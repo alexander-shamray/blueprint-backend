@@ -121,9 +121,10 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     [Fact]
     public async Task Concurrent_callers_cause_one_fetch()
     {
-        await Task.WhenAll(Enumerable
-            .Range(0, 20)
-            .Select(_ => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken)));
+        await Task.WhenAll(
+            Enumerable
+                .Range(0, 20)
+                .Select(_ => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken)));
 
         _provider.TokenRequests.Count.ShouldBe(1);
     }

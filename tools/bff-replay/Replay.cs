@@ -48,8 +48,9 @@ public static class Replay
                     new CommandDefinition(OutboxRows.ProbeSql(source.Publisher), cancellationToken: ct));
 
                 // Each publisher's own clock, as it stamps ProcessedAt; later rows are live traffic the BFF receives.
-                cutoffs.Add(await connection.ExecuteScalarAsync<DateTimeOffset>(
-                    new CommandDefinition(OutboxRows.CutoffSql, cancellationToken: ct)));
+                cutoffs.Add(
+                    await connection.ExecuteScalarAsync<DateTimeOffset>(
+                        new CommandDefinition(OutboxRows.CutoffSql, cancellationToken: ct)));
             }
 
             started = await StartAsync(bus, settings.Broker, brokerDeadline, ct);

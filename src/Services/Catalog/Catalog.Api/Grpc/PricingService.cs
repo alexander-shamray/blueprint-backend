@@ -27,9 +27,8 @@ internal sealed class PricingService(IDispatcher dispatcher) : PricingGrpc.Prici
             if (!Guid.TryParseExact(request.ProductId[i], "D", out productIds[i]))
             {
                 // The index, never the value: §13.4's redactor cannot see a value interpolated into a message.
-                throw new RpcException(new Status(
-                    StatusCode.InvalidArgument,
-                    $"product_id[{i}] is not a GUID."));
+                throw new RpcException(
+                    new Status(StatusCode.InvalidArgument, $"product_id[{i}] is not a GUID."));
             }
         }
 

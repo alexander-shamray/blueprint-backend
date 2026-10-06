@@ -87,9 +87,8 @@ public static class DependencyInjection
                 ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
             }.ConnectionString;
 
-        services.AddSingleton<IOutboxStats>(sp => new OutboxStats(
-            new SqlConnectionFactory(metricsConnectionString),
-            sp.GetRequiredService<OutboxTable>()));
+        services.AddSingleton<IOutboxStats>(sp =>
+            new OutboxStats(new SqlConnectionFactory(metricsConnectionString), sp.GetRequiredService<OutboxTable>()));
         services.AddSingleton<OutboxMetrics>();
 
         // Constructs the metrics singletons at start, before the bus, so they exist for the first message (§13.6).

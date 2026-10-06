@@ -81,12 +81,8 @@ public class OutboxMessageTests
     [Fact]
     public void Staging_an_unstageable_type_throws_before_a_row_exists()
     {
-        Should.Throw<InvalidOperationException>(() => OutboxMessage.Stage(
-            new NotAMessage("nope"),
-            OutboxLane.Broker,
-            Guid.CreateVersion7(),
-            Types,
-            Json));
+        Should.Throw<InvalidOperationException>(() =>
+            OutboxMessage.Stage(new NotAMessage("nope"), OutboxLane.Broker, Guid.CreateVersion7(), Types, Json));
     }
 
     [Fact]
@@ -94,12 +90,13 @@ public class OutboxMessageTests
     {
         // §9.3's allow-list made structural: a mapper returning its domain event cannot publish it (§5.5).
         Should
-            .Throw<InvalidOperationException>(() => OutboxMessage.Stage(
-                new SampleDomainEvent(Now, "raised"),
-                OutboxLane.Broker,
-                Guid.CreateVersion7(),
-                Types,
-                Json))
+            .Throw<InvalidOperationException>(() =>
+                OutboxMessage.Stage(
+                    new SampleDomainEvent(Now, "raised"),
+                    OutboxLane.Broker,
+                    Guid.CreateVersion7(),
+                    Types,
+                    Json))
             .Message.ShouldContain("Broker lane");
     }
 
@@ -119,12 +116,8 @@ public class OutboxMessageTests
         foreach (OutboxLane lane in lanes)
         {
             Should
-                .Throw<InvalidOperationException>(() => OutboxMessage.Stage(
-                    message,
-                    lane,
-                    Guid.CreateVersion7(),
-                    Types,
-                    Json))
+                .Throw<InvalidOperationException>(() =>
+                    OutboxMessage.Stage(message, lane, Guid.CreateVersion7(), Types, Json))
                 .Message.ShouldContain("different things");
         }
     }
@@ -134,12 +127,13 @@ public class OutboxMessageTests
     {
         // C# does not confine an enum to its declared members (§9.4).
         Should
-            .Throw<InvalidOperationException>(() => OutboxMessage.Stage(
-                new SampleDomainEvent(Now, "raised"),
-                (OutboxLane)42,
-                Guid.CreateVersion7(),
-                Types,
-                Json))
+            .Throw<InvalidOperationException>(() =>
+                OutboxMessage.Stage(
+                    new SampleDomainEvent(Now, "raised"),
+                    (OutboxLane)42,
+                    Guid.CreateVersion7(),
+                    Types,
+                    Json))
             .Message.ShouldContain("is not a lane");
     }
 
@@ -156,12 +150,8 @@ public class OutboxMessageTests
         };
 
         Should
-            .Throw<InvalidOperationException>(() => OutboxMessage.Stage(
-                message,
-                OutboxLane.Local,
-                Guid.CreateVersion7(),
-                Types,
-                Json))
+            .Throw<InvalidOperationException>(() =>
+                OutboxMessage.Stage(message, OutboxLane.Local, Guid.CreateVersion7(), Types, Json))
             .Message.ShouldContain("Local lane");
     }
 

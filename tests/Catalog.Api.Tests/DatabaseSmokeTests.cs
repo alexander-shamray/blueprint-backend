@@ -260,18 +260,19 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     private ServiceProvider BuildFaultInjectingProvider()
     {
         ServiceCollection services = new();
-        services.AddCatalogInfrastructure(new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Catalog"] = fixture.ConnectionString,
-                    // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@catalog-rabbit.invalid:5672",
-                    // AddRedisConnections throws without both, unreachable on the same convention.
-                    ["ConnectionStrings:RedisCache"] = "catalog-redis.invalid:6379",
-                    ["ConnectionStrings:RedisCoordination"] = "catalog-redis.invalid:6380"
-                })
-            .Build());
+        services.AddCatalogInfrastructure(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:Catalog"] = fixture.ConnectionString,
+                        // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
+                        ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@catalog-rabbit.invalid:5672",
+                        // AddRedisConnections throws without both, unreachable on the same convention.
+                        ["ConnectionStrings:RedisCache"] = "catalog-redis.invalid:6379",
+                        ["ConnectionStrings:RedisCoordination"] = "catalog-redis.invalid:6380"
+                    })
+                .Build());
 
         ServiceDescriptor options =
             services.Single(d => d.ServiceType == typeof(DbContextOptions<CatalogDbContext>));

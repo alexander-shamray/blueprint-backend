@@ -115,18 +115,19 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     private IOutboxStats NewStats()
     {
         ServiceProvider provider = new ServiceCollection()
-            .AddInventoryInfrastructure(new ConfigurationBuilder()
-                .AddInMemoryCollection(
-                    new Dictionary<string, string?>
-                    {
-                        ["ConnectionStrings:Inventory"] = fixture.ConnectionString,
-                        // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
-                        ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@inventory-rabbit.invalid:5672",
-                        // AddRedisConnections throws without both, unreachable on the same convention.
-                        ["ConnectionStrings:RedisCache"] = "inventory-redis.invalid:6379",
-                        ["ConnectionStrings:RedisCoordination"] = "inventory-redis.invalid:6380"
-                    })
-                .Build())
+            .AddInventoryInfrastructure(
+                new ConfigurationBuilder()
+                    .AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["ConnectionStrings:Inventory"] = fixture.ConnectionString,
+                            // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
+                            ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@inventory-rabbit.invalid:5672",
+                            // AddRedisConnections throws without both, unreachable on the same convention.
+                            ["ConnectionStrings:RedisCache"] = "inventory-redis.invalid:6379",
+                            ["ConnectionStrings:RedisCoordination"] = "inventory-redis.invalid:6380"
+                        })
+                    .Build())
             .BuildServiceProvider();
 
         _providers.Add(provider);

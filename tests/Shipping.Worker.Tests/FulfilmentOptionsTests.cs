@@ -53,9 +53,8 @@ public sealed class FulfilmentOptionsTests
 
         Should.NotThrow(() => provider.GetRequiredService<IStartupValidator>().Validate());
 
-        provider.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge.ShouldBe(TimeSpan.Parse(
-            ShippingWorkerFactory.InventedGiveUpAge,
-            System.Globalization.CultureInfo.InvariantCulture));
+        provider.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge.ShouldBe(
+            TimeSpan.Parse(ShippingWorkerFactory.InventedGiveUpAge, System.Globalization.CultureInfo.InvariantCulture));
     }
 
     // The production validator over the same binding: the host theory above
@@ -63,10 +62,11 @@ public sealed class FulfilmentOptionsTests
     private static ServiceProvider Bound(string value)
     {
         ServiceCollection services = new();
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?> { [$"{FulfilmentOptions.SectionName}:GiveUpAge"] = value })
-            .Build());
+        services.AddSingleton<IConfiguration>(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string?> { [$"{FulfilmentOptions.SectionName}:GiveUpAge"] = value })
+                .Build());
 
         services
             .AddOptions<FulfilmentOptions>()

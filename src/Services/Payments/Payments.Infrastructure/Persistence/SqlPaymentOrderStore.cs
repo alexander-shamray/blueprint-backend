@@ -59,40 +59,39 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
     {
         (DbConnection connection, DbTransaction transaction) = Current();
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            PlacedSql,
-            new
-            {
-                OrderId = id.Value,
-                CustomerId = customerId,
-                TotalAmount = total,
-                Currency = currency,
-                PlacedAt = placedAt
-            },
-            transaction,
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                PlacedSql,
+                new
+                {
+                    OrderId = id.Value,
+                    CustomerId = customerId,
+                    TotalAmount = total,
+                    Currency = currency,
+                    PlacedAt = placedAt
+                },
+                transaction,
+                cancellationToken: ct));
     }
 
     public async Task RecordCancelledAsync(OrderId id, DateTimeOffset cancelledAt, CancellationToken ct)
     {
         (DbConnection connection, DbTransaction transaction) = Current();
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            CancelledSql,
-            new { OrderId = id.Value, CancelledAt = cancelledAt },
-            transaction,
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                CancelledSql,
+                new { OrderId = id.Value, CancelledAt = cancelledAt },
+                transaction,
+                cancellationToken: ct));
     }
 
     public async Task<PaymentOrderRecord?> LockAsync(OrderId id, CancellationToken ct)
     {
         (DbConnection connection, DbTransaction transaction) = Current();
 
-        Row? row = await connection.QuerySingleOrDefaultAsync<Row>(new CommandDefinition(
-            LockSql,
-            new { OrderId = id.Value },
-            transaction,
-            cancellationToken: ct));
+        Row? row = await connection.QuerySingleOrDefaultAsync<Row>(
+            new CommandDefinition(LockSql, new { OrderId = id.Value }, transaction, cancellationToken: ct));
 
         return row is null
             ? null

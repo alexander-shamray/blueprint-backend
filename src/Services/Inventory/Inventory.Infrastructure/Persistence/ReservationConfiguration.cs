@@ -40,10 +40,11 @@ internal sealed class ReservationConfiguration : IEntityTypeConfiguration<Reserv
 
         // EF snapshots a mutable list by reference without a comparer, so an
         // in-place change on a loaded row would vanish from change detection.
-        unavailable.Metadata.SetValueComparer(new ValueComparer<List<ProductId>>(
-            (a, b) => a!.SequenceEqual(b!),
-            v => v.Aggregate(0, (h, id) => HashCode.Combine(h, id)),
-            v => v.ToList()));
+        unavailable.Metadata.SetValueComparer(
+            new ValueComparer<List<ProductId>>(
+                (a, b) => a!.SequenceEqual(b!),
+                v => v.Aggregate(0, (h, id) => HashCode.Combine(h, id)),
+                v => v.ToList()));
 
         builder.Property(r => r.Version).HasColumnName("RowVersion").IsRowVersion();
         builder.Ignore(r => r.DomainEvents);

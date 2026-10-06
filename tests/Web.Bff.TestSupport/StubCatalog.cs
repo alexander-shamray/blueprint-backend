@@ -109,12 +109,13 @@ public sealed class StubCatalog : IAsyncLifetime
             GetPricesRequest request,
             ServerCallContext context)
         {
-            stub._calls.Enqueue(new Call(
-                [.. request.ProductId],
-                request.Currency,
-                context.RequestHeaders.GetValue("authorization"),
-                // Lower-cased, as Metadata is an ordinal list and HTTP/2 names are lower-case on the wire.
-                context.RequestHeaders.GetValue("x-correlation-id")));
+            stub._calls.Enqueue(
+                new Call(
+                    [.. request.ProductId],
+                    request.Currency,
+                    context.RequestHeaders.GetValue("authorization"),
+                    // Lower-cased, as Metadata is an ordinal list and HTTP/2 names are lower-case on the wire.
+                    context.RequestHeaders.GetValue("x-correlation-id")));
 
             if (stub.HangFor > TimeSpan.Zero)
                 await Task.Delay(stub.HangFor, context.CancellationToken);
@@ -135,9 +136,10 @@ public sealed class StubCatalog : IAsyncLifetime
             // GetPricesValidator's ceiling.
             if (request.ProductId.Count > PricingContract.MaxProductIds)
             {
-                throw new RpcException(new Status(
-                    StatusCode.InvalidArgument,
-                    $"A request may name at most {PricingContract.MaxProductIds} products."));
+                throw new RpcException(
+                    new Status(
+                        StatusCode.InvalidArgument,
+                        $"A request may name at most {PricingContract.MaxProductIds} products."));
             }
 
             GetPricesReply reply = new();

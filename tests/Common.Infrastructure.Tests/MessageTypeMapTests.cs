@@ -96,10 +96,11 @@ public class MessageTypeMapTests
     {
         // Without the alias, this instance would stage rows it could not deliver.
         Should
-            .Throw<InvalidOperationException>(() => new MessageTypeMap(
-                [typeof(SampleDomainEvent).Assembly],
-                new Dictionary<string, Type>(),
-                new Dictionary<Type, string> { [typeof(SampleDomainEvent)] = "Nothing.Resolves.This" }))
+            .Throw<InvalidOperationException>(() =>
+                new MessageTypeMap(
+                    [typeof(SampleDomainEvent).Assembly],
+                    new Dictionary<string, Type>(),
+                    new Dictionary<Type, string> { [typeof(SampleDomainEvent)] = "Nothing.Resolves.This" }))
             .Message.ShouldContain("cannot resolve");
     }
 
@@ -108,13 +109,14 @@ public class MessageTypeMapTests
     {
         // A failure with no symptom: the payload would read back as a type it never was.
         Should
-            .Throw<InvalidOperationException>(() => new MessageTypeMap(
-                [typeof(SampleDomainEvent).Assembly],
-                new Dictionary<string, Type>(),
-                new Dictionary<Type, string>
-                {
-                    [typeof(SampleDomainEvent)] = typeof(SampleValueTypeDomainEvent).FullName!
-                }))
+            .Throw<InvalidOperationException>(() =>
+                new MessageTypeMap(
+                    [typeof(SampleDomainEvent).Assembly],
+                    new Dictionary<string, Type>(),
+                    new Dictionary<Type, string>
+                    {
+                        [typeof(SampleDomainEvent)] = typeof(SampleValueTypeDomainEvent).FullName!
+                    }))
             .Message.ShouldContain("resolves to");
     }
 
@@ -123,12 +125,13 @@ public class MessageTypeMapTests
     {
         // An alias is typed by hand, so it is the name that can exceed the column.
         Should
-            .Throw<InvalidOperationException>(() => new MessageTypeMap(
-                [typeof(SampleDomainEvent).Assembly],
-                new Dictionary<string, Type>
-                {
-                    [new string('n', MessageTypeMap.MaxNameLength + 1)] = typeof(SampleDomainEvent)
-                }))
+            .Throw<InvalidOperationException>(() =>
+                new MessageTypeMap(
+                    [typeof(SampleDomainEvent).Assembly],
+                    new Dictionary<string, Type>
+                    {
+                        [new string('n', MessageTypeMap.MaxNameLength + 1)] = typeof(SampleDomainEvent)
+                    }))
             .Message.ShouldContain("No row can carry it");
     }
 
@@ -137,9 +140,10 @@ public class MessageTypeMapTests
     {
         // The dispatcher trusts the row's Lane, so this alias would bypass the lane guards.
         Should
-            .Throw<InvalidOperationException>(() => new MessageTypeMap(
-                [typeof(SampleDomainEvent).Assembly],
-                new Dictionary<string, Type> { ["Some.Old.Name"] = typeof(NotAMessage) }))
+            .Throw<InvalidOperationException>(() =>
+                new MessageTypeMap(
+                    [typeof(SampleDomainEvent).Assembly],
+                    new Dictionary<string, Type> { ["Some.Old.Name"] = typeof(NotAMessage) }))
             .Message.ShouldContain("does not carry");
     }
 
@@ -147,12 +151,13 @@ public class MessageTypeMapTests
     public void An_alias_that_shadows_a_live_name_fails_the_host()
     {
         Should
-            .Throw<InvalidOperationException>(() => new MessageTypeMap(
-                [typeof(SampleDomainEvent).Assembly],
-                new Dictionary<string, Type>
-                {
-                    ["Common.Infrastructure.Tests.SampleDomainEvent"] = typeof(SampleIntegrationEvent)
-                }))
+            .Throw<InvalidOperationException>(() =>
+                new MessageTypeMap(
+                    [typeof(SampleDomainEvent).Assembly],
+                    new Dictionary<string, Type>
+                    {
+                        ["Common.Infrastructure.Tests.SampleDomainEvent"] = typeof(SampleIntegrationEvent)
+                    }))
             .Message.ShouldContain("also a live type name");
     }
 

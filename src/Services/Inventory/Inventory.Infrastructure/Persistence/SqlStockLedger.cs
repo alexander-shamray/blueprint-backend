@@ -52,21 +52,20 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
     {
         (DbConnection connection, DbTransaction transaction) = Current();
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            $"SAVE TRANSACTION {Savepoint};",
-            transaction: transaction,
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition($"SAVE TRANSACTION {Savepoint};", transaction: transaction, cancellationToken: ct));
 
         List<ReservedLevel> levels = [];
         List<ProductId> unavailable = [];
 
         foreach (ReservationLine line in lines.OrderBy(l => l.ProductId.Value))
         {
-            LevelRow? row = await connection.QuerySingleOrDefaultAsync<LevelRow>(new CommandDefinition(
-                TakeSql,
-                new { ProductId = line.ProductId.Value, line.Quantity },
-                transaction: transaction,
-                cancellationToken: ct));
+            LevelRow? row = await connection.QuerySingleOrDefaultAsync<LevelRow>(
+                new CommandDefinition(
+                    TakeSql,
+                    new { ProductId = line.ProductId.Value, line.Quantity },
+                    transaction: transaction,
+                    cancellationToken: ct));
 
             if (row is null)
                 unavailable.Add(line.ProductId);
@@ -77,10 +76,11 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
         if (unavailable.Count == 0)
             return new LedgerOutcome(levels, unavailable);
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            $"ROLLBACK TRANSACTION {Savepoint};",
-            transaction: transaction,
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                $"ROLLBACK TRANSACTION {Savepoint};",
+                transaction: transaction,
+                cancellationToken: ct));
 
         return new LedgerOutcome([], unavailable);
     }
@@ -94,11 +94,12 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
 
         foreach (ReservationLine line in lines.OrderBy(l => l.ProductId.Value))
         {
-            LevelRow? row = await connection.QuerySingleOrDefaultAsync<LevelRow>(new CommandDefinition(
-                GiveBackSql,
-                new { ProductId = line.ProductId.Value, line.Quantity },
-                transaction: transaction,
-                cancellationToken: ct));
+            LevelRow? row = await connection.QuerySingleOrDefaultAsync<LevelRow>(
+                new CommandDefinition(
+                    GiveBackSql,
+                    new { ProductId = line.ProductId.Value, line.Quantity },
+                    transaction: transaction,
+                    cancellationToken: ct));
 
             // A held line implies its row; a release that skipped it would publish StockReleased for stock it
             // never returned, so the transaction rolls back instead.
@@ -117,11 +118,12 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
 
         foreach (ReservationLine line in lines.OrderBy(l => l.ProductId.Value))
         {
-            int affected = await connection.ExecuteAsync(new CommandDefinition(
-                FulfilSql,
-                new { ProductId = line.ProductId.Value, line.Quantity },
-                transaction: transaction,
-                cancellationToken: ct));
+            int affected = await connection.ExecuteAsync(
+                new CommandDefinition(
+                    FulfilSql,
+                    new { ProductId = line.ProductId.Value, line.Quantity },
+                    transaction: transaction,
+                    cancellationToken: ct));
 
             // Reserved below what this row holds is the ledger disagreeing
             // with itself; retrying will not fix it and acking would hide it.

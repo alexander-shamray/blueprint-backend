@@ -33,8 +33,9 @@ public sealed class ReplayTargetTests
     public void Each_publisher_s_outbox_is_the_table_its_service_maps(string name)
     {
         Publisher publisher = Publisher.All.Single(p => p.Name == name);
-        string configuration = File.ReadAllText(RepositoryFile.Locate(
-            $"src/Services/{name}/{name}.Infrastructure/Persistence/OutboxMessageConfiguration.cs"));
+        string configuration = File.ReadAllText(
+            RepositoryFile.Locate(
+                $"src/Services/{name}/{name}.Infrastructure/Persistence/OutboxMessageConfiguration.cs"));
 
         configuration.ShouldContain($"builder.ToTable(\"OutboxMessages\", \"{publisher.Schema}\");");
     }

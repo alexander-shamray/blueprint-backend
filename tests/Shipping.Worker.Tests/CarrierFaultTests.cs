@@ -121,8 +121,11 @@ public sealed class CarrierFaultTests : IDisposable
         // CarrierAnswerBuffer reads the body inside the attempt, so an oversize body fails the attempt and is retried.
         Server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(200)
-                .WithBody("{\"events\":[" + new string('x', CarrierHop.MaxAnswerBytes + 1) + "]}"));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(200)
+                    .WithBody("{\"events\":[" + new string('x', CarrierHop.MaxAnswerBytes + 1) + "]}"));
 
         await Should.ThrowAsync<CarrierUnavailableException>(() =>
             Carrier().GetEventsAsync("crr_x", TestContext.Current.CancellationToken));

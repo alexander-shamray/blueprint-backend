@@ -112,9 +112,10 @@ public class GrantCheckedTokenCacheTests
 
     /// <summary>An unsigned token with one <c>permission</c> claim per element; the class never validates it.</summary>
     private static string Jwt(string[] permissions) =>
-        new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
-            issuer: "https://identity.invalid/realms/test",
-            claims: [.. permissions.Select(p => new Claim("permission", p))]));
+        new JwtSecurityTokenHandler().WriteToken(
+            new JwtSecurityToken(
+                issuer: "https://identity.invalid/realms/test",
+                claims: [.. permissions.Select(p => new Claim("permission", p))]));
 
     /// <summary>A token source answering with one token or throwing one exception.</summary>
     private sealed class FixedTokenCache : ITokenCache

@@ -99,21 +99,22 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
     public async Task HandleAsync(OrderPlacedDomainEvent domainEvent, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
-        await connection.ExecuteAsync(new CommandDefinition(
-            PlacedSql,
-            new
-            {
-                OrderId = domainEvent.OrderId.Value,
-                CustomerId = domainEvent.CustomerId.Value,
-                Status = nameof(OrderStatus.AwaitingStock),
-                Total = domainEvent.Total.Amount,
-                domainEvent.Total.Currency,
-                LineCount = domainEvent.Lines.Count,
-                // Ids only: a name is Catalog's fact about the product, resolved on read (ADR-027).
-                Products = JsonSerializer.Serialize(domainEvent.Lines.Select(l => l.ProductId.Value)),
-                domainEvent.OccurredAt
-            },
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                PlacedSql,
+                new
+                {
+                    OrderId = domainEvent.OrderId.Value,
+                    CustomerId = domainEvent.CustomerId.Value,
+                    Status = nameof(OrderStatus.AwaitingStock),
+                    Total = domainEvent.Total.Amount,
+                    domainEvent.Total.Currency,
+                    LineCount = domainEvent.Lines.Count,
+                    // Ids only: a name is Catalog's fact about the product, resolved on read (ADR-027).
+                    Products = JsonSerializer.Serialize(domainEvent.Lines.Select(l => l.ProductId.Value)),
+                    domainEvent.OccurredAt
+                },
+                cancellationToken: ct));
 
         await RecordPendingFactsAsync(connection, domainEvent.OrderId, ct);
     }
@@ -150,17 +151,18 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
         string? cancelReason = null)
     {
         using IDbConnection connection = connections.Create();
-        await connection.ExecuteAsync(new CommandDefinition(
-            StatusSql,
-            new
-            {
-                OrderId = orderId.Value,
-                Status = status.ToString(),
-                OccurredAt = occurredAt,
-                ConfirmedAt = confirmedAt,
-                CancelReason = cancelReason
-            },
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                StatusSql,
+                new
+                {
+                    OrderId = orderId.Value,
+                    Status = status.ToString(),
+                    OccurredAt = occurredAt,
+                    ConfirmedAt = confirmedAt,
+                    CancelReason = cancelReason
+                },
+                cancellationToken: ct));
 
         await RecordPendingFactsAsync(connection, orderId, ct);
     }

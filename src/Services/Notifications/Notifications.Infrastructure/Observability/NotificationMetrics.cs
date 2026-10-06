@@ -70,9 +70,10 @@ public sealed class NotificationMetrics
 
         return
         [
-            .. WaitingSteps.All.Select(step => new Measurement<double>(
-                waiting.TryGetValue(step, out int count) ? count : 0,
-                new KeyValuePair<string, object?>("step", step)))
+            .. WaitingSteps.All.Select(step =>
+                new Measurement<double>(
+                    waiting.TryGetValue(step, out int count) ? count : 0,
+                    new KeyValuePair<string, object?>("step", step)))
         ];
     }
 

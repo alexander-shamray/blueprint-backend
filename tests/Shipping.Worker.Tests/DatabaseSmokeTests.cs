@@ -263,15 +263,16 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     private ServiceProvider BuildFaultInjectingProvider()
     {
         ServiceCollection services = new();
-        services.AddShippingInfrastructure(new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Shipping"] = fixture.ConnectionString,
-                    // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672"
-                })
-            .Build());
+        services.AddShippingInfrastructure(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:Shipping"] = fixture.ConnectionString,
+                        // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
+                        ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672"
+                    })
+                .Build());
 
         ServiceDescriptor options =
             services.Single(d => d.ServiceType == typeof(DbContextOptions<ShippingDbContext>));

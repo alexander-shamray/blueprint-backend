@@ -227,18 +227,19 @@ public class MetricsRegistrationTests
     {
         ServiceCollection services = new();
         services.AddInventoryApplication();
-        services.AddInventoryInfrastructure(new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Inventory"] =
-                        "Server=inventory-sql.invalid;Database=Inventory;User Id=sa;Password=not-a-real-password",
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@inventory-rabbit.invalid:5672",
-                    // AddRedisConnections throws without both, unreachable on the same convention.
-                    ["ConnectionStrings:RedisCache"] = "inventory-redis.invalid:6379",
-                    ["ConnectionStrings:RedisCoordination"] = "inventory-redis.invalid:6380"
-                })
-            .Build());
+        services.AddInventoryInfrastructure(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:Inventory"] =
+                            "Server=inventory-sql.invalid;Database=Inventory;User Id=sa;Password=not-a-real-password",
+                        ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@inventory-rabbit.invalid:5672",
+                        // AddRedisConnections throws without both, unreachable on the same convention.
+                        ["ConnectionStrings:RedisCache"] = "inventory-redis.invalid:6379",
+                        ["ConnectionStrings:RedisCoordination"] = "inventory-redis.invalid:6380"
+                    })
+                .Build());
 
         return services;
     }

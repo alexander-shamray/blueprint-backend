@@ -47,29 +47,26 @@ internal sealed class SqlContactStore(IDbConnectionFactory connections) : IConta
     {
         using IDbConnection connection = connections.Create();
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            SaveSql,
-            new { CustomerId = customerId, contact.Email, contact.Locale, FetchedAt = fetchedAt },
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                SaveSql,
+                new { CustomerId = customerId, contact.Email, contact.Locale, FetchedAt = fetchedAt },
+                cancellationToken: ct));
     }
 
     public async Task<ContactRecord?> GetAsync(Guid customerId, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
 
-        return await connection.QuerySingleOrDefaultAsync<ContactRecord>(new CommandDefinition(
-            GetSql,
-            new { CustomerId = customerId },
-            cancellationToken: ct));
+        return await connection.QuerySingleOrDefaultAsync<ContactRecord>(
+            new CommandDefinition(GetSql, new { CustomerId = customerId }, cancellationToken: ct));
     }
 
     public async Task DeleteAsync(Guid customerId, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            DeleteSql,
-            new { CustomerId = customerId },
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(DeleteSql, new { CustomerId = customerId }, cancellationToken: ct));
     }
 }

@@ -69,8 +69,12 @@ public sealed class ContactFaultTests : IAsyncLifetime
             .RespondWith(Response.Create().WithStatusCode(503));
         _keycloak.Given(Request.Create().WithPath(Path).UsingGet())
             .InScenario("flaky").WhenStateIs("recovered")
-            .RespondWith(Response.Create().WithStatusCode(200).WithHeader("Content-Type", "application/json")
-                .WithBody(User));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(200)
+                    .WithHeader("Content-Type", "application/json")
+                    .WithBody(User));
 
         (await ReadAsync()).ShouldBeOfType<ContactLookup.Found>();
 
@@ -85,8 +89,12 @@ public sealed class ContactFaultTests : IAsyncLifetime
     public async Task An_answer_larger_than_the_bound_is_an_attempt_the_pipeline_retries_and_then_a_fault()
     {
         _keycloak.Given(Request.Create().WithPath(Path).UsingGet())
-            .RespondWith(Response.Create().WithStatusCode(200).WithHeader("Content-Type", "application/json")
-                .WithBody("{\"enabled\":true,\"email\":\"" + new string('a', ContactHop.MaxAnswerBytes) + "\"}"));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(200)
+                    .WithHeader("Content-Type", "application/json")
+                    .WithBody("{\"enabled\":true,\"email\":\"" + new string('a', ContactHop.MaxAnswerBytes) + "\"}"));
 
         await Should.ThrowAsync<HttpRequestException>(() => ReadAsync());
 

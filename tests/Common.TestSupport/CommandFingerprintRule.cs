@@ -60,9 +60,10 @@ public static class CommandFingerprintRule
     public static IReadOnlyList<string> OperationNames(Assembly application) =>
     [
         .. IdempotentCommands(application)
-            .Select(command => (string)command
-                .GetProperty(nameof(IIdempotentCommand.OperationName), BindingFlags.Public | BindingFlags.Static)!
-                .GetValue(null)!)
+            .Select(command =>
+                (string)command
+                    .GetProperty(nameof(IIdempotentCommand.OperationName), BindingFlags.Public | BindingFlags.Static)!
+                    .GetValue(null)!)
     ];
 
     /// <summary>An assembly's idempotent commands: the one selection every gate over them reads.</summary>

@@ -22,12 +22,13 @@ public static partial class SeededProducts
                 .TakeWhile(line => !line.StartsWith("## ", StringComparison.Ordinal))
                 .Select(line => Row().Match(line))
                 .Where(row => row.Success)
-                .Select(row => new SeededProduct(
-                    Guid.Parse(row.Groups["id"].Value, CultureInfo.InvariantCulture),
-                    row.Groups["name"].Value,
-                    decimal.Parse(row.Groups["amount"].Value, CultureInfo.InvariantCulture),
-                    row.Groups["currency"].Value,
-                    int.Parse(row.Groups["onHand"].Value, CultureInfo.InvariantCulture)))
+                .Select(row =>
+                    new SeededProduct(
+                        Guid.Parse(row.Groups["id"].Value, CultureInfo.InvariantCulture),
+                        row.Groups["name"].Value,
+                        decimal.Parse(row.Groups["amount"].Value, CultureInfo.InvariantCulture),
+                        row.Groups["currency"].Value,
+                        int.Parse(row.Groups["onHand"].Value, CultureInfo.InvariantCulture)))
         ];
 
         // An empty table would hold every seeder to nothing, which every seeder passes.

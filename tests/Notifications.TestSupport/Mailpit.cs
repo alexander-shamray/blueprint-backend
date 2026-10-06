@@ -36,10 +36,11 @@ public sealed class Mailpit : IAsyncDisposable
 
     /// <summary>STARTTLS under a certificate Mailpit signs itself, which no trust store holds.</summary>
     public static Mailpit SelfSigned() =>
-        new(Builder()
-            .WithEnvironment("MP_SMTP_TLS_CERT", $"sans:{CertificateName}")
-            .WithEnvironment("MP_SMTP_TLS_KEY", $"sans:{CertificateName}")
-            .Build());
+        new(
+            Builder()
+                .WithEnvironment("MP_SMTP_TLS_CERT", $"sans:{CertificateName}")
+                .WithEnvironment("MP_SMTP_TLS_KEY", $"sans:{CertificateName}")
+                .Build());
 
     public string Host => _container.Hostname;
 
@@ -175,8 +176,10 @@ public sealed class Mailpit : IAsyncDisposable
             .WithImage(Image)
             .WithPortBinding(ApiPort, assignRandomHostPort: true)
             .WithEnvironment("MP_ENABLE_CHAOS", "true")
-            .WithWaitStrategy(Wait.ForUnixContainer()
-                .UntilHttpRequestIsSucceeded(r => r.ForPort((ushort)ApiPort).ForPath("/readyz")));
+            .WithWaitStrategy(
+                Wait
+                    .ForUnixContainer()
+                    .UntilHttpRequestIsSucceeded(r => r.ForPort((ushort)ApiPort).ForPath("/readyz")));
 
     private sealed record MailpitPage(int Total, IReadOnlyList<MailpitSummary> Messages);
 }

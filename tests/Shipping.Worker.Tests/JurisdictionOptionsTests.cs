@@ -63,11 +63,14 @@ public sealed class JurisdictionOptionsTests
     public void Each_window_is_named_in_the_failure(string member, string value)
     {
         ServiceCollection services = new();
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
-            .AddInMemoryCollection(Members.Select(name => new KeyValuePair<string, string?>(
-                $"{ShippingJurisdictionOptions.SectionName}:{name}",
-                string.Equals(name, member, StringComparison.Ordinal) ? value : "11.00:00:00")))
-            .Build());
+        services.AddSingleton<IConfiguration>(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    Members.Select(name =>
+                        new KeyValuePair<string, string?>(
+                            $"{ShippingJurisdictionOptions.SectionName}:{name}",
+                            string.Equals(name, member, StringComparison.Ordinal) ? value : "11.00:00:00")))
+                .Build());
 
         // The production validator over the same binding; the theory above still fails if the registration is dropped.
         services
@@ -91,16 +94,17 @@ public sealed class JurisdictionOptionsTests
     {
         // ADR-053 rule 2's control, without which the theories above could pass against a class nothing satisfies.
         ServiceCollection services = new();
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    [$"{ShippingJurisdictionOptions.SectionName}:AddressRetention"] =
-                        ShippingWorkerFactory.InventedAddressRetention,
-                    [$"{ShippingJurisdictionOptions.SectionName}:TrackingRetention"] =
-                        ShippingWorkerFactory.InventedTrackingRetention
-                })
-            .Build());
+        services.AddSingleton<IConfiguration>(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        [$"{ShippingJurisdictionOptions.SectionName}:AddressRetention"] =
+                            ShippingWorkerFactory.InventedAddressRetention,
+                        [$"{ShippingJurisdictionOptions.SectionName}:TrackingRetention"] =
+                            ShippingWorkerFactory.InventedTrackingRetention
+                    })
+                .Build());
 
         services
             .AddOptions<ShippingJurisdictionOptions>()
@@ -117,11 +121,13 @@ public sealed class JurisdictionOptionsTests
         ShippingJurisdictionOptions bound =
             provider.GetRequiredService<IOptions<ShippingJurisdictionOptions>>().Value;
 
-        bound.AddressRetention.ShouldBe(TimeSpan.Parse(
-            ShippingWorkerFactory.InventedAddressRetention,
-            System.Globalization.CultureInfo.InvariantCulture));
-        bound.TrackingRetention.ShouldBe(TimeSpan.Parse(
-            ShippingWorkerFactory.InventedTrackingRetention,
-            System.Globalization.CultureInfo.InvariantCulture));
+        bound.AddressRetention.ShouldBe(
+            TimeSpan.Parse(
+                ShippingWorkerFactory.InventedAddressRetention,
+                System.Globalization.CultureInfo.InvariantCulture));
+        bound.TrackingRetention.ShouldBe(
+            TimeSpan.Parse(
+                ShippingWorkerFactory.InventedTrackingRetention,
+                System.Globalization.CultureInfo.InvariantCulture));
     }
 }

@@ -86,10 +86,11 @@ public sealed class DeliveryOptionsTests
     private static ServiceProvider Bound(string value, RetentionPolicy retention)
     {
         ServiceCollection services = new();
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?> { [$"{DeliveryOptions.SectionName}:GiveUpAge"] = value })
-            .Build());
+        services.AddSingleton<IConfiguration>(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string?> { [$"{DeliveryOptions.SectionName}:GiveUpAge"] = value })
+                .Build());
         services.AddSingleton(retention);
 
         services

@@ -143,10 +143,11 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
             b.ConfigureTestServices(services =>
             {
                 services.RemoveAll<ITokenCache>();
-                services.AddSingleton<ITokenCache>(sp => new GrantCheckedTokenCache(
-                    new RefusingTokenCache(),
-                    sp.GetRequiredService<AddressMetrics>(),
-                    NullLogger<GrantCheckedTokenCache>.Instance));
+                services.AddSingleton<ITokenCache>(sp =>
+                    new GrantCheckedTokenCache(
+                        new RefusingTokenCache(),
+                        sp.GetRequiredService<AddressMetrics>(),
+                        NullLogger<GrantCheckedTokenCache>.Instance));
             }));
         using OutboundCount counted = OutboundCounter.Refused(refusing.Services);
 
@@ -248,12 +249,8 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
 
         AddressLookup lookup = await Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken);
 
-        lookup.ShouldBeOfType<AddressLookup.Found>().Address.ShouldBe(new DeliveryAddress(
-            widest.Line1,
-            widest.Line2,
-            widest.City,
-            widest.PostalCode,
-            widest.Country));
+        lookup.ShouldBeOfType<AddressLookup.Found>().Address.ShouldBe(
+            new DeliveryAddress(widest.Line1, widest.Line2, widest.City, widest.PostalCode, widest.Country));
     }
 
     [Theory]

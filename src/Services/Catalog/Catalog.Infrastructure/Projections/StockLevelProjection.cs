@@ -30,9 +30,10 @@ public sealed class StockLevelProjection(IDbConnectionFactory connections)
     {
         using IDbConnection connection = connections.Create();
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            UpsertSql,
-            new { integrationEvent.ProductId, integrationEvent.QuantityAvailable, integrationEvent.OccurredAt },
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                UpsertSql,
+                new { integrationEvent.ProductId, integrationEvent.QuantityAvailable, integrationEvent.OccurredAt },
+                cancellationToken: ct));
     }
 }

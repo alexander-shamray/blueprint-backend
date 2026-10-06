@@ -44,30 +44,29 @@ internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) 
     {
         using IDbConnection connection = connections.Create();
 
-        await connection.ExecuteAsync(new CommandDefinition(
-            SaveSql,
-            new
-            {
-                OrderId = orderId.Value,
-                CustomerId = customerId,
-                address.Line1,
-                address.Line2,
-                address.City,
-                address.PostalCode,
-                address.Country,
-                FetchedAt = fetchedAt
-            },
-            cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                SaveSql,
+                new
+                {
+                    OrderId = orderId.Value,
+                    CustomerId = customerId,
+                    address.Line1,
+                    address.Line2,
+                    address.City,
+                    address.PostalCode,
+                    address.Country,
+                    FetchedAt = fetchedAt
+                },
+                cancellationToken: ct));
     }
 
     public async Task<DeliveryAddress?> GetAsync(OrderId orderId, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
 
-        Row? row = await connection.QuerySingleOrDefaultAsync<Row>(new CommandDefinition(
-            GetSql,
-            new { OrderId = orderId.Value },
-            cancellationToken: ct));
+        Row? row = await connection.QuerySingleOrDefaultAsync<Row>(
+            new CommandDefinition(GetSql, new { OrderId = orderId.Value }, cancellationToken: ct));
 
         // char(2) space-pads a shorter value; two letters by contract, so the trim is defensive.
         return row is null

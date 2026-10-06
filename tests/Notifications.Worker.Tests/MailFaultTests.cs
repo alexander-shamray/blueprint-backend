@@ -155,9 +155,10 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             using OutboundCount counted = OutboundCounter.Unavailable(host.Services);
             long started = Stopwatch.GetTimestamp();
 
-            await Should.ThrowAsync<MailUnavailableException>(() => host.Services
-                .GetRequiredService<IMailChannel>()
-                .SendAsync(Mail(), TestContext.Current.CancellationToken));
+            await Should.ThrowAsync<MailUnavailableException>(() =>
+                host.Services
+                    .GetRequiredService<IMailChannel>()
+                    .SendAsync(Mail(), TestContext.Current.CancellationToken));
 
             Stopwatch.GetElapsedTime(started).ShouldBeLessThan(MailHop.TotalTimeout + TimeSpan.FromSeconds(2));
             counted.Of("transient").ShouldBeGreaterThanOrEqualTo(
@@ -182,9 +183,10 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             mailPort: stalled.Port);
         using OutboundCount counted = OutboundCounter.Unavailable(host.Services);
 
-        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => host.Services
-            .GetRequiredService<IMailChannel>()
-            .SendAsync(Mail(), TestContext.Current.CancellationToken));
+        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
+            host.Services
+                .GetRequiredService<IMailChannel>()
+                .SendAsync(Mail(), TestContext.Current.CancellationToken));
 
         // An attempt timeout once the send began may follow a relay that took the message, so a retry could send it
         // twice (§9.7): it is the adapter's fault, never a timeout the pipeline would convert and retry.
@@ -209,9 +211,10 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             TestContext.Current.CancellationToken);
         caller.CancelAfter(TimeSpan.FromSeconds(1));
 
-        await Should.ThrowAsync<OperationCanceledException>(() => host.Services
-            .GetRequiredService<IMailChannel>()
-            .SendAsync(Mail(), caller.Token));
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            host.Services
+                .GetRequiredService<IMailChannel>()
+                .SendAsync(Mail(), caller.Token));
 
         counted.Value.ShouldBe(0, "a pass cancelled at shutdown is not a relay incident, whichever phase it was in");
         stalled.Connections.ShouldBe(1, "the send began, and was not made again");
@@ -226,9 +229,10 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
         using NotificationsWorkerFactory host = Credentialed(relay.Port);
         using OutboundCount counted = OutboundCounter.Unavailable(host.Services);
 
-        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => host.Services
-            .GetRequiredService<IMailChannel>()
-            .SendAsync(Mail(), TestContext.Current.CancellationToken));
+        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
+            host.Services
+                .GetRequiredService<IMailChannel>()
+                .SendAsync(Mail(), TestContext.Current.CancellationToken));
 
         thrown.Cause.ShouldBe(MailFault.Transient);
         thrown.SmtpStatus.ShouldBe(454);
@@ -247,9 +251,10 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
         using NotificationsWorkerFactory host = Credentialed(relay.Port);
         using OutboundCount counted = OutboundCounter.Unavailable(host.Services);
 
-        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => host.Services
-            .GetRequiredService<IMailChannel>()
-            .SendAsync(Mail(), TestContext.Current.CancellationToken));
+        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
+            host.Services
+                .GetRequiredService<IMailChannel>()
+                .SendAsync(Mail(), TestContext.Current.CancellationToken));
 
         thrown.Cause.ShouldBe(MailFault.Credential);
         thrown.SmtpStatus.ShouldBe(535);

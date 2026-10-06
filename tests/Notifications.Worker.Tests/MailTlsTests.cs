@@ -112,9 +112,10 @@ public sealed class MailTlsTests(MailpitFixture fixture) : IAsyncLifetime
             mailSecurity: "StartTls");
         using OutboundCount counted = OutboundCounter.Unavailable(development.Services);
 
-        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => development.Services
-            .GetRequiredService<IMailChannel>()
-            .SendAsync(Mail(), TestContext.Current.CancellationToken));
+        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
+            development.Services
+                .GetRequiredService<IMailChannel>()
+                .SendAsync(Mail(), TestContext.Current.CancellationToken));
 
         thrown.Cause.ShouldBe(MailFault.Transient);
         stalled.Connections.ShouldBe(MailHop.MaxRetryAttempts + 1, "a timeout before the send is retried");

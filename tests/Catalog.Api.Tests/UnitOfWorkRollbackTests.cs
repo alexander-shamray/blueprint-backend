@@ -36,8 +36,8 @@ public class UnitOfWorkRollbackTests(ServiceFixture fixture)
 
                 // A domain refusal, which is an answer rather than a fault: the
                 // handler ran, mutated, and decided no.
-                return Task.FromResult(Result.Failure(
-                    new Error("probe.refused", "the domain refused this", ErrorType.Rule)));
+                return Task.FromResult(
+                    Result.Failure(new Error("probe.refused", "the domain refused this", ErrorType.Rule)));
             },
             TestContext.Current.CancellationToken);
 
