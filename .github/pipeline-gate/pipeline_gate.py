@@ -412,6 +412,108 @@ def _matches(pattern: str, path: str) -> bool:
 
 
 # --------------------------------------------------------------------------
+# shards
+# --------------------------------------------------------------------------
+
+SELECTS_TERM = re.compile(r"FullyQualifiedName(!?)~(\S+)")
+
+
+def read_shards(workflow_text: str) -> list[tuple[str, str]]:
+    """The `integration` job's matrix, as (shard, selects) pairs in file order.
+
+    A `selects: >-` value is the line after it, the form a selection too long
+    for one line takes without folding a space into the filter.
+    """
+    lines = workflow_text.splitlines()
+    for index, line in enumerate(lines):
+        if re.match(r"^\s{2}integration:\s*$", line):
+            break
+    else:
+        return []
+
+    pairs: list[tuple[str, str]] = []
+    shard: str | None = None
+    body = lines[index + 1:]
+    for position, line in enumerate(body):
+        if re.match(r"^\s{2}\S", line):          # the next job
+            break
+        if found := re.match(r"^\s*-\s*shard:\s*(\S+)\s*$", line):
+            shard = found.group(1)
+        elif found := re.match(r"^\s*selects:\s*(.*?)\s*$", line):
+            value = found.group(1)
+            if value == ">-" and position + 1 < len(body):
+                value = body[position + 1].strip()
+            if shard is not None:
+                pairs.append((shard, value))
+                shard = None
+    return pairs
+
+
+def check_shards() -> list[str]:
+    """The integration shards partition the stage: no test in two, none in none.
+
+    `stages` reads the shards as one directory and cannot see it, so the
+    cascade is proved from the filters' text instead.
+    """
+    try:
+        text = WORKFLOW.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f".github/workflows/ci.yml is not readable: {error}"]
+
+    shards = read_shards(text)
+    if not shards:
+        return [
+            "found no (shard, selects) pairs in the integration matrix in "
+            "ci.yml, so a cascade nobody read passes vacuously — the parser is "
+            "what is broken"
+        ]
+
+    problems: list[str] = []
+    above: list[str] = []
+    for position, (shard, selects) in enumerate(shards):
+        selected: list[str] = []
+        excluded: set[str] = set()
+        for term in selects.split("&"):
+            if found := SELECTS_TERM.fullmatch(term):
+                if found.group(1):
+                    excluded.add(found.group(2))
+                else:
+                    selected.append(found.group(2))
+            else:
+                problems.append(
+                    f"the {shard} shard selects with {term!r}, which is not a "
+                    "FullyQualifiedName term the cascade can be checked over"
+                )
+
+        if position == len(shards) - 1:
+            if selected:
+                problems.append(
+                    f"the last shard, {shard}, selects {', '.join(selected)}. It "
+                    "has to be the remainder, excluding every shard above it and "
+                    "selecting nothing, or a project no shard names runs nowhere"
+                )
+        elif len(selected) != 1:
+            problems.append(
+                f"the {shard} shard selects {len(selected)} namespaces; every "
+                "shard but the last selects exactly one"
+            )
+
+        if missing := sorted(set(above) - excluded):
+            problems.append(
+                f"the {shard} shard does not exclude {', '.join(missing)}, "
+                "selected above it, so those tests run in two shards"
+            )
+        if extra := sorted(excluded - set(above)):
+            problems.append(
+                f"the {shard} shard excludes {', '.join(extra)}, which no shard "
+                "above it selects, so those tests run in no shard"
+            )
+        above += selected
+
+    return problems
+
+
+# --------------------------------------------------------------------------
 # stages
 # --------------------------------------------------------------------------
 
@@ -571,6 +673,7 @@ def main(argv: list[str]) -> int:
 
     sub.add_parser("filters", help="every deployable is matched by some path filter")
     sub.add_parser("images", help="every Dockerfile is built by some matrix entry")
+    sub.add_parser("shards", help="the integration shards partition the stage")
 
     stages = sub.add_parser("stages", help="every stage ran, ran enough, and ran once")
     stages.add_argument("results", nargs="+", type=Path)
@@ -589,6 +692,13 @@ def main(argv: list[str]) -> int:
         if code := fail(problems, "the images matrix in ci.yml"):
             return code
         print("pipeline-gate: every Dockerfile under src/ is built by a matrix entry.")
+        return 0
+
+    if args.command == "shards":
+        problems = check_shards()
+        if code := fail(problems, "the integration shards in ci.yml"):
+            return code
+        print("pipeline-gate: the integration shards are a cascade, disjoint and exhaustive.")
         return 0
 
     problems = check_stages(args.results)

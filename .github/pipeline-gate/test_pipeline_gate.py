@@ -317,6 +317,80 @@ class ImageTests(Fixture):
         self.assertIn("parser", problems[0])
 
 
+# The integration matrix at ci.yml's indentation, one value in the folded form.
+SHARDS = """\
+  integration:
+    strategy:
+      matrix:
+        include:
+          - shard: payments
+            selects: FullyQualifiedName~Payments.
+          - shard: ordering
+            selects: >-
+              FullyQualifiedName~Ordering.&FullyQualifiedName!~Payments.
+          - shard: rest
+            selects: FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.
+"""
+
+
+class ShardTests(Fixture):
+    def setUp(self) -> None:
+        super().setUp()
+        self.write(WORKFLOW + SHARDS)
+
+    def test_a_cascade_is_clean(self) -> None:
+        self.assertEqual(pipeline_gate.check_shards(), [])
+
+    def test_the_folded_value_is_read_from_the_next_line(self) -> None:
+        """The parser's subject: a `>-` read as the value would pass as a term-less shard."""
+        shards = pipeline_gate.read_shards(WORKFLOW + SHARDS)
+
+        self.assertEqual(
+            shards[1], ("ordering", "FullyQualifiedName~Ordering.&FullyQualifiedName!~Payments."))
+
+    def test_a_remainder_missing_an_exclusion_runs_tests_twice(self) -> None:
+        self.write(WORKFLOW + SHARDS.replace("FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.", "FullyQualifiedName!~Payments."))
+
+        problems = pipeline_gate.check_shards()
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("rest shard does not exclude Ordering.", problems[0])
+        self.assertIn("two shards", problems[0])
+
+    def test_a_deleted_remainder_is_caught(self) -> None:
+        self.write(WORKFLOW + SHARDS.split("          - shard: rest")[0])
+
+        problems = pipeline_gate.check_shards()
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("the last shard, ordering, selects Ordering.", problems[0])
+
+    def test_an_exclusion_of_nothing_above_leaves_tests_in_no_shard(self) -> None:
+        self.write(WORKFLOW + SHARDS.replace(
+            "selects: FullyQualifiedName~Payments.", "selects: FullyQualifiedName~Payments.&FullyQualifiedName!~Ordering."))
+
+        problems = pipeline_gate.check_shards()
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("payments shard excludes Ordering.", problems[0])
+        self.assertIn("no shard", problems[0])
+
+    def test_a_term_the_cascade_cannot_read_is_caught(self) -> None:
+        self.write(WORKFLOW + SHARDS.replace("selects: FullyQualifiedName~Payments.", "selects: Category=Slow"))
+
+        problems = pipeline_gate.check_shards()
+
+        self.assertTrue(any("'Category=Slow'" in problem for problem in problems), problems)
+
+    def test_an_unparsed_matrix_fails_rather_than_passing_empty(self) -> None:
+        self.write(WORKFLOW)
+
+        problems = pipeline_gate.check_shards()
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("parser", problems[0])
+
+
 def trx(total: int, assembly: str, tests: list[str]) -> str:
     # The class name is deliberately NOT derived from the assembly: two
     # projects holding a `Suite` is what the identity has to survive, and a

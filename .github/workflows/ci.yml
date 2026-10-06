@@ -232,6 +232,9 @@ jobs:
       - name: Every image is built by some service
         run: python .github/pipeline-gate/pipeline_gate.py images
 
+      - name: The integration shards partition the stage
+        run: python .github/pipeline-gate/pipeline_gate.py shards
+
   # The scaffold has no template directory: it renders a new service from
   # src/Services/Catalog at run time, so there is one copy of the wiring rather
   # than two that drift. The risk that buys is that Catalog moves under the
@@ -681,10 +684,13 @@ jobs:
       # collector stops running, which reads exactly like a clean result. Both
       # stages, because the domain assemblies are exercised on both sides of
       # the category and §12.9 asks for the figure over the whole run.
+
+      # One root per shard, so a shard whose collector wrote nothing is named
+      # rather than hidden in the stage's total.
       - name: Report domain-layer coverage
         run: >
           python .github/coverage/domain_coverage.py
-          ./TestResults/unit ./TestResults/integration
+          ./TestResults/unit ./TestResults/integration/*
 
   # §15.1's per-service image build, closing the gap compose.yml names: that
   # smoke is filtered to deploy/compose/**, so a Dockerfile a source change
