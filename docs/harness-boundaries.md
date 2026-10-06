@@ -119,6 +119,14 @@ extra command runs, write redirections, and `graph` / `clean` / `init` /
 The `cbx` wrapper is the other half — whitelist and
 `CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
 
+**`CBX_NO_SKILL_AUTO_UPDATE=1` is also in `.claude/settings.json`'s `env`,
+because the wrapper is not the only way the CLI runs.** A bare
+`codebase-index` call from a checkout, which the argv guard admits, replaced
+the tracked skill with the package's stock copy, measured on 2026-10-06:
+seven files, the wrappers' `-P` and `PYTHONSAFEPATH` among what went. The
+`env` block reaches every command a session runs, so no route is left to
+spell the variable.
+
 **`PostToolUse` runs `.claude/hooks/refresh-index.py` after every edit and
 every shell call**, over the checkout the **edited path** belongs to, resolved
 before it is walked. `cwd` answers when the event names no file,
