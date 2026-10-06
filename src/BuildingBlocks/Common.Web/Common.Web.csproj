@@ -20,6 +20,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <!-- DbUpdateConcurrencyException, which §10.5's 409 row names; the base package, never a provider. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <!-- AddCommonOpenApi's transformer, which writes each endpoint's declared example into its document. -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
 
   <ItemGroup>

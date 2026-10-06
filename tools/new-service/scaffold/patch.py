@@ -618,6 +618,23 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             '["Health checks", "Health checks", "Health checks"]);\n',
         ),
     ),
+    "tests/Catalog.Api.Tests/RequestExampleRuleTests.cs": (
+        (
+            "    public void The_rule_above_is_looking_at_the_bodies_this_host_binds()\n",
+            "    public void This_host_binds_no_body_for_the_rule_above_to_look_at_yet()\n",
+        ),
+        (
+            "        // The floor: an offender list is as green over an empty selection.\n"
+            "        Names(RequestExampleRule.Bodied(Endpoints)).ShouldBe([\"PublishProduct\"]);\n",
+            "        Names(RequestExampleRule.Bodied(Endpoints)).ShouldBeEmpty(\n"
+            '            "This host binds no request body yet, so the rule above is '
+            'vacuous. The day it binds " +\n'
+            '            "one, this test fails — replace it with the ShouldBe form '
+            'naming that endpoint, " +\n'
+            '            "which is what keeps a vacuous gate from quietly becoming '
+            'a permanent one.");\n',
+        ),
+    ),
     # ADR-017's floor is the template's consumer, which a rendered host does
     # not inherit, so it is inverted on the same argument: the test fails the
     # day the service registers its first consumer, and says what to restore.
@@ -697,7 +714,7 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "\n"
             "// Appendix C's OpenAPI deliverable: document only, no UI.\n"
-            "builder.Services.AddOpenApi();\n",
+            "builder.Services.AddCommonOpenApi();\n",
             "",
         ),
         (
@@ -718,6 +735,40 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     # suite's own unknown-path test says so — so the two tests that name the
     # document leave, and the suite's summary stops describing it. The
     # authenticated factory stays: the unknown-path test is its other user.
+    "tests/Catalog.Api.Tests/RequestExampleRuleTests.cs": (
+        ("using System.Net;\nusing System.Text.Json;\nusing Catalog.TestSupport;\n", ""),
+        (
+            "/// <summary>Each body this host binds has an example its validator passes, and the document carries "
+            "it.</summary>\n",
+            "/// <summary>Each body this host binds has an example its validator passes.</summary>\n",
+        ),
+        (
+            "\n"
+            "    [Fact]\n"
+            "    public async Task The_served_document_carries_an_example_on_every_request_body()\n"
+            "    {\n"
+            "        using JsonDocument document = await DocumentAsync();\n"
+            "\n"
+            "        // Counted against the endpoint table, so a document that lost its bodies is not read as clean.\n"
+            "        RequestExampleRule.Bodies(document).Count.ShouldBe(RequestExampleRule.Bodied(Endpoints).Count);\n"
+            "        RequestExampleRule.Unexampled(document).ShouldBeEmpty();\n"
+            "    }\n"
+            "\n"
+            "    private static async Task<JsonDocument> DocumentAsync()\n"
+            "    {\n"
+            "        using HostSmokeTests.AuthenticatedUnreachableFactory authenticated = new();\n"
+            "        using HttpClient client = authenticated.CreateClient();\n"
+            "        using HttpRequestMessage request = new(HttpMethod.Get, \"/openapi/v1.json\");\n"
+            "        request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());\n"
+            "\n"
+            "        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);\n"
+            "        response.StatusCode.ShouldBe(HttpStatusCode.OK);\n"
+            "\n"
+            "        return JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));\n"
+            "    }\n",
+            "",
+        ),
+    ),
     "tests/Catalog.Api.Tests/HostSmokeTests.cs": (
         (
             "/// <summary>The host builds under <c>ValidateOnBuild</c> and serves its probes (§13.5) and OpenAPI "

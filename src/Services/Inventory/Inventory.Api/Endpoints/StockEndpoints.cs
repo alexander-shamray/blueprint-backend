@@ -25,6 +25,7 @@ public static class StockEndpoints
                 })
             // An absolute count, so a repeat sets what the first set (ADR-058).
             .RetrySafe(RetrySafety.Convergent)
+            .WithRequestExample(new SetOnHandRequest(25))
             .WithName("SetOnHand");
 
         group

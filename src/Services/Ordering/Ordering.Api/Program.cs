@@ -21,7 +21,7 @@ builder.Services.AddOrderingApplication();       // §6.2
 builder.Services.AddOrderingInfrastructure(builder.Configuration);   // §4.2, §7.1
 
 // Appendix C's OpenAPI deliverable: document only, no UI.
-builder.Services.AddOpenApi();
+builder.Services.AddCommonOpenApi();
 
 // ADR-052's server half; no interceptor, as the only caller-supplied value is parsed before the dispatcher.
 builder.Services.AddGrpc();

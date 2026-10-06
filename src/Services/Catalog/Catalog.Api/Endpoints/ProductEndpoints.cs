@@ -31,6 +31,13 @@ public static class ProductEndpoints
                     return result.ToHttpResult();
                 })
             .RequireAuthorization(CatalogPermissions.Write)
+            .WithRequestExample(
+                new PublishProductCommand(
+                    Guid.Parse("0199b0c4-6f2e-7a31-8c5d-2e4f6a7b8c9d"),
+                    "Walnut desk lamp",
+                    "https://images.example.com/products/walnut-desk-lamp.jpg",
+                    49.90m,
+                    "EUR"))
             .WithName("PublishProduct");
 
         // CursorPage, not Result (§6.2), so ToHttpResult has no part here.

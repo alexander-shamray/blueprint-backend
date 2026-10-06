@@ -30,6 +30,12 @@ public static class OrderEndpoints
                     return result.ToHttpResult();
                 })
             .RequireAuthorization(OrderingPermissions.Write)
+            .WithRequestExample(
+                new PlaceOrderCommand(
+                    Guid.Parse("0199b0c4-8b21-7c53-8e7f-4a6b8c9d0e1f"),
+                    [new PlaceOrderItem(Guid.Parse("0199b0c4-6f2e-7a31-8c5d-2e4f6a7b8c9d"), 2)],
+                    new AddressDto("1 Example Street", null, "Sampleton", "1234 AB", "NL"),
+                    "EUR"))
             .WithName("PlaceOrder");
 
         // A request record, since the reason is parsed here and the origin is not the caller's to state (§11.4).
@@ -60,6 +66,7 @@ public static class OrderEndpoints
             .RequireAuthorization(OrderingPermissions.Cancel)
             // Order.Cancel returns on a cancelled order, and cancelled is terminal (§5.4).
             .RetrySafe(RetrySafety.Convergent)
+            .WithRequestExample(new CancelOrderRequest(CancellationReasons.ToCode(CancellationReason.CustomerRequest)))
             .WithName("CancelOrder");
     }
 }
