@@ -99,6 +99,7 @@ SOURCE_INPUTS="
 src/Gateway/Gateway.Api
 src/BFF/Web.Bff
 src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
+src/BuildingBlocks/Common.Web/HealthProbe.cs
 .gitattributes
 deploy/canary
 $(awk '$2 == "source" { print $3 }' "$CASES")
@@ -1030,6 +1031,16 @@ if [ "$mapped_count" -eq 0 ]; then
 else
     pass "MapCommonHealthEndpoints maps $mapped_count paths, read from source"
 fi
+
+# HealthProbe asks its own copy of the readiness path, which Compose's
+# healthchecks run; it has to be a mapped path whose predicate reads the tag.
+grep -ohE 'MapHealthChecks\("/health/[a-z]+".*Contains\(Ready\)' \
+    "$ROOT/src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs" |
+    sed -E 's|^MapHealthChecks\("(/health/[a-z]+)".*|\1|' >"$OUT/ready-probes.txt"
+probe_path="$(sed -nE 's|.*ReadinessPath = "(/health/[a-z]+)";.*|\1|p' \
+    "$ROOT/src/BuildingBlocks/Common.Web/HealthProbe.cs")"
+check "HealthProbe asks '$probe_path', a path Common.Web gates on readiness" \
+    grep -qxF -- "${probe_path:-unparsed}" "$OUT/ready-probes.txt"
 
 for chart in $SERVICE_CHARTS; do
     while read -r path; do

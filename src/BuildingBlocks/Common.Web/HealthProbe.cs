@@ -1,12 +1,13 @@
 using System.Globalization;
 using System.Net;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 
 namespace Common.Web;
 
 /// <summary>A host's own readiness probe, for a container image that has no shell or HTTP client (§14.1).</summary>
-/// <remarks>The port is the runtime image's ASPNETCORE_HTTP_PORTS, which Catalog's and Ordering's Kestrel:Endpoints
-/// pin alike, and the path is the one <see cref="HealthCheckExtensions.MapCommonHealthEndpoints"/> maps (§13.5).
-/// </remarks>
+/// <remarks>The port is read as Kestrel binds it, so a declared endpoint outranks the image's ASPNETCORE_HTTP_PORTS,
+/// and the path is the one <see cref="HealthCheckExtensions.MapCommonHealthEndpoints"/> maps (§13.5).</remarks>
 public static class HealthProbe
 {
     /// <summary>The argument that makes a host probe itself instead of starting.</summary>
@@ -18,16 +19,15 @@ public static class HealthProbe
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(2);
 
     /// <summary>Asks this container's readiness endpoint over loopback: 0 on 200, 1 on anything else.</summary>
-    public static Task<int> RunAsync() =>
-        RunAsync(Environment.GetEnvironmentVariable("ASPNETCORE_HTTP_PORTS"), Timeout);
+    public static Task<int> RunAsync() => RunAsync(PortOf(HostConfiguration()), Timeout);
 
-    /// <summary>Asks the readiness endpoint on the first of <paramref name="httpPorts"/> over loopback.</summary>
-    public static async Task<int> RunAsync(string? httpPorts, TimeSpan timeout)
+    /// <summary>Asks the readiness endpoint on <paramref name="port"/> over loopback.</summary>
+    public static async Task<int> RunAsync(int? port, TimeSpan timeout)
     {
-        string first = (httpPorts ?? string.Empty).Split(';', StringSplitOptions.TrimEntries)[0];
-        if (!int.TryParse(first, NumberStyles.None, CultureInfo.InvariantCulture, out int port))
+        if (port is null)
         {
-            await Console.Error.WriteLineAsync($"No port to probe: ASPNETCORE_HTTP_PORTS is '{httpPorts}'.");
+            await Console.Error.WriteLineAsync(
+                "No port to probe: no HTTP/1.1 endpoint in Kestrel:Endpoints and no ASPNETCORE_HTTP_PORTS.");
             return 1;
         }
 
@@ -44,5 +44,43 @@ public static class HealthProbe
             await Console.Error.WriteLineAsync($"{ReadinessPath} did not answer: {e.Message}");
             return 1;
         }
+    }
+
+    /// <summary>The port Kestrel serves HTTP/1.1 on, or null when the configuration names none.</summary>
+    /// <remarks>Any declared endpoint replaces HTTP_PORTS, and an Http2-only one refuses the probe's HTTP/1.1.
+    /// </remarks>
+    public static int? PortOf(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        IConfigurationSection[] endpoints = [.. configuration.GetSection("Kestrel:Endpoints").GetChildren()];
+        if (endpoints.Length > 0)
+        {
+            string? url = endpoints
+                .Where(e => !string.Equals(e["Protocols"], "Http2", StringComparison.OrdinalIgnoreCase))
+                .Select(e => e["Url"])
+                .FirstOrDefault(u => u is not null);
+
+            return url is null ? null : BindingAddress.Parse(url).Port;
+        }
+
+        string first = (configuration["HTTP_PORTS"] ?? string.Empty).Split(';', StringSplitOptions.TrimEntries)[0];
+        return int.TryParse(first, NumberStyles.None, CultureInfo.InvariantCulture, out int port) ? port : null;
+    }
+
+    // The sources a container host's Kestrel reads in the host's order; the probe runs before any host is built.
+    private static IConfiguration HostConfiguration()
+    {
+        string environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? "Production";
+
+        return new ConfigurationBuilder()
+            .AddEnvironmentVariables("ASPNETCORE_")
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: true)
+            .AddJsonFile($"appsettings.{environment}.json", optional: true)
+            .AddEnvironmentVariables()
+            .Build();
     }
 }
