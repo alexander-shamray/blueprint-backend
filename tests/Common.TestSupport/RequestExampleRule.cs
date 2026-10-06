@@ -65,19 +65,28 @@ public static class RequestExampleRule
         return offenders;
     }
 
-    /// <summary>Each bodied endpoint that answers its own example with a 4xx, sent as a caller sends it.</summary>
-    /// <remarks>Whoever refuses: a validator of the built command, a handler's parse, the route or policy. A 5xx or no
-    /// answer within <paramref name="budget"/> is past them all: validation runs before idempotency (§6.3).</remarks>
+    /// <summary>Registers the probe <see cref="RefusedAsync"/> reads, a validator of every type.</summary>
+    public static void ObserveValidation(IServiceCollection services) =>
+        services.AddSingleton<ValidatorArrivals>().AddTransient(typeof(IValidator<>), typeof(ArrivalProbe<>));
+
+    /// <summary>Each bodied endpoint that refuses its own example, or answers it short of a validator.</summary>
+    /// <remarks>A 4xx is a refusal, from a validator of the built command, a handler's parse, the route or policy. Any
+    /// other outcome must reach the command's validators, since a 5xx or a wait could come from in front of them;
+    /// past them, idempotency waits on what the host cannot reach (§6.3).</remarks>
     public static async Task<IReadOnlyList<string>> RefusedAsync(
-        IEnumerable<Endpoint> endpoints,
+        IServiceProvider services,
         HttpClient client,
         Action<HttpRequestMessage> authenticate,
         TimeSpan budget,
         CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(authenticate);
 
+        ValidatorArrivals arrivals = services.GetService<ValidatorArrivals>() ??
+            throw new InvalidOperationException("RefusedAsync reads a probe: register ObserveValidation on the host");
+        IEnumerable<Endpoint> endpoints = services.GetRequiredService<EndpointDataSource>().Endpoints;
         List<string> offenders = [];
 
         foreach (RouteEndpoint endpoint in Bodied(endpoints).OfType<RouteEndpoint>())
@@ -93,18 +102,27 @@ public static class RequestExampleRule
 
             using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
             deadline.CancelAfter(budget);
+            int before = arrivals.Count;
+            string answer;
 
             try
             {
                 using HttpResponseMessage response = await client.SendAsync(request, deadline.Token);
+                answer = $"answers its own example with {(int)response.StatusCode}";
 
                 if ((int)response.StatusCode is >= 400 and < 500)
+                {
                     offenders.Add($"{NameOf(endpoint)} refuses its own example with {(int)response.StatusCode}");
+                    continue;
+                }
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                // Past every refusal and waiting on infrastructure the host cannot reach.
+                answer = $"gives its own example no answer within {budget.TotalSeconds}s";
             }
+
+            if (arrivals.Count == before)
+                offenders.Add($"{NameOf(endpoint)} {answer} and never reaches a validator");
         }
 
         return offenders;
@@ -157,4 +175,32 @@ public static class RequestExampleRule
     // The body a minimal API binds, which is what puts a request body in the operation.
     private static Type? BodyOf(Endpoint endpoint) =>
         endpoint.Metadata.GetMetadata<IAcceptsMetadata>()?.RequestType;
+
+    /// <summary>How many requests have reached a validator on the host this is registered on.</summary>
+    private sealed class ValidatorArrivals
+    {
+        private int count;
+
+        public int Count => Volatile.Read(ref count);
+
+        public void Arrive() => Interlocked.Increment(ref count);
+    }
+
+    // No rules: it only counts, beside the command's own validators, so it changes no verdict.
+    private sealed class ArrivalProbe<T>(ValidatorArrivals arrivals) : AbstractValidator<T>
+    {
+        public override ValidationResult Validate(ValidationContext<T> context)
+        {
+            arrivals.Arrive();
+            return base.Validate(context);
+        }
+
+        public override Task<ValidationResult> ValidateAsync(
+            ValidationContext<T> context,
+            CancellationToken cancellation = default)
+        {
+            arrivals.Arrive();
+            return base.ValidateAsync(context, cancellation);
+        }
+    }
 }

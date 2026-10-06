@@ -126,7 +126,7 @@ public class RequestExampleTests
     }
 
     [Fact]
-    public async Task An_endpoint_answering_its_own_example_with_a_4xx_is_named_and_a_5xx_is_not()
+    public async Task An_endpoint_refusing_its_own_example_or_answering_it_before_a_validator_is_named()
     {
         using IHost host = await StartAsync(endpoints =>
         {
@@ -135,21 +135,95 @@ public class RequestExampleTests
                 .WithRequestExample(Valid)
                 .WithName("Refused");
             endpoints
-                .MapPost("/unreachable/{id:guid}", (Guid id, Restock restock) => Results.StatusCode(503))
+                .MapPost("/unvalidated", (Restock _) => Results.StatusCode(503))
+                .WithRequestExample(Valid)
+                .WithName("Unvalidated");
+            endpoints
+                .MapPost(
+                    "/unreachable/{id:guid}",
+                    async (Guid id, Restock restock, HttpContext context) =>
+                    {
+                        await ValidateAsync(restock, context);
+                        return Results.StatusCode(503);
+                    })
                 .WithRequestExample(Valid)
                 .WithName("Unreachable");
         });
+
+        IReadOnlyList<string> refused = await RefusedAsync(host, TimeSpan.FromSeconds(5));
+
+        // The third route takes a parameter, so this also shows the path is filled rather than left to 404.
+        refused.ShouldBe(
+        [
+            "Refused refuses its own example with 400",
+            "Unvalidated answers its own example with 503 and never reaches a validator"
+        ]);
+    }
+
+    [Fact]
+    public async Task An_endpoint_giving_its_own_example_no_answer_before_a_validator_is_named()
+    {
+        using IHost host = await StartAsync(endpoints =>
+        {
+            endpoints
+                .MapPost(
+                    "/hangs",
+                    async (Restock _, CancellationToken ct) =>
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                        return Results.NoContent();
+                    })
+                .WithRequestExample(Valid)
+                .WithName("Hangs");
+            endpoints
+                .MapPost(
+                    "/waits",
+                    async (Restock restock, HttpContext context, CancellationToken ct) =>
+                    {
+                        await ValidateAsync(restock, context);
+                        await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                        return Results.NoContent();
+                    })
+                .WithRequestExample(Valid)
+                .WithName("Waits");
+        });
+
+        IReadOnlyList<string> refused = await RefusedAsync(host, TimeSpan.FromSeconds(0.5));
+
+        // A wait in front of the validators looks like one behind them, so only the probe tells them apart.
+        refused.ShouldBe(["Hangs gives its own example no answer within 0.5s and never reaches a validator"]);
+    }
+
+    [Fact]
+    public async Task A_host_with_no_probe_is_refused_rather_than_read_as_clean()
+    {
+        using IHost host = await StartAsync(
+            endpoints => endpoints.MapPost("/restock", (Restock _) => Results.NoContent()).WithRequestExample(Valid),
+            observe: false);
+
+        InvalidOperationException refused = await Should.ThrowAsync<InvalidOperationException>(
+            RefusedAsync(host, TimeSpan.FromSeconds(5)));
+
+        refused.Message.ShouldBe("RefusedAsync reads a probe: register ObserveValidation on the host");
+    }
+
+    // What ValidationBehavior does for a command, so the probe sees the request arrive.
+    private static async Task ValidateAsync(Restock restock, HttpContext context)
+    {
+        foreach (IValidator<Restock> validator in context.RequestServices.GetServices<IValidator<Restock>>())
+            await validator.ValidateAsync(new ValidationContext<Restock>(restock), context.RequestAborted);
+    }
+
+    private static async Task<IReadOnlyList<string>> RefusedAsync(IHost host, TimeSpan budget)
+    {
         using HttpClient client = host.GetTestClient();
 
-        IReadOnlyList<string> refused = await RequestExampleRule.RefusedAsync(
-            Endpoints(host),
+        return await RequestExampleRule.RefusedAsync(
+            host.Services,
             client,
             _ => { },
-            TimeSpan.FromSeconds(5),
+            budget,
             TestContext.Current.CancellationToken);
-
-        // The second route takes a parameter, so this also shows the path is filled rather than left to 404.
-        refused.ShouldBe(["Refused refuses its own example with 400"]);
     }
 
     private static IEnumerable<Endpoint> Endpoints(IHost host) =>
@@ -166,16 +240,21 @@ public class RequestExampleTests
         return JsonDocument.Parse(document);
     }
 
-    private static Task<IHost> StartAsync(Action<IEndpointRouteBuilder> map) =>
+    private static Task<IHost> StartAsync(Action<IEndpointRouteBuilder> map, bool observe = true) =>
         new HostBuilder()
             .ConfigureWebHost(web =>
             {
                 web.UseTestServer();
                 web.ConfigureServices(services =>
+                {
                     services
                         .AddRouting()
                         .AddCommonOpenApi()
-                        .AddScoped<IValidator<Restock>, RestockValidator>());
+                        .AddScoped<IValidator<Restock>, RestockValidator>();
+
+                    if (observe)
+                        RequestExampleRule.ObserveValidation(services);
+                });
                 web.Configure(app =>
                 {
                     app.UseRouting();
