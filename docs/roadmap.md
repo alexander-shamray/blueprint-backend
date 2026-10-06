@@ -478,8 +478,9 @@ BFF's token, the absent `permission` claim, that a host running the real
 `AddJwtAuthentication` accepts it, and that a client without the scope is
 refused. The login half is `RealmImportTests`, which reads the export and
 starts nothing — so no standing test mints a password-grant token for `demo` or
-`browser`, and the claims those logins carry were verified once, by hand. It is
-still the only suite in the solution that starts an identity provider.
+`browser`, and the claims those logins carry were verified once, by hand.
+[Appendix B](backend-architecture/appendix-b-licences.md) names the suites that
+start an identity provider.
 
 **The `Directory.Build.props` analyser policy is settled, and it is a tax.**
 [ADR-019](backend-architecture/adr/ADR-019-warnings-are-errors-and-the-editorconfig-is-a-build-input.md)
