@@ -14,6 +14,7 @@ CI hands it.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 import unittest
@@ -480,6 +481,10 @@ class Main(unittest.TestCase):
             map_path.write_text(map_text, encoding="utf-8")
             payload_path = Path(directory) / "payload.json"
             payload_path.write_text(payload_text, encoding="utf-8")
+            # A scratch repository by default, so the verdict never depends on where the suite runs from.
+            if "--root" not in extra:
+                git(Path(directory), "init", "-q")
+                extra = ("--root", directory, *extra)
             out, err = io.StringIO(), io.StringIO()
             with redirect_stdout(out), redirect_stderr(err):
                 code = locality_gate.main(["locality_gate.py", "--map", str(map_path), *extra, str(payload_path)])
@@ -557,6 +562,15 @@ class IgnoredPaths(unittest.TestCase):
         (self.root / ".gitignore").write_text(".claude/settings.local.json\n", encoding="utf-8")
         self.assertEqual(ignored_paths(["docs/local.json"], self.root), set())
 
+    def test_a_user_excludes_file_is_not_read(self) -> None:
+        # A developer's global excludes are not the tree's rules, and CI has none to read.
+        excludes = self.root / "user-ignore"
+        excludes.write_text("*.md\n", encoding="utf-8")
+        config = self.root / "user-config"
+        config.write_text(f"[core]\n\texcludesFile = {excludes.as_posix()}\n", encoding="utf-8")
+        with unittest.mock.patch.dict("os.environ", {"GIT_CONFIG_GLOBAL": str(config)}):
+            self.assertEqual(ignored_paths(["docs/a.md", "docs/local.json"], self.root), {"docs/local.json"})
+
     def test_a_directory_outside_any_repository_refuses_the_run(self) -> None:
         with tempfile.TemporaryDirectory() as outside:
             ceiling = {"GIT_CEILING_DIRECTORIES": str(Path(outside).parent)}
@@ -597,7 +611,7 @@ class TheShippedIgnoreRules(unittest.TestCase):
                                  encoding="utf-8", check=True).stdout.splitlines()
         self.assertGreater(len(tracked), 100, "ls-files found almost nothing")
         listed = subprocess.run(["git", "-C", str(ROOT), "-c", "core.ignorecase=true",
-                                 "ls-files", "-ci", "--exclude-standard"],
+                                 "-c", f"core.excludesFile={os.devnull}", "ls-files", "-ci", "--exclude-standard"],
                                 capture_output=True, encoding="utf-8", check=True).stdout.splitlines()
         self.assertEqual(listed, [])
 

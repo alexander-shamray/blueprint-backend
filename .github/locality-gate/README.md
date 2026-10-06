@@ -26,7 +26,8 @@ for the first two; this gate is §3 enforced.
   rides along, so a removal is not read as a path the diff leaves behind.
 - The checkout's `.gitignore` files, through `git check-ignore --no-index`
   run from the working directory, which in CI is the pull request's merge
-  checkout.
+  checkout. A user's global excludes file is not read, so a developer's
+  machine reaches the verdict CI does.
 
 ## What it judges
 
