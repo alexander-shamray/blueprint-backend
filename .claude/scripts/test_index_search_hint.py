@@ -456,7 +456,7 @@ class OneRoute(Scratch):
         module.mkdir()
         (module / ".git").write_text("gitdir: ../.git/modules/module\n", encoding="utf-8")
 
-        self.assertNotIn("cbx", self.refused(*grep_call(), cwd=module))
+        self.assertEqual(["find_refs", "find_symbol"], tools(self.refused(*grep_call(), cwd=module)))
 
 
 class WhatItCannotRead(Scratch):
