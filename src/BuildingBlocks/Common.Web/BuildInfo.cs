@@ -20,7 +20,8 @@ public static class BuildInfo
 
     // The entry assembly, because the version that matters is the host's, not this library's.
     private static string? Read() =>
-        Assembly.GetEntryAssembly()
+        Assembly
+            .GetEntryAssembly()
             ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion;
 }

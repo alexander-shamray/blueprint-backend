@@ -72,7 +72,8 @@ public sealed class SupersededBookingTests
         bool moved = await PassAsync(carrier, new ConflictOnceUnitOfWork(), new RecordingLogger(), pending, voided);
 
         moved.ShouldBeFalse();
-        carrier.Cancels.ShouldHaveSingleItem(
+        carrier.Cancels
+            .ShouldHaveSingleItem(
                 "a conflict left to the row's backoff strands a Voided row the claim never takes again")
             .IdempotencyKey.ShouldBe($"cancel:{voided.Id.Value}");
     }

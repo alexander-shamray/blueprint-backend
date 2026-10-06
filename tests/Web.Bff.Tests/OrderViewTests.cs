@@ -177,7 +177,8 @@ public sealed class OrderViewTests
 
     [Fact]
     public void An_owned_row_no_step_has_reached_is_a_handler_defect_and_says_so() =>
-        Should.Throw<InvalidOperationException>(() =>
+        Should
+            .Throw<InvalidOperationException>(() =>
                 OrderView.Summary(new OrderReadRow { OrderId = Order, FirstSeenAt = At, AsOf = At }, []))
             .Message.ShouldContain("no step");
 }

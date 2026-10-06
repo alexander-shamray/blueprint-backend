@@ -28,7 +28,8 @@ public sealed class MailOptionsTests
     [InlineData(null, null)]
     public void Outside_development_a_missing_credential_is_refused_at_registration(string? userName, string? password)
     {
-        Should.Throw<InvalidOperationException>(() =>
+        Should
+            .Throw<InvalidOperationException>(() =>
                 Bound(Environments.Production, Relay(userName: userName, relayPassword: password)))
             .Message.ShouldContain(
                 $"{MailOptions.UserNameKey} and {MailOptions.PasswordKey} are required outside Development");

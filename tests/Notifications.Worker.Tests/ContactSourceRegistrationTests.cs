@@ -70,7 +70,8 @@ public sealed class ContactSourceRegistrationTests
     [InlineData("commerce?x=1")]
     public void A_realm_that_is_not_one_plain_path_segment_is_refused_by_key(string? realm)
     {
-        Should.Throw<InvalidOperationException>(
+        Should
+            .Throw<InvalidOperationException>(
                 () => Register("https://keycloak.example/", Environments.Production, realm))
             .Message.ShouldContain(ContactRegistration.RealmKey);
     }

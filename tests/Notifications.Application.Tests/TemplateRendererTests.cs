@@ -131,8 +131,9 @@ public class TemplateRendererTests
     [Fact]
     public void A_resend_in_a_language_the_deployment_dropped_throws_rather_than_rendering_without_a_culture()
     {
-        Should.Throw<InvalidOperationException>(() =>
-            Renderer(["kk", "en"]).Render(TemplateKeys.OrderPlaced, Everything, 1, ["ru"]))
+        Should
+            .Throw<InvalidOperationException>(() =>
+                Renderer(["kk", "en"]).Render(TemplateKeys.OrderPlaced, Everything, 1, ["ru"]))
             .Message.ShouldContain("ru");
     }
 
