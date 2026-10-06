@@ -60,6 +60,9 @@ INTERPRETERS = {
 SEPARATORS = set("|&;()\n")
 REDIRECTS = set("<>")
 
+# A transcript line recording a failed result, in either JSON spacing.
+FAILED = re.compile(rb'"is_error":\s*true')
+
 # A heredoc's opening, `<<TAG`, `<<-TAG` or a quoted tag; not `<<<`.
 HEREDOC = re.compile(r"(?<!<)<<(-?)[ \t]*(['\"]?)([A-Za-z_][\w.-]*)\2")
 
@@ -344,13 +347,16 @@ def lookup(name: str, given: dict) -> bool:
     return any(runs_cli(argv) for argv, _piped, _after in segments(given["command"], SHELLS[name]))
 
 
-def calls(transcript: Path):
-    """Every tool call the transcript records, as (name, input). Only the
-    lines naming a tool call are parsed: a long session's transcript runs to
-    tens of megabytes, and this runs before the agent's call does."""
+def calls(transcript: Path) -> list[tuple[str, dict]]:
+    """Every tool call the transcript records that did not end in an error,
+    as (name, input): a call a guard refused, or one that failed, asked
+    nothing. Only the lines naming a call or a failed result are parsed: a
+    long session's transcript runs to tens of megabytes, and this runs
+    before the agent's call does."""
+    made, failed = [], set()
     with transcript.open("rb") as handle:
         for line in handle:
-            if b'"tool_use"' not in line:
+            if b'"tool_use"' not in line and not FAILED.search(line):
                 continue
             try:
                 entry = json.loads(line)
@@ -361,7 +367,10 @@ def calls(transcript: Path):
             for block in content if isinstance(content, list) else ():
                 if isinstance(block, dict) and block.get("type") == "tool_use":
                     given = block.get("input")
-                    yield str(block.get("name")), given if isinstance(given, dict) else {}
+                    made.append((block.get("id"), str(block.get("name")), given if isinstance(given, dict) else {}))
+                elif isinstance(block, dict) and block.get("type") == "tool_result" and block.get("is_error") is True:
+                    failed.add(block.get("tool_use_id"))
+    return [(name, given) for call_id, name, given in made if call_id not in failed]
 
 
 def in_worktree(cwd: str) -> bool:
