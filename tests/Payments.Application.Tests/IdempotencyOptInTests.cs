@@ -1,5 +1,6 @@
 using System.Reflection;
 using Common.Application;
+using Common.TestSupport;
 using Shouldly;
 using Xunit;
 
@@ -52,8 +53,7 @@ public class IdempotencyOptInTests
         // Written to what the behaviour rebuilds, not to what the container's constraint admits.
         (Type Command, Type Result)[] candidates =
         [
-            .. Commands()
-                .Where(typeof(IIdempotentCommand).IsAssignableFrom)
+            .. Idempotent()
                 .SelectMany(t => t
                     .GetInterfaces()
                     .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICommand<>))
@@ -100,10 +100,7 @@ public class IdempotencyOptInTests
         names.ShouldBeEmpty(
             "This service opts no command into idempotency yet, so the check below is "
             + "vacuous. The day it does, this test fails — replace it with the ShouldNotBeEmpty "
-            + "form, which is what keeps a vacuous gate from quietly becoming a permanent one, "
-            + "and cover that command's endpoint authorization: §8.5 requires an idempotent "
-            + "command's endpoint to be authenticated, since an anonymous one collapses every "
-            + "caller into the shared system subject.");
+            + "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
 
         names.Distinct(StringComparer.Ordinal).Count().ShouldBe(
             names.Length,
@@ -152,8 +149,7 @@ public class IdempotencyOptInTests
             .GetProperty(nameof(IIdempotentCommand.OperationName), BindingFlags.Public | BindingFlags.Static)!
             .GetValue(null)!;
 
-    private static Type[] Idempotent() =>
-        [.. Commands().Where(typeof(IIdempotentCommand).IsAssignableFrom)];
+    private static Type[] Idempotent() => [.. CommandFingerprintRule.IdempotentCommands(Application)];
 
     private static Type[] Commands() =>
     [

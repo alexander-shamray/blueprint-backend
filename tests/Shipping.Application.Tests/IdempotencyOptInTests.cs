@@ -1,5 +1,6 @@
 using System.Reflection;
 using Common.Application;
+using Common.TestSupport;
 using Shouldly;
 using Xunit;
 
@@ -52,8 +53,7 @@ public class IdempotencyOptInTests
         // Written to what the behaviour rebuilds, not to what the container's constraint admits.
         (Type Command, Type Result)[] candidates =
         [
-            .. Commands()
-                .Where(typeof(IIdempotentCommand).IsAssignableFrom)
+            .. Idempotent()
                 .SelectMany(t => t
                     .GetInterfaces()
                     .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICommand<>))
@@ -149,8 +149,7 @@ public class IdempotencyOptInTests
             .GetProperty(nameof(IIdempotentCommand.OperationName), BindingFlags.Public | BindingFlags.Static)!
             .GetValue(null)!;
 
-    private static Type[] Idempotent() =>
-        [.. Commands().Where(typeof(IIdempotentCommand).IsAssignableFrom)];
+    private static Type[] Idempotent() => [.. CommandFingerprintRule.IdempotentCommands(Application)];
 
     private static Type[] Commands() =>
     [

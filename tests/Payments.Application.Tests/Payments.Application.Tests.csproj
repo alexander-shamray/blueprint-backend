@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Application\Payments.Application.csproj" />
+    <!-- CommandFingerprintRule's selection of an idempotent command, the one every gate over them reads. -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
     <!-- No Payments.TestSupport and no Docker: the handlers here run against hand-rolled fakes.
          Payments.Infrastructure is referenced so §9.4's payload contract meets the real registration. -->
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Infrastructure\Payments.Infrastructure.csproj" />

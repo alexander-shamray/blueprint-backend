@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Shipping\Shipping.Application\Shipping.Application.csproj" />
+    <!-- CommandFingerprintRule's selection of an idempotent command, the one every gate over them reads. -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
     <!-- No Shipping.TestSupport and no Docker: the handlers here run against hand-rolled fakes, and §12.4
          reads a level as what a test exercises, not as an assembly. -->
   </ItemGroup>
