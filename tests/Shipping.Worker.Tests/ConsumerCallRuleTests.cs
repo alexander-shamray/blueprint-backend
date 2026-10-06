@@ -1,5 +1,6 @@
 using Shipping.TestSupport;
 using Common.TestSupport;
+using MassTransit;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -57,6 +58,55 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
                 "HttpClient",
                 "ICarrierGateway"
             ]);
+    }
+
+    public sealed record Probe;
+
+    // Generic, because the Ordering stub this suite references declares a client of the same name.
+    public sealed class Addressing<TClient>(TClient client) : IConsumer<Probe>
+        where TClient : class
+    {
+        public TClient Client { get; } = client;
+
+        public Task Consume(ConsumeContext<Probe> context) => Task.CompletedTask;
+    }
+
+    private Type AddressClient =>
+        factory.Composition.First(d => d.ServiceType.Name == "DeliveryAddressesClient").ServiceType;
+
+    private IServiceCollection AddressingComposition()
+    {
+        IServiceCollection services = new ServiceCollection();
+        services.AddScoped(typeof(Addressing<>).MakeGenericType(AddressClient));
+        foreach (ServiceDescriptor descriptor in factory.Composition)
+        {
+            if (descriptor.ServiceType == AddressClient)
+                services.Add(descriptor);
+        }
+
+        return services;
+    }
+
+    [Fact]
+    public void A_consumer_taking_a_registered_client_is_reported_under_the_clients_type()
+    {
+        ConsumerCallRule.Offenders(AddressingComposition(), typeof(ConsumerCallRuleTests).Assembly, [])
+            .ShouldHaveSingleItem()
+            .ShouldContain("> reaches DeliveryAddressesClient (Addressing<DeliveryAddressesClient> -> ");
+    }
+
+    [Fact]
+    public void An_exception_on_the_clients_type_grants_a_consumer_that_takes_it()
+    {
+        ConsumerCallException granted = new(
+            AddressClient,
+            GrantedBy: "ADR-052",
+            WhenUnreachable: "the message is retried",
+            WhenAnsweredNo: "the message faults",
+            UnreachableChoice.Correctness);
+
+        ConsumerCallRule.Offenders(AddressingComposition(), typeof(ConsumerCallRuleTests).Assembly, [granted])
+            .ShouldBeEmpty();
     }
 
     private static string[] Names(IEnumerable<Type> types) => [.. types.Select(type => type.Name)];
