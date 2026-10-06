@@ -65,7 +65,9 @@ internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) 
         using IDbConnection connection = connections.Create();
 
         Row? row = await connection.QuerySingleOrDefaultAsync<Row>(new CommandDefinition(
-            GetSql, new { OrderId = orderId.Value }, cancellationToken: ct));
+            GetSql,
+            new { OrderId = orderId.Value },
+            cancellationToken: ct));
 
         // char(2) space-pads a shorter value; two letters by contract, so the trim is defensive.
         return row is null

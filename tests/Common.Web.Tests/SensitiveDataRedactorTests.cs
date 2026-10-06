@@ -162,7 +162,11 @@ public class SensitiveDataRedactorTests
             })))
         {
             factory.CreateLogger("test").Log<object?>(
-                LogLevel.Information, new EventId(4), null, null, (_, _) => "no state");
+                LogLevel.Information,
+                new EventId(4),
+                null,
+                null,
+                (_, _) => "no state");
         }
 
         exported.Single().Attributes.ShouldBeNull();

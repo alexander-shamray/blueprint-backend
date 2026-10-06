@@ -17,7 +17,8 @@ public sealed class SendWorkerBudgetTests
     public void The_lease_outlives_both_calls_a_row_makes()
     {
         TimeSpan.FromSeconds(SendWorker.LeaseSeconds).ShouldBeGreaterThan(
-            OneRow, "a lease shorter than a row's calls lets a second replica claim a row still being sent");
+            OneRow,
+            "a lease shorter than a row's calls lets a second replica claim a row still being sent");
     }
 
     [Fact]
@@ -25,14 +26,16 @@ public sealed class SendWorkerBudgetTests
     {
         // The default the solution never overrides, measured rather than written down (§15.3).
         (SendWorker.DrainBudget + SendWorker.CommitRoom).ShouldBeLessThanOrEqualTo(
-            new HostOptions().ShutdownTimeout, "the host abandons a pass still committing when its drain runs out");
+            new HostOptions().ShutdownTimeout,
+            "the host abandons a pass still committing when its drain runs out");
     }
 
     [Fact]
     public void A_pass_fits_the_drain_budget()
     {
         OneRow.ShouldBeLessThanOrEqualTo(
-            SendWorker.DrainBudget, "a stop cancels a pass whose calls outrun the drain budget, mid-send");
+            SendWorker.DrainBudget,
+            "a stop cancels a pass whose calls outrun the drain budget, mid-send");
     }
 
     [Fact]

@@ -63,7 +63,8 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
             before.AddSeconds(5),
             "the dispatcher's ladder is 2^min(Attempts, 8) x 5 s, so the first backoff is at least five seconds");
         FulfilmentSteps.BookingCalls(_carrier).ShouldBe(
-            CarrierHop.MaxRetryAttempts + 1, "the pipeline retries a 503 inside the one call");
+            CarrierHop.MaxRetryAttempts + 1,
+            "the pipeline retries a 503 inside the one call");
     }
 
     [Fact]
@@ -73,7 +74,11 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
 
         // WireMock.Net journals a request once its response is produced, hence the stall short of the attempt timeout.
         using IDisposable stalled = ServiceFixture.CarrierAnswers(
-            _carrier, FulfilmentSteps.BookingPath, 503, method: "POST", delay: StallPerAttempt);
+            _carrier,
+            FulfilmentSteps.BookingPath,
+            503,
+            method: "POST",
+            delay: StallPerAttempt);
 
         Task<int> first = PassAsync();
         await FulfilmentSteps.WaitUntil(() => Task.FromResult(FulfilmentSteps.BookingCalls(_carrier) >= 1));
@@ -85,7 +90,8 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
         (await _steps.StatusAsync(order)).ShouldBe("Pending");
         (await _steps.AttemptsAsync(order)).ShouldBe(1, "one pass failed on the row, and the other never took it");
         FulfilmentSteps.BookingCalls(_carrier).ShouldBe(
-            CarrierHop.MaxRetryAttempts + 1, "every request in the journal belongs to the first pass");
+            CarrierHop.MaxRetryAttempts + 1,
+            "every request in the journal belongs to the first pass");
     }
 
     [Fact]

@@ -54,7 +54,8 @@ public sealed class FulfilmentOptionsTests
         Should.NotThrow(() => provider.GetRequiredService<IStartupValidator>().Validate());
 
         provider.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge.ShouldBe(TimeSpan.Parse(
-            ShippingWorkerFactory.InventedGiveUpAge, System.Globalization.CultureInfo.InvariantCulture));
+            ShippingWorkerFactory.InventedGiveUpAge,
+            System.Globalization.CultureInfo.InvariantCulture));
     }
 
     // The production validator over the same binding: the host theory above

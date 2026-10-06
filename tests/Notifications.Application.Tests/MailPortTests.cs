@@ -80,7 +80,9 @@ public class MailPortTests
     public void An_unavailable_relay_carries_its_cause_and_its_code_and_nothing_of_the_relays_own()
     {
         MailUnavailableException thrown = new(
-            "Message x met SmtpCommandException 451 while sending.", MailFault.Transient, 451);
+            "Message x met SmtpCommandException 451 while sending.",
+            MailFault.Transient,
+            451);
 
         thrown.Cause.ShouldBe(MailFault.Transient);
         thrown.SmtpStatus.ShouldBe(451);

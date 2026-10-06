@@ -931,8 +931,7 @@ foreach (OutboxClaim message in claimed)
         // escape with no attempt recorded and every row behind it left
         // leased — a delivery failure disguised as a shutdown.
         await connection.ExecuteAsync(
-            new CommandDefinition(
-                _failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
+            new CommandDefinition(_failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
 
         DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
     }

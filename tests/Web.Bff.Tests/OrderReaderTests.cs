@@ -70,8 +70,7 @@ public sealed class OrderReaderTests(BffServiceFixture fixture) : IAsyncLifetime
         await fixture.DeliverAsync(OrderEvents.Placed(b, _buyer, At));
 
         // The handlers stamp FirstSeenAt from the clock; forcing a tie is the case the id tiebreaker exists for.
-        await fixture.ExecuteAsync(
-            "UPDATE bff.Orders SET FirstSeenAt = {0} WHERE OrderId IN ({1}, {2})", At, a, b);
+        await fixture.ExecuteAsync("UPDATE bff.Orders SET FirstSeenAt = {0} WHERE OrderId IN ({1}, {2})", At, a, b);
 
         CursorPage<OrderSummary> first = await Reader.ListAsync(_buyer, null, 1, Ct);
         CursorPage<OrderSummary> second = await Reader.ListAsync(_buyer, first.NextCursor, 1, Ct);

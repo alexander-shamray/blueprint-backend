@@ -49,8 +49,7 @@ public sealed class ConfirmOrderMapper : ICommandMessageMapper<ConfirmOrder, Con
         }
         catch (DomainException e)
         {
-            throw new ContractMappingException(
-                $"Unusable payment reference on {nameof(ConfirmOrder)}.", e);
+            throw new ContractMappingException($"Unusable payment reference on {nameof(ConfirmOrder)}.", e);
         }
     }
 }
@@ -66,8 +65,7 @@ public sealed class MarkOrderShippedMapper : ICommandMessageMapper<MarkOrderShip
         }
         catch (DomainException e)
         {
-            throw new ContractMappingException(
-                $"Unusable tracking number on {nameof(MarkOrderShipped)}.", e);
+            throw new ContractMappingException($"Unusable tracking number on {nameof(MarkOrderShipped)}.", e);
         }
     }
 }

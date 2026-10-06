@@ -23,7 +23,9 @@ public sealed class UnreservedDespatchProjection(IDbConnectionFactory connection
     {
         using IDbConnection connection = connections.Create();
         int affected = await connection.ExecuteAsync(new CommandDefinition(
-            ClaimSql, new { OrderId = domainEvent.OrderId.Value }, cancellationToken: ct));
+            ClaimSql,
+            new { OrderId = domainEvent.OrderId.Value },
+            cancellationToken: ct));
 
         if (affected == 1)
             metrics.UnreservedDespatch();

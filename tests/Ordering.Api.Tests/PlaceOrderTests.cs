@@ -53,15 +53,14 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
 
         // The handler never called SaveChanges, so a committed row is the transaction behaviour's half (§6.3).
         (await fixture.ScalarAsync<decimal>(
-            "SELECT Value = UnitPriceAmount FROM ordering.OrderLines WHERE OrderId = {0}", id))
+            "SELECT Value = UnitPriceAmount FROM ordering.OrderLines WHERE OrderId = {0}",
+            id))
             .ShouldBe(19.99m);
 
-        (await fixture.ScalarAsync<int>(
-            "SELECT Value = Quantity FROM ordering.OrderLines WHERE OrderId = {0}", id))
+        (await fixture.ScalarAsync<int>("SELECT Value = Quantity FROM ordering.OrderLines WHERE OrderId = {0}", id))
             .ShouldBe(2);
 
-        (await fixture.ScalarAsync<string>(
-            "SELECT Value = Status FROM ordering.Orders WHERE Id = {0}", id))
+        (await fixture.ScalarAsync<string>("SELECT Value = Status FROM ordering.Orders WHERE Id = {0}", id))
             .ShouldBe("AwaitingStock", "stored by name, never by number (§7.2)");
     }
 
@@ -83,7 +82,8 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         Guid id = await IdOfAsync(response);
 
         (await fixture.ScalarAsync<decimal>(
-            "SELECT Value = UnitPriceAmount FROM ordering.OrderLines WHERE OrderId = {0}", id))
+            "SELECT Value = UnitPriceAmount FROM ordering.OrderLines WHERE OrderId = {0}",
+            id))
             .ShouldBe(price);
 
         // The Broker row is OrderPlaced, the contract every other service reads the total from.
@@ -104,8 +104,7 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
 
         Guid id = await IdOfAsync(await PlaceAsync(product));
 
-        (await fixture.ScalarAsync<Guid>(
-            "SELECT Value = CustomerId FROM ordering.Orders WHERE Id = {0}", id))
+        (await fixture.ScalarAsync<Guid>("SELECT Value = CustomerId FROM ordering.Orders WHERE Id = {0}", id))
             .ShouldBe(Caller);
     }
 

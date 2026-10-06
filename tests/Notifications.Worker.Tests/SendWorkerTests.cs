@@ -22,7 +22,8 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     private static readonly DateTimeOffset At = new(2026, 10, 2, 9, 0, 0, TimeSpan.Zero);
 
     private static readonly TimeSpan GiveUpAge = TimeSpan.Parse(
-        NotificationsWorkerFactory.InventedGiveUpAge, System.Globalization.CultureInfo.InvariantCulture);
+        NotificationsWorkerFactory.InventedGiveUpAge,
+        System.Globalization.CultureInfo.InvariantCulture);
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 

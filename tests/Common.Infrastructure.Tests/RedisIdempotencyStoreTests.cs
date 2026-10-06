@@ -54,8 +54,7 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
         IIdempotencyStore store = provider.GetRequiredService<IIdempotencyStore>();
 
         string claim = await ClaimedAsync(store, "done", Retention);
-        await store.CompleteAsync(
-            "done", claim, "\"0195e4b2\"", TestContext.Current.CancellationToken);
+        await store.CompleteAsync("done", claim, "\"0195e4b2\"", TestContext.Current.CancellationToken);
 
         IdempotencyEntry? entry = await store.GetAsync("done", TestContext.Current.CancellationToken);
 
@@ -208,8 +207,7 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
 
         successor.ShouldNotBe(stale);
 
-        await store.CompleteAsync(
-            "outlived", stale, "\"clobbered\"", TestContext.Current.CancellationToken);
+        await store.CompleteAsync("outlived", stale, "\"clobbered\"", TestContext.Current.CancellationToken);
 
         IdempotencyEntry? entry = await store.GetAsync("outlived", TestContext.Current.CancellationToken);
 
@@ -317,8 +315,7 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
 
         // Reading the payload back proves the script ran, not merely that nothing threw.
         string completed = await ClaimedAsync(store, "acl-done", Retention);
-        await store.CompleteAsync(
-            "acl-done", completed, "\"ok\"", TestContext.Current.CancellationToken);
+        await store.CompleteAsync("acl-done", completed, "\"ok\"", TestContext.Current.CancellationToken);
 
         IdempotencyEntry? entry = await store.GetAsync("acl-done", TestContext.Current.CancellationToken);
         entry.ShouldNotBeNull();

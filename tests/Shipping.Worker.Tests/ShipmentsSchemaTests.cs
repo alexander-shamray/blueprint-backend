@@ -70,7 +70,8 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
             order);
 
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = PollAttempts FROM shipping.Shipments WHERE OrderId = {0}", order)).ShouldBe(0);
+            "SELECT Value = PollAttempts FROM shipping.Shipments WHERE OrderId = {0}",
+            order)).ShouldBe(0);
     }
 
     private Task<string> FilterAsync(string index) =>
@@ -97,7 +98,8 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
             order);
 
         DateTimeOffset created = await fixture.ScalarAsync<DateTimeOffset>(
-            "SELECT Value = CreatedAt FROM shipping.Shipments WHERE OrderId = {0}", order);
+            "SELECT Value = CreatedAt FROM shipping.Shipments WHERE OrderId = {0}",
+            order);
         created.ShouldBeGreaterThanOrEqualTo(before);
     }
 
@@ -140,7 +142,8 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
         await SaveAsync(shipment);
 
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.TrackingEvents WHERE ShipmentId = {0}", shipment.Id.Value))
+            "SELECT Value = COUNT(*) FROM shipping.TrackingEvents WHERE ShipmentId = {0}",
+            shipment.Id.Value))
             .ShouldBe(2);
     }
 
@@ -177,12 +180,14 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
         read.CreatedAt.ShouldBe(Now, "the aggregate's own stamp, never the column's default");
         read.Version.ShouldNotBeEmpty("the rowversion is what §6.3's concurrency check reads");
         read.TrackingEvents.Select(e => e.Status).ShouldBe(
-            [TrackingStatus.Collected, TrackingStatus.Unrecognised], ignoreOrder: true);
+            [TrackingStatus.Collected, TrackingStatus.Unrecognised],
+            ignoreOrder: true);
 
         // By name, never by number (§7.2): an enum stored as an int makes the
         // member order a storage contract.
         (await fixture.ScalarAsync<string>(
-            "SELECT Value = Status FROM shipping.Shipments WHERE Id = {0}", shipment.Id.Value))
+            "SELECT Value = Status FROM shipping.Shipments WHERE Id = {0}",
+            shipment.Id.Value))
             .ShouldBe("Dispatched");
     }
 

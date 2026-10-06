@@ -35,7 +35,8 @@ public static class ReservationEndpoints
                 async (Guid orderId, IDispatcher dispatcher, CancellationToken ct) =>
                 {
                     Result result = await dispatcher.SendAsync(
-                        new ReleaseStockCommand(orderId, CommandOrigin.User), ct);
+                        new ReleaseStockCommand(orderId, CommandOrigin.User),
+                        ct);
 
                     return result.ToHttpResult();
                 })
@@ -54,7 +55,8 @@ public static class ReservationEndpoints
                     CancellationToken ct) =>
                 {
                     Result result = await dispatcher.SendAsync(
-                        new ReinstateReservationCommand(request.CommandId, orderId), ct);
+                        new ReinstateReservationCommand(request.CommandId, orderId),
+                        ct);
 
                     return result.ToHttpResult();
                 })

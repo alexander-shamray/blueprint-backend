@@ -59,7 +59,9 @@ public sealed class PricingContractTests : IAsyncLifetime
 
         using HttpClient client = Caller();
         QuoteResponse? quote = await client.Quote(
-            interaction.Currency, TestContext.Current.CancellationToken, Basket(interaction, published));
+            interaction.Currency,
+            TestContext.Current.CancellationToken,
+            Basket(interaction, published));
 
         Guid[] expected = [.. priced.Aliases.Select(alias => published[alias])];
 

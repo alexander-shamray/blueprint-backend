@@ -57,7 +57,10 @@ public sealed class ReservationClockOrderingTests
         Reservation held = Reservation.Reserve(order, [new ReservationLine(ProductId.New(), 1)], [], BeforeLock);
         var repository = new FakeReservationRepository(held, clock);
         var handler = new FulfilReservationHandler(
-            repository, new FakeStockLedger(), clock, NullLogger<FulfilReservationHandler>.Instance);
+            repository,
+            new FakeStockLedger(),
+            clock,
+            NullLogger<FulfilReservationHandler>.Instance);
 
         await handler.HandleAsync(new FulfilReservationCommand(order.Value), CancellationToken.None);
 
@@ -73,7 +76,10 @@ public sealed class ReservationClockOrderingTests
         released.Release([], BeforeLock);
         var repository = new FakeReservationRepository(released, clock);
         var handler = new FulfilReservationHandler(
-            repository, new FakeStockLedger(), clock, NullLogger<FulfilReservationHandler>.Instance);
+            repository,
+            new FakeStockLedger(),
+            clock,
+            NullLogger<FulfilReservationHandler>.Instance);
 
         await handler.HandleAsync(new FulfilReservationCommand(order.Value), CancellationToken.None);
 
@@ -110,7 +116,8 @@ public sealed class ReservationClockOrderingTests
             Task.FromResult(new LedgerOutcome([], []));
 
         public Task<IReadOnlyList<ReservedLevel>> GiveBackAsync(
-            IReadOnlyList<ReservationLine> lines, CancellationToken ct) =>
+            IReadOnlyList<ReservationLine> lines,
+            CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<ReservedLevel>>([]);
 
         public Task FulfilAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct) => Task.CompletedTask;

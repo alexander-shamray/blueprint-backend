@@ -70,7 +70,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         await EventuallyStatus(order, "Fulfilled");
         (await Available(product)).ShouldBe(1);
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}", product))
+                "SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}",
+                product))
             .ShouldBe(0);
         (await fixture.OutboxAsync()).Count.ShouldBe(staged, "no §3.2 event describes despatch");
     }
@@ -126,7 +127,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         HttpResponseMessage reinstate =
             await ReservationTestSupport.ReinstateAsync(Admin(), order, Guid.CreateVersion7());
         reinstate.StatusCode.ShouldBe(
-            HttpStatusCode.UnprocessableEntity, "the parcel has gone; there is nothing to reinstate");
+            HttpStatusCode.UnprocessableEntity,
+            "the parcel has gone; there is nothing to reinstate");
         (await Available(product)).ShouldBe(3, "and no stock was re-taken for a shipped order");
     }
 
@@ -141,7 +143,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
 
         (await fixture.InboxAsync(despatch.MessageId)).ShouldHaveSingleItem();
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
+                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}",
+                order))
             .ShouldBe(0, "a despatch for an order this service never reserved holds nothing");
         (await fixture.OutboxAsync()).Count.ShouldBe(staged, "no §3.2 event describes despatch");
     }
@@ -199,7 +202,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
 
         (await fixture.OutboxAsync()).Count.ShouldBe(staged, "no §3.2 event describes a second despatch");
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}", product))
+                "SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}",
+                product))
             .ShouldBe(0, "the second despatch found nothing held to move");
     }
 
@@ -233,7 +237,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         string status = await StatusAsync(order);
         int available = await Available(product);
         int reserved = await fixture.ScalarAsync<int>(
-            "SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}", product);
+            "SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}",
+            product);
         (status, available, reserved).ShouldBeOneOf(
             ("Released", 3, 0),
             ("Fulfilled", 1, 0));

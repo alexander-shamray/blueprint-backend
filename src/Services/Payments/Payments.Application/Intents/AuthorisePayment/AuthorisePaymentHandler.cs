@@ -56,7 +56,11 @@ public sealed class AuthorisePaymentHandler(
         if (record is { IsCancelled: true })
         {
             intents.Add(PaymentIntent.Decline(
-                order, command.Amount, command.Currency, DeclineReasons.OrderCancelled, clock.GetUtcNow()));
+                order,
+                command.Amount,
+                command.Currency,
+                DeclineReasons.OrderCancelled,
+                clock.GetUtcNow()));
             return Result.Success();
         }
 
@@ -65,7 +69,8 @@ public sealed class AuthorisePaymentHandler(
             throw new PaymentOrderNotYetKnownException($"No OrderPlaced has reached Payments for {order}.");
 
         AuthorisationResult verdict = await provider.AuthoriseAsync(
-            new AuthorisationRequest(order, record.CustomerId!.Value, command.Amount, command.Currency), ct);
+            new AuthorisationRequest(order, record.CustomerId!.Value, command.Amount, command.Currency),
+            ct);
 
         if (verdict is AuthorisationResult.Authorised authorised)
             Authorised(log, order.Value, authorised.Reference, null);
@@ -85,7 +90,11 @@ public sealed class AuthorisePaymentHandler(
 
     // Both sides, for the person at the error queue deciding whether the sender or the record is wrong.
     private static string Mismatch(
-        OrderId order, AuthorisePaymentCommand command, decimal? amount, string? currency, string against) =>
+        OrderId order,
+        AuthorisePaymentCommand command,
+        decimal? amount,
+        string? currency,
+        string against) =>
         $"AuthorisePayment for {order} asks for {command.Amount} {command.Currency}; " +
         $"{against} holds {amount} {currency}.";
 }

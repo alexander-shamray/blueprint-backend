@@ -260,7 +260,9 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [InlineData(202, "{\"status\":\"cancelled\"}", true)]
     [InlineData(409, "{\"status\":\"cancelled\"}", true)]
     public async Task A_cancel_answered_with_anything_else_is_the_carrier_being_wrong(
-        int status, string body, bool throws)
+        int status,
+        string body,
+        bool throws)
     {
         _server.Given(Request.Create().WithPath("/v1/shipments/*/cancel").UsingPost())
             .AtPriority(0)
@@ -315,7 +317,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [InlineData(CarrierLimits.MaxTrackingNumberLength, true)]
     [InlineData(CarrierLimits.MaxTrackingNumberLength + 1, false)]
     public async Task A_tracking_number_longer_than_the_column_is_refused_before_it_is_recorded(
-        int length, bool accepted)
+        int length,
+        bool accepted)
     {
         string tracking = new('t', length);
         _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
@@ -454,7 +457,10 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     public void A_missing_carrier_key_stops_the_host()
     {
         using ShippingWorkerFactory factory = new(
-            Unreachable.Sql, Unreachable.Rabbit, "https://carrier.example/", carrierApiKey: " ");
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            "https://carrier.example/",
+            carrierApiKey: " ");
 
         Should.Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(

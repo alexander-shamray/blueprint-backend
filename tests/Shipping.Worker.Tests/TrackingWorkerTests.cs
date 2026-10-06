@@ -156,7 +156,8 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             line => line.Contains("is abandoned and no longer polled", StringComparison.Ordinal));
 
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(
-            0, "a terminal row is outside the claim");
+            0,
+            "a terminal row is outside the claim");
     }
 
     [Fact]
@@ -227,7 +228,8 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0);
         (await fixture.StatusAsync(shipment.Id)).ShouldBe(
-            "Booked", "nothing cancelled at the carrier while this worker held the row");
+            "Booked",
+            "nothing cancelled at the carrier while this worker held the row");
     }
 
     [Fact]

@@ -43,12 +43,10 @@ internal static class ReservationTestSupport
             available);
 
     public static Task<int> Available(ServiceFixture fixture, Guid product) =>
-        fixture.ScalarAsync<int>(
-            "SELECT Value = Available FROM inventory.StockItems WHERE ProductId = {0}", product);
+        fixture.ScalarAsync<int>("SELECT Value = Available FROM inventory.StockItems WHERE ProductId = {0}", product);
 
     public static Task<string> StatusAsync(ServiceFixture fixture, Guid orderId) =>
-        fixture.ScalarAsync<string>(
-            "SELECT Value = Status FROM inventory.Reservations WHERE OrderId = {0}", orderId);
+        fixture.ScalarAsync<string>("SELECT Value = Status FROM inventory.Reservations WHERE OrderId = {0}", orderId);
 
     /// <summary>Polls <see cref="StatusAsync"/> for <paramref name="expected"/>; no row yet is not yet.</summary>
     public static async Task EventuallyStatus(ServiceFixture fixture, Guid orderId, string expected)

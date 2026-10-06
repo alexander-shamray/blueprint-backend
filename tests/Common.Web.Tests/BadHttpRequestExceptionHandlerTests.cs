@@ -194,7 +194,9 @@ public class BadHttpRequestExceptionHandlerTests
         content.Headers.ContentType = null;
 
         using HttpResponseMessage response = await client.PostAsync(
-            Route, content, TestContext.Current.CancellationToken);
+            Route,
+            content,
+            TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnsupportedMediaType);
 
@@ -210,7 +212,8 @@ public class BadHttpRequestExceptionHandlerTests
         using HttpClient client = host.GetTestClient();
 
         using HttpResponseMessage response = await client.GetAsync(
-            $"{Route}?page=three", TestContext.Current.CancellationToken);
+            $"{Route}?page=three",
+            TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 

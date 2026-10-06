@@ -63,7 +63,8 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
     public async Task<CancellationResult> CancelAsync(CancellationRequest request, CancellationToken ct)
     {
         using HttpRequestMessage message = new(
-            HttpMethod.Post, $"v1/shipments/{Uri.EscapeDataString(request.Reference)}/cancel");
+            HttpMethod.Post,
+            $"v1/shipments/{Uri.EscapeDataString(request.Reference)}/cancel");
         message.Headers.Add(KeyHeader, request.IdempotencyKey);
 
         using HttpResponseMessage response = await SendAsync(message, ct);
@@ -89,7 +90,8 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
     public async Task<IReadOnlyList<CarrierEvent>> GetEventsAsync(string reference, CancellationToken ct)
     {
         using HttpRequestMessage message = new(
-            HttpMethod.Get, $"v1/shipments/{Uri.EscapeDataString(reference)}/events");
+            HttpMethod.Get,
+            $"v1/shipments/{Uri.EscapeDataString(reference)}/events");
 
         using HttpResponseMessage response = await SendAsync(message, ct);
 

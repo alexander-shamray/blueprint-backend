@@ -128,8 +128,7 @@ public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsync
     {
         // ADR-052: "does not exist" is wider than a missing record, so all three cases answer NotFound.
         Guid order = await fixture.SeedOrderAsync(Guid.CreateVersion7());
-        await fixture.ExecuteAsync(
-            "UPDATE ordering.Orders SET Status = 'Cancelled' WHERE Id = {0};", order);
+        await fixture.ExecuteAsync("UPDATE ordering.Orders SET Status = 'Cancelled' WHERE Id = {0};", order);
 
         StatusCode status = await StatusOfAsync(
             () => Addresses

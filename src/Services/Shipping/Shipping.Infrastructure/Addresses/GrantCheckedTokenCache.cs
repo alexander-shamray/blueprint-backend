@@ -43,7 +43,8 @@ public sealed partial class GrantCheckedTokenCache(
             // Every cause is the deployment's to fix, so each counts; HttpRequestException and shutdown pass uncounted.
             metrics.Refused();
             throw new AddressSourceRefusedException(
-                "The identity provider did not issue this host a usable token (§11.5).", e);
+                "The identity provider did not issue this host a usable token (§11.5).",
+                e);
         }
 
         string[] granted =

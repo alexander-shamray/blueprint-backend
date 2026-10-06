@@ -150,11 +150,13 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         fault.Fired.ShouldBeTrue("the first pass booked and then failed its commit");
         FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(
-            2, "the second pass repeated the call rather than skipping it");
+            2,
+            "the second pass repeated the call rather than skipping it");
         BookingKeys().Distinct().ShouldHaveSingleItem().ShouldBe($"book:{await _steps.ShipmentIdAsync(order)}");
         (await _steps.ReferenceAsync(order)).ShouldBe("crr_SIM-OK");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0}", order)).ShouldBe(1);
+            "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0}",
+            order)).ShouldBe(1);
     }
 
     [Fact]
@@ -201,7 +203,8 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         (await _steps.StatusAsync(order)).ShouldBe("Voided");
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0);
         FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(
-            0, "spec section 6: a Pending shipment is voided at once and is never booked");
+            0,
+            "spec section 6: a Pending shipment is voided at once and is never booked");
     }
 
     [Fact]
@@ -215,7 +218,8 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         (await _steps.StatusAsync(order)).ShouldBe("Voided");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0}", order)).ShouldBe(1);
+            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0}",
+            order)).ShouldBe(1);
     }
 
     [Fact]

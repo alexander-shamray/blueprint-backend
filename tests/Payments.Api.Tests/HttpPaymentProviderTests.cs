@@ -183,7 +183,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         Guid payer = Guid.CreateVersion7();
 
         await Provider().AuthoriseAsync(
-            new AuthorisationRequest(OrderId.New(), payer, 42.10m, "EUR"), TestContext.Current.CancellationToken);
+            new AuthorisationRequest(OrderId.New(), payer, 42.10m, "EUR"),
+            TestContext.Current.CancellationToken);
 
         using JsonDocument sent = JsonDocument.Parse(_server.LogEntries.ShouldHaveSingleItem().RequestMessage!.Body!);
         sent.RootElement.EnumerateObject().Select(p => p.Name)
@@ -390,7 +391,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
 
         (DateTimeOffset.UtcNow - started).ShouldBeLessThan(ProviderHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
         counted.Value.ShouldBe(
-            ProviderHop.MaxRetryAttempts + 1, "every attempt timed out, each the provider's, counted by OnTimeout");
+            ProviderHop.MaxRetryAttempts + 1,
+            "every attempt timed out, each the provider's, counted by OnTimeout");
     }
 
     [Fact]
@@ -561,7 +563,10 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     public void A_missing_provider_key_stops_the_host()
     {
         using PaymentsApiFactory factory = new(
-            UnreachableSql, UnreachableRabbit, _server.Urls[0] + "/", providerApiKey: " ");
+            UnreachableSql,
+            UnreachableRabbit,
+            _server.Urls[0] + "/",
+            providerApiKey: " ");
 
         Should.Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(

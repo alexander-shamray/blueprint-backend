@@ -113,7 +113,8 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     public async Task NotFound_is_the_one_answer_that_means_the_order_has_no_address()
     {
         AddressLookup lookup = await Source().GetAsync(
-            new OrderId(Guid.CreateVersion7()), TestContext.Current.CancellationToken);
+            new OrderId(Guid.CreateVersion7()),
+            TestContext.Current.CancellationToken);
 
         lookup.ShouldBeOfType<AddressLookup.NoSuchOrder>();
     }
@@ -248,7 +249,11 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
         AddressLookup lookup = await Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken);
 
         lookup.ShouldBeOfType<AddressLookup.Found>().Address.ShouldBe(new DeliveryAddress(
-            widest.Line1, widest.Line2, widest.City, widest.PostalCode, widest.Country));
+            widest.Line1,
+            widest.Line2,
+            widest.City,
+            widest.PostalCode,
+            widest.Country));
     }
 
     [Theory]
@@ -307,7 +312,9 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     public void An_address_source_that_is_not_an_absolute_http_address_stops_the_host(string configured)
     {
         using ShippingWorkerFactory factory = new(
-            Unreachable.Sql, Unreachable.Rabbit, addressSourceBaseUrl: configured);
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            addressSourceBaseUrl: configured);
 
         Should.Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(AddressRegistration.BaseUrlKey);
@@ -319,7 +326,9 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     public void An_address_source_with_a_query_or_fragment_stops_the_host(string configured)
     {
         using ShippingWorkerFactory factory = new(
-            Unreachable.Sql, Unreachable.Rabbit, addressSourceBaseUrl: configured);
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            addressSourceBaseUrl: configured);
 
         Should.Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldBe(
@@ -331,7 +340,9 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     public void An_address_source_carrying_user_information_stops_the_host_without_echoing_it()
     {
         using ShippingWorkerFactory factory = new(
-            Unreachable.Sql, Unreachable.Rabbit, addressSourceBaseUrl: "http://shipping:hunter2@ordering.example/");
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            addressSourceBaseUrl: "http://shipping:hunter2@ordering.example/");
 
         string message = Should.Throw<InvalidOperationException>(() => factory.Services).Message;
 

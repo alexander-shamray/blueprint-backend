@@ -142,7 +142,10 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             if (now - work.CancellationRequestedAt!.Value >= giveUpAge)
             {
                 CommitOutcome ended = await CommitAsync(
-                    sp, id, (shipment, at) => shipment.CarrierRefusedCancellation(at), ct);
+                    sp,
+                    id,
+                    (shipment, at) => shipment.CarrierRefusedCancellation(at),
+                    ct);
 
                 if (ended.Moved)
                     GaveUpCancellation(log, work.Id, work.OrderId, giveUpAge, null);
@@ -173,7 +176,10 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         if (now - work.CreatedAt >= giveUpAge)
         {
             CommitOutcome abandoned = await CommitPendingAsync(
-                sp, id, (shipment, now) => shipment.MarkUnfulfillable(GaveUpReason, now), ct);
+                sp,
+                id,
+                (shipment, now) => shipment.MarkUnfulfillable(GaveUpReason, now),
+                ct);
 
             if (abandoned.Moved)
                 GaveUp(log, work.Id, work.OrderId, giveUpAge, null);
@@ -192,7 +198,10 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             {
                 // Terminal and not retried: ADR-052's fifth row.
                 CommitOutcome unfulfillable = await CommitPendingAsync(
-                    sp, id, (shipment, now) => shipment.MarkUnfulfillable("no_such_order", now), ct);
+                    sp,
+                    id,
+                    (shipment, now) => shipment.MarkUnfulfillable("no_such_order", now),
+                    ct);
 
                 return unfulfillable.Moved;
             }
@@ -202,7 +211,11 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
             // Committed before the booking, so a pass repeated after a crash does not read it twice (ADR-052).
             await store.SaveAsync(
-                order, found.CustomerId, address, sp.GetRequiredService<TimeProvider>().GetUtcNow(), ct);
+                order,
+                found.CustomerId,
+                address,
+                sp.GetRequiredService<TimeProvider>().GetUtcNow(),
+                ct);
         }
 
         BookingResult booking = await carrier.BookAsync(new BookingRequest(id, address), ct);
@@ -210,7 +223,10 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         if (booking is BookingResult.Refused refused)
         {
             CommitOutcome declined = await CommitPendingAsync(
-                sp, id, (shipment, now) => shipment.MarkUnfulfillable(refused.Reason, now), ct);
+                sp,
+                id,
+                (shipment, now) => shipment.MarkUnfulfillable(refused.Reason, now),
+                ct);
 
             return declined.Moved;
         }
@@ -222,7 +238,10 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         try
         {
             committed = await CommitPendingAsync(
-                sp, id, (shipment, now) => shipment.Book(booked.Reference, booked.TrackingNumber, now), ct);
+                sp,
+                id,
+                (shipment, now) => shipment.Book(booked.Reference, booked.TrackingNumber, now),
+                ct);
         }
         catch (Exception ex)
         {

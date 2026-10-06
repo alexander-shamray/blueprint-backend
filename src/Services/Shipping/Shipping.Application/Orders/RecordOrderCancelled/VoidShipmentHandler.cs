@@ -6,7 +6,9 @@ using Shipping.Domain.Shipments;
 namespace Shipping.Application.Orders.RecordOrderCancelled;
 
 public sealed class VoidShipmentHandler(
-    IShipmentRepository shipments, TimeProvider clock, ILogger<VoidShipmentHandler> log)
+    IShipmentRepository shipments,
+    TimeProvider clock,
+    ILogger<VoidShipmentHandler> log)
     : ICommandHandler<VoidShipmentCommand, Result>
 {
     // A superseded arrival is logged, not thrown; ids only, never an address (§11.7). CA1848 (ADR-019).

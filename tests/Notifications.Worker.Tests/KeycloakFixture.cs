@@ -169,7 +169,9 @@ public sealed class KeycloakFixture : IAsyncLifetime
         });
 
         return await Http.PostAsync(
-            $"{Authority}/protocol/openid-connect/token", form, TestContext.Current.CancellationToken);
+            $"{Authority}/protocol/openid-connect/token",
+            form,
+            TestContext.Current.CancellationToken);
     }
 
     /// <summary>Asks Keycloak each question a host will, as its first answers can outlast ContactHop's total.</summary>
@@ -180,7 +182,8 @@ public sealed class KeycloakFixture : IAsyncLifetime
         using HttpResponseMessage ungranted = await GrantAsync(UngrantedClient, UngrantedSecret, ContactScope);
 
         using HttpRequestMessage read = new(
-            HttpMethod.Get, $"{BaseAddress}admin/realms/{Realm}/users/{Guid.CreateVersion7():D}");
+            HttpMethod.Get,
+            $"{BaseAddress}admin/realms/{Realm}/users/{Guid.CreateVersion7():D}");
         using HttpResponseMessage answered = await AsAdminAsync(read);
     }
 
@@ -232,7 +235,9 @@ public sealed class KeycloakFixture : IAsyncLifetime
         });
 
         using HttpResponseMessage response = await Http.PostAsync(
-            $"{BaseAddress}realms/master/protocol/openid-connect/token", form, TestContext.Current.CancellationToken);
+            $"{BaseAddress}realms/master/protocol/openid-connect/token",
+            form,
+            TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
@@ -248,7 +253,8 @@ public sealed class KeycloakFixture : IAsyncLifetime
             try
             {
                 using HttpResponseMessage response = await Http.GetAsync(
-                    $"{Authority}/.well-known/openid-configuration", TestContext.Current.CancellationToken);
+                    $"{Authority}/.well-known/openid-configuration",
+                    TestContext.Current.CancellationToken);
 
                 if (response.IsSuccessStatusCode)
                     return;

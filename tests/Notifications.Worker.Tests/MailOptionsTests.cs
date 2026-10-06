@@ -71,7 +71,8 @@ public sealed class MailOptionsTests
     public void In_development_plain_unauthenticated_submission_is_accepted()
     {
         using ServiceProvider provider = Bound(
-            Environments.Development, Relay(security: "None", userName: null, relayPassword: null));
+            Environments.Development,
+            Relay(security: "None", userName: null, relayPassword: null));
 
         Should.NotThrow(() => provider.GetRequiredService<IStartupValidator>().Validate());
     }
@@ -82,7 +83,8 @@ public sealed class MailOptionsTests
     public void A_user_name_and_a_password_come_together_in_every_environment(string? userName, string? password)
     {
         using ServiceProvider provider = Bound(
-            Environments.Development, Relay(security: "None", userName: userName, relayPassword: password));
+            Environments.Development,
+            Relay(security: "None", userName: userName, relayPassword: password));
 
         Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
             .Message.ShouldContain("are set together or not at all");

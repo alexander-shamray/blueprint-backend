@@ -89,11 +89,13 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
 
     public Task<string> ReferenceAsync(Guid order) =>
         fixture.ScalarAsync<string>(
-            "SELECT Value = CarrierReference FROM shipping.Shipments WHERE OrderId = {0}", order);
+            "SELECT Value = CarrierReference FROM shipping.Shipments WHERE OrderId = {0}",
+            order);
 
     public Task<string> ReasonAsync(Guid order) =>
         fixture.ScalarAsync<string>(
-            "SELECT Value = UnfulfillableReason FROM shipping.Shipments WHERE OrderId = {0}", order);
+            "SELECT Value = UnfulfillableReason FROM shipping.Shipments WHERE OrderId = {0}",
+            order);
 
     public Task<int> AttemptsAsync(Guid order) =>
         fixture.ScalarAsync<int>("SELECT Value = Attempts FROM shipping.Shipments WHERE OrderId = {0}", order);
@@ -104,22 +106,27 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
     /// <summary>Null once a pass has released the row it claimed.</summary>
     public Task<DateTimeOffset?> LockedUntilAsync(Guid order) =>
         fixture.ScalarAsync<DateTimeOffset?>(
-            "SELECT Value = LockedUntil FROM shipping.Shipments WHERE OrderId = {0}", order);
+            "SELECT Value = LockedUntil FROM shipping.Shipments WHERE OrderId = {0}",
+            order);
 
     /// <summary>The instant itself, as <c>DATEDIFF</c> counts boundaries and can read five seconds as four.</summary>
     public Task<DateTimeOffset> NextAttemptAtAsync(Guid order) =>
         fixture.ScalarAsync<DateTimeOffset>(
-            "SELECT Value = NextAttemptAt FROM shipping.Shipments WHERE OrderId = {0}", order);
+            "SELECT Value = NextAttemptAt FROM shipping.Shipments WHERE OrderId = {0}",
+            order);
 
     /// <summary>Moves <c>CreatedAt</c> back by <paramref name="age"/> from the host's clock.</summary>
     public Task AgeAsync(Guid order, TimeSpan age) =>
         fixture.ExecuteAsync(
-            "UPDATE shipping.Shipments SET CreatedAt = {1} WHERE OrderId = {0};", order, DateTimeOffset.UtcNow - age);
+            "UPDATE shipping.Shipments SET CreatedAt = {1} WHERE OrderId = {0};",
+            order,
+            DateTimeOffset.UtcNow - age);
 
     /// <summary>Makes a backed-off row claimable now, so a test need not wait out the ladder.</summary>
     public Task ClearBackoffAsync(Guid order) =>
         fixture.ExecuteAsync(
-            "UPDATE shipping.Shipments SET NextAttemptAt = SYSDATETIMEOFFSET() WHERE OrderId = {0};", order);
+            "UPDATE shipping.Shipments SET NextAttemptAt = SYSDATETIMEOFFSET() WHERE OrderId = {0};",
+            order);
 
     /// <summary>The engine's own clock, since the container's and the host's can disagree.</summary>
     public Task<DateTimeOffset> DatabaseNowAsync() =>

@@ -33,7 +33,8 @@ public class RecordOrderCancelledHandlerTests
         _intents.Seed(PaymentIntent.Authorise(order, 42.10m, "EUR", "psp_1", Now.AddMinutes(-1)));
 
         await Handler().HandleAsync(
-            new RecordOrderCancelledCommand(order.Value, Now), TestContext.Current.CancellationToken);
+            new RecordOrderCancelledCommand(order.Value, Now),
+            TestContext.Current.CancellationToken);
 
         _orders.Cancelled.ShouldBe([(order, Now)]);
         _provider.Voids.ShouldHaveSingleItem().ShouldBe(new VoidRequest(order, "psp_1"));
@@ -52,7 +53,8 @@ public class RecordOrderCancelledHandlerTests
         _refunds.Existing.Add(order);
 
         await Handler().HandleAsync(
-            new RecordOrderCancelledCommand(order.Value, Now), TestContext.Current.CancellationToken);
+            new RecordOrderCancelledCommand(order.Value, Now),
+            TestContext.Current.CancellationToken);
 
         _orders.Cancelled.ShouldHaveSingleItem();
         _provider.Voids.ShouldBeEmpty();
@@ -66,7 +68,8 @@ public class RecordOrderCancelledHandlerTests
         _intents.Seed(PaymentIntent.Decline(order, 42.10m, "EUR", "card_declined", Now));
 
         await Handler().HandleAsync(
-            new RecordOrderCancelledCommand(order.Value, Now), TestContext.Current.CancellationToken);
+            new RecordOrderCancelledCommand(order.Value, Now),
+            TestContext.Current.CancellationToken);
 
         _orders.Cancelled.ShouldHaveSingleItem();
         _provider.Voids.ShouldBeEmpty("ADR-047: no money was taken, so nothing moved back");
@@ -79,7 +82,8 @@ public class RecordOrderCancelledHandlerTests
         OrderId order = OrderId.New();
 
         await Handler().HandleAsync(
-            new RecordOrderCancelledCommand(order.Value, Now), TestContext.Current.CancellationToken);
+            new RecordOrderCancelledCommand(order.Value, Now),
+            TestContext.Current.CancellationToken);
 
         _orders.Cancelled.ShouldHaveSingleItem("the stamp creates the tombstone record when none exists");
         _provider.Voids.ShouldBeEmpty();
@@ -92,10 +96,10 @@ public class RecordOrderCancelledHandlerTests
         OrderId order = OrderId.New();
 
         await Handler().HandleAsync(
-            new RecordOrderCancelledCommand(order.Value, Now), TestContext.Current.CancellationToken);
+            new RecordOrderCancelledCommand(order.Value, Now),
+            TestContext.Current.CancellationToken);
 
-        _intents.GetCallsBeforeStamp.ShouldBe(
-            0, "the stamp's lock is what serialises this against AuthorisePayment");
+        _intents.GetCallsBeforeStamp.ShouldBe(0, "the stamp's lock is what serialises this against AuthorisePayment");
     }
 
     [Fact]
@@ -107,7 +111,8 @@ public class RecordOrderCancelledHandlerTests
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
             Handler().HandleAsync(
-                new RecordOrderCancelledCommand(order.Value, Now), TestContext.Current.CancellationToken));
+                new RecordOrderCancelledCommand(order.Value, Now),
+                TestContext.Current.CancellationToken));
         _refunds.Added.ShouldBeEmpty("the unit rolls back and §9.8 retries it whole");
     }
 

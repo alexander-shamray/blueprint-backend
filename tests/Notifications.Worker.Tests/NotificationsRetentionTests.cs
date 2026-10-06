@@ -95,7 +95,10 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
     public async Task No_line_of_the_purge_holds_a_mailbox()
     {
         await fixture.StageContactAsync(
-            Guid.CreateVersion7(), "aigerim.private@example.test", "kk", TimeSpan.FromDays(18));
+            Guid.CreateVersion7(),
+            "aigerim.private@example.test",
+            "kk",
+            TimeSpan.FromDays(18));
 
         await fixture.PurgeNotificationsRetentionAsync();
 

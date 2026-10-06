@@ -128,7 +128,12 @@ public sealed class ServiceFixture()
     {
         Guid order = Guid.CreateVersion7();
         Ordering.Addresses[order] = new StubAddress(
-            Guid.CreateVersion7(), line1 ?? "1 Abay Avenue", null, city ?? "Almaty", postalCode, country);
+            Guid.CreateVersion7(),
+            line1 ?? "1 Abay Avenue",
+            null,
+            city ?? "Almaty",
+            postalCode,
+            country);
 
         OrderConfirmed confirmed = new()
         {
@@ -208,7 +213,9 @@ public sealed class ServiceFixture()
     /// <summary>Moves <c>CreatedAt</c> back by <paramref name="age"/> from the host's clock.</summary>
     public Task AgeCreatedAsync(ShipmentId id, TimeSpan age) =>
         ExecuteAsync(
-            "UPDATE shipping.Shipments SET CreatedAt = {1} WHERE Id = {0};", id.Value, DateTimeOffset.UtcNow - age);
+            "UPDATE shipping.Shipments SET CreatedAt = {1} WHERE Id = {0};",
+            id.Value,
+            DateTimeOffset.UtcNow - age);
 
     /// <summary>Moves <c>CancellationRequestedAt</c> back by <paramref name="age"/> from the host's clock.</summary>
     public Task AgeCancellationAsync(ShipmentId id, TimeSpan age) =>
