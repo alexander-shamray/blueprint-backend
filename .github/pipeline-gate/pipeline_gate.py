@@ -424,19 +424,10 @@ def read_shards(workflow_text: str) -> list[tuple[str, str]]:
     A `selects: >-` value is the line after it, the form a selection too long
     for one line takes without folding a space into the filter.
     """
-    lines = workflow_text.splitlines()
-    for index, line in enumerate(lines):
-        if re.match(r"^\s{2}integration:\s*$", line):
-            break
-    else:
-        return []
-
     pairs: list[tuple[str, str]] = []
     shard: str | None = None
-    body = lines[index + 1:]
+    body = _integration_job(workflow_text)
     for position, line in enumerate(body):
-        if re.match(r"^\s{2}\S", line):          # the next job
-            break
         if found := re.match(r"^\s*-\s*shard:\s*(\S+)\s*$", line):
             shard = found.group(1)
         elif found := re.match(r"^\s*selects:\s*(.*?)\s*$", line):
@@ -447,6 +438,35 @@ def read_shards(workflow_text: str) -> list[tuple[str, str]]:
                 pairs.append((shard, value))
                 shard = None
     return pairs
+
+
+def _integration_job(workflow_text: str) -> list[str]:
+    """The `integration` job's lines after its key, up to the next job."""
+    lines = workflow_text.splitlines()
+    for index, line in enumerate(lines):
+        if re.match(r"^\s{2}integration:\s*$", line):
+            break
+    else:
+        return []
+
+    body: list[str] = []
+    for line in lines[index + 1:]:
+        if re.match(r"^\s{2}\S", line):          # the next job
+            break
+        body.append(line)
+    return body
+
+
+def count_shard_keys(workflow_text: str) -> tuple[int, int]:
+    """Every `shard:` and `selects:` key in the job, in whatever shape it is written.
+
+    Looser than `read_shards` on purpose: a key the parser skipped is a shard
+    the cascade was never checked over, and only a second count can see it.
+    """
+    body = _integration_job(workflow_text)
+    shards = sum(1 for line in body if re.search(r"(?:^|[\s{,])shard\s*:", line))
+    selects = sum(1 for line in body if re.search(r"(?:^|[\s{,])selects\s*:", line))
+    return shards, selects
 
 
 def check_shards() -> list[str]:
@@ -469,6 +489,15 @@ def check_shards() -> list[str]:
         ]
 
     problems: list[str] = []
+    shard_keys, selects_keys = count_shard_keys(text)
+    if (shard_keys, selects_keys) != (len(shards), len(shards)):
+        problems.append(
+            f"the integration job holds {shard_keys} shard and {selects_keys} "
+            f"selects keys and the parser read {len(shards)} entries. Write each "
+            "entry as `- shard: <name>` with its `selects:` on the line after, "
+            "with no trailing comment, or the cascade is checked without it"
+        )
+
     above: list[str] = []
     for position, (shard, selects) in enumerate(shards):
         selected: list[str] = []
