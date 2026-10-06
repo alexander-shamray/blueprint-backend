@@ -105,6 +105,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "mcp__codebase-index__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR'] + '/.claude/hooks/index-mcp-root.py', run_name='__main__')\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
