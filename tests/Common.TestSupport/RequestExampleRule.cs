@@ -71,8 +71,8 @@ public static class RequestExampleRule
 
     /// <summary>Each bodied endpoint that refuses its own example, or answers it short of a validator.</summary>
     /// <remarks>A 4xx is a refusal, from a validator of the built command, a handler's parse, the route or policy. Any
-    /// other outcome must reach the command's validators, since a 5xx or a wait could come from in front of them;
-    /// past them, idempotency waits on what the host cannot reach (§6.3).</remarks>
+    /// other outcome must reach a validator, since a 5xx or a wait could come from in front of validation;
+    /// past it, idempotency waits on what the host cannot reach (§6.3).</remarks>
     public static async Task<IReadOnlyList<string>> RefusedAsync(
         IServiceProvider services,
         HttpClient client,
