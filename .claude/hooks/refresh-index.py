@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refresh the code index of the checkout an edit or a Bash call changed. One
+"""Refresh the code index of the checkout an edit or a shell call changed. One
 refresh owns an index at a time, and it returns 0 whatever happens: an index
 that cannot refresh is no reason to fail the call that provoked it."""
 
@@ -144,7 +144,7 @@ def seed_source(root: Path) -> Path | None:
 
 def target(event: dict) -> Path | None:
     """The indexed or seedable checkout holding the file that changed, else
-    the one `cwd` names, which follows a Bash call into a worktree, then
+    the one `cwd` names, which follows a shell call into a worktree, then
     `CLAUDE_PROJECT_DIR`, then the working directory `git-worktree-fork.sh`
     runs it in — each in turn, never as a second chance after an unindexed
     tree, which would refresh the one that did not change."""
