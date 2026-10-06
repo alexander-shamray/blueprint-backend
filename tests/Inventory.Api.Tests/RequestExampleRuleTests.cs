@@ -3,7 +3,9 @@ using System.Text.Json;
 using Inventory.TestSupport;
 using Common.TestSupport;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -44,10 +46,12 @@ public class RequestExampleRuleTests(HostSmokeTests.UnreachableInfrastructureFac
     public async Task No_endpoint_refuses_its_own_example()
     {
         using HostSmokeTests.AuthenticatedUnreachableFactory authenticated = new();
-        using HttpClient client = authenticated.CreateClient();
+        using WebApplicationFactory<Program> observed =
+            authenticated.WithWebHostBuilder(web => web.ConfigureTestServices(RequestExampleRule.ObserveValidation));
+        using HttpClient client = observed.CreateClient();
 
         IReadOnlyList<string> refused = await RequestExampleRule.RefusedAsync(
-            authenticated.Services.GetRequiredService<EndpointDataSource>().Endpoints,
+            observed.Services,
             client,
             request =>
             {
