@@ -69,8 +69,9 @@ halves are the rule: a level with no home is a level nobody writes, and a level
 whose home is empty is one nobody notices is missing.
 
 **How to run them is `docs/testing.md`**, deliberately not this chapter: the
-commands, the `Category=Integration` filter of §12.4, which five projects need
-a Docker daemon and what the coverage figure of §12.9 is measured over. This
+commands, the `Category=Integration` filter of §12.4, how to find the projects
+that need a Docker daemon and what the coverage figure of §12.9 is measured
+over. This
 chapter decides what to test and that file decides how to run it, and the
 second goes stale on a different clock — a new runner flag changes nothing
 about the pyramid. Where they disagree, this chapter wins.
@@ -1134,7 +1135,7 @@ Respawn between tests keeps them isolated at a fraction of the cost.
 > to the last three was the suite growing while the callout did not. **The
 > count of retakes is not written here either**, for the reason the figures
 > keep demonstrating: it has been wrong at each of them. What a reader can
-> check is whether this pair matches `docs/testing.md` and a run.
+> check is whether this pair matches a run.
 >
 > **One retake was the first to go *down*, and the direction is worth
 > naming.** ADR-033 withdrew the token-denylist claim, so

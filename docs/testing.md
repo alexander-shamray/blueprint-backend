@@ -310,8 +310,9 @@ inside a checkout:
 ## Architecture rules are tests
 
 [§4.2](backend-architecture/04-solution-structure.md)'s dependency table is
-enforced by `ArchitectureTests` in each service's Domain, Application and Api
-suites, and a violation is a **build failure rather than a review comment**.
+enforced by an `ArchitectureTests` class in each service's test suites, a
+worker's in its Worker suite where a host's is in its Api suite, and a
+violation is a **build failure rather than a review comment**.
 They read *emitted* assembly references, so a forbidden reference nothing uses
 passes until code crosses it — §4.2 states that reach and what closing it would
 cost. They need no container, so they are in the fast half:
