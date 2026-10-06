@@ -3,9 +3,10 @@
 staged pipeline can be quietly wrong. `filters`: every deployable under `src/`
 has a path filter, because one nothing filters is one CI never rebuilds.
 `images`: every Dockerfile is built by a matrix entry reading a defined
-filter. `stages`: each stage's test count, not its exit code, because
-`dotnet test` exits zero on an empty filter (§12.1), and every project in
-`Platform.slnx` runs in exactly one stage. Stdlib only (licence gate's terms).
+filter, and every build has an SBOM. `stages`: each stage's test count, not
+its exit code, because `dotnet test` exits zero on an empty filter (§12.1),
+and every project in `Platform.slnx` runs in exactly one stage. Stdlib only
+(licence gate's terms).
 
     py -3.12 .github/pipeline-gate/pipeline_gate.py filters
     py -3.12 .github/pipeline-gate/pipeline_gate.py stages TestResults/architecture TestResults/unit TestResults/integration
@@ -306,6 +307,91 @@ def check_images(root: Path = ROOT) -> list[str]:
                 "built at all"
             )
 
+    problems.extend(check_sboms(text))
+    return problems
+
+
+SBOM_ACTION = "anchore/sbom-action@"
+
+
+def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
+    """One job's steps, in order, as {key: value} over the keys a step holds.
+
+    A step opens at a six-space `- `; its own keys sit at eight spaces and
+    `with:`'s at ten, both kept, so `image` is the SBOM step's input. A key's
+    value runs on over deeper lines, which is what reads a folded `run: >`
+    whole, and a comment is skipped.
+    """
+    lines = workflow_text.splitlines()
+    for index, line in enumerate(lines):
+        if re.match(rf"^\s{{2}}{re.escape(job)}:\s*$", line):
+            break
+    else:
+        return []
+
+    steps: list[dict[str, str]] = []
+    inside = False
+    key: str | None = None
+    for line in lines[index + 1:]:
+        if re.match(r"^\s{2}\S", line):          # the next job
+            break
+        if re.match(r"^\s{4}steps:\s*$", line):
+            inside = True
+            continue
+        if not inside or not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if re.match(r"^\s{4}\S", line):
+            inside = False
+            continue
+        if found := re.match(r"^\s{6}-\s+([a-z-]+):\s*(.*)$", line):
+            steps.append({})
+            key = found.group(1)
+            steps[-1][key] = found.group(2)
+        elif steps and (found := re.match(r"^(?:\s{8}|\s{10})([a-z-]+):\s*(.*)$", line)):
+            key = found.group(1)
+            steps[-1][key] = found.group(2)
+        elif steps and key is not None:
+            steps[-1][key] += " " + line.strip()
+    return steps
+
+
+def check_sboms(workflow_text: str) -> list[str]:
+    """Every image the `images` job builds has an SBOM made from it (ADR-071).
+
+    Per build step rather than per Dockerfile, because the matrix is what
+    reaches the Dockerfiles and the inventory above already holds it to them:
+    an SBOM step reading the reference a build tags, under the same `if:` and
+    after it, covers every leg that build covers.
+    """
+    steps = read_job_steps(workflow_text, "images")
+    builds = [(index, step) for index, step in enumerate(steps) if "docker build" in step.get("run", "")]
+    if not builds:
+        return [
+            "found no `docker build` step in the images job: the SBOM check "
+            "would pass vacuously, so the parser or the job is what is broken"
+        ]
+
+    problems: list[str] = []
+    for index, build in builds:
+        tag = re.search(r"--tag\s+((?:\$\{\{[^}]*\}\}|[^\s$])+)", build["run"])
+        if tag is None:
+            problems.append(
+                "an images job build step names no --tag, so no SBOM step can be "
+                "shown to read the image it builds"
+            )
+            continue
+        if not any(
+            step.get("uses", "").startswith(SBOM_ACTION)
+            and step.get("image", "").strip() == tag.group(1)
+            and step.get("if", "").strip() == build.get("if", "").strip()
+            for step in steps[index + 1:]
+        ):
+            problems.append(
+                f"the images job builds {tag.group(1)} and no {SBOM_ACTION} step "
+                "after it reads that reference under the same `if:`. ADR-071 "
+                "gives every image the pipeline builds an SBOM, and a leg that "
+                "builds without one ships an image nothing has inventoried"
+            )
     return problems
 
 
@@ -701,7 +787,7 @@ def main(argv: list[str]) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("filters", help="every deployable is matched by some path filter")
-    sub.add_parser("images", help="every Dockerfile is built by some matrix entry")
+    sub.add_parser("images", help="every Dockerfile is built by some matrix entry, with an SBOM")
     sub.add_parser("shards", help="the integration shards partition the stage")
 
     stages = sub.add_parser("stages", help="every stage ran, ran enough, and ran once")
@@ -720,7 +806,7 @@ def main(argv: list[str]) -> int:
         problems = check_images()
         if code := fail(problems, "the images matrix in ci.yml"):
             return code
-        print("pipeline-gate: every Dockerfile under src/ is built by a matrix entry.")
+        print("pipeline-gate: every Dockerfile under src/ is built by a matrix entry, and every build has an SBOM.")
         return 0
 
     if args.command == "shards":
