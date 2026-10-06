@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Point a session's own code search at the code index while it has made no
-lookup, once and then every few searches; the transcript is the state, so it
-writes nothing, and it returns 0 whatever happens."""
+"""Refuse a session's first search for a named symbol once, with the index
+lookup that answers it as the reason, while the session has asked the index
+nothing; a call it cannot judge goes through, and it returns 0 whatever
+happens."""
 
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import os
 import re
 import shlex
 import sys
+import tempfile
 from pathlib import Path
 
 CBX = "bash .claude/skills/codebase-index/scripts/cbx"
@@ -25,9 +27,13 @@ TOOLS = {
     "impact": "impact_of",
 }
 
-# The first search is hinted, then every EVERY-th after it, so a session that
-# declines the index is reminded without being told on every call.
-EVERY = 5
+# One refusal per session, recorded where each of its calls can see it; a
+# call that cannot record it goes through, so none is refused twice.
+ASKED = "claude-index-ask"
+SESSION = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+
+# The most names one refusal spells out.
+NAMES = 3
 
 # The subcommands and tools that answer a question; stats, health and upkeep
 # read the index without asking it anything.
@@ -298,9 +304,9 @@ def lookup(name: str, given: dict) -> bool:
 
 
 def calls(transcript: Path):
-    """Every tool call the transcript records, as (id, name, input, cwd). Only
-    the lines naming a tool call are parsed: a long session's transcript runs
-    to tens of megabytes, and this runs inside the agent's turn."""
+    """Every tool call the transcript records, as (name, input). Only the
+    lines naming a tool call are parsed: a long session's transcript runs to
+    tens of megabytes, and this runs before the agent's call does."""
     with transcript.open("rb") as handle:
         for line in handle:
             if b'"tool_use"' not in line:
@@ -309,15 +315,12 @@ def calls(transcript: Path):
                 entry = json.loads(line)
             except ValueError:
                 continue
-            if not isinstance(entry, dict):
-                continue
-            message, cwd = entry.get("message"), entry.get("cwd")
+            message = entry.get("message") if isinstance(entry, dict) else None
             content = message.get("content") if isinstance(message, dict) else None
             for block in content if isinstance(content, list) else ():
                 if isinstance(block, dict) and block.get("type") == "tool_use":
                     given = block.get("input")
-                    yield (block.get("id"), str(block.get("name")), given if isinstance(given, dict) else {},
-                           cwd if isinstance(cwd, str) else None)
+                    yield str(block.get("name")), given if isinstance(given, dict) else {}
 
 
 def in_worktree(cwd: str) -> bool:
@@ -340,64 +343,70 @@ def in_worktree(cwd: str) -> bool:
     return False
 
 
-def subject(pattern: str) -> tuple[str, bool]:
-    """What to ask the index for, and whether that is a named symbol. A call
-    form, `Name(` or `Name\\(`, and word boundaries are dropped first."""
+def names(pattern: str) -> list[str]:
+    """The symbols a search pattern names: one, or an alternation of them,
+    word boundaries, a call form and a wrapping group dropped. A lowercase
+    word is text, and text, a message or a pattern is grep's to list whole."""
     text = re.sub(r"\\b|\\<|\\>", "", pattern).strip()
-    text = re.sub(r"\s*(?:\\\(|\()$", "", text)
-    if IDENTIFIER.match(text):
-        return text, True
-    query = " ".join(re.sub(r"\W+", " ", text).split())
-    return query or "X", False
+    text = re.sub(r"^\\?\((.*)\\?\)$", r"\1", text)
+    found = []
+    for part in re.split(r"\\?\|", text):
+        part = re.sub(r"\s*(?:\\\(|\()$", "", part.strip())
+        if not (IDENTIFIER.match(part) and re.search(r"[A-Z_.]", part)):
+            return []
+        if part not in found:
+            found.append(part)
+    return found
 
 
-def hint(pattern: str, worktree: bool) -> str:
-    target, symbol = subject(pattern)
-    target = target[:80]
-    if symbol:
-        tools = (TOOLS["refs"], TOOLS["symbol"])
-        ask = (f"`{MCP}{TOOLS['refs']}` for what calls or uses `{target}`, "
-               f"`{MCP}{TOOLS['symbol']}` for where it is defined")
-        command = f'{CBX} refs "{target}" --json'
+def first(session: object) -> bool:
+    """True for the first call of `session` to ask, by a file only one call
+    can create, so a parallel batch is refused once."""
+    if not isinstance(session, str) or not SESSION.match(session):
+        return False
+    folder = Path(tempfile.gettempdir()) / ASKED
+    try:
+        folder.mkdir(exist_ok=True)
+        os.close(os.open(folder / session, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except OSError:
+        return False
+    return True
+
+
+def ask(found: list[str], worktree: bool) -> str:
+    """The refusal's reason: one route to the index, the one that answers
+    from this tree, because the MCP server serves the checkout it started in."""
+    named = ", ".join(f"`{name}`" for name in found)
+    if worktree:
+        runs = ", ".join(f'`{CBX} refs "{name}" --json`' for name in found)
+        route = (f"load the codebase-index skill, whose grant the CLI runs under, then run {runs}, one per "
+                 f"call, and `{CBX} symbol \"{found[0]}\" --json` for where it is defined; the CLI reads this "
+                 "worktree's own index")
     else:
-        tools = (TOOLS["search"],)
-        ask = f"`{MCP}{TOOLS['search']}` with `limit: 3` and one session tag"
-        command = f'{CBX} search "{target}" --limit 3 --session <tag> --json'
-    load = ",".join(MCP + tool for tool in tools)
-    where = (" This session is in a linked worktree and the MCP server serves"
-             " the checkout it started in, so for code this branch changed use"
-             " the CLI form, which answers from this worktree's own index."
-             if worktree else "")
-    return (
-        "That was a code search, and this session has made no code-index "
-        f"lookup yet. Ask the index: {ask}. The MCP tools are deferred, so "
-        f"load them first with ToolSearch `select:{load}`; or load the "
-        f"codebase-index skill and run `{command}`.{where} Grep stays right "
-        "for text, error messages and docs/.")
+        load = ",".join(MCP + TOOLS[tool] for tool in ("refs", "symbol"))
+        route = (f"call `{MCP}{TOOLS['refs']}` for what uses each and `{MCP}{TOOLS['symbol']}` for where "
+                 f"it is defined, loaded first with ToolSearch `select:{load}`")
+    return (f"Before searching for {named}, ask the code index: {route}. This search is refused once "
+            "per session; rerun it unchanged if you still need every occurrence.")
 
 
 def answer(event: dict) -> str | None:
+    """Why to refuse this call, or None to let it run. A subagent's profile
+    may hold neither the MCP tools nor a shell, so it is never refused."""
     name, given = event.get("tool_name"), event.get("tool_input")
-    if not isinstance(name, str) or not isinstance(given, dict):
+    if not isinstance(name, str) or not isinstance(given, dict) or event.get("agent_id"):
         return None
     cwd = event.get("cwd") if isinstance(event.get("cwd"), str) else ""
     pattern = search(name, given, cwd)
+    found = names(pattern) if pattern else []
     transcript = event.get("transcript_path")
-    if pattern is None or not isinstance(transcript, str) or not transcript:
+    if not found or not isinstance(transcript, str) or not transcript:
         return None
-    # Only the searches before this call count: a batch of parallel calls is
-    # recorded whole before any of them returns.
-    current, before = event.get("tool_use_id"), True
-    searches = 1
-    for call_id, called, called_with, called_in in calls(Path(transcript)):
-        if lookup(called, called_with):
-            return None
-        before = before and call_id != current
-        if before and search(called, called_with, called_in or cwd) is not None:
-            searches += 1
-    if (searches - 1) % EVERY:
+    if any(lookup(called, called_with) for called, called_with in calls(Path(transcript))):
         return None
-    return hint(pattern, bool(cwd) and in_worktree(cwd))
+    if not first(event.get("session_id")):
+        return None
+    return ask(found[:NAMES], bool(cwd) and in_worktree(cwd))
 
 
 def main() -> int:
@@ -407,9 +416,10 @@ def main() -> int:
         found = answer(event) if isinstance(event, dict) else None
         if found:
             print(json.dumps({"hookSpecificOutput": {
-                "hookEventName": "PostToolUse",
-                "additionalContext": found}}))
-    except Exception:  # noqa: BLE001 - a hint that fails says nothing
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": found}}))
+    except Exception:  # noqa: BLE001 - a call it cannot judge goes through
         pass
     return 0
 
