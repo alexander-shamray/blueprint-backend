@@ -52,7 +52,9 @@ public class RequestExampleRuleTests(HostSmokeTests.UnreachableInfrastructureFac
             request =>
             {
                 request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
-                request.Headers.Add(TestAuthHandler.PermissionsHeader, $"{OrderingPermissions.Write} {OrderingPermissions.Cancel}");
+                request.Headers.Add(
+                    TestAuthHandler.PermissionsHeader,
+                    $"{OrderingPermissions.Write} {OrderingPermissions.Cancel}");
             },
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken);

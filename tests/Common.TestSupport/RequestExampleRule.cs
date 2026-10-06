@@ -67,7 +67,7 @@ public static class RequestExampleRule
 
     /// <summary>Each bodied endpoint that answers its own example with a 4xx, sent as a caller sends it.</summary>
     /// <remarks>Whoever refuses: a validator of the built command, a handler's parse, the route or policy. A 5xx or no
-    /// answer within <paramref name="budget"/> is past them all, as validation runs before idempotency (§6.3).</remarks>
+    /// answer within <paramref name="budget"/> is past them all: validation runs before idempotency (§6.3).</remarks>
     public static async Task<IReadOnlyList<string>> RefusedAsync(
         IEnumerable<Endpoint> endpoints,
         HttpClient client,
