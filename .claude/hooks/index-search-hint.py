@@ -111,7 +111,8 @@ def tokens(command: str, escape: str) -> list[str]:
 def segments(command: str, escape: str = "\\"):
     """Each simple command in `command` as (argv, piped, after): quotes
     honoured, redirections and their targets dropped, `piped` when it reads
-    the output of the one before it, and `after` the operator ending it."""
+    standard input, from the one before it or a redirection, and `after` the
+    operator ending it."""
     words = tokens(command, escape)
     argv, piped, skip = [], False, False
     for index, token in enumerate(words):
@@ -122,7 +123,7 @@ def segments(command: str, escape: str = "\\"):
             yield argv, piped, token
             argv, piped = [], token.strip("\n") in ("|", "|&")
         elif token and set(token) <= SEPARATORS | REDIRECTS:
-            skip = True
+            skip, piped = True, piped or set(token) == {"<"}
         elif not (token.isdigit() and following and set(following) & REDIRECTS
                   and set(following) <= SEPARATORS | REDIRECTS):
             argv.append(token)

@@ -52,6 +52,7 @@ SEARCHES = (
     "grep -rn Retry \\\n  src",
     "git status --short\ngrep -rn Retry src",
     "grep -rn MAX_RETRIES src",
+    "rg OutboxRelay src > found.txt",
 )
 
 # Each searches the tree for text, which grep lists whole and the index does not.
@@ -70,6 +71,8 @@ NOT_SEARCHES = (
     "grep -n Money src/Money.cs",
     "git log --oneline | grep Fix",
     "cat build.log | rg Error",
+    "rg Error < build.log",
+    "rg ClaimAsync <<< \"$text\"",
     "grep -rn Saga docs/backend-architecture",
     "grep -rn Saga docs 2>/dev/null",
     "grep -rn Saga \\\n  docs",
