@@ -138,9 +138,9 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   ├── backend-architecture/           This document, one file per chapter;
 │   │                                   one per ADR under adr/, indexed by
 │   │                                   Appendix A
-│   ├── runbooks/                       One per alert (§13.9), plus a README
-│   │                                   that is excluded from the pairing by
-│   │                                   name
+│   ├── runbooks/                       The one each alert names, some shared
+│   │                                   (§13.9), plus a README that is excluded
+│   │                                   from the pairing by name
 │   ├── secrets.md                      How a secret reaches a pod and how each
 │   │                                   kind is rotated — the operational half
 │   │                                   of §15.4, which keeps the inventory
