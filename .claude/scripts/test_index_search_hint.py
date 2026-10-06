@@ -387,13 +387,16 @@ class WhenItAsks(Scratch):
 
     def test_a_lookup_that_was_refused_or_failed_asked_nothing(self):
         """A guard refuses `cbx … | head` as two commands, and an MCP tool
-        called before it is loaded errors: neither reached the index."""
-        for earlier, failed in (
-                (bash_call("bash .claude/skills/codebase-index/scripts/cbx refs X --json | head -20"), True),
-                (("mcp__codebase-index__find_refs", {"symbol": "X"}), True),
-                (("mcp__codebase-index__find_refs", {"symbol": "X"}), False)):
+        called before it is loaded errors: neither reached the index. A
+        shell command that exited non-zero after the lookup still ran it."""
+        lookup = bash_call("bash .claude/skills/codebase-index/scripts/cbx refs X --json | head -20")
+        for earlier, text, failed in (
+                (lookup, "PreToolUse:Bash hook error: refused", True),
+                (("mcp__codebase-index__find_refs", {"symbol": "X"}), "<tool_use_error>not loaded", True),
+                (("mcp__codebase-index__find_refs", {"symbol": "X"}), "{}", False),
+                (lookup, [{"type": "text", "text": "Exit code 1\n"}], False)):
             result = {"type": "user", "message": {"role": "user", "content": [
-                {"type": "tool_result", "tool_use_id": "toolu_0", "is_error": failed, "content": "refused"}]}}
+                {"type": "tool_result", "tool_use_id": "toolu_0", "is_error": text != "{}", "content": text}]}}
             session = Session(self.scratch, earlier=[earlier])
             with session.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(result) + "\n")

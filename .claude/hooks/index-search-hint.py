@@ -367,9 +367,21 @@ def lookup(name: str, given: dict) -> bool:
     return any(runs_cli(argv) for argv, _piped, _after in segments(given["command"], SHELLS[name]))
 
 
+def ran(result: dict) -> bool:
+    """True when a call's result records that it ran: no error, or a shell's
+    non-zero exit, whose text opens `Exit code`. A guard's refusal and a
+    tool's error read otherwise."""
+    if result.get("is_error") is not True:
+        return True
+    content = result.get("content")
+    if isinstance(content, list):
+        content = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+    return isinstance(content, str) and content.startswith("Exit code")
+
+
 def looked(transcript: Path) -> bool:
     """True when the transcript records a lookup that was not refused: one
-    whose result is no error, or that has no result yet. It stops at the
+    whose result shows it ran, or that has no result yet. It stops at the
     first lookup answered and parses a result line only when the line names
     a lookup still waiting: a long session's transcript runs to tens of
     megabytes, and this runs before the agent's call does."""
@@ -393,7 +405,7 @@ def looked(transcript: Path) -> bool:
                 if block.get("type") == "tool_use" and lookup(str(block.get("name")), given):
                     waiting.add(str(block.get("id")))
                 elif block.get("type") == "tool_result" and str(block.get("tool_use_id")) in waiting:
-                    if block.get("is_error") is not True:
+                    if ran(block):
                         return True
                     waiting.discard(str(block.get("tool_use_id")))
     return bool(waiting)

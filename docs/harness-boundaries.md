@@ -252,9 +252,10 @@ refused too. A lookup made by any route — an MCP tool or the CLI, through
 either shell — lets every search through, and the hook reads that from the
 session's transcript, parsing the lines that record a call, and a result
 only when it answers a lookup, and stopping at the first lookup answered: on
-a 62 MB transcript the whole read took 0.1 s. A call a guard refused, or
-one that ended in an error, asked the index nothing and is not a lookup. A subagent is never refused: its profile
-may hold neither the MCP tools nor a shell.
+a 62 MB transcript the whole read took 0.1 s. A call a guard refused, or a
+tool's error, asked the index nothing and is not a lookup; a shell command
+that ran the CLI and then exited non-zero did ask, and is one. A subagent is
+never refused: its profile may hold neither the MCP tools nor a shell.
 
 **It names one route, the one that answers from this tree.** The MCP server
 starts with `--root .` in the directory the session started in, and
