@@ -218,7 +218,7 @@ every command it emits to a row of the route table and a prefix the skill
 approves.
 
 **`PostToolUse` runs `.claude/hooks/index-search-hint.py` after `Grep` and
-`Bash`, because the prompt is not where the code questions are.** A task
+both shell tools, because the prompt is not where the code questions are.** A task
 prompt — `/ship` and an issue — asks none of them; they come up inside the
 turn, where a prompt hook never runs, and from the transcripts not one of the
 sessions here that searched code in the week to 2026-10-06 made a lookup. A

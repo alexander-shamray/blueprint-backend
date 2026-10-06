@@ -34,10 +34,22 @@ EVERY = 5
 ASKING = ("search", "explain", "architecture", "symbol", "refs", "impact",
           "diff-impact", "path", "describe", "verify")
 UPKEEP = {"healthcheck", "index_stats"}
-CLIS = {"cbx", "cbx.ps1", "codebase-index"}
+CLIS = {"cbx", "cbx.ps1", "codebase-index", "codebase_index"}
 
-SEPARATORS = set("|&;()")
+# The tools that run a command line, and the escape character each one's
+# shell reads: PowerShell's is the backtick, so a backslash is a path.
+SHELLS = {"Bash": "\\", "PowerShell": ""}
+
+# The programs that run the script or module they are handed, and their
+# options that consume the next word.
+INTERPRETERS = {"bash", "sh", "pwsh", "powershell", "py", "python", "python3"}
+INTERPRETER_VALUED = {"-executionpolicy", "-ep", "-workingdirectory", "-wd", "-x", "-w"}
+
+SEPARATORS = set("|&;()\n")
 REDIRECTS = set("<>")
+
+# A heredoc's opening, `<<TAG`, `<<-TAG` or a quoted tag; not `<<<`.
+HEREDOC = re.compile(r"(?<!<)<<(-?)[ \t]*(['\"]?)([A-Za-z_][\w.-]*)\2")
 
 # The options of grep, rg and git grep that consume the next word.
 VALUED = {"-e", "-f", "-A", "-B", "-C", "-m", "-g", "-t", "-T", "-M",
@@ -57,31 +69,52 @@ FILTERS = {"-g", "--glob", "--iglob", "-t", "--type", "--include"}
 IDENTIFIER = re.compile(r"^[^\W\d]\w*(?:\.[^\W\d]\w*)*$")
 
 
-def segments(command: str):
-    """Each simple command in `command` as (argv, piped): quotes honoured,
-    redirections and their targets dropped, and `piped` when it reads the
-    output of the one before it."""
+def unheredoc(command: str) -> str:
+    """`command` without its heredoc bodies, which are data, not commands."""
+    kept, waiting = [], []
     for line in command.splitlines():
-        try:
-            lexer = shlex.shlex(line, posix=True, punctuation_chars="|&;<>()")
-            lexer.whitespace_split = True
-            tokens = list(lexer)
-        except ValueError:
-            tokens = line.split()
-        argv, piped, skip = [], False, False
-        for index, token in enumerate(tokens):
-            following = tokens[index + 1] if index + 1 < len(tokens) else ""
-            if skip:
-                skip = False
-            elif token and set(token) <= SEPARATORS:
-                yield argv, piped
-                argv, piped = [], token in ("|", "|&")
-            elif token and set(token) <= SEPARATORS | REDIRECTS:
-                skip = True
-            elif not (token.isdigit() and following and set(following) & REDIRECTS
-                      and set(following) <= SEPARATORS | REDIRECTS):
-                argv.append(token)
-        yield argv, piped
+        if waiting:
+            dash, tag = waiting[0]
+            if (line.lstrip("\t") if dash else line) == tag:
+                waiting.pop(0)
+            continue
+        kept.append(line)
+        waiting = [(found.group(1), found.group(3)) for found in HEREDOC.finditer(line)]
+    return "\n".join(kept)
+
+
+def tokens(command: str, escape: str) -> list[str]:
+    """The words and operators of `command`, a newline outside quotes being
+    an operator; a line at a time when the whole will not split."""
+    text = unheredoc(command.replace("\\\n", " ") if escape else command)
+    try:
+        lexer = shlex.shlex(text, posix=True, punctuation_chars="|&;<>()\n")
+        lexer.whitespace, lexer.commenters, lexer.escape = " \t\r", "", escape
+        lexer.whitespace_split = True
+        return list(lexer)
+    except ValueError:
+        return [word for line in text.splitlines() for word in [*line.split(), "\n"]]
+
+
+def segments(command: str, escape: str = "\\"):
+    """Each simple command in `command` as (argv, piped, after): quotes
+    honoured, redirections and their targets dropped, `piped` when it reads
+    the output of the one before it, and `after` the operator ending it."""
+    words = tokens(command, escape)
+    argv, piped, skip = [], False, False
+    for index, token in enumerate(words):
+        following = words[index + 1] if index + 1 < len(words) else ""
+        if skip:
+            skip = False
+        elif token and set(token) <= SEPARATORS:
+            yield argv, piped, token
+            argv, piped = [], token.strip("\n") in ("|", "|&")
+        elif token and set(token) <= SEPARATORS | REDIRECTS:
+            skip = True
+        elif not (token.isdigit() and following and set(following) & REDIRECTS
+                  and set(following) <= SEPARATORS | REDIRECTS):
+            argv.append(token)
+    yield argv, piped, ""
 
 
 def prose_only(paths: list[str], filters: list[str]) -> bool:
@@ -137,6 +170,9 @@ def shown(paths: list[str], base: str, cwd: str) -> list[str]:
     root = checkout(cwd)
     named = []
     for path in paths or ["."]:
+        if path.startswith(EXCLUDES):
+            named.append(path)
+            continue
         try:
             found = located(base, path).resolve()
             named.append(found.relative_to(root).as_posix() if root and found.is_relative_to(root) else path)
@@ -145,12 +181,19 @@ def shown(paths: list[str], base: str, cwd: str) -> list[str]:
     return named
 
 
-def shell_search(command: str, cwd: str) -> str | None:
+def shell_search(command: str, cwd: str, escape: str = "\\") -> str | None:
     """The pattern of a tree-wide grep, rg or git grep in `command`, or None.
     A grep with no recursion reads one file or a pipe, which the index does
     not replace, and neither does an rg filtering a pipe."""
-    shell = cwd
-    for argv, piped in segments(command):
+    shell, outer, before = cwd, [], ""
+    for argv, piped, after in segments(command, escape):
+        # A subshell's `cd` ends with it.
+        for mark in before:
+            if mark == "(":
+                outer.append(shell)
+            elif mark == ")" and outer:
+                shell = outer.pop()
+        before = after
         while argv and re.match(r"^[A-Za-z_]\w*=", argv[0]):
             argv = argv[1:]
         if not argv:
@@ -210,11 +253,11 @@ def search(name: str, given: dict, cwd: str) -> str | None:
             return None
         paths = [given["path"]] if isinstance(given.get("path"), str) else []
         filters = [given[key] for key in ("glob", "type") if isinstance(given.get(key), str)]
-        if prose_only(paths, filters) or files_only(paths, cwd) or elsewhere(paths, cwd, cwd):
+        if prose_only(shown(paths, cwd, cwd), filters) or files_only(paths, cwd) or elsewhere(paths, cwd, cwd):
             return None
         return pattern
-    if name == "Bash" and isinstance(given.get("command"), str):
-        return shell_search(given["command"], cwd)
+    if name in SHELLS and isinstance(given.get("command"), str):
+        return shell_search(given["command"], cwd, SHELLS[name])
     return None
 
 
@@ -222,16 +265,33 @@ def executable(word: str) -> str:
     return word.replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe")
 
 
+def ran(argv: list[str]) -> list[str]:
+    """What `argv` runs: `VAR=` words, an interpreter and its options
+    dropped, so `-m codebase_index` reads as the CLI itself."""
+    while argv and re.match(r"^[A-Za-z_]\w*=", argv[0]):
+        argv = argv[1:]
+    if not argv or executable(argv[0]).lower() not in INTERPRETERS:
+        return argv
+    rest = argv[1:]
+    while rest and rest[0].startswith("-"):
+        option = rest[0].lower()
+        if option in ("-c", "-command"):
+            return []
+        rest = rest[2:] if option in INTERPRETER_VALUED else rest[1:]
+        if option in ("-f", "-file"):
+            break
+    return rest
+
+
 def lookup(name: str, given: dict) -> bool:
     """True when the call asked the index: an MCP tool, or a command that
     runs the CLI, never one that merely names it."""
     if name.startswith(MCP):
         return name[len(MCP):] not in UPKEEP
-    if name != "Bash" or not isinstance(given.get("command"), str):
+    if name not in SHELLS or not isinstance(given.get("command"), str):
         return False
-    for argv, _piped in segments(given["command"]):
-        if argv and executable(argv[0]) in ("bash", "sh", "pwsh", "powershell"):
-            argv = argv[1:]
+    for argv, _piped, _after in segments(given["command"], SHELLS[name]):
+        argv = ran(argv)
         if len(argv) > 1 and executable(argv[0]) in CLIS and argv[1] in ASKING:
             return True
     return False

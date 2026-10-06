@@ -110,7 +110,7 @@
         ]
       },
       {
-        "matcher": "Grep|Bash",
+        "matcher": "Grep|Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
