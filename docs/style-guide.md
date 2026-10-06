@@ -522,8 +522,25 @@ file and a reviewer are the only things that do.
 - **Operators go at the end of the line they continue from**
   (`dotnet_style_operator_placement_when_wrapping = end_of_line`). Each line
   then ends by announcing that more is coming. This holds for `&&`, `||`, `??`
-  and `+`, in conditions and expressions alike; a leading `&&` or `??` is a
-  leftover. It governs wrapped lambda predicates as much as `if` headers.
+  and `+`, and for the pattern combinators `or` and `and`, in conditions and
+  expressions alike; a leading one is a leftover. It governs wrapped lambda
+  predicates as much as `if` headers. **The conditional operator is the
+  exception**: `?` and `:` lead their branch lines, four past the line the
+  condition opens on, because a branch is not another operand and the leading
+  `?` is what tells the two apart.
+
+  **Where the operands sit follows from the continuation rule above.** An
+  expression that opens its own line — an expression body, a wrapped
+  initialiser, a lambda body — keeps its operands in that line's column, as the
+  `if` header keeps them after `if (`. One that opens mid-line, after `return`,
+  `=` or `when (`, continues four past the statement, never under its first
+  operand. A concatenated string argument keeps its pieces in one column.
+
+  **Nothing enforces it.** The setting carries no severity, and IDE0055 reports
+  only what the formatter would change, which never includes moving an
+  operator. The sieve is `rg '^\s*(&&|\|\||\?\?|\+|or|and)\s' -g '*.cs'`; its
+  `or` and `and` arms also match a word opening a raw string's line, so read
+  each hit.
 - A base-type list is the one continuation covered by none of the above: no
   bracket to hang off, no operator, already one entry per line. Leave it
   aligned under the `:`.
