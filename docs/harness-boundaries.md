@@ -236,10 +236,12 @@ in the first `/ship` session that ran it the agent read both hints and
 grepped on, ending with no lookup (#564): by then the grep had answered, and
 asking the index meant redoing a search that had worked. A refusal is the one
 form the agent cannot read past, so it is spent once, on the search the index
-answers better. **Text is never refused**: a lowercase word, a message, a
-regular expression or a phrase is a search for every occurrence, which grep
-lists completely and a ranked top three does not, and so is a search confined
-to `docs/` or to Markdown, of one file, or of a pipe.
+answers better. A symbol is an identifier that mixes cases or carries an
+underscore; **anything else is text and is never refused**: a word in one
+case, `timeout` or `TODO`, a file name, a message, a regular expression or a
+phrase is a search for every occurrence, which grep lists completely and a
+ranked top three does not, and so is a search confined to `docs/` or to
+Markdown, of one file, or of a pipe.
 
 **Once is a file, and the transcript says the rest.** The refusal is recorded
 by creating a file named after the session under the temporary directory,
