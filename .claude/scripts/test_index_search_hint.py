@@ -326,6 +326,10 @@ class WhenItAsks(Scratch):
                         (bash_call("pwsh -NoProfile -ExecutionPolicy Bypass -File "
                                    ".claude/skills/codebase-index/scripts/cbx.ps1 search outbox --json"),),
                         (bash_call("py -3.12 -P -m codebase_index refs X --json"),),
+                        (bash_call('pwsh -NoProfile -Command "& ./.claude/skills/codebase-index/scripts/cbx.ps1'
+                                   ' refs X --json"'),),
+                        (bash_call("bash -c 'bash .claude/skills/codebase-index/scripts/cbx refs X --json'"),),
+                        (bash_call("bash -x .claude/skills/codebase-index/scripts/cbx refs X --json"),),
                         (bash_call("git status\nbash .claude/skills/codebase-index/scripts/cbx refs X --json"),),
                         (bash_call("CBX_NO_SKILL_AUTO_UPDATE=1 bash "
                                    ".claude/skills/codebase-index/scripts/cbx refs X --json"),),
@@ -339,6 +343,7 @@ class WhenItAsks(Scratch):
                         'git commit -m "say cbx search first"',
                         "echo codebase-index search",
                         'py -3.12 -c "import codebase_index" search',
+                        "bash -c 'echo cbx refs X'",
                         "git commit -F - <<'EOF'\nbash .claude/skills/codebase-index/scripts/cbx refs X --json\nEOF",
                         'gh pr create --body "Run:\nbash .claude/skills/codebase-index/scripts/cbx refs X\n"'):
             with self.subTest(command=command):

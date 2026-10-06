@@ -47,10 +47,15 @@ CLIS = {"cbx", "cbx.ps1", "codebase-index", "codebase_index"}
 # backtick only joins a continued line here.
 SHELLS = {"Bash": "\\", "PowerShell": ""}
 
-# The programs that run the script or module they are handed, and their
-# options that consume the next word.
-INTERPRETERS = {"bash", "sh", "pwsh", "powershell", "py", "python", "python3"}
-INTERPRETER_VALUED = {"-executionpolicy", "-ep", "-workingdirectory", "-wd", "-x", "-w"}
+# The programs that run the script or module they are handed, and each one's
+# options that consume the next word; PowerShell's are read in any case.
+POWERSHELLS = {"pwsh", "powershell"}
+PYTHONS = {"py", "python", "python3"}
+INTERPRETERS = {
+    "bash": set(), "sh": set(),
+    **dict.fromkeys(POWERSHELLS, {"-executionpolicy", "-ep", "-workingdirectory", "-wd"}),
+    **dict.fromkeys(PYTHONS, {"-X", "-W"}),
+}
 
 SEPARATORS = set("|&;()\n")
 REDIRECTS = set("<>")
@@ -272,22 +277,26 @@ def executable(word: str) -> str:
     return word.replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe")
 
 
-def ran(argv: list[str]) -> list[str]:
-    """What `argv` runs: `VAR=` words, an interpreter and its options
-    dropped, so `-m codebase_index` reads as the CLI itself."""
+def runs_cli(argv: list[str], depth: int = 0) -> bool:
+    """True when `argv` asks the CLI a question: directly, through an
+    interpreter and its options, or in the command a shell's `-c` runs, so
+    `-m codebase_index` reads as the CLI itself."""
     while argv and re.match(r"^[A-Za-z_]\w*=", argv[0]):
         argv = argv[1:]
-    if not argv or executable(argv[0]).lower() not in INTERPRETERS:
-        return argv
-    rest = argv[1:]
-    while rest and rest[0].startswith("-"):
-        option = rest[0].lower()
-        if option in ("-c", "-command"):
-            return []
-        rest = rest[2:] if option in INTERPRETER_VALUED else rest[1:]
-        if option in ("-f", "-file"):
-            break
-    return rest
+    program = executable(argv[0]).lower() if argv else ""
+    if program in INTERPRETERS:
+        rest = argv[1:]
+        while rest and rest[0].startswith("-"):
+            option = rest[0].lower() if program in POWERSHELLS else rest[0]
+            if option in ("-c", "-command"):
+                escape = "" if program in POWERSHELLS else "\\"
+                return (program not in PYTHONS and depth < 2 and len(rest) > 1 and any(
+                    runs_cli(inner, depth + 1) for inner, _piped, _after in segments(rest[1], escape)))
+            rest = rest[2:] if option in INTERPRETERS[program] else rest[1:]
+            if program in POWERSHELLS and option in ("-f", "-file"):
+                break
+        argv = rest
+    return len(argv) > 1 and executable(argv[0]) in CLIS and argv[1] in ASKING
 
 
 def lookup(name: str, given: dict) -> bool:
@@ -297,11 +306,7 @@ def lookup(name: str, given: dict) -> bool:
         return name[len(MCP):] not in UPKEEP
     if name not in SHELLS or not isinstance(given.get("command"), str):
         return False
-    for argv, _piped, _after in segments(given["command"], SHELLS[name]):
-        argv = ran(argv)
-        if len(argv) > 1 and executable(argv[0]) in CLIS and argv[1] in ASKING:
-            return True
-    return False
+    return any(runs_cli(argv) for argv, _piped, _after in segments(given["command"], SHELLS[name]))
 
 
 def calls(transcript: Path):
