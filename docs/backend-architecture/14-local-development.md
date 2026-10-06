@@ -167,9 +167,17 @@ services:
       - bash
       - -c
       - >-
+        rm -f /tmp/ready;
         grep -q '^rule_files:' prometheus.yaml
         || echo 'rule_files: [ /etc/prometheus/rules/platform-alerts.yaml ]' >> prometheus.yaml;
         exec ./run-all.sh
+    # run-all.sh touches /tmp/ready once every component is up; the command
+    # removes it first, so a restart is not read healthy from the last run.
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/ready"]
+      interval: 5s
+      retries: 30
+      start_period: 30s
     ports: [ "127.0.0.1:3000:3000" ]
     volumes:
       - ../observability/alerts/platform-alerts.yaml:/etc/prometheus/rules/platform-alerts.yaml:ro
