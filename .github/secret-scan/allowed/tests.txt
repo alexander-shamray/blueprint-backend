@@ -28,7 +28,6 @@ tests/Ordering.Api.Tests/MessagingRegistrationTests.cs | credential-assignment |
 tests/Common.Web.Tests/RealmImportTests.cs | credential-assignment | eb26d4a9a0ef | The suite pinning the realm export's documented local client default.
 tests/Common.Web.Tests/RealmImportTests.cs | credential-assignment | afcf12beb59c | The suite pinning the realm export's second documented local client default.
 tests/Common.Web.Tests/RealmImportTests.cs | credential-assignment | c9e80f5d4b22 | The suite pinning the realm export's third documented local client default.
-tests/Common.Web.Tests/RealmImportTests.cs | connection-string-password | 4b7870187707 | A C# local of that name assigned the result of a call, not a value.
 tests/Common.Web.Tests/RedactingScopeProviderTests.cs | connection-string-password | f52fbd32b2b3 | The throwaway value the scope redactor is asserted to remove.
 tests/Common.Web.Tests/SensitiveDataRedactorTests.cs | connection-string-password | f52fbd32b2b3 | The same throwaway value in the record redactor's suite.
 tests/Common.Web.Tests/SensitiveDataRedactorTests.cs | connection-string-password | 75857a458999 | An English word in a message template the suite asserts about.
