@@ -1,9 +1,9 @@
 # ADR-071 — Every image carries an SBOM, and signing waits on a registry
 
 **Decision.** Every image the `images` job in `ci.yml` builds gets an SBOM,
-made by Syft (`anchore/sbom-action`) from the built image as SPDX JSON and
-kept as a workflow artefact, and `pipeline-gate images` refuses a build step
-with none after it. Signing and provenance arrive with the first push to a
+made by Syft (`anchore/sbom-action`, pinned to a commit) from the built image
+as SPDX JSON and kept as a workflow artefact, and `pipeline-gate images`
+refuses a build step with none after it. Signing and provenance arrive with the first push to a
 registry, in the job that pushes: keyless with cosign, the trust root
 Sigstore's public-good Fulcio and Rekor, the identity `ci.yml` on
 `refs/heads/main` through GitHub's OIDC token, with the SBOM and a SLSA

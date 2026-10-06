@@ -73,7 +73,7 @@ jobs:
       # A comment between steps belongs to neither.
       - name: SBOM for ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: ${{ matrix.image }}:${{ github.sha }}
           format: spdx-json
@@ -83,7 +83,7 @@ SBOM_STEP = """\
       # A comment between steps belongs to neither.
       - name: SBOM for ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: ${{ matrix.image }}:${{ github.sha }}
           format: spdx-json
@@ -363,6 +363,15 @@ class SbomTests(Fixture):
             "          image: ${{ matrix.image }}:latest"))
 
         self.assertEqual(len(pipeline_gate.check_images(self.root)), 1)
+
+    def test_an_sbom_action_pinned_to_a_tag_is_caught(self) -> None:
+        """A tag can be moved to other code; the action reads the image."""
+        self.write(WORKFLOW.replace("@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3", "@v0"))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("pinned to a commit", problems[0])
 
     def test_an_sbom_under_another_condition_is_caught(self) -> None:
         """An SBOM step left at `always()` fails every skipped leg, and one

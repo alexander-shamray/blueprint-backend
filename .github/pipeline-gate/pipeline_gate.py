@@ -369,16 +369,16 @@ def check_sboms(workflow_text: str) -> list[str]:
             )
             continue
         if not any(
-            step.get("uses", "").startswith(SBOM_ACTION)
+            re.fullmatch(rf"{re.escape(SBOM_ACTION)}[0-9a-f]{{40}}(?:\s+#.*)?", step.get("uses", "").strip())
             and step.get("image", "").strip() == tag.group(1)
             and step.get("if", "").strip() == build.get("if", "").strip()
             for step in steps[index + 1:]
         ):
             problems.append(
                 f"the images job builds {tag.group(1)} and no {SBOM_ACTION} step "
-                "after it reads that reference under the same `if:`. ADR-071 "
-                "gives every image the pipeline builds an SBOM, and a leg that "
-                "builds without one ships an image nothing has inventoried"
+                "pinned to a commit reads that reference after it under the same "
+                "`if:`. ADR-071 gives every image the pipeline builds an SBOM, and "
+                "a leg without one ships an image nothing has inventoried"
             )
     return problems
 
