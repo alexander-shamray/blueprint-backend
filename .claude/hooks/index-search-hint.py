@@ -131,11 +131,13 @@ def segments(command: str, escape: str = "\\"):
 
 
 def prose_only(paths: list[str], filters: list[str]) -> bool:
-    """True when the search reads only prose: its file filters, where it
-    names any, or else the paths it names; an rg `!` glob or a git exclude
-    pathspec leaves prose out rather than reading it."""
-    named = filters or paths
-    return bool(named) and all(not item.startswith(EXCLUDES) and PROSE.search(item.strip("'\"")) for item in named)
+    """True when the search reads only prose: the file filters it names are
+    all prose, or the paths it reads are. An rg `!` glob or a git exclude
+    pathspec says what is left out, not what is read, so neither counts."""
+    def prose(items: list[str]) -> bool:
+        read = [item for item in items if not item.startswith(EXCLUDES)]
+        return bool(read) and all(PROSE.search(item.strip("'\"")) for item in read)
+    return prose(filters) or prose(paths)
 
 
 def located(cwd: str, path: str) -> Path:
