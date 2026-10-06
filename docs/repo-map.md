@@ -487,7 +487,10 @@ reason.
   **outside `/validate-blueprint`'s scope** and, unlike the roadmap, not named
   in it either — a drift check on a document whose whole value is being stale
   would fail on every entry by design. **Do not edit a spec or a plan to match
-  the code that followed it**; amend the chapter instead.
+  the code that followed it**; amend the chapter instead. A plan may name
+  files of its own that no longer exist — the sandbox-hardening plan lists
+  its own original file under the retired month plan's name — so a search for
+  a retired name excludes this tree rather than editing it.
 - **`.remember/`** is session state, not content. Never edit it as part of a
   change.
 
