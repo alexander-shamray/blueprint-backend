@@ -54,9 +54,10 @@ anything.
 > specifically to stop a reader inferring capability from a green pipeline.
 > It is true now, which is a worse reason to leave it unexamined than a
 > better one.
-> **Signing is not** — it needs a registry and a key this
-> repository has neither of, so what runs is the half that can run rather than
-> a step that would have to be faked. Nor is any `Deploy:` node: there is no
+> **Each image gets an SBOM and no signature**
+> ([ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md)):
+> signing waits on a registry this repository does not have, so what runs is
+> the half that can run rather than a step that would have to be faked. Nor is any `Deploy:` node: there is no
 > dev, staging or production environment, which is why §15.5's canary is
 > `workflow_dispatch` only and why the k6 SLO run has a target that does not
 > exist yet. Naming the split here is cheaper than letting a reader infer from
@@ -602,6 +603,12 @@ Both images carry the **same tag**, which is what lets `values.yaml` hold one
 `image.tag` and the Helm hook interpolate it into the migrator reference
 (§7.4). A migrator built from a different commit than the API it precedes is
 the exact failure the migration hook exists to prevent.
+
+**What is built is inventoried, and what is pushed is signed.** The job that
+pushes signs each digest keyless and attaches its SBOM and provenance, and the
+rollout verifies the signature before Helm runs
+([ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md));
+until a registry exists, the build stops at the SBOM.
 
 ## 15.3 Deployment
 

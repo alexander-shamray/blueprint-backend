@@ -697,10 +697,9 @@ jobs:
   # broke would surface on the next compose pull request. Here it surfaces on
   # the offending one, after the test stages, in the order §15.1 draws.
 
-  # Built and not pushed. §15.1's node reads "Build + sign images", and signing
-  # needs a registry and a key this repository has neither of, so what runs is
-  # the half that can run. `pipeline-gate images` asserts every Dockerfile
-  # under src/ appears below.
+  # Built and not pushed, each with an SBOM; signing waits on a registry
+  # (ADR-071). `pipeline-gate images` asserts every Dockerfile under src/
+  # appears below and every build has its SBOM.
   images:
     needs: [changes, stage-gate]
     if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' || needs.changes.outputs.inventory == 'true' || needs.changes.outputs.payments == 'true' || needs.changes.outputs.shipping == 'true' || needs.changes.outputs.notifications == 'true' }}
@@ -787,3 +786,13 @@ jobs:
           --file ${{ matrix.dockerfile }}
           --tag ${{ matrix.image }}:${{ github.sha }}
           .
+
+      # ADR-071: an SBOM from the built image, as SPDX JSON in a workflow
+      # artefact until a registry exists to attach it to.
+      - name: SBOM for ${{ matrix.image }}
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ matrix.image }}:${{ github.sha }}
+          format: spdx-json
+          artifact-name: sbom-${{ matrix.image }}.spdx.json

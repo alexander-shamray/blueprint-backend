@@ -58,6 +58,35 @@ jobs:
           - filter: gateway
             image: gateway
             dockerfile: src/Gateway/Gateway.Api/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+
+      - name: Build ${{ matrix.image }}
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        run: >
+          docker build
+          --file ${{ matrix.dockerfile }}
+          --tag ${{ matrix.image }}:${{ github.sha }}
+          .
+
+      # A comment between steps belongs to neither.
+      - name: SBOM for ${{ matrix.image }}
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ matrix.image }}:${{ github.sha }}
+          format: spdx-json
+"""
+
+SBOM_STEP = """\
+      # A comment between steps belongs to neither.
+      - name: SBOM for ${{ matrix.image }}
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ matrix.image }}:${{ github.sha }}
+          format: spdx-json
 """
 
 
@@ -315,6 +344,57 @@ class ImageTests(Fixture):
 
         self.assertEqual(len(problems), 1)
         self.assertIn("parser", problems[0])
+
+
+class SbomTests(Fixture):
+    """ADR-071's coverage: every build the images job runs has its SBOM."""
+
+    def test_a_build_with_no_sbom_step_is_caught(self) -> None:
+        self.write(WORKFLOW.replace(SBOM_STEP, ""))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("builds ${{ matrix.image }}:${{ github.sha }} and no anchore/sbom-action@", problems[0])
+
+    def test_an_sbom_of_another_reference_is_caught(self) -> None:
+        self.write(WORKFLOW.replace(
+            "          image: ${{ matrix.image }}:${{ github.sha }}",
+            "          image: ${{ matrix.image }}:latest"))
+
+        self.assertEqual(len(pipeline_gate.check_images(self.root)), 1)
+
+    def test_an_sbom_under_another_condition_is_caught(self) -> None:
+        """An SBOM step left at `always()` fails every skipped leg, and one
+        narrower than the build skips legs the build ran."""
+        self.write(WORKFLOW.replace(SBOM_STEP, SBOM_STEP.replace(
+            "if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}",
+            "if: ${{ github.event_name == 'push' }}")))
+
+        self.assertEqual(len(pipeline_gate.check_images(self.root)), 1)
+
+    def test_an_sbom_before_the_build_is_caught(self) -> None:
+        moved = WORKFLOW.replace(SBOM_STEP, "").replace(
+            "      - name: Build ${{ matrix.image }}", SBOM_STEP + "\n      - name: Build ${{ matrix.image }}")
+        self.write(moved)
+
+        self.assertEqual(len(pipeline_gate.check_images(self.root)), 1)
+
+    def test_a_job_with_no_build_fails_rather_than_passing_empty(self) -> None:
+        self.write(WORKFLOW.replace("          docker build\n", "          podman build\n"))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("vacuously", problems[0])
+
+    def test_the_step_reader_joins_a_folded_run_and_keeps_with_inputs(self) -> None:
+        steps = pipeline_gate.read_job_steps(WORKFLOW, "images")
+
+        self.assertEqual(len(steps), 3)
+        self.assertIn("--tag ${{ matrix.image }}:${{ github.sha }} .", steps[1]["run"])
+        self.assertEqual(steps[2]["image"], "${{ matrix.image }}:${{ github.sha }}")
+        self.assertNotIn("comment", " ".join(steps[1].values()))
 
 
 # The integration matrix at ci.yml's indentation, one value in the folded form.
