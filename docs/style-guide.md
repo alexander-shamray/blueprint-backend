@@ -459,6 +459,13 @@ file and a reviewer are the only things that do.
   nothing to strand in front of it: object creation (`new MsSqlBuilder()`), a
   call with no receiver (`When(OrderPlaced)`), and a parenthesised expression
   (`(await Task.WhenAll(…))`).
+
+  **No analyser sees a chain, so two bracket scans stand in for one.** A line
+  above a `.` continuation, spread elements included, whose receiver carries a
+  call after its head; and a continuation line carrying two calls at its own
+  depth, where member access before a call and an empty-argument qualifier
+  such as `.That()` do not count as a second. Strings and comments are blanked
+  first, and a `>` in `=>` is not a type argument's.
 - **A lambda body that is itself a call goes on its own line**, at + 4, rather
   than trailing after the `=>`. A bare parameter re-mention is not a call and
   stays — `p => p` heading its own chain is the fluent-DSL idiom:
