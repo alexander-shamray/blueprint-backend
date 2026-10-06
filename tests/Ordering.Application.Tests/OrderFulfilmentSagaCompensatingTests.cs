@@ -43,9 +43,9 @@ public class OrderFulfilmentSagaCompensatingTests
 
             await Publish(harness, SagaContracts.OrderConfirmed(orderId, Customer));
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.CancelledAfterConfirmation))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.CancelledAfterConfirmation))
                 .ShouldBeTrue();
 
             ConsumeFaults<OrderConfirmed>(harness).ShouldAllBe(e => e == null);
@@ -68,14 +68,12 @@ public class OrderFulfilmentSagaCompensatingTests
             await Publish(harness, SagaContracts.PaymentDeclined(orderId, "do_not_honour"));
             await Publish(harness, new StockReleaseExpired(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.PaymentDeclined))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.PaymentDeclined))
                 .ShouldBeTrue();
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.StockNotReleased))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.StockNotReleased))
                 .ShouldBeTrue();
         }
     }
@@ -102,9 +100,9 @@ public class OrderFulfilmentSagaCompensatingTests
 
             await Publish(harness, SagaContracts.PaymentAuthorised(orderId, "auth-late"));
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.PaymentAuthorisedDuringCompensation))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.PaymentAuthorisedDuringCompensation))
                 .ShouldBeTrue();
 
             ConsumeFaults<PaymentAuthorised>(harness).ShouldAllBe(e => e == null);
@@ -138,9 +136,7 @@ public class OrderFulfilmentSagaCompensatingTests
 
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.CustomerRequest))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.CustomerRequest))
                 .ShouldBeTrue();
 
             ISagaStateMachineTestHarness<OrderFulfilmentSaga, OrderFulfilmentState> saga =
@@ -150,9 +146,9 @@ public class OrderFulfilmentSagaCompensatingTests
 
             await Publish(harness, SagaContracts.PaymentAuthorised(orderId, "auth-after-release"));
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.PaymentAuthorisedDuringCompensation))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.PaymentAuthorisedDuringCompensation))
                 .ShouldBeTrue();
 
             (await saga.NotExists(orderId)).ShouldBeNull();
@@ -237,9 +233,7 @@ public class OrderFulfilmentSagaCompensatingTests
 
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.PaymentTimeout))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.PaymentTimeout))
                 .ShouldBeTrue();
 
             ISagaStateMachineTestHarness<OrderFulfilmentSaga, OrderFulfilmentState> saga =
@@ -301,9 +295,9 @@ public class OrderFulfilmentSagaCompensatingTests
                 SagaContracts.OrderCancelled(orderId, Customer, CancelReasons.CustomerRequest));
             await Publish(harness, new StockReleaseExpired(orderId));
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.StockNotReleased))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.StockNotReleased))
                 .ShouldBeTrue();
 
             ISagaStateMachineTestHarness<OrderFulfilmentSaga, OrderFulfilmentState> saga =
@@ -313,9 +307,9 @@ public class OrderFulfilmentSagaCompensatingTests
 
             await Publish(harness, SagaContracts.PaymentAuthorised(orderId, "auth-after-timeout"));
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.PaymentAuthorisedDuringCompensation))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.PaymentAuthorisedDuringCompensation))
                 .ShouldBeTrue();
 
             (await saga.NotExists(orderId)).ShouldBeNull();
@@ -390,9 +384,7 @@ public class OrderFulfilmentSagaCompensatingTests
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
             // The reason recorded on entry, which a cancellation arriving mid-flight must not rewrite.
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.PaymentDeclined))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.PaymentDeclined))
                 .ShouldBeTrue();
 
             harness.Sent
@@ -438,9 +430,7 @@ public class OrderFulfilmentSagaCompensatingTests
             // ADR-024's first guarantee: Inventory answers the command although it already released.
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.CustomerRequest))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.CustomerRequest))
                 .ShouldBeTrue();
 
             (await NotYetSent<FlagOrderForReview>(harness, m => m.OrderId == orderId))

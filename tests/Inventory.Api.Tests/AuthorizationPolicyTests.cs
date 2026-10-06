@@ -59,10 +59,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     public void No_inventory_endpoint_is_anonymous()
     {
         // A stock level or a reservation is never public, unlike Catalog's listing.
-        string[] names =
-        [
-            "SetOnHand", "GetStock", "GetReservation", "ReleaseReservation", "ReinstateReservation"
-        ];
+        string[] names = ["SetOnHand", "GetStock", "GetReservation", "ReleaseReservation", "ReinstateReservation"];
 
         foreach (Endpoint endpoint in Endpoints.Where(e => names.Contains(Name(e))))
         {

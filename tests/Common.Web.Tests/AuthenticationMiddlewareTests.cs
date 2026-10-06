@@ -147,8 +147,10 @@ public class AuthenticationMiddlewareTests
     /// <summary>Reports what <see cref="ICurrentUser"/> saw, behind the default policy.</summary>
     private static void MapProbe(IEndpointRouteBuilder endpoints) =>
         endpoints
-            .MapGet("/", (ICurrentUser user) => Results.Ok(
-                new ProbeBody(user.IsAuthenticated, user.IsAuthenticated ? user.Id.ToString() : null)))
+            .MapGet(
+                "/",
+                (ICurrentUser user) =>
+                    Results.Ok(new ProbeBody(user.IsAuthenticated, user.IsAuthenticated ? user.Id.ToString() : null)))
             .RequireAuthorization();
 
     private static async Task<Probe> SendAsync(HttpClient client)

@@ -46,7 +46,8 @@ public sealed class AuthorisePaymentMapperTests
         Guid order = Guid.CreateVersion7();
 
         new AuthorisePaymentMapper().Map(new AuthorisePayment(order, 0m, "EUR"))
-            .ShouldBe(new AuthorisePaymentCommand(order, 0m, "EUR"),
+            .ShouldBe(
+                new AuthorisePaymentCommand(order, 0m, "EUR"),
                 "Money.Zero is a valid total in Catalog and Ordering, and the saga forwards it");
     }
 

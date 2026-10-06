@@ -40,14 +40,16 @@ public sealed class PlaceOrderValidator : AbstractValidator<PlaceOrderCommand>
 
         // The address as a whole first, or a null member would produce a failure for each of its parts.
         RuleFor(x => x.ShippingAddress).NotNull();
-        When(x => x.ShippingAddress is not null, () =>
-        {
-            RuleFor(x => x.ShippingAddress.Line1).NotEmpty().MaximumLength(200);
-            RuleFor(x => x.ShippingAddress.Line2).MaximumLength(200);
-            RuleFor(x => x.ShippingAddress.City).NotEmpty().MaximumLength(100);
-            RuleFor(x => x.ShippingAddress.PostalCode).NotEmpty().MaximumLength(20);
+        When(
+            x => x.ShippingAddress is not null,
+            () =>
+            {
+                RuleFor(x => x.ShippingAddress.Line1).NotEmpty().MaximumLength(200);
+                RuleFor(x => x.ShippingAddress.Line2).MaximumLength(200);
+                RuleFor(x => x.ShippingAddress.City).NotEmpty().MaximumLength(100);
+                RuleFor(x => x.ShippingAddress.PostalCode).NotEmpty().MaximumLength(20);
 
-            RuleFor(x => x.ShippingAddress.Country).NotEmpty().Matches(@"^[A-Za-z]{2}\z");
-        });
+                RuleFor(x => x.ShippingAddress.Country).NotEmpty().Matches(@"^[A-Za-z]{2}\z");
+            });
     }
 }

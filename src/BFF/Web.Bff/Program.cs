@@ -50,8 +50,9 @@ string authority = builder.Configuration[AuthenticationExtensions.AuthorityKey]!
 builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.AuthorityKey));
 
 builder.Services
-    .AddHttpClient(CachingTokenClient.HttpClientName, client =>
-        client.BaseAddress = new Uri(authority.TrimEnd('/') + "/"));
+    .AddHttpClient(
+        CachingTokenClient.HttpClientName,
+        client => client.BaseAddress = new Uri(authority.TrimEnd('/') + "/"));
 
 // A local rather than one chain, because AddStandardResilienceHandler returns a different builder (§9.7).
 IHttpClientBuilder pricing = builder.Services

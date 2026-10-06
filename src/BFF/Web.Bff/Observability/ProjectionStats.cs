@@ -32,19 +32,23 @@ internal sealed class ProjectionStats(IDbConnectionFactory connections, TimeProv
 
     // The registered clock, which stamped FirstSeenAt, rather than the engine's.
     public double UnattributedAgeSeconds() =>
-        _cache.GetOrCreate(nameof(UnattributedAgeSeconds), entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = CacheFor;
-            using IDbConnection connection = connections.Create();
-            connection.ConnectionString =
-                new SqlConnectionStringBuilder(connection.ConnectionString) { ConnectTimeout = ConnectTimeoutSeconds }
-                    .ConnectionString;
+        _cache.GetOrCreate(
+            nameof(UnattributedAgeSeconds),
+            entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = CacheFor;
+                using IDbConnection connection = connections.Create();
+                connection.ConnectionString =
+                    new SqlConnectionStringBuilder(connection.ConnectionString)
+                    {
+                        ConnectTimeout = ConnectTimeoutSeconds
+                    }.ConnectionString;
 
-            DateTimeOffset? oldest = connection.ExecuteScalar<DateTimeOffset?>(
-                new CommandDefinition(OldestSql, commandTimeout: CommandTimeoutSeconds));
+                DateTimeOffset? oldest = connection.ExecuteScalar<DateTimeOffset?>(
+                    new CommandDefinition(OldestSql, commandTimeout: CommandTimeoutSeconds));
 
-            return oldest is null ? 0 : Math.Max(0, (clock.GetUtcNow() - oldest.Value).TotalSeconds);
-        });
+                return oldest is null ? 0 : Math.Max(0, (clock.GetUtcNow() - oldest.Value).TotalSeconds);
+            });
 
     public void Dispose() => _cache.Dispose();
 }

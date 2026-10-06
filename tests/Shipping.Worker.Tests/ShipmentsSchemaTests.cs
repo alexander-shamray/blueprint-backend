@@ -25,9 +25,22 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
 
         columns.ShouldBe(
             [
-                "Attempts", "CancellationRefusedAt", "CancellationRequestedAt", "CarrierReference", "CreatedAt",
-                "Id", "LockedUntil", "NextAttemptAt", "NextPollAt", "OrderId", "PollAttempts", "RowVersion",
-                "Status", "TerminalAt", "TrackingNumber", "UnfulfillableReason"
+                "Attempts",
+                "CancellationRefusedAt",
+                "CancellationRequestedAt",
+                "CarrierReference",
+                "CreatedAt",
+                "Id",
+                "LockedUntil",
+                "NextAttemptAt",
+                "NextPollAt",
+                "OrderId",
+                "PollAttempts",
+                "RowVersion",
+                "Status",
+                "TerminalAt",
+                "TrackingNumber",
+                "UnfulfillableReason"
             ],
             ignoreOrder: true);
     }

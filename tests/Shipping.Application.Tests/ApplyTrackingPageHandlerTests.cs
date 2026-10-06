@@ -23,11 +23,13 @@ public class ApplyTrackingPageHandlerTests
         Shipment shipment = Booked();
         FakeShipments repository = new(shipment);
 
-        Result result = await Handle(repository, shipment.Id,
-        [
-            new CarrierEvent("e2", TrackingStatus.Delivered, Now.AddHours(2)),
-            new CarrierEvent("e1", TrackingStatus.Collected, Now.AddHours(1))
-        ]);
+        Result result = await Handle(
+            repository,
+            shipment.Id,
+            [
+                new CarrierEvent("e2", TrackingStatus.Delivered, Now.AddHours(2)),
+                new CarrierEvent("e1", TrackingStatus.Collected, Now.AddHours(1))
+            ]);
 
         result.IsSuccess.ShouldBeTrue();
         shipment.Status.ShouldBe(ShipmentStatus.Delivered);
@@ -43,11 +45,13 @@ public class ApplyTrackingPageHandlerTests
         Shipment shipment = Booked();
         FakeShipments repository = new(shipment);
 
-        Result result = await Handle(repository, shipment.Id,
-        [
-            new CarrierEvent("x", TrackingStatus.Collected, Now.AddHours(1)),
-            new CarrierEvent("x", TrackingStatus.Delivered, Now.AddHours(2))
-        ]);
+        Result result = await Handle(
+            repository,
+            shipment.Id,
+            [
+                new CarrierEvent("x", TrackingStatus.Collected, Now.AddHours(1)),
+                new CarrierEvent("x", TrackingStatus.Delivered, Now.AddHours(2))
+            ]);
 
         result.IsSuccess.ShouldBeTrue();
         shipment.Status.ShouldBe(ShipmentStatus.Delivered);
@@ -62,11 +66,13 @@ public class ApplyTrackingPageHandlerTests
         Shipment shipment = Booked();
         FakeShipments repository = new(shipment);
 
-        await Handle(repository, shipment.Id,
-        [
-            new CarrierEvent("e1", TrackingStatus.Unrecognised, Now),
-            new CarrierEvent("e2", TrackingStatus.InTransit, Now.AddMinutes(1))
-        ]);
+        await Handle(
+            repository,
+            shipment.Id,
+            [
+                new CarrierEvent("e1", TrackingStatus.Unrecognised, Now),
+                new CarrierEvent("e2", TrackingStatus.InTransit, Now.AddMinutes(1))
+            ]);
 
         shipment.Status.ShouldBe(ShipmentStatus.Booked);
         shipment.TrackingEvents.Count.ShouldBe(2, "a carrier's fact is kept whether or not it moves the row");

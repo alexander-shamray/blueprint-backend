@@ -41,8 +41,12 @@ public sealed class OrderJourneyTests(ServiceFixture fixture) : IAsyncLifetime
 
         IReadOnlyList<Notification> rows = await fixture.NotificationsAsync(order);
         rows.Select(n => n.TemplateKey).ShouldBe(
-            [TemplateKeys.OrderPlaced, TemplateKeys.OrderConfirmed, TemplateKeys.ShipmentDispatched,
-                TemplateKeys.ShipmentDelivered],
+            [
+                TemplateKeys.OrderPlaced,
+                TemplateKeys.OrderConfirmed,
+                TemplateKeys.ShipmentDispatched,
+                TemplateKeys.ShipmentDelivered
+            ],
             ignoreOrder: true);
         rows.ShouldAllBe(n => n.Status == NotificationStatus.Sent && n.CustomerId == customer);
 

@@ -185,7 +185,9 @@ public sealed class OrderEndpointTests(BffServiceFixture fixture) : IAsyncLifeti
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
         JsonElement root = body.RootElement;
 
-        return (root.GetProperty("status").GetInt32(), root.GetProperty("code").GetString(),
+        return (
+            root.GetProperty("status").GetInt32(),
+            root.GetProperty("code").GetString(),
             root.GetProperty("detail").GetString());
     }
 

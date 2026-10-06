@@ -25,9 +25,7 @@ public class OrderFulfilmentSagaNoInstanceTests
             await Publish(harness, SagaContracts.OrderPlaced(orderId, Customer));
             await Publish(harness, SagaContracts.StockReservationFailed(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.OutOfStock))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.OutOfStock))
                 .ShouldBeTrue();
 
             OrderCancelled echo = SagaContracts.OrderCancelled(

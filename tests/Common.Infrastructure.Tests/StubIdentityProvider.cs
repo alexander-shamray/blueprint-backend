@@ -67,37 +67,41 @@ public sealed class StubIdentityProvider : IAsyncLifetime
         _app = builder.Build();
 
         // The realm path is part of the authority, as Keycloak's is, so a slashless base address misses it.
-        _app.MapGet("/realms/test/.well-known/openid-configuration", () =>
-        {
-            Discoveries++;
-
-            return OmitTokenEndpoint
-                ? Results.Json(new { issuer = $"{Authority}" })
-                : Results.Json(new
-                {
-                    token_endpoint = AdvertisedTokenEndpoint ?? $"{Authority}protocol/openid-connect/token"
-                });
-        });
-
-        _app.MapPost("/realms/test/protocol/openid-connect/token", async (HttpContext context) =>
-        {
-            IFormCollection form = await context.Request.ReadFormAsync();
-            TokenRequests.Enqueue(form.ToDictionary(f => f.Key, f => f.Value.ToString(), StringComparer.Ordinal));
-
-            if (TokenStatus != StatusCodes.Status200OK)
-                return Results.Content(TokenFailureBody, "application/json", statusCode: TokenStatus);
-
-            Dictionary<string, object> body = new(StringComparer.Ordinal)
+        _app.MapGet(
+            "/realms/test/.well-known/openid-configuration",
+            () =>
             {
-                ["access_token"] = BlankAccessToken ? "" : $"issued-{TokenRequests.Count}",
-                ["token_type"] = "Bearer"
-            };
+                Discoveries++;
 
-            if (ExpiresIn is int lifetime)
-                body["expires_in"] = lifetime;
+                return OmitTokenEndpoint
+                    ? Results.Json(new { issuer = $"{Authority}" })
+                    : Results.Json(new
+                    {
+                        token_endpoint = AdvertisedTokenEndpoint ?? $"{Authority}protocol/openid-connect/token"
+                    });
+            });
 
-            return Results.Json(body);
-        });
+        _app.MapPost(
+            "/realms/test/protocol/openid-connect/token",
+            async (HttpContext context) =>
+            {
+                IFormCollection form = await context.Request.ReadFormAsync();
+                TokenRequests.Enqueue(form.ToDictionary(f => f.Key, f => f.Value.ToString(), StringComparer.Ordinal));
+
+                if (TokenStatus != StatusCodes.Status200OK)
+                    return Results.Content(TokenFailureBody, "application/json", statusCode: TokenStatus);
+
+                Dictionary<string, object> body = new(StringComparer.Ordinal)
+                {
+                    ["access_token"] = BlankAccessToken ? "" : $"issued-{TokenRequests.Count}",
+                    ["token_type"] = "Bearer"
+                };
+
+                if (ExpiresIn is int lifetime)
+                    body["expires_in"] = lifetime;
+
+                return Results.Json(body);
+            });
 
         await _app.StartAsync();
         Authority = new Uri($"{_app.Urls.Single()}/realms/test/");

@@ -61,8 +61,14 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         await fixture.DeliverAsync(refunded);
         Guid[] handled =
         [
-            published.MessageId, placedKept.MessageId, confirmed.MessageId, authorised.MessageId,
-            dispatched.MessageId, placedCancelled.MessageId, cancellation.MessageId, refunded.MessageId
+            published.MessageId,
+            placedKept.MessageId,
+            confirmed.MessageId,
+            authorised.MessageId,
+            dispatched.MessageId,
+            placedCancelled.MessageId,
+            cancellation.MessageId,
+            refunded.MessageId
         ];
 
         ProjectedOrder keptBefore = (await fixture.OrderAsync(kept)).ShouldNotBeNull();

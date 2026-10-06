@@ -72,16 +72,18 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
 
     /// <summary><c>double</c> throughout: the age is one, and a count is widened for the gauge anyway.</summary>
     private double Read(string key, string sql, OutboxLane lane) =>
-        _cache.GetOrCreate(key, entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = CacheFor;
-            using IDbConnection connection = _connections.Create();
+        _cache.GetOrCreate(
+            key,
+            entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = CacheFor;
+                using IDbConnection connection = _connections.Create();
 
-            // MIN over an empty lane is NULL; COUNT never is, so one coalesce serves both.
-            return connection.ExecuteScalar<double?>(
-                new CommandDefinition(
-                    sql,
-                    new { lane = lane.ToString() },
-                    commandTimeout: CommandTimeoutSeconds)) ?? 0;
-        });
+                // MIN over an empty lane is NULL; COUNT never is, so one coalesce serves both.
+                return connection.ExecuteScalar<double?>(
+                    new CommandDefinition(
+                        sql,
+                        new { lane = lane.ToString() },
+                        commandTimeout: CommandTimeoutSeconds)) ?? 0;
+            });
 }

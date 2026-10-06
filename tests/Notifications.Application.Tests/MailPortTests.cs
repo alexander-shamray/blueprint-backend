@@ -12,7 +12,9 @@ public class MailPortTests
         typeof(MailResult).GetNestedTypes()
             .Where(t => t.IsSubclassOf(typeof(MailResult)))
             .Select(t => t.Name)
-            .ShouldBe(["Accepted", "Refused"], ignoreOrder: true,
+            .ShouldBe(
+                ["Accepted", "Refused"],
+                ignoreOrder: true,
                 "a fault is an exception, so a dead relay can never reach a row as a refusal");
     }
 

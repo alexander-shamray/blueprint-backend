@@ -25,9 +25,7 @@ public class OrderFulfilmentSagaAwaitingStockTests
             await Publish(harness, SagaContracts.OrderPlaced(orderId, Customer));
             await Publish(harness, SagaContracts.StockReservationFailed(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.OutOfStock))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.OutOfStock))
                 .ShouldBeTrue();
 
             // No compensation: nothing was reserved, so nothing is released.
@@ -46,9 +44,7 @@ public class OrderFulfilmentSagaAwaitingStockTests
             await Publish(harness, SagaContracts.OrderPlaced(orderId, Customer));
             await Publish(harness, new StockReservationExpired(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.StockTimeout))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.StockTimeout))
                 .ShouldBeTrue();
         }
     }
@@ -83,9 +79,7 @@ public class OrderFulfilmentSagaAwaitingStockTests
 
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.CustomerRequest))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.CustomerRequest))
                 .ShouldBeTrue();
 
             ISagaStateMachineTestHarness<OrderFulfilmentSaga, OrderFulfilmentState> saga =
@@ -115,9 +109,7 @@ public class OrderFulfilmentSagaAwaitingStockTests
 
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.PaymentDeclined))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.PaymentDeclined))
                 .ShouldBeTrue();
         }
     }
@@ -146,9 +138,7 @@ public class OrderFulfilmentSagaAwaitingStockTests
 
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.CustomerRequest))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.CustomerRequest))
                 .ShouldBeTrue();
 
             ISagaStateMachineTestHarness<OrderFulfilmentSaga, OrderFulfilmentState> saga =

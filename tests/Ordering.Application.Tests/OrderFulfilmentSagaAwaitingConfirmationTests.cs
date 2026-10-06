@@ -78,9 +78,9 @@ public class OrderFulfilmentSagaAwaitingConfirmationTests
             // Driven rather than waited out.
             await Publish(harness, new ConfirmationExpired(orderId));
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.NotConfirmed))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.NotConfirmed))
                 .ShouldBeTrue();
 
             // No CancelOrder: §3.2 gives Ordering no refund command to compensate with.
@@ -118,9 +118,7 @@ public class OrderFulfilmentSagaAwaitingConfirmationTests
 
             await Publish(harness, SagaContracts.ShipmentDispatched(orderId, "TRACK-EARLY"));
 
-            (await Sent<MarkOrderShipped>(harness, m =>
-                m.OrderId == orderId &&
-                m.TrackingNumber == "TRACK-EARLY"))
+            (await Sent<MarkOrderShipped>(harness, m => m.OrderId == orderId && m.TrackingNumber == "TRACK-EARLY"))
                 .ShouldBeTrue();
 
             ConsumeFaults<ShipmentDispatched>(harness).ShouldAllBe(e => e == null);
@@ -144,9 +142,9 @@ public class OrderFulfilmentSagaAwaitingConfirmationTests
             await Publish(harness, SagaContracts.StockReleased(orderId));
             await Publish(harness, SagaContracts.OrderConfirmed(orderId, Customer));
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.CancelledAfterConfirmation))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.CancelledAfterConfirmation))
                 .ShouldBeTrue();
 
             ISagaStateMachineTestHarness<OrderFulfilmentSaga, OrderFulfilmentState> saga =
@@ -173,9 +171,9 @@ public class OrderFulfilmentSagaAwaitingConfirmationTests
 
             (await Sent<MarkOrderShipped>(harness, m => m.OrderId == orderId)).ShouldBeTrue();
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.CancelledAfterConfirmation))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.CancelledAfterConfirmation))
                 .ShouldBeTrue();
         }
     }

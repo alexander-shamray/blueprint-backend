@@ -71,16 +71,18 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
 
     /// <summary>One shape for all three; <c>double</c>, because the gauge widens a count anyway.</summary>
     private double Read(string key, string sql, OutboxLane lane) =>
-        _cache.GetOrCreate(key, entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = CacheFor;
-            using IDbConnection connection = _connections.Create();
+        _cache.GetOrCreate(
+            key,
+            entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = CacheFor;
+                using IDbConnection connection = _connections.Create();
 
-            // MIN over an empty lane is NULL, and COUNT never is, so one coalesce serves all three.
-            return connection.ExecuteScalar<double?>(
-                new CommandDefinition(
-                    sql,
-                    new { lane = lane.ToString() },
-                    commandTimeout: CommandTimeoutSeconds)) ?? 0;
-        });
+                // MIN over an empty lane is NULL, and COUNT never is, so one coalesce serves all three.
+                return connection.ExecuteScalar<double?>(
+                    new CommandDefinition(
+                        sql,
+                        new { lane = lane.ToString() },
+                        commandTimeout: CommandTimeoutSeconds)) ?? 0;
+            });
 }

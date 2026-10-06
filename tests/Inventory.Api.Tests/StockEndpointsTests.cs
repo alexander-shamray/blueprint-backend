@@ -80,7 +80,8 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
             client.PutAsJsonAsync(
                 $"/v1/inventory/stock/{product}", new { onHand = 7 }, TestContext.Current.CancellationToken));
 
-        responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.NoContent,
+        responses.ShouldAllBe(
+            r => r.StatusCode == HttpStatusCode.NoContent,
             "the second waited on the first's key-range lock and loaded its committed row; neither met the key");
         (await fixture.ScalarAsync<int>(
             "SELECT Value = COUNT(*) FROM inventory.StockItems WHERE ProductId = {0}", product))

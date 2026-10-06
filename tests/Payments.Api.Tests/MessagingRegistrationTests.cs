@@ -143,7 +143,8 @@ public class MessagingRegistrationTests
     public void The_ladder_is_non_decreasing_and_starts_under_a_minute()
     {
         RedeliveryLadder.Intervals.ShouldBe(RedeliveryLadder.Intervals.Order());
-        RedeliveryLadder.Intervals[0].ShouldBeLessThan(TimeSpan.FromMinutes(1),
+        RedeliveryLadder.Intervals[0].ShouldBeLessThan(
+            TimeSpan.FromMinutes(1),
             "the routine reorder is milliseconds; the first wait should not cost the saga minutes");
     }
 

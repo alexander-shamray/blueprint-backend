@@ -47,8 +47,9 @@ builder.Services
 string authority = builder.Configuration[AuthenticationExtensions.AuthorityKey]!;
 
 builder.Services
-    .AddHttpClient(CachingTokenClient.HttpClientName, client =>
-        client.BaseAddress = new Uri(authority.TrimEnd('/') + "/"));
+    .AddHttpClient(
+        CachingTokenClient.HttpClientName,
+        client => client.BaseAddress = new Uri(authority.TrimEnd('/') + "/"));
 
 // The key's name, so a refused discovery document says which key to fix (§11.3, §11.5).
 builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.AuthorityKey));

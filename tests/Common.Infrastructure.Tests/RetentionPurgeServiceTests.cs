@@ -59,7 +59,10 @@ public class RetentionPurgeServiceTests
     {
         // ValidateOnBuild first, as every host builds: a host with no command pipeline writes no marker (§9.5).
         List<string> statements = [];
-        using ServiceProvider provider = Registrations(statements, withOutbox: false, withMarkers: false,
+        using ServiceProvider provider = Registrations(
+            statements,
+            withOutbox: false,
+            withMarkers: false,
             withClaims: false).BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
 
         (int outbox, int inbox, int idempotency) =
