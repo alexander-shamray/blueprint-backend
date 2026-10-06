@@ -250,8 +250,9 @@ which only one call can create, so a parallel batch is refused once and a
 session whose file cannot be made is never refused, since the rerun would be
 refused too. A lookup made by any route — an MCP tool or the CLI, through
 either shell — lets every search through, and the hook reads that from the
-session's transcript, parsing only the lines that record a call or a failed
-result, which on a 62 MB transcript took 0.2 s. A call a guard refused, or
+session's transcript, parsing the lines that record a call, and a result
+only when it answers a lookup, and stopping at the first lookup answered: on
+a 62 MB transcript the whole read took 0.1 s. A call a guard refused, or
 one that ended in an error, asked the index nothing and is not a lookup. A subagent is never refused: its profile
 may hold neither the MCP tools nor a shell.
 

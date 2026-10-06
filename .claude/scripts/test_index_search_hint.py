@@ -180,6 +180,14 @@ def reason(done) -> str:
     return output["permissionDecisionReason"]
 
 
+def module():
+    """The hook loaded in this process, for the cases that watch its calls."""
+    spec = importlib.util.spec_from_file_location("index_search_hint", HINT)
+    hook = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(hook)
+    return hook
+
+
 def tools(text: str) -> list[str]:
     return re.findall(r"`mcp__codebase-index__(\w+)`", text)
 
@@ -386,7 +394,9 @@ class WhenItAsks(Scratch):
                 (("mcp__codebase-index__find_refs", {"symbol": "X"}), False)):
             result = {"type": "user", "message": {"role": "user", "content": [
                 {"type": "tool_result", "tool_use_id": "toolu_0", "is_error": failed, "content": "refused"}]}}
-            session = Session(self.scratch, earlier=[earlier], lines=[result])
+            session = Session(self.scratch, earlier=[earlier])
+            with session.path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(result) + "\n")
             with self.subTest(earlier=earlier, failed=failed):
                 self.assertEqual(failed, bool(reason(session.before(*grep_call()))))
 
@@ -426,14 +436,31 @@ class WhenItAsks(Scratch):
         transcript before the call it precedes could run."""
         session = Session(self.scratch)
         self.assertTrue(reason(session.before(*grep_call())))
-        spec = importlib.util.spec_from_file_location("index_search_hint", HINT)
-        hook = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(hook)
+        hook = module()
         event = json.loads(session.event(*grep_call()))
         with (mock.patch.object(hook.tempfile, "tempdir", str(session.temp)),
-              mock.patch.object(hook, "calls", side_effect=AssertionError("read the transcript")) as read):
+              mock.patch.object(hook, "looked", side_effect=AssertionError("read the transcript")) as read):
             self.assertIsNone(hook.answer(event))
         read.assert_not_called()
+
+    def test_the_transcript_is_read_only_to_the_first_lookup_answered(self):
+        """A session that asked the index early is not charged a parse of
+        every later line on each search it makes."""
+        answered = {"type": "user", "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "toolu_0", "is_error": False, "content": "{}"}]}}
+        earlier = [("mcp__codebase-index__find_refs", {"symbol": "X"})]
+        session = Session(self.scratch, earlier=earlier)
+        others = [{"type": "user", "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": f"toolu_other{index}", "content": "x"}]}} for index in range(50)]
+        later = [tool_use(f"toolu_late{index}", *bash_call("bash cbx refs Y")) for index in range(50)]
+        with session.path.open("a", encoding="utf-8") as handle:
+            greps = (tool_use(f"toolu_grep{index}", *grep_call()) for index in range(50))
+            for row in [*greps, *others, answered, *later]:
+                handle.write(json.dumps(row) + "\n")
+        hook = module()
+        with mock.patch.object(hook.json, "loads", wraps=json.loads) as parse:
+            self.assertTrue(hook.looked(session.path))
+        self.assertEqual(2, parse.call_count)
 
     def test_a_lookup_does_not_spend_the_ask_either(self):
         lookup = (("mcp__codebase-index__find_refs", {"symbol": "X"}),)
