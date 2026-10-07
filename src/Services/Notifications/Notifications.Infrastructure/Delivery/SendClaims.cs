@@ -32,7 +32,8 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
         OUTPUT inserted.NotificationId, inserted.EventId,
             COALESCE(NULLIF(inserted.CorrelationId, '{Guid.Empty:D}'), inserted.OrderId) AS CorrelationId,
             inserted.OrderId, inserted.CustomerId, inserted.TemplateKey, inserted.Parameters, inserted.CreatedAt,
-            inserted.SendStartedAt, inserted.TemplateVersion, inserted.Languages;
+            inserted.SendStartedAt, inserted.TemplateVersion, inserted.Languages, inserted.TraceParent,
+            inserted.TraceState;
         """;
 
     // The dispatcher's ladder, read from its constants so the two cannot drift; the lease drops with it. No count

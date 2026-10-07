@@ -1,3 +1,4 @@
+using Common.Infrastructure.Tracing;
 using Microsoft.EntityFrameworkCore;
 using Notifications.Application.Records;
 
@@ -12,5 +13,6 @@ internal sealed class NotificationRepository(NotificationsDbContext db) : INotif
     public Task<Notification?> GetAsync(Guid notificationId, CancellationToken ct) =>
         db.NotificationLog.SingleOrDefaultAsync(n => n.NotificationId == notificationId, ct);
 
-    public void Add(Notification notification) => db.NotificationLog.Add(notification);
+    // The intake's trace, kept on the row so the send worker's pass joins it (§9.4).
+    public void Add(Notification notification) => StagedTraceColumns.Stamp(db.NotificationLog.Add(notification));
 }

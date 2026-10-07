@@ -192,7 +192,9 @@ public static IHostApplicationBuilder AddObservability(this IHostApplicationBuil
             .AddSource("MassTransit")
             // The outbox's delivery span, which joins a staging request to the
             // publish it causes (§9.4); a source nothing listens to starts none.
-            .AddSource("Commerce.Outbox"))
+            .AddSource("Commerce.Outbox")
+            // A worker's pass over a row it claims, joined the same way.
+            .AddSource("Commerce.Claims"))
         .UseOtlpExporter();
 
     return builder;

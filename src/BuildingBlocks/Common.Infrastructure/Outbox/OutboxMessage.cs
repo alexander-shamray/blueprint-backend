@@ -1,8 +1,8 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Common.Application;
 using Common.Contracts;
 using Common.Domain;
+using Common.Infrastructure.Tracing;
 
 namespace Common.Infrastructure.Outbox;
 
@@ -15,11 +15,11 @@ public sealed class OutboxMessage
     /// <summary>The widest <see cref="OutboxLane"/> name the column holds.</summary>
     public const int LaneMaxLength = 16;
 
-    /// <summary>A W3C <c>traceparent</c> at version 00, the only version an activity writes.</summary>
-    public const int TraceParentMaxLength = 55;
+    /// <summary>The <c>TraceParent</c> column's width, which <see cref="StagedTrace"/> owns.</summary>
+    public const int TraceParentMaxLength = StagedTrace.ParentMaxLength;
 
-    /// <summary>The <c>tracestate</c> W3C asks a vendor to carry at least; a longer one is not staged.</summary>
-    public const int TraceStateMaxLength = 512;
+    /// <summary>The <c>TraceState</c> column's width, which <see cref="StagedTrace"/> owns.</summary>
+    public const int TraceStateMaxLength = StagedTrace.StateMaxLength;
 
     public long Id { get; private set; }
 
@@ -93,7 +93,7 @@ public sealed class OutboxMessage
         }
 
         // The staging request's trace, read here because the row is written in that request's transaction.
-        Activity? staging = Activity.Current is { IdFormat: ActivityIdFormat.W3C } current ? current : null;
+        StagedTrace staging = StagedTrace.Current;
 
         return new OutboxMessage
         {
@@ -108,8 +108,8 @@ public sealed class OutboxMessage
                 ? o.OccurredAt
                 : ((IDomainEvent)message).OccurredAt,
 
-            TraceParent = staging?.Id,
-            TraceState = staging?.TraceStateString is { Length: <= TraceStateMaxLength } state ? state : null
+            TraceParent = staging.Parent,
+            TraceState = staging.State
         };
     }
 }

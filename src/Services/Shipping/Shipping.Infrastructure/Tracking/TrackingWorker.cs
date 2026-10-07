@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Common.Application;
+using Common.Infrastructure.Tracing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -88,12 +90,19 @@ public sealed class TrackingWorker(
 
     private async Task<bool> PollOrBackOffAsync(TrackingClaims claims, TrackingWork work, CancellationToken ct)
     {
+        // Linked, not parented as the booking is: a poll repeats for the shipment's life, most find nothing, and as
+        // children they would stretch the order's trace to the delivery. The link still joins the despatch (§9.4).
+        using Activity? span = new StagedTrace(work.TraceParent, work.TraceState).StartLinked("shipment track");
+        span?.SetTag("shipping.shipment.id", work.Id);
+
         try
         {
             return await PollAsync(work, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            span?.SetStatus(ActivityStatusCode.Error);
+
             // Logged before the backoff is written, so a database fault in FailAsync cannot hide the carrier's.
             PollFailed(log, work.Id, work.OrderId, work.PollAttempts + 1, ex);
 

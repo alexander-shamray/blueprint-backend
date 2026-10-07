@@ -30,7 +30,7 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {FulfilmentWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
         OUTPUT inserted.Id, inserted.OrderId, inserted.Status, inserted.CarrierReference, inserted.CreatedAt,
-            inserted.CancellationRequestedAt;
+            inserted.CancellationRequestedAt, inserted.TraceParent, inserted.TraceState;
         """;
 
     // The dispatcher's ladder, read from its constants so the two cannot drift; the lease drops with it. No

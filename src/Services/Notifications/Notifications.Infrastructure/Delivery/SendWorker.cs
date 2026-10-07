@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Common.Application;
+using Common.Infrastructure.Tracing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -200,6 +202,11 @@ public sealed class SendWorker(
         ContactReads reads,
         CancellationToken ct)
     {
+        // A child of the intake that wrote the row, so the contact read and the relay's send join the order's trace;
+        // parent rather than link, as the outbox argues, the wait in the table being real (§9.4).
+        using Activity? span = new StagedTrace(work.TraceParent, work.TraceState).StartClaimed("notification send");
+        span?.SetTag("notifications.notification.id", work.NotificationId);
+
         try
         {
             // A scope per row, so a row that throws mid-write hands the next none of its tracked state.
@@ -209,6 +216,8 @@ public sealed class SendWorker(
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            span?.SetStatus(ActivityStatusCode.Error);
+
             // Logged before the backoff is written, so a database fault there cannot hide this one.
             Fault(work, ex);
 
