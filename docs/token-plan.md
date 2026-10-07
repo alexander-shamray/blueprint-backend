@@ -254,7 +254,7 @@ the external reviewers found.
 **Landing, in two PRs rather than one per bullet**: the archived suites pin
 `/ship`'s review text, so the local review and the archive land together,
 and the agent prompts follow. The first carries `branch-reviewer`; `/ship`
-step 5 as the local review and the merge as step 6, 104.6 KB to 60.6 KB;
+step 5 as the local review and the merge as step 6, 104.6 KB to 61.1 KB;
 the 18 files and the six Copilot-only `pr-*` helpers archived; the tests
 that outlive them moved to `test_pr_helpers.py` and
 `test_command_grants.py`; and each comment the archive touched cut to the
