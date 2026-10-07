@@ -453,7 +453,8 @@ Each round is the review done once, end to end:
    de-duplicate gates below could check the claim against a record.
 
    **What the helper prints is the round's plan:** `pinned`, then `mode
-   full` or `mode since <sha>`, the binary and closed-record counts, and one
+   full` or `mode since <sha>`, one `tracked` line counting what it listed
+   and each reason it skipped the rest, and one
    `slice <n> <row> <files> <bytes> <list>` line per slice — at most 240,000
    bytes, about 60k tokens, unless one file is larger. A sample's bytes are
    its fenced lines, so a `samples` auditor reads the fences and not the
