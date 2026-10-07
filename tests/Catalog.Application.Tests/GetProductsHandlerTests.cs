@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Catalog.Application.Tests;
 
-/// <summary>§6.5's and ADR-016's pagination: clamping, limit + 1, the tiebreaker and the cursor.</summary>
+/// <summary>§6.5's and ADR-016's pagination, and ADR-073's search and sort over it.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class GetProductsHandlerTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -34,14 +34,34 @@ public sealed class GetProductsHandlerTests(ServiceFixture fixture) : IAsyncLife
         return products;
     }
 
-    private async Task<CursorPage<ProductSummaryDto>> QueryAsync(string? cursor, int limit)
+    private async Task<CursorPage<ProductSummaryDto>> QueryAsync(
+        string? cursor,
+        int limit,
+        string? q = null,
+        string? sort = null)
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
 
         return await dispatcher.QueryAsync(
-            new GetProductsQuery(cursor, limit),
+            new GetProductsQuery(cursor, limit, q, sort),
             TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>Every page of one query, walked with the cursors it returns, so a skip or a repeat shows.</summary>
+    private async Task<List<ProductSummaryDto>> WalkAsync(int limit, string? q = null, string? sort = null)
+    {
+        List<ProductSummaryDto> seen = [];
+        string? cursor = null;
+        do
+        {
+            CursorPage<ProductSummaryDto> page = await QueryAsync(cursor, limit, q, sort);
+            seen.AddRange(page.Items);
+            cursor = page.NextCursor;
+        }
+        while (cursor is not null);
+
+        return seen;
     }
 
     [Fact]
@@ -137,5 +157,95 @@ public sealed class GetProductsHandlerTests(ServiceFixture fixture) : IAsyncLife
         page.Items.Single(p => p.ProductId == reported).QuantityAvailable.ShouldBe(4);
         page.Items.Single(p => p.ProductId == unreported).QuantityAvailable.ShouldBeNull(
             "unknown and none are different facts to a screen");
+    }
+
+    [Fact]
+    public async Task A_search_matches_anywhere_in_the_name_whatever_its_case()
+    {
+        await SeedAsync(
+            ("Walnut desk lamp", Base),
+            ("Oak DESK", Base.AddMinutes(1)),
+            ("Floor lamp", Base.AddMinutes(2)));
+
+        CursorPage<ProductSummaryDto> page = await QueryAsync(null, 20, q: "desk");
+
+        page.Items.Select(i => i.Name).ShouldBe(["Oak DESK", "Walnut desk lamp"]);
+    }
+
+    [Fact]
+    public async Task A_search_reads_the_like_wildcards_as_the_characters_they_are()
+    {
+        // ADR-073: q is text to find, never a pattern, so % and _ and [ match only themselves.
+        await SeedAsync(
+            ("100% wool", Base),
+            ("1000 wool", Base.AddMinutes(1)),
+            ("a_b", Base.AddMinutes(2)),
+            ("axb", Base.AddMinutes(3)),
+            ("[x]", Base.AddMinutes(4)),
+            ("x", Base.AddMinutes(5)));
+
+        (await QueryAsync(null, 20, q: "0%")).Items.Select(i => i.Name).ShouldBe(["100% wool"]);
+        (await QueryAsync(null, 20, q: "a_b")).Items.Select(i => i.Name).ShouldBe(["a_b"]);
+        (await QueryAsync(null, 20, q: "[x]")).Items.Select(i => i.Name).ShouldBe(["[x]"]);
+    }
+
+    [Fact]
+    public async Task A_search_nothing_matches_is_an_empty_page_with_no_cursor()
+    {
+        await SeedAsync(("Walnut desk lamp", Base));
+
+        CursorPage<ProductSummaryDto> page = await QueryAsync(null, 20, q: "sofa");
+
+        page.Items.ShouldBeEmpty();
+        page.NextCursor.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task The_name_sort_pages_a_filtered_set_in_order_with_nothing_skipped_or_repeated()
+    {
+        // Ties on the name, and one row the search excludes, so both the tiebreaker and the filter cross a page.
+        List<Product> seeded = await SeedAsync(
+            ("Lamp C", Base),
+            ("Lamp A", Base.AddMinutes(1)),
+            ("Lamp B", Base.AddMinutes(2)),
+            ("Lamp A", Base.AddMinutes(3)),
+            ("Lamp A", Base.AddMinutes(4)),
+            ("Chair", Base.AddMinutes(5)));
+
+        List<ProductSummaryDto> seen = await WalkAsync(2, q: "lamp", sort: ProductSort.Name);
+
+        seen.Select(i => i.Name).ShouldBe(["Lamp A", "Lamp A", "Lamp A", "Lamp B", "Lamp C"]);
+        seen.Select(i => i.ProductId).ShouldBeUnique();
+        seen.Select(i => i.ProductId).ShouldBe(
+            [.. seeded.Where(p => p.Name != "Chair").Select(p => p.Id.Value)],
+            ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task The_newest_sort_pages_a_filtered_set_with_nothing_skipped_or_repeated()
+    {
+        await SeedAsync(
+            ("Lamp 1", Base),
+            ("Chair", Base.AddMinutes(1)),
+            ("Lamp 2", Base.AddMinutes(2)),
+            ("Lamp 3", Base.AddMinutes(3)),
+            ("Chair", Base.AddMinutes(4)));
+
+        List<ProductSummaryDto> seen = await WalkAsync(1, q: "lamp");
+
+        seen.Select(i => i.Name).ShouldBe(["Lamp 3", "Lamp 2", "Lamp 1"]);
+    }
+
+    [Fact]
+    public async Task A_cursor_reused_under_another_query_is_refused_rather_than_misread()
+    {
+        await SeedAsync(("Lamp A", Base), ("Lamp B", Base.AddMinutes(1)), ("Lamp C", Base.AddMinutes(2)));
+        CursorPage<ProductSummaryDto> first = await QueryAsync(null, 1, q: "lamp", sort: ProductSort.Name);
+
+        // The pipeline's ValidationBehavior throws before the handler reads anything (§6.3).
+        await Should.ThrowAsync<FluentValidation.ValidationException>(
+            () => QueryAsync(first.NextCursor, 1, q: "lamp", sort: ProductSort.Newest));
+        await Should.ThrowAsync<FluentValidation.ValidationException>(
+            () => QueryAsync(first.NextCursor, 1, q: "lam", sort: ProductSort.Name));
     }
 }

@@ -674,7 +674,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "\n"
             "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
-            "        applied.Length.ShouldBe(10);\n"
+            "        applied.Length.ShouldBe(11);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddProducts\");\n"
             "        applied[2].ShouldEndWith(\"_AddOutbox\");\n"
@@ -684,7 +684,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[6].ShouldEndWith(\"_IdempotencyMarkerCommittedAtDefault\");\n"
             "        applied[7].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n"
             "        applied[8].ShouldEndWith(\"_AddStockLevels\");\n"
-            "        applied[9].ShouldEndWith(\"_AddOutboxTraceContext\");\n",
+            "        applied[9].ShouldEndWith(\"_AddOutboxTraceContext\");\n"
+            "        applied[10].ShouldEndWith(\"_AddProductNameIndex\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
             "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"

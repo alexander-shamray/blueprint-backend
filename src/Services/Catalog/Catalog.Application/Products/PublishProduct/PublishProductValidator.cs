@@ -5,11 +5,14 @@ namespace Catalog.Application.Products.PublishProduct;
 /// <summary>The user-input half of the boundary, a field-keyed 400 before any handler runs (§6.3, §10.5).</summary>
 public sealed class PublishProductValidator : AbstractValidator<PublishProductCommand>
 {
+    /// <summary>The <c>Name</c> column's width, which the listing's search shares (ADR-073).</summary>
+    public const int MaxNameLength = 200;
+
     public PublishProductValidator()
     {
         // Guid.Empty would be one key shared by every caller; validation runs before any key is claimed (§6.3).
         RuleFor(x => x.CommandId).NotEmpty();
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(MaxNameLength);
 
         // The scheme is the point: an href bound to a javascript: or data:text/html URL is stored XSS (§5.7's
         // division: input, not a bug). Absolute, because a relative URI has no scheme to refuse.

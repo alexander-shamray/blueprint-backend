@@ -1193,7 +1193,10 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
 > stable under concurrent inserts.
 >
 > The cursor is **opaque** — base64 of the sort key plus the tiebreaker ID — so
-> the sort strategy stays an implementation detail rather than a public contract.
+> its layout stays an implementation detail rather than a public contract. Where
+> a listing does make its sort public, the cursor also carries the query it was
+> minted under
+> ([ADR-073](adr/ADR-073-the-product-listing-takes-a-search-and-a-closed-sort-and-its-cursor-carries-both.md)).
 > The tiebreaker is required: without it, rows sharing a `PlacedAt` value
 > straddle the page boundary unpredictably.
 >
@@ -1244,6 +1247,19 @@ operation that retires a product, so the listing hides none, and the one that
 adds it decides for both reads whether a retired product is hidden (#471). It
 is uncached, as the listing is, for the reason [§8.2](08-caching-redis.md)
 gives.
+
+**Catalog's listing takes a search and a closed sort, and its cursor carries
+both** ([ADR-073](adr/ADR-073-the-product-listing-takes-a-search-and-a-closed-sort-and-its-cursor-carries-both.md)).
+`GetProductsQuery` adds `Q`, a contains-match on the name in which the
+caller's text is never a pattern, and `Sort`, one of `ProductSort`'s values.
+A sort key that is not one instant no longer fits `Cursor.Encode`, so
+`ProductCursor` lays out its own payload and makes it opaque through
+`Cursor.Wrap`; it holds the ordering and the search beside the seek, and
+`GetProductsValidator` refuses a cursor minted under another pair rather than
+reading it as a position in this one. The cursor stays opaque, as the
+decision above says. What it no longer implies is a single ordering: there is
+one per sort, each with its keyset index, and none by price, since each
+product keeps its own currency.
 
 ## 6.6 The progression — escalating Ordering to a physical split
 

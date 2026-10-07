@@ -1,3 +1,4 @@
+using Catalog.Application.Products.PublishProduct;
 using Catalog.Domain.Products;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -19,7 +20,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder
             .Property(p => p.Name)
-            .HasMaxLength(200);
+            .HasMaxLength(PublishProductValidator.MaxNameLength);
 
         // ThumbnailUrl takes the 400 default from §7.2's string convention.
 
@@ -35,8 +36,9 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         // Optimistic concurrency — SQL Server maintains this automatically.
         builder.Property(p => p.Version).IsRowVersion();
 
-        // The exact seek §6.5's keyset predicate performs.
+        // The exact seek §6.5's keyset predicate performs, once per ordering ADR-073 admits.
         builder.HasIndex(p => new { p.PublishedAt, p.Id });
+        builder.HasIndex(p => new { p.Name, p.Id });
 
         builder.Ignore(p => p.DomainEvents);
     }

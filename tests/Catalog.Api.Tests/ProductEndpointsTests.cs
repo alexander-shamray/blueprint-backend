@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Catalog.TestSupport;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
@@ -472,5 +473,89 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         Guid[] seen = [.. first.Items.Concat(second.Items).Select(i => i.ProductId)];
         seen.ShouldBeUnique();
         seen.ShouldBe(published, ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task The_listing_searches_and_sorts_from_its_query_string()
+    {
+        foreach (string name in new[] { "Walnut lamp", "Chair", "Brass lamp" })
+            (await PublishAsync(name)).EnsureSuccessStatusCode();
+
+        PageDto? page = await _client.GetFromJsonAsync<PageDto>(
+            "/v1/catalog/products?q=LAMP&sort=name",
+            TestContext.Current.CancellationToken);
+
+        page.ShouldNotBeNull();
+        page.Items.Select(i => i.Name).ShouldBe(["Brass lamp", "Walnut lamp"]);
+    }
+
+    [Fact]
+    public async Task An_unknown_sort_is_a_field_keyed_400()
+    {
+        HttpResponseMessage response = await _client.GetAsync(
+            "/v1/catalog/products?sort=price",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"Sort\"");
+    }
+
+    [Fact]
+    public async Task An_empty_search_and_an_empty_sort_ask_for_neither()
+    {
+        (await PublishAsync("Chair")).EnsureSuccessStatusCode();
+
+        PageDto? page = await _client.GetFromJsonAsync<PageDto>(
+            "/v1/catalog/products?q=&sort=",
+            TestContext.Current.CancellationToken);
+
+        page.ShouldNotBeNull();
+        page.Items.ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task A_cursor_reused_under_another_sort_is_a_400_on_the_cursor()
+    {
+        foreach (string name in new[] { "A", "B", "C" })
+            (await PublishAsync(name)).EnsureSuccessStatusCode();
+
+        PageDto? first = await _client.GetFromJsonAsync<PageDto>(
+            "/v1/catalog/products?limit=1",
+            TestContext.Current.CancellationToken);
+        first.ShouldNotBeNull();
+        first.NextCursor.ShouldNotBeNull();
+
+        HttpResponseMessage response = await _client.GetAsync(
+            $"/v1/catalog/products?limit=1&sort=name&cursor={Uri.EscapeDataString(first.NextCursor)}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"Cursor\"");
+    }
+
+    [Fact]
+    public async Task The_openapi_document_describes_the_listings_search_and_sort()
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, "/openapi/v1.json");
+        request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
+
+        HttpResponseMessage response = await _client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        using JsonDocument document = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        string[] parameters =
+        [
+            .. document.RootElement
+                .GetProperty("paths")
+                .GetProperty("/v1/catalog/products")
+                .GetProperty("get")
+                .GetProperty("parameters")
+                .EnumerateArray()
+                .Select(p => p.GetProperty("name").GetString()!)
+        ];
+        parameters.ShouldBe(["cursor", "q", "sort", "limit"], ignoreOrder: true);
     }
 }
