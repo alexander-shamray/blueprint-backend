@@ -30,13 +30,14 @@ for a subagent.
 command `/ship` loads through the `Skill` tool is counted as `/ship`, and a
 subagent belongs to the command running when it started. A harness command
 typed mid-run — `/compact`, `/reload-plugins`, `/model` and the others in
-`CARRY_ON` — does not end it. **A skill the
-session loads with no typed command** — a sweep a prompt asked for, a
-plugin's workflow — names the work after it as `skill:<name>`, until the
-next typed prompt or the next skill it loads. That can be long: a session
-that loads one skill and then runs a review loop on wakes counts the whole
-loop under it, so read what a skill costs from `--spawns` descriptions
-rather than from its row. **A prompt no person typed** — a task
+`CARRY_ON` — does not end it. **A skill the session loads with no typed
+command** — a sweep a prompt asked for, a plugin's workflow — names the
+work after it as `skill:<name>`, until the next typed prompt or, for a
+plugin's skill, the next skill it loads; one of this repository's commands
+loaded as a skill keeps the commands it loads, as a typed one does. That
+can be long: a session that loads one skill and then runs a review loop on
+wakes counts the whole loop under it, so read what a skill costs from
+`--spawns` descriptions rather than from its row. **A prompt no person typed** — a task
 notification, a scheduled wake — keeps the label, because most are a
 background agent or CI watch reporting back inside the command's own run;
 what the session spent from the first such wake to the next typed prompt

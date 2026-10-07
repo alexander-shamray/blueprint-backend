@@ -123,7 +123,8 @@ class Report:
             elif wake_of(entry) and not woken:
                 woken = True
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
-            elif (command == NO_COMMAND or command.startswith("skill:")) and not entry.get("isSidechain") \
+            # A plugin's skill hands on to the next; one of this repository's commands keeps what it loads.
+            elif (command == NO_COMMAND or ":" in command.removeprefix("skill:")) and not entry.get("isSidechain") \
                     and (skill := skill_of(entry)) and command != "skill:" + skill:
                 command = "skill:" + skill
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
