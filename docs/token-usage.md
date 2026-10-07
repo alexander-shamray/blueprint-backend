@@ -189,9 +189,12 @@ wrote plans, 15M; most plan-writing agents sat under `(no command)` and
 **A `/ship` run is about 9.8M**, 4.6M of it before the first wake, which
 agrees with the review's hand-patched 731M (45%) over fewer directories.
 
-**`/check-links` is cheap on its own.** Of its 78M, 2.7M came before a
-wake — about 0.5M a run over the five — and 96% after one, where a `fork`
-building a whole feature sat.
+**`/check-links` is cheap on its own**, and the spawn descriptions, not
+the wake split, show it: of the 65 agents under its label, 3 were about
+links, 3M, and the rest were feature work and review rounds held under a
+label that stuck after one `Skill` call, the `fork` "PR-5 end-to-end"
+among them. Its own spend is at most the 2.7M before a wake and those
+three, about 1.1M a run over the five.
 
 **More than half of the window, 55%, was spent after a wake**: background
 agents and CI watches reporting back, inside a run or after it.

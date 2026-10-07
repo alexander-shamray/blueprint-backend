@@ -166,9 +166,9 @@ counted under `/ship`. Passed on the run `token-usage.md` names.
 - A plan-writing agent, about 7M a plan, gets the planning rule below, and
   a comment sweep is handed the lines the comment gate flags rather than
   whole suites to read.
-- `/check-links` stays a prompt: measured apart from the work a session
-  did after a wake, its own spend is small (`token-usage.md`), and what
-  read as its cost was not its.
+- `/check-links` stays a prompt: three of the agents counted under it were
+  about links, and the rest was other work under a label that stuck
+  (`token-usage.md`).
 - The superpowers plugin stays enabled: the owner plans more work with it.
   Its cost is cut where it is spent, in writing a plan; the agents first
   counted as `writing-plans`' were mostly the review loop the ceiling
