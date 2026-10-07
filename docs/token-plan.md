@@ -288,6 +288,19 @@ a malformed record (#598). The exit waits on step 1's quality set.
 **Exit.** On the sweep quality set, a first sweep finds at least what the
 earlier sweeps filed.
 
+**Landing.** `sweep-slices.sh` owns both sweeps' rows as code and cuts them
+into lists of at most 240,000 bytes, which the parent hands out by path and
+never reads; a tracked path no row owns refuses the run, and its suite runs
+it over this tree. As of c86e6ec a full first round is 41 slices and 8.8 MB
+for either sweep, against 14.9 MB tracked: a sample counts only its fenced
+lines, and the closed records are owned and not read, because they are never
+edited to match the code. The security sweep gains the explicit partition the
+bug sweep had. From round 2 one auditor per row follows the leads the round
+before produced; `sweep-mark.sh` records a clean sweep's commit as a local
+`refs/sweeps/<kind>`, and the next round 1 reads only what changed since, or
+everything under `full`. Re-verification runs on Sonnet. The exit waits on
+step 1's quality set.
+
 ### Step 6 — the commands
 
 Each command splits into a runbook — the steps, the tables, the exact
