@@ -112,6 +112,17 @@ class ReportTests(unittest.TestCase):
         self.assertEqual((plain["cache_read"], plain["woken_equivalent"]), (80, 0))
         self.assertEqual(rows["TOTAL", ""]["woken_equivalent"], 22)
 
+    def test_a_harness_command_typed_mid_run_leaves_the_run_its_command(self):
+        compact = prompt("<command-name>/compact</command-name>", "2026-10-07T10:00:00.000Z")
+        reload = prompt("<command-name>/reload-plugins</command-name>", "2026-10-07T10:30:00.000Z")
+        self.files.write("s.jsonl", [
+            ship(), reply("m1", read=1),
+            compact, reply("m2", at="2026-10-07T10:01:00.000Z", read=2),
+            reload, reply("m3", at="2026-10-07T10:31:00.000Z", read=4)])
+        rows, _ = self.rows()
+        self.assertEqual((rows["/ship", "main"]["cache_read"], rows["/ship", "main"]["contexts"]), (7, 1))
+        self.assertEqual(set(rows), {("/ship", "main"), ("TOTAL", "")})
+
     def test_a_tool_result_does_not_end_the_command(self):
         self.files.write("s.jsonl", [ship(), tool_result(), reply("m1", read=7)])
         rows, _ = self.rows()
