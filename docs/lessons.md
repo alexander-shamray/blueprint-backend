@@ -1,5 +1,8 @@
 # Lessons that travel
 
+**Grep it for the lesson you need; never read it whole.** It is about 20k
+tokens and closed, and one lesson is what a question about one area needs.
+
 **What this repository has learned that generalises past the PR that found
 it.** These were `CLAUDE.md`'s *Lessons that travel* section until that section
 reached 755 lines — a quarter of a file loaded into every session's context,
