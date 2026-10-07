@@ -515,7 +515,7 @@ or a leading space both suppress the conversion and a bare `/` does not.
 grant could not.** `gh-issue-create.sh` sets `MSYS2_ARG_CONV_EXCL` for its
 own `gh` child, so the conversion never sees the title; the command's grant
 is on the script and is unchanged. Writing the subject in backticks —
-``/security-sweep`` — is still the house form for a title that names a
+`` `/security-sweep` `` — is still the house form for a title that names a
 command, because a reader of the tracker deserves it, not because the
 filing needs it.
 
