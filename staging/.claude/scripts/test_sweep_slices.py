@@ -4,6 +4,7 @@ The partition runs against this repository's own tree, so a new top-level
 directory no row owns fails here before a sweep passes over it.
 """
 
+import re
 import shutil
 import tempfile
 import unittest
@@ -58,6 +59,9 @@ def parse(stdout):
         if word == "slice":
             n, row, files, size, listing = rest.split(" ")
             slices.append((row, int(files), int(size), listing))
+        elif word == "tracked":
+            words = line.split(" ")
+            head["counts"] = {k: int(v) for k, v in zip(words[::2], words[1::2])}
         else:
             head[word] = rest
     return head, slices
@@ -70,21 +74,29 @@ def listed(slices):
 class TheRealTree(unittest.TestCase):
     """Both partitions hold over this repository, within the budget."""
 
-    def test_every_tracked_path_has_a_row_and_every_slice_fits(self):
+    def test_every_tracked_path_is_listed_or_counted_and_every_slice_fits(self):
+        # `full`, so a ref a real sweep left in this checkout does not narrow it.
         sweep = Sweep(self, REPO)
+        tracked = len(git(REPO, "ls-tree -r --name-only --full-tree HEAD").splitlines())
         for kind in ("bug", "security"):
             with self.subTest(kind=kind):
                 run_bash('rm -rf "$W.slices"', W=sweep.path)
-                result = sweep.slices(kind)
+                result = sweep.slices(kind, "full")
                 self.assertEqual(0, result.returncode, result.stderr)
                 head, slices = parse(result.stdout)
                 self.assertEqual("full", head["mode"])
-                self.assertGreater(len(slices), 1)
+                counts = head["counts"]
+                self.assertEqual(tracked, counts["tracked"])
+                skipped = sum(v for k, v in counts.items() if k not in ("tracked", "listed"))
+                self.assertEqual(counts["tracked"], counts["listed"] + skipped)
                 for row, files, size, _ in slices:
                     self.assertTrue(size <= BUDGET or files == 1, (row, files, size))
                 paths = listed(slices)
+                self.assertEqual(counts["listed"], len(paths))
                 self.assertEqual(len(paths), len(set(paths)), "a path in two slices")
-                self.assertTrue(any(p.startswith("src/") for p in paths))
+                for top in ("src/", "tests/", "tools/", ".claude/", "deploy/", "docs/"):
+                    self.assertTrue(any(p.startswith(top) for p in paths), top)
+                self.assertTrue(any("/" not in p for p in paths), "the root files")
                 self.assertFalse(any(p.startswith("docs/superpowers/") for p in paths))
 
 
@@ -126,6 +138,21 @@ class AClone(unittest.TestCase):
         self.assertEqual(f"since {base}", head["mode"])
         self.assertEqual(["tools/added.py"], listed(slices))
 
+    def test_a_sample_counts_its_fences_and_a_doc_without_one_is_counted_not_listed(self):
+        self.assertEqual(0, self.mark("bug", git(self.repo, "rev-parse HEAD")).returncode)
+        body = "```cs\nvar x = 1;\n```\n"
+        nested = "````md\n```\ninner\n```\n````\nprose after\n"
+        self.commit("docs/fenced.md", "# t\n" + body)
+        self.commit("docs/nested.md", nested)
+        self.commit("docs/plain.md", "no code here\n")
+        result = Sweep(self, self.repo).slices("bug")
+        self.assertEqual(0, result.returncode, result.stderr)
+        head, slices = parse(result.stdout)
+        self.assertEqual(["docs/fenced.md", "docs/nested.md"], sorted(listed(slices)))
+        self.assertEqual(1, head["counts"]["fenceless"])
+        # The fenced line alone; the nested fence's body is its three inner lines.
+        self.assertEqual(len("var x = 1;\n") + len("```\ninner\n```\n"), sum(s[2] for s in slices))
+
     def test_full_and_a_non_ancestor_ref_both_read_everything(self):
         self.commit("tools/added.py", "print(1)\n")
         tip = git(self.repo, "rev-parse HEAD")
@@ -159,6 +186,25 @@ class AClone(unittest.TestCase):
             R=self.repo, DROP=str(DROP), W=sweep.path,
         )
         self.assertEqual("gone", dropped.stdout.strip(), dropped.stderr)
+
+
+class TheTablesNameTheHelpersRows(unittest.TestCase):
+    """Each command's row table names exactly the rows `row_of` can print."""
+
+    def test_each_table_matches_row_of(self):
+        source = SLICES.read_text(encoding="utf-8")
+        body = source[source.index("row_of() {"):source.index("\n}\n", source.index("row_of() {"))]
+        arms = re.findall(r"^\s*(.+?)\) echo ([a-z-]+) ;;$", body, re.MULTILINE)
+        self.assertGreater(len(arms), 5, "the arm pattern stopped matching row_of")
+        for kind in ("bug", "security"):
+            with self.subTest(kind=kind):
+                rows = {
+                    row for pattern, row in arms
+                    if pattern == "*" or any(p.split(":")[0] in (kind, "*") for p in pattern.split("|"))
+                }
+                text = (SCRIPTS.parent / "commands" / f"{kind}-sweep.md").read_text(encoding="utf-8")
+                table = set(re.findall(r"^   \| `([a-z-]+)` \|", text, re.MULTILINE))
+                self.assertEqual(rows, table)
 
 
 class Arguments(unittest.TestCase):
