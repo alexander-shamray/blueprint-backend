@@ -243,8 +243,9 @@ gone.
    smaller, uniform problem. Poison messages simply come back, which costs a
    round trip and loses nothing.
 2. Or **move the unreplayable ones out first** — the tool's `discard` with a
-   `--message-id` for each takes exactly those, wherever they sit in the
-   queue, records each before it goes and returns the rest. By hand, `get`
+   `--message-id` for each takes exactly those among the first `--limit`
+   messages, so set `--limit` to at least the queue's depth; it records each
+   before it goes and returns the rest. By hand, `get`
    with `ackmode=ack_requeue_false` consumes exactly the messages it returns,
    so with `count` set to the number you have identified and confirmed at the
    head of the queue, that is a selective removal. Record each body before it
