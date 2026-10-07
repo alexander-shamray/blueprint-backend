@@ -28,7 +28,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         schema.ShouldBe(1, "InitialCreate's hand-written EnsureSchema is what creates it");
 
         // Named and ordered, since a count passes on a shorter prefix applied twice. The first seven
-        // are wiring every service has; the last four are this service's own (§3.2).
+        // and the last are wiring every service has; the rest are this service's own (§3.2).
         string[] applied = await fixture.AppliedMigrationsAsync();
         applied.Length.ShouldBe(12);
         applied[0].ShouldEndWith("_InitialCreate");
