@@ -84,6 +84,8 @@ class ReportTests(unittest.TestCase):
             prompt("<bash-input>git status</bash-input>", "2026-10-07T09:11:00.000Z"),
             prompt("<bash-stdout>On branch main</bash-stdout><bash-stderr></bash-stderr>", "2026-10-07T09:12:00.000Z"),
             prompt("<local-command-stdout>Compacted</local-command-stdout>", "2026-10-07T09:13:00.000Z"),
+            {"type": "user", "timestamp": "2026-10-07T09:13:30.000Z",
+             "message": {"content": [{"type": "text", "text": "[Request interrupted by user]"}]}},
         ]
         for entry in injected:
             entry.pop("origin", None)
