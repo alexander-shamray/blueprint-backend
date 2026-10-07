@@ -665,23 +665,23 @@ Each round is the review done once, end to end:
    file a path outside `$work`. That check is a string comparison and opens
    nothing.
 
-   Then, for every surviving candidate, **dispatch one more `bug-auditor`
-   with that candidate alone** — the root, the file, the line, the claim and
-   the failure scenario as the fan-out returned them — under the verdict
-   contract in `.claude/agents/bug-auditor.md`, and take its verdict record,
-   which carries the reachability evidence too. **This step does not open
-   `$work` itself.** An unverified agent claim still never becomes an issue —
-   two independent read-only readings, neither able to mutate, must agree —
-   and the audited tree never enters the one invocation that holds
-   `gh-issue-create.sh`.
-   A verdict of `refuted` or `outside-root` drops the candidate; a record that
-   is not in the declared shape is dropped as malformed and counted; and **a
-   record whose `file` and `line` are not the candidate's as dispatched is
-   dropped the same way**, whatever its verdict says — two readings that
-   disagree on where the defect is have not agreed, and a `confirmed` at
-   another location is a redirect, not a confirmation. Drop what does not
-   survive, and say how many did not — that count is the round's own quality
-   signal.
+   Then, for every surviving candidate, **dispatch one more `bug-auditor` with
+   that candidate alone** — the root, the file, the line, the claim and the
+   failure scenario as the fan-out returned them — under the verdict contract in
+   `.claude/agents/bug-auditor.md`, and take its verdict record, which carries
+   the reachability evidence too. **This step does not open `$work` itself.** An
+   unverified agent claim still never becomes an issue — two independent
+   read-only readings, neither able to mutate, must agree — and the audited tree
+   never enters the one invocation that holds `gh-issue-create.sh`. A verdict of
+   `unreadable-root` is a round error under *Never fail open*, not a dropped
+   record, and is read before the shape and location checks below. A verdict of
+   `refuted` or `outside-root` drops the candidate; a record that is not in the
+   declared shape is dropped as malformed and counted; and **a record whose
+   `file` and `line` are not the candidate's as dispatched is dropped the same
+   way**, whatever its verdict says — two readings that disagree on where the
+   defect is have not agreed, and a `confirmed` at another location is a
+   redirect, not a confirmation. Drop what does not survive, and say how many
+   did not — that count is the round's own quality signal.
 3. **De-duplicate.** Check each survivor against the tracked set and the
    already-tracked rule above.
 4. **File.** One issue per survivor, most severe first, in the house body form:
