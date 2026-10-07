@@ -55,7 +55,9 @@ COMMAND_SEPARATOR = re.compile(r"[\n;&|()`]+|(?<=\s)\{(?=\s)|(?<=\s)\}")
 # git's own options sit between `git` and the subcommand, so `git -C . push`
 # would not read as a push at all. Dropped, so the subcommand comes first.
 GIT_GLOBAL_OPTIONS = re.compile(
-    r"^git(?:\s+(?:-[Cc]\s+(?:\"[^\"]*\"|'[^']*'|\S+)|--(?:git-dir|work-tree|namespace|exec-path)(?:=|\s+)\S+|-{1,2}[A-Za-z][\w-]*))+\s+")
+    r"^git(?:\s+(?:-[Cc]\s+(?:\"[^\"]*\"|'[^']*'|\S+)"
+    r"|--(?:git-dir|work-tree|namespace|exec-path)(?:=|\s+)\S+"
+    r"|-{1,2}[A-Za-z][\w-]*))+\s+")
 
 
 def git_commands(source):
