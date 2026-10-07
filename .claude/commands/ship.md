@@ -661,8 +661,10 @@ cannot buy it a second.
 
    - **A round with nothing open ends it**: a full pass with an empty
      `findings` list, or a recheck that marks every carried finding
-     `fixed` and adds none. One clean round is enough, because
-     each round already reads what the one before it changed.
+     `fixed` and adds none. One clean round is enough here, unlike a
+     sweep's, because a fix that could break something a recheck would not
+     read — a `bug`-level one, or one over 400 lines — has already earned
+     the full pass 3 asks for.
    - **A round whose only findings are refused under the style guide's
      *Comments* rule ends it too**: a true comment asked to be reworded is
      not a defect, and another round would only ask again.
