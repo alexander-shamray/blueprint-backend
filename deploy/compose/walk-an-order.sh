@@ -19,23 +19,30 @@ uuid() {
 started=$SECONDS
 say() { echo "[+$((SECONDS - started))s] $*"; }
 
-token=$(curl -sf "$keycloak/realms/commerce/protocol/openid-connect/token" \
-  -d grant_type=password -d client_id=web-app -d username=demo -d password=demo | jq -r .access_token)
+# A failed call says what failed and exits 1, rather than ending on curl's own code with nothing printed.
+token=$(curl -sSf "$keycloak/realms/commerce/protocol/openid-connect/token" \
+  -d grant_type=password -d client_id=web-app -d username=demo -d password=demo | jq -r .access_token) ||
+  { say "no token from $keycloak"; exit 1; }
 
 body=$(jq -nc --arg id "$(uuid)" --arg product "$product" '{
   commandId: $id,
   items: [{productId: $product, quantity: 1}],
   shippingAddress: {line1: "1 Test Street", city: "Almaty", postalCode: "050000", country: "KZ"},
   currency: "EUR"}')
-order=$(curl -sf -X POST "$gateway/api/v1/orders" -H "Authorization: Bearer $token" \
-  -H 'Content-Type: application/json' -d "$body" | jq -r .)
+order=$(curl -sS -X POST "$gateway/api/v1/orders" -H "Authorization: Bearer $token" \
+  -H 'Content-Type: application/json' -d "$body") || { say "the order call failed"; exit 1; }
+case "$order" in
+  \"*\") order=$(jq -r . <<< "$order") ;;
+  *) say "the order was refused: $order"; exit 1 ;;
+esac
 say "placed $order"
 
 last=""
 while [ $((SECONDS - started)) -lt "$deadline" ]; do
   # A string: before the projection has the order, the answer is a problem whose status is the number 404.
+  # A call that failed in transit reads as nothing and is polled again.
   status=$(curl -s "$gateway/bff/v1/orders/$order" -H "Authorization: Bearer $token" |
-    jq -r 'if (.status | type) == "string" then .status else empty end')
+    jq -r 'if (.status | type) == "string" then .status else empty end' 2>/dev/null) || status=""
   if [ "$status" != "$last" ]; then
     say "the buyer's read says ${status:-nothing yet}"
     last=$status
