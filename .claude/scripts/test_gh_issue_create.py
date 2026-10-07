@@ -116,8 +116,7 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         # purpose: neither sweep files one, so the helper's vocabulary is the
         # sweeps' and not the tracker's. The `hand` route does not widen it:
         # `documentation` is one of GitHub's defaults that `gh-label-ensure.sh`
-        # must not re-create, and the contract's §6 says the issue vocabulary is
-        # wider than the helper.
+        # must not re-create, and the contract's §6 says the issue vocabulary is wider than the helper.
         for kind in ("documentation", "Security", "security --force", "-R other/repo", ""):
             with self.subTest(kind=kind):
                 self.assert_refused_before_gh(self.run_helper(kind, "high", "sweep", body=self.STDIN))
