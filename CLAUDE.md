@@ -222,9 +222,10 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   message.
 - **The review loop.** With the external reviewers switched off, and until
   `docs/token-plan.md` step 4 archives them, a PR is reviewed in rounds of
-  one read-only subagent each. Round 1 reads the branch diff; each later
-  round reads the diff since the round before and the findings still open,
-  not the tree. The diff is written under `artifacts/review/`, since
+  one `bug-auditor` each, read-only by its tool list rather than by the
+  brief, and never `general-purpose`. Round 1 reads the branch diff; each
+  later round reads the diff since the round before and the findings still
+  open, not the tree. The diff is written under `artifacts/review/`, since
   `bug-auditor` refuses the scratchpad. The loop ends at a round with
   nothing open, at one whose only findings are refused under the style
   guide's *Comments* rule, or at the seventh.
