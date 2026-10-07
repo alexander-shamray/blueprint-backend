@@ -107,14 +107,27 @@ class TheRealTree(unittest.TestCase):
                 self.assertFalse(any(p.startswith("docs/superpowers/") for p in paths))
 
 
-class AClone(unittest.TestCase):
-    """A shared clone, so a commit and a ref never touch the working repository."""
+# One file in every row both sweeps own, so a small repository partitions the
+# way this one does; a clone of this one checks out every file per test.
+SMALL_TREE = {"src/BuildingBlocks/a.cs": "x\n", "src/Services/b.cs": "x\n", "tests/c.cs": "x\n",
+              "tools/d.py": "x\n", ".github/e.yml": "x\n", ".claude/f.md": "x\n", "deploy/g.yaml": "x\n",
+              ".config/h.json": "x\n", "README.md": "x\n", "docs/i.md": "```sh\nx\n```\n"}
+
+
+class ASmallRepository(unittest.TestCase):
+    """A small repository of its own, so a commit and a ref never touch this one."""
 
     def setUp(self):
         self.repo = tempfile.mkdtemp(prefix="sweepslices-")
         self.addCleanup(shutil.rmtree, self.repo, ignore_errors=True)
-        cloned = run_bash('git clone -q --shared "$SRC" "$DST"', SRC=REPO, DST=self.repo)
-        self.assertEqual(0, cloned.returncode, cloned.stderr)
+        made = run_bash('cd "$R" && git init -q --initial-branch=main .', R=self.repo)
+        self.assertEqual(0, made.returncode, made.stderr)
+        for relative, text in SMALL_TREE.items():
+            target = Path(self.repo, relative)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text)
+        git(self.repo, "add -A")
+        git(self.repo, 'commit -q -m "the small tree"')
 
     def commit(self, relative, text):
         target = Path(self.repo, relative)

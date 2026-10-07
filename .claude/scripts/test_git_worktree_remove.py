@@ -86,8 +86,17 @@ class RemoveShape(unittest.TestCase):
         self.addCleanup(lambda: run_bash('rm -rf "$TARGET"', TARGET=root))
         return root, Path(native)
 
-    def remove(self, where, path=".claude/worktrees/probe"):
-        return run_bash('cd "$WHERE" && bash "$REMOVE" "$P"', WHERE=where, REMOVE=str(REMOVE), P=path)
+    def remove(self, where, path=".claude/worktrees/probe", script=REMOVE):
+        return run_bash('cd "$WHERE" && bash "$REMOVE" "$P"', WHERE=where, REMOVE=str(script), P=path)
+
+    def timed(self, native, bound, grace):
+        """A copy of the helper with a shorter bound and grace, so a test waits
+        seconds rather than the production half minute."""
+        text = REMOVE.read_text(encoding="utf-8")
+        self.assertIn("bound, grace = 30, 2\n", text)
+        copy = native / "git-worktree-remove.sh"
+        copy.write_bytes(text.replace("bound, grace = 30, 2\n", f"bound, grace = {bound}, {grace}\n").encode())
+        return copy
 
     def present(self, root, name="probe"):
         return run_bash('[ -f "$W/tracked.txt" ]', W=f"{root}/checkout/.claude/worktrees/{name}").returncode == 0
@@ -228,23 +237,19 @@ class RemoveShape(unittest.TestCase):
     def test_a_request_put_back_near_the_bound_still_gets_its_grace(self):
         """A refresh that fails late puts its request back and exits, which
         leaves nothing holding the tree, so the bound must not report one. The
-        helper starts some time after the holder's grab, so a copy with a
-        grace near the bound keeps the release inside it on a slow host."""
+        helper starts some time after the holder's grab: the release, 3 s from
+        the grab, lands a second inside the 4 s bound, and the 3 s grace still
+        runs at the bound for a start up to 2 s late."""
         root, native = self.fixture()
-        text = REMOVE.read_text(encoding="utf-8")
-        self.assertIn("bound, grace = 30, 2\n", text)
-        copy = native / "git-worktree-remove.sh"
-        copy.write_bytes(text.replace("bound, grace = 30, 2\n", "bound, grace = 10, 8\n").encode())
-        self.hold(native, 9, put_back=True)
-        result = run_bash('cd "$WHERE" && bash "$REMOVE" "$P"', WHERE=f"{root}/checkout", REMOVE=str(copy),
-                          P=".claude/worktrees/probe")
+        self.hold(native, 3, put_back=True)
+        result = self.remove(f"{root}/checkout", script=self.timed(native, 4, 3))
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(self.present(root))
 
     def test_a_refresh_past_the_bound_removes_nothing(self):
         root, native = self.fixture()
-        self.hold(native, 60)
-        result = self.remove(f"{root}/checkout")
+        self.hold(native, 20)
+        result = self.remove(f"{root}/checkout", script=self.timed(native, 1, 2))
         self.assertEqual(5, result.returncode, result.stderr)
         self.assertIn("nothing removed", result.stderr)
         self.assertTrue(self.present(root))
