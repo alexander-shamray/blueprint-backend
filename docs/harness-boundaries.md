@@ -730,10 +730,11 @@ resetting it for the caller would discard the amend, which is the work. And
 `abort` mid-replay discards uncommitted edits as `git rebase --abort` does,
 because discarding the stop's work is what an abort is for; the helper lists
 them before it aborts. And a two-parent merge on the branch is held to git's
-own merge of its parents only in the files that merged cleanly, and an octopus
-not at all: a conflicted file, and every file of an octopus, is left to
-`--cc`, which cannot see a clean hunk dropped when the merge took one side of
-a file whole, so the replay brings the hunk back unannounced (#583).
+own merge of its parents in the files that merged cleanly, and in a conflicted
+file it took whole from one side, which must still carry the other side's
+clean hunks. The rest is left to `--cc`, which cannot see a clean hunk dropped
+inside a file: every file of an octopus, a conflicted file resolved by hand,
+and one whose parents have no single merge base or whose base lacks it.
 
 The third is `Bash(git fetch origin:*)`, which no longer admits a URL but still
 admits a trailing flag; `--upload-pack`, `--receive-pack` and `--exec` are

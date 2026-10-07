@@ -201,13 +201,36 @@ remember_replay() {
   printf '%s %s %s %s\n' "$branch" "$approved_lease" "$1" "$2" > "$pending"
 }
 
+# A conflicted file the merge took whole from one parent must still carry the
+# other parent's clean hunks, which `git merge-file --ours` lays over that side.
+# One with no single base or no blob on a side, an add/add say, is `--cc`'s.
+dropped_a_clean_hunk() {
+  local merge=$1 first=$2 second=$3 base=$4 path=$5 took ours theirs from redone
+  case "$base" in "" | *$'\n'*) return 1 ;; esac
+  took=$(git rev-parse -q --verify "$merge:$path") || return 1
+  from=$(git rev-parse -q --verify "$base:$path") || return 1
+  ours=$(git rev-parse -q --verify "$first:$path") || return 1
+  theirs=$(git rev-parse -q --verify "$second:$path") || return 1
+  if [ "$took" = "$theirs" ]; then
+    theirs=$ours
+    ours=$took
+  elif [ "$took" != "$ours" ]; then
+    return 1
+  fi
+  redone=$(git merge-file --object-id --ours "$ours" "$from" "$theirs") || true
+  [ -n "$redone" ] ||
+    { echo "cannot replay the clean hunks of $path in $merge, so what a replay drops is unknown" >&2
+      exit 10; }
+  [ "$redone" != "$took" ]
+}
+
 # A rebase drops merge commits, so a merge holding what git's own merge of its
 # parents would not is lost before the push, where no lease can see it. Each
-# file git merges cleanly must be as git made it; a conflicted file is left to
-# `--cc`, blind to a clean hunk dropped inside it (docs/harness-boundaries.md),
-# and so is an octopus.
+# file git merges cleanly must be as git made it, and a conflicted one taken
+# whole from one side must keep the other's clean hunks; any other conflicted
+# file is left to `--cc` (docs/harness-boundaries.md), and so is an octopus.
 require_no_merge_invented_anything() {
-  local invented merge parents made status tree conflicted changed path kept
+  local invented merge parents made status tree conflicted changed path kept base
   invented=$(git log --merges --cc --format="" "refs/remotes/origin/main..HEAD")
   kept=""
   for merge in $(git rev-list --merges "refs/remotes/origin/main..HEAD"); do
@@ -226,6 +249,11 @@ require_no_merge_invented_anything() {
       [ -n "$path" ] || continue
       printf '%s\n' "$conflicted" | grep -qxF -- "$path" || kept="$kept$merge $path"$'\n'
     done <<< "$changed"
+    base=$(git merge-base --all "$2" "$3") || base=""
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      ! dropped_a_clean_hunk "$merge" "$2" "$3" "$base" "$path" || kept="$kept$merge $path"$'\n'
+    done <<< "$conflicted"
   done
   [ -z "$invented" ] && [ -z "$kept" ] ||
     { echo "a merge on $branch carries content git's own merge of its parents would not," >&2
