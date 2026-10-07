@@ -1780,8 +1780,8 @@ owed if this list ever grows past the primitives §6.4 uses.
 reach only part of it.** A third one crosses the replay path end to end —
 `Catalog.Api.Tests` posts the same `CommandId` twice through a real Redis and
 asserts one product and one identical response — but every integration
-assertion here is still about the **success** path and about `Result<Guid>`:
-the release decisions are unobserved, and so is the void-shaped replay. Moving
+assertion here is still about the **success** path: the release decisions are
+unobserved. Moving
 `CompleteAsync` back inside the `try` — undoing this section's answer to the
 release question — leaves all of them green. So the behaviour gets its own
 suite against a recording store, in `Common.Application.Tests` beside §6.3's,
