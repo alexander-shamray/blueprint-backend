@@ -51,7 +51,9 @@ internal sealed class PublisherOutboxes(string serverConnectionString)
                         ProcessedAt   datetimeoffset   NULL,
                         Attempts      int              NOT NULL,
                         LastError     nvarchar(2000)   NULL,
-                        LockedUntil   datetimeoffset   NULL
+                        LockedUntil   datetimeoffset   NULL,
+                        TraceParent   varchar(55)      NULL,
+                        TraceState    varchar(512)     NULL
                     );
                 TRUNCATE TABLE {publisher.Outbox};
                 """);
