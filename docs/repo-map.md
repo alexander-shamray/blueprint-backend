@@ -46,8 +46,8 @@ docs/lessons.md              the lessons that generalise past the PR that
                              the log says what a PR decided, this says what
                              the next PR should do about it
 docs/harness-boundaries.md   what the harness grants these commands and what
-                             it refuses them — the deny list, the sandbox and
-                             its residuals, and every grant wider than the
+                             it refuses them — the deny list and its
+                             residuals, and every grant wider than the
                              operation it buys. Read it before touching
                              anything under .claude/, and state a new residual
                              there rather than in `CLAUDE.md`
