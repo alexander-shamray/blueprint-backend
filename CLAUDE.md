@@ -51,6 +51,8 @@ rewritten. This file and the files it points at are inside the rule too.
 dotnet tool restore && dotnet restore Platform.slnx && dotnet build Platform.slnx
 dotnet test Platform.slnx                                     # needs a running Docker daemon
 dotnet test Platform.slnx --filter "Category!=Integration"    # no daemon
+dotnet ef migrations add <Name> --project src/Services/Catalog/Catalog.Infrastructure \
+    --startup-project src/Services/Catalog/Catalog.Migrator --output-dir Persistence/Migrations
 ```
 
 - **`py -3.12`, not `python`**: CI pins 3.12 and the local default is
