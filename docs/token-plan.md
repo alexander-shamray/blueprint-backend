@@ -106,15 +106,12 @@ compares against that baseline.
 
 ### What the baseline changed
 
-[`token-usage.md`](token-usage.md) holds the baseline. Four of its figures
-reorder the work:
-
-| | |
-|---|---|
-| Subagents | 56% of the input equivalent; `general-purpose` alone 35%, `bug-auditor` 16% |
-| `general-purpose` | 584 contexts at about 1M each, and no command here spawns that type |
-| A main session | a mean context of 295k a call, of which the resident text above is a sixth |
-| A `/ship` run | about 10M, 59% of it subagents |
+[`token-usage.md`](token-usage.md) owns the figures, one dated section per
+measurement. Three directions taken from them reorder the work: subagents
+are the largest spender, and `general-purpose`, which no command here
+grants, is the largest type; a main session's context is mostly the
+conversation, not the resident text above; and inside `/ship` the agents
+are review rounds that the owner's standing instructions ask for.
 
 The largest spender is outside every step drafted from the corpus, so
 step 2 is new and comes first after the measurement. The `/ship` target is
