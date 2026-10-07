@@ -616,6 +616,8 @@ jobs:
   # a project no shard names runs in `rest`. The key is not `filter`, which
   # `pipeline-gate images` reads as an image's.
   integration:
+    # Unnamed, a leg is labelled with every matrix value, `selects` included.
+    name: integration (${{ matrix.shard }})
     needs: [licence-gate, pipeline-gate]
     runs-on: ubuntu-latest
     strategy:
@@ -728,6 +730,7 @@ jobs:
   # (ADR-071). `pipeline-gate images` asserts every Dockerfile under src/
   # appears below and every build has its SBOM.
   images:
+    name: images (${{ matrix.image }})
     needs: [changes, stage-gate]
     if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' || needs.changes.outputs.inventory == 'true' || needs.changes.outputs.payments == 'true' || needs.changes.outputs.shipping == 'true' || needs.changes.outputs.notifications == 'true' }}
     runs-on: ubuntu-latest
