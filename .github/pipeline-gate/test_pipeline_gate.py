@@ -406,6 +406,72 @@ class SbomTests(Fixture):
         self.assertNotIn("comment", " ".join(steps[1].values()))
 
 
+class ActionTests(unittest.TestCase):
+    """Every third-party `uses:` in every workflow is a commit pin."""
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.workflows = self.root / ".github" / "workflows"
+        self.workflows.mkdir(parents=True)
+
+    def write(self, name: str, text: str) -> None:
+        (self.workflows / name).write_text(text, encoding="utf-8")
+
+    def test_pins_first_party_tags_and_local_actions_are_clean(self) -> None:
+        self.write("ci.yml", (
+            "jobs:\n  a:\n    steps:\n"
+            "      - uses: actions/checkout@v4\n"
+            "      - uses: ./.github/actions/local\n"
+            "      - name: Filter\n"
+            "        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3\n"))
+
+        self.assertEqual(pipeline_gate.check_actions(self.root), [])
+
+    def test_a_third_party_action_on_a_tag_is_caught_in_any_workflow(self) -> None:
+        self.write("ci.yml", "jobs:\n  a:\n    steps:\n      - uses: actions/checkout@v4\n")
+        self.write("helm.yaml", "jobs:\n  a:\n    steps:\n      - uses: 'azure/setup-helm@v4'\n")
+
+        problems = pipeline_gate.check_actions(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("helm.yaml runs azure/setup-helm@v4, a third-party action not pinned", problems[0])
+
+    def test_a_short_sha_and_a_reusable_workflow_on_a_branch_are_caught(self) -> None:
+        self.write("ci.yml", (
+            "jobs:\n  a:\n    uses: org/repo/.github/workflows/x.yml@main\n"
+            "  b:\n    steps:\n      - uses: dorny/paths-filter@ceb8a2b\n"))
+
+        self.assertEqual(len(pipeline_gate.check_actions(self.root)), 2)
+
+    def test_an_image_without_a_digest_is_caught(self) -> None:
+        self.write("ci.yml", "jobs:\n  a:\n    steps:\n      - uses: docker://alpine:3\n")
+
+        self.assertIn("not pinned to a digest", pipeline_gate.check_actions(self.root)[0])
+
+    def test_a_comment_naming_uses_is_not_a_reference(self) -> None:
+        self.write("ci.yml", (
+            "jobs:\n  a:\n    steps:\n      # refuses: anything@v1\n"
+            "      - uses: actions/checkout@v4\n"))
+
+        self.assertEqual(pipeline_gate.read_uses((self.workflows / "ci.yml").read_text()), ["actions/checkout@v4"])
+
+    def test_no_reference_fails_rather_than_passing_empty(self) -> None:
+        self.write("ci.yml", "jobs: {}\n")
+
+        self.assertIn("vacuously", pipeline_gate.check_actions(self.root)[0])
+
+    def test_the_reader_sees_every_uses_line_in_this_repositorys_workflows(self) -> None:
+        """The subject is coverage: a reference the reader skips is one never checked."""
+        for path in (pipeline_gate.ROOT / ".github" / "workflows").glob("*.y*ml"):
+            text = path.read_text(encoding="utf-8")
+            lines = [line for line in text.splitlines() if "uses:" in line and not line.lstrip().startswith("#")]
+            with self.subTest(workflow=path.name):
+                self.assertGreater(len(lines), 0)
+                self.assertEqual(len(pipeline_gate.read_uses(text)), len(lines))
+
+
 # The integration matrix at ci.yml's indentation, one value in the folded form.
 SHARDS = """\
   integration:
