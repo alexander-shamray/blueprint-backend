@@ -21,13 +21,46 @@ The plan's subagent arithmetic uses the second as its base. That session's
 51 responses re-sent 6.8M tokens from the cache and wrote 0.17M to it, an
 input equivalent of 1.0M; its last turn carried 203k of context.
 
-## The baseline — owed
+## 2026-10-07 — the baseline, the owner's machine, all history
 
-On the machine that runs `/ship` and the sweeps:
+Measured by the report as of 371a978 over every transcript under the main
+checkout's directory, with no `--since`, so it is a total rather than a
+rate; the span was not yet printed. Totals: 64,114 responses in 1,631
+contexts re-sent 13.3B tokens from the cache and wrote 225M to it, an input
+equivalent of 1.65B; output was 16.8M.
 
-```bash
-python tools/token-usage/token_usage.py --json
-```
+### Who spent it
 
-over the transcripts of two or three `/ship` runs and one sweep, recorded
-here as a section in the form above.
+| Who | Input equivalent | Share | Contexts | Calls each | Mean context per call | Per context |
+|---|---|---|---|---|---|---|
+| Main sessions | 725M | 43.9% | 624 | 34 | 295k | 1.16M |
+| `general-purpose` subagents | 582M | 35.3% | 584 | 46 | 174k | 1.00M |
+| `bug-auditor` | 258M | 15.6% | 327 | 38 | 159k | 0.79M |
+| `Explore` | 37M | 2.3% | 66 | 33 | 126k | 0.57M |
+| `fork` | 27M | 1.6% | 8 | 64 | 464k | 3.32M |
+| `Plan` | 21M | 1.3% | 20 | 55 | 157k | 1.05M |
+
+**Subagents spent 56%**, and the largest single spender is a type no
+command here spawns: nothing under `.claude/commands/` names
+`general-purpose`, so those 584 agents were started by the model or by a
+plugin's workflow. A subagent writes its whole context to the cache once
+— 160–175k per `general-purpose` or `bug-auditor` context — so a cache
+write, priced above input, is a fifth of the input equivalent.
+
+**A main session's mean context is 295k a call.** The resident text the
+plan measured — about 45k for `/ship` — is a sixth of that; the rest is
+the conversation itself — tool output and file reads, which the report does
+not yet split.
+
+### `/ship`
+
+39 runs: 388M in all, about 10M a run, of which 59% is subagents —
+about four `general-purpose` and two `bug-auditor` contexts a run. The
+main session took 131 calls a run at a mean context of 270k.
+
+### What the report could not attribute
+
+73% sits under `(no command)`: a prompt that asks for a sweep, or a plugin
+workflow, loads its skill without a typed command. The report as of
+938ba06 names that work `skill:<name>` and prints its span, and the next
+measurement uses it.
