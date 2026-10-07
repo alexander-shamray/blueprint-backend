@@ -129,3 +129,20 @@ already written for 120–200 calls.
 next prompt a person types, so a `fork` that built a whole feature
 ("PR-5 end-to-end: Catalog stock levels") counted as `skill:check-links`;
 what `/check-links` itself spends is not yet separated.
+
+## 2026-10-07 — what the review of this file corrected
+
+The figures above were measured by a report with two faults, both fixed as
+of 9e3e352; they stand as the record of what that report said.
+
+- **A label ended early.** A compaction summary, a `!` command's input or
+  output, and a local command's output were each read as a typed prompt,
+  so a long `/ship` run lost its label partway. Re-measured on the owner's
+  machine with them excluded, over the same window, `/ship` holds 731M
+  (45%), not 583M (36%), and `(no command)` 407M (25%), not 604M (38%):
+  about 10.6M a `/ship` run over the 69, not 8.4M.
+- **The worktrees were not read.** A session started in
+  `.claude/worktrees/<name>` writes its own transcript directory; the owner's
+  machine holds 103 of them, about 112 MB beside the main directory's
+  1.4 GB, and every figure above leaves them out. The report now reads them
+  by default and names what it read.
