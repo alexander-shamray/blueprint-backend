@@ -238,6 +238,15 @@ jobs:
       - name: Every third-party action is pinned to a commit
         run: python .github/pipeline-gate/pipeline_gate.py actions
 
+      # §3.2's table against the code that publishes and consumes, stdlib
+      # Python over text like the inventories above, so it belongs here.
+      - name: Test the messaging gate
+        working-directory: .github/messaging-gate
+        run: python -m unittest
+
+      - name: §3.2's table matches what every host publishes and consumes
+        run: python .github/messaging-gate/messaging_gate.py check
+
   # The scaffold has no template directory: it renders a new service from
   # src/Services/Catalog at run time, so there is one copy of the wiring rather
   # than two that drift. The risk that buys is that Catalog moves under the
