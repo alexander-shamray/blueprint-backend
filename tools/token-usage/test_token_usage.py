@@ -262,6 +262,20 @@ class ReportTests(unittest.TestCase):
         self.assertEqual((spawn["calls"], spawn["cache_read"], spawn["started"]), (2, 30, "2026-10-07"))
 
 
+    def test_tool_results_are_counted_per_command_and_tool_in_the_main_session(self):
+        calls = {"type": "assistant", "timestamp": "2026-10-07T09:05:00.000Z", "message": {
+            "id": "m1", "usage": usage(read=1), "content": [
+                {"type": "tool_use", "id": "t1", "name": "Bash", "input": {}},
+                {"type": "tool_use", "id": "t2", "name": "Read", "input": {}}]}}
+        results = {"type": "user", "timestamp": "2026-10-07T09:06:00.000Z", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t1", "content": "x" * 40},
+            {"type": "tool_result", "tool_use_id": "t2", "content": [{"type": "text", "text": "y" * 8}]}]}}
+        sidechain = {**results, "isSidechain": True}
+        self.files.write("s.jsonl", [ship(), calls, results, sidechain])
+        _, report = self.rows()
+        self.assertEqual(report.results, {("/ship", "Bash"): [1, 40], ("/ship", "Read"): [1, 8]})
+
+
 class CommandLineTests(unittest.TestCase):
     def test_a_project_is_named_by_its_path_with_dashes_on_either_platform(self):
         self.assertEqual(token_usage.project_name("/home/user/blueprint-backend"), "-home-user-blueprint-backend")

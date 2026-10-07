@@ -7,6 +7,7 @@ measures for; this file records what a developer needs at the keyboard.
 py -3.12 tools/token-usage/token_usage.py                      # this checkout's transcripts
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --json
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --spawns 40   # the costliest subagents and their tasks
+py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --tools 30    # what tool results put into main sessions
 py -3.12 tools/token-usage/token_usage.py --session <id>      # one session and its subagents
 py -3.12 tools/token-usage/token_usage.py ~/.claude/projects/<dir> ...
 ```
@@ -45,7 +46,10 @@ next typed prompt is `woken_equivalent`, beside `input_equivalent` and
 part of it. The first and last day counted go to stderr.
 `--spawns N` lists single subagents instead, costliest first, each with the
 description it was spawned with — which says why a command no one wrote to
-delegate spent most of its tokens in agents. A subagent's type
+delegate spent most of its tokens in agents. `--tools N` lists the
+commands and tools whose results put the most text into main sessions,
+in characters and about a quarter as many tokens: what a large context is
+made of, since a result stays in it for every later turn. A subagent's type
 comes from its `.meta.json`, else from the parent's tool result naming it,
 else it is `subagent`.
 
