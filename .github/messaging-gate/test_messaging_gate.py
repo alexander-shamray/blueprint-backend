@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """What the messaging gate would catch, which running it against this repository does not say.
 
-Negative cases with their positive control, cases whose subject is the parser,
-and two whose subject is coverage of this repository.
-
     py -3.12 -m unittest discover -s .github/messaging-gate
 """
 from __future__ import annotations
