@@ -68,7 +68,14 @@ def parse(stdout):
 
 
 def listed(slices):
-    return [p for *_, listing in slices for p in Path(listing).read_text().splitlines()]
+    """The listed paths, read by bash: the helper prints its own spelling, which
+    under MSYS is a POSIX path Python resolves to another directory."""
+    paths = []
+    for *_, listing in slices:
+        read = run_bash('cat -- "$P"', P=listing)
+        assert read.returncode == 0, read.stderr
+        paths += read.stdout.splitlines()
+    return paths
 
 
 class TheRealTree(unittest.TestCase):
