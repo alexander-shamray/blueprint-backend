@@ -95,7 +95,8 @@ forgotten. `PaymentRefunded` was that row until Notifications claimed it. Both
 directions are two set comparisons over this table, automated precisely
 because neither failure produces a symptom: the
 [messaging gate](../../.github/messaging-gate/README.md) makes them, and holds
-every row to what its host's code publishes, consumes and accepts.
+every row to what its host's code publishes, consumes and accepts, bar a name
+the gate's README lists as owed: stated here and not built yet.
 
 The command column is entirely the saga's doing: Ordering's `OrderFulfilmentSaga`
 is the only thing that sends commands, and each one lands on the queue of the
