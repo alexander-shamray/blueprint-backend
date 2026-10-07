@@ -41,8 +41,8 @@ from this list without its section is how one gets "corrected" back.
   states the claim; bold-led callouts; one `---` and the nav footer.
 - **Comments — every language**: say why and cite the owner; no history,
   reviewer, inventory, test name or emphasis; a summary one sentence, a
-  `<remarks>` four lines and cited, a block five; a finding is closed by
-  cutting.
+  `<remarks>` four lines and cited, a block five; a finding is accepted
+  only when the comment is false or breaks a rule, and closed by cutting.
 - **Layout and naming**: four spaces, CRLF, final newline, UTF-8 without a
   byte-order mark; `using` outside the namespace, no blank line between
   consecutive usings (IDE0065); a blank line after the namespace declaration
