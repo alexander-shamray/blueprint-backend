@@ -9,6 +9,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import token_usage
 from token_usage import NO_COMMAND, Report
@@ -196,6 +197,21 @@ class CommandLineTests(unittest.TestCase):
         root = Path.cwd().resolve()
         self.assertEqual(token_usage.default_project(root),
                          Path.home() / ".claude" / "projects" / token_usage.project_name(str(root)))
+
+    def test_the_default_reads_every_worktree_of_the_checkout_from_the_checkout_or_a_worktree(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            checkout = base / "repo"
+            worktree = checkout / ".claude" / "worktrees" / "feature"
+            worktree.mkdir(parents=True)
+            projects = base / "home" / ".claude" / "projects"
+            main = projects / token_usage.project_name(str(checkout))
+            for name in (main.name, main.name + "--claude-worktrees-feature", "unrelated"):
+                (projects / name).mkdir(parents=True)
+            with mock.patch.object(token_usage.Path, "home", return_value=base / "home"):
+                expected = [main, projects / (main.name + "--claude-worktrees-feature")]
+                self.assertEqual(token_usage.default_projects(checkout), expected)
+                self.assertEqual(token_usage.default_projects(worktree), expected)
 
     def test_a_missing_directory_exits_2(self):
         with contextlib.redirect_stderr(io.StringIO()):
