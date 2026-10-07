@@ -4,10 +4,10 @@
 measures for; this file records what a developer needs at the keyboard.
 
 ```bash
-python tools/token-usage/token_usage.py                      # this checkout's transcripts
-python tools/token-usage/token_usage.py --since 2026-10-01 --json
-python tools/token-usage/token_usage.py --since 2026-10-01 --spawns 40   # the costliest subagents and their tasks
-python tools/token-usage/token_usage.py ~/.claude/projects/<dir> ...
+py -3.12 tools/token-usage/token_usage.py                      # this checkout's transcripts
+py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --json
+py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --spawns 40   # the costliest subagents and their tasks
+py -3.12 tools/token-usage/token_usage.py ~/.claude/projects/<dir> ...
 ```
 
 It reads Claude Code's transcripts — a `<session>.jsonl` per session and a
@@ -47,5 +47,5 @@ ran the sessions, so a baseline is measured there.
 Stdlib only, and the suite writes its transcripts to a temporary directory:
 
 ```bash
-cd tools/token-usage && python -m unittest        # Windows: py -3.12 -m unittest
+cd tools/token-usage && py -3.12 -m unittest
 ```
