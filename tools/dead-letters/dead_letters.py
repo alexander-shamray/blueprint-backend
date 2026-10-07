@@ -345,6 +345,12 @@ def command_move(run: Run, verb: str) -> int:
             continue
         try:
             routed = run.broker.publish(endpoint, message)
+        except AnswerLost as error:
+            # Returned as well, it could be on both; the record holds it either way, so the run stops and says so.
+            reason = f"{error}; the replay may have reached {endpoint}, so it is not returned, and --record holds it"
+            act(message, "failed", reason)
+            run.audit(queue, message, "failed", endpoint, reason)
+            break
         except Refused as error:
             routed, reason = False, str(error)
         if routed:
@@ -367,10 +373,13 @@ def refusal(message: dict, endpoint: str) -> str | None:
 def put_back(run: Run, queue: str, message: dict, action: str, reason: str, actions: list[dict]) -> None:
     """Return a taken message to the queue it came from, unchanged, at its tail."""
     try:
-        returned = run.broker.publish(queue, message)
+        returned: bool | None = run.broker.publish(queue, message)
+    except AnswerLost as error:
+        returned, reason = None, f"{reason}; returning it lost its answer ({error}), so it may be back on {queue}, " \
+                                 f"and the --record file holds it"
     except Refused as error:
         returned, reason = False, f"{reason}; returning it failed too: {error}"
-    if not returned:
+    if returned is False:
         reason = f"{reason}; it is not on {queue} any more and the --record file holds it"
     actions.append({"message_id": message_id(message), "action": action, "destination": queue, "reason": reason})
     run.audit(queue, message, action, queue, reason)
