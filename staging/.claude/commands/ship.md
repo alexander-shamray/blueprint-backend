@@ -157,11 +157,11 @@ branch is.
      rows, and equality with either is finished.
    - Compare identity, never content: no range read over `origin/main..HEAD`,
      no patch-id comparison.
-   - Read unfinished, and Stay, for: a checkout *behind* the landed head; a
-     branch updated after its last push; an *unused* branch (clean, holding
-     nothing `origin/main` lacks, never merged), which is kept and adopted so
-     step 1 skips the fork; and an abandoned empty worktree, kept and named
-     in the report.
+   - Read unfinished, and Stay, for: a checkout *behind* the landed head,
+     kept and named in the report; a branch updated after its last push;
+     an *unused* branch (clean, holding nothing `origin/main` lacks, never
+     merged), which is kept and adopted so step 1 skips the fork; and an
+     abandoned empty worktree, kept and named in the report.
    - Never drop the tree read, and never let a merged PR exempt a workspace
      from any read: the reads are a conjunction.
    - A merged PR with uncommitted edits or commits made after the merge is
