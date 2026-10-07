@@ -19,15 +19,16 @@ whole-repository run.
 
 - A **root path**, the pinned worktree. Read only under it. Open one file
   under it first; if none resolves, report `unreadable-root` and stop.
-- A **scope** — CI/tooling, application source, or deploy and
-  infrastructure — and the **accepted** risks not to re-report. Open one
+- A **scope**, one of the rows `/security-sweep` names, and the
+  **accepted** risks not to re-report. Open one
   file inside the scope too; if the root reads but the scope selects
   nothing, report `empty-scope` with the paths or patterns you tried.
 - **Your scope bounds what you report, not what you read**: an exploit path
   can start in one area and land in another.
 - A **slice list** of the files you own in round 1: read each one whole,
-  with `offset` and `limit` above 500 lines — the list file is the one path
-  outside the root you open. In a later round you are given the candidates
+  with `offset` and `limit` above 500 lines, but in a `samples` slice only
+  the fenced blocks — the list file is the one path outside the root you
+  open. In a later round you are given the candidates
   so far, as JSON, instead: follow them.
 
 ## How you read

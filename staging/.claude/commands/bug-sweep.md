@@ -333,9 +333,10 @@ establish ownership.
 **What it costs is attribution, not safety.** A nested `secsweep-a/bbbb` is
 refused, the names `mktemp` invents inside the detach helper are unique so two
 sweeps cannot collide, and the drop helper removes only the exact path handed
-to it. What is lost is that a stray temp directory does not say which of the
-two commands left it. That is a residual named rather than hidden, and the run
-summary says which command owns the directory it reports.
+to it and the slice lists it names from that path. What is lost is that a
+stray temp directory does not say which of the two commands left it. That is a
+residual named rather than hidden, and the run summary says which command owns
+the directory it reports.
 
 **Both helpers' header comments name "a sweep" rather than `/security-sweep`,
 and the prefix is not renamed.** The prefix is the one literal both helpers
@@ -355,8 +356,9 @@ so the summary names the commit the sweep actually read.
 caller's tree, which would silently forfeit the stable-snapshot property this
 section buys. A failed `git worktree add` is a round that could not run,
 reported like any other tool error under *Never fail open* below. **The round
-writes nothing to disk** — issue bodies are piped to `gh-issue-create.sh` on
-stdin (the File step), not written to files — so `$work` stays clean and the
+writes nothing inside `$work`** — issue bodies are piped to `gh-issue-create.sh`
+on stdin (the File step), not written to files, and the slice lists and the ref
+are outside it (`docs/harness-boundaries.md`) — so `$work` stays clean and the
 teardown below removes it without `--force`.
 
 **Prove the root is readable before the fan-out, rather than trusting the add.**
@@ -375,7 +377,9 @@ that cannot be proved readable is a round that could not run, reported under
 detached checkout pins the commit, but nothing about it forces a reader to look
 there — `Read`, `Grep`, `Glob` and an Agent default to the caller's workspace.
 So **every read is an absolute path under `$work`** — every `Read`, `Grep` and
-`Glob` argument, and every Agent prompt's stated root. There are deliberately no
+`Glob` argument, and every Agent prompt's stated root. The one path outside it
+is `$work.slices/`, the lists `sweep-slices.sh` writes beside it, which hold
+names, not the tree. There are deliberately no
 shell readers in the grant to bind: `grep`, `git grep` and `git log` were
 excluded, because a shell reader's target is its working directory and the only
 ways to point one at `$work` — `cd "$work" && …` or `git -C "$work" …` — start
@@ -591,8 +595,9 @@ Each round is the review done once, end to end:
    here can miss the logic and execution defects this command exists to find.
    Whoever adds an agent owes this line and `security-sweep.md`'s an entry.
 
-   **The rows are `sweep-slices.sh`'s, which cuts them into slices.** Run it
-   once, after the worktree is made and before round 1:
+   **The rows are `sweep-slices.sh`'s, which cuts them into slices**: its
+   `row_of` holds each row's paths, and the table says why each row exists.
+   Run it once, after the worktree is made and before round 1:
 
    ```bash
    bash .claude/scripts/sweep-slices.sh bug "$posix"      # `full` as a third argument when asked
@@ -600,12 +605,12 @@ Each round is the review done once, end to end:
 
    | | |
    |---|---|
-   | Building blocks | `src/BuildingBlocks/**` — the dispatcher and its behaviours, the outbox, the Redis helpers, the web middleware |
-   | Services and hosts | **all of `src/**` except `BuildingBlocks`** — today `src/Services/**`, and §4.1's gateway, BFF and AppHost as they land |
-   | The suites | `tests/**` — where the cannot-fail class lives, and the only area whose defects are all of one kind |
-   | Tooling | `tools/**`, `.github/**`, `.claude/**` — Python, shell, and the command and agent definitions |
-   | Deployment and configuration | `deploy/**`, `.config/**`, and **every tracked file at the repository root** — the build files, the dotfiles, `CLAUDE.md` and `README.md` alike |
-   | Samples | `docs/**` fenced code, audited as code but excerpt-aware; the closed records are owned and not read |
+   | `building-blocks` | the dispatcher and its behaviours, the outbox, the Redis helpers, the web middleware |
+   | `services` | the rest of `src/` — the services, and §4.1's gateway, BFF and AppHost as they land |
+   | `suites` | where the cannot-fail class lives, and the only area whose defects are all of one kind |
+   | `tooling` | Python, shell, CI, and the command and agent definitions |
+   | `deploy` | deployment and configuration, and **every tracked file at the repository root** — the build files, the dotfiles, `CLAUDE.md` and `README.md` alike |
+   | `samples` | fenced code in `docs/`, audited as code but excerpt-aware; the closed records are owned and not read |
 
    **The rows have to partition the repository, not merely sample it.** A row is
    an auditor's **reporting** ownership, so a path no row owns is not a path
@@ -655,13 +660,14 @@ Each round is the review done once, end to end:
    full` or `mode since <sha>`, the binary and closed-record counts, and one
    `slice <n> <row> <files> <bytes> <list>` line per slice — at most 240,000
    bytes, about 60k tokens, unless one file is larger. A sample's bytes are
-   its fenced lines, and a docs file with no fence is not sliced. The closed
-   records, `docs/superpowers/`, `pr-decision-log.md` and `lessons.md`, are
-   owned and not read: they are never edited to match the code, so a defect
-   in their samples has nothing to fix. The lists stay beside the worktree,
-   and the parent never reads them. A scope hint keeps the slices of the rows
-   it names, or, for a path, the slices whose list `Grep` finds it in; the
-   summary says which it dropped.
+   its fenced lines, so a `samples` auditor reads the fences and not the
+   prose, and a docs file with no fence is not sliced. The closed records,
+   `docs/superpowers/`, `pr-decision-log.md` and `lessons.md`, are owned and
+   not read: they are never edited to match the code, so a defect in their
+   samples has nothing to fix. The lists stay beside the worktree, and the
+   parent reads them only to `Grep` for a path a scope hint names, keeping
+   the slices that hold it, or the slices of the rows it names; the summary
+   says which it dropped.
 
    **Round 1 is one auditor per slice; every later round follows leads.**
    From round 2 the tree is not re-read: one auditor goes to each row that
