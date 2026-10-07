@@ -68,25 +68,28 @@ class Report:
         self.seen: set[str] = set()
         self.skipped = 0
         self.span: list[str] = []
+        self.spawns: list[dict] = []
 
-    def add(self, command: str, agent: str, entry: dict, context: str) -> None:
+    def add(self, command: str, agent: str, entry: dict, context: str) -> dict | None:
+        """Count a response once, and return its usage when it was counted."""
         message = entry.get("message")
         if entry.get("type") != "assistant" or not isinstance(message, dict):
-            return
+            return None
         usage = message.get("usage")
         if not isinstance(usage, dict):
-            return
+            return None
         if self.since and str(entry.get("timestamp", self.since))[:10] < self.since:
-            return
+            return None
         # A response is written once per content block, each line carrying the same usage.
         key = message.get("id") or entry.get("requestId") or entry.get("uuid")
         if key in self.seen:
-            return
+            return None
         if key:
             self.seen.add(key)
         self.groups.setdefault((command, agent), Usage()).add(usage, context)
         if day := str(entry.get("timestamp", ""))[:10]:
             self.span = [min(self.span[0], day), max(self.span[1], day)] if self.span else [day, day]
+        return usage
 
     def read_project(self, project: Path) -> None:
         for main in sorted(project.glob("*.jsonl")):
@@ -113,12 +116,18 @@ class Report:
                 self.add(command, MAIN, entry, f"{session}#{prompt}")
         for transcript in sorted((main.parent / session / "subagents").glob("agent-*.jsonl")):
             agent_id = transcript.stem.removeprefix("agent-")
-            agent = agent_type(transcript.with_suffix(".meta.json")) or types.get(agent_id) or SUBAGENT
+            meta = read_meta(transcript.with_suffix(".meta.json"))
+            agent = text_field(meta, "agentType") or types.get(agent_id) or SUBAGENT
             entries = list(self.entries(transcript))
             started = next((str(e["timestamp"]) for e in entries if e.get("timestamp")), "")
             spawned_in = command_at(boundaries, started)
+            spawn = Usage()
             for entry in entries:
-                self.add(spawned_in, agent, entry, f"{session}/{agent_id}")
+                if counted := self.add(spawned_in, agent, entry, f"{session}/{agent_id}"):
+                    spawn.add(counted, agent_id)
+            if spawn.calls:
+                self.spawns.append({"command": spawned_in, "agent": agent, "started": started[:10],
+                                    "description": text_field(meta, "description") or "", **spawn.row()})
 
     def entries(self, path: Path):
         with path.open(encoding="utf-8", errors="replace") as lines:
@@ -181,11 +190,16 @@ def command_at(boundaries: list[tuple[str, str]], timestamp: str) -> str:
     return boundaries[index][1] if index >= 0 else NO_COMMAND
 
 
-def agent_type(meta: Path) -> str | None:
+def read_meta(meta: Path) -> dict:
     try:
-        found = json.loads(meta.read_text(encoding="utf-8")).get("agentType")
-    except (OSError, ValueError, AttributeError):
-        return None
+        found = json.loads(meta.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return found if isinstance(found, dict) else {}
+
+
+def text_field(meta: dict, name: str) -> str | None:
+    found = meta.get(name)
     return found if isinstance(found, str) and found else None
 
 
@@ -194,14 +208,17 @@ def default_project(root: Path) -> Path:
     return Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(root.resolve()))
 
 
-def render(rows: list[dict]) -> str:
-    columns = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output",
-               "input_equivalent")
+ROWS = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output", "input_equivalent")
+SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
+
+
+def render(rows: list[dict], columns: tuple[str, ...] = ROWS) -> str:
     cells = [list(columns)] + [[f"{r[c]:,}" if isinstance(r[c], int) else r[c] for c in columns] for r in rows]
     widths = [max(len(row[i]) for row in cells) for i in range(len(columns))]
-    lines = ["  ".join(cell.ljust(w) if i < 2 else cell.rjust(w) for i, (cell, w) in enumerate(zip(row, widths)))
+    left = {"command", "agent", "started", "description"}
+    lines = ["  ".join(cell.ljust(w) if c in left else cell.rjust(w) for c, cell, w in zip(columns, row, widths))
              for row in cells]
-    return "\n".join(lines)
+    return "\n".join(line.rstrip() for line in lines)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -210,6 +227,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="transcript directories; defaults to this checkout's under ~/.claude/projects")
     parser.add_argument("--since", help="only responses on or after this date, YYYY-MM-DD")
     parser.add_argument("--json", action="store_true", help="print the rows as JSON")
+    parser.add_argument("--spawns", type=int, metavar="N",
+                        help="list the N costliest subagents, each with the task it was given, instead")
     args = parser.parse_args(argv)
     if args.since and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args.since):
         parser.error("--since takes YYYY-MM-DD")
@@ -220,8 +239,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"no transcript directory at {project}", file=sys.stderr)
             return 2
         report.read_project(project)
-    rows = report.rows()
-    print(json.dumps(rows, indent=2) if args.json else render(rows))
+    if args.spawns is not None:
+        rows = sorted(report.spawns, key=lambda r: r["input_equivalent"], reverse=True)[:args.spawns]
+        columns = SPAWNS
+    else:
+        rows, columns = report.rows(), ROWS
+    print(json.dumps(rows, indent=2) if args.json else render(rows, columns))
     if report.span:
         print(f"responses from {report.span[0]} to {report.span[1]}", file=sys.stderr)
     if report.skipped:

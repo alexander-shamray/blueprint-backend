@@ -6,6 +6,7 @@ measures for; this file records what a developer needs at the keyboard.
 ```bash
 python tools/token-usage/token_usage.py                      # this checkout's transcripts
 python tools/token-usage/token_usage.py --since 2026-10-01 --json
+python tools/token-usage/token_usage.py --since 2026-10-01 --spawns 40   # the costliest subagents and their tasks
 python tools/token-usage/token_usage.py ~/.claude/projects/<dir> ...
 ```
 
@@ -28,7 +29,10 @@ command `/ship` loads through the `Skill` tool is counted as `/ship`, and a
 subagent belongs to the command running when it started. **A skill the
 session loads with no typed command** — a sweep a prompt asked for, a
 plugin's workflow — names the work after it as `skill:<name>`, until the
-next prompt. The first and last day counted go to stderr. A subagent's type
+next prompt. The first and last day counted go to stderr.
+`--spawns N` lists single subagents instead, costliest first, each with the
+description it was spawned with — which says why a command no one wrote to
+delegate spent most of its tokens in agents. A subagent's type
 comes from its `.meta.json`, else from the parent's tool result naming it,
 else it is `subagent`.
 
