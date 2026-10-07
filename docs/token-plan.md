@@ -201,6 +201,12 @@ counted under `/ship`.
 
 ### Step 4 — local review, and the external reviewers archived
 
+The owner chose, on 2026-10-07, to archive both reviewers rather than keep
+Copilot suspended, to be restored from the tag if they return. The owner's
+user-level instructions that suspend Copilot, require a Copilot cycle
+before merging once it is back, and skip Grok are edited in the same
+change, so nothing standing asks for a reviewer the tree no longer holds.
+
 - Tag `archive/external-reviewers` on `main` and push it; remove the 18
   files from the tree and the references to them — the deny in
   `settings.json`, both sweeps' `disallowed-tools`, `guard-edit-target.py`
