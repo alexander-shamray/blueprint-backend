@@ -209,9 +209,13 @@ def text_field(meta: dict, name: str) -> str | None:
     return found if isinstance(found, str) and found else None
 
 
+def project_name(path: str) -> str:
+    """Claude Code's name for a directory's transcripts: its path with every other character a dash."""
+    return re.sub(r"[^A-Za-z0-9]", "-", path)
+
+
 def default_project(root: Path) -> Path:
-    """Claude Code's transcript directory for a checkout: its path with every other character a dash."""
-    return Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(root.resolve()))
+    return Path.home() / ".claude" / "projects" / project_name(str(root.resolve()))
 
 
 ROWS = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output", "input_equivalent")
