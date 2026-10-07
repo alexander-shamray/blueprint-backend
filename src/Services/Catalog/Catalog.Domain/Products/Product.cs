@@ -44,7 +44,7 @@ public sealed class Product : AggregateRoot<ProductId>
         return product;
     }
 
-    /// <summary>Reprices the product in its own currency; the same price again raises nothing (ADR-058).</summary>
+    /// <summary>Reprices the product in its own currency; the same price again raises nothing (§5.4).</summary>
     /// <remarks>
     /// The currency is fixed at publication, because Ordering's projection keys a price by currency and a change
     /// of currency would leave the old row orderable at the old amount (§6.6).

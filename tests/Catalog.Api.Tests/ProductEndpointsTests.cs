@@ -326,7 +326,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     /// <summary>A price change as a caller holding <paramref name="permissions"/>, or as no principal when null.</summary>
-    private Task<HttpResponseMessage> ChangePriceAsync(Guid id, object body, string? permissions)
+    private Task<HttpResponseMessage> ChangePriceAsync(Guid id, object body, string? permissions, Guid? caller = null)
     {
         HttpRequestMessage request = new(HttpMethod.Put, $"/v1/catalog/products/{id}/price")
         {
@@ -335,7 +335,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
 
         if (permissions is not null)
         {
-            request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
+            request.Headers.Add(TestAuthHandler.UserHeader, (caller ?? Guid.CreateVersion7()).ToString());
             request.Headers.Add(TestAuthHandler.PermissionsHeader, permissions);
         }
 
@@ -350,7 +350,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
 
         HttpResponseMessage response = await ChangePriceAsync(
             id,
-            new { Amount = 24.50m, Currency = "EUR" },
+            new { CommandId = Guid.CreateVersion7(), Amount = 24.50m, Currency = "EUR" },
             CatalogPermissions.Write);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -361,6 +361,27 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         item.Amount.ShouldBe(24.50m);
     }
 
+    [Fact]
+    public async Task A_stale_repeat_of_a_price_change_replays_rather_than_restoring_the_old_price()
+    {
+        // Why the endpoint is keyed rather than convergent (ADR-058): the retry of the first change arrives after
+        // the second, and a convergent endpoint would put the first price back.
+        HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+        var caller = Guid.CreateVersion7();
+        object first = new { CommandId = Guid.CreateVersion7(), Amount = 24.50m, Currency = "EUR" };
+        object second = new { CommandId = Guid.CreateVersion7(), Amount = 29.00m, Currency = "EUR" };
+
+        foreach (object change in new[] { first, second, first })
+        {
+            HttpResponseMessage response = await ChangePriceAsync(id, change, CatalogPermissions.Write, caller);
+            response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        }
+
+        (await fixture.ScalarAsync<decimal>("SELECT Value = PriceAmount FROM catalog.Products WHERE Id = {0}", id))
+            .ShouldBe(29.00m, "the stale repeat was answered from its key, not applied again");
+    }
+
     [Theory]
     [InlineData(null, HttpStatusCode.Unauthorized)]
     [InlineData("catalog:read", HttpStatusCode.Forbidden)]
@@ -369,7 +390,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
         Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
 
-        HttpResponseMessage response = await ChangePriceAsync(id, new { Amount = 1m, Currency = "EUR" }, permissions);
+        HttpResponseMessage response = await ChangePriceAsync(id, new { CommandId = Guid.CreateVersion7(), Amount = 1m, Currency = "EUR" }, permissions);
 
         response.StatusCode.ShouldBe(expected);
         (await fixture.ScalarAsync<decimal>("SELECT Value = PriceAmount FROM catalog.Products WHERE Id = {0}", id))
@@ -384,7 +405,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
 
         HttpResponseMessage response = await ChangePriceAsync(
             id,
-            new { Amount = 24.50m, Currency = "USD" },
+            new { CommandId = Guid.CreateVersion7(), Amount = 24.50m, Currency = "USD" },
             CatalogPermissions.Write);
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -397,7 +418,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     {
         HttpResponseMessage response = await ChangePriceAsync(
             Guid.CreateVersion7(),
-            new { Amount = 24.50m, Currency = "EUR" },
+            new { CommandId = Guid.CreateVersion7(), Amount = 24.50m, Currency = "EUR" },
             CatalogPermissions.Write);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);

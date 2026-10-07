@@ -9,7 +9,7 @@ public class ChangePriceValidatorTests
 {
     private static readonly ChangePriceValidator Validator = new();
 
-    private static ChangePriceCommand Valid() => new(Guid.CreateVersion7(), 24.50m, "EUR");
+    private static ChangePriceCommand Valid() => new(Guid.CreateVersion7(), Guid.CreateVersion7(), 24.50m, "EUR");
 
     [Fact]
     public void A_valid_command_passes()
@@ -19,6 +19,8 @@ public class ChangePriceValidatorTests
 
     public static TheoryData<string, ChangePriceCommand> Invalid() => new()
     {
+        // An omitted CommandId binds as Guid.Empty, one shared idempotency key rather than an absent one (§8.5).
+        { "CommandId", Valid() with { CommandId = Guid.Empty } },
         { "ProductId", Valid() with { ProductId = Guid.Empty } },
         // Omitted binds as null, so it is a 400 rather than a free product.
         { "Amount", Valid() with { Amount = null } },

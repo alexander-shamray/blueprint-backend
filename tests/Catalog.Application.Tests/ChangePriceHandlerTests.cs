@@ -50,7 +50,7 @@ public sealed class ChangePriceHandlerTests(ServiceFixture fixture) : IAsyncLife
     {
         Guid productId = await PublishedAsync();
 
-        Result result = await SendAsync(new ChangePriceCommand(productId, 24.50m, "eur"));
+        Result result = await SendAsync(new ChangePriceCommand(Guid.CreateVersion7(), productId, 24.50m, "eur"));
 
         result.IsSuccess.ShouldBeTrue();
         (await fixture.ScalarAsync<decimal>(
@@ -76,9 +76,9 @@ public sealed class ChangePriceHandlerTests(ServiceFixture fixture) : IAsyncLife
     {
         Guid productId = await PublishedAsync(19.99m);
 
-        (await SendAsync(new ChangePriceCommand(productId, 19.99m, "EUR"))).IsSuccess.ShouldBeTrue();
+        (await SendAsync(new ChangePriceCommand(Guid.CreateVersion7(), productId, 19.99m, "EUR"))).IsSuccess.ShouldBeTrue();
 
-        (await fixture.OutboxAsync()).ShouldBeEmpty("a convergent repeat publishes no second event (ADR-058)");
+        (await fixture.OutboxAsync()).ShouldBeEmpty("the price did not change, so there is nothing to publish");
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class ChangePriceHandlerTests(ServiceFixture fixture) : IAsyncLife
     {
         Guid productId = await PublishedAsync();
 
-        Result result = await SendAsync(new ChangePriceCommand(productId, 24.50m, "USD"));
+        Result result = await SendAsync(new ChangePriceCommand(Guid.CreateVersion7(), productId, 24.50m, "USD"));
 
         result.Error.ShouldBe(ProductErrors.CurrencyFixed);
         (await fixture.ScalarAsync<decimal>(
@@ -99,7 +99,7 @@ public sealed class ChangePriceHandlerTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task An_unknown_product_is_not_found()
     {
-        Result result = await SendAsync(new ChangePriceCommand(Guid.CreateVersion7(), 24.50m, "EUR"));
+        Result result = await SendAsync(new ChangePriceCommand(Guid.CreateVersion7(), Guid.CreateVersion7(), 24.50m, "EUR"));
 
         result.Error.ShouldBe(ProductErrors.NotFound);
     }
