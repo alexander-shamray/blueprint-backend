@@ -233,11 +233,8 @@ class ImageTests(Fixture):
     def test_an_entry_reading_an_undefined_filter_is_caught(self) -> None:
         """The one neither direction can see, and the worst of the three.
 
-        `needs.changes.outputs[matrix.filter]` on a name no filter defines is
-        the empty string, not an error — so the `if` is false, the step is
-        skipped, and the job goes green having built nothing. Both halves of
-        the inventory are still perfectly consistent.
-        """
+        An undefined `filter` reads as the empty string, not an error, so every
+        build step is skipped and only the guard step notices."""
         self.write(WORKFLOW.replace("- filter: gateway", "- filter: edge"))
 
         problems = pipeline_gate.check_images(self.root)

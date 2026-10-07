@@ -174,12 +174,8 @@ def read_image_matrix(workflow_text: str) -> list[tuple[str, str]]:
 def check_images(root: Path = ROOT) -> list[str]:
     """Every image is built, and everything built is an image.
 
-    Both directions, because a Dockerfile in no matrix is an image CI never
-    builds and a matrix entry naming no Dockerfile fails on the day it is
-    first selected. The third check is the one neither direction can make: a
-    `filter` no filter defines makes `needs.changes.outputs[matrix.filter]`
-    the empty string rather than an error, so the step is skipped and the job
-    reports success having built nothing.
+    Both directions, and the check neither can make: an undefined `filter` makes
+    `needs.changes.outputs[matrix.filter]` empty, so only the guard step notices.
     """
     problems: list[str] = []
 
@@ -235,14 +231,13 @@ def check_images(root: Path = ROOT) -> list[str]:
         problems.append(
             f"ci.yml's images matrix reads the filter {name!r}, which the "
             "paths-filter step does not define. A GitHub expression indexing a "
-            "missing output is the empty string, so that entry's `if` is "
-            "always false and the job reports success having built nothing"
+            "missing output is the empty string, so that entry's build "
+            "never runs and its guard step fails"
         )
 
     # ...and the `changes` job has to export it, which defining it does not do:
     # `needs.changes.outputs.gateway` reads a job output, and deleting the one
-    # `outputs:` line leaves the filter defined, the checks above green, and
-    # the images job's `if` false on every gateway-only change.
+    # `outputs:` line leaves the filter defined and the checks above green.
     exported = read_job_outputs(text, "changes")
     if not exported:
         problems.append(
