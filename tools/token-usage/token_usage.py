@@ -19,6 +19,7 @@ MAIN = "main"
 SUBAGENT = "subagent"
 COMMAND = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
 INJECTED = ("<bash-", "<local-command-")
+WORKTREE = re.compile(r"[\\/]\.claude[\\/]worktrees[\\/].*$")
 
 # Anthropic's prompt-caching prices as multiples of the base input price.
 WRITE_5M = 1.25
@@ -218,6 +219,12 @@ def default_project(root: Path) -> Path:
     return Path.home() / ".claude" / "projects" / project_name(str(root.resolve()))
 
 
+def default_projects(cwd: Path) -> list[Path]:
+    """The main checkout's transcript directory, then each worktree's under .claude/worktrees beside it."""
+    main = default_project(Path(WORKTREE.sub("", str(cwd.resolve()))))
+    return [main, *sorted(main.parent.glob(main.name + "--claude-worktrees-*"))]
+
+
 ROWS = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output", "input_equivalent")
 SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
 
@@ -242,13 +249,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.since and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args.since):
         parser.error("--since takes YYYY-MM-DD")
-    projects = args.projects or [default_project(Path.cwd())]
+    projects = args.projects or [p for p in default_projects(Path.cwd()) if p.is_dir()]
+    missing = [p for p in args.projects if not p.is_dir()] if args.projects else []
+    if missing or not projects:
+        print(f"no transcript directory at {(missing or default_projects(Path.cwd()))[0]}", file=sys.stderr)
+        return 2
     report = Report(args.since)
     for project in projects:
-        if not project.is_dir():
-            print(f"no transcript directory at {project}", file=sys.stderr)
-            return 2
         report.read_project(project)
+    print(f"read {projects[0]}" + (f" and {len(projects) - 1} more" if len(projects) > 1 else ""), file=sys.stderr)
     if args.spawns is not None:
         rows = sorted(report.spawns, key=lambda r: r["input_equivalent"], reverse=True)[:args.spawns]
         columns = SPAWNS

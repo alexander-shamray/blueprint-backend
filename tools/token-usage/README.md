@@ -38,8 +38,11 @@ else it is `subagent`.
 
 The default directory is `~/.claude/projects/` plus the checkout's absolute
 path with every character that is not a letter or digit made a dash, which
-is how Claude Code names it. Transcripts are local to the machine that ran
-the sessions, so a baseline is measured there.
+is how Claude Code names it — and, beside it, every directory a session
+started in one of the checkout's `.claude/worktrees/` wrote, which `/ship`
+and `/branch` sessions do. Run from a worktree, it reads the same set. The
+directories read go to stderr. Transcripts are local to the machine that
+ran the sessions, so a baseline is measured there.
 
 Stdlib only, and the suite writes its transcripts to a temporary directory:
 
