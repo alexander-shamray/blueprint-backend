@@ -1,9 +1,6 @@
 namespace Catalog.Application.Products.GetProducts;
 
-/// <summary>
-/// The listing's closed set of orderings (ADR-073). No price: products carry their own currency, so one numeric
-/// order across them would rank a figure in one currency against a figure in another.
-/// </summary>
+/// <summary>The listing's closed set of orderings (ADR-073).</summary>
 public static class ProductSort
 {
     /// <summary>Newest first, by <c>PublishedAt</c> then <c>Id</c>, and the default when none is named.</summary>
