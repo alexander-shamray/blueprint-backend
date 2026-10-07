@@ -255,7 +255,7 @@ def check_images(root: Path = ROOT) -> list[str]:
                 f"ci.yml's changes job defines the filter {name!r} and does not "
                 "export it as a job output, so `needs.changes.outputs."
                 f"{name}` is empty and every leg under that filter fails its "
-                "guard step on the next run rather than on this change"
+                "guard step"
             )
 
     # ...and the job has no `if:` of its own. GitHub expands a matrix only

@@ -268,8 +268,8 @@ class ImageTests(Fixture):
         """Defining a filter and exporting it are two different things.
 
         `needs.changes.outputs.gateway` reads a JOB output, so with its
-        `outputs:` line gone every gateway leg reads an empty one: the guard
-        step fails them on the next run, and this on the change itself."""
+        `outputs:` line gone every gateway leg reads an empty one and fails
+        its guard step."""
         self.write(WORKFLOW.replace(
             "      gateway: ${{ steps.changes.outputs.gateway }}\n", ""))
 
