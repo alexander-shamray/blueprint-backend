@@ -63,6 +63,10 @@ docs/churn-plan.md           where the corpus churns, measured on a named
                              it
 docs/churn-plan-2.md         the same, measured again once that sequence
                              landed, and the comment budget's sweeps
+docs/token-plan.md           where a session's tokens go, measured on a
+                             named commit, and the steps that cut them
+docs/token-usage.md          what tools/token-usage reported, one dated
+                             section per measurement
 docs/repo-map.md             this file — what every entry here is and why
                              it is shaped that way. It lists itself because
                              the locator in `CLAUDE.md` does, and a map
