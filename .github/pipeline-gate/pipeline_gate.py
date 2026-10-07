@@ -174,8 +174,8 @@ def read_image_matrix(workflow_text: str) -> list[tuple[str, str]]:
 def check_images(root: Path = ROOT) -> list[str]:
     """Every image is built, and everything built is an image.
 
-    Both directions, and the check neither can make: an undefined `filter` makes
-    `needs.changes.outputs[matrix.filter]` empty, so only the guard step notices.
+    Both directions, and checks neither can make: an undefined `filter`, for one,
+    makes `needs.changes.outputs[matrix.filter]` empty, so only the guard step notices.
     """
     problems: list[str] = []
 

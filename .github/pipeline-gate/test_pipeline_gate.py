@@ -231,7 +231,7 @@ class ImageTests(Fixture):
         self.assertIn("does not exist", problems[0])
 
     def test_an_entry_reading_an_undefined_filter_is_caught(self) -> None:
-        """The one neither direction can see.
+        """A case neither direction can see.
 
         An undefined `filter` reads as the empty string, not an error, so every
         build step is skipped and only the guard step notices."""
