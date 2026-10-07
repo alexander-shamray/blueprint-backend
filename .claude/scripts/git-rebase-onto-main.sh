@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-# Rebase the current branch onto origin/main and publish it: the only force
-# push here, denied raw in `.claude/settings.json`. Its guards, owned by this
-# list, are facts about the checkout: the branch is the one in hand and not
-# main, the tree is clean, the remote carries nothing the work did not start
-# from, no merge holds content neither parent has, a replay that stops with
-# nothing unmerged is reported and never skipped, and a retry publishes only
-# on the replay and only while origin holds the leased tip.
+# Rebase the current branch onto origin/main and publish it, the only force
+# push here. Guards: the branch is in hand and not main, the tree clean, origin
+# holds nothing unseen, no merge holds what neither parent has, a replay keeps
+# its stopped todo and skips no stop, and a retry forces only it, at the lease.
 
 # Four modes, because a conflict is the case rebase is here for. `start`
 # leaves a conflicted rebase in progress rather than aborting it: backing out
@@ -244,9 +241,10 @@ stopped() {
       exit 11; }
   # Checked, because an unwritten marker wedges the rebase: `continue` and
   # `abort` both refuse one without it, and no raw `git rebase` is granted.
-  # It holds the commit the replay stopped at, where `continue` requires
-  # HEAD to be, or one commit on.
-  git rev-parse HEAD > "$now/started-by-this-helper" ||
+  # It holds the commit the replay stopped at, where `continue` requires HEAD
+  # to be or one commit on, and the todo is copied beside it for `continue`.
+  { git rev-parse HEAD > "$now/started-by-this-helper" &&
+    { cat "$now/git-rebase-todo" 2>/dev/null || true; } > "$now/todo-at-stop"; } ||
     { echo "cannot mark $now as this helper's; the replay is left where it is, and" >&2
       echo "'abort' accepts it only if an earlier stop's mark is there, or else by hand" >&2
       exit 14; }
@@ -348,6 +346,14 @@ case "$mode" in
       echo "and start again, recovering anything committed here from $head_now first" >&2
       exit 9
     fi
+    # What is left to replay is what this helper planned: a todo edited since
+    # the stop could drop or reorder the branch's commits with every guard
+    # above green. A stop with no copy is an earlier version's, and fails closed.
+    todo_now=$(cat "$state/git-rebase-todo" 2>/dev/null) || todo_now=""
+    { [ -f "$state/todo-at-stop" ] && [ "$todo_now" = "$(cat "$state/todo-at-stop")" ]; } ||
+      { echo "the replay's todo list is not the one it stopped with, so what is left to replay is not" >&2
+        echo "what this helper planned: 'abort' the replay and start again" >&2
+        exit 9; }
     unmerged=$(git diff --name-only --diff-filter=U)
     [ -z "$unmerged" ] ||
       { echo "these are still unmerged; resolve and 'git add' them first:" >&2

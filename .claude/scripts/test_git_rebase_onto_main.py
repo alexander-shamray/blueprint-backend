@@ -513,6 +513,19 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
         self.assertEqual(9, result.returncode, result.stderr)
         self.assertIn("'abort' the replay", result.stderr)
 
+    def test_continue_refuses_a_todo_edited_since_the_stop(self):
+        # Every other guard reads HEAD, the marker and the remote, and a hand
+        # edit of what is left to replay changes none of them.
+        published = self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip()
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at("GIT_SEQUENCE_EDITOR='f() { echo \"exec true\" >> \"$1\"; }; f' git rebase --edit-todo")
+        self.at('echo resolved > a.txt && git add a.txt')
+        result = self.helper("continue")
+        self.assertEqual(9, result.returncode, result.stderr)
+        self.assertIn("todo list is not the one it stopped with", result.stderr)
+        self.assertEqual("yes", self.rebase_running())
+        self.assertEqual(published, self.at("git ls-remote origin refs/heads/feat/x").stdout.split()[0])
+
     def test_continue_sends_a_replay_whose_remote_branch_went_to_abort(self):
         # Mid-replay there is nothing to push normally, so the way out named
         # has to be one that works from here.
