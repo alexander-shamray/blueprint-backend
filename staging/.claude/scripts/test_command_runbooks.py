@@ -1,8 +1,7 @@
 """The commands split into a runbook and its argument (docs/token-plan.md, step 6).
 
-A runbook is resident in every turn its command runs, so its size is the cost
-this split exists to cut, and the argument is read only when a rule is
-disputed. These cases hold the two halves to each other.
+A runbook is resident in every turn its command runs and its argument is read
+only when a rule is disputed; these cases hold the two halves to each other.
 """
 
 import re
