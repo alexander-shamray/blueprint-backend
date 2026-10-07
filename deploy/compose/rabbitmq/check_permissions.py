@@ -105,7 +105,7 @@ FRAMEWORK_PREFIX = "MassTransit:"
 INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 
 # The one account here that is not a service's, and the one tag any account may
-# hold: ADR-072 decides both, and check_operator holds them.
+# hold: ADR-072 decides both, main holds the tag and check_operator the grant.
 OPERATOR = "dead-letter-operator"
 OPERATOR_TAGS = ["management"]
 
