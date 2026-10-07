@@ -1,0 +1,5 @@
+# A difference §3.2's table states and the code has not built yet, one per
+# line as `<host> <column> <name> #<issue>`, the issue being what builds it.
+# Only a name the table has and the code lacks can be owed; a line that stops
+# being a difference fails the gate until it is deleted.
+Catalog publishes ProductDiscontinued #471
