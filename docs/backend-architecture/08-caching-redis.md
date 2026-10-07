@@ -330,8 +330,9 @@ with itself, the event keeps every other service consistent shortly after — an
 now both are the same mechanism.
 
 **Catalog caches nothing today, so its price change stages the `Broker` row
-alone.** A `Local` row with no handler to take it is refused (§9.4), so the
-`Local` half arrives with Catalog's first cached read, beside its handler.
+alone.** A `Local` row is staged only for an event a handler is registered
+for ([§7.5](07-persistence.md)), so the `Local` half arrives with Catalog's
+first cached read, beside its handler.
 
 The consumer's side is **Ordering's**, and it is a shape rather than a
 registration: Ordering caches nothing through `HybridCache` today, so its one
