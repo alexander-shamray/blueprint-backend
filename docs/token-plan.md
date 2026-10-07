@@ -130,8 +130,8 @@ time.
   cache writes, cache reads and output per command and per subagent type,
   with a suite. Landed.
 - `docs/token-usage.md` records the baseline. An all-history total and a
-  three-week window landed; a measurement of two or three named `/ship`
-  runs and one sweep is still owed.
+  three-week window landed, and one named `/ship` run; a second named run
+  and one sweep are still owed.
 - The quality sets: the issues earlier sweeps filed, with the commits they
   were found on; the findings earlier review rounds raised on merged PRs.
   Still owed, and until they land no step whose exit test holds recall on
@@ -139,7 +139,7 @@ time.
 
 **Exit.** Attribution holds on a known session: for one named `/ship` run,
 every response between its command and the next prompt a person typed is
-counted under `/ship`.
+counted under `/ship`. Passed on the run `token-usage.md` names.
 
 ### Step 2 — the subagents the model starts, and what fills a session
 
@@ -166,9 +166,9 @@ counted under `/ship`.
 - A plan-writing agent, about 7M a plan, gets the planning rule below, and
   a comment sweep is handed the lines the comment gate flags rather than
   whole suites to read.
-- `/check-links` becomes a stdlib script with a suite only if its own
-  spawns, measured apart from the work a session did after it, show the
-  cost the first window suggested.
+- `/check-links` stays a prompt: measured apart from the work a session
+  did after a wake, its own spend is small (`token-usage.md`), and what
+  read as its cost was not its.
 - The superpowers plugin stays enabled: the owner plans more work with it.
   Its cost is cut where it is spent, once `--spawns` shows what its
   `writing-plans` agents, 2.1M each, were given. `CLAUDE.md` gains a short
