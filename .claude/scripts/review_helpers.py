@@ -26,8 +26,6 @@ import subprocess
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
-REVIEW = SCRIPTS / "grok-review.sh"
-LEDGER = SCRIPTS / "grok-ledger.sh"
 NEWLINE = chr(10)  # spelled this way so patch scripts cannot mangle it
 SETTINGS = SCRIPTS.parent / "settings.json"
 COMMANDS = SCRIPTS.parent / "commands"
@@ -54,34 +52,6 @@ def setUpModule():
         )
 
 
-def declared(name):
-    """Read one single-quoted pattern out of grok-review.sh by its variable name.
-
-    Read rather than restated, so the test and the script cannot disagree about
-    what the pattern is, only about what it should match.
-    """
-    text = REVIEW.read_text(encoding="utf-8")
-    found = re.findall(rf"^{re.escape(name)}='([^']*)'$", text, re.MULTILINE)
-    if len(found) != 1:
-        raise AssertionError(
-            f"expected exactly one declaration of {name} in {REVIEW.name}, "
-            f"found {len(found)}"
-        )
-    return found[0]
-
-
-def declared_value(name):
-    """Read one bare `name=value` assignment out of grok-review.sh."""
-    text = REVIEW.read_text(encoding="utf-8")
-    found = re.findall(rf"^{re.escape(name)}=(\S+)$", text, re.MULTILINE)
-    if len(found) != 1:
-        raise AssertionError(
-            f"expected exactly one declaration of {name} in {REVIEW.name}, "
-            f"found {len(found)}"
-        )
-    return found[0]
-
-
 def run_bash(script, subject="", **env_extra):
     """Run a bash fragment with the subject on stdin and everything else in env.
 
@@ -99,12 +69,6 @@ def run_bash(script, subject="", **env_extra):
         text=True,
         env=env,
     )
-
-
-def grep_matches(pattern, subject, ignore_case=True):
-    """`grep -qE` (optionally -i) on the real engine the scripts call."""
-    flag = "-i" if ignore_case else ""
-    return run_bash(f'grep -q {flag} -E "$PAT"', subject, PAT=pattern).returncode == 0
 
 
 def code_lines(text):

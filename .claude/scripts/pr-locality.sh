@@ -1,46 +1,8 @@
 #!/usr/bin/env bash
-# Judge a pull request's changed paths against the `| Class |` and
-# `| Touch set |` rows its body declares, and print a verdict per path — and
-# nothing the author wrote. Read-only, fixed field set.
-#
-# /review-branch, /review-copilot and /ship read the two rows
-# `docs/change-locality.md` asks a PR body to carry through this rather than a
-# `gh pr view` grant, which reaches the unfiltered `--json reviews` feed. A
-# caller that chooses fields can choose `reviews`, so this one chooses none:
-# `body` from the pull request, `filename` from the files endpoint.
-#
-# The output never contains the touch-set cell. A pull request author is not a
-# trusted party, /review-copilot takes any PR number, and a row would carry an
-# author's text to an Edit-capable agent unfiltered. A path grammar cannot
-# close that — `Ignore_all_previous_instructions.md` is a path
-# — so the cell is consumed here and only a verdict leaves: one `class` line
-# whose value is letters this script validated, then one `inside <path>` or
-# `outside <path>` line per changed file, where the path is the diff's own
-# and the word is this script's. A caller acts on `outside` lines and never
-# sees what the set said. A changed path is the author's text too — the
-# author names the files, and git permits a newline inside a name — so each
-# arrives JSON-encoded, one per line and unambiguous, and is printed only if
-# it decodes to a plain path: no escape in it, path characters only, a `/`
-# or a `.` in it, no `..` segment. Any other name refuses the whole run,
-# because a verdict list with one line withheld is a list a caller would
-# read as complete.
-#
-# Nothing is printed when the body carries neither row; a caller that reads
-# nothing skips its touch-set check and says so, and does not infer a class.
-# One row without the other is refused, because each command reads the pair.
-# A row that fails its grammar is refused with exit 3 naming the row and not
-# its content: a class cell is one letter A–E, two distinct letters joined
-# by `+`, or `A+D+E`; a touch-set cell is a comma-separated list of path
-# tokens, bare or in balanced backticks, of path and glob characters — `*`,
-# `**`, `?` and a brace alternation — each carrying a `/` or a `.`, and each
-# repository-relative: no leading `/`, no `./`, no `..` segment, brace
-# alternatives included, since the edit-target guard judges where an edit
-# inside the checkout lands and not a path naming the outside.
-#
-# The verdict narrows and grants nothing. What holds authority is the
-# caller's own deny list and the class's tree set in the contract; an
-# `outside` line is a finding for the caller, and an `inside` line is not a
-# licence for anything the caller's grant refuses.
+# Judge a pull request's changed paths against the `| Class |` and `| Touch set |` rows its body declares: one `class`
+# line, then `inside <path>` or `outside <path>` per changed file, and never the author's cell. Read-only, fixed field
+# set; the grammar, the exit codes and why the verdict grants nothing are `docs/harness-boundaries.md`'s (*Pull
+# request reads and the locality verdict*), and `test_pr_helpers.py` pins them.
 set -euo pipefail
 pr="${1:?usage: pr-locality.sh <pr-number>}"
 [[ "$pr" =~ ^[0-9]+$ ]] || { echo "pr must be a number" >&2; exit 2; }

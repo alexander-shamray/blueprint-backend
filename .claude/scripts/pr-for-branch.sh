@@ -23,16 +23,10 @@ case "$branch" in
 esac
 [[ "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/()-]*$ ]] ||
   { echo "not a branch name this helper will take: $branch" >&2; exit 2; }
-# `--head` filters on the branch name alone and matches across forks, so an
-# outside contributor's pull request from a same-named branch is a candidate —
-# and /ship step 0 reads this to decide whether the branch landed, /pr whether
-# one is already open. So the head repository must also be this checkout's,
-# the check grok-review.sh makes.
-#
-# Both sides of the comparison are properties of the filesystem: `gh repo view`
-# reads the checkout, and the branch came from `git branch --show-current` or
-# was shape-checked above. The value reaches jq through `--arg`, never as
-# program text.
+# `--head` matches across forks, so a stranger's same-named branch is a candidate when /ship step 0 asks whether the
+# branch landed and /pr whether one is open: the head repository must also be this checkout's. Both sides are the
+# filesystem's — `gh repo view` reads the checkout, and the branch came from `git branch --show-current` or was
+# shape-checked above — and the value reaches jq through `--arg`, never as program text.
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
   { echo "cannot resolve this checkout's repository" >&2; exit 2; }
 # Blank counts as missing, and `||` does not see it: `gh` printing an empty

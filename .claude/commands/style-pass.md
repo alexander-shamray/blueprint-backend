@@ -41,7 +41,7 @@ run unattended.
 `Bash(python:*)` would be a prefix grant on a general-purpose interpreter:
 `python -c "<anything>"` would be auto-approved, and one `open(…,'w')`
 reaches every path the `Edit(…)` denies cover — `.claude/scripts/**`,
-`.claude/sandbox/**`, `.claude/commands/**`, `.claude/agents/**`,
+`.claude/commands/**`, `.claude/agents/**`, `.claude/hooks/**`,
 `.claude/settings.json`, `.claude/settings.local.json` and `.remember/**` —
 while one `subprocess.run` reaches every `git push --force` and `git switch -fC`
 the deny list and the `git-*.sh` helpers exist to keep out. A rule that

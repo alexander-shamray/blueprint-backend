@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
-# Land one of this repository's pull requests by rebase, bound to a named
-# head, and nothing else: /ship step 7's one merge.
-#
-# A raw `gh pr merge --rebase` grant is a prefix match, so a trailing
-# `--admin` sits inside it and merges past the failing checks step 7 treats
-# as a stop (`docs/harness-boundaries.md`). This helper takes two positional
-# arguments and spells every flag itself, so there is nowhere to put one.
-#
-# The method is fixed: `--squash` discards the commits /commit split.
+# Land one of this repository's pull requests by rebase, bound to a named head: /ship's merge step. A raw
+# `gh pr merge --rebase` grant is a prefix match, so a trailing `--admin` would merge past the failing checks /ship
+# treats as a stop (`docs/harness-boundaries.md`); this helper takes two arguments and spells every flag itself. The
+# method is fixed: `--squash` discards the commits /commit split.
 set -euo pipefail
 [ "$#" -eq 2 ] ||
   { echo "usage: gh-pr-merge.sh <pr-number> <head-oid>" >&2; exit 2; }
@@ -15,7 +10,7 @@ pr="$1"
 oid="$2"
 [[ "$pr" =~ ^[0-9]+$ ]] || { echo "pr must be a number: $pr" >&2; exit 2; }
 # The oid is required rather than optional. `--match-head-commit` is the one
-# guard in step 7 that fails closed: without it a push landing between the
+# guard in /ship's merge step that fails closed: without it a push landing between the
 # checks and the merge lands a commit whose checks never ran.
 [[ "$oid" =~ ^[0-9a-f]{40}$ ]] ||
   { echo "head oid must be a full 40-character sha: $oid" >&2; exit 2; }
