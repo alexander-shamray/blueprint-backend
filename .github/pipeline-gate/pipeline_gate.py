@@ -254,33 +254,25 @@ def check_images(root: Path = ROOT) -> list[str]:
             problems.append(
                 f"ci.yml's changes job defines the filter {name!r} and does not "
                 "export it as a job output, so `needs.changes.outputs."
-                f"{name}` is empty. The images job's condition is then false "
-                "and every image under that filter is silently skipped"
+                f"{name}` is empty and every leg under that filter fails its "
+                "guard step on the next run rather than on this change"
             )
 
-    # ...and the job's own `if:` has to test every filter the matrix reads, and
-    # nothing else. It is the fourth edit a new deployable needs, and one it
-    # forgets skips the whole job on a change touching only that deployable.
-    built = {filter_name for filter_name, _ in matrix}
-    tested = read_condition_outputs(text, "images")
-    if not tested:
+    # ...and the job has no `if:` of its own. GitHub expands a matrix only
+    # after the job's condition passes, so a skipped job is one check whose
+    # name shows `${{ matrix.image }}` verbatim; each step tests its own filter.
+    condition = read_job_condition(text, "images")
+    if condition is None:
         problems.append(
-            "found no needs.changes.outputs.<name> in the images job's `if:`: "
-            "the two checks below would pass vacuously, so the parser or the "
-            "condition is what is broken"
+            "found no `images:` job in ci.yml: the check below would pass "
+            "vacuously, so the parser or the job's key is what is broken"
         )
-    for name in sorted(built - tested):
+    elif condition:
         problems.append(
-            f"the images job's `if:` does not test needs.changes.outputs.{name}, "
-            "which the matrix builds under. A change touching only that "
-            "deployable makes the condition false, and the job reports "
-            "success having built nothing"
-        )
-    for name in sorted(tested - built):
-        problems.append(
-            f"the images job's `if:` tests needs.changes.outputs.{name}, which "
-            "no matrix entry builds under: the job starts for a change it has "
-            "no image to build for"
+            f"the images job carries a job-level `if: {condition}`. A matrix "
+            "job that condition skips is never expanded, so the check is named "
+            "with its expression unevaluated; leave the decision to each "
+            "step's `if:` on needs.changes.outputs[matrix.filter]"
         )
 
     # ...and it has to be the right one. An entry pairing the gateway's
@@ -438,18 +430,17 @@ def check_actions(root: Path = ROOT) -> list[str]:
     return problems
 
 
-def read_condition_outputs(workflow_text: str, job: str) -> set[str]:
-    """The `needs.changes.outputs.<name>` names one job's own `if:` reads.
+def read_job_condition(workflow_text: str, job: str) -> str | None:
+    """One job's own four-space `if:`, folded lines joined; "" for none, None for no job.
 
-    The job-level key at four spaces, with any folded continuation; a step's
-    `if:` sits deeper and is not the job's condition.
+    A step's `if:` sits deeper and is not the job's condition.
     """
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
         if re.match(rf"^\s{{2}}{re.escape(job)}:\s*$", line):
             break
     else:
-        return set()
+        return None
 
     condition: list[str] = []
     for line in lines[index + 1:]:
@@ -457,12 +448,12 @@ def read_condition_outputs(workflow_text: str, job: str) -> set[str]:
             break
         if condition:
             if line.startswith(" " * 6):
-                condition.append(line)
+                condition.append(line.strip())
                 continue
             break
         if found := re.match(r"^\s{4}if:\s*(.*)$", line):
-            condition.append(found.group(1))
-    return set(re.findall(r"needs\.changes\.outputs\.([a-z][a-z0-9-]*)", "\n".join(condition)))
+            condition.append(found.group(1).strip())
+    return " ".join(condition).strip()
 
 
 def read_job_outputs(workflow_text: str, job: str) -> set[str]:

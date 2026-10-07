@@ -48,7 +48,6 @@ jobs:
       gateway: ${{ steps.changes.outputs.gateway }}
 
   images:
-    if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.gateway == 'true' }}
     strategy:
       matrix:
         include:
@@ -239,8 +238,7 @@ class ImageTests(Fixture):
         skipped, and the job goes green having built nothing. Both halves of
         the inventory are still perfectly consistent.
         """
-        self.write(WORKFLOW.replace("- filter: gateway", "- filter: edge")
-                   .replace("outputs.gateway ==", "outputs.edge =="))
+        self.write(WORKFLOW.replace("- filter: gateway", "- filter: edge"))
 
         problems = pipeline_gate.check_images(self.root)
 
@@ -259,8 +257,7 @@ class ImageTests(Fixture):
         """
         self.write(WORKFLOW.replace(
             "          - filter: gateway\n            image: gateway",
-            "          - filter: catalog\n            image: gateway")
-                   .replace(" || needs.changes.outputs.gateway == 'true'", ""))
+            "          - filter: catalog\n            image: gateway"))
 
         problems = pipeline_gate.check_images(self.root)
 
@@ -270,14 +267,9 @@ class ImageTests(Fixture):
     def test_a_filter_the_changes_job_does_not_export_is_caught(self) -> None:
         """Defining a filter and exporting it are two different things.
 
-        `needs.changes.outputs.gateway` reads a JOB output, which exists only
-        because an `outputs:` entry maps it from the step. Delete that one line
-        and the filter still exists, both inventory directions still pass, the
-        name check still passes — and a gateway-only change makes the images
-        job's own condition false, so every gateway build is skipped. The
-        unconditional guard step inside the job catches this for a leg that
-        runs; it cannot catch a job that never starts.
-        """
+        `needs.changes.outputs.gateway` reads a JOB output, so with its
+        `outputs:` line gone every gateway leg reads an empty one: the guard
+        step fails them on the next run, and this on the change itself."""
         self.write(WORKFLOW.replace(
             "      gateway: ${{ steps.changes.outputs.gateway }}\n", ""))
 
@@ -286,44 +278,39 @@ class ImageTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("does not export it", problems[0])
 
-    def test_a_filter_the_jobs_condition_does_not_test_is_caught(self) -> None:
-        """The fourth edit a new deployable needs: the job's own `if:`.
-
-        Forget it and a change touching only that deployable makes the
-        condition false, so the whole job is skipped and reports success.
-        """
-        self.write(WORKFLOW.replace(" || needs.changes.outputs.gateway == 'true'", ""))
+    def test_a_job_level_condition_is_caught(self) -> None:
+        """A skipped matrix job is never expanded, so GitHub names its one
+        check with `${{ matrix.image }}` unevaluated."""
+        self.write(WORKFLOW.replace(
+            "  images:\n",
+            "  images:\n    if: ${{ needs.changes.outputs.catalog == 'true' }}\n"))
 
         problems = pipeline_gate.check_images(self.root)
 
         self.assertEqual(len(problems), 1)
-        self.assertIn("does not test needs.changes.outputs.gateway", problems[0])
+        self.assertIn("job-level `if: ${{ needs.changes.outputs.catalog == 'true' }}`", problems[0])
 
-    def test_a_condition_naming_no_matrix_filter_is_caught(self) -> None:
+    def test_a_job_level_condition_folded_over_lines_is_read_whole(self) -> None:
         self.write(WORKFLOW.replace(
-            "needs.changes.outputs.gateway == 'true' }}",
-            "needs.changes.outputs.gateway == 'true' || needs.changes.outputs.edge == 'true' }}"))
-
-        problems = pipeline_gate.check_images(self.root)
-
-        self.assertEqual(len(problems), 1)
-        self.assertIn("tests needs.changes.outputs.edge, which no matrix entry builds under", problems[0])
-
-    def test_a_condition_folded_over_lines_is_read_whole(self) -> None:
-        self.write(WORKFLOW.replace(
-            "    if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.gateway == 'true' }}\n",
+            "  images:\n",
+            "  images:\n"
             "    if: >-\n"
             "      ${{ needs.changes.outputs.catalog == 'true'\n"
             "      || needs.changes.outputs.gateway == 'true' }}\n"))
 
-        self.assertEqual(pipeline_gate.check_images(self.root), [])
+        problems = pipeline_gate.check_images(self.root)
 
-    def test_an_unparsed_condition_fails_rather_than_passing_empty(self) -> None:
-        self.write(WORKFLOW.replace("    if: ${{", "    when: ${{"))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("|| needs.changes.outputs.gateway == 'true' }}", problems[0])
+
+    def test_a_renamed_images_job_fails_rather_than_passing_empty(self) -> None:
+        """The condition check passes on no `if:`, so a key the parser cannot
+        find has to fail on its own."""
+        self.write(WORKFLOW.replace("  images:\n", "  build-images:\n"))
 
         problems = pipeline_gate.check_images(self.root)
 
-        self.assertIn("found no needs.changes.outputs.<name>", problems[0])
+        self.assertTrue(any("found no `images:` job" in problem for problem in problems), problems)
 
     def test_the_filter_parser_keeps_them_apart(self) -> None:
         """The subject of the check above. `read_filters` flattens, which is
