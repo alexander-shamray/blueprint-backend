@@ -44,11 +44,14 @@ else it is `subagent`.
 
 The default directory is `~/.claude/projects/` plus the checkout's absolute
 path with every character that is not a letter or digit made a dash, which
-is how Claude Code names it — and, beside it, every directory a session
-started in one of the checkout's `.claude/worktrees/` wrote, which `/ship`
-and `/branch` sessions do. Run from a worktree, it reads the same set. The
-directories read go to stderr. Transcripts are local to the machine that
-ran the sessions, so a baseline is measured there.
+is how Claude Code names it — and, beside it, every directory whose name
+is that one followed by a dash: the worktrees `/branch` makes under
+`.claude/worktrees/` and the sibling forks it makes when that directory is
+not writable. A different checkout whose path only extends this one's is
+read too, so name such a directory explicitly when it matters. Run from a
+worktree, it reads the same set. The directories read go to stderr.
+Transcripts are local to the machine that ran the sessions, so a baseline
+is measured there.
 
 Stdlib only, and the suite writes its transcripts to a temporary directory:
 

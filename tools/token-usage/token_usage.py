@@ -241,9 +241,9 @@ def default_project(root: Path) -> Path:
 
 
 def default_projects(cwd: Path) -> list[Path]:
-    """The main checkout's transcript directory, then each worktree's under .claude/worktrees beside it."""
+    """The main checkout's transcript directory, then each worktree's: under .claude/worktrees or a sibling fork."""
     main = default_project(Path(WORKTREE.sub("", str(cwd.resolve()))))
-    return [main, *sorted(main.parent.glob(main.name + "--claude-worktrees-*"))]
+    return [main, *sorted(main.parent.glob(main.name + "-*"))]
 
 
 ROWS = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output", "input_equivalent",
