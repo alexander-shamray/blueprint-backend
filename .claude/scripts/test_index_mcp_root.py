@@ -143,7 +143,14 @@ class WhatItNames(Checkouts):
     CASES = (
         ("search_code", {"query": "outbox relay", "session": "r1"},
          "cbx search 'outbox relay' --session r1 --json"),
+        ("search_code", {"query": "relay", "limit": 3}, "cbx search relay --limit 3 --json"),
+        ("search_code", {"query": "relay", "limit": 3, "offset": 6, "token_budget": 900, "mode": "fts",
+                         "raw": True, "session": "r1"},
+         "cbx search relay --limit 3 --offset 6 --token-budget 900 --mode fts --raw --session r1 --json"),
+        ("search_code", {"query": "relay", "raw": False}, "cbx search relay --json"),
         ("explain_code", {"query": "saga"}, "cbx explain saga --json"),
+        ("explain_code", {"query": "saga", "token_budget": 3000, "raw": True},
+         "cbx explain saga --token-budget 3000 --raw --json"),
         ("find_symbol", {"name": "Order"}, "cbx symbol Order --json"),
         ("find_refs", {"symbol": "Order", "kind": "callers"}, "cbx refs Order --kind callers --json"),
         ("impact_of", {"target": "Order"}, "cbx impact Order --json"),
@@ -184,7 +191,12 @@ class WhatItNames(Checkouts):
         as the same one."""
         for tool, given, sub in (
                 ("impact_of", {"target": "Order", "direction": "down", "depth": 3}, "impact"),
-                ("search_code", {"query": "relay", "limit": 5}, "search"),
+                ("search_code", {"query": "relay", "mode": "semantic"}, "search"),
+                ("search_code", {"query": "relay", "limit": "5"}, "search"),
+                ("search_code", {"query": "relay", "limit": True}, "search"),
+                ("search_code", {"query": "relay", "offset": -1}, "search"),
+                ("search_code", {"query": "relay", "raw": "yes"}, "search"),
+                ("explain_code", {"query": "saga", "offset": 10}, "explain"),
                 ("impact_of_diff", {"base": "origin/main"}, "diff-impact"),
                 ("verify_evidence", {"refs": ["src/a.cs:1-4"]}, "verify"),
                 ("find_refs", {"symbol": "Order", "kind": "writers"}, "refs"),
