@@ -111,6 +111,30 @@ class ReportTests(unittest.TestCase):
         rows, _ = self.rows()
         self.assertEqual(rows["/ship", "subagent"]["cache_read"], 9)
 
+    def test_a_skill_loaded_without_a_typed_command_names_the_work_after_it(self):
+        loads = {"type": "assistant", "timestamp": "2026-10-07T09:05:00.000Z", "message": {
+            "id": "m1", "usage": usage(read=1),
+            "content": [{"type": "tool_use", "name": "Skill", "input": {"skill": "bug-sweep"}}]}}
+        self.files.write("s.jsonl", [prompt("sweep the tree"), loads, reply("m2", read=2)])
+        self.files.write("s/subagents/agent-a5.jsonl", [reply("x5", at="2026-10-07T09:06:00.000Z", read=4)])
+        rows, _ = self.rows()
+        self.assertEqual(rows["skill:bug-sweep", "main"]["cache_read"], 3)
+        self.assertEqual(rows["skill:bug-sweep", "subagent"]["cache_read"], 4)
+
+    def test_a_skill_loaded_by_a_typed_command_stays_that_command(self):
+        loads = {"type": "assistant", "message": {
+            "id": "m1", "usage": usage(read=1),
+            "content": [{"type": "tool_use", "name": "Skill", "input": {"skill": "branch"}}]}}
+        self.files.write("s.jsonl", [ship(), loads, reply("m2", read=2)])
+        rows, _ = self.rows()
+        self.assertEqual(rows["/ship", "main"]["cache_read"], 3)
+
+    def test_the_span_is_the_first_and_last_day_counted(self):
+        self.files.write("s.jsonl", [ship(), reply("m1", at="2026-09-01T00:00:00.000Z"),
+                                     reply("m2", at="2026-10-02T00:00:00.000Z")])
+        _, report = self.rows()
+        self.assertEqual(report.span, ["2026-09-01", "2026-10-02"])
+
     def test_since_drops_earlier_responses(self):
         self.files.write("s.jsonl", [ship(), reply("m1", at="2026-10-01T00:00:00.000Z", read=1),
                                      reply("m2", at="2026-10-07T00:00:00.000Z", read=2)])

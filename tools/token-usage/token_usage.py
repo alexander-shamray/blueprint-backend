@@ -67,6 +67,7 @@ class Report:
         self.groups: dict[tuple[str, str], Usage] = {}
         self.seen: set[str] = set()
         self.skipped = 0
+        self.span: list[str] = []
 
     def add(self, command: str, agent: str, entry: dict, context: str) -> None:
         message = entry.get("message")
@@ -84,6 +85,8 @@ class Report:
         if key:
             self.seen.add(key)
         self.groups.setdefault((command, agent), Usage()).add(usage, context)
+        if day := str(entry.get("timestamp", ""))[:10]:
+            self.span = [min(self.span[0], day), max(self.span[1], day)] if self.span else [day, day]
 
     def read_project(self, project: Path) -> None:
         for main in sorted(project.glob("*.jsonl")):
@@ -97,6 +100,9 @@ class Report:
         for entry in self.entries(main):
             if is_prompt(entry):
                 command, prompt = command_of(entry), prompt + 1
+                boundaries.append((str(entry.get("timestamp", "")), command))
+            elif command == NO_COMMAND and not entry.get("isSidechain") and (skill := skill_of(entry)):
+                command = "skill:" + skill
                 boundaries.append((str(entry.get("timestamp", "")), command))
             result = entry.get("toolUseResult")
             if isinstance(result, dict) and result.get("agentId") and result.get("agentType"):
@@ -158,6 +164,17 @@ def command_of(entry: dict) -> str:
     return "/" + found.group(1) if found else NO_COMMAND
 
 
+def skill_of(entry: dict) -> str | None:
+    """The skill a response loads with the Skill tool, which a typed slash command does not need."""
+    content = (entry.get("message") or {}).get("content") if entry.get("type") == "assistant" else None
+    for block in content if isinstance(content, list) else ():
+        if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Skill":
+            name = (block.get("input") or {}).get("skill")
+            if isinstance(name, str) and name:
+                return name.lstrip("/")
+    return None
+
+
 def command_at(boundaries: list[tuple[str, str]], timestamp: str) -> str:
     """The command whose prompt last preceded the timestamp."""
     index = bisect.bisect_right([t for t, _ in boundaries], timestamp) - 1
@@ -205,6 +222,8 @@ def main(argv: list[str] | None = None) -> int:
         report.read_project(project)
     rows = report.rows()
     print(json.dumps(rows, indent=2) if args.json else render(rows))
+    if report.span:
+        print(f"responses from {report.span[0]} to {report.span[1]}", file=sys.stderr)
     if report.skipped:
         print(f"{report.skipped} unreadable transcript lines skipped", file=sys.stderr)
     return 0

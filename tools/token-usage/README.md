@@ -25,7 +25,10 @@ for a subagent.
 
 **A command owns everything until the next prompt a person types**, so a
 command `/ship` loads through the `Skill` tool is counted as `/ship`, and a
-subagent belongs to the command running when it started. A subagent's type
+subagent belongs to the command running when it started. **A skill the
+session loads with no typed command** — a sweep a prompt asked for, a
+plugin's workflow — names the work after it as `skill:<name>`, until the
+next prompt. The first and last day counted go to stderr. A subagent's type
 comes from its `.meta.json`, else from the parent's tool result naming it,
 else it is `subagent`.
 
