@@ -70,7 +70,7 @@ jobs:
 
   # Beside the licence gate rather than inside `build`, on its argument: stdlib
   # Python over text and a few `bash` fragments, so it needs no restore, no
-  # Docker and no network — the `gh` the ledger calls is a stub on PATH.
+  # Docker and no network — each suite that reaches `gh` stubs it on PATH.
   review-helpers:
     runs-on: ubuntu-latest
     steps:
