@@ -37,12 +37,12 @@ plugin's skill, the next skill it loads; one of this repository's commands
 loaded as a skill keeps the commands it loads, as a typed one does. That
 can be long: a session that loads one skill and then runs a review loop on
 wakes counts the whole loop under it, so read what a skill costs from
-`--spawns` descriptions rather than from its row. **A prompt no person typed** — a task
-notification, a scheduled wake — keeps the label, because most are a
-background agent or CI watch reporting back inside the command's own run;
-what the session spent from the first such wake to the next typed prompt
-is `woken_equivalent`, beside `input_equivalent` and part of it. The
-first and last day counted go to stderr.
+`--spawns` descriptions rather than from its row. **A prompt no person
+typed** — a task notification, a scheduled wake — keeps the label, because
+most are a background agent or CI watch reporting back inside the
+command's own run; what the session spent from the first such wake to the
+next typed prompt is `woken_equivalent`, beside `input_equivalent` and
+part of it. The first and last day counted go to stderr.
 `--spawns N` lists single subagents instead, costliest first, each with the
 description it was spawned with — which says why a command no one wrote to
 delegate spent most of its tokens in agents. A subagent's type
