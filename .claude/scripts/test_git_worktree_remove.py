@@ -44,7 +44,7 @@ printf '%s\\n' "$root"
 HOLDER = """
 import os, sys, time
 cache, delay, seconds, ready = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
-put_back = sys.argv[5:] == ["put-back"]
+put_back, give_up = "put-back" in sys.argv[5:], "give-up" in sys.argv[5:]
 time.sleep(delay)
 handle = open(os.path.join(cache, "refresh.lock"), "a+b")
 if sys.platform == "win32":
@@ -56,15 +56,17 @@ else:
     import fcntl
     def grab():
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-# Retried, because the helper's own poll holds the lock for an instant.
-for _ in range(100):
+# Retried, because the helper's own poll holds the lock for an instant and a
+# case timing a worker cannot also race that poll. The real work() returns at
+# once on a failed grab and leaves its request, which `give-up` models.
+for _ in range(1 if give_up else 100):
     try:
         grab()
         break
     except OSError:
         time.sleep(0.01)
 else:
-    sys.exit("the lock never came free")
+    sys.exit(0 if give_up else "the lock never came free")
 open(ready, "w").close()
 try:
     os.remove(os.path.join(cache, "refresh.pending"))
@@ -103,17 +105,18 @@ class RemoveShape(unittest.TestCase):
         """What the hook leaves before it starts a worker."""
         (self.cache(native) / "refresh.pending").write_text("", encoding="utf-8")
 
-    def hold(self, native, seconds, delay=0.0, wait=True, put_back=False):
-        ready = native / "ready"
+    def hold(self, native, seconds, delay=0.0, wait=True, put_back=False, give_up=False, ready="ready"):
+        ready = native / ready
         holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(self.cache(native)), str(delay),
-                                   str(seconds), str(ready), *(["put-back"] if put_back else [])])
+                                   str(seconds), str(ready), *(["put-back"] if put_back else []),
+                                   *(["give-up"] if give_up else [])])
         self.addCleanup(holder.wait)
         self.addCleanup(holder.kill)
         if not wait:
-            return
+            return holder
         for _ in range(300):
             if ready.exists():
-                return
+                return holder
             time.sleep(0.05)
         self.fail("the lock holder never took the lock")
 
@@ -206,12 +209,34 @@ class RemoveShape(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 25)
         self.assertFalse(self.present(root))
 
+    def test_a_worker_that_collides_gives_up_and_its_request_is_dropped(self):
+        """The real worker meeting a held lock exits and leaves its request,
+        so the tree is removed once the holder lets go and the grace passes."""
+        root, native = self.fixture()
+        self.hold(native, 1)
+        self.request(native)
+        worker = self.hold(native, 0, wait=False, give_up=True, ready="worker-ready")
+        self.assertEqual(0, worker.wait(timeout=30))
+        self.assertFalse((native / "worker-ready").exists(), "the worker took a held lock")
+        started = time.monotonic()
+        result = self.remove(f"{root}/checkout")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertGreaterEqual(time.monotonic() - started, 2)
+        self.assertFalse(self.present(root))
+
     def test_a_request_put_back_near_the_bound_still_gets_its_grace(self):
         """A refresh that fails late puts its request back and exits, which
-        leaves nothing holding the tree, so the bound must not report one."""
+        leaves nothing holding the tree, so the bound must not report one. The
+        helper starts some time after the holder's grab, so a copy with a
+        grace near the bound keeps the release inside it on a slow host."""
         root, native = self.fixture()
-        self.hold(native, 29.3, put_back=True)
-        result = self.remove(f"{root}/checkout")
+        text = REMOVE.read_text(encoding="utf-8")
+        self.assertIn("bound, grace = 30, 2\n", text)
+        copy = native / "git-worktree-remove.sh"
+        copy.write_bytes(text.replace("bound, grace = 30, 2\n", "bound, grace = 10, 8\n").encode())
+        self.hold(native, 9, put_back=True)
+        result = run_bash('cd "$WHERE" && bash "$REMOVE" "$P"', WHERE=f"{root}/checkout", REMOVE=str(copy),
+                          P=".claude/worktrees/probe")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(self.present(root))
 
