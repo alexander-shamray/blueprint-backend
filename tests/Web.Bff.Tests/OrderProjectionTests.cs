@@ -4,6 +4,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shouldly;
+using Web.Bff.Messaging;
 using Web.Bff.Orders;
 using Web.Bff.Persistence;
 using Xunit;
@@ -372,17 +373,20 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
     /// <summary>SQL Server's deadlock-victim error, which the endpoint's retry absorbs.</summary>
     private const int DeadlockVictim = 1205;
 
+    /// <summary>The endpoint's retry count, spaced as its ladder is spaced, so contenders stop colliding in step.</summary>
+    /// <remarks>Jittered milliseconds, not §9.8's ladder of seconds, since sixty writers here would wait minutes.</remarks>
     private static async Task RetriedOnDeadlockAsync(Func<Task> apply)
     {
-        for (int attempt = 1; ; attempt++)
+        for (int retry = 0; ; retry++)
         {
             try
             {
                 await apply();
                 return;
             }
-            catch (SqlException e) when (e.Number == DeadlockVictim && attempt < 5)
+            catch (SqlException e) when (e.Number == DeadlockVictim && retry < RetryPolicy.RetryLimit)
             {
+                await Task.Delay(TimeSpan.FromMilliseconds(Random.Shared.Next(20, 120) * (1 << retry)));
             }
         }
     }
