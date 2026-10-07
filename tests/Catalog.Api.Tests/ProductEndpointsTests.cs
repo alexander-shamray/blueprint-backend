@@ -14,6 +14,9 @@ namespace Catalog.Api.Tests;
 [Collection(nameof(IntegrationCollection))]
 public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 {
+    /// <summary>The seller <see cref="PublishAsync"/> publishes as, and the caller a write defaults to.</summary>
+    private readonly Guid _seller = Guid.CreateVersion7();
+
     private HttpClient _client = null!;
 
     public async ValueTask InitializeAsync()
@@ -39,9 +42,9 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         DateTimeOffset PublishedAt,
         int? QuantityAvailable);
 
-    /// <summary>A fresh <c>CommandId</c> per call (§8.5).</summary>
+    /// <summary>A fresh <c>CommandId</c> per call (§8.5), as this test's seller.</summary>
     private Task<HttpResponseMessage> PublishAsync(string name, decimal amount = 10m) =>
-        PostAsync(
+        PostAsAsync(
             new
             {
                 CommandId = Guid.CreateVersion7(),
@@ -50,7 +53,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
                 Amount = amount,
                 Currency = "EUR"
             },
-            CatalogPermissions.Write);
+            _seller);
 
     /// <summary>A publish as a caller holding <paramref name="permissions"/>, or as no principal when null.</summary>
     private Task<HttpResponseMessage> PostAsync(object body, string? permissions)
@@ -108,7 +111,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         rows.ShouldBe(1, "the claim is what stops the second attempt reaching the handler (§8.5)");
     }
 
-    /// <summary><see cref="PostAsync"/> with the caller pinned, for a test whose subject is the key.</summary>
+    /// <summary><see cref="PostAsync"/> with the caller pinned, for a test about the key or the seller.</summary>
     private Task<HttpResponseMessage> PostAsAsync(object body, Guid caller)
     {
         HttpRequestMessage request = new(HttpMethod.Post, "/v1/catalog/products")
@@ -336,7 +339,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
 
         if (permissions is not null)
         {
-            request.Headers.Add(TestAuthHandler.UserHeader, (caller ?? Guid.CreateVersion7()).ToString());
+            request.Headers.Add(TestAuthHandler.UserHeader, (caller ?? _seller).ToString());
             request.Headers.Add(TestAuthHandler.PermissionsHeader, permissions);
         }
 
@@ -369,13 +372,12 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         // the second, and a convergent endpoint would put the first price back.
         HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
         Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
-        var caller = Guid.CreateVersion7();
         object first = new { CommandId = Guid.CreateVersion7(), Amount = 24.50m, Currency = "EUR" };
         object second = new { CommandId = Guid.CreateVersion7(), Amount = 29.00m, Currency = "EUR" };
 
         foreach (object change in new[] { first, second, first })
         {
-            HttpResponseMessage response = await ChangePriceAsync(id, change, CatalogPermissions.Write, caller);
+            HttpResponseMessage response = await ChangePriceAsync(id, change, CatalogPermissions.Write);
             response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         }
 
@@ -423,6 +425,226 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             CatalogPermissions.Write);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Another_sellers_price_change_is_a_404_that_changes_nothing()
+    {
+        HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await ChangePriceAsync(
+            id,
+            new { CommandId = Guid.CreateVersion7(), Amount = 24.50m, Currency = "EUR" },
+            CatalogPermissions.Write,
+            caller: Guid.CreateVersion7());
+
+        // A 404, not a 403, which would confirm the product exists (ADR-074, §11.4).
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await fixture.ScalarAsync<decimal>("SELECT Value = PriceAmount FROM catalog.Products WHERE Id = {0}", id))
+            .ShouldBe(19.99m);
+    }
+
+    private sealed record OwnPageDto(List<OwnItemDto> Items, string? NextCursor);
+
+    private sealed record OwnItemDto(Guid ProductId, string Name, DateTimeOffset? WithdrawnAt);
+
+    /// <summary>A withdrawal as a caller holding <paramref name="permissions"/>, or as nobody when null.</summary>
+    private Task<HttpResponseMessage> WithdrawAsync(
+        Guid id,
+        string? permissions = CatalogPermissions.Write,
+        Guid? caller = null,
+        Guid? commandId = null)
+    {
+        HttpRequestMessage request = new(HttpMethod.Post, $"/v1/catalog/products/{id}/withdrawal")
+        {
+            Content = JsonContent.Create(new { CommandId = commandId ?? Guid.CreateVersion7() })
+        };
+
+        if (permissions is not null)
+        {
+            request.Headers.Add(TestAuthHandler.UserHeader, (caller ?? _seller).ToString());
+            request.Headers.Add(TestAuthHandler.PermissionsHeader, permissions);
+        }
+
+        return _client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>The caller's own list, as <paramref name="caller"/> holding <c>catalog:write</c>.</summary>
+    private Task<HttpResponseMessage> GetOwnAsync(Guid caller, string query = "")
+    {
+        HttpRequestMessage request = new(HttpMethod.Get, $"/v1/catalog/products/mine{query}");
+        request.Headers.Add(TestAuthHandler.UserHeader, caller.ToString());
+        request.Headers.Add(TestAuthHandler.PermissionsHeader, CatalogPermissions.Write);
+
+        return _client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task A_withdrawal_is_a_204_that_hides_the_product_from_both_public_reads()
+    {
+        HttpResponseMessage published = await PublishAsync("Walnut desk");
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+        await PublishAsync("Oak shelf");
+
+        HttpResponseMessage response = await WithdrawAsync(id);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // ADR-074: a withdrawn product is the same 404 as an unknown one, and the listing no longer holds it.
+        HttpResponseMessage one = await _client.GetAsync(
+            $"/v1/catalog/products/{id}",
+            TestContext.Current.CancellationToken);
+        one.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        string body = await one.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"code\":\"product.not_found\"");
+
+        PageDto? page = await _client.GetFromJsonAsync<PageDto>(
+            "/v1/catalog/products",
+            TestContext.Current.CancellationToken);
+        page.ShouldNotBeNull();
+        page.Items.Select(i => i.Name).ShouldBe(["Oak shelf"]);
+    }
+
+    [Fact]
+    public async Task A_second_withdrawal_is_a_422_carrying_its_code()
+    {
+        HttpResponseMessage published = await PublishAsync("Walnut desk");
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+        (await WithdrawAsync(id)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        HttpResponseMessage response = await WithdrawAsync(id);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"code\":\"product.withdrawn\"");
+    }
+
+    [Fact]
+    public async Task A_repeat_of_the_same_withdrawal_replays_its_204()
+    {
+        // Why the endpoint is keyed (ADR-058): a retry of a withdrawal that succeeded must not read as a refusal.
+        HttpResponseMessage published = await PublishAsync("Walnut desk");
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+        var commandId = Guid.CreateVersion7();
+
+        (await WithdrawAsync(id, commandId: commandId)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await WithdrawAsync(id, commandId: commandId)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Another_sellers_withdrawal_is_a_404_that_leaves_the_product_on_sale()
+    {
+        HttpResponseMessage published = await PublishAsync("Walnut desk");
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await WithdrawAsync(id, caller: Guid.CreateVersion7());
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await _client.GetAsync($"/v1/catalog/products/{id}", TestContext.Current.CancellationToken))
+            .StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.Unauthorized)]
+    [InlineData("catalog:read", HttpStatusCode.Forbidden)]
+    public async Task A_withdrawal_needs_catalog_write(string? permissions, HttpStatusCode expected)
+    {
+        HttpResponseMessage published = await PublishAsync("Walnut desk");
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await WithdrawAsync(id, permissions);
+
+        response.StatusCode.ShouldBe(expected);
+        (await fixture.ScalarAsync<int>(
+                "SELECT Value = COUNT(*) FROM catalog.Products WHERE Id = {0} AND WithdrawnAt IS NULL",
+                id))
+            .ShouldBe(1, "a refused request must not reach the handler");
+    }
+
+    [Fact]
+    public async Task A_withdrawn_products_price_change_is_a_422_carrying_its_code()
+    {
+        HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+        (await WithdrawAsync(id)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        HttpResponseMessage response = await ChangePriceAsync(
+            id,
+            new { CommandId = Guid.CreateVersion7(), Amount = 24.50m, Currency = "EUR" },
+            CatalogPermissions.Write);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"code\":\"product.withdrawn\"");
+    }
+
+    [Fact]
+    public async Task The_own_list_holds_the_callers_products_withdrawn_ones_included_and_no_one_elses()
+    {
+        HttpResponseMessage desk = await PublishAsync("Walnut desk");
+        Guid deskId = await desk.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+        await PublishAsync("Oak shelf");
+        await PostAsAsync(
+            new
+            {
+                CommandId = Guid.CreateVersion7(),
+                Name = "Pine stool",
+                ThumbnailUrl = (string?)null,
+                Amount = 5m,
+                Currency = "EUR"
+            },
+            Guid.CreateVersion7());
+        (await WithdrawAsync(deskId)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        HttpResponseMessage response = await GetOwnAsync(_seller);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        OwnPageDto? page =
+            await response.Content.ReadFromJsonAsync<OwnPageDto>(TestContext.Current.CancellationToken);
+        page.ShouldNotBeNull();
+
+        // Newest first, the seller from the principal and never a parameter (§11.4).
+        page.Items.Select(i => i.Name).ShouldBe(["Oak shelf", "Walnut desk"]);
+        page.Items.Single(i => i.ProductId == deskId).WithdrawnAt.ShouldNotBeNull();
+        page.Items.Single(i => i.Name == "Oak shelf").WithdrawnAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task The_own_list_pages_forward_with_the_returned_cursor()
+    {
+        await PublishAsync("First");
+        await PublishAsync("Second");
+        await PublishAsync("Third");
+
+        OwnPageDto? first = await (await GetOwnAsync(_seller, "?limit=2")).Content
+            .ReadFromJsonAsync<OwnPageDto>(TestContext.Current.CancellationToken);
+        first.ShouldNotBeNull();
+        first.Items.Select(i => i.Name).ShouldBe(["Third", "Second"]);
+        first.NextCursor.ShouldNotBeNull();
+
+        OwnPageDto? second = await (await GetOwnAsync(_seller, $"?limit=2&cursor={first.NextCursor}")).Content
+            .ReadFromJsonAsync<OwnPageDto>(TestContext.Current.CancellationToken);
+        second.ShouldNotBeNull();
+        second.Items.Select(i => i.Name).ShouldBe(["First"]);
+        second.NextCursor.ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.Unauthorized)]
+    [InlineData("catalog:read", HttpStatusCode.Forbidden)]
+    public async Task The_own_list_needs_catalog_write(string? permissions, HttpStatusCode expected)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, "/v1/catalog/products/mine");
+        if (permissions is not null)
+        {
+            request.Headers.Add(TestAuthHandler.UserHeader, _seller.ToString());
+            request.Headers.Add(TestAuthHandler.PermissionsHeader, permissions);
+        }
+
+        HttpResponseMessage response = await _client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(expected);
     }
 
     [Fact]

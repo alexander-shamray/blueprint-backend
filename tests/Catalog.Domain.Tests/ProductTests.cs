@@ -132,4 +132,58 @@ public class ProductTests
 
         Should.Throw<DomainException>(() => product.ChangePrice(default, Now));
     }
+
+    [Fact]
+    public void Publish_records_the_seller_it_is_given()
+    {
+        var seller = new SellerId(Guid.CreateVersion7());
+
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now, seller);
+
+        product.Seller.ShouldBe(seller);
+        product.WithdrawnAt.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Withdraw_stamps_the_product_and_raises_the_contract_payload()
+    {
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+        product.ClearDomainEvents();
+        DateTimeOffset later = Now.AddHours(1);
+
+        product.Withdraw(later);
+
+        product.WithdrawnAt.ShouldBe(later);
+        ProductDiscontinuedDomainEvent discontinued = product.DomainEvents
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<ProductDiscontinuedDomainEvent>();
+        discontinued.ProductId.ShouldBe(product.Id);
+        discontinued.OccurredAt.ShouldBe(later);
+    }
+
+    [Fact]
+    public void Withdraw_refuses_a_product_already_withdrawn()
+    {
+        // The handler refuses it first as a rule failure; reaching the guard is a bug (§5.7).
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+        product.Withdraw(Now.AddHours(1));
+        product.ClearDomainEvents();
+
+        Should.Throw<DomainException>(() => product.Withdraw(Now.AddHours(2)));
+        product.WithdrawnAt.ShouldBe(Now.AddHours(1));
+        product.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ChangePrice_refuses_a_withdrawn_product()
+    {
+        // A later PriceChanged would re-list the product in Ordering's projection (§6.6), so a withdrawal is final.
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+        product.Withdraw(Now.AddHours(1));
+        product.ClearDomainEvents();
+
+        Should.Throw<DomainException>(() => product.ChangePrice(Money.Of(24.50m, "EUR"), Now.AddHours(2)));
+        product.Price.ShouldBe(Money.Of(19.99m, "EUR"));
+        product.DomainEvents.ShouldBeEmpty();
+    }
 }

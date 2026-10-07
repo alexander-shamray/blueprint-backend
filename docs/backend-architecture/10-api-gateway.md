@@ -141,6 +141,18 @@ the subset a resource would need.
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api" }
         ]
       },
+      // A seller's own products (ADR-074): a GET that names a caller, so a
+      // literal path that outranks catalog-public's catch-all.
+      "catalog-own": {
+        "ClusterId": "catalog",
+        "Match": { "Path": "/api/v1/catalog/products/mine", "Methods": [ "GET" ] },
+        "AuthorizationPolicy": "authenticated",
+        "RateLimiterPolicy": "authenticated",
+        "Transforms": [
+          { "PathRemovePrefix": "/api" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api" }
+        ]
+      },
       "ordering": {
         "ClusterId": "ordering",
         "Match": { "Path": "/api/v1/orders/{**catch-all}" },
@@ -285,7 +297,10 @@ one route rather than across two, and it is the same point — not a second one.
 **The catch-all serves Catalog's one-product read as well as the listing**
 ([§6.5](06-cqrs.md)), under the same pair, so a product's deep link needs no
 route of its own and is metered by §10.3's per-IP window like the page that
-linked to it.
+linked to it. The one Catalog GET it must not serve is a seller's own list
+([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)),
+which names a caller: `catalog-own` matches that literal path, which routing
+ranks above the catch-all, and holds it to `authenticated`.
 
 > **A name it cannot resolve stops the gateway, and this passage said the
 > opposite for a long time.** It described a silent per-route drop — "the path

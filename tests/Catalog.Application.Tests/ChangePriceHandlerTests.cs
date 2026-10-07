@@ -2,6 +2,7 @@ using System.Text.Json;
 using Catalog.Application.Products;
 using Catalog.Application.Products.ChangePrice;
 using Catalog.Application.Products.PublishProduct;
+using Catalog.Application.Products.WithdrawProduct;
 using Catalog.TestSupport;
 using Common.Application;
 using Common.Contracts.Catalog.V1;
@@ -20,25 +21,21 @@ public sealed class ChangePriceHandlerTests(ServiceFixture fixture) : IAsyncLife
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-    private async Task<Result> SendAsync<TCommand>(TCommand command)
-        where TCommand : ICommand<Result>
+    /// <summary>The seller every product here is published by, and the caller each change is sent as.</summary>
+    private static readonly Guid Seller = Guid.CreateVersion7();
+
+    private async Task<TResult> SendAsync<TResult>(ICommand<TResult> command, Guid? caller = null)
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
 
-        return await scope.ServiceProvider
-            .GetRequiredService<IDispatcher>()
-            .SendAsync(command, TestContext.Current.CancellationToken);
+        return await Caller.SendAsync(scope.ServiceProvider, command, caller ?? Seller);
     }
 
     /// <summary>A published product, with its <c>ProductPublished</c> row cleared so each test sees its own.</summary>
     private async Task<Guid> PublishedAsync(decimal amount = 19.99m)
     {
-        await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
-        Result<Guid> published = await scope.ServiceProvider
-            .GetRequiredService<IDispatcher>()
-            .SendAsync(
-                new PublishProductCommand(Guid.CreateVersion7(), "Walnut desk", null, amount, "EUR"),
-                TestContext.Current.CancellationToken);
+        Result<Guid> published =
+            await SendAsync(new PublishProductCommand(Guid.CreateVersion7(), "Walnut desk", null, amount, "EUR"));
 
         await fixture.ExecuteAsync("DELETE FROM catalog.OutboxMessages");
 
@@ -102,5 +99,37 @@ public sealed class ChangePriceHandlerTests(ServiceFixture fixture) : IAsyncLife
         Result result = await SendAsync(new ChangePriceCommand(Guid.CreateVersion7(), Guid.CreateVersion7(), 24.50m, "EUR"));
 
         result.Error.ShouldBe(ProductErrors.NotFound);
+    }
+
+    [Fact]
+    public async Task Another_sellers_product_is_not_found_and_keeps_its_price()
+    {
+        Guid productId = await PublishedAsync();
+
+        Result result = await SendAsync(
+            new ChangePriceCommand(Guid.CreateVersion7(), productId, 24.50m, "EUR"),
+            caller: Guid.CreateVersion7());
+
+        // A 404, not a 403, which would confirm the product exists (ADR-074, §11.4).
+        result.Error.ShouldBe(ProductErrors.NotFound);
+        (await fixture.ScalarAsync<decimal>(
+                "SELECT Value = PriceAmount FROM catalog.Products WHERE Id = {0}",
+                productId))
+            .ShouldBe(19.99m);
+        (await fixture.OutboxAsync()).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_withdrawn_product_is_a_rule_failure_that_stages_nothing()
+    {
+        Guid productId = await PublishedAsync();
+        (await SendAsync(new WithdrawProductCommand(Guid.CreateVersion7(), productId))).IsSuccess.ShouldBeTrue();
+        await fixture.ExecuteAsync("DELETE FROM catalog.OutboxMessages");
+
+        Result result = await SendAsync(new ChangePriceCommand(Guid.CreateVersion7(), productId, 24.50m, "EUR"));
+
+        // A PriceChanged now would re-list the product in Ordering's projection (§6.6).
+        result.Error.ShouldBe(ProductErrors.Withdrawn);
+        (await fixture.OutboxAsync()).ShouldBeEmpty();
     }
 }

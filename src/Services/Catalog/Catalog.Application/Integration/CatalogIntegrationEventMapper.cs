@@ -11,10 +11,9 @@ namespace Catalog.Application.Integration;
 /// </summary>
 internal sealed class CatalogIntegrationEventMapper : IIntegrationEventMapper
 {
-    // The allow-list. Catalog's last fact of §3.2, ProductDiscontinued, joins
-    // it with the domain operation that raises it; an entry here with no
-    // domain event behind it would not compile, which is the property that
-    // keeps this list honest.
+    // The allow-list, every fact §3.2 says Catalog publishes. An entry here
+    // with no domain event behind it would not compile, which is the property
+    // that keeps this list honest.
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
     {
         // Domain type in, contract type out. The suffix (§5.5) is what makes
@@ -22,7 +21,8 @@ internal sealed class CatalogIntegrationEventMapper : IIntegrationEventMapper
         // §12.4's "the domain type never reaches the broker" would have
         // nothing to assert against.
         [typeof(ProductPublishedDomainEvent)] = e => ToContract((ProductPublishedDomainEvent)e),
-        [typeof(PriceChangedDomainEvent)] = e => ToContract((PriceChangedDomainEvent)e)
+        [typeof(PriceChangedDomainEvent)] = e => ToContract((PriceChangedDomainEvent)e),
+        [typeof(ProductDiscontinuedDomainEvent)] = e => ToContract((ProductDiscontinuedDomainEvent)e)
     };
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
@@ -70,5 +70,14 @@ internal sealed class CatalogIntegrationEventMapper : IIntegrationEventMapper
         ProductId = e.ProductId.Value,
         Amount = e.Price.Amount,
         Currency = e.Price.Currency
+    };
+
+    // The same envelope again; the contract carries no reason, as its own summary says.
+    private static ProductDiscontinued ToContract(ProductDiscontinuedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.ProductId.Value,
+        OccurredAt = e.OccurredAt,
+        ProductId = e.ProductId.Value
     };
 }

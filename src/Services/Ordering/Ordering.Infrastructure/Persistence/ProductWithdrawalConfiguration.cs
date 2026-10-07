@@ -6,7 +6,7 @@ namespace Ordering.Infrastructure.Persistence;
 /// <summary>When Catalog last withdrew a product, at product level, for §6.6's price projection.</summary>
 /// <remarks>
 /// <c>ProductDiscontinued</c> carries no currency, so a withdrawal must survive having no price row to reach;
-/// a watermark, not a flag, so a later republish re-lists the product (§6.6).
+/// a watermark, not a flag, so a price older than the withdrawal is refused in whichever order the two arrive (§6.6).
 /// </remarks>
 internal sealed class ProductWithdrawalConfiguration : IEntityTypeConfiguration<ProductWithdrawal>
 {

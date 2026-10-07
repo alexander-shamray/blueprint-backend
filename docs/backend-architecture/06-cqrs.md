@@ -1220,7 +1220,10 @@ Rules for the read side:
 
   The exception is narrow and has exactly one instance: a query the caller
   bounds by *enumerating* what it wants — Catalog's `GetPrices`, which takes a
-  list of product ids and returns one row each, and is reached over the one
+  list of product ids and returns at most one row each — none for an unknown,
+  other-currency or withdrawn id
+  ([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md))
+  — and is reached over the one
   synchronous hop [§9.7](09-messaging.md) permits. A cursor there would
   paginate a set the caller already holds. What such a query owes instead is
   a **ceiling on the list**, enforced by `GetPricesValidator.MaxProductIds`,
@@ -1236,17 +1239,18 @@ Rules for the read side:
 
 **Catalog's one-product read returns the listing's row.**
 `GET /v1/catalog/products/{id}` is `GetProductQuery`, and it answers with
-`ProductSummaryDto` because the aggregate holds nothing that row leaves out:
+`ProductSummaryDto` because the aggregate holds nothing a buyer needs that row
+leaves out — its seller and its withdrawal are the seller's own list's:
 the rule above asks for the shape the caller needs, both callers need this
 one, and a second record with the same members would be two types to keep in
 step. `QuantityAvailable` keeps the listing's meaning —
 `null` is a level Inventory has never reported, not zero. An unknown id is
 `ProductErrors.NotFound`, returned through `Result<T>` so the 404 carries its
-`code` ([§10.5](10-api-gateway.md)), and the only 404: Catalog has no
-operation that retires a product, so the listing hides none, and the one that
-adds it decides for both reads whether a retired product is hidden (#471). It
-is uncached, as the listing is, for the reason [§8.2](08-caching-redis.md)
-gives.
+`code` ([§10.5](10-api-gateway.md)), and so is a withdrawn product: both
+reads hide one, and only its seller's own list still shows it
+([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)).
+It is uncached, as the listing is, for the reason
+[§8.2](08-caching-redis.md) gives.
 
 **Catalog's listing takes a search and a closed sort, and its cursor carries
 both** ([ADR-073](adr/ADR-073-the-product-listing-takes-a-search-and-a-closed-sort-and-its-cursor-carries-both.md)).
@@ -1464,9 +1468,12 @@ price history with it.
 > rather than left to be discovered.
 >
 > A **watermark** rather than a flag, for the reason `UpdatedAt` is a
-> comparison: a withdrawal must not make a product permanently unorderable.
-> Catalog republishing at a later `OccurredAt` re-lists it, in currencies that
-> have rows and in currencies that do not.
+> comparison: delivery is unordered, so what the projection must refuse is a
+> price *older* than the withdrawal, arriving after it. A newer one would still
+> re-list the product, in currencies that have rows and in currencies that do
+> not, but Catalog never sends one: a withdrawal is final there, and a price
+> change after it is refused at the source
+> ([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)).
 >
 > **The upsert's read of that watermark needs its own `HOLDLOCK`, and taking
 > it first is what stops the two statements deadlocking.** The answer that

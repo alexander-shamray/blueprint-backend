@@ -167,7 +167,16 @@ OMITTED = frozenset(
         "src/Services/Catalog/Catalog.Application/Products/ChangePrice/ChangePriceCommand.cs",
         "src/Services/Catalog/Catalog.Application/Products/ChangePrice/ChangePriceHandler.cs",
         "src/Services/Catalog/Catalog.Application/Products/ChangePrice/ChangePriceValidator.cs",
+        "src/Services/Catalog/Catalog.Application/Products/GetOwnProducts/GetOwnProductsHandler.cs",
+        "src/Services/Catalog/Catalog.Application/Products/GetOwnProducts/GetOwnProductsQuery.cs",
+        "src/Services/Catalog/Catalog.Application/Products/GetOwnProducts/OwnProductDto.cs",
+        "src/Services/Catalog/Catalog.Application/Products/ProductOwnership.cs",
+        "src/Services/Catalog/Catalog.Application/Products/WithdrawProduct/WithdrawProductCommand.cs",
+        "src/Services/Catalog/Catalog.Application/Products/WithdrawProduct/WithdrawProductHandler.cs",
+        "src/Services/Catalog/Catalog.Application/Products/WithdrawProduct/WithdrawProductValidator.cs",
         "src/Services/Catalog/Catalog.Domain/Products/PriceChangedDomainEvent.cs",
+        "src/Services/Catalog/Catalog.Domain/Products/ProductDiscontinuedDomainEvent.cs",
+        "src/Services/Catalog/Catalog.Domain/Products/SellerId.cs",
         "src/Services/Catalog/Catalog.Domain/Common/Money.cs",
         "src/Services/Catalog/Catalog.Domain/Products/IProductRepository.cs",
         "src/Services/Catalog/Catalog.Domain/Products/Product.cs",
@@ -199,6 +208,9 @@ OMITTED = frozenset(
         "tests/Catalog.Application.Tests/PublishProductValidatorTests.cs",
         "tests/Catalog.Application.Tests/ChangePriceHandlerTests.cs",
         "tests/Catalog.Application.Tests/ChangePriceValidatorTests.cs",
+        "tests/Catalog.Application.Tests/Caller.cs",
+        "tests/Catalog.Application.Tests/WithdrawProductHandlerTests.cs",
+        "tests/Catalog.Application.Tests/WithdrawProductValidatorTests.cs",
         # Wiring by subject, slice by requirement: the trace is proved through
         # Catalog's own consumer of StockLevelChanged, which a rendered service
         # does not have.
