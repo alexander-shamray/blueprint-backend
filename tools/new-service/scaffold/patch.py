@@ -44,8 +44,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
         (
             "    // The allow-list. Catalog's last fact of §3.2, ProductDiscontinued, joins\n"
-            "    // it with the domain operation that raises it (#471); an entry here with\n"
-            "    // no domain event behind it would not compile, which is the property that\n"
+            "    // it with the domain operation that raises it; an entry here with no\n"
+            "    // domain event behind it would not compile, which is the property that\n"
             "    // keeps this list honest.\n"
             "    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()\n"
             "    {\n"

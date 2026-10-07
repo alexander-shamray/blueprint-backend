@@ -12,8 +12,8 @@ namespace Catalog.Application.Integration;
 internal sealed class CatalogIntegrationEventMapper : IIntegrationEventMapper
 {
     // The allow-list. Catalog's last fact of §3.2, ProductDiscontinued, joins
-    // it with the domain operation that raises it (#471); an entry here with
-    // no domain event behind it would not compile, which is the property that
+    // it with the domain operation that raises it; an entry here with no
+    // domain event behind it would not compile, which is the property that
     // keeps this list honest.
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
     {
