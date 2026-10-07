@@ -190,8 +190,9 @@ counted under `/ship`. Passed on the run `token-usage.md` names.
 0.5M a context and a main session's mean context under 150k a call.
 
 **Landed:** the report's `--tools` view of what fills a main session, and
-`CLAUDE.md`'s *Subagents, review rounds and plans*, which now owns the
-review loop, the delegation brief and the planning rule. **Owed:** the
+`CLAUDE.md`'s *Subagents, review rounds and plans*, which owns the
+delegation brief and the planning rule; the review loop it held moved to
+`/ship` step 5 with step 4. **Owed:** the
 owner's user-level memory rule cut to cite that section, a change outside
 the repository; the plugin's own settings, where it has them; and the
 exit measurement, which needs the rules to have run for a span, #589. The
