@@ -36,9 +36,11 @@ class Usage:
     write_1h: int = 0
     read: int = 0
     output: int = 0
+    woken: float = 0.0
     contexts: set[str] = field(default_factory=set)
 
-    def add(self, usage: dict, context: str) -> None:
+    def add(self, usage: dict, context: str, woken: bool = False) -> None:
+        before = self.equivalent
         self.calls += 1
         self.input += usage.get("input_tokens") or 0
         self.read += usage.get("cache_read_input_tokens") or 0
@@ -50,6 +52,8 @@ class Usage:
         else:
             self.write_5m += usage.get("cache_creation_input_tokens") or 0
         self.contexts.add(context)
+        if woken:
+            self.woken += self.equivalent - before
 
     @property
     def equivalent(self) -> float:
@@ -61,6 +65,7 @@ class Usage:
             "contexts": len(self.contexts), "calls": self.calls, "input": self.input,
             "cache_write": self.write_5m + self.write_1h, "cache_read": self.read,
             "output": self.output, "input_equivalent": round(self.equivalent),
+            "woken_equivalent": round(self.woken),
         }
 
 
@@ -73,7 +78,7 @@ class Report:
         self.span: list[str] = []
         self.spawns: list[dict] = []
 
-    def add(self, command: str, agent: str, entry: dict, context: str) -> dict | None:
+    def add(self, command: str, agent: str, entry: dict, context: str, woken: bool = False) -> dict | None:
         """Count a response once, and return its usage when it was counted."""
         message = entry.get("message")
         if entry.get("type") != "assistant" or not isinstance(message, dict):
@@ -89,7 +94,7 @@ class Report:
             return None
         if key:
             self.seen.add(key)
-        self.groups.setdefault((command, agent), Usage()).add(usage, context)
+        self.groups.setdefault((command, agent), Usage()).add(usage, context, woken)
         if day := str(entry.get("timestamp", ""))[:10]:
             self.span = [min(self.span[0], day), max(self.span[1], day)] if self.span else [day, day]
         return usage
@@ -100,40 +105,38 @@ class Report:
 
     def read_session(self, main: Path) -> None:
         session = main.stem
-        boundaries: list[tuple[str, str]] = []
+        boundaries: list[tuple[str, str, bool]] = []
         types: dict[str, str] = {}
-        command = owner = NO_COMMAND
-        prompt = 0
+        command, prompt, woken = NO_COMMAND, 0, False
         for entry in self.entries(main):
+            # A wake is mostly a background agent or watch reporting back inside the command's own run.
             if is_prompt(entry):
-                command = owner = command_of(entry)
-                prompt += 1
-                boundaries.append((str(entry.get("timestamp", "")), command))
-            elif kind := wake_of(entry):
-                command = f"{owner} after {kind}"
-                prompt += 1
-                boundaries.append((str(entry.get("timestamp", "")), command))
+                command, prompt, woken = command_of(entry), prompt + 1, False
+                boundaries.append((str(entry.get("timestamp", "")), command, woken))
+            elif wake_of(entry) and not woken:
+                woken = True
+                boundaries.append((str(entry.get("timestamp", "")), command, woken))
             elif command == NO_COMMAND and not entry.get("isSidechain") and (skill := skill_of(entry)):
-                command = owner = "skill:" + skill
-                boundaries.append((str(entry.get("timestamp", "")), command))
+                command = "skill:" + skill
+                boundaries.append((str(entry.get("timestamp", "")), command, woken))
             result = entry.get("toolUseResult")
             if isinstance(result, dict) and result.get("agentId") and result.get("agentType"):
                 types[result["agentId"]] = result["agentType"]
             if entry.get("isSidechain"):
-                self.add(command, SUBAGENT, entry, f"{session}/{entry.get('agentId', 'inline')}")
+                self.add(command, SUBAGENT, entry, f"{session}/{entry.get('agentId', 'inline')}", woken)
             else:
-                self.add(command, MAIN, entry, f"{session}#{prompt}")
+                self.add(command, MAIN, entry, f"{session}#{prompt}", woken)
         for transcript in sorted((main.parent / session / "subagents").glob("agent-*.jsonl")):
             agent_id = transcript.stem.removeprefix("agent-")
             meta = read_meta(transcript.with_suffix(".meta.json"))
             agent = text_field(meta, "agentType") or types.get(agent_id) or SUBAGENT
             entries = list(self.entries(transcript))
             started = next((str(e["timestamp"]) for e in entries if e.get("timestamp")), "")
-            spawned_in = command_at(boundaries, started)
+            spawned_in, after_wake = command_at(boundaries, started)
             spawn = Usage()
             for entry in entries:
-                if counted := self.add(spawned_in, agent, entry, f"{session}/{agent_id}"):
-                    spawn.add(counted, agent_id)
+                if counted := self.add(spawned_in, agent, entry, f"{session}/{agent_id}", after_wake):
+                    spawn.add(counted, agent_id, after_wake)
             if spawn.calls:
                 self.spawns.append({"command": spawned_in, "agent": agent, "started": started[:10],
                                     "description": text_field(meta, "description") or "", **spawn.row()})
@@ -154,7 +157,7 @@ class Report:
         rows.sort(key=lambda r: r["input_equivalent"], reverse=True)
         total = Usage()
         for usage in self.groups.values():
-            for name in ("calls", "input", "write_5m", "write_1h", "read", "output"):
+            for name in ("calls", "input", "write_5m", "write_1h", "read", "output", "woken"):
                 setattr(total, name, getattr(total, name) + getattr(usage, name))
             total.contexts |= usage.contexts
         return [*rows, {"command": "TOTAL", "agent": "", **total.row()}]
@@ -180,7 +183,7 @@ def is_prompt(entry: dict) -> bool:
 
 
 def wake_of(entry: dict) -> str | None:
-    """The kind of a prompt no person typed — a task notification, a scheduled wake — which starts its own work."""
+    """The kind of a prompt no person typed: a task notification, a scheduled wake."""
     origin = entry.get("origin")
     if entry.get("type") != "user" or entry.get("isSidechain") or entry.get("isMeta") or not isinstance(origin, dict):
         return None
@@ -209,10 +212,10 @@ def skill_of(entry: dict) -> str | None:
     return None
 
 
-def command_at(boundaries: list[tuple[str, str]], timestamp: str) -> str:
-    """The command whose prompt last preceded the timestamp."""
-    index = bisect.bisect_right([t for t, _ in boundaries], timestamp) - 1
-    return boundaries[index][1] if index >= 0 else NO_COMMAND
+def command_at(boundaries: list[tuple[str, str, bool]], timestamp: str) -> tuple[str, bool]:
+    """The command whose prompt last preceded the timestamp, and whether a wake had come since."""
+    index = bisect.bisect_right([t for t, _, _ in boundaries], timestamp) - 1
+    return boundaries[index][1:] if index >= 0 else (NO_COMMAND, False)
 
 
 def read_meta(meta: Path) -> dict:
@@ -243,7 +246,8 @@ def default_projects(cwd: Path) -> list[Path]:
     return [main, *sorted(main.parent.glob(main.name + "--claude-worktrees-*"))]
 
 
-ROWS = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output", "input_equivalent")
+ROWS = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output", "input_equivalent",
+        "woken_equivalent")
 SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
 
 

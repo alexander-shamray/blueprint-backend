@@ -94,22 +94,23 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(rows["/ship", "main"]["cache_read"], 7)
         self.assertNotIn((NO_COMMAND, "main"), rows)
 
-    def test_work_a_wake_starts_is_counted_apart_from_the_command_it_follows(self):
+    def test_a_wake_keeps_the_command_and_its_work_is_counted_beside_it(self):
         def wake(at):
             return {"type": "user", "timestamp": at, "origin": {"kind": "task-notification"},
                     "message": {"content": "<task-notification>pending</task-notification>"}}
         self.files.write("s.jsonl", [
-            ship(), reply("m1", read=1),
-            wake("2026-10-07T11:00:00.000Z"), reply("m2", at="2026-10-07T11:01:00.000Z", read=2),
-            wake("2026-10-07T12:00:00.000Z"), reply("m3", at="2026-10-07T12:01:00.000Z", read=4),
-            prompt("thanks", "2026-10-07T13:00:00.000Z"), reply("m4", at="2026-10-07T13:01:00.000Z", read=8)])
-        self.files.write("s/subagents/agent-w.jsonl", [reply("x1", at="2026-10-07T11:30:00.000Z", read=16)])
+            ship(), reply("m1", read=10),
+            wake("2026-10-07T11:00:00.000Z"), reply("m2", at="2026-10-07T11:01:00.000Z", read=20),
+            wake("2026-10-07T12:00:00.000Z"), reply("m3", at="2026-10-07T12:01:00.000Z", read=40),
+            prompt("thanks", "2026-10-07T13:00:00.000Z"), reply("m4", at="2026-10-07T13:01:00.000Z", read=80)])
+        self.files.write("s/subagents/agent-w.jsonl", [reply("x1", at="2026-10-07T11:30:00.000Z", read=160)])
         rows, _ = self.rows()
-        self.assertEqual(rows["/ship", "main"]["cache_read"], 1)
-        self.assertEqual(rows["/ship after task-notification", "main"]["cache_read"], 6)
-        self.assertEqual(rows["/ship after task-notification", "main"]["contexts"], 2)
-        self.assertEqual(rows["/ship after task-notification", "subagent"]["cache_read"], 16)
-        self.assertEqual(rows[NO_COMMAND, "main"]["cache_read"], 8)
+        ship_main = rows["/ship", "main"]
+        self.assertEqual((ship_main["cache_read"], ship_main["contexts"], ship_main["woken_equivalent"]), (70, 1, 6))
+        self.assertEqual(rows["/ship", "subagent"]["woken_equivalent"], 16)
+        plain = rows[NO_COMMAND, "main"]
+        self.assertEqual((plain["cache_read"], plain["woken_equivalent"]), (80, 0))
+        self.assertEqual(rows["TOTAL", ""]["woken_equivalent"], 22)
 
     def test_a_tool_result_does_not_end_the_command(self):
         self.files.write("s.jsonl", [ship(), tool_result(), reply("m1", read=7)])
