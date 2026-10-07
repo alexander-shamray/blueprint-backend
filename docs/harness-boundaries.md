@@ -723,7 +723,7 @@ every guard in that list is a fact about the checkout. Which is the general
 form — where the safety is a property of the state rather than of the words,
 the grant has to be a helper.
 
-**Three of its edges are accepted rather than guarded.** A replay amended after
+**Some of its edges are accepted rather than guarded.** A replay amended after
 a failed push no longer descends from the commit `publish` recorded, so
 `publish` refuses it and names the tip to reset the branch to by hand:
 resetting it for the caller would discard the amend, which is the work. And
