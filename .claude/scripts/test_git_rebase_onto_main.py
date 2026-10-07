@@ -648,6 +648,33 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
         self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip(), "nothing was replayed")
         self.assertEqual("only-here\n", self.at("cat resolved-by-hand.txt").stdout)
 
+    def test_a_merge_that_kept_one_side_against_a_clean_change_stops_the_run(self):
+        # Without d.txt the merge matches the branch's side exactly, so `--cc`
+        # shows nothing, and the replay onto main would bring d.txt back.
+        self.at('git checkout -q main && echo later > d.txt && git add -A '
+                '&& git commit -qm "main moved again" && git push -q origin main '
+                '&& git checkout -q feat/x && git merge --no-commit -q main; git rm -qf d.txt '
+                '&& git commit -qm "merge main, without d.txt" && git push -q -f origin feat/x')
+        self.assertEqual("", self.at("git log --merges --cc --format= origin/main..HEAD").stdout,
+                         "the fixture is one `--cc` can see, so it tests nothing new")
+        before = self.at("git rev-parse HEAD").stdout.strip()
+
+        result = self.helper()
+        self.assertEqual(10, result.returncode, result.stderr)
+        self.assertIn("d.txt", result.stderr, "the file the merge kept apart is not named")
+        self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip(), "nothing was replayed")
+
+    def test_a_conflict_the_merge_resolved_to_one_side_is_left_to_the_replay(self):
+        # A conflicted file differs from git's own merge by construction, so
+        # the comparison skips it; the replay meets the same conflict and stops.
+        self.at(CONFLICT + 'git merge -q main; echo theirs > a.txt && git add a.txt '
+                '&& git commit -q --no-edit && git push -q -f origin feat/x')
+        self.assertEqual("", self.at("git status --porcelain").stdout, "the merge was not committed")
+        self.addCleanup(lambda: self.at("git rebase --abort"))
+        result = self.helper()
+        self.assertEqual(8, result.returncode, result.stderr)
+        self.assertIn("which is the point", result.stderr)
+
     def test_an_ordinary_merge_forward_is_flattened_without_complaint(self):
         # Its content is in its parents, so dropping it loses nothing.
         self.merge_forward()

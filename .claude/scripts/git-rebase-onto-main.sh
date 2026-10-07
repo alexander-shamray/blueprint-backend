@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rebase the current branch onto origin/main and publish it, the only force
 # push here. Guards: the branch is in hand and not main, the tree clean, origin
-# holds nothing unseen, no merge holds what neither parent has, a replay keeps
+# holds nothing unseen, no merge holds what git's own would not, a replay keeps
 # its stopped todo and skips no stop, and a retry forces only it, at the lease.
 
 # Four modes, because a conflict is the case rebase is here for. `start`
@@ -201,19 +201,37 @@ remember_replay() {
   printf '%s %s %s %s\n' "$branch" "$approved_lease" "$1" "$2" > "$pending"
 }
 
-# A rebase drops merge commits, and a merge can carry content that is in
-# neither parent — a conflict resolved while merging, or an edit made while
-# resolving. Replaying such a branch loses it before the push, which no lease
-# can see. `--cc` shows only what differs from every parent, so an ordinary
-# merge-forward prints nothing and is flattened without complaint, and one
-# that invented something stops the run. `/ship` step 0 asks ancestry against
-# the head a pull request merged rather than content, so this is the one read.
+# A rebase drops merge commits, so a merge holding what git's own merge of its
+# parents would not is lost before the push, where no lease can see it. Each
+# file that merge makes cleanly must be as git made it, which `--cc` misses
+# when one parent's side was kept; a conflicted file, or an octopus, is left
+# to `--cc`, which shows what differs from every parent.
 require_no_merge_invented_anything() {
-  local invented
+  local invented merge parents made status tree conflicted changed path kept
   invented=$(git log --merges --cc --format="" "refs/remotes/origin/main..HEAD")
-  [ -z "$invented" ] ||
-    { echo "a merge on $branch carries content neither parent has, and a replay would drop it:" >&2
+  kept=""
+  for merge in $(git rev-list --merges "refs/remotes/origin/main..HEAD"); do
+    parents=$(git rev-list --parents -n 1 "$merge")
+    set -- $parents
+    [ "$#" -eq 3 ] || continue
+    status=0
+    made=$(git merge-tree --write-tree --name-only --no-messages "$2" "$3") || status=$?
+    [ "$status" -le 1 ] ||
+      { echo "cannot merge the parents of $merge to compare with it, so what a replay drops is unknown" >&2
+        exit 10; }
+    tree=$(printf '%s\n' "$made" | sed -n 1p)
+    conflicted=$(printf '%s\n' "$made" | sed 1d)
+    changed=$(git diff --name-only "$tree" "$merge")
+    while IFS= read -r path; do
+      [ -n "$path" ] || continue
+      printf '%s\n' "$conflicted" | grep -qxF -- "$path" || kept="$kept$merge $path"$'\n'
+    done <<< "$changed"
+  done
+  [ -z "$invented" ] && [ -z "$kept" ] ||
+    { echo "a merge on $branch carries content git's own merge of its parents would not," >&2
+      echo "and a replay would drop it:" >&2
       git log --merges --oneline "refs/remotes/origin/main..HEAD" >&2
+      [ -z "$kept" ] || { echo "where it differs from a clean merge:" >&2; printf '%s' "$kept" >&2; }
       echo "land or re-commit that content before rebasing" >&2
       exit 10; }
 }
