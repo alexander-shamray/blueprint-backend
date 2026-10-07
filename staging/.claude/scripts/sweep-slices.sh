@@ -27,12 +27,13 @@ esac
 out="$resolved.slices"
 [ ! -e "$out" ] || { echo "slices already cut: $out" >&2; exit 3; }
 
-pinned=$(git -C "$resolved" rev-parse --verify HEAD)
+g() { git -C "$resolved" "$@"; }
+pinned=$(g rev-parse --verify HEAD)
 since=""
-if [ "$mode" != full ] && last=$(git -C "$resolved" rev-parse --verify --quiet "refs/sweeps/$kind^{commit}"); then
+if [ "$mode" != full ] && last=$(g rev-parse --verify --quiet "refs/sweeps/$kind^{commit}"); then
   # A ref that is not an ancestor marks a sweep of another line of history, so
   # the diff from it would skip files this commit never had swept.
-  if git -C "$resolved" merge-base --is-ancestor "$last" "$pinned"; then since="$last"; fi
+  if g merge-base --is-ancestor "$last" "$pinned"; then since="$last"; fi
 fi
 
 row_of() {
@@ -49,43 +50,71 @@ row_of() {
   esac
 }
 
-# Text files only: a binary has nothing an auditor can read, and is counted.
-declare -A text=() changed=()
-while IFS= read -r f; do text[${f#"$pinned:"}]=1; done \
-  < <(git -C "$resolved" grep -I -l -e '' "$pinned" -- .)
-if [ -n "$since" ]; then
-  while IFS= read -r f; do changed[$f]=1; done \
-    < <(git -C "$resolved" diff --name-only --no-renames "$since" "$pinned")
-fi
+# The bytes inside fences, the only part of a sample the sweeps audit. A fence
+# closes only on its own character, at least as long, with nothing after it.
+fenced_bytes() {
+  awk '
+    match($0, /^[ \t]*(```+|~~~+)/) {
+      mark = substr($0, RSTART, RLENGTH); sub(/^[ \t]*/, "", mark)
+      ch = substr(mark, 1, 1); n = length(mark); rest = substr($0, RSTART + RLENGTH)
+      if (!open) { open = 1; och = ch; on = n; next }
+      if (ch == och && n >= on && rest ~ /^[ \t]*$/) { open = 0; next }
+    }
+    open { total += length($0) + 1 }
+    END { print total + 0 }'
+}
 
+# Each git read lands in a file with its status checked, NUL-separated, so a
+# failing git fails the run and a name holding a newline stays one name.
 mkdir "$out"
-unowned=0 binary=0 record=0
-declare -A rowfiles=()
-while IFS=$'\t' read -r meta file; do
+trap 'rm -rf "$out"' ERR
+g ls-tree -r -l -z --full-tree "$pinned" > "$out/.tree"
+g grep -I -l -z -e '' "$pinned" -- . > "$out/.text" || [ "$?" -eq 1 ]
+: > "$out/.changed"
+[ -z "$since" ] || g diff --name-only --no-renames -z "$since" "$pinned" > "$out/.changed"
+mapfile -d '' tree < "$out/.tree"
+mapfile -d '' texts < "$out/.text"
+mapfile -d '' changes < "$out/.changed"
+rm -f "$out/.tree" "$out/.text" "$out/.changed"
+trap - ERR
+[ "${#tree[@]}" -gt 0 ] || { rm -rf "$out"; echo "no tracked files at $pinned" >&2; exit 3; }
+
+declare -A text=() changed=() rowfiles=()
+for f in "${texts[@]}"; do text[${f#"$pinned:"}]=1; done
+for f in "${changes[@]}"; do changed[$f]=1; done
+
+tracked=0 unowned=0 unchanged=0 empty=0 binary=0 record=0 fenceless=0 listed=0
+for rec in "${tree[@]}"; do
+  meta=${rec%%$'\t'*} file=${rec#*$'\t'}
+  # A slice list is one name a line, so a name holding a line break cannot be
+  # listed; refusing it is the only answer that does not drop it unsaid.
+  case "$file" in *$'\n'*|*$'\r'*) rm -rf "$out"; echo "a tracked name with a line break" >&2; exit 3 ;; esac
+  tracked=$((tracked + 1))
   size=${meta##* }
-  case "$file" in \"*) rm -rf "$out"; echo "a path git had to quote: $file" >&2; exit 3 ;; esac
-  [ -z "$since" ] || [ -n "${changed[$file]:-}" ] || continue
   row=$(row_of "$file") || { echo "no row owns: $file" >&2; unowned=$((unowned + 1)); continue; }
+  [ -z "$since" ] || [ -n "${changed[$file]:-}" ] || { unchanged=$((unchanged + 1)); continue; }
+  [ "$size" != 0 ] || { empty=$((empty + 1)); continue; }
   [ -n "${text[$file]:-}" ] || { binary=$((binary + 1)); continue; }
   # Closed records are never edited to match the code (CLAUDE.md), so a defect
   # in their samples has no fix to file; owned by the row, counted, not read.
   case "$file" in
     docs/superpowers/*|docs/pr-decision-log.md|docs/lessons.md) record=$((record + 1)); continue ;;
   esac
-  # A sample's size is its fenced lines, the only part the sweeps audit there.
   if [ "$row" = samples ]; then
-    size=$(git -C "$resolved" cat-file blob "$pinned:$file" |
-      awk '/^[[:space:]]*(```|~~~)/ { f = !f; next } f { n += length($0) + 1 } END { print n + 0 }')
-    [ "$size" -gt 0 ] || continue
+    size=$(g cat-file blob "$pinned:$file" | fenced_bytes)
+    [ "$size" -gt 0 ] || { fenceless=$((fenceless + 1)); continue; }
   fi
+  listed=$((listed + 1))
   rowfiles[$row]+="$size $file"$'\n'
-done < <(git -C "$resolved" ls-tree -r -l --full-tree "$pinned")
+done
 [ "$unowned" -eq 0 ] || { rm -rf "$out"; echo "$unowned tracked path(s) no row owns" >&2; exit 3; }
+if [ -z "$since" ] && [ "$listed" -eq 0 ]; then
+  rm -rf "$out"; echo "a full run that lists nothing has read nothing" >&2; exit 3
+fi
 
 echo "pinned $pinned"
 if [ -n "$since" ]; then echo "mode since $since"; else echo "mode full"; fi
-echo "binary-skipped $binary"
-echo "record-skipped $record"
+echo "tracked $tracked listed $listed unchanged $unchanged empty $empty binary $binary record $record fenceless $fenceless"
 n=0
 for row in $(printf '%s\n' "${!rowfiles[@]}" | sort); do
   bytes=0 files=0 list=""
