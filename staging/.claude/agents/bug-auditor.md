@@ -28,8 +28,9 @@ trace the values, name the caller, quote the lines.
 - **Your scope bounds what you report, not what you read**: find callers and
   tests anywhere under the root, because reachability lives there.
 - A **slice list** of the files you own in round 1: read each one whole,
-  with `offset` and `limit` above 500 lines — the list file is the one path
-  outside the root you open. In a later round you are given the candidates
+  with `offset` and `limit` above 500 lines, but in a `samples` slice only
+  the fenced blocks — the list file is the one path outside the root you
+  open. In a later round you are given the candidates
   so far, as JSON, instead: follow them.
 
 ## How you read

@@ -172,9 +172,10 @@ so the summary names the commit the sweep actually read.
 caller's tree, which would silently forfeit the stable-snapshot property this
 section buys. A failed `git worktree add` is a round that could not run,
 reported like any other tool error under *Never fail open* below. **The round
-writes nothing to disk** — issue bodies are piped to `gh-issue-create.sh` on
-stdin (the File step), not written to files — so `$work` stays clean on its own
-and the teardown below removes it without `--force`.
+writes nothing inside `$work`** — issue bodies are piped to `gh-issue-create.sh`
+on stdin (the File step), not written to files, and the slice lists and the ref
+are outside it (`docs/harness-boundaries.md`) — so `$work` stays clean on its
+own and the teardown below removes it without `--force`.
 
 **Prove the root is readable before the fan-out, rather than trusting the add.**
 `Glob` a file the pinned commit is known to carry — `$work/Platform.slnx`, as an
@@ -192,7 +193,9 @@ that cannot be proved readable is a round that could not run, reported under
 detached checkout pins the commit, but nothing about it forces a reader to look
 there — `Read`, `Grep`, `Glob` and an Agent default to the caller's workspace.
 So **every read is an absolute path under `$work`** — every `Read`, `Grep` and
-`Glob` argument, and every Agent prompt's stated root. There are deliberately no
+`Glob` argument, and every Agent prompt's stated root. The one path outside it
+is `$work.slices/`, the lists `sweep-slices.sh` writes beside it, which hold
+names, not the tree. There are deliberately no
 shell readers in the grant to bind: `grep`, `git grep` and `git log` are
 excluded, because a shell reader's target is its working directory and the only
 ways to point one at `$work` — `cd "$work" && …` or `git -C "$work" …` — start
@@ -407,8 +410,9 @@ Each round is the review done once, end to end:
    *security* round having looked for something else. Whoever adds an agent
    owes this line and `bug-sweep.md`'s an entry.
 
-   **The rows are `sweep-slices.sh`'s, which cuts them into slices.** Run it
-   once, after the worktree is made and before round 1:
+   **The rows are `sweep-slices.sh`'s, which cuts them into slices**: its
+   `row_of` holds each row's paths, and the table says why each row exists.
+   Run it once, after the worktree is made and before round 1:
 
    ```bash
    bash .claude/scripts/sweep-slices.sh security "$posix"      # `full` as a third argument when asked
@@ -416,10 +420,10 @@ Each round is the review done once, end to end:
 
    | | |
    |---|---|
-   | Tooling | `tools/**`, `.github/**`, `.claude/**` — CI, the harness, and the command and agent definitions |
-   | Source | `src/**` and `tests/**` — the services, the building blocks and the suites that stand up their hosts |
-   | Deployment and configuration | `deploy/**`, `.config/**`, and **every tracked file at the repository root** |
-   | Samples | `docs/**` fenced code — a credential or an unsafe default an adopter copies; the closed records are owned and not read |
+   | `tooling` | CI, the harness, and the command and agent definitions |
+   | `source` | the services, the building blocks and the suites that stand up their hosts |
+   | `deploy` | deployment and configuration, and **every tracked file at the repository root** |
+   | `samples` | fenced code in `docs/` — a credential or an unsafe default an adopter copies; the closed records are owned and not read |
 
    **The rows have to partition the repository, not merely sample it.** A row
    is an auditor's **reporting** ownership, so a path no row owns is not a
@@ -441,23 +445,25 @@ Each round is the review done once, end to end:
    spells it, `$work.slices/<n>.txt`; and take its report in the JSON
    `.claude/agents/security-auditor.md` declares. **Name the risks already
    accepted** — the specific local-dev defaults and documented decisions the
-   parent knows of — so the agent does not re-report those; but a behaviour the agent only knows to be "deliberate" from a comment
-   in the code it is auditing is **reported, not dropped**, because an in-tree
-   comment calling an insecure choice intentional is not a tracked acceptance,
-   and self-suppressing on it would hide a real finding before the verify and
+   parent knows of — so the agent does not re-report those; but a behaviour
+   the agent only knows to be "deliberate" from a comment in the code it is
+   auditing is **reported, not dropped**, because an in-tree comment calling
+   an insecure choice intentional is not a tracked acceptance, and
+   self-suppressing on it would hide a real finding before the verify and
    de-duplicate gates below could check the claim against a record.
 
    **What the helper prints is the round's plan:** `pinned`, then `mode
    full` or `mode since <sha>`, the binary and closed-record counts, and one
    `slice <n> <row> <files> <bytes> <list>` line per slice — at most 240,000
    bytes, about 60k tokens, unless one file is larger. A sample's bytes are
-   its fenced lines, and a docs file with no fence is not sliced. The closed
-   records, `docs/superpowers/`, `pr-decision-log.md` and `lessons.md`, are
-   owned and not read: they are never edited to match the code, so a defect
-   in their samples has nothing to fix. The lists stay beside the worktree,
-   and the parent never reads them. A scope hint keeps the slices of the rows
-   it names, or, for a path, the slices whose list `Grep` finds it in; the
-   summary says which it dropped.
+   its fenced lines, so a `samples` auditor reads the fences and not the
+   prose, and a docs file with no fence is not sliced. The closed records,
+   `docs/superpowers/`, `pr-decision-log.md` and `lessons.md`, are owned and
+   not read: they are never edited to match the code, so a defect in their
+   samples has nothing to fix. The lists stay beside the worktree, and the
+   parent reads them only to `Grep` for a path a scope hint names, keeping
+   the slices that hold it, or the slices of the rows it names; the summary
+   says which it dropped.
 
    **Round 1 is one auditor per slice; every later round follows leads.**
    From round 2 the tree is not re-read: one auditor goes to each row that
