@@ -62,14 +62,20 @@ public static class ProductEndpoints
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("ChangePrice");
 
-        // CursorPage, not Result (§6.2), so ToHttpResult has no part here.
+        // CursorPage, not Result (§6.2), so ToHttpResult has no part here; GetProductsValidator's 400 is thrown.
         group
             .MapGet(
                 "/",
-                async (string? cursor, IDispatcher dispatcher, CancellationToken ct, int limit = 20) =>
+                async (
+                    string? cursor,
+                    string? q,
+                    string? sort,
+                    IDispatcher dispatcher,
+                    CancellationToken ct,
+                    int limit = 20) =>
                 {
                     CursorPage<ProductSummaryDto> page =
-                        await dispatcher.QueryAsync(new GetProductsQuery(cursor, limit), ct);
+                        await dispatcher.QueryAsync(new GetProductsQuery(cursor, limit, q, sort), ct);
 
                     return Results.Ok(page);
                 })
