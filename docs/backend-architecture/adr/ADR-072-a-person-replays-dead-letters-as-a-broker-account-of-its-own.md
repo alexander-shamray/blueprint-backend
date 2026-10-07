@@ -2,9 +2,10 @@
 
 **Decision.** A message on an `_error` or `_skipped` queue is moved by
 `tools/dead-letters`, run by a person, authenticated as `dead-letter-operator`:
-tagged `management`, with no `configure`, `read` on the dead-letter queues
-alone, and `write` on the endpoint exchanges and their dead-letter exchanges
-and on no contract, framework, delay or default exchange. It is declared in
+tagged `management`, with no `configure`, `read` on no name but one ending
+`_error` or `_skipped`, and `write` on the endpoint exchanges and their
+dead-letter exchanges and on no contract, framework, delay or default
+exchange. It is declared in
 `deploy/compose/rabbitmq/definitions.json` with an empty password hash, so it
 exists with that grant on every broker built from the file and nothing logs in
 as it until an operator sets a password for an incident. `check_permissions.py`
