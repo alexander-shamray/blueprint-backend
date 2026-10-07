@@ -346,6 +346,21 @@ class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
         self.assertEqual("yes", self.at(REBASE_RUNNING).stdout.strip(),
                          "the foreign rebase was thrown away")
 
+    def test_a_git_am_session_is_refused_as_itself(self):
+        # It shares rebase-apply with a rebase, so without its own check each
+        # mode names it as one: a rebase in progress, or one of no branch.
+        self.at('git format-patch -1 --stdout refs/remotes/origin/main > ../main.patch '
+                '&& echo other > c.txt && git add c.txt && git commit -qm "c.txt here first"; '
+                'git am ../main.patch')
+        self.assertEqual("yes", self.at(REBASE_RUNNING).stdout.strip(), "the am session did not stop")
+        self.addCleanup(lambda: self.at("git am --abort"))
+        for mode in ("start", "continue", "publish", "abort"):
+            with self.subTest(mode=mode):
+                result = self.helper("feat/x", mode)
+                self.assertEqual(9, result.returncode, result.stderr)
+                self.assertIn("a 'git am' session is in progress, not a rebase", result.stderr)
+        self.assertEqual("yes", self.at(REBASE_RUNNING).stdout.strip(), "the am session was disturbed")
+
     def test_a_rebase_that_never_started_is_not_called_a_conflict(self):
         # Every other way `git rebase` can fail leaves no state, and reporting
         # it as a conflict sends the caller to a `continue` with nothing to do.

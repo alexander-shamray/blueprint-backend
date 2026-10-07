@@ -71,6 +71,14 @@ if state=$(current_state); then
   in_progress=1
 fi
 
+# `git am` keeps its session in rebase-apply too, marked by this file. Every
+# mode would refuse it as some rebase, so the refusal names what it is.
+if [ -n "$state" ] && [ -f "$state/applying" ]; then
+  echo "a 'git am' session is in progress, not a rebase: finish it with 'git am --continue'" \
+       "or leave it with 'git am --abort'" >&2
+  exit 9
+fi
+
 # The branch under a rebase is not the current branch: HEAD is detached while
 # the replay runs, so `git branch --show-current` answers nothing. git records
 # the name it will restore and the commit the replay started from, and both
