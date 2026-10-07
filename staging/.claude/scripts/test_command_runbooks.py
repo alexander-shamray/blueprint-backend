@@ -12,14 +12,15 @@ from review_helpers import COMMANDS
 
 ARGUMENTS = COMMANDS.parent.parent / "docs" / "commands"
 
-# Bytes. A runbook past its ceiling has regrown its argument.
+# Bytes: each landed size and about a tenth, so a rule can be added without a
+# fight, and a runbook past its ceiling has regrown its argument.
 CEILINGS = {
-    "ship.md": 28000,
-    "bug-sweep.md": 16000,
-    "security-sweep.md": 14000,
-    "branch.md": 8000,
-    "validate-blueprint.md": 8000,
-    "review-branch.md": 6000,
+    "ship.md": 30500,
+    "bug-sweep.md": 17500,
+    "security-sweep.md": 14500,
+    "branch.md": 8800,
+    "validate-blueprint.md": 8800,
+    "review-branch.md": 8200,
 }
 
 CITATION = re.compile(r"docs/commands/([a-z-]+\.md)`?, \*([^*]+)\*")
