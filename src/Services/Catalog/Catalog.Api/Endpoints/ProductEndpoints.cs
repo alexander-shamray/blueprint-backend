@@ -41,22 +41,23 @@ public static class ProductEndpoints
                     "EUR"))
             .WithName("PublishProduct");
 
-        // §8.4's route: a request record, since the product is the route's and the body carries the price alone.
+        // §8.4's route: a request record, since the product is the route's and the body carries the rest.
         group
             .MapPut(
                 "/{id:guid}/price",
                 async (Guid id, ChangePriceRequest request, IDispatcher dispatcher, CancellationToken ct) =>
                 {
                     Result result = await dispatcher.SendAsync(
-                        new ChangePriceCommand(id, request.Amount, request.Currency),
+                        new ChangePriceCommand(request.CommandId, id, request.Amount, request.Currency),
                         ct);
 
                     return result.ToHttpResult();
                 })
             .RequireAuthorization(CatalogPermissions.Write)
-            // An absolute price, so a repeat sets what the first set and raises nothing (ADR-058).
-            .RetrySafe(RetrySafety.Convergent)
-            .WithRequestExample(new ChangePriceRequest(54.90m, "EUR"))
+            // Built from the route and the body, so no parameter names the command (§8.5).
+            .Idempotent<ChangePriceCommand>()
+            .WithRequestExample(
+                new ChangePriceRequest(Guid.Parse("0199b0c4-8b21-7c53-ae7f-4a6b8c9d0e1f"), 54.90m, "EUR"))
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("ChangePrice");
@@ -94,4 +95,4 @@ public static class ProductEndpoints
 }
 
 // decimal? for the reason ChangePriceCommand gives: `{}` must be a 400, not a free product.
-public sealed record ChangePriceRequest(decimal? Amount, string Currency);
+public sealed record ChangePriceRequest(Guid CommandId, decimal? Amount, string Currency);

@@ -106,7 +106,7 @@ public class ProductTests
     [Fact]
     public void ChangePrice_to_the_same_price_raises_nothing()
     {
-        // What makes the endpoint convergent: a retried request publishes no second event (ADR-058).
+        // A change to the price the product already has is no change, so nothing is published for it.
         var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
         product.ClearDomainEvents();
 
