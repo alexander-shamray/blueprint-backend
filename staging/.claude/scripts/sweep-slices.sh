@@ -67,7 +67,8 @@ fenced_bytes() {
 # Each git read lands in a file with its status checked, NUL-separated, so a
 # failing git fails the run and a name holding a newline stays one name.
 mkdir "$out"
-trap 'rm -rf "$out"' ERR
+# Any exit before the plan is printed takes the half-cut lists with it.
+trap 'rm -rf "$out"' EXIT
 g ls-tree -r -l -z --full-tree "$pinned" > "$out/.tree"
 g grep -I -l -z -e '' "$pinned" -- . > "$out/.text" || [ "$?" -eq 1 ]
 : > "$out/.changed"
@@ -76,8 +77,7 @@ mapfile -d '' tree < "$out/.tree"
 mapfile -d '' texts < "$out/.text"
 mapfile -d '' changes < "$out/.changed"
 rm -f "$out/.tree" "$out/.text" "$out/.changed"
-trap - ERR
-[ "${#tree[@]}" -gt 0 ] || { rm -rf "$out"; echo "no tracked files at $pinned" >&2; exit 3; }
+[ "${#tree[@]}" -gt 0 ] || { echo "no tracked files at $pinned" >&2; exit 3; }
 
 declare -A text=() changed=() rowfiles=()
 for f in "${texts[@]}"; do text[${f#"$pinned:"}]=1; done
@@ -88,7 +88,7 @@ for rec in "${tree[@]}"; do
   meta=${rec%%$'\t'*} file=${rec#*$'\t'}
   # A slice list is one name a line, so a name holding a line break cannot be
   # listed; refusing it is the only answer that does not drop it unsaid.
-  case "$file" in *$'\n'*|*$'\r'*) rm -rf "$out"; echo "a tracked name with a line break" >&2; exit 3 ;; esac
+  case "$file" in *$'\n'*|*$'\r'*) echo "a tracked name with a line break" >&2; exit 3 ;; esac
   tracked=$((tracked + 1))
   size=${meta##* }
   row=$(row_of "$file") || { echo "no row owns: $file" >&2; unowned=$((unowned + 1)); continue; }
@@ -107,9 +107,9 @@ for rec in "${tree[@]}"; do
   listed=$((listed + 1))
   rowfiles[$row]+="$size $file"$'\n'
 done
-[ "$unowned" -eq 0 ] || { rm -rf "$out"; echo "$unowned tracked path(s) no row owns" >&2; exit 3; }
+[ "$unowned" -eq 0 ] || { echo "$unowned tracked path(s) no row owns" >&2; exit 3; }
 if [ -z "$since" ] && [ "$listed" -eq 0 ]; then
-  rm -rf "$out"; echo "a full run that lists nothing has read nothing" >&2; exit 3
+  echo "a full run that lists nothing has read nothing" >&2; exit 3
 fi
 
 echo "pinned $pinned"
@@ -125,10 +125,12 @@ for row in $(printf '%s\n' "${!rowfiles[@]}" | sort); do
     echo "slice $n $row $files $bytes $out/$n.txt"
     bytes=0 files=0 list=""
   }
-  while read -r size file; do
-    [ -n "$file" ] || continue
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    size=${line%% *} file=${line#* }
     [ $((bytes + size)) -le "$BUDGET" ] || flush
     bytes=$((bytes + size)) files=$((files + 1)) list+="$file"$'\n'
   done <<<"${rowfiles[$row]}"
   flush
 done
+trap - EXIT
