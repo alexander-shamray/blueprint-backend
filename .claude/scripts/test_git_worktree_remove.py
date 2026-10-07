@@ -209,11 +209,11 @@ class RemoveShape(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 25)
         self.assertFalse(self.present(root))
 
-    def test_a_worker_that_collides_gives_up_and_its_request_is_dropped(self):
-        """The real worker meeting a held lock exits and leaves its request,
+    def test_a_stand_in_that_gives_up_like_the_worker_leaves_its_request_to_be_dropped(self):
+        """Modelled on work(), which exits on a held lock and leaves its request,
         so the tree is removed once the holder lets go and the grace passes."""
         root, native = self.fixture()
-        self.hold(native, 1)
+        self.hold(native, 5)
         self.request(native)
         worker = self.hold(native, 0, wait=False, give_up=True, ready="worker-ready")
         self.assertEqual(0, worker.wait(timeout=30))
