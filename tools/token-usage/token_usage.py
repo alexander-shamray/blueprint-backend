@@ -82,6 +82,7 @@ class Report:
         self.skipped = 0
         self.span: list[str] = []
         self.spawns: list[dict] = []
+        self.results: dict[tuple[str, str], list[int]] = {}
 
     def add(self, command: str, agent: str, entry: dict, context: str, woken: bool = False) -> dict | None:
         """Count a response once, and return its usage when it was counted."""
@@ -113,6 +114,7 @@ class Report:
         boundaries: list[tuple[str, str, bool]] = []
         types: dict[str, str] = {}
         command, prompt, woken = NO_COMMAND, 0, False
+        tools: dict[str, str] = {}
         for entry in self.entries(main):
             # A wake is mostly a background agent or watch reporting back inside the command's own run.
             if is_prompt(entry) and command_of(entry) in CARRY_ON:
@@ -129,6 +131,8 @@ class Report:
                     and (skill := skill_of(entry)) and command != "skill:" + skill:
                 command = "skill:" + skill
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
+            if not entry.get("isSidechain"):
+                self.count_results(command, entry, tools)
             result = entry.get("toolUseResult")
             if isinstance(result, dict) and result.get("agentId") and result.get("agentType"):
                 types[result["agentId"]] = result["agentType"]
@@ -151,6 +155,24 @@ class Report:
                 self.spawns.append({"command": spawned_in, "agent": agent, "started": started[:10],
                                     "description": text_field(meta, "description") or "", **spawn.row()})
 
+    def count_results(self, command: str, entry: dict, tools: dict[str, str]) -> None:
+        """Note each tool call's name, and add each tool result's characters to its tool's count."""
+        content = (entry.get("message") or {}).get("content")
+        if not isinstance(content, list):
+            return
+        if self.since and str(entry.get("timestamp", self.since))[:10] < self.since:
+            return
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_use" and isinstance(block.get("id"), str):
+                tools[block["id"]] = str(block.get("name") or "?")
+            elif block.get("type") == "tool_result":
+                tool = tools.get(str(block.get("tool_use_id")), "?")
+                counted = self.results.setdefault((command, tool), [0, 0])
+                counted[0] += 1
+                counted[1] += len(result_text(block.get("content")))
+
     def entries(self, path: Path):
         with path.open(encoding="utf-8", errors="replace") as lines:
             for line in lines:
@@ -171,6 +193,14 @@ class Report:
                 setattr(total, name, getattr(total, name) + getattr(usage, name))
             total.contexts |= usage.contexts
         return [*rows, {"command": "TOTAL", "agent": "", **total.row()}]
+
+
+def result_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(b.get("text", "") for b in content if isinstance(b, dict) and isinstance(b.get("text"), str))
+    return ""
 
 
 def is_prompt(entry: dict) -> bool:
@@ -258,13 +288,14 @@ def default_projects(cwd: Path) -> list[Path]:
 
 ROWS = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output", "input_equivalent",
         "woken_equivalent")
+RESULTS = ("command", "tool", "results", "characters", "approx_tokens")
 SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
 
 
 def render(rows: list[dict], columns: tuple[str, ...] = ROWS) -> str:
     cells = [list(columns)] + [[f"{r[c]:,}" if isinstance(r[c], int) else r[c] for c in columns] for r in rows]
     widths = [max(len(row[i]) for row in cells) for i in range(len(columns))]
-    left = {"command", "agent", "started", "description"}
+    left = {"command", "agent", "started", "description", "tool"}
     lines = ["  ".join(cell.ljust(w) if c in left else cell.rjust(w) for c, cell, w in zip(columns, row, widths))
              for row in cells]
     return "\n".join(line.rstrip() for line in lines)
@@ -281,6 +312,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="print the rows as JSON")
     parser.add_argument("--spawns", type=int, metavar="N",
                         help="list the N costliest subagents, each with the task it was given, instead")
+    parser.add_argument("--tools", type=int, metavar="N",
+                        help="list the N commands and tools whose results put the most text into main sessions")
     parser.add_argument("--session", default="", metavar="ID",
                         help="only the session whose id starts with ID, with its subagents")
     args = parser.parse_args(argv)
@@ -295,7 +328,12 @@ def main(argv: list[str] | None = None) -> int:
     for project in projects:
         report.read_project(project)
     print(f"read {projects[0]}" + (f" and {len(projects) - 1} more" if len(projects) > 1 else ""), file=sys.stderr)
-    if args.spawns is not None:
+    if args.tools is not None:
+        rows = [{"command": c, "tool": t, "results": n, "characters": size, "approx_tokens": size // 4}
+                for (c, t), (n, size) in report.results.items()]
+        rows = sorted(rows, key=lambda r: r["characters"], reverse=True)[:args.tools]
+        columns = RESULTS
+    elif args.spawns is not None:
         rows = sorted(report.spawns, key=lambda r: r["input_equivalent"], reverse=True)[:args.spawns]
         columns = SPAWNS
     else:
