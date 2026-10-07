@@ -8,7 +8,7 @@ public sealed class PlaceOrderValidator : AbstractValidator<PlaceOrderCommand>
 {
     public PlaceOrderValidator()
     {
-        // Guid.Empty would be one key shared by every caller; validation runs before any claim (§6.3).
+        // Guid.Empty would be one key for all of a caller's requests (§8.5); validation runs before any claim (§6.3).
         RuleFor(x => x.CommandId).NotEmpty();
         // NotEmpty first, since Matches skips null; \z, not $, which matches before a trailing newline (§6.4).
         RuleFor(x => x.Currency).NotEmpty().Matches(@"^[A-Za-z]{3}\z");
