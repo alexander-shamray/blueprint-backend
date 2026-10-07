@@ -156,7 +156,8 @@ transcripts' own `usage` sums.
   narrowing: one pull request reached round 20 at about 15M a round. Round
   2 onwards reads the diff since the last round and the open findings, not
   the tree, and a round whose only findings are refused under the style
-  guide's *Comments* rule ends the loop. The ceiling is the owner's to set.
+  guide's *Comments* rule ends the loop. The ceiling is seven rounds,
+  the sweeps' own.
 - A plan-writing agent, about 7M a plan, gets the planning rule below, and
   a comment sweep is handed the lines the comment gate flags rather than
   whole suites to read.
