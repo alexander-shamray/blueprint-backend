@@ -39,8 +39,8 @@ printf '%s\\n' "$root"
 """
 
 # A refresh-index.py worker in miniature: it starts after a delay, takes the
-# lock, says so through a marker file, takes the outstanding request, and lets
-# go after the given number of seconds.
+# lock and the outstanding request, says so through a marker file, and lets go
+# after the given number of seconds.
 HOLDER = """
 import os, sys, time
 cache, delay, seconds, ready = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
@@ -67,11 +67,11 @@ for _ in range(1 if give_up else 100):
         time.sleep(0.01)
 else:
     sys.exit(0 if give_up else "the lock never came free")
-open(ready, "w").close()
 try:
     os.remove(os.path.join(cache, "refresh.pending"))
 except FileNotFoundError:
     pass
+open(ready, "w").close()
 time.sleep(seconds)
 if put_back:
     open(os.path.join(cache, "refresh.pending"), "w").close()
