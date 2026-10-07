@@ -203,9 +203,15 @@ remember_replay() {
 
 # A conflicted file the merge took whole from one parent must still carry the
 # other parent's clean hunks, which `git merge-file --ours` lays over that side.
-# One with no single base or no blob on a side, an add/add say, is `--cc`'s.
+# One with no single base or no blob on a side, an add/add say, is `--cc`'s, and
+# so is a binary file, which has no hunks to keep.
 dropped_a_clean_hunk() {
   local merge=$1 first=$2 second=$3 base=$4 path=$5 took ours theirs from redone
+  # Still quoted under core.quotePath=false, so not a name rev-parse can read.
+  case "$path" in
+    \"*) echo "cannot name the conflicted path $path in $merge, so what a replay drops is unknown" >&2
+         exit 10 ;;
+  esac
   case "$base" in "" | *$'\n'*) return 1 ;; esac
   took=$(git rev-parse -q --verify "$merge:$path") || return 1
   from=$(git rev-parse -q --verify "$base:$path") || return 1
@@ -217,6 +223,7 @@ dropped_a_clean_hunk() {
   elif [ "$took" != "$ours" ]; then
     return 1
   fi
+  [ "$(git diff --numstat "$ours" "$theirs" | cut -f1)" != "-" ] || return 1
   redone=$(git merge-file --object-id --ours "$ours" "$from" "$theirs") || true
   [ -n "$redone" ] ||
     { echo "cannot replay the clean hunks of $path in $merge, so what a replay drops is unknown" >&2
@@ -238,13 +245,15 @@ require_no_merge_invented_anything() {
     set -- $parents
     [ "$#" -eq 3 ] || continue
     status=0
-    made=$(git merge-tree --write-tree --name-only --no-messages "$2" "$3") || status=$?
+    # Unquoted, so a name with a non-ASCII byte is one rev-parse can read; both lists alike.
+    made=$(git -c core.quotePath=false merge-tree --write-tree --name-only --no-messages "$2" "$3") ||
+      status=$?
     [ "$status" -le 1 ] ||
       { echo "cannot merge the parents of $merge to compare with it, so what a replay drops is unknown" >&2
         exit 10; }
     tree=$(printf '%s\n' "$made" | sed -n 1p)
     conflicted=$(printf '%s\n' "$made" | sed 1d)
-    changed=$(git diff --name-only "$tree" "$merge")
+    changed=$(git -c core.quotePath=false diff --name-only "$tree" "$merge")
     while IFS= read -r path; do
       [ -n "$path" ] || continue
       printf '%s\n' "$conflicted" | grep -qxF -- "$path" || kept="$kept$merge $path"$'\n'
