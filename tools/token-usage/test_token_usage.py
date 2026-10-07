@@ -303,6 +303,11 @@ class CommandLineTests(unittest.TestCase):
                 self.assertEqual(token_usage.default_projects(checkout), expected)
                 self.assertEqual(token_usage.default_projects(worktree), expected)
 
+    def test_the_spawns_and_tools_views_cannot_be_asked_for_together(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as refused:
+            token_usage.main(["--spawns", "5", "--tools", "5"])
+        self.assertEqual(refused.exception.code, 2)
+
     def test_a_missing_directory_exits_2(self):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(token_usage.main(["/no/such/transcripts"]), 2)
