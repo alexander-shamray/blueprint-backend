@@ -155,7 +155,8 @@ missing it.
 
 Discard with a record once the real destination has had it —
 `dead_letters.py discard <endpoint>_skipped --message-id <id> --execute
---record FILE` writes the record and then removes exactly that message. Fixing
+--record FILE` takes the messages ahead of it and that one, writes each to
+the record, returns the others to the tail and discards that one. Fixing
 the sender is what closes it.
 
 ## Closing it
