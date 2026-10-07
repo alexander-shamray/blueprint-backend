@@ -718,9 +718,9 @@ pins none — the argument lives in [`repo-map.md`](repo-map.md)'s AppHost
 entry, which is the authority for it. Reject the finding and cite that, not
 this table.
 
-**A pointer rather than a copy, deliberately.** `/review-branch` and
-`/review-grok` list the house non-findings a reviewer may reject by name and
-attribute the list to this file; four of the five are rules stated here and
+**A pointer rather than a copy, deliberately.** `/review-branch` lists the
+house non-findings a reviewer may reject by name and attributes the list to
+this file; four of the five are rules stated here and
 the fifth is a fact about what the repository pins, which is nowhere near a
 style rule. Restating it here would put a claim about `Directory.Packages.props`
 in a document about prose and braces, and it would rot on that file's clock
