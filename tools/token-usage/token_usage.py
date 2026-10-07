@@ -123,7 +123,8 @@ class Report:
             elif wake_of(entry) and not woken:
                 woken = True
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
-            elif command == NO_COMMAND and not entry.get("isSidechain") and (skill := skill_of(entry)):
+            elif (command == NO_COMMAND or command.startswith("skill:")) and not entry.get("isSidechain") \
+                    and (skill := skill_of(entry)) and command != "skill:" + skill:
                 command = "skill:" + skill
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
             result = entry.get("toolUseResult")

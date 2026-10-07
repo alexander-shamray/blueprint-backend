@@ -168,6 +168,19 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(rows["skill:bug-sweep", "main"]["cache_read"], 3)
         self.assertEqual(rows["skill:bug-sweep", "subagent"]["cache_read"], 4)
 
+    def test_a_later_skill_relabels_a_run_a_skill_labelled(self):
+        def loads(message_id, at, skill):
+            return {"type": "assistant", "timestamp": at, "message": {
+                "id": message_id, "usage": usage(read=1),
+                "content": [{"type": "tool_use", "name": "Skill", "input": {"skill": skill}}]}}
+        self.files.write("s.jsonl", [
+            prompt("plan it"), loads("m1", "2026-10-07T09:05:00.000Z", "superpowers:writing-plans"),
+            loads("m2", "2026-10-07T10:00:00.000Z", "superpowers:executing-plans"),
+            reply("m3", at="2026-10-07T10:01:00.000Z", read=2)])
+        rows, _ = self.rows()
+        self.assertEqual(rows["skill:superpowers:writing-plans", "main"]["cache_read"], 1)
+        self.assertEqual(rows["skill:superpowers:executing-plans", "main"]["cache_read"], 3)
+
     def test_a_skill_loaded_by_a_typed_command_stays_that_command(self):
         loads = {"type": "assistant", "message": {
             "id": "m1", "usage": usage(read=1),
