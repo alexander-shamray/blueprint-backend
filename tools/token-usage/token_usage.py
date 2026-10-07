@@ -21,6 +21,9 @@ MAIN = "main"
 SUBAGENT = "subagent"
 COMMAND = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
 INJECTED = ("<bash-", "<local-command-", "[Request interrupted")
+# Harness commands that act on the session, typed mid-run, after which the run they interrupted goes on.
+CARRY_ON = {"/compact", "/autocompact", "/reload-plugins", "/context", "/cost", "/status", "/model", "/effort",
+            "/fast", "/config", "/permissions", "/memory", "/mcp", "/hooks", "/agents", "/plugin", "/help"}
 WORKTREE = re.compile(r"[\\/]\.claude[\\/]worktrees[\\/].*$")
 
 # Anthropic's prompt-caching prices as multiples of the base input price.
@@ -112,7 +115,9 @@ class Report:
         command, prompt, woken = NO_COMMAND, 0, False
         for entry in self.entries(main):
             # A wake is mostly a background agent or watch reporting back inside the command's own run.
-            if is_prompt(entry):
+            if is_prompt(entry) and command_of(entry) in CARRY_ON:
+                pass
+            elif is_prompt(entry):
                 command, prompt, woken = command_of(entry), prompt + 1, False
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
             elif wake_of(entry) and not woken:

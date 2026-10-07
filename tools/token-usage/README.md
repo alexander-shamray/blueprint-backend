@@ -28,7 +28,9 @@ for a subagent.
 
 **A command owns everything until the next prompt a person types**, so a
 command `/ship` loads through the `Skill` tool is counted as `/ship`, and a
-subagent belongs to the command running when it started. **A skill the
+subagent belongs to the command running when it started. A harness command
+typed mid-run — `/compact`, `/reload-plugins`, `/model` and the others in
+`CARRY_ON` — does not end it. **A skill the
 session loads with no typed command** — a sweep a prompt asked for, a
 plugin's workflow — names the work after it as `skill:<name>`, until the
 next prompt. **A prompt no person typed** — a task notification, a
