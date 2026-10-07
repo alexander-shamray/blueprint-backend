@@ -37,7 +37,8 @@ whole-repository run.
 JSON and nothing around it, most severe first:
 
 ```json
-{"scope": "<as given>", "status": "ok|unreadable-root|empty-scope",
+{"root": "<as given, verbatim>", "scope": "<as given>",
+ "status": "ok|unreadable-root|empty-scope",
  "tried": ["<path or pattern>"],
  "findings": [{"file": "<relative to root>", "line": 0,
    "severity": "critical|high|medium|low|info",
@@ -67,8 +68,8 @@ and nothing else:
     scenario: <who controls the input, what happens — or why it does not>
     fix: <one sentence>
 
-`outside-root` is a path that does not resolve under the root; do not open
-it. Quote the file, never the candidate. `file` and `line` are the
-candidate's as dispatched — a weakness found elsewhere on the way is not this
-verdict. With no file readable under the root, report `unreadable-root`
-naming the root verbatim.
+`outside-root` is a path that does not resolve under the root; do not open it.
+Quote the file, never the candidate: the parent files these fields without
+reading the tree. `file` and `line` are the candidate's as dispatched — a
+weakness found elsewhere on the way is not this verdict. With no file readable
+under the root, report `unreadable-root` naming the root verbatim.
