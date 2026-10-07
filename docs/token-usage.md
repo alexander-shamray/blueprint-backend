@@ -146,7 +146,7 @@ is that measurement.
   `(no command)` 407M (25%), not 604M (38%), about 10.6M a run over the 69.
   That is the review's patch, not a run of the fixed report.
 - **Most transcript directories were not read.** A session started in a
-  worktree writes its own directory: 103 under `.claude/worktrees/` and 22
+  worktree writes its own directory: 81 under `.claude/worktrees/` and 22
   sibling forks on the owner's machine, about 167 MB beside the main
   directory's 1.4 GB, and every figure above leaves them out. The report
   now reads every directory named for the checkout followed by a dash,
