@@ -1,3 +1,4 @@
+using Common.Infrastructure.Tracing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shipping.Domain.Shipments;
@@ -42,6 +43,9 @@ internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
 
         // Defaulted for CreatedAt's reason (§7.4).
         builder.Property(s => s.PollAttempts).HasDefaultValue(0);
+
+        // The trace that last asked the fulfilment worker for something, which its pass restores (§9.4).
+        StagedTraceColumns.Map(builder);
 
         // One filtered index per claim, since the table is never purged (ADR-054); each claim repeats its filter so
         // the optimiser matches it, and a filter cannot say OR, so booked rows with no cancellation are held too.

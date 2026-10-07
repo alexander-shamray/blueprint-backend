@@ -1,7 +1,9 @@
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
+using Common.Infrastructure.Tracing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Shipping.Domain.Shipments;
 
 namespace Shipping.Infrastructure.Persistence;
@@ -29,11 +31,42 @@ public sealed class ShippingDbContext(DbContextOptions<ShippingDbContext> option
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ShippingDbContext).Assembly);
     }
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampFulfilmentTraces();
+
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    // cancellationToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        StampFulfilmentTraces();
+
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
     /// <summary>§7.2's global conventions, for every row this context maps.</summary>
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<decimal>().HavePrecision(19, 4);
         configurationBuilder.Properties<string>().HaveMaxLength(400);
         configurationBuilder.Properties<DateTimeOffset>().HaveColumnType("datetimeoffset(7)");
+    }
+
+    // The two writes that hand the fulfilment worker a pass, a recorded shipment and a requested cancellation, keep
+    // the trace they ran in, so the booking and what it publishes join it (§9.4). The worker's own writes do not.
+    private void StampFulfilmentTraces()
+    {
+        foreach (EntityEntry<Shipment> entry in ChangeTracker.Entries<Shipment>())
+        {
+            if (entry.State == EntityState.Added ||
+                (entry.State == EntityState.Modified && entry.Property(s => s.CancellationRequestedAt).IsModified))
+            {
+                StagedTraceColumns.Stamp(entry);
+            }
+        }
     }
 }

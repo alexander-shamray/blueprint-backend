@@ -71,7 +71,9 @@ public static class ObservabilityExtensions
                 // Redis instrumentation lives in AddRedisConnections, beside the keyed connections (§13.2).
                 .AddSource("MassTransit")
                 // OutboxDispatcher.ActivitySourceName: the span that joins a staging request to its publish (§9.4).
-                .AddSource("Commerce.Outbox"))
+                .AddSource("Commerce.Outbox")
+                // StagedTrace.ClaimSourceName: a worker's pass over a row it claims, joined to the row's writer (§9.4).
+                .AddSource("Commerce.Claims"))
             .UseOtlpExporter();
 
         return builder;

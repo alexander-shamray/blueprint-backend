@@ -235,10 +235,13 @@ public class ObservabilityTests
         exported.ShouldContain(a => a.Source.Name == EfCoreActivitySource);
     }
 
-    [Fact]
-    public void Outbox_delivery_spans_are_collected()
+    [Theory]
+    [InlineData("Commerce.Outbox")]
+    [InlineData("Commerce.Claims")]
+    public void Joined_trace_spans_are_collected(string sourceName)
     {
-        // OutboxDispatcher's source, spelled out like the meters: without it a trace ends at the outbox (§9.4).
+        // OutboxDispatcher's and StagedTrace's sources, spelled out like the meters: without either a trace ends at
+        // the table its rows wait in (§9.4).
         List<Activity> exported = [];
 
         HostApplicationBuilder builder = TelemetryHost.Builder();
@@ -250,14 +253,14 @@ public class ObservabilityTests
         using IHost host = builder.Build();
         TracerProvider provider = host.Services.GetRequiredService<TracerProvider>();
 
-        using ActivitySource source = new("Commerce.Outbox");
+        using ActivitySource source = new(sourceName);
         using Activity? activity = source.StartActivity("probe");
         activity?.Stop();
 
         provider.ForceFlush();
 
-        activity.ShouldNotBeNull("nothing is listening to the outbox's activity source");
-        exported.ShouldContain(a => a.Source.Name == "Commerce.Outbox");
+        activity.ShouldNotBeNull($"nothing is listening to {sourceName}");
+        exported.ShouldContain(a => a.Source.Name == sourceName);
     }
 
     private static DefaultHttpContext Request(string path)

@@ -43,7 +43,9 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
                 "SendStartedAt",
                 "Status",
                 "TemplateKey",
-                "TemplateVersion"
+                "TemplateVersion",
+                "TraceParent",
+                "TraceState"
             ],
             ignoreOrder: true);
     }

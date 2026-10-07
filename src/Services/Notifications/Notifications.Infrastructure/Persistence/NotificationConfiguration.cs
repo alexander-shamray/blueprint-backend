@@ -1,3 +1,4 @@
+using Common.Infrastructure.Tracing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Notifications.Application.Records;
@@ -45,5 +46,8 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
 
         // A shadow property, so the record names no EF type, as §8.5's marker does (§7.2).
         builder.Property<byte[]>("RowVersion").IsRowVersion().IsRequired();
+
+        // The intake's trace, which the send worker's pass restores (§9.4); shadow, for the same reason.
+        StagedTraceColumns.Map(builder);
     }
 }

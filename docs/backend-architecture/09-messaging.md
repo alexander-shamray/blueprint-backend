@@ -550,9 +550,9 @@ return new OutboxMessage
     OccurredAt = message is IIntegrationEvent o
         ? o.OccurredAt
         : ((IDomainEvent)message).OccurredAt,
-    // The staging request's W3C context, which the dispatcher restores.
-    TraceParent = staging?.Id,
-    TraceState = staging?.TraceStateString is { Length: <= TraceStateMaxLength } state ? state : null
+    // StagedTrace.Current, read once: the staging request's W3C context, which the dispatcher restores.
+    TraceParent = staging.Parent,
+    TraceState = staging.State
 };
 ```
 
@@ -962,15 +962,26 @@ the raise, the commit and the poll, which is the honest reading of "how stale
 is this read model".
 
 **The row carries the trace that staged it, and each delivery runs as that
-trace's child.** `Stage` records the current activity's W3C `traceparent` and
-`tracestate` in two nullable columns, and the dispatcher starts every row's
-delivery on `OutboxDispatcher.ActivitySourceName` with that context as its
-parent. MassTransit carries the context from the publish to the consumer by
-itself; the table was the hop that dropped it, so without the columns every
-trace ended at the outbox and what followed was reachable only by joining
-logs on the correlation id. A worker that claims its own rows in a later pass
-drops it the same way, and Shipping's booking and Notifications' send still
-do ([#586](https://github.com/alexander-shamray/blueprint-backend/issues/586)). **Parent rather than link, deliberately**:
+trace's child.** `Stage` records `StagedTrace.Current`, the current activity's
+W3C `traceparent` and `tracestate`, in two nullable columns, and the
+dispatcher starts every row's delivery on `OutboxDispatcher.ActivitySourceName`
+with that context as its parent. MassTransit carries the context from the
+publish to the consumer by itself; the table was the hop that dropped it, so
+without the columns every trace ended at the outbox and what followed was
+reachable only by joining logs on the correlation id.
+
+**A worker that claims its own rows in a later pass is the same hop, and
+takes the same columns.** `StagedTraceColumns` maps them as shadow properties
+on a row whose type is the domain's, and its pass starts on
+`StagedTrace.ClaimSourceName`. Shipping stamps a shipment when it is recorded
+and again when its cancellation is requested, the two writes that ask the
+fulfilment worker for a pass, and that pass runs as their child, so the
+booking or the carrier's cancellation sits in the confirming or cancelling
+trace. Notifications stamps a notice at intake, and its send runs as that
+trace's child. **The tracking poll links rather than parents**: it repeats
+for the shipment's whole life and most polls find nothing, so as children
+they would stretch the order's trace to the delivery; the despatch a poll
+stages then travels in the poll's trace, one link from the order's. **Parent rather than link, deliberately**:
 a link would keep the request's trace and the delivery's apart and leave a
 reader to follow the join, which is the gap this closes; a parent makes one
 trace from the request to the last consumer, and its duration then includes
@@ -985,7 +996,8 @@ MassTransit's own outbox
 which keeps the context with the message, so a `ReserveStock` sent while
 handling an `OrderPlaced` stays in that event's trace. That is measured by
 `OrderFulfilmentSagaEndpointTests` on a real broker rather than assumed, and
-the table's own hop by `OutboxTraceContextTests`.
+the table's own hop by `OutboxTraceContextTests`, and the workers' by
+`FulfilmentTraceContextTests` and `SendTraceContextTests`.
 
 `ProjectionInvoker` resolves and calls the handlers for a runtime type. It uses
 the same cached-delegate approach as the dispatcher in [§6.2](06-cqrs.md), so the reflection

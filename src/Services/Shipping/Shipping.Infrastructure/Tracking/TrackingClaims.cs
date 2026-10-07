@@ -29,7 +29,8 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         )
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {TrackingWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
-        OUTPUT inserted.Id, inserted.OrderId, inserted.CarrierReference, inserted.PollAttempts, inserted.CreatedAt;
+        OUTPUT inserted.Id, inserted.OrderId, inserted.CarrierReference, inserted.PollAttempts, inserted.CreatedAt,
+            inserted.TraceParent, inserted.TraceState;
         """;
 
     // The dispatcher's ladder on this worker's own count (ADR-054), floored at the poll interval so a 429 is

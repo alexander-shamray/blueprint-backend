@@ -1,7 +1,10 @@
 namespace Notifications.Infrastructure.Delivery;
 
 /// <summary>One leased row: what the pass decides on, and the stamp a resend renders again.</summary>
-/// <remarks>No mailbox is projected, since the row holds none (ADR-053 rule 4).</remarks>
+/// <remarks>
+/// No mailbox is projected, since the row holds none (ADR-053 rule 4). The trace pair is the intake's, which the
+/// pass restores as its parent (§9.4).
+/// </remarks>
 public sealed record SendWork(
     Guid NotificationId,
     Guid EventId,
@@ -13,4 +16,6 @@ public sealed record SendWork(
     DateTimeOffset CreatedAt,
     DateTimeOffset? SendStartedAt,
     int? TemplateVersion,
-    string? Languages);
+    string? Languages,
+    string? TraceParent,
+    string? TraceState);

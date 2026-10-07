@@ -4,6 +4,7 @@ using System.Text.Json;
 using Common.Application;
 using Common.Contracts;
 using Common.Domain;
+using Common.Infrastructure.Tracing;
 using Dapper;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
@@ -156,10 +157,7 @@ public sealed class OutboxDispatcher : BackgroundService
         {
             // A child of the trace that staged the row, so MassTransit's publish, and the consumer it propagates
             // to, join that trace rather than starting one here (§9.4). A row with no context starts its own.
-            ActivityContext staging =
-                ActivityContext.TryParse(message.TraceParent, message.TraceState, out ActivityContext parsed)
-                    ? parsed
-                    : default;
+            ActivityContext staging = new StagedTrace(message.TraceParent, message.TraceState).ToParent();
             using Activity? span = Deliveries.StartActivity("outbox deliver", ActivityKind.Internal, staging);
             span?.SetTag("messaging.message.id", message.MessageId);
 

@@ -219,6 +219,8 @@ public sealed class SupersededBookingTests
             nameof(ShipmentStatus.Pending),
             null,
             first.CreatedAt,
+            null,
+            null,
             null);
 
         return await worker.FulfilAsync(provider, work, TestContext.Current.CancellationToken);

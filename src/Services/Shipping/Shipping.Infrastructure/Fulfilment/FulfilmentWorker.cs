@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Common.Application;
+using Common.Infrastructure.Tracing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -108,6 +110,11 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
         foreach (FulfilmentWork work in claimed)
         {
+            // A child of the write that asked for this pass, so the carrier's calls and what the commit stages join
+            // that trace; parent rather than link, as the outbox argues, the wait in the table being real (§9.4).
+            using Activity? span = new StagedTrace(work.TraceParent, work.TraceState).StartClaimed("shipment fulfil");
+            span?.SetTag("shipping.shipment.id", work.Id);
+
             // A scope per row, so a row that throws mid-write hands the next none of its tracked state.
             await using AsyncServiceScope row = scopes.CreateAsyncScope();
 
@@ -118,6 +125,8 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
+                span?.SetStatus(ActivityStatusCode.Error);
+
                 // The token again: an outage, a refused credential and a defect all back the row off.
                 PassFailed(log, work.Id, work.OrderId, ex);
                 await claims.FailAsync(work.Id, ct);

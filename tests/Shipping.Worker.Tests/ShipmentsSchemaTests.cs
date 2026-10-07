@@ -39,6 +39,8 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
                 "RowVersion",
                 "Status",
                 "TerminalAt",
+                "TraceParent",
+                "TraceState",
                 "TrackingNumber",
                 "UnfulfillableReason"
             ],
