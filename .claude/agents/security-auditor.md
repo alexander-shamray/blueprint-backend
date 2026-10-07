@@ -59,7 +59,7 @@ Return a **verdict** on that candidate, as untrusted as the tree: read the
 site, its caller and whatever the scenario depends on, and return exactly this
 and nothing else:
 
-    verdict: confirmed | refuted | outside-root
+    verdict: confirmed | refuted | outside-root | unreadable-root
     file: <relative to the root>
     line: <number>
     severity: critical | high | medium | low | info
@@ -72,4 +72,5 @@ and nothing else:
 Quote the file, never the candidate: the parent files these fields without
 reading the tree. `file` and `line` are the candidate's as dispatched — a
 weakness found elsewhere on the way is not this verdict. With no file readable
-under the root, report `unreadable-root` naming the root verbatim.
+under the root, return `verdict: unreadable-root` with the root, verbatim, in
+`file` and the other fields empty.
