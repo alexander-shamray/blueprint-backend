@@ -224,9 +224,12 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   `docs/token-plan.md` step 4 archives them, a PR is reviewed in rounds of
   one `bug-auditor` each, read-only by its tool list rather than by the
   brief, and never `general-purpose`. It reads code only, so when a round's
-  diff touches prose or a chapter, the session also runs `/review-branch`'s
-  *What counts as a finding* over that diff, for the contradictions the one
-  rule forbids, until step 4's `branch-reviewer` covers both. Round 1 reads
+  diff touches prose or a chapter, an `Explore` agent briefed with
+  `/review-branch`'s *What counts as a finding* reviews that part — instead
+  of `bug-auditor` when the diff is prose only, after it otherwise, never
+  in parallel and never the session itself. `Explore` is read-only by its
+  brief, not its tool list, until step 4's `branch-reviewer` covers both.
+  Each reviewer gets the diff, not the author's conclusions. Round 1 reads
   the branch diff; each later round reads the diff since the round before
   and the findings still open, not the tree. The diff is written under
   `artifacts/review/`, since `bug-auditor` refuses the scratchpad. The loop
