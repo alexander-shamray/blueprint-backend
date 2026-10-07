@@ -124,7 +124,8 @@ class Report:
                 woken = True
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
             # A plugin's skill hands on to the next; one of this repository's commands keeps what it loads.
-            elif (command == NO_COMMAND or ":" in command.removeprefix("skill:")) and not entry.get("isSidechain") \
+            elif (command == NO_COMMAND or command.startswith("skill:") and ":" in command[6:]) \
+                    and not entry.get("isSidechain") \
                     and (skill := skill_of(entry)) and command != "skill:" + skill:
                 command = "skill:" + skill
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))

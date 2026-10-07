@@ -194,6 +194,15 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(rows["skill:ship", "main"]["cache_read"], 4)
         self.assertNotIn(("skill:branch", "main"), rows)
 
+    def test_a_typed_plugin_command_keeps_the_skills_it_loads(self):
+        loads = {"type": "assistant", "timestamp": "2026-10-07T09:05:00.000Z", "message": {
+            "id": "m1", "usage": usage(read=1),
+            "content": [{"type": "tool_use", "name": "Skill", "input": {"skill": "superpowers:writing-plans"}}]}}
+        typed = prompt("<command-name>/superpowers:brainstorm</command-name>")
+        self.files.write("s.jsonl", [typed, loads, reply("m2", at="2026-10-07T09:06:00.000Z", read=2)])
+        rows, _ = self.rows()
+        self.assertEqual(rows["/superpowers:brainstorm", "main"]["cache_read"], 3)
+
     def test_a_skill_loaded_by_a_typed_command_stays_that_command(self):
         loads = {"type": "assistant", "message": {
             "id": "m1", "usage": usage(read=1),
