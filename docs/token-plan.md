@@ -97,7 +97,7 @@ every sweep's tooling row reads.
 | Every turn, everywhere | 3.9k + 1.2k | about 1.5k + 0.85k |
 | A `/ship` turn | about 45k resident | about 12k |
 | Reviewing one PR | about 9M, carrying the triage chain over as is | about 0.8M |
-| A first sweep | up to about 185M | about 25M |
+| A first sweep | up to about 185M | about 25M ending by round 3, about 40M at the seventh |
 | A repeat sweep | the same | about 2–4M |
 | A session touching `.claude/` or style | 11–22k of reference | 2–5k |
 
@@ -167,8 +167,9 @@ the external reviewers found.
 - Slices of at most 60k tokens from an explicit file list the parent builds
   with `git ls-files`, about 36 over the corpus left after the exclusions,
   each read whole.
-- Rounds 2 and 3 follow the leads round 1 found, with the findings so far
-  passed in; the ceiling is three rounds.
+- Round 2 onwards follows the leads the rounds before it found, with the
+  findings so far passed in, rather than re-reading the tree; the ceiling
+  stays seven rounds, and the loop still ends on a round with nothing new.
 - The SHA of the last sweep is kept, and a repeat sweep reads the diff
   since it.
 - Re-verifying a finding runs on `model: sonnet`; the auditors stay on the
