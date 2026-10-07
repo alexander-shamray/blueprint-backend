@@ -665,9 +665,32 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
                       "the file the merge kept apart is not named")
         self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip(), "nothing was replayed")
 
+    def test_a_side_taken_whole_over_a_clean_hunk_in_a_conflicted_file_stops_the_run(self):
+        # Main edits lines 1 and 50 of m.txt and the branch line 50, and the
+        # merge takes the branch's m.txt whole. It equals one parent, so `--cc`
+        # is empty, and the replay would bring main's line 1 back.
+        self.at('git checkout -q main && seq 1 60 > m.txt && git add -A && git commit -qm "m.txt" '
+                '&& git push -q origin main && git checkout -q feat/x && git rebase -q main '
+                '&& git push -q -f origin feat/x '
+                '&& git checkout -q main && sed -i "1s/.*/main-one/;50s/.*/main-fifty/" m.txt '
+                '&& git commit -qam "main edits m.txt" && git push -q origin main '
+                '&& git checkout -q feat/x && sed -i "50s/.*/branch-fifty/" m.txt '
+                '&& git commit -qam "the branch edits m.txt" '
+                '&& { git merge -q main || true; } && git checkout -q --ours m.txt && git add m.txt '
+                '&& git commit -q --no-edit && git push -q -f origin feat/x')
+        self.assertEqual("", self.at("git log --merges --cc --format= origin/main..HEAD").stdout,
+                         "the fixture is one `--cc` can see, so it tests nothing new")
+        before = self.at("git rev-parse HEAD").stdout.strip()
+
+        result = self.helper()
+        self.assertEqual(10, result.returncode, result.stderr)
+        self.assertIn(f"where it differs from a clean merge:\n{before} m.txt\n", result.stderr,
+                      "the conflicted file that dropped a clean hunk is not named")
+        self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip(), "nothing was replayed")
+
     def test_a_conflict_the_merge_resolved_to_one_side_is_left_to_the_replay(self):
-        # A conflicted file differs from git's own merge by construction, so
-        # the comparison skips it, and here the replay meets the same conflict.
+        # A side taken whole that drops none of the other's clean hunks passes,
+        # and here the replay meets the same conflict.
         self.at(CONFLICT + 'git merge -q main; echo theirs > a.txt && git add a.txt '
                 '&& git commit -q --no-edit && git push -q -f origin feat/x')
         self.assertEqual("", self.at("git status --porcelain").stdout, "the merge was not committed")
