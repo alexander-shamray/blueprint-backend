@@ -101,6 +101,10 @@ public class OutboxSerialisationTests
                 "Walnut desk",
                 "https://cdn.example/desk.jpg",
                 Money.Of(19.99m, "EUR"),
+                Raised),
+            [typeof(PriceChangedDomainEvent)] = new PriceChangedDomainEvent(
+                ProductId.New(),
+                Money.Of(24.50m, "EUR"),
                 Raised)
         };
 

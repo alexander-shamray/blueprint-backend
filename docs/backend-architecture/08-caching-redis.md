@@ -303,8 +303,8 @@ sequenceDiagram
     A->>C: PUT /v1/catalog/products/{id}/price
     rect rgb(240, 245, 250)
     Note over C,DB: One transaction — no I/O but the database
-    C->>DB: UPDATE Prices
-    C->>DB: INSERT outbox: Local (own cache)
+    C->>DB: UPDATE Products (the price)
+    C->>DB: INSERT outbox: Local (own cache, once it has one)
     C->>DB: INSERT outbox: Broker (PriceChanged)
     C->>DB: COMMIT
     end
@@ -328,6 +328,10 @@ Remote invalidation flows through the `Broker` lane as an ordinary integration
 event. Both are needed — the local row keeps the writing service consistent
 with itself, the event keeps every other service consistent shortly after — and
 now both are the same mechanism.
+
+**Catalog caches nothing today, so its price change stages the `Broker` row
+alone.** A `Local` row with no handler to take it is refused (§9.4), so the
+`Local` half arrives with Catalog's first cached read, beside its handler.
 
 The consumer's side is **Ordering's**, and it is a shape rather than a
 registration: Ordering caches nothing through `HybridCache` today, so its one

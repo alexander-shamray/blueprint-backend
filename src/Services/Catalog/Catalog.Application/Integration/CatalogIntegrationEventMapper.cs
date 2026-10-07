@@ -11,17 +11,18 @@ namespace Catalog.Application.Integration;
 /// </summary>
 internal sealed class CatalogIntegrationEventMapper : IIntegrationEventMapper
 {
-    // The allow-list. Catalog's other two facts of §3.2 — PriceChanged and
-    // ProductDiscontinued — join it with the domain operations that raise
-    // them; an entry here with no domain event behind it would not compile,
-    // which is the property that keeps this list honest.
+    // The allow-list. Catalog's last fact of §3.2, ProductDiscontinued, joins
+    // it with the domain operation that raises it (#471); an entry here with
+    // no domain event behind it would not compile, which is the property that
+    // keeps this list honest.
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
     {
         // Domain type in, contract type out. The suffix (§5.5) is what makes
         // that visible — with one name for both, this reads as identity, and
         // §12.4's "the domain type never reaches the broker" would have
         // nothing to assert against.
-        [typeof(ProductPublishedDomainEvent)] = e => ToContract((ProductPublishedDomainEvent)e)
+        [typeof(ProductPublishedDomainEvent)] = e => ToContract((ProductPublishedDomainEvent)e),
+        [typeof(PriceChangedDomainEvent)] = e => ToContract((PriceChangedDomainEvent)e)
     };
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
@@ -56,6 +57,17 @@ internal sealed class CatalogIntegrationEventMapper : IIntegrationEventMapper
         ProductId = e.ProductId.Value,
         Name = e.Name,
         ThumbnailUrl = e.ThumbnailUrl,
+        Amount = e.Price.Amount,
+        Currency = e.Price.Currency
+    };
+
+    // The same envelope as ProductPublished's, for the same reasons.
+    private static PriceChanged ToContract(PriceChangedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.ProductId.Value,
+        OccurredAt = e.OccurredAt,
+        ProductId = e.ProductId.Value,
         Amount = e.Price.Amount,
         Currency = e.Price.Currency
     };

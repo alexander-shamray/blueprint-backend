@@ -1623,10 +1623,9 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > **A projection with no publisher is worse than a remote call.** If this
 > service has applied neither of the two events that write a price row — the
 > `ProductPublished` Catalog necessarily emitted, because `Product.Publish`
-> is its factory, nor any later `PriceChanged`, which is optional and which
-> Catalog has no publisher for today — this table has no row for the product
-> and every order containing it fails, silently, with a
-> 422 `order.products_unavailable` and no error in any log. Silently is the
+> is its factory, nor any later `PriceChanged`, which is optional — this
+> table has no row for the product and every order containing it fails,
+> silently, with a 422 `order.products_unavailable` and no error in any log. Silently is the
 > word that matters: a rule rejection is a *correct* answer from a service with
 > no prices, so nothing about it looks like a fault. Two mitigations, both
 > worth having: Catalog republishes its full catalogue on demand (an

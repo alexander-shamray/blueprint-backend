@@ -133,7 +133,7 @@ the subset a resource would need.
       // still requires catalog:write (§11.4); this is the edge's coarser check.
       "catalog-write": {
         "ClusterId": "catalog",
-        "Match": { "Path": "/api/v1/catalog/{**catch-all}", "Methods": [ "POST" ] },
+        "Match": { "Path": "/api/v1/catalog/{**catch-all}", "Methods": [ "POST", "PUT" ] },
         "AuthorizationPolicy": "authenticated",
         "RateLimiterPolicy": "authenticated",
         "Transforms": [

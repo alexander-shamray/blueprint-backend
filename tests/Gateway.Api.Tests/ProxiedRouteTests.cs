@@ -54,6 +54,23 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
         stub.ReceivedPaths.Last().ShouldBe("/v1/catalog/products");
     }
 
+    /// <summary>A price change is a PUT (§8.4), so <c>catalog-write</c> admits the verb as well as POST.</summary>
+    [Fact]
+    public async Task An_authenticated_put_reaches_catalog_write()
+    {
+        using StubbedGatewayFactory factory = new(stub.Address);
+        using HttpClient client = factory.CreateClient();
+        var productId = Guid.CreateVersion7();
+
+        using HttpRequestMessage request = new(HttpMethod.Put, $"/api/v1/catalog/products/{productId}/price");
+        request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
+
+        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        stub.ReceivedPaths.Last().ShouldBe($"/v1/catalog/products/{productId}/price");
+    }
+
     /// <summary><c>catalog-write</c> is <c>authenticated</c>, so an anonymous POST reaches nothing (§11.4).</summary>
     [Fact]
     public async Task An_anonymous_post_to_catalog_write_is_refused()
@@ -137,12 +154,12 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
         stub.ReceivedPaths.Last().ShouldBe($"/v1/payments/{order}");
     }
 
-    /// <summary>PUT names neither catalog route, so routing answers an authenticated caller 405 (§10.2).</summary>
+    /// <summary>DELETE names neither catalog route, so routing answers an authenticated caller 405 (§10.2).</summary>
     /// <remarks>
     /// The anonymous half is <see cref="A_wrong_method_is_challenged_before_it_is_refused"/> (ADR-030).
     /// </remarks>
     [Fact]
-    public async Task The_catalog_namespace_matches_no_method_but_get_and_post()
+    public async Task The_catalog_namespace_matches_no_method_but_get_post_and_put()
     {
         using StubbedGatewayFactory factory = new(stub.Address);
         using HttpClient client = factory.CreateClient();
@@ -151,7 +168,7 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
         int before = stub.ReceivedPaths.Count;
 
         using HttpRequestMessage request =
-            new(HttpMethod.Put, "/api/v1/catalog/products");
+            new(HttpMethod.Delete, "/api/v1/catalog/products");
         request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
 
         HttpResponseMessage response =
@@ -172,9 +189,8 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
 
         int before = stub.ReceivedPaths.Count;
 
-        HttpResponseMessage response = await client.PutAsync(
+        HttpResponseMessage response = await client.DeleteAsync(
             "/api/v1/catalog/products",
-            content: null,
             TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);

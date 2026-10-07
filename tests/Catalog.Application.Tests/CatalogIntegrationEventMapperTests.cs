@@ -70,6 +70,24 @@ public class CatalogIntegrationEventMapperTests
     }
 
     [Fact]
+    public void A_price_change_becomes_its_contract_correlated_by_the_product()
+    {
+        var productId = ProductId.New();
+
+        PriceChanged contract = Mapper()
+            .Map([new PriceChangedDomainEvent(productId, Money.Of(24.5m, "eur"), Raised)])
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<PriceChanged>();
+
+        contract.ProductId.ShouldBe(productId.Value);
+        contract.CorrelationId.ShouldBe(productId.Value);
+        contract.MessageId.ShouldNotBe(Guid.Empty);
+        contract.OccurredAt.ShouldBe(Raised);
+        contract.Amount.ShouldBe(24.5m);
+        contract.Currency.ShouldBe("EUR");
+    }
+
+    [Fact]
     public void An_unregistered_domain_event_is_skipped_and_is_not_an_error()
     {
         // §9.3's first row: absence from the registry keeps a domain event off the bus, and is not an error.
