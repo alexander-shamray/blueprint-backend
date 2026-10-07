@@ -35,10 +35,13 @@ product exists. A literal gateway route rather than the catch-all, because
 the own list names a caller and `catalog-public` is anonymous at the edge.
 **Consequences.** Nothing records who published a product before this
 column, and the seeder publishes as nobody, so those rows keep a null seller,
-belong to no caller, and cannot be repriced or withdrawn through the API; an
-operator does that in SQL or publishes a new product. A seller who withdraws
-by mistake publishes again under a new id, and orders already placed keep the
-old one, whose name the BFF's projection still holds. The BFF consumes no
+belong to no caller, and cannot be repriced or withdrawn through the API
+until an operator sets their `SellerId` in SQL, after which that seller acts
+through the API. A direct update of the price or of `WithdrawnAt` would
+stage no event, and Ordering's projection would go on selling the product at
+its old price. A seller who withdraws by mistake publishes again under a new
+id, and orders already placed keep the old one, whose name the BFF's
+projection still holds. The BFF consumes no
 `ProductDiscontinued`: a withdrawn product's name stays readable on the
 orders that bought it, which is the reason to keep it. A deep link to a
 withdrawn product now answers 404 where it answered the product, including
