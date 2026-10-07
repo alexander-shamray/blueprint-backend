@@ -18,6 +18,7 @@ NO_COMMAND = "(no command)"
 MAIN = "main"
 SUBAGENT = "subagent"
 COMMAND = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
+INJECTED = ("<bash-", "<local-command-")
 
 # Anthropic's prompt-caching prices as multiples of the base input price.
 WRITE_5M = 1.25
@@ -155,14 +156,19 @@ def is_prompt(entry: dict) -> bool:
     """A person's prompt: tool results and injected meta messages are user entries too."""
     if entry.get("type") != "user" or entry.get("isSidechain") or entry.get("isMeta"):
         return False
+    if entry.get("isCompactSummary"):
+        return False
     origin = entry.get("origin")
     if isinstance(origin, dict) and origin.get("kind") != "human":
         return False
     content = (entry.get("message") or {}).get("content")
-    if isinstance(content, str):
-        return True
-    return isinstance(content, list) and any(
-        isinstance(b, dict) and b.get("type") == "text" for b in content)
+    if isinstance(content, list):
+        texts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+        if not texts:
+            return False
+        content = " ".join(texts)
+    # A `!` command's input and output and a local command's output are written as user text.
+    return isinstance(content, str) and not content.lstrip().startswith(INJECTED)
 
 
 def command_of(entry: dict) -> str:

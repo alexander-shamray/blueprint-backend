@@ -76,6 +76,21 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(rows[NO_COMMAND, "main"]["cache_read"], 5)
         self.assertEqual(rows["/ship", "main"]["cache_read"], 2)
 
+    def test_text_the_harness_writes_as_a_user_entry_does_not_end_the_command(self):
+        injected = [
+            {"type": "user", "isCompactSummary": True, "timestamp": "2026-10-07T09:10:00.000Z",
+             "message": {"content": "This session is being continued from a previous conversation..."}},
+            prompt("<bash-input>git status</bash-input>", "2026-10-07T09:11:00.000Z"),
+            prompt("<bash-stdout>On branch main</bash-stdout><bash-stderr></bash-stderr>", "2026-10-07T09:12:00.000Z"),
+            prompt("<local-command-stdout>Compacted</local-command-stdout>", "2026-10-07T09:13:00.000Z"),
+        ]
+        for entry in injected:
+            entry.pop("origin", None)
+        self.files.write("s.jsonl", [ship(), *injected, reply("m1", at="2026-10-07T09:14:00.000Z", read=7)])
+        rows, _ = self.rows()
+        self.assertEqual(rows["/ship", "main"]["cache_read"], 7)
+        self.assertNotIn((NO_COMMAND, "main"), rows)
+
     def test_a_tool_result_does_not_end_the_command(self):
         self.files.write("s.jsonl", [ship(), tool_result(), reply("m1", read=7)])
         rows, _ = self.rows()
