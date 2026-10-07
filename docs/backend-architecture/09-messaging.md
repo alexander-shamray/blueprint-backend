@@ -966,9 +966,11 @@ trace's child.** `Stage` records the current activity's W3C `traceparent` and
 `tracestate` in two nullable columns, and the dispatcher starts every row's
 delivery on `OutboxDispatcher.ActivitySourceName` with that context as its
 parent. MassTransit carries the context from the publish to the consumer by
-itself; the table was the one hop that dropped it, so without the columns
-every trace ended at the outbox and what followed was reachable only by
-joining logs on the correlation id. **Parent rather than link, deliberately**:
+itself; the table was the hop that dropped it, so without the columns every
+trace ended at the outbox and what followed was reachable only by joining
+logs on the correlation id. A worker that claims its own rows in a later pass
+drops it the same way, and Shipping's booking and Notifications' send still
+do ([#586](https://github.com/alexander-shamray/blueprint-backend/issues/586)). **Parent rather than link, deliberately**:
 a link would keep the request's trace and the delivery's apart and leave a
 reader to follow the join, which is the gap this closes; a parent makes one
 trace from the request to the last consumer, and its duration then includes
