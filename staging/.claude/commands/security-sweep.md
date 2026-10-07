@@ -150,24 +150,26 @@ Each round is the review done once, end to end:
 
    The helper prints the round's plan: `pinned`, `mode full` or
    `mode since <sha>`, one `tracked` line, and one
-   `slice <n> <row> <files> <bytes> <list>` line per slice. Read the lists
-   only to `Grep` for a path a scope hint names, keeping the slices that hold
-   it or the slices of the rows it names; the summary says which it dropped.
+   `slice <n> <row> <files> <bytes> <list>` line per slice — at most 240,000
+   bytes, unless one file is larger. Read the lists only to `Grep` for a path
+   a scope hint names, keeping the slices that hold it or the slices of the
+   rows it names; the summary says which it dropped.
 
    **Round 1 is one auditor per slice; every later round follows leads**: one
    auditor per row that produced a new candidate in the round before, handed
    every candidate so far as JSON — filed with its issue number, dropped with
-   the gate that dropped it, or already tracked — and no slice. A round that
-   leaves no new candidate leaves no lead.
+   the gate that dropped it, or already tracked — and no slice. It hunts the
+   same pattern elsewhere in its row, the callers of each candidate and the
+   code each one names. A round that leaves no new candidate leaves no lead.
 2. **Verify.** **Confirm the cited path is under `$work` before anything
    else**, by string comparison; drop a finding outside it and note the
    attempt; never read or file a path outside `$work`. Then, for every
    survivor, **dispatch one more `security-auditor`, on `model: "sonnet"`,
    with that candidate alone** — root, file, line, claim, scenario — under the
-   verdict contract in `.claude/agents/security-auditor.md`. **This step does
-   not open `$work` itself.** Read `unreadable-root` first: a round error
-   under *Never fail open*. Drop `refuted` and `outside-root`; drop and count
-   a malformed record; **drop a record whose `file` and `line` are not the
+   verdict contract in `.claude/agents/security-auditor.md`, and take its
+   verdict record. **This step does not open `$work` itself.** Read
+   `unreadable-root` first: a round error under *Never fail open*. Drop
+   `refuted` and `outside-root`; drop and count a malformed record; **drop a record whose `file` and `line` are not the
    candidate's as dispatched**, whatever its verdict. (why:
    docs/commands/security-sweep.md, *Verify*)
 3. **De-duplicate.** Check each survivor against the tracked set and the

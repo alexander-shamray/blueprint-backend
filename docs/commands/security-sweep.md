@@ -64,6 +64,12 @@ agreement between two.
 **Porcelain is a labelled record, so `$work` is the path field and not the
 line.** The format is three lines per worktree —
 
+```
+worktree D:/tmp/alexa/secsweep-nlPuf1
+HEAD 34bb526dd8e01aac01275b05530937275427f7e9
+detached
+```
+
 — so compare the **`worktree `-prefixed lines only**, and strip that prefix
 before anything reads `$work`. Both halves matter and each fails differently.
 Left unstripped, `$work` is `worktree D:/…` and `$work/Platform.slnx` cannot
@@ -208,7 +214,8 @@ nothing untracked. Do not check-then-remove: a plain `git worktree remove`
 already refuses a checkout holding anything modified or untracked, which is
 exactly the condition wanted, so let its own refusal be the guard. **`--force`
 is not available to defeat it**, which is the helper's whole purpose — it also
-refuses the main worktree and any path this repository has not registered:.
+refuses the main worktree and any path this repository has not registered
+(the command is in the runbook).
 
 A detached, read-only sweep that wrote its scratch to a separate temp path
 leaves `$work` clean, and a clean worktree removes without complaint. **If
@@ -369,7 +376,8 @@ rather than security findings, so a sweep run through it can return a clean
 *security* round having looked for something else.
 
 **The rows are `sweep-slices.sh`'s, which cuts them into slices**: its
-`row_of` holds each row's paths, and the table says why each row exists.
+`row_of` holds each row's paths, and the runbook's table in *The round*
+says why each row exists.
 
 **The rows have to partition the repository, not merely sample it.** A row
 is an auditor's **reporting** ownership, so a path no row owns is not a
@@ -568,6 +576,8 @@ this command files and does not fix. So:
   a sweep that keeps turning up new areas; it is not a promise the repo is clean
   at seven.
 
+**A sweep that ends clean marks the commit it read**, and only then
+(the command is in the runbook).
 The next sweep's round 1 then reads only the files changed since, and its
 summary says "clean since" that commit. A sweep that ended on the ceiling,
 errored or ran under a scope hint does not mark, because what it read was not

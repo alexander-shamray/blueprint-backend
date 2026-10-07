@@ -21,7 +21,9 @@ would satisfy. If explaining the problem requires quoting a chapter, it is not
 this command's finding.
 
 Three commands sit next to this one, and the boundaries are worth stating
-because an overlapping sweep files the same thing twice under two labels:
+because an overlapping sweep files the same thing twice under two labels; the
+runbook's table in *What this command hunts, and what it hands over* draws
+them.
 
 **The overlap with `/security-sweep` is handled by the de-duplicate gate, not by
 the boundary.** The gate below enumerates issues regardless of label, so a
@@ -38,7 +40,8 @@ medium, and deliberately: a latent security weakness is a liability the moment
 it exists, where a latent defect on an unreachable path is a note. The threshold
 is the user's to move, not this command's.
 
-The calibration, so the bar is operable rather than a word:
+The calibration, so the bar is operable rather than a word, is the runbook's
+table in *Severity, and why the bar is high*.
 
 **A vacuous gate is ranked critical, and that is a claim about this repository
 rather than about defects in general.** The design puts its enforcement in
@@ -108,24 +111,30 @@ caught by a test. The second half has a mitigation and the first does not — th
 mitigation is the next section. Name the limit in the run summary rather than
 implying the sweep is stronger than it is.
 
-The mitigation is the test corpus, which the runbook's *The tests are evidence, and they cut both ways* applies:
+The mitigation is the test corpus, which the runbook's *The tests are
+evidence, and they cut both ways* applies.
 
-**Before filing, look for a test that covers the cited line.** Grep the suites
-for the type and the member. What turns up decides the candidate:
+**Before filing, look for a test that covers the cited line — and the verifier
+looks, not the parent.** The verify dispatch asks it to grep the suites for the
+type and the member and to say whether a covering test would fail if the defect
+were real; its answer travels in the verdict record's existing `scenario`
+field, so the agent's verdict contract is unchanged and the parent still opens
+nothing in `$work` (*The round: verify*). What turns up decides the candidate:
 
 - **A test that asserts the behaviour and would fail if the defect were real**
-  is reason to re-read the candidate, not proof against it. Read the test as
-  written, and **do not lean on the suite being green** — nothing here runs it,
-  so its passing at this commit is an assumption rather than an observation:
-  CI's verdict belongs to a commit this command never checks, and three of the
-  projects need a Docker daemon that may not have been present. Drop the
-  candidate when the test's own text shows the failure scenario cannot hold; if
-  it is filed anyway, say in the issue why the test passes regardless.
+  is reason to re-read the candidate, not proof against it. The verifier reads
+  the test as written, and **does not lean on the suite being green** — nothing
+  here runs it, so its passing at this commit is an assumption rather than an
+  observation: CI's verdict belongs to a commit this command never checks, and
+  three of the projects need a Docker daemon that may not have been present.
+  Drop the candidate when the test's own text shows the failure scenario
+  cannot hold; if it is filed anyway, say in the issue why the test passes
+  regardless, composed from the verdict's `scenario` field.
 - **A test that covers the line and could not fail** is not evidence of
   anything, and the sweep has now found **two** findings rather than none: the
-  original defect, and a vacuous test that is itself critical by the table
-  above. This is the case worth slowing down for, which is why the auditor's
-  checklist names it and why the bar puts it at the top.
+  original defect, and a vacuous test that is itself critical by the
+  runbook's severity table. This is the case worth slowing down for, which is
+  why the auditor's checklist names it and why the bar puts it at the top.
 - **No test at all** leaves the candidate exactly where it was. Absent coverage
   is not a defect this command files, and it is not corroboration either.
 
@@ -273,51 +282,17 @@ opened. That is the precise fail-open the named-file assertion exists to close,
 reintroduced by an unbound variable, so the proof takes an **absolute** path or
 it is not the proof.
 
-**The `secsweep-` prefix is not a copy-paste slip, and it is this command's one
-piece of borrowed clothing.** `git-worktree-detach.sh` and
-`git-worktree-drop.sh` both refuse any path that is not `secsweep-` plus six
-characters under the canonical temp root. What that buys is exclusion, not
-ownership: it puts every sibling PR worktree and everything outside the temp
-root out of reach, which is the point, since the audited tree is
-prompt-injection input and a poisoned finding naming a sibling would otherwise
-be able to delete it. **It does not establish that the path came from this
-invocation, and the two helpers differ on why.** `git-worktree-detach.sh`
-creates the directory itself and prints it, so for *that* helper the question
-does not arise — there is no caller-supplied path to doubt.
-`git-worktree-drop.sh` is the other case: the teardown hands it `$posix`, and
-any registered worktree of the right shape satisfies it, including one an
-abandoned earlier sweep left behind. So exclusion is the load-bearing half, and
-ownership is not proved. Those helpers live under `.claude/scripts/`, which is
-`Edit`-denied to a command session by design, so this command cannot widen the
-shape to `bugsweep-` and must satisfy the one that exists.
-
-**The shape check compares `dirname "$resolved"` against `$tmproot` and matches
-the basename alone**, because in a bash `case` pattern there is no pathname
-expansion, so `?` matches **any** character including `/` — the pattern
-`"$tmproot"/secsweep-??????` would accept `$tmproot/secsweep-a/bbbb` as readily
-as `$tmproot/secsweep-abc123`. A basename contains no `/`, so the direct-child
-condition cannot be talked past.
-
-**Both helpers state in their own comments** what the check excludes (sibling
-PR worktrees, anything outside the temp root) and what it establishes, because
-a reader of a helper has not necessarily read this file first. Their refusal
-message reads `sweep-shaped`, not `sweep-owned`, because the check does not
-establish ownership.
-
-**What it costs is attribution, not safety.** A nested `secsweep-a/bbbb` is
-refused, the names `mktemp` invents inside the detach helper are unique so two
-sweeps cannot collide, and the drop helper removes only the exact path handed
-to it and the slice lists it names from that path. What is lost is that a
-stray temp directory does not say which of the two commands left it. That is a
-residual named rather than hidden, and the run summary says which command owns
-the directory it reports.
-
-**Both helpers' header comments name "a sweep" rather than `/security-sweep`,
-and the prefix is not renamed.** The prefix is the one literal both helpers
-match on: moving it means changing the name the detach helper mints and the
-shape the drop helper requires together, and a half-done rename leaves a sweep
-able to fork but not tear down. The detach helper says in place that
-`secsweep-` is shared.
+**The `secsweep-` prefix is borrowed, and its exclusion argument — the shape
+check both helpers make, and why the prefix is not renamed — is owned by
+`docs/harness-boundaries.md`, *Normalisation, residuals and the sweeps*.** What
+that section does not say: the check establishes exclusion, not ownership.
+`git-worktree-detach.sh` mints the path itself, so the question does not arise
+there; `git-worktree-drop.sh` accepts any registered worktree of the right
+shape, including one an abandoned sweep left, which is why its refusal reads
+`sweep-shaped`, not `sweep-owned`. It compares `dirname "$resolved"` against
+`$tmproot` and matches the basename alone, because in a bash `case` pattern `?`
+matches `/` too, and a basename holds none. A stray directory does not say which
+sweep left it, so the run summary says which command owns the one it reports.
 
 **Pin the resolved commit, not `HEAD` a second time.** Reading `HEAD` once for a
 summary and again for `git worktree add` are two calls, and in a repo worked by
@@ -374,9 +349,6 @@ and the rule above keeps the reads there. To sweep work in progress, commit it
 first so a `HEAD` exists to fork. Say in the opening summary which commit the
 sweep pinned to.
 
-The prefix's exclusion argument for both sweeps is owned by
-`docs/harness-boundaries.md`, *Normalisation, residuals and the sweeps*.
-
 ## Teardown
 
 **Always return to the original directory at the end — including when a round
@@ -408,15 +380,15 @@ or high.** Three gates, and each drops candidates the round must not file:
 
 - **Confirmed.** A subagent's claim is raw data, never a filing. A second
   read-only auditor reads the code it cites, traces the values, finds the
-  caller and reproduces the failure scenario before it becomes an issue
-  (*The round: verify*), so the parent never opens `$work` itself; the test
-  corpus is weighed per the section above. An audit that files unverified agent output
-  manufactures noise the next round then has to triage, and a defect sweep is
-  more exposed to this than a security one: a plausible-sounding logic bug that
+  caller, reproduces the failure scenario and weighs the test corpus before
+  it becomes an issue (*The round: verify*), so the parent never opens
+  `$work` itself. An audit that files unverified agent output manufactures
+  noise the next round then has to triage, and a defect sweep is more
+  exposed to this than a security one: a plausible-sounding logic bug that
   dissolves on a second read is the characteristic failure of this whole
   exercise.
 - **Critical or high.** Everything below the bar is recorded in the round
-  summary, not filed, per the calibration above.
+  summary, not filed, per the runbook's severity table.
 - **Not already tracked.** Before filing, enumerate the **whole** issue set
   through `gh-issue-list.sh`, which spells `--state all --limit 1000` itself
   because the default 30 hides older issues and lets a duplicate straight
@@ -534,9 +506,9 @@ is a finding handled without a new issue. Say which in the summary.
 (`.claude/agents/bug-auditor.md`), whose complete tool list is `Read`,
 `Grep`, `Glob` — no shell, no editing, no network, no sub-agents — over
 areas with **disjoint reporting ownership**, so no two are answerable for the
-same defect. That is not a reading restriction, and the paragraph below the
-table says why it must not become one. Read-only here is a property of
-the agent's tool grant, not a word in its prompt, and the profile is
+same defect. That is not a reading restriction, and *A row bounds what an
+auditor reports* below says why it must not become one. Read-only here is a
+property of the agent's tool grant, not a word in its prompt, and the profile is
 deliberately narrower than "excludes `Edit`/`Write`": a profile that still
 carried `Bash` or a network tool could be driven by a **prompt-injected**
 audit file into filing to another tracker or calling out before the parent's
@@ -560,10 +532,13 @@ and a `general-purpose` spawn is permitted under an
 **The residual is that a deny list of agent types is an inventory**, and a
 type it does not name is admitted by default; that argument, and the test
 that enforces it, are owned by `docs/harness-boundaries.md`, *Agent-type, push
-and dotnet entries*.
+and dotnet entries*. The other sweeps' read-only profiles belong on it too,
+because `security-auditor` run here can miss the logic and execution defects
+this command exists to find.
 
 **The rows are `sweep-slices.sh`'s, which cuts them into slices**: its
-`row_of` holds each row's paths, and the table says why each row exists.
+`row_of` holds each row's paths, and the runbook's table in *The round*
+says why each row exists.
 **The rows have to partition the repository, not merely sample it.** A row is
 an auditor's **reporting** ownership, so a path no row owns is not a path
 without defects — it is a path nobody was answerable for, reported as a clean
