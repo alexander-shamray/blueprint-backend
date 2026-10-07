@@ -720,8 +720,8 @@ is one round and step 7 cannot buy it a second.
    not happen — a body that names the class has named the reason.
 
    **One check holds whatever the class: a fix to a script under
-   `.claude/` carries its case.** `CLAUDE.md`'s *Working in this
-   repo* owns the rule, and this step reads it because it runs before
+   `.claude/` carries its case.** `docs/change-locality.md` §6's
+   *Working rules* own the rule, and this step reads it because it runs before
    every commit steps 3, 5 and 6 make — steps 5 and 6 rerun these checks
    before each fix they commit — while step 0 runs once, before the run
    writes a subject, and never again. A run that never reaches this step
@@ -751,7 +751,7 @@ is one round and step 7 cannot buy it a second.
    **A refusal stops the chain**, because the missing case is a file under
    `.claude/scripts/`, which this session is denied editing, so the run has
    no fix to make. Report the script, the suites looked for and the rule as
-   `CLAUDE.md` words it. The read sees that a suite changed, not that its
+   the contract's §6 words it. The read sees that a suite changed, not that its
    new case failed before the fix; the commit body argues that half.
 
    **Before `/commit`, not after.** A defect found after the commit costs a
