@@ -1,11 +1,8 @@
 # Repo map
 
-**What every entry in `CLAUDE.md`'s tree is, and why it is shaped the way it
-is.** `CLAUDE.md` carries a locator with one line per entry; this file is the
-argument behind each line, and the master copy where the two differ in length.
-Where a line here says more than the line there, that is the split working;
-where the two disagree about *where a thing lives*, one of them is a bug
-report against the other.
+**What every entry in the tree is, and why it is shaped the way it is.**
+This file is the tree's one owner: `CLAUDE.md` carries only a locator of
+the documents a session reads first, and cites this file for the rest.
 
 **It is load-bearing whenever a fact it records changes** — an entry added or
 removed anywhere in the tree, a gate's shape, a service's project set, what a
@@ -69,10 +66,9 @@ docs/token-usage.md          what tools/token-usage reported, one dated
                              section per measurement
 docs/repo-map.md             this file — what every entry here is and why
                              it is shaped that way. It lists itself because
-                             the locator in `CLAUDE.md` does, and a map
-                             missing an entry its own shorter twin carries
-                             has falsified the header above rather than
-                             merely gone short
+                             it is an entry in the tree it maps, and a map
+                             missing one of its own entries has falsified
+                             the header above rather than merely gone short
 docs/style-guide.md          the prose, C# and SQL dialect both artefacts
                              are written in, and which rules the build
                              enforces rather than a reviewer
@@ -113,9 +109,9 @@ TODO.md                      the user's one local planning file — the open
                              committed: a tracked list is main's view of
                              itself and needs a pull request and two review
                              loops to move, which is slower than the thing
-                             it describes. `CLAUDE.md`'s *Working in this
-                             repo* carries the one rule that keeps it
-                             current, and no command, helper or gate reads it
+                             it describes. The contract's §6 carries the one
+                             rule that keeps it current, and no command,
+                             helper or gate reads it
 global.json                  SDK pin (§4.4)
 .config/dotnet-tools.json    dotnet-ef, pinned to the EF Core version —
                              `dotnet tool restore` is the whole setup
