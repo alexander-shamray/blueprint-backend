@@ -134,7 +134,10 @@ Notes that decide the edge cases:
   §4.2 through it; [`repo-map.md`](repo-map.md) argues each edge that
   exists.
 - A migration is Class A only for the service whose schema moved. Two
-  migrations in one PR against two services is two PRs.
+  migrations in one PR against two services is two PRs — except when a
+  building block's own table moved, which is Class B: the shared code reads
+  the column in every service from its first deploy, so each service's
+  migration lands with it, and a split would leave `main` red between them.
 - Appendix B is the one shared Markdown Class E must edit, because the
   licence gate makes it load-bearing. Do not also list the package in a
   chapter.
