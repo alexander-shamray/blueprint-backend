@@ -134,8 +134,8 @@ what `/check-links` itself spends is not yet separated.
 
 The figures above were measured by a report with faults since fixed, as of
 6da22d1; they stand as the record of what that report said, and none of
-them has been re-measured with the fixed one. That measurement is owed,
-and #587 holds it.
+them has been re-measured with the fixed one; the section after this one
+is that measurement.
 
 - **A label ended early.** A compaction summary, a `!` command's input or
   output, a local command's output and an interrupt were each read as a
@@ -150,3 +150,45 @@ and #587 holds it.
   directory's 1.4 GB, and every figure above leaves them out. The report
   now reads every directory named for the checkout followed by a dash,
   which takes in both, and names what it read.
+
+## 2026-10-07 — the fixed report, since 2026-09-15
+
+Measured by the report as of 6a0d524 on the owner's machine, with
+`--since 2026-09-15`, over the main checkout's transcript directory and
+the 103 named for it followed by a dash; the span printed was 2026-09-15
+to 2026-10-07. 70,167 responses in 2,497 contexts came to 1.73B input
+equivalent; output was 19.7M. One fault was still in it: `/compact`,
+`/autocompact` and `/reload-plugins` typed mid-run took the label, 81M
+(4.7%) of the window, fixed in 8630e15; the rows below leave that as it
+fell.
+
+| Workflow | Input equivalent | Share | Subagents' part | After a wake | Runs |
+|---|---|---|---|---|---|
+| `/ship`, typed or loaded as a skill | 767M | 44.5% | 55% | 53% | 78 |
+| Prompts with no command or skill | 482M | 27.9% | 39% | 35% | |
+| The superpowers plugin's skills | 255M | 14.8% | 81% | 80% | |
+| Harness commands typed mid-run | 81M | 4.7% | 62% | 66% | |
+| `/check-links` | 78M | 4.5% | 60% | 96% | 5 |
+| `/branch`, `/commit`, `/pr`, `/review-copilot` on their own | 60M | 3.5% | 37% | 47% | |
+
+| Who | Input equivalent | Share |
+|---|---|---|
+| Main sessions | 784M | 45.5% |
+| `general-purpose` | 596M | 34.5% |
+| `bug-auditor` | 259M | 15.0% |
+| `Explore`, `fork`, `Plan` and the rest | 87M | 5.0% |
+
+**A `/ship` run is about 9.8M**, 4.6M of it before the first wake, which
+agrees with the review's hand-patched 731M (45%) over fewer directories.
+
+**`/check-links` is cheap on its own.** Of its 78M, 2.7M came before a
+wake — about 0.5M a run over the five — and 96% after one, where a `fork`
+building a whole feature sat.
+
+**More than half of the window, 55%, was spent after a wake**: background
+agents and CI watches reporting back, inside a run or after it.
+
+**Attribution holds on a named run.** The latest `/ship` session,
+a2177270, read with `--session`: every response, and its two `Explore`
+and one `bug-auditor` subagents, counted under `/ship` in one context,
+16.2M in all.
