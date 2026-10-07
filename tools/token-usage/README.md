@@ -7,6 +7,7 @@ measures for; this file records what a developer needs at the keyboard.
 py -3.12 tools/token-usage/token_usage.py                      # this checkout's transcripts
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --json
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --spawns 40   # the costliest subagents and their tasks
+py -3.12 tools/token-usage/token_usage.py --session <id>      # one session and its subagents
 py -3.12 tools/token-usage/token_usage.py ~/.claude/projects/<dir> ...
 ```
 

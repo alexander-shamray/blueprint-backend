@@ -171,6 +171,15 @@ class ReportTests(unittest.TestCase):
         _, report = self.rows()
         self.assertEqual(report.span, ["2026-09-01", "2026-10-02"])
 
+    def test_session_reads_only_the_session_named_with_its_subagents(self):
+        self.files.write("aaa1.jsonl", [ship(), reply("m1", read=1)])
+        self.files.write("aaa1/subagents/agent-x.jsonl", [reply("x1", at="2026-10-07T09:20:00.000Z", read=2)])
+        self.files.write("bbb2.jsonl", [ship(), reply("m2", read=4)])
+        report = Report(session="aaa")
+        report.read_project(self.root)
+        total = report.rows()[-1]
+        self.assertEqual((total["cache_read"], total["calls"]), (3, 2))
+
     def test_since_drops_earlier_responses(self):
         self.files.write("s.jsonl", [ship(), reply("m1", at="2026-10-01T00:00:00.000Z", read=1),
                                      reply("m2", at="2026-10-07T00:00:00.000Z", read=2)])

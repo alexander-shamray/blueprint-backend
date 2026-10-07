@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import glob
 import io
 import json
 import re
@@ -70,8 +71,9 @@ class Usage:
 
 
 class Report:
-    def __init__(self, since: str | None = None) -> None:
+    def __init__(self, since: str | None = None, session: str = "") -> None:
         self.since = since
+        self.session = session
         self.groups: dict[tuple[str, str], Usage] = {}
         self.seen: set[str] = set()
         self.skipped = 0
@@ -100,7 +102,7 @@ class Report:
         return usage
 
     def read_project(self, project: Path) -> None:
-        for main in sorted(project.glob("*.jsonl")):
+        for main in sorted(project.glob(glob.escape(self.session) + "*.jsonl")):
             self.read_session(main)
 
     def read_session(self, main: Path) -> None:
@@ -271,6 +273,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="print the rows as JSON")
     parser.add_argument("--spawns", type=int, metavar="N",
                         help="list the N costliest subagents, each with the task it was given, instead")
+    parser.add_argument("--session", default="", metavar="ID",
+                        help="only the session whose id starts with ID, with its subagents")
     args = parser.parse_args(argv)
     if args.since and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args.since):
         parser.error("--since takes YYYY-MM-DD")
@@ -279,7 +283,7 @@ def main(argv: list[str] | None = None) -> int:
     if missing or not projects:
         print(f"no transcript directory at {(missing or default_projects(Path.cwd()))[0]}", file=sys.stderr)
         return 2
-    report = Report(args.since)
+    report = Report(args.since, args.session)
     for project in projects:
         report.read_project(project)
     print(f"read {projects[0]}" + (f" and {len(projects) - 1} more" if len(projects) > 1 else ""), file=sys.stderr)
