@@ -43,8 +43,9 @@ from this list without its section is how one gets "corrected" back.
   `<remarks>` four lines and cited, a block five; a finding is closed by
   cutting.
 - **Layout and naming**: four spaces, CRLF, final newline, UTF-8 without a
-  byte-order mark; `using` outside the namespace (IDE0065), a blank line
-  after it (IDE0055); no unused `using`.
+  byte-order mark; `using` outside the namespace with no blank line
+  between them (IDE0065); a blank line after the namespace declaration
+  (IDE0055); no unused `using`.
 - **Statements and types**: braces for two statements or one that wraps;
   explicit local types but for the four carve-outs; target-typed `new()`
   only beside its type; a spread `[.. x]` to materialise.
