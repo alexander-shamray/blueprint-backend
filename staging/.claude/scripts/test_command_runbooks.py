@@ -11,8 +11,8 @@ from review_helpers import COMMANDS
 
 ARGUMENTS = COMMANDS.parent.parent / "docs" / "commands"
 
-# Bytes: each landed size and about a tenth, so a rule can be added without a
-# fight, and a runbook past its ceiling has regrown its argument.
+# Bytes as git stores them (LF), each landed size and about a tenth: a rule can
+# be added without a fight, and a runbook past its ceiling has regrown.
 CEILINGS = {
     "ship.md": 30500,
     "bug-sweep.md": 17500,
@@ -59,7 +59,7 @@ class EachSplitCommandHasBothHalves(unittest.TestCase):
     def test_each_runbook_stays_under_its_ceiling(self):
         for name, ceiling in CEILINGS.items():
             with self.subTest(command=name):
-                size = len((COMMANDS / name).read_bytes())
+                size = len((COMMANDS / name).read_bytes().replace(b"\r\n", b"\n"))
                 self.assertLessEqual(size, ceiling, f"{name} is {size} bytes, over {ceiling}")
 
     def test_each_argument_names_its_runbook(self):
