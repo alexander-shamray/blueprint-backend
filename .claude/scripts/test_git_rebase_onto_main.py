@@ -654,14 +654,15 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
         self.at('git checkout -q main && echo later > d.txt && git add -A '
                 '&& git commit -qm "main moved again" && git push -q origin main '
                 '&& git checkout -q feat/x && git merge --no-commit -q main; git rm -qf d.txt '
-                '&& git commit -qm "merge main, without d.txt" && git push -q -f origin feat/x')
+                '&& git commit -qm "merge main, keeping the branch side" && git push -q -f origin feat/x')
         self.assertEqual("", self.at("git log --merges --cc --format= origin/main..HEAD").stdout,
                          "the fixture is one `--cc` can see, so it tests nothing new")
         before = self.at("git rev-parse HEAD").stdout.strip()
 
         result = self.helper()
         self.assertEqual(10, result.returncode, result.stderr)
-        self.assertIn("d.txt", result.stderr, "the file the merge kept apart is not named")
+        self.assertIn(f"where it differs from a clean merge:\n{before} d.txt\n", result.stderr,
+                      "the file the merge kept apart is not named")
         self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip(), "nothing was replayed")
 
     def test_a_conflict_the_merge_resolved_to_one_side_is_left_to_the_replay(self):
