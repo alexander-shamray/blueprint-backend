@@ -23,7 +23,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | Agent-type, push and dotnet entries | Agent-type deny enumeration, the inverted push check, and review-branch's dotnet grants and MSBuild imports. |
 | The edit-target guard | The symbolic-link premise and guard-edit-target.py refusing spelling mismatches. |
 | Edit guard path resolution | Link anchors, case folding, checkout-root anchors, UNC and device prefixes, and short-name aliases. |
-| Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, and how both sweeps share worktrees. |
+| Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how both sweeps share worktrees, and their slice lists and ref. |
 
 ## Purpose and provenance of this file
 
@@ -1236,3 +1236,14 @@ that is not `secsweep-` plus six characters under the canonical temp root —
 the shape check that stops a poisoned finding from naming a PR worktree
 and having it deleted. Renaming the prefix would have to move in both helpers
 and both callers at once, so it stands; what is lost is attribution.
+
+**Both sweeps now write two things besides their issues and their worktree.**
+`sweep-slices.sh` writes its slice lists to the worktree's path plus
+`.slices`, a name it derives from the same checked shape rather than takes,
+and `git-worktree-drop.sh` removes that directory once git has removed the
+worktree. `sweep-mark.sh` moves `refs/sweeps/bug` or `refs/sweeps/security`
+to a commit, and only to an existing one by its full SHA. The ref is local
+and a missing one means a full sweep, so the write can make a later sweep
+read less only by pointing at a commit that really was swept clean; a
+poisoned tree cannot reach it, because the parent runs it once, on a clean
+end, with `$pinned`.
