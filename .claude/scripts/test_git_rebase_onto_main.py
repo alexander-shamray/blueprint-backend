@@ -649,8 +649,8 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
         self.assertEqual("only-here\n", self.at("cat resolved-by-hand.txt").stdout)
 
     def test_a_merge_that_kept_one_side_against_a_clean_change_stops_the_run(self):
-        # Without d.txt the merge matches the branch's side exactly, so `--cc`
-        # shows nothing, and the replay onto main would bring d.txt back.
+        # The merge takes the branch's side of d.txt and main's of the rest, so
+        # `--cc` shows nothing, and the replay onto main would bring d.txt back.
         self.at('git checkout -q main && echo later > d.txt && git add -A '
                 '&& git commit -qm "main moved again" && git push -q origin main '
                 '&& git checkout -q feat/x && git merge --no-commit -q main; git rm -qf d.txt '
