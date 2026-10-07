@@ -1,5 +1,8 @@
 # PR decision log
 
+**Grep it for the entry you need; never read it whole.** It is about 100k
+tokens, closed, and one entry is what a question about one PR needs.
+
 **What each landed PR from PR-08 onward decided, and why those decisions bind
 what comes after.**
 
