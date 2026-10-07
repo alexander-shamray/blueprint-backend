@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import io
 import json
 import re
 import sys
@@ -239,6 +240,9 @@ def render(rows: list[dict], columns: tuple[str, ...] = ROWS) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # A redirected Windows stdout is cp1252, and a spawn's description is whatever the model wrote.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("projects", nargs="*", type=Path,
                         help="transcript directories; defaults to this checkout's under ~/.claude/projects")
