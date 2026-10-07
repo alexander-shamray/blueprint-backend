@@ -43,17 +43,18 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "using Common.Domain;\n",
         ),
         (
-            "    // The allow-list. Catalog's other two facts of §3.2 — PriceChanged and\n"
-            "    // ProductDiscontinued — join it with the domain operations that raise\n"
-            "    // them; an entry here with no domain event behind it would not compile,\n"
-            "    // which is the property that keeps this list honest.\n"
+            "    // The allow-list. Catalog's last fact of §3.2, ProductDiscontinued, joins\n"
+            "    // it with the domain operation that raises it (#471); an entry here with\n"
+            "    // no domain event behind it would not compile, which is the property that\n"
+            "    // keeps this list honest.\n"
             "    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()\n"
             "    {\n"
             "        // Domain type in, contract type out. The suffix (§5.5) is what makes\n"
             "        // that visible — with one name for both, this reads as identity, and\n"
             "        // §12.4's \"the domain type never reaches the broker\" would have\n"
             "        // nothing to assert against.\n"
-            "        [typeof(ProductPublishedDomainEvent)] = e => ToContract((ProductPublishedDomainEvent)e)\n"
+            "        [typeof(ProductPublishedDomainEvent)] = e => ToContract((ProductPublishedDomainEvent)e),\n"
+            "        [typeof(PriceChangedDomainEvent)] = e => ToContract((PriceChangedDomainEvent)e)\n"
             "    };\n",
             "    // Empty until this service publishes a contract: translation is opt-in (§9.3).\n"            "    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];\n",
         ),
@@ -76,6 +77,17 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        ProductId = e.ProductId.Value,\n"
             "        Name = e.Name,\n"
             "        ThumbnailUrl = e.ThumbnailUrl,\n"
+            "        Amount = e.Price.Amount,\n"
+            "        Currency = e.Price.Currency\n"
+            "    };\n"
+            "\n"
+            "    // The same envelope as ProductPublished's, for the same reasons.\n"
+            "    private static PriceChanged ToContract(PriceChangedDomainEvent e) => new()\n"
+            "    {\n"
+            "        MessageId = Guid.CreateVersion7(),\n"
+            "        CorrelationId = e.ProductId.Value,\n"
+            "        OccurredAt = e.OccurredAt,\n"
+            "        ProductId = e.ProductId.Value,\n"
             "        Amount = e.Price.Amount,\n"
             "        Currency = e.Price.Currency\n"
             "    };\n",
@@ -596,7 +608,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
         (
             "        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(\n"
-            '            ["PublishProduct", "gRPC - /catalog.pricing.v1.Pricing/GetPrices"]);\n',
+            '            ["ChangePrice", "PublishProduct", "gRPC - /catalog.pricing.v1.Pricing/GetPrices"]);\n',
             "        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBeEmpty(\n"
             '            "This host maps no write endpoint yet, so the rule above is '
             'vacuous. The day it maps " +\n'
@@ -625,7 +637,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
         (
             "        // The floor: an offender list is as green over an empty selection.\n"
-            "        Names(RequestExampleRule.Bodied(Endpoints)).ShouldBe([\"PublishProduct\"]);\n",
+            "        Names(RequestExampleRule.Bodied(Endpoints)).ShouldBe([\"ChangePrice\", \"PublishProduct\"]);\n",
             "        Names(RequestExampleRule.Bodied(Endpoints)).ShouldBeEmpty(\n"
             '            "This host binds no request body yet, so the rule above is '
             'vacuous. The day it binds " +\n'
