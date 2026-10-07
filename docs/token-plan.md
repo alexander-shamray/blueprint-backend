@@ -189,6 +189,14 @@ counted under `/ship`. Passed on the run `token-usage.md` names.
 **Exit.** Measured again over a comparable span: `general-purpose` under
 0.5M a context and a main session's mean context under 150k a call.
 
+**Landed:** the report's `--tools` view of what fills a main session, and
+`CLAUDE.md`'s *Subagents, review rounds and plans*, which now owns the
+review loop, the delegation brief and the planning rule. **Owed:** the
+owner's user-level memory rule cut to cite that section, a change outside
+the repository; the plugin's own settings, where it has them; and the
+exit measurement, which needs the rules to have run for a span, #589. The
+cheaper model waits on step 1's quality sets.
+
 ### Step 3 — what every session loads
 
 - `CLAUDE.md` from 3.9k to about 1.5k: the locator, the commands, the hard
