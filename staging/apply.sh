@@ -13,9 +13,9 @@ fix() {  # fix <message> <path>...
   git add -- "$@"
   git commit -q -m "$msg"
 }
-fix "feat(agents): bug-auditor keeps its rules, gains the read block and the exclusion list, and reports JSON, 13.4 KB to 5.2 KB" \
+fix "feat(agents): bug-auditor keeps its rules, gains the read block and reports JSON, 13.4 KB to 5.5 KB" \
   .claude/agents/bug-auditor.md
-fix "feat(agents): security-auditor keeps its rules, gains the read block and the exclusion list, and reports JSON, 6.4 KB to 3.3 KB" \
+fix "feat(agents): security-auditor keeps its rules, gains the read block and reports JSON, 6.4 KB to 3.4 KB" \
   .claude/agents/security-auditor.md
 git rm -r -q staging
 git commit -q -m "chore: staging/ goes once the prompts are in place"
