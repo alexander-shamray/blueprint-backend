@@ -91,6 +91,11 @@ docs/personal-data-incident.md
                              opening on the reporting clock. Outside
                              docs/runbooks/ because no alert can point at
                              it, as ADR-053 places it
+docs/commands/               the argument for each long command under
+                             .claude/commands/ — why a rule is shaped as it
+                             is — read when a command is disputed or edited,
+                             never while it runs; the runbook wins where the
+                             two differ
 docs/runbooks/               NOT one per alert: a procedure two alerts share
                              is declared, with its reason, in check.py's
                              SHARED_RUNBOOKS. Plus a README that is

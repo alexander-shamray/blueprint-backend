@@ -319,6 +319,18 @@ read only when the command is disputed or edited.
 **Exit.** A `/ship` run's resident text is about 12k a turn, and the run
 reaches the same end state as one under the long form.
 
+**Landing.** The six runbooks keep their frontmatter, every step and its
+number, every fenced command, table and stop condition, and each rule as one
+sentence citing the section of `docs/commands/<name>.md` that argues it;
+arguments `harness-boundaries.md` already owns are cited there. Sizes in
+bytes, landed against main at 73a58dd, about four to a token: `ship` 61,149
+to 27,990, `bug-sweep` 59,259 to 15,996, `security-sweep` 47,806 to 13,390,
+`branch` 25,732 to 7,999, `validate-blueprint` 18,149 to 7,999, and
+`review-branch` 14,573 to 7,483, over its target because its frontmatter's
+deny list is 2 KB on its own. `test_command_runbooks.py` holds each runbook
+under a ceilings table and each citation to a heading that exists. The exit
+waits on the next real `/ship` run, measured with `tools/token-usage/`.
+
 ### Alongside — the comment budget
 
 C# comments from 34% of lines towards 15% is
