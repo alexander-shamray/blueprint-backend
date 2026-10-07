@@ -95,3 +95,31 @@ writes are among the largest files in the repository.
 
 The report as of this commit lists single subagents with the task each was
 given (`--spawns`), which is the next measurement.
+
+## 2026-10-07 — the forty costliest subagents, since 2026-09-15
+
+Measured by the report as of e85bce1 with `--spawns 40`; the span printed
+was 2026-09-15 to 2026-10-07. The forty spent 225M, 14% of the window, at
+3.9–12.2M each; grouped by the task each was given:
+
+| Task | Agents | Input equivalent | Each |
+|---|---|---|---|
+| A review round's slice — "Round 19 slice B review", "Review round 9 slice A" | 14 | 72M | 5.2M |
+| Writing a plan — "Write Notifications PR-1 plan" and five siblings, two more by `fork` | 8 | 56M | 6.9M |
+| A comment sweep — "Sweep Ordering test suites", "Bring Payments comments under comment gate" | 8 | 46M | 5.7M |
+| Implementing — "Code track 1 implementer", "Implement Task 1: consumers" | 7 | 38M | 5.4M |
+| Fixing a round's findings — "Fix round 1 slice A findings" | 3 | 14M | 4.7M |
+
+**Review loops run long.** One pull request reached round 20 of a review
+the model runs with its own agents — two slices a round at about 5M each,
+then agents to fix what they found — and another reached round 9 with
+`bug-auditor` slices. No command sets that loop's ceiling or what a later
+round reads.
+
+**A plan costs about 7M to write**, in one agent re-reading what it has
+already written for 120–200 calls.
+
+**The `/check-links` figure above overstates it.** A label holds until the
+next prompt a person types, so a `fork` that built a whole feature
+("PR-5 end-to-end: Catalog stock levels") counted as `skill:check-links`;
+what `/check-links` itself spends is not yet separated.
