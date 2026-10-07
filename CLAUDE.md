@@ -222,21 +222,21 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   message.
 - **The review loop.** With the external reviewers switched off, and until
   `docs/token-plan.md` step 4 archives them, a PR is reviewed in rounds of
-  one `bug-auditor` each, read-only by its tool list rather than by the
-  brief, and never `general-purpose`. It reads code only, so when a round's
-  diff touches prose or a chapter, an `Explore` agent briefed with
+  one read-only reviewer each, `bug-auditor` for code — read-only by its
+  tool list rather than by the brief, and never `general-purpose`. When a
+  round's diff touches prose or a chapter, an `Explore` agent briefed with
   `/review-branch`'s *What counts as a finding*, and told to read each
-  touched document and each owner it cites whole, reviews that part — instead
-  of `bug-auditor` when the diff is prose only, after it otherwise, never
-  in parallel and never the session itself. `Explore` is read-only by its
-  brief, not its tool list, until step 4's `branch-reviewer` covers both.
-  Each reviewer gets the diff, not the author's conclusions. Round 1 reads
-  the branch diff; each later round reads the diff since the round before
-  and the findings still open, not the tree. The diff is written under
-  `artifacts/review/`, since `bug-auditor` refuses the scratchpad. The loop
-  ends at a round with nothing open, at one whose only findings are refused
-  under the style guide's *Comments* rule, or at the seventh, whose open
-  findings are filed as issues before the PR is reported done.
+  touched document and each owner it cites whole, reviews that part:
+  instead of `bug-auditor` when the diff is prose only, after it otherwise,
+  never in parallel and never the session itself. `Explore` is read-only
+  by its brief, not its tool list, until step 4's `branch-reviewer` covers
+  both. Each reviewer gets the diff, not the author's conclusions. Round 1
+  reads the branch diff; each later round reads the diff since the round
+  before and the findings still open, not the tree. The diff is written
+  under `artifacts/review/`, since `bug-auditor` refuses the scratchpad.
+  The loop ends at a round with nothing open, at one whose only findings
+  are refused under the style guide's *Comments* rule, or at the seventh,
+  whose open findings are filed as issues before the PR is reported done.
 - **Plans.** A change that fits one PR takes plan mode, not a plan file. A
   plan file cites code by path and symbol rather than pasting it and stays
   under 50 KB; research for it goes to `Explore` with a brief. Small tasks
