@@ -228,7 +228,8 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   open, not the tree. The diff is written under `artifacts/review/`, since
   `bug-auditor` refuses the scratchpad. The loop ends at a round with
   nothing open, at one whose only findings are refused under the style
-  guide's *Comments* rule, or at the seventh.
+  guide's *Comments* rule, or at the seventh, whose open findings are filed
+  as issues before the PR is reported done.
 - **Plans.** A change that fits one PR takes plan mode, not a plan file. A
   plan file cites code by path and symbol rather than pasting it and stays
   under 50 KB; research for it goes to `Explore` with a brief. Small tasks
