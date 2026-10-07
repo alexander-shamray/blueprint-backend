@@ -107,8 +107,8 @@ TODO.md                      the user's one local planning file — the open
                              no pull request yet; the intent behind each
                              lives in its issue. Gitignored and never
                              committed: a tracked list is main's view of
-                             itself and needs a pull request and two review
-                             loops to move, which is slower than the thing
+                             itself and needs a pull request and a review
+                             to move, which is slower than the thing
                              it describes. The contract's §6 carries the one
                              rule that keeps it current, and no command,
                              helper or gate reads it
