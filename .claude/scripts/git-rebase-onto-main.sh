@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Rebase the current branch onto origin/main and publish it, the only force
 # push here. Guards: the branch is in hand and not main, the tree clean, origin
-# holds nothing unseen, no merge holds what git's own would not, a replay keeps
-# its stopped todo and skips no stop, and a retry forces only it, at the lease.
+# holds nothing unseen, a merge differs from git's only where it conflicted, a
+# replay keeps its todo and skips no stop, and a retry forces it at the lease.
 
 # Four modes, because a conflict is the case rebase is here for. `start`
 # leaves a conflicted rebase in progress rather than aborting it: backing out
@@ -203,9 +203,9 @@ remember_replay() {
 
 # A rebase drops merge commits, so a merge holding what git's own merge of its
 # parents would not is lost before the push, where no lease can see it. Each
-# file that merge makes cleanly must be as git made it, which `--cc` misses
-# when one parent's side was kept; a conflicted file, or an octopus, is left
-# to `--cc`, which shows what differs from every parent.
+# file git merges cleanly must be as git made it; a conflicted file is left to
+# `--cc`, blind to a clean hunk dropped inside it (docs/harness-boundaries.md),
+# and so is an octopus.
 require_no_merge_invented_anything() {
   local invented merge parents made status tree conflicted changed path kept
   invented=$(git log --merges --cc --format="" "refs/remotes/origin/main..HEAD")

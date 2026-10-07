@@ -666,7 +666,7 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
 
     def test_a_conflict_the_merge_resolved_to_one_side_is_left_to_the_replay(self):
         # A conflicted file differs from git's own merge by construction, so
-        # the comparison skips it; the replay meets the same conflict and stops.
+        # the comparison skips it, and here the replay meets the same conflict.
         self.at(CONFLICT + 'git merge -q main; echo theirs > a.txt && git add a.txt '
                 '&& git commit -q --no-edit && git push -q -f origin feat/x')
         self.assertEqual("", self.at("git status --porcelain").stdout, "the merge was not committed")
