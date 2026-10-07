@@ -43,4 +43,24 @@ public sealed class Product : AggregateRoot<ProductId>
 
         return product;
     }
+
+    /// <summary>Reprices the product in its own currency; the same price again raises nothing (ADR-058).</summary>
+    /// <remarks>
+    /// The currency is fixed at publication, because Ordering's projection keys a price by currency and a change
+    /// of currency would leave the old row orderable at the old amount (§6.6).
+    /// </remarks>
+    public void ChangePrice(Money price, DateTimeOffset now)
+    {
+        // Bug guards: the validator and the handler refuse both first (§5.7).
+        if (price == default)
+            throw new DomainException("A product must have a price.");
+        if (price.Currency != Price.Currency)
+            throw new DomainException("A product's price cannot change currency.");
+
+        if (price == Price)
+            return;
+
+        Price = price;
+        Raise(new PriceChangedDomainEvent(Id, price, now));
+    }
 }

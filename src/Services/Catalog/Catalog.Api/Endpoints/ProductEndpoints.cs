@@ -1,3 +1,4 @@
+using Catalog.Application.Products.ChangePrice;
 using Catalog.Application.Products.GetProduct;
 using Catalog.Application.Products.GetProducts;
 using Catalog.Application.Products.PublishProduct;
@@ -40,6 +41,26 @@ public static class ProductEndpoints
                     "EUR"))
             .WithName("PublishProduct");
 
+        // §8.4's route: a request record, since the product is the route's and the body carries the price alone.
+        group
+            .MapPut(
+                "/{id:guid}/price",
+                async (Guid id, ChangePriceRequest request, IDispatcher dispatcher, CancellationToken ct) =>
+                {
+                    Result result = await dispatcher.SendAsync(
+                        new ChangePriceCommand(id, request.Amount, request.Currency),
+                        ct);
+
+                    return result.ToHttpResult();
+                })
+            .RequireAuthorization(CatalogPermissions.Write)
+            // An absolute price, so a repeat sets what the first set and raises nothing (ADR-058).
+            .RetrySafe(RetrySafety.Convergent)
+            .WithRequestExample(new ChangePriceRequest(54.90m, "EUR"))
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("ChangePrice");
+
         // CursorPage, not Result (§6.2), so ToHttpResult has no part here.
         group
             .MapGet(
@@ -71,3 +92,6 @@ public static class ProductEndpoints
             .WithName("GetProduct");
     }
 }
+
+// decimal? for the reason ChangePriceCommand gives: `{}` must be a 400, not a free product.
+public sealed record ChangePriceRequest(decimal? Amount, string Currency);

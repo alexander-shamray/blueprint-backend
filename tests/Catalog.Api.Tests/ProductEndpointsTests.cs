@@ -325,6 +325,84 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         body.ShouldContain("\"code\":\"product.not_found\"");
     }
 
+    /// <summary>A price change as a caller holding <paramref name="permissions"/>, or as no principal when null.</summary>
+    private Task<HttpResponseMessage> ChangePriceAsync(Guid id, object body, string? permissions)
+    {
+        HttpRequestMessage request = new(HttpMethod.Put, $"/v1/catalog/products/{id}/price")
+        {
+            Content = JsonContent.Create(body)
+        };
+
+        if (permissions is not null)
+        {
+            request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
+            request.Headers.Add(TestAuthHandler.PermissionsHeader, permissions);
+        }
+
+        return _client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task A_price_change_is_a_204_and_the_read_returns_the_new_price()
+    {
+        HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await ChangePriceAsync(
+            id,
+            new { Amount = 24.50m, Currency = "EUR" },
+            CatalogPermissions.Write);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        ItemDto? item = await _client.GetFromJsonAsync<ItemDto>(
+            $"/v1/catalog/products/{id}",
+            TestContext.Current.CancellationToken);
+        item.ShouldNotBeNull();
+        item.Amount.ShouldBe(24.50m);
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.Unauthorized)]
+    [InlineData("catalog:read", HttpStatusCode.Forbidden)]
+    public async Task A_price_change_needs_catalog_write(string? permissions, HttpStatusCode expected)
+    {
+        HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await ChangePriceAsync(id, new { Amount = 1m, Currency = "EUR" }, permissions);
+
+        response.StatusCode.ShouldBe(expected);
+        (await fixture.ScalarAsync<decimal>("SELECT Value = PriceAmount FROM catalog.Products WHERE Id = {0}", id))
+            .ShouldBe(19.99m, "a refused request must not reach the handler");
+    }
+
+    [Fact]
+    public async Task A_price_in_another_currency_is_a_422_carrying_its_code()
+    {
+        HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await ChangePriceAsync(
+            id,
+            new { Amount = 24.50m, Currency = "USD" },
+            CatalogPermissions.Write);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"code\":\"product.currency_fixed\"");
+    }
+
+    [Fact]
+    public async Task A_price_change_for_an_unknown_product_is_a_404()
+    {
+        HttpResponseMessage response = await ChangePriceAsync(
+            Guid.CreateVersion7(),
+            new { Amount = 24.50m, Currency = "EUR" },
+            CatalogPermissions.Write);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
     [Fact]
     public async Task The_openapi_document_describes_the_one_product_read()
     {

@@ -29,7 +29,7 @@ public class RequestExampleRuleTests(HostSmokeTests.UnreachableInfrastructureFac
     public void The_rule_above_is_looking_at_the_bodies_this_host_binds()
     {
         // The floor: an offender list is as green over an empty selection.
-        Names(RequestExampleRule.Bodied(Endpoints)).ShouldBe(["PublishProduct"]);
+        Names(RequestExampleRule.Bodied(Endpoints)).ShouldBe(["ChangePrice", "PublishProduct"]);
     }
 
     [Fact]

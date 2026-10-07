@@ -84,4 +84,52 @@ public class ProductTests
 
         first.Id.ShouldNotBe(second.Id, "identity comes from the factory, never from the caller's data");
     }
+
+    [Fact]
+    public void ChangePrice_reprices_and_raises_the_contract_payload()
+    {
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+        product.ClearDomainEvents();
+        DateTimeOffset later = Now.AddHours(1);
+
+        product.ChangePrice(Money.Of(24.50m, "EUR"), later);
+
+        product.Price.ShouldBe(Money.Of(24.50m, "EUR"));
+        PriceChangedDomainEvent changed = product.DomainEvents
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<PriceChangedDomainEvent>();
+        changed.ProductId.ShouldBe(product.Id);
+        changed.Price.ShouldBe(Money.Of(24.50m, "EUR"));
+        changed.OccurredAt.ShouldBe(later);
+    }
+
+    [Fact]
+    public void ChangePrice_to_the_same_price_raises_nothing()
+    {
+        // What makes the endpoint convergent: a retried request publishes no second event (ADR-058).
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+        product.ClearDomainEvents();
+
+        product.ChangePrice(Money.Of(19.99m, "eur"), Now.AddHours(1));
+
+        product.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ChangePrice_refuses_another_currency()
+    {
+        // The handler refuses it first as a rule failure; reaching the guard is a bug (§5.7).
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+
+        Should.Throw<DomainException>(() => product.ChangePrice(Money.Of(19.99m, "USD"), Now));
+        product.Price.ShouldBe(Money.Of(19.99m, "EUR"));
+    }
+
+    [Fact]
+    public void ChangePrice_refuses_a_default_price()
+    {
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+
+        Should.Throw<DomainException>(() => product.ChangePrice(default, Now));
+    }
 }

@@ -36,7 +36,7 @@ public class WriteEndpointRuleTests(HostSmokeTests.UnreachableInfrastructureFact
     {
         // The floor: an offender list is as green over an empty selection.
         Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(
-            ["PublishProduct", "gRPC - /catalog.pricing.v1.Pricing/GetPrices"]);
+            ["ChangePrice", "PublishProduct", "gRPC - /catalog.pricing.v1.Pricing/GetPrices"]);
 
         // What the selection leaves out by shape, named, so a route this host maps that way is not left out too.
         Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe(
