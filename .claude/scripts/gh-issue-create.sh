@@ -43,8 +43,8 @@ kind="$1"; severity="$2"; route="$3"
 
 # A word outside the vocabulary is refused rather than passed on.
 # `documentation` is absent because neither sweep files one, and it is a
-# GitHub default label `gh-label-ensure.sh` must not create; CLAUDE.md states
-# that the issue vocabulary is wider than the label helper.
+# GitHub default label `gh-label-ensure.sh` must not create; the contract's §6
+# (docs/change-locality.md) states that the issue vocabulary is wider than the label helper.
 case "$kind" in
   security|bug) ;;
   *) echo "not a kind this helper will file under: $kind" >&2; exit 2 ;;
