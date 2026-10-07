@@ -68,8 +68,7 @@ class BothSweepsAgreeOnWhatSuppresses(unittest.TestCase):
         """The runbook and its argument file, with their wrapping collapsed.
 
         The gate's wording lives in whichever of the two argues it, so a phrase
-        is looked for in both and a retired one refused in both. These are
-        80-column prose files that wrap the same sentence at different points.
+        is looked for in both and a retired one refused in both.
         """
         argument = COMMANDS.parent.parent / "docs" / "commands" / name
         text = (COMMANDS / name).read_text(encoding="utf-8") + "\n" + argument.read_text(encoding="utf-8")
