@@ -152,6 +152,12 @@ transcripts' own `usage` sums.
   `Explore` before `general-purpose` for a search; nothing delegated that
   one `Grep` answers; one task per session, with `/clear` between tasks,
   because every turn re-sends the whole context.
+- A command whose work is mechanical stops being a prompt: `/check-links`
+  spent about 15.6M a run, mostly in agents it never asks for, on a check
+  a stdlib script does deterministically, and becomes one with a suite.
+- The superpowers `writing-plans` agents, 2.1M each, are measured against
+  the plans they produce; whether the plugin stays enabled for this
+  repository is the owner's decision, made on that figure.
 - A plugin workflow found to spawn an agent per task gets its reviewers
   handed the task's diff rather than the tree, through the plugin's own
   settings where it has them and the user's settings otherwise.

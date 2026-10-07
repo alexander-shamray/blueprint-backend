@@ -58,9 +58,40 @@ not yet split.
 about four `general-purpose` and two `bug-auditor` contexts a run. The
 main session took 131 calls a run at a mean context of 270k.
 
-### What the report could not attribute
+### What the report could not attribute then
 
 73% sits under `(no command)`: a prompt that asks for a sweep, or a plugin
 workflow, loads its skill without a typed command. The report as of
 938ba06 names that work `skill:<name>` and prints its span, and the next
 measurement uses it.
+
+## 2026-10-07 — since 2026-09-15, with skills attributed
+
+Measured by the report as of 938ba06 with `--since 2026-09-15`, on the same
+machine: 1.61B input equivalent, 97% of the all-history total, so the
+history is in effect these three weeks.
+
+| Workflow | Input equivalent | Share | Subagents' part |
+|---|---|---|---|
+| `/ship`, typed or loaded as a skill, 69 runs | 583M | 36% | 56% |
+| Prompts with no command or skill | 603M | 37% | 52% |
+| The superpowers plugin's skills | 216M | 13% | 78% |
+| `/check-links`, 5 runs | 78M | 5% | 60% |
+| `/branch`, `/commit`, `/pr`, `/review-copilot` on their own | 65M | 4% | 37% |
+| Work after `/reload-plugins` | 62M | 4% | 67% |
+
+**The subagents are the model's choice, not the commands'.** `/ship`'s
+grant names only `review-grok-triager` and `/check-links` names no agent,
+yet a `/ship` run spawned about three `general-purpose` and one or two
+`bug-auditor` contexts and a `/check-links` run about nine
+`general-purpose` ones: about 8.4M a `/ship` run and 15.6M a
+`/check-links` run. 96 of the 327 `bug-auditor` contexts were spawned
+inside `/ship` runs, which run no sweep.
+
+**The costliest agents are a plugin's.** The superpowers `writing-plans`
+skill spawned 66 `general-purpose` agents at 2.1M each, 77 calls apiece at
+a mean context of 228k — the plans under `docs/superpowers/` that each run
+writes are among the largest files in the repository.
+
+The report as of this commit lists single subagents with the task each was
+given (`--spawns`), which is the next measurement.
