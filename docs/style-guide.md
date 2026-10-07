@@ -19,7 +19,8 @@ of one is how it gets "corrected" back into the corpus.
 **A short list of these rules stays in `CLAUDE.md`**, under *Style*, because
 they have to be true of an edit made before anyone opens this file. **This file
 is the master copy**: where the two disagree, the disagreement is a bug report
-against the shorter one, and the change that moves a rule has to reach both.
+against the shorter one, and the change that moves a rule has to reach both,
+and the summary line that names it.
 
 **`/style-pass` records a corrected form here**, in the C# style or SQL style
 section below, in the established voice — the rule, an example, and the reason
