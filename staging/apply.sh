@@ -28,10 +28,15 @@ mv "$settings" staging/settings.json
 cp -R staging/.claude/. .claude/
 git rm -r -q --cached staging >/dev/null
 git add -A .claude
+issue592=(.claude/scripts/git-rebase-onto-main.sh .claude/scripts/test_git_rebase_onto_main.py)
+git reset -q -- "${issue592[@]}"
 
 "${PY[@]}" -m unittest discover -s .claude/scripts -q
 "${PY[@]}" .github/comment-gate/comment_gate.py --base origin/main --head "$(git write-tree | xargs git commit-tree -p HEAD -m probe)"
 git commit -q -m "feat(ship): the local review replaces the external loops, and their machinery is archived" -m "branch-reviewer and /ship step 5's local review replace Grok's and Copilot's loops; the merge is step 6. The 18 files docs/token-plan.md step 4 counts and the six Copilot-only pr-* helpers leave the tree for archive/external-reviewers; test_copilot_feeds.py keeps its pull request helper cases as test_pr_helpers.py, the agent-grant and push rules move to test_command_grants.py, and each comment the archive touched is cut to the comment gate's budget."
+
+git add -- "${issue592[@]}"
+git commit -q -m "fix: git-rebase-onto-main.sh and its suite each keep their one long line inside 120 columns" -m "Closes #592"
 
 cp staging/settings.json .claude/settings.json
 rm -rf staging
@@ -40,7 +45,7 @@ git add .claude/settings.json
 git commit -q -m "chore(settings): the sandbox and grok-ledger denies go with the files they guarded" -m "Last, and alone, because settings.json self-locks (CLAUDE.md, The harness)."
 "${PY[@]}" -m unittest discover -s .claude/scripts -q
 [ -z "$(git status --porcelain)" ] || { echo "tree not clean after commit" >&2; exit 1; }
-git log --oneline -3
+git log --oneline -4
 [ "${NO_PUSH:-}" = 1 ] && { echo "NO_PUSH: stopping before tag and push"; exit 0; }
 
 git tag archive/external-reviewers origin/main
