@@ -158,6 +158,19 @@ class ReportTests(unittest.TestCase):
         self.assertEqual((rows["TOTAL", ""]["cache_read"], rows["TOTAL", ""]["output"]), (5, 10))
 
 
+    def test_each_subagent_is_a_spawn_with_its_task_and_its_own_cost(self):
+        self.files.write("s.jsonl", [ship(), reply("m1", read=1)])
+        self.files.write("s/subagents/agent-a6.jsonl", [reply("x6", at="2026-10-07T09:20:00.000Z", read=10),
+                                                        reply("x7", at="2026-10-07T09:21:00.000Z", read=20)])
+        (self.root / "s/subagents/agent-a6.meta.json").write_text(
+            '{"agentType": "general-purpose", "description": "Review the diff"}')
+        _, report = self.rows()
+        spawn, = report.spawns
+        self.assertEqual((spawn["command"], spawn["agent"], spawn["description"]),
+                         ("/ship", "general-purpose", "Review the diff"))
+        self.assertEqual((spawn["calls"], spawn["cache_read"], spawn["started"]), (2, 30, "2026-10-07"))
+
+
 class CommandLineTests(unittest.TestCase):
     def test_the_default_directory_is_the_checkout_path_with_dashes(self):
         found = token_usage.default_project(Path("/home/user/blueprint-backend"))
@@ -166,6 +179,18 @@ class CommandLineTests(unittest.TestCase):
     def test_a_missing_directory_exits_2(self):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(token_usage.main(["/no/such/transcripts"]), 2)
+
+    def test_spawns_lists_the_costliest_first(self):
+        with tempfile.TemporaryDirectory() as directory:
+            files = Transcripts(Path(directory))
+            files.write("s.jsonl", [ship()])
+            files.write("s/subagents/agent-a.jsonl", [reply("x1", at="2026-10-07T09:20:00.000Z", read=10)])
+            files.write("s/subagents/agent-b.jsonl", [reply("x2", at="2026-10-07T09:20:00.000Z", read=990)])
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(token_usage.main([directory, "--spawns", "1", "--json"]), 0)
+        spawns = json.loads(out.getvalue())
+        self.assertEqual([s["cache_read"] for s in spawns], [990])
 
     def test_json_prints_the_rows(self):
         with tempfile.TemporaryDirectory() as directory:
