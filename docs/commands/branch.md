@@ -87,10 +87,10 @@ not content.
 
 ## Step 0
 
-**That worktree is this change's workspace, so step 5 forks nothing** —
-a second worktree from inside the first is how a chain ends up with two
-directories and one branch's work split across them. Report its path and
-its branch.
+**A linked worktree the session is already in is this change's workspace, so
+step 5 forks nothing** — a second worktree from inside the first is how a chain
+ends up with two directories and one branch's work split across them. Report its
+path and its branch.
 
 **What this step switches off is the `git worktree add`, and nothing else.**
 Carry on into step 1 and let it read the branch and the tree as usual: a
@@ -107,14 +107,13 @@ which half each case skips.
 
 ## Step 1
 
-The exception is not a shortcut, and it is worth knowing why it exists: a
-worktree is a fresh checkout of committed state, so uncommitted work does
-not follow it. Moving the work across would take a stash or a patch, and
-both are refused here — stashing hides work the user can see right now,
-and a patch is lossy about untracked files and line endings in a
-repository that forces `*.cs text eol=crlf` and leaves everything else to
-the platform. The honest answer is to keep the work where it is and name
-the cost.
+Branching in place on a dirty `main` is not a shortcut, and it is worth knowing
+why that exception exists: a worktree is a fresh checkout of committed state, so
+uncommitted work does not follow it. Moving the work across would take a stash
+or a patch, and both are refused here — stashing hides work the user can see
+right now, and a patch is lossy about untracked files and line endings in a
+repository that forces `*.cs text eol=crlf` and leaves everything else to the
+platform. The honest answer is to keep the work where it is and name the cost.
 
 A clean `main` is the normal state at the start of a PR, so this is the
 edge and not the rule. **An in-place branch forgoes the worktree for good
@@ -209,8 +208,8 @@ The dirty and detached rows are the exception and stay on `HEAD`, because
 the whole point of those paths is to carry the state that is already in the
 tree. A base is not what they are short of.
 
-**The helper is the whole command, and it takes two arguments because
-everything else about it is fixed.** Its one git command that writes is
+**`git-worktree-fork.sh` is the whole command, and it takes two arguments
+because everything else about it is fixed.** Its one git command that writes is
 `git worktree add --no-track -b <branch> <path> origin/main`, after which
 it starts the new worktree's index refresh — a `Bash(git worktree add:*)`
 grant would also buy `-B`, which does not create a branch but **resets**
