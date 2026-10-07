@@ -259,7 +259,12 @@ the 18 files and the six Copilot-only `pr-*` helpers archived; the tests
 that outlive them moved to `test_pr_helpers.py` and
 `test_command_grants.py`; and each comment the archive touched cut to the
 comment gate's budget, `pr-locality.sh`'s contract moving into
-`harness-boundaries.md`. The exit waits on step 1's quality set.
+`harness-boundaries.md`. The second gives both auditors the read block and
+the exclusion list `branch-reviewer` already carries, and their fan-out
+reports become JSON: `bug-auditor` 13.4 KB to 5.2 KB, `security-auditor`
+6.4 KB to 3.3 KB. Their argument already lived in the sweeps and in
+`harness-boundaries.md`, so nothing moved to `docs/`; the verdict blocks
+the sweeps parse are unchanged. The exit waits on step 1's quality set.
 
 ### Step 5 — the sweeps
 
