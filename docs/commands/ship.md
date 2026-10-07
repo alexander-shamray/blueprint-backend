@@ -400,9 +400,9 @@ nothing but a line in `git branch`. Name it in the report and leave it.
 
 ## Step 1: /branch
 
-**Skip if already off `main`** (the rule is the runbook's step 1), because
-step 0's unused-workspace row stayed on a branch that exists and has a
-worktree: there is nothing for this step to create, and
+**Skip if already off `main`** (the rule is the runbook's step 1), which
+includes step 0's unused-workspace row, which stayed on a branch that exists and
+has a worktree: there is nothing for this step to create, and
 `git-worktree-fork.sh` would refuse the name if it tried.
 
 **This step is also where the workspace comes from, and it has two
@@ -423,12 +423,13 @@ wrong one is visible before anything is committed to it.
 
 ## Step 2: checks
 
-**The checks follow the class the PR body will carry** (the selection is
-the runbook's step 2). `/check-links` reads only
-`docs/backend-architecture/`, so a Class A runbook edit, links and all, runs
-neither check: the link check would report on a tree it did not touch. Its
-PR body says so rather than claiming a run that did not happen — a body
-that names the class has named the reason.
+**The checks follow the class the PR body will carry** (the selection is the
+runbook's step 2). `/check-links` reads only `docs/backend-architecture/`, and a
+runbook is neither Class C nor inside `/validate-blueprint`'s audit scope (the
+runbook's step 2 lists it), so a Class A runbook edit, links and all, runs
+neither check: the link check would report on a tree it did not touch. Its PR
+body says so rather than claiming a run that did not happen — a body that names
+the class has named the reason.
 
 **One check holds whatever the class: a fix to a script under
 `.claude/` carries its case.** `docs/change-locality.md` §6's
@@ -550,14 +551,14 @@ mergeable does not become less so because the reviewer had more to say.
 Report the state plainly — findings per round and whether the rate was
 still flat when the budget ran out is the useful signal — and merge.
 
-**Of the runbook's four step 6 gate reads, `pr-state.sh` and `gh pr checks` read
-the remote, and `git status --short` and `git log <headRefOid>..HEAD` read the
-workspace.** `headRefOid`, the checks and `--match-head-commit` all agree
-happily about a head this checkout has since moved past: a commit made after the
-last review, or an edit made while the review ran, is invisible to all three.
-The merge would then succeed for the older head and the teardown remove the
-worktree, stranding the newer work on a merged branch — step 0's whole argument,
-arriving at the other end of the run.
+**Of the four reads in the runbook's step 6 gate block, `pr-state.sh` and `gh pr
+checks` read the remote, and `git status --short` and `git log
+<headRefOid>..HEAD` read the workspace.** `headRefOid`, the checks and
+`--match-head-commit` all agree happily about a head this checkout has since
+moved past: a commit made after the last review, or an edit made while the
+review ran, is invisible to all three. The merge would then succeed for the
+older head and the teardown remove the worktree, stranding the newer work on a
+merged branch — step 0's whole argument, arriving at the other end of the run.
 
 **`git log <headRefOid>..HEAD` is the read rather than an equality**, and
 the asymmetry is deliberate: a HEAD carrying anything the remote lacks is
