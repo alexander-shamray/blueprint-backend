@@ -187,9 +187,15 @@ class ReportTests(unittest.TestCase):
 
 
 class CommandLineTests(unittest.TestCase):
-    def test_the_default_directory_is_the_checkout_path_with_dashes(self):
-        found = token_usage.default_project(Path("/home/user/blueprint-backend"))
-        self.assertEqual(found, Path.home() / ".claude/projects/-home-user-blueprint-backend")
+    def test_a_project_is_named_by_its_path_with_dashes_on_either_platform(self):
+        self.assertEqual(token_usage.project_name("/home/user/blueprint-backend"), "-home-user-blueprint-backend")
+        self.assertEqual(token_usage.project_name("C:\\dev\\ashamray\\blueprint-backend"),
+                         "C--dev-ashamray-blueprint-backend")
+
+    def test_the_default_directory_is_under_the_home_projects_directory(self):
+        root = Path.cwd().resolve()
+        self.assertEqual(token_usage.default_project(root),
+                         Path.home() / ".claude" / "projects" / token_usage.project_name(str(root)))
 
     def test_a_missing_directory_exits_2(self):
         with contextlib.redirect_stderr(io.StringIO()):

@@ -44,5 +44,5 @@ the sessions, so a baseline is measured there.
 Stdlib only, and the suite writes its transcripts to a temporary directory:
 
 ```bash
-cd tools/token-usage && python -m unittest
+cd tools/token-usage && python -m unittest        # Windows: py -3.12 -m unittest
 ```
