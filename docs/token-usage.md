@@ -132,17 +132,21 @@ what `/check-links` itself spends is not yet separated.
 
 ## 2026-10-07 — what the review of this file corrected
 
-The figures above were measured by a report with two faults, both fixed as
-of 9e3e352; they stand as the record of what that report said.
+The figures above were measured by a report with faults since fixed, as of
+6da22d1; they stand as the record of what that report said, and none of
+them has been re-measured with the fixed one. That measurement is owed,
+and #587 holds it.
 
 - **A label ended early.** A compaction summary, a `!` command's input or
-  output, and a local command's output were each read as a typed prompt,
-  so a long `/ship` run lost its label partway. Re-measured on the owner's
-  machine with them excluded, over the same window, `/ship` holds 731M
-  (45%), not 583M (36%), and `(no command)` 407M (25%), not 604M (38%):
-  about 10.6M a `/ship` run over the 69, not 8.4M.
-- **The worktrees were not read.** A session started in
-  `.claude/worktrees/<name>` writes its own transcript directory; the owner's
-  machine holds 103 of them, about 112 MB beside the main directory's
-  1.4 GB, and every figure above leaves them out. The report now reads them
-  by default and names what it read.
+  output, a local command's output and an interrupt were each read as a
+  typed prompt, so a long `/ship` run lost its label partway. The review
+  patched the first three out of the report and measured the same window
+  on the owner's machine: `/ship` 731M (45%), not 583M (36%), and
+  `(no command)` 407M (25%), not 604M (38%), about 10.6M a run over the 69.
+  That is the review's patch, not a run of the fixed report.
+- **Most transcript directories were not read.** A session started in a
+  worktree writes its own directory: 103 under `.claude/worktrees/` and 22
+  sibling forks on the owner's machine, about 167 MB beside the main
+  directory's 1.4 GB, and every figure above leaves them out. The report
+  now reads every directory named for the checkout followed by a dash,
+  which takes in both, and names what it read.
