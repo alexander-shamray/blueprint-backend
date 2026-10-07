@@ -28,6 +28,38 @@ State the exceptions with the rule: half this file's value is the carve-outs,
 and a rule recorded without its exceptions gets applied to the exceptions next
 time.
 
+## Summary — a locator, not the rule
+
+**Read this first, then the section you are about to apply.** Each line
+names its section and is a pointer into it, not a substitute: the
+sections below are the rule, with their exceptions, and a rule applied
+from this list without its section is how one gets "corrected" back.
+
+- **Prose conventions**: 80-column prose, British spelling, identifiers
+  in their real spelling; `§9.3` cross-references citing the section that
+  states the claim; bold-led callouts; one `---` and the nav footer.
+- **Comments — every language**: say why and cite the owner; no history,
+  reviewer, inventory, test name or emphasis; a summary one sentence, a
+  `<remarks>` four lines and cited, a block five; a finding is closed by
+  cutting.
+- **Layout and naming**: four spaces, CRLF, final newline, UTF-8 without a
+  byte-order mark; `using` outside the namespace (IDE0065), a blank line
+  after it (IDE0055); no unused `using`.
+- **Statements and types**: braces for two statements or one that wraps;
+  explicit local types but for the four carve-outs; target-typed `new()`
+  only beside its type; a spread `[.. x]` to materialise.
+- **Wrapping**: a list on one line or one element per line; a broken
+  chain one call per line at head + 4; break at the outermost bracket;
+  operators end the line, `?` and `:` lead it.
+- **Whitespace, suppressions and secrets**: one space before `=`, `=>`
+  and `{`, never a column; no `#pragma`; no real credentials but the
+  local Compose defaults.
+- **Settled choices**: file-scoped namespaces, C# 14 `extension` blocks
+  where a class groups one receiver's extensions, expression bodies for
+  one-line members, .NET 10 — not oversights; do not "fix" them.
+- **SQL style**: clause keywords on their own line, one predicate per
+  line, `Alias = expression` not `AS`, `INNER JOIN` in full.
+
 ## Prose conventions
 
 - **Wrap prose at 80 columns.** Tables, links and code blocks may exceed it.
