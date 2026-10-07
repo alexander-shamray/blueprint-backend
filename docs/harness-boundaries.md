@@ -1,5 +1,32 @@
 # Harness boundaries
 
+## Index
+
+**Read the section you need, not the file**: each is 3–4k tokens and the
+whole is about 22k. `Grep -n "^## <title>"` gives its first line.
+
+| Section | What it covers |
+|---|---|
+| Purpose and provenance of this file | Why the section left CLAUDE.md, the four edits made in the move, and the scope-drift callouts. |
+| Edit denies and agent self-protection | Edit-only file rules, the denied .claude trees, and why the skill and index-wrapper grants need guarding. |
+| Index refresh and worktree seeding | The PostToolUse refresh hook, seeding worktree indexes, carrying MCP approval into forks, and the SessionStart refresh. |
+| Index hint hooks and hook wiring | Query, search and MCP-root hooks, MCP_TIMEOUT, and why hook commands run without a shell. |
+| Settings self-lock and permission root | The settings.json self-lock and its delay, settings.local.json, how EnterWorktree moves rules, and the hooks deny. |
+| Sandbox reviewer container and grant semantics | Grok review container, egress proxy, credential residual, and allowed-tools as auto-approval rather than whitelist. |
+| Prefix grants and wildcard denies | Table of over-wide git grants, the reset-grant lesson, mid-pattern deny wildcards and the quoting bypass. |
+| Git argv guard hook | How guard-git-argv.py resolves the executed argv, its successive bypasses, git -c and stated residuals. |
+| The ext transport and pinned grants | Why ext:: cannot be written as a rule, hook coverage, and fetch and pull grant pinning. |
+| Grant inventory and push helpers | Frontmatter grants, the numbered inventory, /ship's closed entries, sweep helpers and the force-push rebase helper. |
+| Copilot comment feeds closure | How #56 put the feeds behind helpers, the gh allow-list gate, #150, and the author-login measurements. |
+| Sweep push denies and triager guards | Push denies in the sweeps, turn-wide frontmatter denies, and the review-grok triager profile and hooks. |
+| Output deny and shell-expansion residuals | The --output entry closed by the hook, expansion readings, locale quotes, process substitution, crashes and pipes. |
+| Agent-type, push and dotnet entries | Agent-type deny enumeration, the inverted push check, and review-branch's dotnet grants and MSBuild imports. |
+| Review-grok split and edit-target guard | Adjudicator split, removing Bash from the writing step, and guard-edit-target.py refusing spelling mismatches. |
+| Edit guard path resolution | Link anchors, case folding, checkout-root anchors, UNC and device prefixes, and short-name aliases. |
+| Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, and how both sweeps share worktrees. |
+
+## Purpose and provenance of this file
+
 **What the agent harness grants this repository's commands, what it refuses
 them, and every place a grant is wider than the operation it was added for.**
 This was `CLAUDE.md`'s *What cuts across them* section until it reached 582
@@ -66,6 +93,8 @@ pointer rather than a second copy.
 
 ---
 
+## Edit denies and agent self-protection
+
 **File permission rules take `Edit(...)`, never `Write(...)`.** `Edit(path)`
 covers every file-editing tool, `Write` included; a `Write(path)` rule matches
 nothing and Claude Code **refuses to start** until it is removed:
@@ -126,6 +155,8 @@ the tracked skill with the package's stock copy, measured on 2026-10-06:
 seven files, the wrappers' `-P` and `PYTHONSAFEPATH` among what went. The
 `env` block reaches every command a session runs, so no route is left to
 spell the variable.
+
+## Index refresh and worktree seeding
 
 **`PostToolUse` runs `.claude/hooks/refresh-index.py` after every edit and
 every shell call**, over the checkout the **edited path** belongs to, resolved
@@ -210,6 +241,8 @@ describing the tree it replaced. The event names no file, which is what the
 session start waits for nothing. What is left to a query's stale report is a
 tree that someone other than the agent moves mid-session, and that is the one
 a person is present for.
+
+## Index hint hooks and hook wiring
 
 **`UserPromptSubmit` runs `.claude/hooks/index-query-hint.py`, because keeping
 the index current never got it read.** The skill's `description` says to
@@ -345,6 +378,8 @@ calls the CLI rather than the `cbx` wrapper that would have set it.
 rather than being it — and a second spelling there would be the copy that
 stops agreeing with the file that runs.
 
+## Settings self-lock and permission root
+
 **`settings.json`'s own entry self-locks, and that is a working constraint, not
 a curiosity.** Once it denies itself, the session cannot edit it again —
 including to undo the edit. So a change to it is one edit that lands complete,
@@ -407,6 +442,8 @@ denies it, and a case in `test_harness_denies.py` asserts the deny, so the next
 hook arrives behind a control rather than behind a sentence that used to be
 true.
 
+## Sandbox reviewer container and grant semantics
+
 **The external review runs in a container over a disposable clone — not a
 worktree — and it had TWO residuals, which were not independent; the egress
 one is closed and the credential one is what stands.** The boundary
@@ -462,6 +499,8 @@ Measured, not read: a `general-purpose` subagent spawned fine under
 `--disallowedTools "Agent(general-purpose)"` with `Agent type 'general-purpose'
 has been denied by permission rule 'Agent(general-purpose)' from cliArg` — and
 again, from a command's own frontmatter, `from command`.
+
+## Prefix grants and wildcard denies
 
 **A helper is the answer whenever a git grant is wider than the operation it
 buys**, because **an allow rule is a prefix and cannot exclude a flag**. Each
@@ -523,6 +562,8 @@ concatenation is now MEASURED**, where this paragraph used to say it was not:
 the earlier probe was refused by the classifier layer — a second net worth
 noting and not evidence. It is evidence now, and it says the deny was genuinely
 defeatable rather than theoretically so.
+
+## Git argv guard hook
 
 **What closed it is the second of the two things named here as owed: a rule
 over the executed argv rather than the typed string.**
@@ -603,6 +644,8 @@ nobody had gone looking for, and the pattern is that the bound gets narrower
 every time somebody probes rather than reasons. **It is a claim about the last
 search, not a proof.**
 
+## The ext transport and pinned grants
+
 **The `::` in a value collides with the `:*` suffix syntax, and the collision
 fails silent in one direction and loud in the other.** `Bash(git *ext::*)`
 passes settings validation and then matches nothing, because the trailing `:*`
@@ -657,6 +700,8 @@ that null result. A decisive probe needs an exact grant on a command the
 harness does not already wave through, which means adding a rule to a file the
 session reads at startup — so it cannot be arranged from within the session it
 would govern.
+
+## Grant inventory and push helpers
 
 **A command's frontmatter is a grant like any other, and it is the one nobody
 reads twice.** The first five rows above were all found in command frontmatter,
@@ -743,6 +788,8 @@ admits a trailing flag; `--upload-pack`, `--receive-pack` and `--exec` are
 denied by name, so what is left is the flag nobody has enumerated yet. The
 honest fix is the helper the transport issue asked for — a
 `git-fetch-origin.sh` taking a branch name and nothing else.
+
+## Copilot comment feeds closure
 
 The fourth **was** `/review-copilot`'s three unfiltered comment feeds, and #56
 closed it. It is kept here in the past tense rather than deleted, because what
@@ -861,6 +908,8 @@ itself — and none carries a Copilot-authored issue comment. So the shared
 exporter says what the login *must* be and nothing has seen it. Not evidence:
 an asserted measurement that never happened stops the next reader checking.
 
+## Sweep push denies and triager guards
+
 The fifth is **`git push` under the two sweeps**, and it is the one that looks
 closed and is not. Both commands state a read-only boundary, and both used to
 close it with "no `git push` is granted either, so the branch cannot move" —
@@ -954,6 +1003,8 @@ dispatch hook was measured under. Grok is enabled here, so the measurement is
 owed on the first `/ship` that reaches step 5: spawn the triager, have it
 edit `.github/workflows/ci.yml`, and see the hook refuse it.
 
+## Output deny and shell-expansion residuals
+
 The sixth **was** the `--output` deny itself — the inventory's one entry that
 is a *deny* rather than an allow, listed because a deny over a command string
 is defeated by shell quoting. **#30 closed it, and not by improving the rule.**
@@ -1036,6 +1087,8 @@ it does not deserve. That shape needs a printer writing a push into a pipeline
 whose far end merely mentions a shell; it has never been typed here, and the
 alternative fails open on a wrapper nobody listed.
 
+## Agent-type, push and dotnet entries
+
 **A seventh thing is a gap in the mechanism rather than in a grant.** Pinning a
 command to one subagent type is a **deny list of every other type**, because
 the harness has no "only this type" allow — so `security-sweep.md`,
@@ -1099,6 +1152,8 @@ filenames are the spelling both files already used and the suite reads. The
 are **not** measured in a `disallowed-tools` value — belt to the names' braces,
 and not the control.
 
+## Review-grok split and edit-target guard
+
 **The tenth is the one grant that was never wider than its operation, and
 the operation was the problem.** `/review-grok` held `Edit` and `Write` for
 the job it exists to do — fix every site a review names in one pass — and
@@ -1155,6 +1210,8 @@ and both commands' frontmatter — to say what may be edited. Nothing here goes
 stale as those change, and the PR that lifts a deny to edit a helper is not
 refused by the guard on its way past. A test pins that control: a denied tree
 spelled as itself is **admitted** here.
+
+## Edit guard path resolution
 
 **Two properties of the resolution are load-bearing and were each found by
 running it rather than by reasoning about it.** The anchor is resolved as
@@ -1234,6 +1291,8 @@ recognise its spelling is refused, whatever alphabet the spelling is in.
 Measured against the commit that shipped it — admitted there, refused after —
 and the control is the worktree case, where a session standing in the aliased
 directory makes it a root of its own and the spelling is recognised again.
+
+## Normalisation, residuals and the sweeps
 
 **Unicode normalisation is the same shape on a different platform, and it took
 two rounds because the first fix argued its way past the probe.** A
