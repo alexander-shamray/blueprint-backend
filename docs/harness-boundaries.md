@@ -119,12 +119,12 @@ already grown twice, once inside the pull request that introduced it. The
 commands grant those helpers by name, so a session that could rewrite
 one before invoking it would make every fixed endpoint a fiction.
 
-**The last three arrived with #33, and the argument for them is the helpers'
-applied one level up.** `commands/`, `agents/` and `settings.json` are the files
-that *grant* what `scripts/**` protects. Ten commands carry an unrestricted
-`Edit` or `Write` and three of them read untrusted input by design, so a single
-applied edit could append a grant to a command's `allowed-tools`, remove a line
-from this deny list, or rewrite `.claude/agents/security-auditor.md` — whose
+**Three of them arrived with #33 — `commands/`, `agents/` and `settings.json` —
+and the argument for them is the helpers' applied one level up.** They are the
+files that *grant* what `scripts/**` protects. Commands carry an unrestricted
+`Edit` or `Write` and some read untrusted input by design, so a single applied
+edit could append a grant to a command's `allowed-tools`, remove a line from
+this deny list, or rewrite `.claude/agents/security-auditor.md` — whose
 read-only guarantee is precisely its `Read, Grep, Glob` tool list, as
 `/security-sweep` says outright: read-only there "is a property of the agent's
 tool grant, not a word in its prompt".
