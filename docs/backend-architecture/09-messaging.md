@@ -981,14 +981,16 @@ trace. Notifications stamps a notice at intake, and its send runs as that
 trace's child. **The tracking poll links rather than parents**: it repeats
 for the shipment's whole life and most polls find nothing, so as children
 they would stretch the order's trace to the delivery; the despatch a poll
-stages then travels in the poll's trace, one link from the order's. **Parent rather than link, deliberately**:
-a link would keep the request's trace and the delivery's apart and leave a
-reader to follow the join, which is the gap this closes; a parent makes one
-trace from the request to the last consumer, and its duration then includes
-the wait in the table, which is real latency a reader should see rather than
-an artefact to hide. A row staged with no W3C activity, or before the columns
-existed, delivers in a trace of its own exactly as it always did, which is
-what keeps the migration safe beside the version still serving (§7.4).
+stages then travels in the poll's trace, one link from the order's.
+
+**Parent rather than link, deliberately**, for the outbox and the bounded
+passes: a link would keep the request's trace and the delivery's apart and leave
+a reader to follow the join, which is the gap this closes; a parent makes one
+trace from the request to the last consumer, and its duration then includes the
+wait in the table, which is real latency a reader should see rather than an
+artefact to hide. A row staged with no W3C activity, or before the columns
+existed, delivers in a trace of its own exactly as it always did, which is what
+keeps the migration safe beside the version still serving (§7.4).
 
 The saga's sends do not pass through this table: they go through
 MassTransit's own outbox
