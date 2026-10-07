@@ -301,8 +301,8 @@ corrected. Class D+E, because `Directory.Packages.props` is Class E's in
 Each `.github/<gate>/README.md` owns what its gate reads and what it claims.
 `repo-map.md` keeps its entry and cites the README; `testing.md`
 keeps the invocation and nothing about the claim; §4.1 keeps the rule the
-gate enforces, in one sentence, and names the gate. `CLAUDE.md`'s
-workflow line lists the gates and says nothing else about any of them.
+gate enforces, in one sentence, and names the gate. `CLAUDE.md`
+lists none of them: its locator cites `repo-map.md` for the tree.
 
 Done when a pull request adding a gate touches its own directory, `ci.yml`,
 its entry in `repo-map.md` and, if the gate enforces a chapter's rule, the
