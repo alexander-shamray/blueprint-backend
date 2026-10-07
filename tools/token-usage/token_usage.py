@@ -310,10 +310,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="transcript directories; defaults to this checkout's under ~/.claude/projects")
     parser.add_argument("--since", help="only responses on or after this date, YYYY-MM-DD")
     parser.add_argument("--json", action="store_true", help="print the rows as JSON")
-    parser.add_argument("--spawns", type=int, metavar="N",
-                        help="list the N costliest subagents, each with the task it was given, instead")
-    parser.add_argument("--tools", type=int, metavar="N",
-                        help="list the N commands and tools whose results put the most text into main sessions")
+    views = parser.add_mutually_exclusive_group()
+    views.add_argument("--spawns", type=int, metavar="N",
+                       help="list the N costliest subagents, each with the task it was given, instead")
+    views.add_argument("--tools", type=int, metavar="N",
+                       help="list the N commands and tools whose results put the most text into main sessions")
     parser.add_argument("--session", default="", metavar="ID",
                         help="only the session whose id starts with ID, with its subagents")
     args = parser.parse_args(argv)
