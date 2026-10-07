@@ -10,6 +10,7 @@ import argparse
 import base64
 import datetime
 import getpass
+import http.client
 import json
 import os
 import sys
@@ -37,6 +38,10 @@ class Refused(Exception):
     """A request the tool will not carry out, with the reason an operator reads."""
 
 
+class AnswerLost(Refused):
+    """A request that may have reached the broker and acted, whose answer never came back."""
+
+
 def http_transport(base_url: str, user: str, password: str, timeout: float = 30.0) -> Send:
     """The Management API over urllib; the credential travels in a header and never in argv."""
     if urllib.parse.urlsplit(base_url).scheme not in ("http", "https"):
@@ -58,13 +63,17 @@ def http_transport(base_url: str, user: str, password: str, timeout: float = 30.
             raise Refused(f"{method} {path}: HTTP {error.code} {detail or error.reason}") from None
         except urllib.error.URLError as error:
             raise Refused(f"{method} {path}: {error.reason}") from None
+        except (OSError, http.client.HTTPException) as error:
+            # urllib wraps only the send; a timeout or reset awaiting or reading the answer arrives raw, after the
+            # broker may have acted on the request.
+            raise AnswerLost(f"{method} {path}: the answer was lost ({type(error).__name__}: {error})") from None
         return json.loads(text) if text else None
 
     return send
 
 
 class Broker:
-    """The five Management API calls this tool makes, and no others."""
+    """The four Management API calls this tool makes, and no others."""
 
     def __init__(self, send: Send, vhost: str) -> None:
         self.send = send
@@ -75,10 +84,6 @@ class Broker:
 
     def queues(self) -> list[dict]:
         return list(self.send("GET", self._path("queues", self.vhost) + "?columns=name,messages", None) or [])
-
-    def depth(self, queue: str) -> int:
-        found = self.send("GET", self._path("queues", self.vhost, queue), None) or {}
-        return int(found.get("messages") or 0)
 
     def peek(self, queue: str, count: int) -> list[dict]:
         # ack_requeue_true puts each message back, redelivered-flagged (docs/runbooks/error-queue.md).
@@ -226,7 +231,7 @@ class Run:
             raise Refused(f"{path}: {error.strerror}") from None
 
     def record(self, queue: str, message: dict) -> None:
-        # Written and synced before the message goes anywhere, so a run that dies mid-move loses nothing.
+        # Written and synced before the message goes anywhere, so a run that dies after the take still has it.
         line = json.dumps({"ts": self.clock().isoformat(timespec="seconds"), "queue": queue, "message": message})
         descriptor = os.open(self.args.record, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         with os.fdopen(descriptor, "a", encoding="utf-8") as file:
@@ -308,6 +313,10 @@ def command_move(run: Run, verb: str) -> int:
             break
         try:
             message = run.broker.take(queue)
+        except AnswerLost as error:
+            reason = f"{error}; the take may have removed a message that is now in neither {queue} nor --record"
+            actions.append({"message_id": None, "action": "failed", "destination": None, "reason": reason})
+            break
         except Refused as error:
             actions.append({"message_id": None, "action": "failed", "destination": None, "reason": str(error)})
             break

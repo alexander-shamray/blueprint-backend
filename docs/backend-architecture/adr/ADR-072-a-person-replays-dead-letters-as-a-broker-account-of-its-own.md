@@ -31,7 +31,8 @@ message, and that no service ever holds it. Provisioning it on a deployed
 broker is the vault's obligation on ADR-036's terms, stated and not checked
 here. The Management API has no move, so an executed run takes each message
 before it publishes it, and a run that dies between the two leaves that
-message only in the record file the tool requires.
+message only in the record file the tool requires; a take whose answer is
+lost may leave it in neither, which the run reports rather than hides.
 
 ---
 

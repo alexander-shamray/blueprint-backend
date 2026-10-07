@@ -57,12 +57,17 @@ syncs that file to disk, and only then publishes it:
 - **a message the run did not select** back to the queue it came from, through
   that queue's own exchange, at the tail.
 
-**The one window is between the take and the publish.** A run that dies there
-has removed a message from the broker and left it in the record file, and
-nowhere else; republish it from the record by hand. That window is why
-`--record` is required rather than offered, and why a discard's record is the
-one [`error-queue.md`](../../docs/runbooks/error-queue.md) asks for before
-anything is purged.
+**Two windows remain, and both are around the take.** A run that dies
+between the take and the publish has removed a message from the broker and
+left it in the record file, and nowhere else; republish it from the record by
+hand. That window is why `--record` is required rather than offered, and why a
+discard's record is the one
+[`error-queue.md`](../../docs/runbooks/error-queue.md) asks for before
+anything is purged. The other is a take whose answer never arrives — a
+timeout or a reset after the request was sent — which may have removed a
+message the tool never saw: the run stops and reports it as `failed`, saying
+the message may be in neither the queue nor the record, and only the
+broker's own statistics can then say whether one left.
 
 A run takes at most as many messages as its first read saw, which `--limit`
 bounds (100 by default), and stops early once every named id is handled, or
@@ -200,5 +205,5 @@ An `action` is one of the audit line's, or `would-replay`, `would-discard` or
 cd tools/dead-letters && py -3.12 -m unittest
 ```
 
-The suite runs against an in-memory double of the five Management API calls
+The suite runs against an in-memory double of the four Management API calls
 the tool makes, and CI's `dead-letters` job runs it.

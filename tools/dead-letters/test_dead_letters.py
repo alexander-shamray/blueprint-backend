@@ -10,6 +10,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest import mock
 import urllib.parse
 from pathlib import Path
 
@@ -48,7 +49,7 @@ def message(identity, *, input_address="rabbitmq://rabbitmq/ordering-commands", 
 
 
 class FakeApi:
-    """The five calls the tool makes, over queues each fed by a fanout exchange of the same name."""
+    """The four calls the tool makes, over queues each fed by a fanout exchange of the same name."""
 
     def __init__(self, queues, unbound=()):
         self.queues = {name: list(messages) for name, messages in queues.items()}
@@ -60,8 +61,6 @@ class FakeApi:
         parts = [urllib.parse.unquote(p) for p in path.split("?")[0].split("/")[2:]]
         if parts[0] == "queues" and len(parts) == 2:
             return [{"name": name, "messages": len(held)} for name, held in self.queues.items()]
-        if parts[0] == "queues" and len(parts) == 3:
-            return {"name": parts[2], "messages": len(self.queues[parts[2]])}
         if parts[0] == "queues" and parts[3] == "get":
             held = self.queues[parts[2]]
             got = copy.deepcopy(held[: body["count"]])
@@ -82,7 +81,7 @@ class FakeApi:
                 "properties": copy.deepcopy(body["properties"]),
                 "payload": body["payload"], "payload_encoding": body["payload_encoding"]})
             return {"routed": True}
-        raise AssertionError(f"the tool made a call outside its five: {method} {path}")
+        raise AssertionError(f"the tool made a call outside its four: {method} {path}")
 
     def destructive(self):
         return [c for c in self.calls if (c[2] or {}).get("ackmode") == "ack_requeue_false"
@@ -249,6 +248,23 @@ class AReplayIsTheSameMessage(unittest.TestCase):
         self.assertIn("HTTP 401", failed["reason"])
         self.assertEqual(1, len(api.queues["ordering-commands_error"]))
 
+    def test_a_take_whose_answer_is_lost_says_the_message_may_be_in_neither_place(self):
+        api = FakeApi({"ordering-commands_error": [message("m-1")], "ordering-commands": []})
+        real_call = api.__call__
+
+        def lose_takes(method, path, body):
+            if (body or {}).get("ackmode") == "ack_requeue_false":
+                real_call(method, path, body)
+                raise dead_letters.AnswerLost(f"POST {path}: the answer was lost (TimeoutError: timed out)")
+            return real_call(method, path, body)
+
+        code, out, _ = run(lose_takes, "replay", "ordering-commands_error", "--all", "--execute",
+                           "--record", self.record, "--json")
+        self.assertEqual(1, code)
+        [failed] = json.loads(out)["actions"]
+        self.assertEqual("failed", failed["action"])
+        self.assertIn("in neither ordering-commands_error nor --record", failed["reason"])
+
     def test_a_skipped_queue_replays_to_its_endpoint(self):
         api = FakeApi({"bff-order-events_skipped": [message("s-1", input_address=None)], "bff-order-events": []})
         code, _, _ = run(api, "replay", "bff-order-events_skipped", "--all", "--execute", "--record", self.record)
@@ -318,6 +334,15 @@ class TheCredential(unittest.TestCase):
     def test_a_url_that_is_not_http_is_refused(self):
         with self.assertRaisesRegex(dead_letters.Refused, "must be http or https"):
             dead_letters.http_transport("file:///etc/passwd", "u", "p")
+
+
+class TheTransport(unittest.TestCase):
+    def test_an_answer_lost_after_the_send_is_reported_as_lost_not_as_a_traceback(self):
+        # urllib wraps only the send, so a timeout reading the answer arrives as a bare OSError.
+        send = dead_letters.http_transport("http://localhost:15672", "u", "p")
+        with mock.patch("urllib.request.urlopen", side_effect=TimeoutError("timed out")):
+            with self.assertRaisesRegex(dead_letters.AnswerLost, r"the answer was lost \(TimeoutError"):
+                send("POST", "/api/queues/%2F/q_error/get", {"count": 1})
 
 
 if __name__ == "__main__":
