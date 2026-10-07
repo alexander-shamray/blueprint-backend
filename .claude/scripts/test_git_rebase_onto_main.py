@@ -82,7 +82,7 @@ def git_commands(source):
 
 # A remote, a checkout of it, a branch with one commit, and a `main` that has
 # moved since — the state every branch update starts from.
-FIXTURE = '''
+BUILD = '''
 set -eu
 root=$(mktemp -d)
 git init -q --bare --initial-branch=main "$root/remote.git"
@@ -102,6 +102,32 @@ git push -q origin main
 git checkout -q feat/x
 printf %s "$root"
 '''
+
+# Each test's own copy of that state, built once per module: about twenty git
+# processes a test become three, which is most of this suite's time on Windows.
+FIXTURE = '''
+set -eu
+: "${TEMPLATE:?}"
+root=$(mktemp -d)
+cp -Rp "$TEMPLATE/." "$root/"
+git -C "$root/work" remote set-url origin "$root/remote.git"
+printf %s "$root"
+'''
+_template = []
+
+
+def template():
+    if not _template:
+        built = run_bash(BUILD)
+        if built.returncode != 0 or not built.stdout.strip():
+            raise RuntimeError(f"the rebase fixture did not build: {built.stderr}")
+        _template.append(built.stdout.strip())
+    return _template[0]
+
+
+def tearDownModule():
+    for root in _template:
+        run_bash('rm -rf "$R"', R=root)
 
 # Both sides edit the same line, so the replay cannot proceed without a person.
 CONFLICT = '''
@@ -214,7 +240,7 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
 class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
 
     def setUp(self):
-        self.root = run_bash(FIXTURE).stdout.strip()
+        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
         self.assertTrue(self.root, "the fixture produced no path")
         self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
         self.work = self.root + "/work"
@@ -427,7 +453,7 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = run_bash(FIXTURE).stdout.strip()
+        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
         self.assertTrue(self.root, "the fixture produced no path")
         self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
         self.work = self.root + "/work"
@@ -622,7 +648,7 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
     loses it before the push, which no lease can see."""
 
     def setUp(self):
-        self.root = run_bash(FIXTURE).stdout.strip()
+        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
         self.assertTrue(self.root, "the fixture produced no path")
         self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
         self.work = self.root + "/work"
@@ -757,7 +783,7 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
 class TheHelperPublishesWhatItRebased(unittest.TestCase):
 
     def setUp(self):
-        self.root = run_bash(FIXTURE).stdout.strip()
+        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
         self.assertTrue(self.root, "the fixture produced no path")
         self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
         self.work = self.root + "/work"
@@ -1099,7 +1125,7 @@ class TheApplyBackendIsNeverTheOneThatRuns(unittest.TestCase):
     """
 
     def setUp(self):
-        self.root = run_bash(FIXTURE).stdout.strip()
+        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
         self.assertTrue(self.root, "the fixture produced no path")
         self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
         self.work = self.root + "/work"
@@ -1192,7 +1218,7 @@ class AStoppedReplayIsNotAlwaysAConflict(unittest.TestCase):
     itself and left in progress, because nothing here may drop a commit."""
 
     def setUp(self):
-        self.root = run_bash(FIXTURE).stdout.strip()
+        self.root = run_bash(FIXTURE, TEMPLATE=template()).stdout.strip()
         self.assertTrue(self.root, "the fixture produced no path")
         self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
         self.work = self.root + "/work"
