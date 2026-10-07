@@ -61,4 +61,25 @@ public class CursorTests
 
         Cursor.Decode(cursor).ShouldBeNull();
     }
+
+    [Fact]
+    public void Wrap_then_unwrap_returns_the_payload_whatever_it_holds()
+    {
+        const string payload = "name:Désk: lamp/50% off+";
+
+        string cursor = Cursor.Wrap(payload);
+
+        // URL-safe as it stands, so a client puts it in a query string without encoding it.
+        cursor.ShouldNotContain("+");
+        cursor.ShouldNotContain("/");
+        Cursor.Unwrap(cursor).ShouldBe(payload);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not base64url !!!")]
+    public void Unwrap_returns_null_for_null_and_for_anything_that_is_not_base64url(string? cursor)
+    {
+        Cursor.Unwrap(cursor).ShouldBeNull();
+    }
 }
