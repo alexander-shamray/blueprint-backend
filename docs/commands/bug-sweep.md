@@ -137,8 +137,11 @@ nothing in `$work` (*The round: verify*). What turns up decides the candidate:
   runbook's severity table. This is the case worth slowing down for, which is
   why the auditor's checklist names it and why the bar puts it at the top.
   A verdict answers for one location, so the vacuous test is not filed from
-  the defect's verdict: its file and line, from `scenario`, join the next
-  round's leads as a candidate of their own and are verified like any other.
+  the defect's verdict: its file and line, from `scenario`, go through the
+  verify step in the same round as a candidate of their own, path check first.
+  The same round, because a candidate left for later has no dispatch to reach
+  it — a lead round goes by row — and a round that files nothing else would
+  end the sweep clean and mark the commit with it unverified.
 - **No test at all** leaves the candidate exactly where it was. Absent coverage
   is not a defect this command files, and it is not corroboration either.
 
@@ -297,9 +300,8 @@ shape, including one an abandoned sweep left, which is why its refusal reads
 `docs/commands/security-sweep.md`, *What this command does not do*. The prefix
 stays `secsweep-` because both helpers are `Edit`-denied to a command session,
 so this command cannot widen the shape to a `bugsweep-` of its own, and the
-helpers' own comments name the prefix as shared. A stray directory does not say
-which sweep left it, so the run summary says which command owns the one it
-reports.
+helpers' header comments name both sweeps. A stray directory does not say which
+sweep left it, so the run summary says which command owns the one it reports.
 
 **Pin the resolved commit, not `HEAD` a second time.** Reading `HEAD` once for a
 summary and again for `git worktree add` are two calls, and in a repo worked by

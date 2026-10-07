@@ -65,7 +65,8 @@ defect, and its answer comes back in the verdict's `scenario` field.
   why the test passes regardless, from that `scenario`.
 - **A test that covers the line and could not fail**: **two** findings, the
   defect and the vacuous test, itself critical; the test's file and line, from
-  `scenario`, are a new candidate in the next round's leads.
+  `scenario`, go through step 2 in the same round as a candidate of their own,
+  path check first.
 - **No test**: the candidate stays where it was; absent coverage is neither
   filed nor corroboration.
 
