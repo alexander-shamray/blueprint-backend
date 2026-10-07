@@ -208,6 +208,15 @@ cheaper model waits on step 1's quality sets.
 
 **Exit.** `/check-links` and `/validate-blueprint` are clean.
 
+**Landed:** `CLAUDE.md` at about 1.9k tokens rather than 1.5k, since step
+2's section on subagents, review rounds and plans now sits in it; the
+working rules in the contract's §6; `harness-boundaries.md` as an index
+and seventeen sections inside the one file, so the references under
+`.claude/` keep resolving; the style guide's summary; and both closed
+records marked grep-only. Neither command's scope reaches a file this step
+touched, so its exit holds without them; the touched files' links were
+checked instead.
+
 ### Step 4 — local review, and the external reviewers archived
 
 The owner chose, on 2026-10-07, to archive both reviewers rather than keep
