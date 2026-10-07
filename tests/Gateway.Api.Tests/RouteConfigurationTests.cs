@@ -160,9 +160,11 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
             string group = ServiceGroups[route.ClusterId];
             string forwarded = route.ForwardedPathPrefix;
 
+            // A catch-all forwards a prefix of the group; a literal route like catalog-own, one path under it.
             bool serves =
                 group.Equals(forwarded, StringComparison.Ordinal) ||
-                group.StartsWith(forwarded.TrimEnd('/') + "/", StringComparison.Ordinal);
+                group.StartsWith(forwarded.TrimEnd('/') + "/", StringComparison.Ordinal) ||
+                forwarded.StartsWith(group + "/", StringComparison.Ordinal);
 
             serves.ShouldBeTrue(
                 $"route '{route.Id}' forwards '{forwarded}' and {route.ClusterId} maps '{group}' — the version sits " +

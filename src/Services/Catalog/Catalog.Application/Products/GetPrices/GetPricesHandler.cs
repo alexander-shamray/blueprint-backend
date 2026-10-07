@@ -4,7 +4,10 @@ using Dapper;
 
 namespace Catalog.Application.Products.GetPrices;
 
-/// <summary>§6.5's read side, Dapper over the write tables at level 1, answering §9.7's pricing hop.</summary>
+/// <summary>
+/// §6.5's read side, Dapper over the write tables at level 1, answering §9.7's pricing hop; a withdrawn product is
+/// absent, as an unknown one is (ADR-074).
+/// </summary>
 public sealed class GetPricesHandler(IDbConnectionFactory connections)
     : IQueryHandler<GetPricesQuery, IReadOnlyList<ProductPriceDto>>
 {
@@ -17,7 +20,8 @@ public sealed class GetPricesHandler(IDbConnectionFactory connections)
             Currency  = p.PriceCurrency
         FROM catalog.Products p
         WHERE p.Id IN @ProductIds
-            AND p.PriceCurrency = @Currency;
+            AND p.PriceCurrency = @Currency
+            AND p.WithdrawnAt IS NULL;
         """;
 
     public async Task<IReadOnlyList<ProductPriceDto>> HandleAsync(GetPricesQuery query, CancellationToken ct)

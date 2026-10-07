@@ -1,7 +1,9 @@
 using Catalog.Application.Products.ChangePrice;
+using Catalog.Application.Products.GetOwnProducts;
 using Catalog.Application.Products.GetProduct;
 using Catalog.Application.Products.GetProducts;
 using Catalog.Application.Products.PublishProduct;
+using Catalog.Application.Products.WithdrawProduct;
 using Common.Application;
 using Common.Web;
 
@@ -62,6 +64,39 @@ public static class ProductEndpoints
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("ChangePrice");
 
+        // ADR-074's withdrawal: POST, which catalog-write already routes, and keyed as ChangePrice is.
+        group
+            .MapPost(
+                "/{id:guid}/withdrawal",
+                async (Guid id, WithdrawProductRequest request, IDispatcher dispatcher, CancellationToken ct) =>
+                {
+                    Result result = await dispatcher.SendAsync(new WithdrawProductCommand(request.CommandId, id), ct);
+
+                    return result.ToHttpResult();
+                })
+            .RequireAuthorization(CatalogPermissions.Write)
+            .Idempotent<WithdrawProductCommand>()
+            .WithRequestExample(new WithdrawProductRequest(Guid.Parse("0199b0c4-a1d3-7e64-9f80-5b7c9d0e1f2a")))
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("WithdrawProduct");
+
+        // The seller's own products, withdrawn ones included (ADR-074). catalog:write, not a read permission: the
+        // caller is whoever publishes, and the subject is the principal, never a parameter (§11.4).
+        group
+            .MapGet(
+                "/mine",
+                async (string? cursor, IDispatcher dispatcher, CancellationToken ct, int limit = 20) =>
+                {
+                    CursorPage<OwnProductDto> page =
+                        await dispatcher.QueryAsync(new GetOwnProductsQuery(cursor, limit), ct);
+
+                    return Results.Ok(page);
+                })
+            .RequireAuthorization(CatalogPermissions.Write)
+            .Produces<CursorPage<OwnProductDto>>()
+            .WithName("GetOwnProducts");
+
         // CursorPage, not Result (§6.2), so ToHttpResult has no part here; GetProductsValidator's 400 is thrown.
         group
             .MapGet(
@@ -102,3 +137,6 @@ public static class ProductEndpoints
 
 // decimal? for the reason ChangePriceCommand gives: `{}` must be a 400, not a free product.
 public sealed record ChangePriceRequest(Guid CommandId, decimal? Amount, string Currency);
+
+// The product is the route's, so the body carries the key alone.
+public sealed record WithdrawProductRequest(Guid CommandId);

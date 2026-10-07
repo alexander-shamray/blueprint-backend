@@ -88,6 +88,22 @@ public class CatalogIntegrationEventMapperTests
     }
 
     [Fact]
+    public void A_withdrawal_becomes_ProductDiscontinued_correlated_by_the_product()
+    {
+        var productId = ProductId.New();
+
+        ProductDiscontinued contract = Mapper()
+            .Map([new ProductDiscontinuedDomainEvent(productId, Raised)])
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<ProductDiscontinued>();
+
+        contract.ProductId.ShouldBe(productId.Value);
+        contract.CorrelationId.ShouldBe(productId.Value);
+        contract.MessageId.ShouldNotBe(Guid.Empty);
+        contract.OccurredAt.ShouldBe(Raised);
+    }
+
+    [Fact]
     public void An_unregistered_domain_event_is_skipped_and_is_not_an_error()
     {
         // §9.3's first row: absence from the registry keeps a domain event off the bus, and is not an error.

@@ -193,6 +193,26 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_withdrawn_product_is_absent_as_an_unknown_one_is()
+    {
+        // ADR-074: Ordering will not price it either (§6.6), so a quote that did would promise an order it refuses.
+        Guid chair = await PublishAsync("Chair", 49.99m, "GBP");
+        await fixture.ExecuteAsync(
+            "UPDATE catalog.Products SET WithdrawnAt = SYSDATETIMEOFFSET() WHERE Id = {0}",
+            chair);
+
+        GetPricesRequest request = new() { Currency = "GBP" };
+        request.ProductId.Add(chair.ToString());
+
+        GetPricesReply reply = await Pricing.GetPricesAsync(
+            request,
+            Authenticated(),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        reply.Price.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task An_anonymous_caller_is_refused()
     {
         GetPricesRequest request = new() { Currency = "GBP" };

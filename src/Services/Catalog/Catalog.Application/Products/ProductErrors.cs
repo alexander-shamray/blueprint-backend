@@ -10,4 +10,7 @@ public static class ProductErrors
     /// <summary>A product keeps the currency it was published in (<c>Product.ChangePrice</c>).</summary>
     public static readonly Error CurrencyFixed =
         Error.Rule("product.currency_fixed", "A product's price cannot change currency.");
+
+    /// <summary>A withdrawal is final, so neither a second one nor a price change follows it (ADR-074).</summary>
+    public static readonly Error Withdrawn = Error.Rule("product.withdrawn", "The product has been withdrawn.");
 }

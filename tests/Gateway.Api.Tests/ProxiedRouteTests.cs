@@ -71,6 +71,58 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
         stub.ReceivedPaths.Last().ShouldBe($"/v1/catalog/products/{productId}/price");
     }
 
+    /// <summary>A withdrawal is a POST under a product (ADR-074), so <c>catalog-write</c> admits it.</summary>
+    [Fact]
+    public async Task An_authenticated_withdrawal_reaches_catalog_write()
+    {
+        using StubbedGatewayFactory factory = new(stub.Address);
+        using HttpClient client = factory.CreateClient();
+        var productId = Guid.CreateVersion7();
+
+        using HttpRequestMessage request = new(HttpMethod.Post, $"/api/v1/catalog/products/{productId}/withdrawal");
+        request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
+
+        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        stub.ReceivedPaths.Last().ShouldBe($"/v1/catalog/products/{productId}/withdrawal");
+    }
+
+    /// <summary>A seller's own list reaches Catalog through <c>catalog-own</c> (ADR-074).</summary>
+    [Fact]
+    public async Task An_authenticated_get_of_the_own_list_reaches_catalog_own()
+    {
+        using StubbedGatewayFactory factory = new(stub.Address);
+        using HttpClient client = factory.CreateClient();
+
+        using HttpRequestMessage request = new(HttpMethod.Get, "/api/v1/catalog/products/mine");
+        request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
+
+        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        stub.ReceivedPaths.Last().ShouldBe("/v1/catalog/products/mine");
+    }
+
+    /// <summary>
+    /// The own list names a caller, so it is <c>catalog-own</c>'s <c>authenticated</c> and not the public
+    /// route's catch-all that answers an anonymous GET of it (ADR-074, §11.4).
+    /// </summary>
+    [Fact]
+    public async Task An_anonymous_get_of_the_own_list_is_refused_at_the_edge()
+    {
+        using StubbedGatewayFactory factory = new(stub.Address);
+        using HttpClient client = factory.CreateClient();
+
+        int before = stub.ReceivedPaths.Count;
+
+        HttpResponseMessage response =
+            await client.GetAsync("/api/v1/catalog/products/mine", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+        stub.ReceivedPaths.Count.ShouldBe(before);
+    }
+
     /// <summary><c>catalog-write</c> is <c>authenticated</c>, so an anonymous POST reaches nothing (§11.4).</summary>
     [Fact]
     public async Task An_anonymous_post_to_catalog_write_is_refused()

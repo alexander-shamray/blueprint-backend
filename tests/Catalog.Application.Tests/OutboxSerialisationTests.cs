@@ -105,7 +105,8 @@ public class OutboxSerialisationTests
             [typeof(PriceChangedDomainEvent)] = new PriceChangedDomainEvent(
                 ProductId.New(),
                 Money.Of(24.50m, "EUR"),
-                Raised)
+                Raised),
+            [typeof(ProductDiscontinuedDomainEvent)] = new ProductDiscontinuedDomainEvent(ProductId.New(), Raised)
         };
 
         public static object Create(Type type) =>

@@ -7,7 +7,7 @@ namespace Catalog.Application.Products.GetProducts;
 /// <summary>
 /// §6.5's read side over the write tables, left-joining Inventory's projected level (§6.1, §3.2), by a keyset
 /// seek per ordering whose <c>Id</c> tiebreaker keeps rows sharing a sort key from straddling a page boundary,
-/// narrowed by ADR-073's search.
+/// narrowed by ADR-073's search, and with no withdrawn product in it (ADR-074).
 /// </summary>
 public sealed class GetProductsHandler(IDbConnectionFactory connections)
     : IQueryHandler<GetProductsQuery, CursorPage<ProductSummaryDto>>
@@ -27,7 +27,8 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
             QuantityAvailable = s.QuantityAvailable
         FROM catalog.Products p
         LEFT JOIN catalog.StockLevels s ON s.ProductId = p.Id
-        WHERE (@Pattern IS NULL OR p.Name LIKE @Pattern ESCAPE '\')
+        WHERE p.WithdrawnAt IS NULL
+          AND (@Pattern IS NULL OR p.Name LIKE @Pattern ESCAPE '\')
         """;
 
     private const string NewestSql =
