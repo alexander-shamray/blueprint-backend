@@ -104,9 +104,25 @@ every sweep's tooling row reads.
 The estimates become measurements in step 1, and each step's exit test
 compares against that baseline.
 
+### What the baseline changed
+
+[`token-usage.md`](token-usage.md) holds the baseline. Four of its figures
+reorder the work:
+
+| | |
+|---|---|
+| Subagents | 56% of the input equivalent; `general-purpose` alone 35%, `bug-auditor` 16% |
+| `general-purpose` | 584 contexts at about 1M each, and no command here spawns that type |
+| A main session | a mean context of 295k a call, of which the resident text above is a sixth |
+| A `/ship` run | about 10M, 59% of it subagents |
+
+The largest spender is outside every step drafted from the corpus, so
+step 2 is new and comes first after the measurement. The `/ship` target is
+a run under 5M, measured.
+
 ## 3. The sequence
 
-Steps 3–5 edit `.claude/commands/`, `agents/` or `scripts/`, which
+Steps 4–6 edit `.claude/commands/`, `agents/` or `scripts/`, which
 `settings.json` denies, so each lifts the deny for its own PR with
 `settings.json` last, per `harness-boundaries.md`, and they land one at a
 time.
@@ -124,18 +140,39 @@ time.
 **Exit.** The report runs over real transcripts and its totals match the
 transcripts' own `usage` sums.
 
-### Step 2 — what every session loads
+### Step 2 — the subagents the model starts, and what fills a session
+
+- Measure with the report as of 938ba06 over the last few weeks: which
+  skills — a plugin's plan-execution workflow among them — and which plain
+  prompts start the `general-purpose` agents; and extend the report to sum
+  tool-result size per tool in main sessions, since that is what a 295k
+  context is made of.
+- `CLAUDE.md` gains one short rule for delegation: a subagent gets a brief
+  naming the files and the question and returns a short structured answer;
+  `Explore` before `general-purpose` for a search; nothing delegated that
+  one `Grep` answers; one task per session, with `/clear` between tasks,
+  because every turn re-sends the whole context.
+- A plugin workflow found to spawn an agent per task gets its reviewers
+  handed the task's diff rather than the tree, through the plugin's own
+  settings where it has them and the user's settings otherwise.
+- A cheaper model for `general-purpose` is tried only behind the quality
+  sets of step 1.
+
+**Exit.** Measured again over a comparable span: `general-purpose` under
+0.5M a context and a main session's mean context under 150k a call.
+
+### Step 3 — what every session loads
 
 - `CLAUDE.md` from 3.9k to about 1.5k: the locator, the commands, the hard
   rules; *Style* and *Working in this repo* cite the files that own them.
 - `harness-boundaries.md` split into an index of about 1.5k and sections of
   3–4k; `style-guide.md` gains a 2k summary above the master copy.
 - `pr-decision-log.md` and `lessons.md` stay where they are, so no link
-  breaks, are marked grep-only, and join the exclusion list in step 3.
+  breaks, are marked grep-only, and join the exclusion list in step 4.
 
 **Exit.** `/check-links` and `/validate-blueprint` are clean.
 
-### Step 3 — local review, and the external reviewers archived
+### Step 4 — local review, and the external reviewers archived
 
 - Tag `archive/external-reviewers` on `main` and push it; remove the 18
   files from the tree and the references to them — the deny in
@@ -162,7 +199,7 @@ transcripts' own `usage` sums.
 **Exit.** On the review quality set, `branch-reviewer` finds at least what
 the external reviewers found.
 
-### Step 4 — the sweeps
+### Step 5 — the sweeps
 
 - Slices of at most 60k tokens from an explicit file list the parent builds
   with `git ls-files`, about 36 over the corpus left after the exclusions,
@@ -178,13 +215,13 @@ the external reviewers found.
 **Exit.** On the sweep quality set, a first sweep finds at least what the
 earlier sweeps filed.
 
-### Step 5 — the commands
+### Step 6 — the commands
 
 Each command splits into a runbook — the steps, the tables, the exact
 commands — and its argument, which moves to `docs/commands/<name>.md` and is
 read only when the command is disputed or edited.
 
-| Command | Now, after step 3 | Target |
+| Command | Now, after step 4 | Target |
 |---|---|---|
 | `ship` | about 18k | about 7k |
 | `branch` | 6.5k | about 2k |
