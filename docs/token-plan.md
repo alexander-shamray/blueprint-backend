@@ -324,10 +324,13 @@ number, every fenced command, table and stop condition, and each rule as one
 sentence citing the section of `docs/commands/<name>.md` that argues it;
 arguments `harness-boundaries.md` already owns are cited there. Sizes in
 bytes, landed against main at 73a58dd, about four to a token: `ship` 61,149
-to 27,990, `bug-sweep` 59,259 to 15,996, `security-sweep` 47,806 to 13,390,
-`branch` 25,732 to 7,999, `validate-blueprint` 18,149 to 7,999, and
-`review-branch` 14,573 to 7,483, over its target because its frontmatter's
-deny list is 2 KB on its own. `test_command_runbooks.py` holds each runbook
+to 28,020, `bug-sweep` 59,259 to 17,080, `security-sweep` 47,806 to 13,585,
+`branch` 25,732 to 8,155, `validate-blueprint` 18,149 to 8,156, and
+`review-branch` 14,573 to 7,671. Four miss their targets: `review-branch`
+because its frontmatter's deny list is 2 KB on its own, and `bug-sweep`,
+`branch` and `validate-blueprint` by the clauses review restored after the
+first cut dropped them, a rule kept being worth more than a byte saved.
+`test_command_runbooks.py` holds each runbook
 under a ceilings table and each citation to a heading that exists. The exit
 waits on the next real `/ship` run, measured with `tools/token-usage/`.
 
