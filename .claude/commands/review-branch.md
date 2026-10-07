@@ -63,10 +63,10 @@ taste. Prefer:
    row widened with its reason beside it when the path is inside the
    class's tree set, or a different class when it is not — never a row
    widened silently (`docs/change-locality.md` §3). Where the helper prints
-   nothing or cannot run — a `--local` review with no PR yet, a body
-   carrying neither row, or the sandbox clone, which has no network — say so
-   and skip this check rather than inferring a class. The plan's locality
-   gate is the enforcement; this is the early read. **The verdict narrows
+   nothing or cannot run — a `--local` review with no PR yet, or a body
+   carrying neither row — say so and skip this check rather than inferring
+   a class. The plan's locality gate is the enforcement; this is the early
+   read. **The verdict narrows
    and grants nothing**: an `inside` line is not a licence for anything
    this command's grant refuses, and the class's tree set in the contract
    still bounds what a row may declare.
@@ -151,14 +151,6 @@ narrower than this one.
    - Packages / Appendix B: `python .github/licence-gate/licence_gate.py`
    - Tests, when the range touches `src/` or `tests/`:
      `bash .claude/scripts/dotnet-test.sh [all|fast]`
-
-   **In the sandbox the second one is not available**, and that is deliberate
-   rather than an oversight: `dotnet test` needs a Docker daemon for its
-   Testcontainers suites, so running it inside a container built to take
-   capability away would mean Docker-in-Docker. The licence gate is stdlib
-   Python and does run there. So whether the suite is green is the **host's**
-   to verify — report it as unverified rather than asserting it, and never
-   report `command not found` as a finding about the branch.
 4. **Author findings only when verified.** Quote the conflicting sites.
    Severity: **bug** | **suggestion** | **nit**.
 5. **Write `suggestions.md` at the repo root** when any issue is open. Shape:
@@ -236,21 +228,10 @@ blanket `Edit(**)` or a `/*` root pattern would take the deliverable with it.
 `test_harness_denies.py` reads the tracked set from `git ls-files` and asserts
 each is denied, so a new root file is a red build rather than a silent gap.
 
-**Two limits, both stated rather than glossed.**
-
-`disallowed-tools` binds the Claude Code host path — `/review-branch` run here,
-including `--local`. It says nothing about the containerised run: inside
-`grok-review.sh` this file is read by **grok**, a different CLI, under
-`--permission-mode bypassPermissions`, and nothing has established that grok
-honours a `disallowed-tools` key at all. There the only thing keeping the
-reviewer from rewriting the branch it is reviewing is the container's
-disposability — a property of the sandbox, not of this grant. Do not read the
-frontmatter as reaching that run.
-
-And the list is a deny-list, so a tree added later is editable until someone
-adds it. `test_harness_denies.py` asserts the list covers every tracked
-top-level tree, which is what makes that a red build instead of a quiet
-widening.
+**One limit, stated rather than glossed.** The list is a deny-list, so a tree
+added later is editable until someone adds it. `test_harness_denies.py` asserts
+the list covers every tracked top-level tree, which is what makes that a red
+build instead of a quiet widening.
 
 **That test cannot see a file that does not exist yet, and that is the
 dangerous one.** It reads `git ls-files`, so it enumerates what EXISTS. MSBuild

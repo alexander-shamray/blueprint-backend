@@ -1,43 +1,8 @@
 #!/usr/bin/env python3
 """Judge an edit target by the file it resolves to, not by the path it spells.
 
-A permission rule matches a spelling and an edit lands on a file.
-`.claude/settings.json` and `/review-grok`'s frontmatter deny edits by the path
-a caller typed, and a symbolic link — or, on Windows, a junction — inside an
-allowed tree is a spelling no deny matches while the write lands wherever the
-link points: inside a denied tree, or out of the checkout altogether. A branch
-under review can introduce such a link before CI has judged it.
-
-So the rule is one predicate that names no tree: an edit target must be the
-file its path spells. Resolve the target, re-anchor it on the resolved checkout
-root, and refuse it if the two disagree. This file holds no copy of any deny
-list, so it cannot go stale as one changes, and an edit spelled at the file it
-actually is passes here and is then judged by the rules that already exist.
-
-The anchoring has three consequences that are not bugs. The checkout root is
-itself resolved, so a worktree under a linked temp root — `/tmp` on macOS, an
-8.3 or `subst` path on Windows — is judged against its own real spelling. An
-anchor is a checkout root and every anchor containing the target must agree,
-because an anchor excuses the one link traversal on its own prefix. And the
-comparison folds case and Unicode normalisation where the filesystem does,
-asked of the mount rather than read off the platform.
-
-The residual: a path no anchor can place is admitted only when it also resolves
-outside every anchor — an absolute path into a scratch directory, or into the
-user's own `~/.claude`, which the harness writes its own state through. A
-spelling no anchor recognises that lands inside a checkout is refused.
-`/review-grok`'s site contract admits only plain repository-relative paths, so
-the exposure this closes cannot spell an out-of-tree target; which out-of-tree
-paths are legitimate is a different file's argument.
-
-One grammar is refused rather than judged: on Windows a spelling beginning `\\`
-skips the normalisation a permission rule's matcher depends on
-(`alternate_alphabet`), unless a checkout named in that grammar contains it.
-
-Protocol: PreToolUse, matcher `Edit|Write|NotebookEdit|MultiEdit`. Exit 0 and
-print nothing to allow; print the deny JSON to refuse, because a guard that
-refuses without saying why gets worked around rather than fixed.
-"""
+A link inside an allowed tree is a write no path deny sees, so a target that is not the file its path spells is refused;
+the argument is `docs/harness-boundaries.md`'s (*Edit guard path resolution*)."""
 
 import json
 import os
@@ -283,15 +248,10 @@ def offence(event):
                 "those ways. Name the file the way the rules are written."
             )
 
-    # `realpath` is taken of the original spelling and `normpath` of the joined
-    # one, because `normpath` collapses `..` lexically, which is wrong for a
-    # `..` that follows a link; the lexical form only locates the target under
-    # an anchor, and where the two disagree the call is refused.
-    #
-    # A `..` that traverses no link is admitted: the harness normalises a path
-    # before matching it, so `docs/../.claude/sandbox/x` is denied by a
-    # `.claude/sandbox/**` rule, and refusing every `..` here would buy nothing
-    # against the deny list while refusing innocent traffic.
+    # `realpath` is taken of the original spelling and `normpath` of the joined one, because `normpath` collapses
+    # `..` lexically, which is wrong after a link; where the two disagree the call is refused. A `..` traversing no
+    # link is admitted: the harness normalises a path before matching it, so `docs/../.claude/scripts/x` meets the
+    # `.claude/scripts/**` deny, and refusing every `..` here would buy nothing against the deny list.
     joined = spelled if os.path.isabs(spelled) else os.path.join(cwd, spelled)
     lexical = os.path.normpath(os.path.abspath(joined))
     resolved = os.path.realpath(joined)

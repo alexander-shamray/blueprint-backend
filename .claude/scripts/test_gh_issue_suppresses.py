@@ -172,12 +172,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
 
     @staticmethod
     def granted_bash(path):
-        """The `Bash(...)` grants on one command's allowed-tools line.
-
-        The same reader `CopilotFeedHelpersAreTheOnlyIntake` uses, because the
-        subject here is the same: what a command may run, not what its prose
-        tells a reader to run.
-        """
+        """The `Bash(...)` grants on one command's allowed-tools line: what it may run, not what its prose says."""
         frontmatter = path.read_text(encoding="utf-8").split("---")[1]
         line = next(
             (ln for ln in frontmatter.splitlines()

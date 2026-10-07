@@ -22,10 +22,8 @@ from review_helpers import (
 class HarnessControlSurfaceIsDenied(unittest.TestCase):
     """The deny list covers the files that grant, not only the helpers.
 
-    `commands/`, `agents/` and `settings.json` hand out the grants that
-    `.claude/scripts/**` and `.claude/sandbox/**` protect, so the same
-    reasoning applies one level up: a command carrying an unrestricted `Edit`
-    while reading untrusted input reaches the frontmatter as well as the feed.
+    `commands/`, `agents/` and `settings.json` hand out the grants the helpers in `.claude/scripts/` hold, so a
+    command carrying an unrestricted `Edit` while reading untrusted input reaches the frontmatter as well as the feed.
     """
 
     def deny(self):
@@ -35,8 +33,7 @@ class HarnessControlSurfaceIsDenied(unittest.TestCase):
         deny = self.deny()
         # `hooks/**` is on the list because a hook runs on every Bash call: a
         # session able to rewrite one could delete its own guard and then act.
-        for path in (".claude/scripts/**", ".claude/sandbox/**",
-                     ".claude/commands/**", ".claude/agents/**",
+        for path in (".claude/scripts/**", ".claude/commands/**", ".claude/agents/**",
                      ".claude/hooks/**", ".claude/skills/**",
                      ".claude/settings.json", ".claude/settings.local.json"):
             for prefix in ("", "./"):
@@ -317,26 +314,16 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
         # `.git/config`, set `diff.external`, and get host execution out of its
         # own approved `git diff`. Denied as a tree and as a file, because in a
         # worktree `.git` is a file pointing at the real directory.
-        #
-        # `/review-grok` is covered here and not in SUBJECTS: it holds `Edit`
-        # for `src/`, `tests/` and `docs/` by design, so the tracked-tree cases
-        # above are not its shape, but a site under `.git/` is a regular file a
-        # crafted review can quote a real line from.
-        for name in (*self.SUBJECTS, "review-grok.md"):
+        for name in self.SUBJECTS:
             rules = self.disallowed(name)
             for target in (".git/**", "./.git/**", ".git", "./.git"):
                 with self.subTest(command=name, target=target):
                     self.assertIn(f"Edit({target})", rules)
 
     def test_the_repository_tracks_no_symbolic_link(self):
-        # `/review-grok`'s site contract holds its path denies by spelling, and
-        # a tracked symbolic link inside an allowed tree is a spelling the deny
-        # never sees while its target can be anywhere. This case makes the
-        # command's premise — that no such link is tracked — a gate on every
-        # push rather than a sentence about one checkout. It is defence in
-        # depth beside `.claude/hooks/guard-edit-target.py`, which decides at
-        # edit time: this one goes red when a link is committed, the guard when
-        # one is written through.
+        # A tracked symbolic link inside an allowed tree is a spelling no path deny sees while its target can be
+        # anywhere. This goes red when one is committed, and `.claude/hooks/guard-edit-target.py` refuses one
+        # written through at edit time.
         out = subprocess.run(
             [GIT, "ls-files", "-s"], cwd=str(SCRIPTS.parent.parent),
             capture_output=True, text=True,

@@ -15,16 +15,14 @@ worktree of its own, which is the next section.
 
 ## A branch is a workspace, not a HEAD
 
-**A new branch gets its own worktree by default, and the session moves into
-it** — the exceptions are named in step 1 and step 5, and both branch in
-place. One
+**A new branch gets its own worktree by default, and the session moves into it**
+— the exceptions are named in step 1 and step 5, and both branch in place. One
 checkout switching between branches is one directory whose contents mean
 something different depending on state nobody can see from the files — and this
-repo's chain leans on the working tree hard enough for that to matter:
-`grok-review.sh` refuses a dirty tree, `suggestions.md` sits untracked at the
-root as a review's working state, and `/commit`'s unscoped form sweeps
-untracked files. Each of those is a rule about *the* tree, and each of them
-gets safer when a PR owns one.
+repo's chain leans on the working tree hard enough for that to matter: `/ship`'s
+merge gate reads a dirty tree as work still owed, and `/commit`'s unscoped form
+sweeps untracked files. Each of those is a rule about *the* tree, and each of
+them gets safer when a PR owns one.
 
 Worktrees live under this checkout's `.claude/worktrees/`:
 
@@ -44,9 +42,9 @@ Inside that directory the session's permission root becomes the worktree, and
 
 **It is inside the checkout, so it must be ignored**, and `.gitignore` carries
 `.claude/worktrees/`. Unignored, every worktree would show as untracked in each
-`git status` the chain reads and put `grok-review.sh`'s clean-tree refusal in
-its blast radius. `git-worktree-fork.sh` refuses a path git does not ignore,
-so a lost line fails the fork rather than the review.
+`git status` the chain reads and put `/ship`'s clean-tree gate in its blast
+radius. `git-worktree-fork.sh` refuses a path git does not ignore, so a lost
+line fails the fork rather than the merge gate.
 
 **Anything that resolves upward from the worktree reaches the main checkout.**
 Claude Code reads every ancestor's `CLAUDE.md`, so a session in a worktree also
@@ -64,7 +62,7 @@ worktree under `mktemp -d` and remove it at the end; it carries no branch and
 nothing returns to it, and they refuse a sibling *by name* — partly because a
 root-level or container layout has no writable parent to put one in, which is a
 layout they have to keep working under rather than one they require. This one
-holds a branch that a PR, two review loops and a person all come back to, so it
+holds a branch that a PR, a review and a person all come back to, so it
 wants a stable named directory in the checkout rather than a temp path.
 None is another's precedent — do not reconcile them by making one match.
 
@@ -93,7 +91,7 @@ main checkout's approval of its MCP servers, which the helper writes as the
 one key `enabledMcpjsonServers` (`docs/harness-boundaries.md`).
 
 `.claude/` is tracked, so it comes with it: the commands, the helper scripts
-the review loops invoke by name, and `settings.json` with its allow and deny
+the commands invoke by name, and `settings.json` with its allow and deny
 rules all arrive in the new directory, and the relative paths in every
 `Bash(bash .claude/scripts/…)` grant mean the same thing there as here.
 `.remember/` is ignored and does not, which is correct — it is session state,
@@ -323,15 +321,14 @@ not content.
    `git push -u origin <branch>` sets the right one.
 
    `origin/main` is the base rather than `HEAD`, for the reason step 1 fetched:
-   local `main` here is whatever it was when it was last pulled, and
-   `grok-review.sh` already carries a paragraph about a review diffed against a
-   stale base. Cutting the worktree from the remote-tracking ref is where that
-   is cheapest to get right.
+   local `main` here is whatever it was when it was last pulled, and a review
+   diffed against a stale base reads changes the branch never made. Cutting the
+   worktree from the remote-tracking ref is where that is cheapest to get right.
 
    Then switch the session into it with **`EnterWorktree`**, passing the new
    directory as `path` — the worktree exists and `git worktree list` reports
    it, which is what that form of the tool requires. When both steps succeed,
-   everything after this command — `/commit`, `/pr`, both review loops,
+   everything after this command — `/commit`, `/pr`, the review,
    `dotnet test` — runs there. The two paragraphs below are what happens when
    either does not.
 

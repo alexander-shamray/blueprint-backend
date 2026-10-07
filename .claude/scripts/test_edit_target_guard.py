@@ -200,10 +200,8 @@ class GuardCase(unittest.TestCase):
 class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
 
     def test_a_link_into_a_denied_tree_is_refused(self):
-        # `/review-grok` holds `Edit` for `docs/` and denies `.claude/**`, and
-        # the deny is matched on the spelling. A link under `docs/` pointing
-        # into the machinery is a path the deny never sees and a write the
-        # machinery receives.
+        # `settings.json` denies the machinery by spelling, so a link under `docs/` pointing into it is a path the
+        # deny never sees and a write the machinery receives.
         target = os.path.join(self.root, ".claude", "scripts", "helper.sh")
         for linker in linkers():
             with self.subTest(link=linker):
