@@ -233,6 +233,9 @@ tools/bff-replay/            ADR-051's rebuild — a console replaying the
                              queue alone. Its README is the procedure, since
                              every runbook here pairs with an alert; its suite is
                              the BFF's, which proves it against the consumers
+tools/token-usage/           Claude Code's recorded token usage per command
+                             and agent type, from local transcripts; stdlib
+                             Python with a suite, for docs/token-plan.md
 deploy/compose/              §14.1's model, laid out in its `README.md`: one
                              baseline and one file per deployable unit, so a
                              service's environment is a file its own PR owns.
