@@ -65,7 +65,7 @@ src/Services/Catalog/        §4.1's five projects; the first gRPC server
 src/Services/Ordering/       the same five, plus §5's aggregate, §9.6's saga
                              and ADR-052's gRPC address read
 src/Services/<the rest>/     Inventory and Payments on the same shape; Shipping and
-                             Notifications are workers, a .Worker where the others have .Api (§4.1)
+                             Notifications are workers, whose projects §4.1 lists
 tests/                       per service its layers' .Tests, a worker's .Worker.Tests in place of .Api.Tests,
                              and .TestSupport (NOT a test project, §4.1); Common.*.Tests; the hosts'
                              suites; Platform.IntegrationTests
