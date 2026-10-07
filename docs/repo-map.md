@@ -239,6 +239,11 @@ tools/bff-replay/            ADR-051's rebuild — a console replaying the
                              queue alone. Its README is the procedure, since
                              every runbook here pairs with an alert; its suite is
                              the BFF's, which proves it against the consumers
+tools/dead-letters/          the dead-letter queues' hands: list, inspect,
+                             replay or discard over the Management API, a
+                             dry run unless told otherwise, as the one broker
+                             account that is not a service's. Stdlib Python
+                             with a suite; the runbooks name it at each step
 tools/token-usage/           Claude Code's recorded token usage per command
                              and agent type, from local transcripts; stdlib
                              Python with a suite, for docs/token-plan.md
@@ -249,9 +254,10 @@ deploy/compose/              §14.1's model, laid out in its `README.md`: one
                              image that is BUILT — ADR-021's delayed-exchange
                              plugin — so its build rides on the compose smoke.
                              It also carries `definitions.json`, the
-                             per-service broker accounts (ADR-036), and
+                             per-service broker accounts (ADR-036) and
+                             tools/dead-letters' passwordless operator, and
                              `check_permissions.py`, which derives what each
-                             service may touch from that service's own source.
+                             may touch from the services' own source.
                              `guest` is NOT among the accounts, and the
                              mechanism matters: RabbitMQ seeds the default user
                              only on an empty database and skips it when

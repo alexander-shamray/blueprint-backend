@@ -43,6 +43,14 @@
       "password_hash": "H/yV1JTPZnIxv7Mjb1gi3jVd7lO3+zPgD2hgMcA7D2DfTpXs",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
       "tags": []
+    },
+    {
+      "name": "dead-letter-operator",
+      "password_hash": "",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": [
+        "management"
+      ]
     }
   ],
   "vhosts": [
@@ -99,6 +107,13 @@
       "configure": "^(bff-|Common\\.Contracts|MassTransit:)",
       "write": "^(bff-|MassTransit:)",
       "read": "^(bff-|Common\\.Contracts|MassTransit:)"
+    },
+    {
+      "user": "dead-letter-operator",
+      "vhost": "/",
+      "configure": "",
+      "write": "^[a-z][a-z0-9-]*(_error|_skipped)?$",
+      "read": "_(error|skipped)$"
     }
   ],
   "topic_permissions": [],

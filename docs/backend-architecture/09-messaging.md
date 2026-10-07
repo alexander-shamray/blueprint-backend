@@ -1274,6 +1274,10 @@ public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, Cance
 > `CommandOrigin` therefore closes §11.4's
 > failure rather than narrowing it: it stops a caller-less command inheriting
 > an owner's privileges, and the broker says who may publish.
+> One account is not a service's: a person replaying dead letters
+> authenticates as `dead-letter-operator`, whose `write` covers every endpoint
+> because a replay is that act, and that residual is argued in
+> [ADR-072](adr/ADR-072-a-person-replays-dead-letters-as-a-broker-account-of-its-own.md).
 >
 > **What it does not buy is `configure` exclusivity**, and that is structural
 > rather than an omission. A consumer declares the exchange it binds, so

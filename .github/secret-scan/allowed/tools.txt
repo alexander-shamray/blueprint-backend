@@ -16,3 +16,14 @@
 
 tools/new-service/test_new_service.py | credential-assignment | 1c47d06cedb2 | The scaffold suite pinning the per-service broker account it renders into compose.
 tools/new-service/test_new_service.py | connection-string-password | 19b974097990 | The scaffold suite pinning the per-service Redis user it renders into compose.
+
+
+# The dead-letter tool.
+#
+# tools/dead-letters reads the operator's credential from a curl config or the
+# environment, never from argv; the lines below name a password and hold none.
+
+tools/dead-letters/dead_letters.py | connection-string-password | 723340c8c4c1 | Splitting the curl config's user line into name and password; the value is read, not written.
+tools/dead-letters/dead_letters.py | connection-string-password | 6aea782b50b2 | Reading the password from the environment; no value is in the source.
+tools/dead-letters/dead_letters.py | connection-string-password | 32d7d6181dbe | Unpacking the loaded credential; no value is in the source.
+tools/dead-letters/test_dead_letters.py | credential-assignment | da3fd0c5abaa | A placeholder the suite's in-memory broker never checks; no broker ever reads it.
