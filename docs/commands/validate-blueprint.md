@@ -73,11 +73,12 @@ make.
 
 ## Method
 
-**The last of those is named here because the scope paragraph naming it is not
-the operative procedure.** An agent works from this section, so a file admitted
-above and absent from this list is a file nobody greps — and the claims that
-live only in `docs/testing.md`, not in §12, are exactly the ones a
-chapter-only sweep cannot see.
+**`docs/testing.md` is the last of the runbook's *Method* paths because the
+scope paragraph naming it is not the operative procedure.** An agent works
+from that section, so a file the scope admits and absent from the *Method*
+path list is a file nobody greps — and the claims that live only in
+`docs/testing.md`, not in §12, are exactly the ones a chapter-only sweep
+cannot see.
 
 The corpus outside the three audited paths is not toured — a restatement
 there is the plan's, per `docs/change-locality.md` §2. A pre-existing
