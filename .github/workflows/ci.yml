@@ -235,6 +235,9 @@ jobs:
       - name: The integration shards partition the stage
         run: python .github/pipeline-gate/pipeline_gate.py shards
 
+      - name: Every third-party action is pinned to a commit
+        run: python .github/pipeline-gate/pipeline_gate.py actions
+
   # The scaffold has no template directory: it renders a new service from
   # src/Services/Catalog at run time, so there is one copy of the wiring rather
   # than two that drift. The risk that buys is that Catalog moves under the
@@ -380,7 +383,7 @@ jobs:
 
       - name: Detect changed services
         id: changes
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           # Without this, negated patterns are silently ignored: the default
           # quantifier ('some') never evaluates the exclusion below.

@@ -69,7 +69,9 @@ make a monorepo practical at this size:
 ```yaml
 - name: Detect changed services
   id: changes
-  uses: dorny/paths-filter@v4
+  # A third-party action is pinned to a commit, never a tag: `pipeline-gate
+  # actions` refuses a tag, which can be moved to other code.
+  uses: dorny/paths-filter@<commit-sha> # vX.Y.Z
   with:
     # Without this, negated patterns are silently ignored: the default
     # quantifier ('some') never evaluates the exclusion below.

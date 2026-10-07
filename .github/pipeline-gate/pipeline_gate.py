@@ -383,6 +383,61 @@ def check_sboms(workflow_text: str) -> list[str]:
     return problems
 
 
+# --------------------------------------------------------------------------
+# actions
+# --------------------------------------------------------------------------
+
+# GitHub publishes these, so whether they ride a major tag is a separate
+# decision; every other owner's action is pinned to a commit.
+FIRST_PARTY_OWNERS = {"actions"}
+
+
+def read_uses(workflow_text: str) -> list[str]:
+    """Every `uses:` reference in one workflow, a step's or a job's."""
+    return re.findall(r"^\s*(?:-\s+)?uses:\s*['\"]?([^\s'\"#]+)", workflow_text, flags=re.MULTILINE)
+
+
+def check_actions(root: Path = ROOT) -> list[str]:
+    """Every third-party action a workflow runs is pinned to a commit (§15.1).
+
+    A tag can be moved to other code, and `paths-filter` decides which gates
+    run, so a moved tag is a way to switch them off that no diff shows.
+    """
+    workflows = sorted(
+        path for path in (root / ".github" / "workflows").glob("*")
+        if path.suffix in (".yml", ".yaml")
+    )
+    references = [
+        (path.name, reference)
+        for path in workflows
+        for reference in read_uses(path.read_text(encoding="utf-8"))
+    ]
+    if not references:
+        return [
+            "found no `uses:` in .github/workflows: the pin check would pass "
+            "vacuously, so the parser or the directory is what is broken"
+        ]
+
+    problems: list[str] = []
+    for name, reference in references:
+        if reference.startswith("./"):
+            continue
+        if reference.startswith("docker://"):
+            if "@sha256:" not in reference:
+                problems.append(f"{name} runs {reference}, a container image not pinned to a digest")
+            continue
+        action, _, ref = reference.partition("@")
+        if action.split("/")[0] in FIRST_PARTY_OWNERS:
+            continue
+        if not re.fullmatch(r"[0-9a-f]{40}", ref):
+            problems.append(
+                f"{name} runs {reference}, a third-party action not pinned to a "
+                "commit. A tag can be moved to other code; pin the full SHA and "
+                "keep the version as a comment"
+            )
+    return problems
+
+
 def read_condition_outputs(workflow_text: str, job: str) -> set[str]:
     """The `needs.changes.outputs.<name>` names one job's own `if:` reads.
 
@@ -777,6 +832,7 @@ def main(argv: list[str]) -> int:
     sub.add_parser("filters", help="every deployable is matched by some path filter")
     sub.add_parser("images", help="every Dockerfile is built by some matrix entry, with an SBOM")
     sub.add_parser("shards", help="the integration shards partition the stage")
+    sub.add_parser("actions", help="every third-party action is pinned to a commit")
 
     stages = sub.add_parser("stages", help="every stage ran, ran enough, and ran once")
     stages.add_argument("results", nargs="+", type=Path)
@@ -802,6 +858,13 @@ def main(argv: list[str]) -> int:
         if code := fail(problems, "the integration shards in ci.yml"):
             return code
         print("pipeline-gate: the integration shards are a cascade, disjoint and exhaustive.")
+        return 0
+
+    if args.command == "actions":
+        problems = check_actions()
+        if code := fail(problems, "the actions .github/workflows runs"):
+            return code
+        print("pipeline-gate: every third-party action in .github/workflows is pinned to a commit.")
         return 0
 
     problems = check_stages(args.results)
