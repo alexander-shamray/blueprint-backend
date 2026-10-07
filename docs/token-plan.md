@@ -260,7 +260,7 @@ to `test_pr_helpers.py` and `test_command_grants.py`; and each comment the
 archive touched cut to the comment gate's budget, `pr-locality.sh`'s contract
 moving into `harness-boundaries.md`. The second gives both auditors the read
 block `branch-reviewer` already carries, and their fan-out reports become JSON:
-`bug-auditor` 13.4 KB to 5.6 KB, `security-auditor` 6.4 KB to 3.5 KB. The
+`bug-auditor` 13.4 KB to 5.7 KB, `security-auditor` 6.4 KB to 3.6 KB. The
 exclusion list stays `branch-reviewer`'s alone, because the sweeps assign
 migrations and fenced samples to auditor rows, and an auditor told to skip them
 would call a row clean that it never read. Their argument lives in the sweeps
