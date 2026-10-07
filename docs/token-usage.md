@@ -94,10 +94,11 @@ runs, and with Copilot suspended each round is one read-only subagent,
 repeated until a round comes back clean — so a cut to them is a change to
 those instructions as much as to the repository.
 
-**The costliest agents are a plugin's.** The superpowers `writing-plans`
-skill spawned 66 `general-purpose` agents at 2.1M each, 77 calls apiece at
-a mean context of 228k — the plans under `docs/superpowers/` that each run
-writes are among the largest files in the repository.
+**The costliest agents sat under a plugin's label.** 66 `general-purpose`
+agents at 2.1M each, 77 calls apiece at a mean context of 228k, counted
+under `skill:superpowers:writing-plans`; their descriptions, read in the
+review below, show most of them were review and fix rounds held under a
+label that stuck, not plan writing.
 
 The report as of this commit lists single subagents with the task each was
 given (`--spawns`), which is the next measurement.
@@ -177,6 +178,13 @@ fell.
 | `general-purpose` | 596M | 34.5% |
 | `bug-auditor` | 259M | 15.0% |
 | `Explore`, `fork`, `Plan` and the rest | 87M | 5.0% |
+
+**The superpowers row is mostly a review loop.** A `skill:` label held
+until the next typed prompt, so a loop run on wakes after a skill loaded
+counted under it. By their descriptions, 67 of the 81 agents under
+`skill:superpowers:writing-plans` were review or fix rounds, 165M, and 8
+wrote plans, 15M; most plan-writing agents sat under `(no command)` and
+`/ship`. What the plugin costs is plan writing, about 7M a plan.
 
 **A `/ship` run is about 9.8M**, 4.6M of it before the first wake, which
 agrees with the review's hand-patched 731M (45%) over fewer directories.

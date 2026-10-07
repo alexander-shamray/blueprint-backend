@@ -170,8 +170,9 @@ counted under `/ship`. Passed on the run `token-usage.md` names.
   did after a wake, its own spend is small (`token-usage.md`), and what
   read as its cost was not its.
 - The superpowers plugin stays enabled: the owner plans more work with it.
-  Its cost is cut where it is spent, once `--spawns` shows what its
-  `writing-plans` agents, 2.1M each, were given. `CLAUDE.md` gains a short
+  Its cost is cut where it is spent, in writing a plan; the agents first
+  counted as `writing-plans`' were mostly the review loop the ceiling
+  above already targets (`token-usage.md`). `CLAUDE.md` gains a short
   planning rule that the plugin's skills defer to as a user instruction: a
   plan cites existing code by path and symbol rather than pasting it, under
   a stated size; research before a plan goes to `Explore` with a brief, not
