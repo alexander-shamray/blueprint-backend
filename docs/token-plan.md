@@ -155,9 +155,16 @@ transcripts' own `usage` sums.
 - A command whose work is mechanical stops being a prompt: `/check-links`
   spent about 15.6M a run, mostly in agents it never asks for, on a check
   a stdlib script does deterministically, and becomes one with a suite.
-- The superpowers `writing-plans` agents, 2.1M each, are measured against
-  the plans they produce; whether the plugin stays enabled for this
-  repository is the owner's decision, made on that figure.
+- The superpowers plugin stays enabled: the owner plans more work with it.
+  Its cost is cut where it is spent, once `--spawns` shows what its
+  `writing-plans` agents, 2.1M each, were given. `CLAUDE.md` gains a short
+  planning rule that the plugin's skills defer to as a user instruction: a
+  plan cites existing code by path and symbol rather than pasting it, under
+  a stated size; research before a plan goes to `Explore` with a brief, not
+  `general-purpose`; a change that fits one PR takes plan mode, not a plan
+  file; and a plan whose tasks are small runs with `executing-plans` in the
+  session, with `subagent-driven-development`'s reviewers handed the task's
+  diff rather than the tree when it is used.
 - A plugin workflow found to spawn an agent per task gets its reviewers
   handed the task's diff rather than the tree, through the plugin's own
   settings where it has them and the user's settings otherwise.
