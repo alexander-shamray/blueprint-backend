@@ -22,7 +22,7 @@ from review_helpers import (
 class HarnessControlSurfaceIsDenied(unittest.TestCase):
     """The deny list covers the files that grant, not only the helpers.
 
-    `commands/`, `agents/` and `settings.json` hand out the grants the helpers in `.claude/scripts/` hold, so a
+    `commands/`, `agents/` and `settings.json` hand out the grants that run the helpers in `.claude/scripts/`, so a
     command carrying an unrestricted `Edit` while reading untrusted input reaches the frontmatter as well as the feed.
     """
 
