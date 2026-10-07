@@ -265,6 +265,40 @@ class AReplayIsTheSameMessage(unittest.TestCase):
         self.assertEqual("failed", failed["action"])
         self.assertIn("in neither ordering-commands_error nor --record", failed["reason"])
 
+    def test_a_replay_whose_answer_is_lost_is_not_returned_and_says_it_may_have_landed(self):
+        api = FakeApi({"ordering-commands_error": [message("m-1")], "ordering-commands": []})
+        real_call = api.__call__
+
+        def lose_replays(method, path, body):
+            if "/exchanges/" in path and "ordering-commands_error" not in path:
+                real_call(method, path, body)
+                raise dead_letters.AnswerLost(f"POST {path}: the answer was lost (TimeoutError: timed out)")
+            return real_call(method, path, body)
+
+        code, out, _ = run(lose_replays, "replay", "ordering-commands_error", "--all", "--execute",
+                           "--record", self.record, "--json")
+        self.assertEqual(1, code)
+        [failed] = json.loads(out)["actions"]
+        self.assertEqual("failed", failed["action"])
+        self.assertIn("may have reached ordering-commands, so it is not returned", failed["reason"])
+        self.assertEqual([], api.queues["ordering-commands_error"], "returned too, it would be on both")
+
+    def test_a_return_whose_answer_is_lost_says_it_may_be_back_rather_than_gone(self):
+        api = FakeApi({"ordering-commands_error": [message("m-1"), message("m-2")], "ordering-commands": []})
+        real_call = api.__call__
+
+        def lose_returns(method, path, body):
+            if "/exchanges/" in path and "ordering-commands_error" in path:
+                real_call(method, path, body)
+                raise dead_letters.AnswerLost(f"POST {path}: the answer was lost (TimeoutError: timed out)")
+            return real_call(method, path, body)
+
+        _, out, _ = run(lose_returns, "replay", "ordering-commands_error", "--message-id", "m-2", "--execute",
+                        "--record", self.record, "--json")
+        returned = next(a for a in json.loads(out)["actions"] if a["message_id"] == "m-1")
+        self.assertIn("may be back on ordering-commands_error", returned["reason"])
+        self.assertNotIn("not on ordering-commands_error any more", returned["reason"])
+
     def test_a_skipped_queue_replays_to_its_endpoint(self):
         api = FakeApi({"bff-order-events_skipped": [message("s-1", input_address=None)], "bff-order-events": []})
         code, _, _ = run(api, "replay", "bff-order-events_skipped", "--all", "--execute", "--record", self.record)

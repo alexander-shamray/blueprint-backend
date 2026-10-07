@@ -76,7 +76,9 @@ when a message it returned comes round again.
 A replay is refused, and the message returned, when MassTransit's
 `MT-Fault-InputAddress` names an endpoint other than the one the queue name
 gives. A replay the broker routes nowhere, or refuses, is returned to the
-dead-letter queue and stops the run. The `list` figures are the Management
+dead-letter queue and stops the run; one whose answer is lost may have
+landed, so it is not returned, and the run stops with the record holding it.
+The `list` figures are the Management
 API's statistics, which lag the queue by a few seconds.
 
 ## What a replay preserves
