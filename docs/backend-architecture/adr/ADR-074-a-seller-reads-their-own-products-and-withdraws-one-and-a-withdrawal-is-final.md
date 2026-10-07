@@ -27,7 +27,9 @@ Ordering's projection consumes had no publisher. Final rather than
 reversible, because Ordering's projection re-lists a product on any price
 newer than its withdrawal watermark ([§6.6](../06-cqrs.md)): a price change
 after a withdrawal would put the product back on sale with no one having
-decided to. Refusing it in Catalog keeps that one rule true at its source.
+decided to. Refusing it in Catalog keeps that one rule true at its source,
+up to the publisher clock §6.6 already names: two replicas' skew can still
+stamp a price committed just before a withdrawal later than the withdrawal.
 Ownership arrives with withdrawal because a withdrawal anyone holding
 `catalog:write` could make on anyone's product is a hole, and the price change
 had the same one. A 404 rather than a 403, because a 403 confirms the

@@ -1471,9 +1471,14 @@ price history with it.
 > comparison: delivery is unordered, so what the projection must refuse is a
 > price *older* than the withdrawal, arriving after it. A newer one would still
 > re-list the product, in currencies that have rows and in currencies that do
-> not, but Catalog never sends one: a withdrawal is final there, and a price
-> change after it is refused at the source
+> not, and Catalog makes no price change after a withdrawal: one is final
+> there, and a price change after it is refused at the source
 > ([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)).
+> "Newer" is still the stamps' order, not the commits', so this rests on the
+> same publisher clock the tie rule above does: a price committed just before
+> a withdrawal, on a replica whose clock runs ahead, can carry the later stamp
+> and keep the product orderable. That is the residual the per-product
+> sequence above would close, and it is named rather than guarded.
 >
 > **The upsert's read of that watermark needs its own `HOLDLOCK`, and taking
 > it first is what stops the two statements deadlocking.** The answer that
