@@ -76,6 +76,15 @@ their real spelling**; **a comment says why and cites its owner, inside
 the guide's budget**; and **no real credentials**, in a sample or in
 source, §14.1's local-development defaults the one stated exception.
 
+## Working in this repo
+
+`docs/change-locality.md` §6's *Working rules* own how work here is done:
+commits, issues, review threads and the round touch set. Two of them fire
+without an edit to prompt a look: **uncommitted work in the tree belongs
+in the PR being worked on — never revert it to clean the tree**; and
+**`TODO.md` is updated the moment a PR or issue is opened, merged, closed
+or reopened**.
+
 ## Subagents, review rounds and plans
 
 Every turn re-sends the whole context, so an agent costs what it reads
