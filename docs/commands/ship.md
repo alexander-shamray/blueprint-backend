@@ -12,12 +12,12 @@ restate them here** — a chainer that paraphrases the steps it calls is the
 worst place for a second copy of a rule to live, because it is the copy that
 drifts.
 
-**The two ends are different, and this file is the only place they are
+**The two ends are different, and the runbook is the only place they are
 written.** Step 0's workspace hygiene and step 6's merge and teardown belong to
 no other command — there is nothing to delegate to and nothing to restate — so
-they are argued here in full. Between them, this command adds only the
-handoffs: which steps are still owed, and where the sequence is allowed to
-stop.
+the runbook writes them in full and this file argues them. Between them, this
+command adds only the handoffs: which steps are still owed, and where the
+sequence is allowed to stop.
 
 ## It runs to the end, and the end is a merged PR
 
@@ -39,18 +39,19 @@ names the option taken and the one rejected. A silent decision is the
 failure mode this rule creates; a stated one is the thing it trades an
 interruption for.
 
-The helper, reviewer and missing-case rows are questions
-about *this* run; the other four are questions about the repository's state, and
-no recommended option exists for any of them. Two of the four are
+Seven things still stop the chain, and the runbook's stop table names them.
+Its helper, reviewer and missing-case rows are questions about *this* run; the
+other four are questions about the repository's state, and no recommended
+option exists for any of them. Two of the four are
 somebody's decision this chain would otherwise undo in silence — commits
 placed on `main`, and a PR deliberately closed — which is a sharper reason
 to stop than not knowing what to do.
 
-**The review hitting its ceiling is not on that list.** A ceiling ends the
-review — it reports itself unconverged and step 6 merges anyway, because
-a budget running out is not a verdict. Reading it as a chain stop would hold
-every PR whose reviewer had more to say, which is the opposite of what step 6
-decides.
+**The review hitting its ceiling is not in the runbook's stop table.** A
+ceiling ends the review — it reports itself unconverged and step 6 merges
+anyway, because a budget running out is not a verdict. Reading it as a
+chain stop would hold every PR whose reviewer had more to say, which is the
+opposite of what step 6 decides.
 
 **The checks carry the weight a stop would.** This command merges, so step 2
 is the only thing between a bad edit and `main` that is not a reviewer, and
@@ -61,8 +62,8 @@ is the only thing between a bad edit and `main` that is not a reviewer, and
 **Step 0's teardown targets a worktree that is already finished; step 6's
 targets the one this run just merged. Exactly one of them owns any given
 directory.** A resumed run that starts inside its own unfinished worktree stays
-there — step 0's table says so in its second row, and that row is what keeps
-this step from stranding the branch it was meant to tidy up around.
+there — the runbook's step 0 table says so in its second row, and that row is
+what keeps this step from stranding the branch it was meant to tidy up around.
 
 **The merged row is the case where the two could collide, which is why it ends
 the run at step 0.** A session standing in a worktree whose PR is already
@@ -76,7 +77,8 @@ already happened.
 **The workspace is part of that state**, and it is read the way `/branch`
 step 0 reads it: `git rev-parse --git-dir --git-common-dir` differing, with no
 `--show-superproject-working-tree` to make it a submodule, means this session
-is already inside this PR's worktree. Then every row above is owed *there* and
+is already inside this PR's worktree. Then every row of the runbook's resume
+table is owed *there* and
 nothing forks a second directory. A run that starts in the main checkout on
 `main` is the only one that can fork a workspace at all — and only with a clean
 tree and a writable `.claude/worktrees/`, per step 1's two exceptions.
@@ -89,15 +91,15 @@ nothing and costs one round, and a re-run is proof where an inference would
 be a guess. A plan PR is no exception, and *A plan is reviewed once, for
 contradiction* says what its re-run costs.
 
-**One call, four outcomes, and it exits 0 for every one of them.** Empty means
-no PR has ever existed for this branch; otherwise the newest row reads `OPEN`,
-`CLOSED` or `MERGED`, and those are precisely the four cases the table above
-distinguishes.
+**One call to `pr-for-branch.sh`, four outcomes, and it exits 0 for every one
+of them.** Empty means no PR has ever existed for this branch; otherwise the
+newest row reads `OPEN`, `CLOSED` or `MERGED`, and those are precisely the
+four cases the runbook's resume table distinguishes.
 
 **`pr-state.sh` cannot be that read, and the reason is an exit
 code rather than a preference.** With no PR for the current branch it exits
 non-zero, and *forked but never PR'd* is what step 1 produces on every run —
-so the commonest state in the table would be classified through a failed
+so the commonest state in the resume table would be classified through a failed
 command, in a chain whose first stop rule is that a non-zero exit means the
 step did not run.
 
@@ -215,15 +217,15 @@ PR'd* is what step 1 produces on every run, so it cannot be one of these
 reads (*Resume, don't restart*). `pr-for-branch.sh` answers with a row or
 with `[]`.
 
-**It is not filtered to merged, and the read above must do that itself.**
-The helper fixes `--state all`, because the resume table one section up
+**It is not filtered to merged, and the runbook's step 0 read must do that
+itself.** The helper fixes `--state all`, because the runbook's resume table
 needs the other states from the same call. So **look for a row whose
 `state` is `MERGED` and whose `baseRefName` is `main`, and compare that
 row's `headRefOid`** — a non-empty result means a pull request exists,
 which is true of an OPEN one too, and an OPEN row's head equals the tip on
 every pushed branch. Treating that as "it landed" would classify an
-unmerged branch as finished and tear the workspace down. The resume table
-one section up reads the same rows for a different question, *which* state
+unmerged branch as finished and tear the workspace down. The runbook's
+resume table reads the same rows for a different question, *which* state
 the newest row carries; `pr-state.sh` is step 6's read, where there is a PR
 number to ask about.
 
@@ -283,7 +285,7 @@ still holds and the directory holding it, and end there. **That is not one
 of the seven stops** — nothing failed and nothing is being asked; it is a run
 that found nothing to do, and saying so is the whole of what it owes.
 
-**Do not spell Finished as "nothing unpushed".** The resume table above
+**Do not spell Finished as "nothing unpushed".** The runbook's resume table
 uses *unpushed* in git's ordinary sense — commits not yet on
 `origin/<branch>` — and its rows need that reading. A clean branch, fully
 pushed, with no PR yet is *nothing unpushed* and is exactly the state that
@@ -301,7 +303,7 @@ step 1 forks, and the same refusal lands on the same name.
 The second shape is easy to miss because the in-place branch is the
 *exception* in step 1 rather than the ordinary case — and it is exactly what
 `/branch` produces every time `main` was dirty, which is every time a change
-is already half-written when the chain starts. The reads above answer
+is already half-written when the chain starts. The runbook's step 0 reads answer
 which row applies, and they are needed **together**: the PR state alone
 cannot see work committed after the merge, and the tip alone says nothing
 until a merged row names the head to compare it with.
@@ -377,7 +379,8 @@ than a second spelling of it.** The predicate asks for a pull request
 merged into `main` itself, so the only worktree this removes is one whose
 tip landed there, and an unused or abandoned one is never reached. At this
 site the tip is `git rev-parse <branch>` rather than `HEAD`, because the
-session is not in that worktree, and the tree half is git's refusal below.
+session is not in that worktree, and the tree half is git's refusal inside
+`git-worktree-remove.sh`, the runbook's step 0 removal.
 
 The helper runs `git worktree remove` without `-f`, so it **refuses a
 worktree holding uncommitted or untracked files**, which is the guard
@@ -397,45 +400,35 @@ nothing but a line in `git branch`. Name it in the report and leave it.
 
 ## Step 1: /branch
 
-**`/branch`**, passing $ARGUMENTS. Skip if already off `main` — which
-includes the unused-workspace row above: step 0 stayed on a branch that
-exists and has a worktree, so there is nothing for this step to create and
+**Skip if already off `main`** (the rule is the runbook's step 1), because
+step 0's unused-workspace row stayed on a branch that exists and has a
+worktree: there is nothing for this step to create, and
 `git-worktree-fork.sh` would refuse the name if it tried.
 
 **This step is also where the workspace comes from, and it has two
-outcomes.** From a clean `main`, `/branch` forks a worktree under
-`.claude/worktrees/` and moves the session into it: **every step below then
-runs in the PR's own directory** and this checkout stays on `main`. On either
-exception — a dirty `main`, because uncommitted work cannot follow a fresh
+outcomes.** A fork moves every later step into the PR's own directory and
+leaves this checkout on `main`. Branching in place is the answer to either
+exception: a dirty `main`, because uncommitted work cannot follow a fresh
 checkout without a stash or a patch and both are refused here, or a
 `.claude/worktrees/` that is not writable, where there is nowhere in the
-checkout to put one — it branches in place, and the rest of the run happens
-in the main checkout on the new branch.
-
-`/branch` owns the naming, the placement and both exceptions, so do not
-restate the rules; do report which outcome happened, because it is what
+checkout to put one. `/branch` owns the naming, the placement and both
+exceptions; the report names which outcome happened, because it is what
 decides where every path in this run is rooted.
 
-`/branch` stops when it is already on a branch and asks whether this is a
-second change or a continuation. In a chain that stop is wrong — being on a
-feature branch is the normal state of a resumed `/ship`. Take the current
-branch as this change's branch and carry on, but **say that you assumed it**
-and name the branch, so a tree that has drifted onto the wrong one is visible
-before anything is committed to it. The same goes for the directory: name
-the worktree the run is in, and if it is the main checkout say that too.
+**`/branch`'s already-on-a-branch stop is wrong in a chain** — being on a
+feature branch is the normal state of a resumed `/ship`. So the runbook
+carries on with the current branch, and the assumption is said aloud, with
+the branch and the directory named, so a tree that has drifted onto the
+wrong one is visible before anything is committed to it.
 
 ## Step 2: checks
 
-**Checks**, selected by the class the PR body will carry
-(`docs/change-locality.md` §5): `/validate-blueprint` after Class C, or
-after an edit to a file in that audit's scope — a chapter or appendix,
-`docs/roadmap.md`, `docs/testing.md`; `/check-links` when the change
-touched links, cross-references or nav footers under
-`docs/backend-architecture/`, the one tree that command reads — so a
-Class A runbook edit, links and all, runs neither, and running the link
-check for it would report on a tree it did not touch. A Class A change's
-PR body says so under the rule below rather than claiming a run that did
-not happen — a body that names the class has named the reason.
+**The checks follow the class the PR body will carry** (the selection is
+the runbook's step 2). `/check-links` reads only
+`docs/backend-architecture/`, so a Class A runbook edit, links and all, runs
+neither check: the link check would report on a tree it did not touch. Its
+PR body says so rather than claiming a run that did not happen — a body
+that names the class has named the reason.
 
 **One check holds whatever the class: a fix to a script under
 `.claude/` carries its case.** `docs/change-locality.md` §6's
@@ -482,9 +475,8 @@ its body from, so a single lumped commit costs twice.
 
 ## Step 4: push, then /pr
 
-**Push, then `/pr`.** Both belong to `/pr` — it reads `git status -sb` and
-pushes only what is owed, then opens the PR, deriving its own title from the
-commits. $ARGUMENTS described the branch, not the PR.
+**Both belong to `/pr`** (the runbook's step 4), which derives its own
+title from the commits, because $ARGUMENTS described the branch, not the PR.
 
 The push is called out because it is the only action in the whole sequence
 that another person can see. A chain that reaches the remote silently is a
@@ -525,7 +517,7 @@ misses what the fix broke.
   `fixed` and adds none. One clean round is enough here for a reason of
   its own, not a sweep's: a fix that could break something a recheck
   would not read — a `bug`-level one, or one over 400 lines — has
-  already earned the full pass 3 asks for.
+  already earned the full pass the runbook's step 5.3 asks for.
 
 - **A round whose only findings are refused under the style guide's
   *Comments* rule ends it too**: a true comment asked to be reworded is
@@ -537,13 +529,12 @@ misses what the fix broke.
   The report says the review ended on its ceiling rather than clean, and
   names the issues.
 
-**The ceiling counts this run's rounds, not the PR's**: a resumed run
-starts again at round one, for the reason *Resume, don't restart* gives.
-A `branch-reviewer` that cannot run — the agent missing, or a reply that
-is not the JSON its file declares — is the review not having run,
-reported so, and it stops the chain under the table in *It runs to the
-end*; it is never replaced by a review this session writes of its own
-diff.
+**The ceiling counts this run's rounds, not the PR's**: a resumed run starts
+again at round one, for the reason *Resume, don't restart* gives. A
+`branch-reviewer` that cannot run — the agent missing, or a reply that is not
+the JSON its file declares — is the review not having run, reported so, and it
+stops the chain under the runbook's stop table; it is never replaced by a review
+this session writes of its own diff.
 
 ## Step 6: the gates
 
@@ -559,13 +550,14 @@ mergeable does not become less so because the reviewer had more to say.
 Report the state plainly — findings per round and whether the rate was
 still flat when the budget ran out is the useful signal — and merge.
 
-**The first two read the remote and the last two read the workspace.**
-`headRefOid`, the checks and `--match-head-commit` all agree happily about
-a head this checkout has since moved past: a commit made after the last
-review, or an edit made while the review ran, is invisible to all three.
+**Of the runbook's four step 6 gate reads, `pr-state.sh` and `gh pr checks` read
+the remote, and `git status --short` and `git log <headRefOid>..HEAD` read the
+workspace.** `headRefOid`, the checks and `--match-head-commit` all agree
+happily about a head this checkout has since moved past: a commit made after the
+last review, or an edit made while the review ran, is invisible to all three.
 The merge would then succeed for the older head and the teardown remove the
-worktree, stranding the newer work on a merged branch — step 0's whole
-argument, arriving at the other end of the run.
+worktree, stranding the newer work on a merged branch — step 0's whole argument,
+arriving at the other end of the run.
 
 **`git log <headRefOid>..HEAD` is the read rather than an equality**, and
 the asymmetry is deliberate: a HEAD carrying anything the remote lacks is
@@ -584,12 +576,12 @@ commits the PR no longer has and reported on a branch that does not exist
 upstream. That is why the fetch and a `git pull --ff-only` also run
 **before step 5**: reviewing the wrong tree is a wasted round.
 
-**A fast-forward that will not fast-forward is divergence**, which is
-another session's history against this one's, and it stops the chain for
-the reason an unmergeable PR does. The rebase helper below does not resolve
-it and is not meant to: it refuses a remote carrying commits this checkout
-lacks, which is exactly this case. A lease would be satisfied here — those
-commits have been fetched — and the other session's work would still be
+**A fast-forward that will not fast-forward is divergence**, which is another
+session's history against this one's, and it stops the chain for the reason an
+unmergeable PR does. The rebase helper, `git-rebase-onto-main.sh`, does not
+resolve it and is not meant to: it refuses a remote carrying commits this
+checkout lacks, which is exactly this case. A lease would be satisfied here —
+those commits have been fetched — and the other session's work would still be
 gone, so the refusal is the helper's own rather than git's.
 
 **Non-empty is not a stop, because there is an obvious right answer.** The
@@ -629,13 +621,14 @@ read said yes. That failure is loud and it lands *before* the teardown, so
 the workspace is intact when the chain stops: report the refusal rather
 than reaching for another method.
 
-It replays the branch onto `origin/main` and publishes the result under a
-lease. **A conflict leaves the rebase in progress on purpose**, because the
-resolution belongs in the replayed commit rather than in a merge commit:
-resolve, `git add`, then the same helper with `continue`, or `abort` to put
-the branch back. There is no clean-case exception — a merge-forward makes a
-merge commit whether or not it conflicted, and an exception is the rule
-nobody remembers at the moment it matters.
+`git-rebase-onto-main.sh`, the runbook's step 6 branch update, replays the
+branch onto `origin/main` and publishes the result under a lease. **A conflict
+leaves the rebase in progress on purpose**, because the resolution belongs in
+the replayed commit rather than in a merge commit: resolve, `git add`, then the
+same helper with `continue`, or `abort` to put the branch back. There is no
+clean-case exception — a merge-forward makes a merge commit whether or not it
+conflicted, and an exception is the rule nobody remembers at the moment it
+matters.
 
 **It rewrites the branch's SHAs, so every verdict above describes a commit
 that no longer exists** — and a conflict resolved during the replay changes
@@ -743,9 +736,9 @@ rule rather than complied with it.
 
 ## Step 6: the teardown
 
-Now put the workspace back the way step 0 wants to find it. **The order is
-the instruction**, and three of the seven lines depend on which outcome
-step 1 produced.
+**The order of the runbook's seven teardown lines is the instruction**, and
+three of them depend on which outcome step 1 produced; the line numbers
+below are that block's.
 
 **`main` ends at a descendant of the merge, not at the merge**, and the
 ancestry check is what says so honestly. Another PR merging between this
@@ -765,70 +758,54 @@ it carries a different SHA. Were the remote ever to answer with an oid
 `main` does not contain, line 5 fails loudly — the direction this chain
 wants to be wrong in.
 
-**Verify first.** Removing the worktree is the one step in this chain that
-destroys something, and doing it on an assumed merge is how an unmerged
-branch loses its only checkout. Verify from the remote rather than from an
-exit code: `state` must read `MERGED` and `mergeCommit` must carry an oid.
+**Verify first, from the remote** (the read is the runbook's line 1).
+Removing the worktree is the one step in this chain that destroys
+something, and doing it on an assumed merge is how an unmerged branch loses
+its only checkout; an exit code says a command ran, not that a merge
+happened.
 
 **Then leave the worktree, and only then is anything on `main`.** After a
 fork the session is inside the worktree *on the feature branch* — step 1 put
 it there and the main checkout kept `main` — so a switch attempted here
 fails outright: git refuses to check out a branch another worktree already
-holds. `ExitWorktree({action: "keep"})` is what returns the session to the
-main checkout, which is already on `main`, so line 3 is skipped entirely on
-this path rather than being a no-op.
+holds. `ExitWorktree` is what returns the session to the main checkout,
+which is already on `main`, which is why the runbook skips line 3 on this
+path rather than running it as a no-op.
 
 **The in-place path is the mirror image.** There is no worktree to leave and
 none to remove, and the session *is* sitting on the merged branch in the
-main checkout — so line 3 is the only thing that makes the pull mean `main`,
-and lines 2 and 6 are skipped. Running line 6 anyway exits non-zero against
-a worktree that never existed and stops the chain on a helper failure with
-nothing behind it.
+main checkout — so line 3 is the only thing that makes the pull mean `main`.
+Running line 6 anyway exits non-zero against a worktree that never existed
+and stops the chain on a helper failure with nothing behind it.
 
-The pull, the ancestry check and the prune run on both paths, once whichever
-of lines 2 and 3 applies has put HEAD on `main`. Skipping the pull is what
-leaves the main checkout a merge behind — precisely the state step 0 exists
-to stop the next run from starting in.
-
-The merged branch itself stays. `git branch -d` is denied, deliberately, and
-a merged branch costs a line in `git branch` — name it in the report.
+The pull runs on both paths because skipping it leaves the main checkout a
+merge behind — precisely the state step 0 exists to stop the next run from
+starting in. The merged branch stays for step 0's teardown's reason.
 
 ## Report
 
-**Open with the workspace**: the worktree this run happened in and the branch
-it holds, or the main checkout and why no worktree was forked. It is the one
-line that tells a reader where every path in the rest of the report is rooted,
-and a resumed run reports it whether or not this run created it.
+The order and the contents are the runbook's *Report*; this is why it has
+them.
 
-Then one line per step: done, skipped and why, or stopped and what is needed —
-including the push, which reports which of its three states it found even when
-that state was "nothing to do". The review reports one line per round —
-full pass or recheck, findings raised, fixed and refused, and what the
-round pushed — and how it ended: clean, on findings refused under the
-*Comments* rule, under *A plan is reviewed once, for contradiction*, or at
-its ceiling with the issues it filed. None of those
-endings means "a finding stopped us": a decided finding belongs in the
-decisions section below, and filing one as a stop is the silent-decision
-failure this report exists to prevent.
+**The workspace comes first** because it is the one line that tells a
+reader where every path in the rest of the report is rooted, and a resumed
+run reports it whether or not this run created it.
 
-**Then the decisions.** Every place this chain answered a question that would
-otherwise have stopped it gets a line: the check finding it reconciled and
-which side won, the review finding that was a judgement and the option
-rejected, and each finding refused and why. This is the section that
-replaces the interruption, so a run that took decisions and lists none of
-them has not reported — it has hidden. A run that took none says so in
-one line.
+**The push reports even "nothing to do"**, because it is the only action
+another person can see (*Step 4: push, then /pr*). **A decided finding is
+never reported as a stop**: it belongs among the decisions, and filing it as
+a stop is the silent-decision failure this report exists to prevent.
 
-**Then the merge and the workspace.** Whether the PR merged and its merge oid,
-the literal `gh-pr-merge.sh` and `git-worktree-remove.sh` lines that ran; or
-which of the two gates stopped it; that `main` was pulled, the HEAD it is now
-at, and that that HEAD contains the merge oid — containment rather than
-equality, because a PR merging in between leaves `main` at a later descendant
-and nothing is wrong; the worktree removed, or the one left behind and why the
-helper refused it; and the merged branch still sitting in `git branch`.
+**The decisions are the section that replaces the interruption**, so a run
+that took decisions and lists none of them has not reported — it has
+hidden.
 
-A step skipped on an assumption gets its assumption restated here rather than
-left in the middle of the run, and a check that did not run is named. The whole
-value of chaining these commands is that the summary is still honest about each
-one — and because nothing stops for a person, the report is the only place a
-person finds out what was decided on their behalf.
+**The merge reports containment rather than equality**, because a PR merging
+in between leaves `main` at a later descendant and nothing is wrong
+(*Step 6: the teardown*).
+
+**Assumptions are restated at the end rather than left in the middle of the
+run.** The whole value of chaining these commands is that the summary is
+still honest about each one — and because nothing stops for a person, the
+report is the only place a person finds out what was decided on their
+behalf.
