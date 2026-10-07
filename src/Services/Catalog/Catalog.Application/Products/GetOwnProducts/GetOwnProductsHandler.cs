@@ -1,5 +1,4 @@
 using System.Data;
-using Catalog.Application.Products.GetProducts;
 using Common.Application;
 using Dapper;
 
@@ -12,6 +11,9 @@ namespace Catalog.Application.Products.GetOwnProducts;
 public sealed class GetOwnProductsHandler(IDbConnectionFactory connections, ICurrentUser currentUser)
     : IQueryHandler<GetOwnProductsQuery, CursorPage<OwnProductDto>>
 {
+    /// <summary>This read's own ceiling (§6.5): a larger <c>limit</c> is clamped to it, never refused.</summary>
+    public const int MaxLimit = 100;
+
     private const string Sql =
         """
         SELECT TOP (@Take)
@@ -34,7 +36,7 @@ public sealed class GetOwnProductsHandler(IDbConnectionFactory connections, ICur
 
     public async Task<CursorPage<OwnProductDto>> HandleAsync(GetOwnProductsQuery query, CancellationToken ct)
     {
-        int limit = Math.Clamp(query.Limit, 1, GetProductsHandler.MaxLimit);
+        int limit = Math.Clamp(query.Limit, 1, MaxLimit);
 
         // Any cursor this read did not mint, the listing's included, is unreadable here and so the first page.
         (DateTimeOffset SortKey, Guid Id)? after = Cursor.Decode(query.Cursor);
