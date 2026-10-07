@@ -44,21 +44,23 @@ never style or clarity. Hunt for:
    amend Appendix D as a register.
 8. **Terminology drift** — one concept under two names, or one name for two.
 9. **Code ↔ blueprint drift** (only when `src/` exists) — checks 1–8 across
-   the boundary, including `Directory.Packages.props` against
-   `appendix-b-licences.md` (presence, version), `AddXApplication()` /
-   `AddXInfrastructure()` registration set and order, and ADR rules (no
-   MassTransit or EF Core in Application or Domain, one composition root,
-   no shared table). **For a value the code is the owner, and for a rule it
-   is not**: a chapter cites the symbol; code breaking a rule is reported,
-   never the spec amended to match.
+   the boundary, including a `src/` type's name, signature or namespace
+   against its sample, `Directory.Packages.props` against
+   `appendix-b-licences.md` (presence; version against the register or a
+   chapter), `AddXApplication()` / `AddXInfrastructure()` registration set
+   and order, and ADR rules (no MassTransit or EF Core in Application or
+   Domain, one composition root, no shared table). **For a value the code
+   is the owner, and for a rule it is not**: a chapter cites the symbol;
+   code breaking a rule is reported, never the spec amended to match.
 10. **Roadmap drift** (`docs/roadmap.md`) — every Appendix C PR has exactly
     one row and every row a real PR; titles are Appendix C's verbatim and
     phases match its headings (**Appendix C always wins**); recompute the
     cumulative column, header, milestone totals and week numbers from the
     estimates and days-per-week ratio, never spot-check; re-derive the
-    critical path from C.3's edges; its citations are check 6; its risk
-    section's open questions (domain, `Directory.Build.props` analyzer
-    policy, Aspire) are wrong once settled. **An estimate is never a
+    critical path from C.3's edges and the roadmap's estimates; its
+    citations are check 6; its risk section's open questions (domain,
+    `Directory.Build.props` analyzer policy, Aspire) are wrong once
+    settled. **An estimate is never a
     finding** — only stale arithmetic or a vanished PR.
 
 ## Method
@@ -69,7 +71,7 @@ and `docs/testing.md`. (why: docs/commands/validate-blueprint.md, *Method*)
 
 - For a value, grep the owning **symbol**, then the value in the three
   audited paths; for a rule or name, grep the identifier there. Report the
-  sites; never tour beyond them.
+  sites; never tour the corpus outside the three paths.
 - A value's owner wins (the code symbol, else the one section stating it)
   and other sites cite it; for a rule, the statement the rest depends on
   wins and the others are amended.

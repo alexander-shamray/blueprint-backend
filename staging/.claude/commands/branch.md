@@ -72,9 +72,9 @@ sweeps' `mktemp -d` ones.
    | `src/**` or `tests/**` | `feat(<scope>)/`, `fix/` or `refactor/` — the diff decides which |
 
    A mixed tree takes the type of the change carrying the argument. Two
-   unrelated changes: name the dominant one, flag the other. A clean tree
-   and no argument: stop and ask; never invent a name
-   (why: docs/commands/branch.md, *Step 2*).
+   unrelated changes: say so, name the dominant one, and flag that the other
+   may want its own branch. A clean tree and no argument: stop and ask;
+   never invent a name (why: docs/commands/branch.md, *Step 2*).
 3. **Name it `<type>/<kebab-summary>`**, with the type the commit will carry:
 
    | | |
@@ -127,11 +127,12 @@ sweeps' `mktemp -d` ones.
    through the helpers only (why: `docs/harness-boundaries.md`, *Prefix
    grants and wildcard denies*).
 
-   **If the fork fails, read the failure first.** Fall back in place only on
-   `fatal: could not create leading directories of '<path>/.git': Permission
-   denied`; report it and that the worktree could not be created. Any other
-   failure stops the command, reported verbatim. The branch usually
-   survives:
+   **If the fork fails, read the failure first.** Fall back in place only
+   when it establishes that the path could not be created for permission
+   reasons, as in `fatal: could not create leading directories of
+   '<path>/.git': Permission denied`; report it and that the worktree could
+   not be created. Any other failure stops the command, reported verbatim.
+   The branch usually survives:
 
    | After the failed fork | Take |
    |---|---|
@@ -149,7 +150,7 @@ sweeps' `mktemp -d` ones.
 
 The branch, its base, **the worktree it lives in and whether the session is
 now inside it** (own line; in place says why), and any dirty files carried.
-**Nothing here removes a worktree**: the user runs `git worktree remove`
-after the PR lands. **A derived name is a guess, so show your work**: say no
-description was passed, give the diff reading, and that
-`git branch -m <better-name>` is free until `/pr` pushes.
+**Nothing here removes a worktree**: keeping or removing it after the PR
+lands is the user's call (`git worktree remove`). **A derived name is a
+guess, so show your work**: say no description was passed, give the diff
+reading, and that `git branch -m <better-name>` is free until `/pr` pushes.

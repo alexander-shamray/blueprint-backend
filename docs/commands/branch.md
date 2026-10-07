@@ -190,11 +190,11 @@ the only thing that tells them apart is having looked first.
 
 ## Step 5
 
-**A skipped fork is never a skipped branch.** Every row above except the
-last ends with a branch that exists; only the first ends with a new
-directory. Reading step 0 as "step 5 is off" would leave a session in a
-linked worktree on `main` with nowhere for the change to go, which is a
-state this command must not produce.
+**A skipped fork is never a skipped branch.** Every row of the runbook's
+step 5 table except the last ends with a branch that exists; only the first
+ends with a new directory. Reading step 0 as "step 5 is off" would leave a
+session in a linked worktree on `main` with nowhere for the change to go,
+which is a state this command must not produce.
 
 **Every clean-`main` row cuts from `origin/main`, not from local `main`.**
 Step 1 fetched for the reason spelled out under the fork below — local
@@ -277,10 +277,13 @@ runbook's table.
 Every git write goes through a helper because a prefix grant buys more than
 its operation; the flags each raw grant would license — `git switch`,
 `git worktree add -B`, `git checkout -b … -f` — are owned by
-`docs/harness-boundaries.md`, *Prefix grants and wildcard denies*. Each
-helper fixes every flag in the file, shape-checks its arguments and creates
-only, so a name that already exists is refused rather than reset;
-`git worktree list` stays a raw grant because it reads and nothing else.
+`docs/harness-boundaries.md`, *Prefix grants and wildcard denies*.
+`git-worktree-fork.sh` and `git-branch-create.sh` fix their commands the same
+way — every flag decided in the file, both arguments shape-checked, and
+creation only, so a name that already exists is refused rather than reset.
+`git-switch-existing.sh` takes one shape-checked argument, requires the branch
+to exist, and passes no flags to git at all. `git worktree list` stays a raw
+grant because it reads and nothing else.
 
 The post-failure table's second row spells the base out for the reason
 the clean-`main` rows give:

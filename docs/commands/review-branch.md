@@ -84,12 +84,13 @@ touch set that the change left stale is not this branch's to fix
 
 ## Report (chat)
 
-**That is enforced, not prose alone.** A "do not fix" claim resting on prose
-while the grant holds `Write` and `Edit` over every path
-`.claude/settings.json` does not deny is, for a review command, the worse
-failure. The frontmatter's `disallowed-tools` path-scopes `Edit` away from
-every tracked tree, `docs/` included, **and from every tracked file at the
-repository root** — denying directories alone would leave `CLAUDE.md`,
+**The runbook's rule never to fix findings unless asked after the review is
+enforced, not prose alone.** A "do not fix" claim resting on prose while
+the grant holds `Write` and `Edit` over every path `.claude/settings.json`
+does not deny is, for a review command, the worse failure. The
+frontmatter's `disallowed-tools` path-scopes `Edit` away from every tracked
+tree, `docs/` included, **and from every tracked file at the repository
+root** — denying directories alone would leave `CLAUDE.md`,
 `global.json`, `Directory.Build.props` and `Platform.slnx` writable, a
 boundary with a gap exactly where this repository keeps its build inputs, so
 a command promising not to fix findings could still apply one to root

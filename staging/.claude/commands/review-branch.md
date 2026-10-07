@@ -43,12 +43,14 @@ never style taste. Prefer:
    `bash .claude/scripts/pr-locality.sh <n>` (`<n>` from
    `bash .claude/scripts/pr-for-branch.sh`), resolved per
    `docs/change-locality.md` §3, never by a row widened silently; if it
-   prints nothing or cannot run, say so and skip; an `inside` line grants
-   nothing (why: docs/commands/review-branch.md, *What counts as a finding*).
+   prints nothing or cannot run, say so and skip, never infer a class; an
+   `inside` line grants nothing (why: docs/commands/review-branch.md, *What
+   counts as a finding*).
 
 Never raise `docs/style-guide.md`'s tabulated house styles, a stale
-restatement this branch left untouched, or a request that a true comment
-keeping its *Comments* rules be reworded, completed or expanded. A diff
+restatement this branch left untouched where the owner site is already
+correct, or a request that a true comment keeping its *Comments* rules be
+reworded, completed or expanded. A diff
 wholly under `docs/superpowers/` gets only what `.claude/commands/ship.md`'s
 *A plan is reviewed once, for contradiction* admits.
 
@@ -56,10 +58,12 @@ wholly under `docs/superpowers/` gets only what `.claude/commands/ship.md`'s
 
 1. **Read `suggestions.md` in full**; enumerate every numbered issue in its
    table and headings. If none, say so and offer a full review.
-2. **Re-verify each issue** at its **Where** / **File** sites on the current
-   tip; set exactly one of **fixed**, **open**, **correct** (only if the file
-   or the user already said so), **false positive** (never held, including a
-   *Comments*-rule rewording request).
+2. **Re-verify each issue** at its **Where** / **File** sites (grep siblings
+   if the line numbers moved) in the current tree (and on the current tip,
+   for branch work); set exactly one of **fixed**, **open**, **correct**
+   (only if the file or the user already said so), **false positive** (never
+   held or no longer applies as a defect, including a *Comments*-rule
+   rewording request).
 3. **Do not invent new issues** beyond a direct regression of a listed item.
 4. **Rewrite `suggestions.md`**: table, every **Status** line, fixed items
    kept briefly, **Re-checked:** today.
