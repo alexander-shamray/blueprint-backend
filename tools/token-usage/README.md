@@ -29,7 +29,10 @@ command `/ship` loads through the `Skill` tool is counted as `/ship`, and a
 subagent belongs to the command running when it started. **A skill the
 session loads with no typed command** — a sweep a prompt asked for, a
 plugin's workflow — names the work after it as `skill:<name>`, until the
-next prompt. The first and last day counted go to stderr.
+next prompt. **A prompt no person typed** — a task notification, a
+scheduled wake — starts work labelled `<command> after <kind>`, so what a
+command spent on its own is not mixed with what the session did when it
+was woken afterwards. The first and last day counted go to stderr.
 `--spawns N` lists single subagents instead, costliest first, each with the
 description it was spawned with — which says why a command no one wrote to
 delegate spent most of its tokens in agents. A subagent's type

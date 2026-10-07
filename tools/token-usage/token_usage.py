@@ -102,13 +102,19 @@ class Report:
         session = main.stem
         boundaries: list[tuple[str, str]] = []
         types: dict[str, str] = {}
-        command, prompt = NO_COMMAND, 0
+        command = owner = NO_COMMAND
+        prompt = 0
         for entry in self.entries(main):
             if is_prompt(entry):
-                command, prompt = command_of(entry), prompt + 1
+                command = owner = command_of(entry)
+                prompt += 1
+                boundaries.append((str(entry.get("timestamp", "")), command))
+            elif kind := wake_of(entry):
+                command = f"{owner} after {kind}"
+                prompt += 1
                 boundaries.append((str(entry.get("timestamp", "")), command))
             elif command == NO_COMMAND and not entry.get("isSidechain") and (skill := skill_of(entry)):
-                command = "skill:" + skill
+                command = owner = "skill:" + skill
                 boundaries.append((str(entry.get("timestamp", "")), command))
             result = entry.get("toolUseResult")
             if isinstance(result, dict) and result.get("agentId") and result.get("agentType"):
@@ -171,6 +177,17 @@ def is_prompt(entry: dict) -> bool:
         content = " ".join(texts)
     # A `!` command's input and output and a local command's output are written as user text.
     return isinstance(content, str) and not content.lstrip().startswith(INJECTED)
+
+
+def wake_of(entry: dict) -> str | None:
+    """The kind of a prompt no person typed — a task notification, a scheduled wake — which starts its own work."""
+    origin = entry.get("origin")
+    if entry.get("type") != "user" or entry.get("isSidechain") or entry.get("isMeta") or not isinstance(origin, dict):
+        return None
+    kind = origin.get("kind")
+    if kind == "human" or not isinstance(kind, str) or not kind:
+        return None
+    return kind if is_prompt({**entry, "origin": None}) else None
 
 
 def command_of(entry: dict) -> str:
