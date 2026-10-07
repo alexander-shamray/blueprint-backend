@@ -225,7 +225,8 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   one `bug-auditor` each, read-only by its tool list rather than by the
   brief, and never `general-purpose`. It reads code only, so when a round's
   diff touches prose or a chapter, an `Explore` agent briefed with
-  `/review-branch`'s *What counts as a finding* reviews that part — instead
+  `/review-branch`'s *What counts as a finding*, and told to read each
+  touched document and each owner it cites whole, reviews that part — instead
   of `bug-auditor` when the diff is prose only, after it otherwise, never
   in parallel and never the session itself. `Explore` is read-only by its
   brief, not its tool list, until step 4's `branch-reviewer` covers both.
