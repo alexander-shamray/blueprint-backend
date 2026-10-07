@@ -169,9 +169,9 @@ Each round is the review done once, end to end:
    verdict contract in `.claude/agents/security-auditor.md`, and take its
    verdict record. **This step does not open `$work` itself.** Read
    `unreadable-root` first: a round error under *Never fail open*. Drop
-   `refuted` and `outside-root`; drop and count a malformed record; **drop a record whose `file` and `line` are not the
-   candidate's as dispatched**, whatever its verdict. (why:
-   docs/commands/security-sweep.md, *Verify*)
+   `refuted` and `outside-root`; drop and count a malformed record; **drop a
+   record whose `file` and `line` are not the candidate's as dispatched**,
+   whatever its verdict. (why: docs/commands/security-sweep.md, *Verify*)
 3. **De-duplicate.** Check each survivor against the tracked set and the
    already-tracked rule above.
 4. **File.** One issue per survivor, most severe first, in the house body

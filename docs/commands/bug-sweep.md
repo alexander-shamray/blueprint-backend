@@ -127,14 +127,18 @@ nothing in `$work` (*The round: verify*). What turns up decides the candidate:
   here runs it, so its passing at this commit is an assumption rather than an
   observation: CI's verdict belongs to a commit this command never checks, and
   three of the projects need a Docker daemon that may not have been present.
-  Drop the candidate when the test's own text shows the failure scenario
-  cannot hold; if it is filed anyway, say in the issue why the test passes
-  regardless, composed from the verdict's `scenario` field.
+  The verifier returns `refuted` when the test's own text shows the failure
+  scenario cannot hold, so step 2's existing drop takes it; if it is confirmed
+  anyway, the issue says why the test passes regardless, composed from the
+  verdict's `scenario` field.
 - **A test that covers the line and could not fail** is not evidence of
   anything, and the sweep has now found **two** findings rather than none: the
   original defect, and a vacuous test that is itself critical by the
   runbook's severity table. This is the case worth slowing down for, which is
   why the auditor's checklist names it and why the bar puts it at the top.
+  A verdict answers for one location, so the vacuous test is not filed from
+  the defect's verdict: its file and line, from `scenario`, join the next
+  round's leads as a candidate of their own and are verified like any other.
 - **No test at all** leaves the candidate exactly where it was. Absent coverage
   is not a defect this command files, and it is not corroboration either.
 
@@ -289,10 +293,13 @@ that section does not say: the check establishes exclusion, not ownership.
 `git-worktree-detach.sh` mints the path itself, so the question does not arise
 there; `git-worktree-drop.sh` accepts any registered worktree of the right
 shape, including one an abandoned sweep left, which is why its refusal reads
-`sweep-shaped`, not `sweep-owned`. It compares `dirname "$resolved"` against
-`$tmproot` and matches the basename alone, because in a bash `case` pattern `?`
-matches `/` too, and a basename holds none. A stray directory does not say which
-sweep left it, so the run summary says which command owns the one it reports.
+`sweep-shaped`, not `sweep-owned`; how the shape is checked is argued in
+`docs/commands/security-sweep.md`, *What this command does not do*. The prefix
+stays `secsweep-` because both helpers are `Edit`-denied to a command session,
+so this command cannot widen the shape to a `bugsweep-` of its own, and the
+helpers' own comments name the prefix as shared. A stray directory does not say
+which sweep left it, so the run summary says which command owns the one it
+reports.
 
 **Pin the resolved commit, not `HEAD` a second time.** Reading `HEAD` once for a
 summary and again for `git worktree add` are two calls, and in a repo worked by
@@ -618,9 +625,11 @@ nothing.
 
 Then, for every surviving candidate, **dispatch one more `bug-auditor`, on
 `model: "sonnet"`, with that candidate alone** — the root, the file, the
-line, the claim and the failure scenario as the fan-out returned them —
-under the verdict contract in `.claude/agents/bug-auditor.md`, and take
-its verdict record, which carries the reachability evidence too. A
+line, the claim and the failure scenario as the fan-out returned them, and a
+request for the tests covering the cited line and whether one would fail under
+the claimed defect, answered in `scenario` — under the verdict contract in
+`.claude/agents/bug-auditor.md`, and take its verdict record, which carries
+the reachability evidence too. A
 verifier on a cheaper model can refute what it should confirm, never file
 what the fan-out did not find. **This step does not open `$work` itself.** An
 unverified agent claim still never becomes an issue — two independent
@@ -699,7 +708,7 @@ or a leading space both suppress the conversion and a bare `/` does not.
 grant could not.** `gh-issue-create.sh` sets `MSYS2_ARG_CONV_EXCL` for its
 own `gh` child, so the conversion never sees the title; the command's grant
 is on the script and is unchanged. Writing the subject in backticks —
-``/bug-sweep`` — is still the house form for a title that names a command,
+`` `/bug-sweep` `` — is still the house form for a title that names a command,
 because a reader of the tracker deserves it, not because the filing needs
 it.
 

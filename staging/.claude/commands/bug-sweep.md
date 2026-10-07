@@ -59,12 +59,13 @@ limit*)
 tests covering the cited line and whether one would fail under the claimed
 defect, and its answer comes back in the verdict's `scenario` field.
 
-- **A test that would fail if the defect were real**: the candidate is re-read
-  against the test's text; **do not lean on the suite being green**. Drop it
-  if that text shows the scenario cannot hold; if filed anyway, the issue says
+- **A test that would fail if the defect were real**: the verifier reads its
+  text; **do not lean on the suite being green**. It returns `refuted` when
+  that text shows the scenario cannot hold; if confirmed anyway, the issue says
   why the test passes regardless, from that `scenario`.
 - **A test that covers the line and could not fail**: **two** findings, the
-  defect and the vacuous test, itself critical.
+  defect and the vacuous test, itself critical; the test's file and line, from
+  `scenario`, are a new candidate in the next round's leads.
 - **No test**: the candidate stays where it was; absent coverage is neither
   filed nor corroboration.
 
