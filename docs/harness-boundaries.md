@@ -969,14 +969,14 @@ alternative fails open on a wrapper nobody listed.
 **A seventh thing is a gap in the mechanism rather than in a grant.** Pinning a
 command to one subagent type is a **deny list of every other type**, because the
 harness has no "only this type" allow — so `security-sweep.md` and
-`bug-sweep.md` each enumerate the registered types that hold a shell, an editor
-or the network, and **a newly added agent under `.claude/agents/` is admitted by
-default** until someone adds it to both lists; `test_command_grants.py` fails a
-granting command that does not. That is the shape this repository already knows
-rots; it is taken here because the alternative on offer is prose. **It rotted
-once already on the day a third agent arrived**: `review-adjudicator` was added
-for #149 and every command then holding a list had to name it, which is the
-enumeration's cost paid in the change that proves it.
+`bug-sweep.md` each deny every registered type but its own auditor, and **a
+newly added agent under `.claude/agents/` is admitted by default** until someone
+adds it to both lists; `test_command_grants.py` fails a granting command that
+does not. That is the shape this repository already knows rots; it is taken here
+because the alternative on offer is prose. **It rotted once already on the day a
+third agent arrived**: `review-adjudicator` was added for #149 and every command
+then holding a list had to name it, which is the enumeration's cost paid in the
+change that proves it.
 
 **The eighth was the push deny-list (#23), and it closed the way the sixth
 did.** Two broad allows — `Bash(git push origin:*)` and the `-u` form — paired
