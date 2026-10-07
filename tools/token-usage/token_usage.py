@@ -19,7 +19,7 @@ NO_COMMAND = "(no command)"
 MAIN = "main"
 SUBAGENT = "subagent"
 COMMAND = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
-INJECTED = ("<bash-", "<local-command-")
+INJECTED = ("<bash-", "<local-command-", "[Request interrupted")
 WORKTREE = re.compile(r"[\\/]\.claude[\\/]worktrees[\\/].*$")
 
 # Anthropic's prompt-caching prices as multiples of the base input price.
@@ -175,7 +175,7 @@ def is_prompt(entry: dict) -> bool:
         if not texts:
             return False
         content = " ".join(texts)
-    # A `!` command's input and output and a local command's output are written as user text.
+    # A `!` command's input and output, a local command's output and an interrupt are written as user text.
     return isinstance(content, str) and not content.lstrip().startswith(INJECTED)
 
 
