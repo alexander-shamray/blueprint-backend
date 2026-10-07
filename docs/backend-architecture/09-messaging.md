@@ -507,7 +507,7 @@ populated on the write path:
 | Type | Used by | Shape |
 |---|---|---|
 | `OutboxMessage` | EF entity, `db.OutboxMessages` | All columns |
-| `OutboxClaim` | Dapper, the dispatcher's `OUTPUT` projection | Id, MessageId, CorrelationId, MessageType, Payload, Lane, Attempts, OccurredAt |
+| `OutboxClaim` | Dapper, the dispatcher's `OUTPUT` projection | Id, MessageId, CorrelationId, MessageType, Payload, Lane, Attempts, OccurredAt, TraceParent, TraceState |
 
 Both live in `Common.Infrastructure/Outbox`. `OutboxMessage.Stage` is the one
 constructor, and its guards are what make §9.3's allow-list structural rather
@@ -547,7 +547,10 @@ return new OutboxMessage
     Lane = lane,
     OccurredAt = message is IIntegrationEvent o
         ? o.OccurredAt
-        : ((IDomainEvent)message).OccurredAt
+        : ((IDomainEvent)message).OccurredAt,
+    // The staging request's W3C context, which the dispatcher restores.
+    TraceParent = staging?.Id,
+    TraceState = staging?.TraceStateString is { Length: <= TraceStateMaxLength } state ? state : null
 };
 ```
 
@@ -870,7 +873,9 @@ OUTPUT
     inserted.Payload,
     inserted.Lane,
     inserted.Attempts,
-    inserted.OccurredAt;
+    inserted.OccurredAt,
+    inserted.TraceParent,
+    inserted.TraceState;
 ```
 
 A completed row gets `ProcessedAt` set and its lease cleared. A failed one has
@@ -953,6 +958,30 @@ invoker is generic and unconstrained (§13.3); the row carries the instant the
 aggregate raised the event, so the lag §13.3 records and §13.7 targets spans
 the raise, the commit and the poll, which is the honest reading of "how stale
 is this read model".
+
+**The row carries the trace that staged it, and each delivery runs as that
+trace's child.** `Stage` records the current activity's W3C `traceparent` and
+`tracestate` in two nullable columns, and the dispatcher starts every row's
+delivery on `OutboxDispatcher.ActivitySourceName` with that context as its
+parent. MassTransit carries the context from the publish to the consumer by
+itself; the table was the one hop that dropped it, so without the columns
+every trace ended at the outbox and what followed was reachable only by
+joining logs on the correlation id. **Parent rather than link, deliberately**:
+a link would keep the request's trace and the delivery's apart and leave a
+reader to follow the join, which is the gap this closes; a parent makes one
+trace from the request to the last consumer, and its duration then includes
+the wait in the table, which is real latency a reader should see rather than
+an artefact to hide. A row staged with no W3C activity, or before the columns
+existed, delivers in a trace of its own exactly as it always did, which is
+what keeps the migration safe beside the version still serving (§7.4).
+
+The saga's sends do not pass through this table: they go through
+MassTransit's own outbox
+([ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)),
+which keeps the context with the message, so a `ReserveStock` sent while
+handling an `OrderPlaced` stays in that event's trace. That is measured by
+`OrderFulfilmentSagaEndpointTests` on a real broker rather than assumed, and
+the table's own hop by `OutboxTraceContextTests`.
 
 `ProjectionInvoker` resolves and calls the handlers for a runtime type. It uses
 the same cached-delegate approach as the dispatcher in [§6.2](06-cqrs.md), so the reflection

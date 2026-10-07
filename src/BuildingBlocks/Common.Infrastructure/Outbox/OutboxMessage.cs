@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Common.Application;
 using Common.Contracts;
@@ -13,6 +14,12 @@ public sealed class OutboxMessage
 
     /// <summary>The widest <see cref="OutboxLane"/> name the column holds.</summary>
     public const int LaneMaxLength = 16;
+
+    /// <summary>A W3C <c>traceparent</c> at version 00, the only version an activity writes.</summary>
+    public const int TraceParentMaxLength = 55;
+
+    /// <summary>The W3C ceiling on <c>tracestate</c>; a longer one is not staged rather than truncated.</summary>
+    public const int TraceStateMaxLength = 512;
 
     public long Id { get; private set; }
 
@@ -35,6 +42,12 @@ public sealed class OutboxMessage
     public string? LastError { get; private set; }
 
     public DateTimeOffset? LockedUntil { get; private set; }
+
+    /// <summary>The trace that staged the row, which the dispatcher restores as its delivery's parent (§9.4).</summary>
+    /// <remarks>Null on a row staged with no W3C activity, or before the column existed (§7.4).</remarks>
+    public string? TraceParent { get; private set; }
+
+    public string? TraceState { get; private set; }
 
     public static OutboxMessage Stage(
         object message,
@@ -79,6 +92,9 @@ public sealed class OutboxMessage
                 "handlers (§7.5).");
         }
 
+        // The staging request's trace, read here because the row is written in that request's transaction.
+        Activity? staging = Activity.Current is { IdFormat: ActivityIdFormat.W3C } current ? current : null;
+
         return new OutboxMessage
         {
             MessageId = message is IIntegrationEvent e ? e.MessageId : Guid.CreateVersion7(),
@@ -90,7 +106,10 @@ public sealed class OutboxMessage
             // The message's own timestamp, never the staging clock, as §13.7's projection.lag requires.
             OccurredAt = message is IIntegrationEvent o
                 ? o.OccurredAt
-                : ((IDomainEvent)message).OccurredAt
+                : ((IDomainEvent)message).OccurredAt,
+
+            TraceParent = staging?.Id,
+            TraceState = staging?.TraceStateString is { Length: <= TraceStateMaxLength } state ? state : null
         };
     }
 }

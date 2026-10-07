@@ -674,7 +674,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "\n"
             "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
-            "        applied.Length.ShouldBe(9);\n"
+            "        applied.Length.ShouldBe(10);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddProducts\");\n"
             "        applied[2].ShouldEndWith(\"_AddOutbox\");\n"
@@ -683,19 +683,21 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[5].ShouldEndWith(\"_AddIdempotencyMarkers\");\n"
             "        applied[6].ShouldEndWith(\"_IdempotencyMarkerCommittedAtDefault\");\n"
             "        applied[7].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n"
-            "        applied[8].ShouldEndWith(\"_AddStockLevels\");\n",
+            "        applied[8].ShouldEndWith(\"_AddStockLevels\");\n"
+            "        applied[9].ShouldEndWith(\"_AddOutboxTraceContext\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
             "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
-            "        applied.Length.ShouldBe(7);\n"
+            "        applied.Length.ShouldBe(8);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddOutbox\");\n"
             "        applied[2].ShouldEndWith(\"_AddInbox\");\n"
             "        applied[3].ShouldEndWith(\"_AddOutboxRetentionIndex\");\n"
             "        applied[4].ShouldEndWith(\"_AddIdempotencyMarkers\");\n"
             "        applied[5].ShouldEndWith(\"_IdempotencyMarkerCommittedAtDefault\");\n"
-            "        applied[6].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n",
+            "        applied[6].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n"
+            "        applied[7].ShouldEndWith(\"_AddOutboxTraceContext\");\n",
         ),
     ),
 }
@@ -1022,14 +1024,15 @@ PURE_CONSUMER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "tests/Catalog.Api.Tests/DatabaseSmokeTests.cs": (
         (
-            "        applied.Length.ShouldBe(7);\n"
+            "        applied.Length.ShouldBe(8);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddOutbox\");\n"
             "        applied[2].ShouldEndWith(\"_AddInbox\");\n"
             "        applied[3].ShouldEndWith(\"_AddOutboxRetentionIndex\");\n"
             "        applied[4].ShouldEndWith(\"_AddIdempotencyMarkers\");\n"
             "        applied[5].ShouldEndWith(\"_IdempotencyMarkerCommittedAtDefault\");\n"
-            "        applied[6].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n",
+            "        applied[6].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n"
+            "        applied[7].ShouldEndWith(\"_AddOutboxTraceContext\");\n",
             "        applied.Length.ShouldBe(5);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddInbox\");\n"

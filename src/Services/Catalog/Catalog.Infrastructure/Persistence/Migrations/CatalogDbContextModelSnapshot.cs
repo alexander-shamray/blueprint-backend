@@ -178,6 +178,16 @@ namespace Catalog.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("ProcessedAt")
                         .HasColumnType("datetimeoffset(7)");
 
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(55)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(55)");
+
+                    b.Property<string>("TraceState")
+                        .HasMaxLength(512)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(512)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("MessageId")

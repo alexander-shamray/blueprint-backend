@@ -2777,7 +2777,7 @@ class TheCommandLine(unittest.TestCase):
             # A count and not a list: a number a test pins fails when it is
             # wrong. Seven and not eight, because this root has no `.github/` and
             # §15.1's allow-list step degrades without it.
-            self.assertIn("76 files created, 7 updated", out)
+            self.assertIn("78 files created, 7 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 

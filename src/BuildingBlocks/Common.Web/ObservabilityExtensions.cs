@@ -69,7 +69,9 @@ public static class ObservabilityExtensions
                 // No options: SetDbQueryParameters would put raw values on the span, past §13.4's redactor (§13.2).
                 .AddEntityFrameworkCoreInstrumentation()
                 // Redis instrumentation lives in AddRedisConnections, beside the keyed connections (§13.2).
-                .AddSource("MassTransit"))
+                .AddSource("MassTransit")
+                // OutboxDispatcher.ActivitySourceName: the span that joins a staging request to its publish (§9.4).
+                .AddSource("Commerce.Outbox"))
             .UseOtlpExporter();
 
         return builder;

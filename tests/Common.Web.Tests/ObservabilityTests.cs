@@ -235,6 +235,31 @@ public class ObservabilityTests
         exported.ShouldContain(a => a.Source.Name == EfCoreActivitySource);
     }
 
+    [Fact]
+    public void Outbox_delivery_spans_are_collected()
+    {
+        // OutboxDispatcher's source, spelled out like the meters: without it a trace ends at the outbox (§9.4).
+        List<Activity> exported = [];
+
+        HostApplicationBuilder builder = TelemetryHost.Builder();
+        builder.AddObservability();
+        builder.Services
+            .AddOpenTelemetry()
+            .WithTracing(t => t.AddInMemoryExporter(exported));
+
+        using IHost host = builder.Build();
+        TracerProvider provider = host.Services.GetRequiredService<TracerProvider>();
+
+        using ActivitySource source = new("Commerce.Outbox");
+        using Activity? activity = source.StartActivity("probe");
+        activity?.Stop();
+
+        provider.ForceFlush();
+
+        activity.ShouldNotBeNull("nothing is listening to the outbox's activity source");
+        exported.ShouldContain(a => a.Source.Name == "Commerce.Outbox");
+    }
+
     private static DefaultHttpContext Request(string path)
     {
         DefaultHttpContext context = new();

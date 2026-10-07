@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using System.Text.Json;
 using Common.Application;
 using Common.Contracts;
@@ -32,6 +33,11 @@ public sealed class OutboxDispatcher : BackgroundService
 
     /// <summary>How often the dispatcher polls, which §13.7's <c>projection.lag</c> target leaves room for.</summary>
     public static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>The source of each row's delivery span, which §13.2's tracing registers by this name.</summary>
+    public const string ActivitySourceName = "Commerce.Outbox";
+
+    private static readonly ActivitySource Deliveries = new(ActivitySourceName);
 
     // Compiled once, for CA1848 (ADR-019): this loop runs every PollInterval.
     private static readonly Action<ILogger, Exception?> ClaimFailed =
@@ -80,7 +86,9 @@ public sealed class OutboxDispatcher : BackgroundService
                 inserted.Payload,
                 inserted.Lane,
                 inserted.Attempts,
-                inserted.OccurredAt;
+                inserted.OccurredAt,
+                inserted.TraceParent,
+                inserted.TraceState;
             """;
 
         _completeSql =
@@ -146,6 +154,15 @@ public sealed class OutboxDispatcher : BackgroundService
 
         foreach (OutboxClaim message in claimed)
         {
+            // A child of the trace that staged the row, so MassTransit's publish, and the consumer it propagates
+            // to, join that trace rather than starting one here (§9.4). A row with no context starts its own.
+            ActivityContext staging =
+                ActivityContext.TryParse(message.TraceParent, message.TraceState, out ActivityContext parsed)
+                    ? parsed
+                    : default;
+            using Activity? span = Deliveries.StartActivity("outbox deliver", ActivityKind.Internal, staging);
+            span?.SetTag("messaging.message.id", message.MessageId);
+
             try
             {
                 // A scope per row, so a handler that throws cannot hand the next row its half-mutated state.
@@ -159,6 +176,8 @@ public sealed class OutboxDispatcher : BackgroundService
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
+                span?.SetStatus(ActivityStatusCode.Error);
+
                 // One bad message does not affect the rest; the token, not the type, as above.
                 await connection.ExecuteAsync(
                     new CommandDefinition(_failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
