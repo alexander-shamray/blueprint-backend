@@ -212,7 +212,7 @@ it without a Service in front of it. **`Shipping` is refused without
 
 **`--pure-consumer` renders §4.1's third shape** and implies `--worker`: the
 seven projects without `<Name>.Domain` and `<Name>.Domain.Tests`, and nothing of
-§9.4's outbox or §9.3's mapper — no outbox table or its two migrations, no
+§9.4's outbox or §9.3's mapper — no outbox table or its three migrations, no
 dispatcher, publisher, gauges or meter line, no collector and no mapper —
 because §3.2 gives such a service nothing to publish. The inbox, the purge, the
 marker table, the migrator, the probes and the bus stay. The render writes a
@@ -222,7 +222,7 @@ holds its premise. Its broker account writes its own endpoints and the fault
 exchanges and no contract. **`Notifications` is refused without it.** The mode
 is four tables in `scaffold/`: `PURE_CONSUMER_OMITTED`, `PURE_CONSUMER_PATCHES`,
 `PURE_CONSUMER_SPANS` — the third a cut from one anchor through another, each
-bound exactly once — and `PURE_CONSUMER_MIGRATIONS`, the two outbox migrations
+bound exactly once — and `PURE_CONSUMER_MIGRATIONS`, the three outbox migrations
 it skips, with the outbox entity cut from the designers and snapshot.
 
 ## What a rendered comment may say

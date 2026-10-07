@@ -1403,7 +1403,7 @@ edit a file's text but not its path.
 `--pure-consumer` renders §4.1's third shape and implies `--worker`. §4.1
 gives such a service no Domain project and §3.2 nothing to publish, so the
 render is seven projects with none of §9.4's outbox or §9.3's mapper: no
-outbox table or its two migrations, no dispatcher, publisher or gauges and no
+outbox table or its three migrations, no dispatcher, publisher or gauges and no
 `AddMeter` line, no collector and no mapper. §9.5's inbox and the purge over
 it, §8.5's marker table, the migrator, the probes and the bus stay. Its
 broker account writes its own endpoints and the fault exchanges and no
