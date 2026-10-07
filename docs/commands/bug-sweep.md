@@ -629,7 +629,7 @@ nothing.
 
 Then, for every surviving candidate, **dispatch one more `bug-auditor`, on
 `model: "sonnet"`, with that candidate alone** — the root, the file, the
-line, the claim and the failure scenario as the fan-out returned them, and a
+line, the claim and the failure scenario as returned, and a
 request for the tests covering the cited line and whether one would fail under
 the claimed defect, answered in `scenario` — under the verdict contract in
 `.claude/agents/bug-auditor.md`, and take its verdict record, which carries
