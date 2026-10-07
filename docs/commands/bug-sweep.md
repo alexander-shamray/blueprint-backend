@@ -138,7 +138,9 @@ nothing in `$work` (*The round: verify*). What turns up decides the candidate:
   why the auditor's checklist names it and why the bar puts it at the top.
   A verdict answers for one location, so the vacuous test is not filed from
   the defect's verdict: its file and line, from `scenario`, go through the
-  verify step in the same round as a candidate of their own, path check first.
+  verify step in the same round as a candidate of their own, path check first,
+  dispatched with the defect verdict's `scenario` as its claim and scenario, so
+  nothing in it is the parent's own wording.
   The same round, because a candidate left for later has no dispatch to reach
   it — a lead round goes by row — and a round that files nothing else would
   end the sweep clean and mark the commit with it unverified.
