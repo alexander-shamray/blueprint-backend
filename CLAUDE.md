@@ -209,6 +209,33 @@ The contract's §6 lists what locality leaves in force; these are the rest.
   `gh pr list --limit 1000` and `gh issue list --limit 1000`, because the
   default of 30 truncates silently.
 
+## Subagents, review rounds and plans
+
+Every turn re-sends the whole context, so an agent costs what it reads
+times the turns it takes, and a tool result stays in the parent for the
+rest of the session; `docs/token-plan.md` step 2 measured where that went.
+
+- **Delegate with a brief.** A subagent is handed the files, diff or
+  question it needs and returns a short structured answer — findings as
+  `file:line`, not prose. `Explore` before `general-purpose` for a search;
+  nothing is delegated that one `Grep` answers; a step's reads go in one
+  message.
+- **The review loop is this, and only this.** A PR is reviewed in rounds of
+  one read-only subagent each. Round 1 reads the branch diff; each later
+  round reads the diff since the round before and the findings still open,
+  not the tree. The diff is written under `artifacts/review/`, since
+  `bug-auditor` refuses the scratchpad. The loop ends at a round with
+  nothing open, at one whose only findings are refused under the style
+  guide's *Comments* rule, or at the seventh.
+- **Plans.** A change that fits one PR takes plan mode, not a plan file. A
+  plan file cites code by path and symbol rather than pasting it and stays
+  under 50 KB; research for it goes to `Explore` with a brief. Small tasks
+  run with `executing-plans`; under `subagent-driven-development`, each
+  reviewer is handed its task's diff, not the tree.
+- **A comment sweep** hands each agent what `.github/comment-gate/` finds in
+  its files with `--tree`, not whole suites to read.
+- **One task per session**: `/clear` between tasks.
+
 ## Available commands
 
 | | |
