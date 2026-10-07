@@ -229,6 +229,20 @@ class CommandLineTests(unittest.TestCase):
         spawns = json.loads(out.getvalue())
         self.assertEqual([s["cache_read"] for s in spawns], [990])
 
+    def test_a_description_the_console_cannot_encode_is_replaced_rather_than_fatal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            files = Transcripts(Path(directory))
+            files.write("s.jsonl", [ship()])
+            files.write("s/subagents/agent-a.jsonl", [reply("x1", at="2026-10-07T09:20:00.000Z", read=1)])
+            (Path(directory) / "s/subagents/agent-a.meta.json").write_text(
+                '{"agentType": "Explore", "description": "Check \\u2192 ship"}', encoding="utf-8")
+            raw = io.BytesIO()
+            console = io.TextIOWrapper(raw, encoding="cp1252")
+            with mock.patch.object(token_usage.sys, "stdout", console), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(token_usage.main([directory, "--spawns", "1"]), 0)
+            console.flush()
+        self.assertIn(b"Check ? ship", raw.getvalue())
+
     def test_json_prints_the_rows(self):
         with tempfile.TemporaryDirectory() as directory:
             Transcripts(Path(directory)).write("s.jsonl", [ship(), reply("m1", read=3)])
