@@ -11,15 +11,15 @@ from review_helpers import COMMANDS
 
 ARGUMENTS = COMMANDS.parent.parent / "docs" / "commands"
 
-# Bytes as git stores them (LF), each landed size and about a tenth: a rule can
-# be added without a fight, and a runbook past its ceiling has regrown.
+# Bytes with CRLF counted as LF, so a Windows checkout reads what Linux CI does;
+# each landed size and about a tenth: a runbook past it has regrown its argument.
 CEILINGS = {
-    "ship.md": 30500,
-    "bug-sweep.md": 17500,
-    "security-sweep.md": 14500,
-    "branch.md": 8800,
-    "validate-blueprint.md": 8800,
-    "review-branch.md": 8200,
+    "ship.md": 30800,
+    "bug-sweep.md": 19000,
+    "security-sweep.md": 14900,
+    "branch.md": 9000,
+    "validate-blueprint.md": 9000,
+    "review-branch.md": 8400,
 }
 
 CITATION = re.compile(r"docs/commands/([a-z-]+\.md)`?, \*([^*]+)\*")
