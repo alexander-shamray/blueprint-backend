@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
 using Common.Infrastructure.Inbox;
@@ -66,6 +68,40 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             expected: 0,
             because: "SetCompletedWhenFinalized deletes the instance, which is why §9.6's diagram has no " +
                 "Cancelled state — and nothing else in the suite watches that it really does");
+    }
+
+    [Fact]
+    public async Task A_command_sent_through_the_bus_outbox_stays_in_the_placing_trace()
+    {
+        // ADR-032's outbox, not §9.4's table: MassTransit stores the context with the message itself, so the
+        // saga's ReserveStock joins the trace that published OrderPlaced. Measured here rather than assumed.
+        ConcurrentQueue<Activity> stopped = new();
+        using ActivityListener listener = new()
+        {
+            ShouldListenTo = source => source.Name is "Request" or "MassTransit",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = stopped.Enqueue
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        using ActivitySource requests = new("Request");
+        var orderId = Guid.CreateVersion7();
+        ActivityTraceId trace;
+
+        using (Activity request = requests.StartActivity("request").ShouldNotBeNull())
+        {
+            trace = request.TraceId;
+            await PublishPlacedAsync(orderId, Guid.CreateVersion7());
+        }
+
+        await Eventually(
+            () => Task.FromResult(stopped.Any(a =>
+                a.Kind == ActivityKind.Producer &&
+                a.TraceId == trace &&
+                // Endpoints.InventoryQueue's name, which is internal to Ordering.Infrastructure.
+                Equals(a.GetTagItem("messaging.destination.name"), "inventory-commands"))),
+            expected: true,
+            because: "the saga's send to Inventory left the bus outbox in a trace of its own");
     }
 
     [Fact]

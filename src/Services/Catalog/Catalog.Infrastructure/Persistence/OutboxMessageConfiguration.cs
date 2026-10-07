@@ -45,6 +45,17 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
             .Property(m => m.LastError)
             .HasMaxLength(OutboxMessage.LastErrorMaxLength);
 
+        // ASCII by the W3C format, and nullable, so a row staged before the columns still delivers (§7.4, §9.4).
+        builder
+            .Property(m => m.TraceParent)
+            .HasMaxLength(OutboxMessage.TraceParentMaxLength)
+            .IsUnicode(false);
+
+        builder
+            .Property(m => m.TraceState)
+            .HasMaxLength(OutboxMessage.TraceStateMaxLength)
+            .IsUnicode(false);
+
         // Filtered to unprocessed rows and covering the claim, so the claim stays cheap whatever the table's size.
         builder
             .HasIndex(m => m.OccurredAt)

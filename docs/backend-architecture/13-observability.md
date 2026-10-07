@@ -189,7 +189,10 @@ public static IHostApplicationBuilder AddObservability(this IHostApplicationBuil
                 o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health"))
             .AddHttpClientInstrumentation()
             .AddEntityFrameworkCoreInstrumentation()
-            .AddSource("MassTransit"))
+            .AddSource("MassTransit")
+            // The outbox's delivery span, which joins a staging request to the
+            // publish it causes (§9.4); a source nothing listens to starts none.
+            .AddSource("Commerce.Outbox"))
         .UseOtlpExporter();
 
     return builder;

@@ -10,4 +10,6 @@ public sealed record OutboxClaim(
     string Payload,
     string Lane,
     int Attempts,
-    DateTimeOffset OccurredAt);
+    DateTimeOffset OccurredAt,
+    string? TraceParent,
+    string? TraceState);

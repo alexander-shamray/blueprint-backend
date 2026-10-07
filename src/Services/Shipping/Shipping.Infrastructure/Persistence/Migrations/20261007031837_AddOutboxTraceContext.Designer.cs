@@ -3,21 +3,24 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using Payments.Infrastructure.Persistence;
+using Shipping.Infrastructure.Persistence;
 
 #nullable disable
 
-namespace Payments.Infrastructure.Persistence.Migrations
+namespace Shipping.Infrastructure.Persistence.Migrations
 {
-    [DbContext(typeof(PaymentsDbContext))]
-    partial class PaymentsDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(ShippingDbContext))]
+    [Migration("20261007031837_AddOutboxTraceContext")]
+    partial class AddOutboxTraceContext
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasDefaultSchema("payments")
+                .HasDefaultSchema("shipping")
                 .HasAnnotation("ProductVersion", "10.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
@@ -46,7 +49,7 @@ namespace Payments.Infrastructure.Persistence.Migrations
                     b.HasIndex("CommittedAt")
                         .HasDatabaseName("IX_Idempotency_CommittedAt");
 
-                    b.ToTable("IdempotencyMarkers", "payments");
+                    b.ToTable("IdempotencyMarkers", "shipping");
                 });
 
             modelBuilder.Entity("Common.Infrastructure.Inbox.InboxMessage", b =>
@@ -67,7 +70,7 @@ namespace Payments.Infrastructure.Persistence.Migrations
                     b.HasIndex("HandledAt")
                         .HasDatabaseName("IX_Inbox_HandledAt");
 
-                    b.ToTable("InboxMessages", "payments");
+                    b.ToTable("InboxMessages", "shipping");
                 });
 
             modelBuilder.Entity("Common.Infrastructure.Outbox.OutboxMessage", b =>
@@ -140,41 +143,64 @@ namespace Payments.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_Outbox_Processed")
                         .HasFilter("[ProcessedAt] IS NOT NULL");
 
-                    b.ToTable("OutboxMessages", "payments");
+                    b.ToTable("OutboxMessages", "shipping");
                 });
 
-            modelBuilder.Entity("Payments.Domain.Intents.PaymentIntent", b =>
+            modelBuilder.Entity("Shipping.Domain.Shipments.Shipment", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("OrderId");
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("decimal(19,4)");
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
+                    b.Property<DateTimeOffset?>("CancellationRefusedAt")
                         .HasColumnType("datetimeoffset(7)");
 
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .IsUnicode(false)
-                        .HasColumnType("char(3)")
-                        .IsFixedLength();
+                    b.Property<DateTimeOffset?>("CancellationRequestedAt")
+                        .HasColumnType("datetimeoffset(7)");
 
-                    b.Property<string>("DeclineReason")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<string>("CarrierReference")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
-                    b.Property<string>("Reference")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset(7)")
+                        .HasDefaultValueSql("SYSDATETIMEOFFSET()");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<DateTimeOffset?>("NextPollAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("PollAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
 
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
+
+                    b.Property<DateTimeOffset?>("TerminalAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<string>("TrackingNumber")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("UnfulfillableReason")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<byte[]>("Version")
                         .IsConcurrencyToken()
@@ -185,66 +211,104 @@ namespace Payments.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PaymentIntents", "payments");
+                    b.HasIndex("NextAttemptAt")
+                        .HasDatabaseName("IX_Shipments_FulfilmentClaim")
+                        .HasFilter("[Status] IN ('Pending', 'Booked') AND [CancellationRefusedAt] IS NULL");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("NextAttemptAt"), new[] { "Status", "CancellationRequestedAt", "LockedUntil" });
+
+                    b.HasIndex("NextPollAt")
+                        .HasDatabaseName("IX_Shipments_TrackingClaim")
+                        .HasFilter("[NextPollAt] IS NOT NULL");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("NextPollAt"), new[] { "Status", "LockedUntil" });
+
+                    b.HasIndex("OrderId")
+                        .IsUnique();
+
+                    b.ToTable("Shipments", "shipping");
                 });
 
-            modelBuilder.Entity("Payments.Domain.Refunds.Refund", b =>
+            modelBuilder.Entity("Shipping.Domain.Shipments.TrackingEvent", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("OrderId");
+                    b.Property<Guid>("ShipmentId")
+                        .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("decimal(19,4)");
-
-                    b.Property<string>("Currency")
-                        .IsRequired()
-                        .HasMaxLength(3)
-                        .IsUnicode(false)
-                        .HasColumnType("char(3)")
-                        .IsFixedLength();
-
-                    b.Property<string>("Reference")
-                        .IsRequired()
+                    b.Property<string>("CarrierEventId")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("nvarchar(100)")
+                        .UseCollation("Latin1_General_BIN2");
 
-                    b.Property<DateTimeOffset>("VoidedAt")
+                    b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("datetimeoffset(7)");
 
-                    b.HasKey("Id");
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("datetimeoffset(7)");
 
-                    b.ToTable("Refunds", "payments");
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.HasKey("ShipmentId", "CarrierEventId");
+
+                    b.ToTable("TrackingEvents", "shipping");
                 });
 
-            modelBuilder.Entity("Payments.Infrastructure.Persistence.PaymentOrderRow", b =>
+            modelBuilder.Entity("Shipping.Infrastructure.Persistence.DeliveryAddressRow", b =>
                 {
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTimeOffset?>("CancelledAt")
-                        .HasColumnType("datetimeoffset(7)");
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
-                    b.Property<string>("Currency")
-                        .HasMaxLength(3)
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(2)
                         .IsUnicode(false)
-                        .HasColumnType("char(3)")
+                        .HasColumnType("char(2)")
                         .IsFixedLength();
 
-                    b.Property<Guid?>("CustomerId")
+                    b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTimeOffset?>("PlacedAt")
+                    b.Property<DateTimeOffset>("FetchedAt")
                         .HasColumnType("datetimeoffset(7)");
 
-                    b.Property<decimal?>("TotalAmount")
-                        .HasPrecision(19, 4)
-                        .HasColumnType("decimal(19,4)");
+                    b.Property<string>("Line1")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Line2")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PostalCode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
 
                     b.HasKey("OrderId");
 
-                    b.ToTable("PaymentOrders", "payments");
+                    b.ToTable("DeliveryAddresses", "shipping");
+                });
+
+            modelBuilder.Entity("Shipping.Domain.Shipments.TrackingEvent", b =>
+                {
+                    b.HasOne("Shipping.Domain.Shipments.Shipment", null)
+                        .WithMany("TrackingEvents")
+                        .HasForeignKey("ShipmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Shipping.Domain.Shipments.Shipment", b =>
+                {
+                    b.Navigation("TrackingEvents");
                 });
 #pragma warning restore 612, 618
         }

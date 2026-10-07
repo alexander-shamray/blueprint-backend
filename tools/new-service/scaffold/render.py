@@ -194,6 +194,10 @@ OMITTED = frozenset(
         "tests/Catalog.Application.Tests/PublishProductValidatorTests.cs",
         "tests/Catalog.Application.Tests/ChangePriceHandlerTests.cs",
         "tests/Catalog.Application.Tests/ChangePriceValidatorTests.cs",
+        # Wiring by subject, slice by requirement: the trace is proved through
+        # Catalog's own consumer of StockLevelChanged, which a rendered service
+        # does not have.
+        "tests/Catalog.Api.Tests/OutboxTraceContextTests.cs",
         "tests/Catalog.Api.Tests/OutboxTransportIdentityTests.cs",
         # The gRPC service's own suite, and it leaves for two reasons at
         # once: there is no PricingService to drive, and the channel it
@@ -380,11 +384,15 @@ COMMITTED_AT_DEFAULT_MIGRATION = re.compile(
 ROW_VERSION_MIGRATION = re.compile(
     r"^\d{14}_AddIdempotencyMarkerRowVersion(\.Designer)?\.cs$"
 )
+# The outbox's trace context. It travels because the outbox mapping does: the
+# copied configuration maps both columns and the dispatcher's claim reads them,
+# so a service without the migration fails its first claim on a missing column.
+TRACE_CONTEXT_MIGRATION = re.compile(r"^\d{14}_AddOutboxTraceContext(\.Designer)?\.cs$")
 LATER_MIGRATION = re.compile(r"^\d{14}_\w+(\.Designer)?\.cs$")
 
 # The template migrations that build §9.4's outbox, which a pure consumer does
 # not copy. Its other migrations keep their offsets, so their ids keep the gaps.
-PURE_CONSUMER_MIGRATIONS = (OUTBOX_MIGRATION, RETENTION_INDEX_MIGRATION)
+PURE_CONSUMER_MIGRATIONS = (OUTBOX_MIGRATION, RETENTION_INDEX_MIGRATION, TRACE_CONTEXT_MIGRATION)
 
 # The migrations a scaffolded service starts with, in the order they are
 # applied — which is the order their ids have to be generated in. A tuple
@@ -403,6 +411,7 @@ TEMPLATE_MIGRATIONS = (
     IDEMPOTENCY_MIGRATION,
     COMMITTED_AT_DEFAULT_MIGRATION,
     ROW_VERSION_MIGRATION,
+    TRACE_CONTEXT_MIGRATION,
 )
 
 # The name each shape above is known by in a diagnostic, in the same order and
@@ -420,6 +429,7 @@ MIGRATION_LABELS = (
     "AddIdempotencyMarkers",
     "IdempotencyMarkerCommittedAtDefault",
     "AddIdempotencyMarkerRowVersion",
+    "AddOutboxTraceContext",
 )
 
 # A service key in a Compose file, at the model's own indent, and the marker
@@ -610,6 +620,7 @@ SLICE_ENTITY = f'            modelBuilder.Entity("{TEMPLATE}.Domain.Products.Pro
 # entity's own tail behind — caught by the check at the end of the function,
 # which is the reason that check is there rather than trusted away.
 ENTITY_END = "\n                });\n\n"
+PROJECTION_ENTITY = f'            modelBuilder.Entity("{TEMPLATE}.Infrastructure.Persistence.StockLevel", b =>\n'
 
 
 def without_slice_entity(designer: str) -> str:
@@ -628,6 +639,19 @@ def without_slice_entity(designer: str) -> str:
         )
 
     stripped = designer[:start] + designer[end + len(ENTITY_END):]
+
+    # Catalog's projection of its one Consumes cell, which a designer written
+    # after AddStockLevels also describes; it is the slice's for the reason
+    # StockLevelConfiguration is OMITTED, and it names `ProductId`.
+    if PROJECTION_ENTITY in stripped:
+        require_once(stripped, PROJECTION_ENTITY, "a designer after AddStockLevels")
+        start = stripped.index(PROJECTION_ENTITY)
+        end = stripped.find(ENTITY_END, start)
+        if end == -1:
+            raise ScaffoldError(
+                "the projection entity block in the designer has no closing `});` at its own indent"
+            )
+        stripped = stripped[:start] + stripped[end + len(ENTITY_END):]
 
     # The aggregate took a using with it. EF emits
     # `using System.Collections.Generic;` for a ComplexProperty mapped as a
@@ -764,6 +788,9 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
     """The projects §4.1 gives the mode, the marker where one is owed, the migration and its snapshot."""
     created: dict[str, str] = {}
     csharp_newline = ""
+    last_copied = max(
+        index for index, shape in enumerate(TEMPLATE_MIGRATIONS)
+        if not (names.pure_consumer and shape in PURE_CONSUMER_MIGRATIONS))
 
     for relative in classify(repo_root, labels):
         if names.pure_consumer and pure_consumer_omits(relative):
@@ -805,6 +832,7 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
                 "_AddIdempotencyMarkers.Designer.cs",
                 "_IdempotencyMarkerCommittedAtDefault.Designer.cs",
                 "_AddIdempotencyMarkerRowVersion.Designer.cs",
+                "_AddOutboxTraceContext.Designer.cs",
             )):
             text = without_slice_entity(text)
             if names.pure_consumer:
@@ -849,10 +877,11 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
             rendered = names.rename(text)
             if name.endswith(".Designer.cs"):
                 rendered = sort_usings(rendered)
-                if offset == len(TEMPLATE_MIGRATIONS) - 1:
+                if offset == last_copied:
                     # Only the last migration's designer describes the model
                     # the service ends up with, and the snapshot is a
-                    # description of exactly that.
+                    # description of exactly that. Last of the ones this mode
+                    # copies, since a pure consumer leaves the outbox's out.
                     snapshot = names.rename(
                         snapshot_from_designer(
                             text,
