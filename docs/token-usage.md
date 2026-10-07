@@ -41,11 +41,13 @@ equivalent of 1.65B; output was 16.8M.
 | `Plan` | 21M | 1.3% | 20 | 55 | 157k | 1.05M |
 
 **Subagents spent 56%**, and the largest single spender is a type no
-command here spawns: nothing under `.claude/commands/` names
-`general-purpose`, so those 584 agents were started by the model or by a
-plugin's workflow. A subagent writes its whole context to the cache once
-— 160–175k per `general-purpose` or `bug-auditor` context — so a cache
-write, priced above input, is a fifth of the input equivalent.
+command here grants or spawns: the commands that name `general-purpose`
+deny it or argue about it, so those 584 agents were started by the model,
+by a plugin's workflow, or by the owner's standing instructions in
+user-level memory, which the repository does not hold. A subagent writes
+its whole context to the cache once — 160–175k per `general-purpose` or
+`bug-auditor` context — so a cache write, priced above input, is a fifth of
+the input equivalent.
 
 **A main session's mean context is 295k a call.** The resident text the
 plan measured — about 45k for `/ship` — is a sixth of that; the rest is
@@ -80,13 +82,17 @@ history is in effect these three weeks.
 | `/branch`, `/commit`, `/pr`, `/review-copilot` on their own | 65M | 4% | 37% |
 | Work after `/reload-plugins` | 62M | 4% | 67% |
 
-**The subagents are the model's choice, not the commands'.** `/ship`'s
-grant names only `review-grok-triager` and `/check-links` names no agent,
-yet a `/ship` run spawned about three `general-purpose` and one or two
+**The subagents are not the commands'.** `/ship`'s grant names only
+`review-grok-triager` and `/check-links` names no agent, yet a `/ship` run
+spawned about three `general-purpose` and one or two
 `bug-auditor` contexts and a `/check-links` run about nine
 `general-purpose` ones: about 8.4M a `/ship` run and 15.6M a
 `/check-links` run. 96 of the 327 `bug-auditor` contexts were spawned
-inside `/ship` runs, which run no sweep.
+inside `/ship` runs, which run no sweep. Inside `/ship` they are the review
+rounds the owner's user-level instructions ask for — a review cycle always
+runs, and with Copilot suspended each round is one read-only subagent,
+repeated until a round comes back clean — so a cut to them is a change to
+those instructions as much as to the repository.
 
 **The costliest agents are a plugin's.** The superpowers `writing-plans`
 skill spawned 66 `general-purpose` agents at 2.1M each, 77 calls apiece at
