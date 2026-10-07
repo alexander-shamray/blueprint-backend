@@ -214,14 +214,15 @@ class RemoveShape(unittest.TestCase):
         so the tree is removed once the holder lets go and the grace passes."""
         root, native = self.fixture()
         self.hold(native, 5)
+        held = time.monotonic()
         self.request(native)
         worker = self.hold(native, 0, wait=False, give_up=True, ready="worker-ready")
         self.assertEqual(0, worker.wait(timeout=30))
         self.assertFalse((native / "worker-ready").exists(), "the worker took a held lock")
-        started = time.monotonic()
         result = self.remove(f"{root}/checkout")
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertGreaterEqual(time.monotonic() - started, 2)
+        # From the holder's grab: its 5 s hold, then the 2 s grace on the request it left.
+        self.assertGreaterEqual(time.monotonic() - held, 6.9, "the request was dropped without its grace")
         self.assertFalse(self.present(root))
 
     def test_a_request_put_back_near_the_bound_still_gets_its_grace(self):
