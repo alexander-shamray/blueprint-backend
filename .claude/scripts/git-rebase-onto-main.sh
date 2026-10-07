@@ -488,6 +488,13 @@ case "$mode" in
       { echo "the rebase in progress is ${rebase_branch:-unreadable}, not $branch" >&2; exit 4; }
     [ -f "$state/started-by-this-helper" ] ||
       { echo "this rebase was not started by this helper, so it is not this helper's to undo" >&2; exit 9; }
+    # `git rebase --abort` resets the tree to the branch's tip, so an edit made
+    # during the stop goes with it, unstaged or not; it is named before it goes.
+    discarded=$(git status --porcelain --untracked-files=no) || discarded=""
+    if [ -n "$discarded" ]; then
+      echo "aborting discards these uncommitted changes, as 'git rebase --abort' does:" >&2
+      printf '%s\n' "$discarded" >&2
+    fi
     git rebase --abort
     rm -f "$pending"
     echo "aborted; $branch is where it was and nothing was published"

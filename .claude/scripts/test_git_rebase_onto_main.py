@@ -589,6 +589,17 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
         self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip())
         self.assertEqual(remote_before, self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip())
 
+    def test_abort_names_the_uncommitted_edits_it_discards(self):
+        # Accepted rather than refused: discarding the stop's work is what an
+        # abort is for, so the edits are listed rather than kept.
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at('echo scratch > b.txt')
+        result = self.helper("abort")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("aborting discards these uncommitted changes", result.stderr)
+        self.assertIn("b.txt", result.stderr)
+        self.assertEqual("work\n", self.at("cat b.txt").stdout, "the abort did not reset the tree")
+
 
 class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
     """A rebase drops merge commits, and a branch made under the old policy
