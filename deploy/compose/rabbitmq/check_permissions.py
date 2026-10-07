@@ -104,6 +104,11 @@ FRAMEWORK_PREFIX = "MassTransit:"
 # read a consumer does need is on its peer's concrete contract exchange.
 INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 
+# The one account here that is not a service's, and the one tag any account may
+# hold: ADR-072 decides both, and check_operator holds them.
+OPERATOR = "dead-letter-operator"
+OPERATOR_TAGS = ["management"]
+
 failures: list[str] = []
 
 
@@ -117,7 +122,8 @@ def read(path: Path) -> str:
 
 def matches(pattern: str, resource: str) -> bool:
     """RabbitMQ applies a permission as an unanchored Erlang regex."""
-    return re.search(pattern, resource) is not None
+    # An empty pattern is RabbitMQ's spelling of no permission, not a regex matching everything.
+    return pattern != "" and re.search(pattern, resource) is not None
 
 
 def owned_contract(user: str) -> str:
@@ -269,9 +275,13 @@ def main() -> int:
         fail("definitions.json declares `guest`. That account is what #44 is about — "
              "one principal, tagged administrator, reachable from any container")
     for user, held in sorted(tags.items()):
-        if held:
+        if held and not (user == OPERATOR and held == OPERATOR_TAGS):
             fail(f"{user}: carries tags {held}. A service account needs none, and "
                  f"`administrator` is what made `guest` worth stealing")
+
+    for user in sorted(users - set(services) - {OPERATOR, "guest"}):
+        fail(f"{user}: is neither a `*{USER_SUFFIX}` service account nor {OPERATOR}, "
+             f"so nothing here derives what it may touch")
 
     # Every service with a broker account has source, and every service with
     # source has a broker account. Both directions, because a service the
@@ -410,12 +420,55 @@ def main() -> int:
                      f"those messages, and a peer that can is a peer that can forge "
                      f"a scheduled timeout (§9.6)")
 
+    check_operator(definitions, permissions, code, prefixes, private)
+
     # 6. The two ways the broker's configuration reaches a container agree.
     check_fixture_matches_dockerfile()
 
     check_source_inputs_covers_reads()
     check_workflow_covers_inputs()
     return report()
+
+
+def check_operator(definitions: dict, permissions: dict, code: dict, prefixes: set[str], private: dict) -> None:
+    """The dead-letter operator's grant: dead letters and the endpoints they replay to, and nothing else."""
+    account = next((user for user in definitions["users"] if user["name"] == OPERATOR), None)
+    if account is None or OPERATOR not in permissions:
+        fail(f"definitions.json declares no {OPERATOR} with permissions, the account "
+             f"tools/dead-letters reaches the broker as")
+        return
+    if account.get("password_hash"):
+        fail(f"{OPERATOR}: carries a password hash. It ships with none, so nothing logs in "
+             f"as it until an operator sets one (tools/dead-letters/README.md)")
+
+    entry = permissions[OPERATOR]
+    endpoints = sorted(set().union(*(consumes for _, consumes in code.values())))
+    # Somebody else's vocabulary, and the default exchange, whose write reaches every queue by name.
+    foreign = [f"{FRAMEWORK_PREFIX}ReceiveFault", INTERFACE_EXCHANGE, "amq.default",
+               *(f"{prefix}Anything" for prefix in sorted(prefixes)),
+               *(f"{prefix}Anything" for prefix in sorted(filter(None, private.values())))]
+    for queue in endpoints:
+        dead = [f"{queue}_error", f"{queue}_skipped"]
+        for resource in dead:
+            if not matches(entry["read"], resource):
+                fail(f"{OPERATOR}: read does not cover `{resource}`, so the tool cannot inspect it")
+        for resource in (queue, *dead):
+            if not matches(entry["write"], resource):
+                fail(f"{OPERATOR}: write does not cover `{resource}`, where a replay or a "
+                     f"returned message lands")
+        for resource in (queue, f"{queue}_delay"):
+            if matches(entry["read"], resource):
+                fail(f"{OPERATOR}: read COVERS `{resource}`, a live queue. The tool reads dead "
+                     f"letters, and a read here is a consume of the endpoint's own work")
+        foreign.append(f"{queue}_delay")
+        for resource in derived_names(queue):
+            if matches(entry["configure"], resource):
+                fail(f"{OPERATOR}: configure COVERS `{resource}`. The tool declares nothing, "
+                     f"so it may delete nothing")
+    for verb in ("configure", "write", "read"):
+        for resource in foreign:
+            if matches(entry[verb], resource):
+                fail(f"{OPERATOR}: {verb} COVERS `{resource}`, which no dead-letter move needs")
 
 
 # A builder alone is not the broker's: a fixture that builds a stub service's

@@ -681,5 +681,89 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
             f"an empty fixture set reported a pass: {failures}")
 
 
+class TheDeadLetterOperator(unittest.TestCase):
+    """The one account that is not a service's, held to tools/dead-letters/README.md's grant."""
+
+    def operator_failures(self, change) -> list[str]:
+        definitions = real()
+        change(definitions)
+        return [f for f in run_against(definitions) if gate.OPERATOR in f]
+
+    def widen(self, verb: str, extra: str):
+        def change(definitions):
+            entry = permission(definitions, gate.OPERATOR)
+            entry[verb] = f"{entry[verb]}|{extra}" if entry[verb] else extra
+        return change
+
+    def test_the_repository_declares_the_operator_these_cases_mutate(self):
+        users = {u["name"]: u for u in real()["users"]}
+        self.assertEqual(gate.OPERATOR_TAGS, users[gate.OPERATOR]["tags"])
+
+    def test_an_empty_pattern_grants_nothing(self):
+        # RabbitMQ's meaning, which an unanchored re.search of "" inverts.
+        self.assertFalse(gate.matches("", "ordering-commands"))
+
+    def test_the_account_missing_is_refused(self):
+        def change(definitions):
+            definitions["users"] = [u for u in definitions["users"] if u["name"] != gate.OPERATOR]
+            definitions["permissions"] = [e for e in definitions["permissions"] if e["user"] != gate.OPERATOR]
+        failures = self.operator_failures(change)
+        self.assertTrue(any("declares no dead-letter-operator" in f for f in failures), failures)
+
+    def test_a_tag_beyond_management_is_refused(self):
+        def change(definitions):
+            next(u for u in definitions["users"] if u["name"] == gate.OPERATOR)["tags"] = [
+                "management", "administrator"]
+        failures = self.operator_failures(change)
+        self.assertTrue(any("carries tags" in f for f in failures), failures)
+
+    def test_a_shipped_password_is_refused(self):
+        def change(definitions):
+            next(u for u in definitions["users"] if u["name"] == gate.OPERATOR)["password_hash"] = "irrelevant"
+        failures = self.operator_failures(change)
+        self.assertTrue(any("carries a password hash" in f for f in failures), failures)
+
+    def test_a_read_on_a_live_endpoint_is_refused(self):
+        failures = self.operator_failures(self.widen("read", "^ordering-commands$"))
+        self.assertTrue(any("read COVERS `ordering-commands`, a live queue" in f for f in failures), failures)
+
+    def test_a_write_on_a_context_s_contracts_is_refused(self):
+        failures = self.operator_failures(self.widen("write", "^Common\\.Contracts\\.Ordering"))
+        self.assertTrue(
+            any("write COVERS `Common.Contracts.Ordering.V1:Anything`" in f for f in failures), failures)
+
+    def test_a_write_on_the_default_exchange_is_refused(self):
+        failures = self.operator_failures(self.widen("write", "^amq\\."))
+        self.assertTrue(any("write COVERS `amq.default`" in f for f in failures), failures)
+
+    def test_a_write_on_a_delay_exchange_is_refused(self):
+        failures = self.operator_failures(self.widen("write", "_delay$"))
+        self.assertTrue(any("write COVERS `ordering-fulfilment-saga_delay`" in f for f in failures), failures)
+
+    def test_any_configure_is_refused(self):
+        failures = self.operator_failures(self.widen("configure", "_error$"))
+        self.assertTrue(any("configure COVERS `ordering-commands_error`" in f for f in failures), failures)
+
+    def test_a_write_short_of_an_endpoint_is_refused(self):
+        def change(definitions):
+            permission(definitions, gate.OPERATOR)["write"] = "_(error|skipped)$"
+        failures = self.operator_failures(change)
+        self.assertTrue(
+            any("write does not cover `ordering-commands`, where a replay" in f for f in failures), failures)
+
+    def test_a_read_short_of_a_skipped_queue_is_refused(self):
+        def change(definitions):
+            permission(definitions, gate.OPERATOR)["read"] = "_error$"
+        failures = self.operator_failures(change)
+        self.assertTrue(any("read does not cover `ordering-commands_skipped`" in f for f in failures), failures)
+
+    def test_another_account_that_is_no_service_is_refused(self):
+        definitions = real()
+        definitions["users"].append({"name": "ops", "password_hash": "", "tags": []})
+        definitions["permissions"].append({"user": "ops", "vhost": "/", "configure": "", "write": ".*", "read": ""})
+        failures = run_against(definitions)
+        self.assertTrue(any("ops: is neither" in f for f in failures), failures)
+
+
 if __name__ == "__main__":
     unittest.main()

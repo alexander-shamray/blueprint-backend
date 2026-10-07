@@ -154,6 +154,10 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │                                   replays the publishers' outbox rows to
 │   │                                   the BFF's queue. Built with the
 │   │                                   solution; its suite is Web.Bff.Tests
+│   ├── dead-letters/                   Lists, inspects, replays or discards
+│   │                                   what §13.6's dead-letter alerts page
+│   │                                   on. Stdlib Python and its tests, over
+│   │                                   the Management API
 │   └── new-service/                    The scaffold of §4.5 and its tests.
 │                                       Stdlib Python, no restore — it renders
 │                                       a service from Catalog at run time

@@ -41,6 +41,18 @@ kubectl -n <ns> exec deploy/rabbitmq -- \
 
 ## Read the message before deciding anything
 
+**[`tools/dead-letters`](../../tools/dead-letters/README.md) does this**, and
+every step below that moves a message:
+
+```bash
+py -3.12 tools/dead-letters/dead_letters.py inspect <endpoint>_error --limit 5
+```
+
+It prints the three fields this section asks for, through the same requeueing
+`get` the `curl` below makes, and runs as `dead-letter-operator`, whose grant
+its README argues. The rest of this section is what it does underneath, and
+the way in when the tool is not to hand.
+
 **`rabbitmqctl` will not do this.** `list_queues` and `info_all` return queue
 metadata and counts — they do not return a message body or a header, which is
 everything the steps below need. Use the Management API's `get` with
@@ -102,9 +114,23 @@ What you want off the result:
 A dependency that was down, a database that was failing over, a deploy mid-roll.
 The payload is valid and the consumer would now succeed.
 
-Move it back with the Management API's shovel, declared as a one-shot
-parameter. It moves every message on the error queue back to the endpoint and
-deletes itself when the queue is empty:
+**Replay with the tool**: a dry run first, which says what would move, then the
+same command with `--execute` and a record file:
+
+```bash
+py -3.12 tools/dead-letters/dead_letters.py replay <endpoint>_error --all
+py -3.12 tools/dead-letters/dead_letters.py replay <endpoint>_error --all \
+    --execute --record incident.jsonl --audit-log audit.jsonl
+```
+
+`--message-id <id>`, repeatable, replays only those and returns the rest. Each
+message keeps its `MessageId`, its headers and its body's bytes, and each move
+is an audit line; its README says how, and where the one window is.
+
+**Or move it back with the Management API's shovel**, declared as a one-shot
+parameter, which needs an operator credential carrying `policymaker` — more
+than `dead-letter-operator` holds. It moves every message on the error queue
+back to the endpoint and deletes itself when the queue is empty:
 
 **Percent-encode the credential before it goes in the URI.** A generated
 password containing `@`, `:`, `/`, `#` or `%` — which a vault-issued one often
@@ -171,10 +197,12 @@ kubectl -n <ns> exec deploy/rabbitmq -- \
 ```
 
 Both ship inside the official image, so this needs no download and no restart —
-which is why it is the recovery here rather than a hand-rolled consume-and-
+which is why it is a recovery here rather than a hand-rolled consume-and-
 republish loop. That loop is where messages get lost at 03:00: it has to
 reproduce the headers `MT-Fault-*` and `MessageId` exactly, and a mistake
-consumes the evidence.
+consumes the evidence. `tools/dead-letters` is that loop written once: it
+writes each message to the record file before it publishes it, and its suite
+pins the id, the headers and the bytes.
 
 **Replay is safe by design and it is worth knowing why.** §9.5's inbox filter
 records `MessageId` and makes a second delivery of the same message a no-op
@@ -189,7 +217,15 @@ A contract the consumer no longer understands, a payload that was malformed at
 source, or an event whose effect has since been produced another way.
 
 Purge only after recording the message body somewhere durable. Once it is gone
-the only record is whatever you saved.
+the only record is whatever you saved. **The tool's discard does both**, and
+refuses to run without the record file:
+
+```bash
+py -3.12 tools/dead-letters/dead_letters.py discard <endpoint>_error --message-id <id> \
+    --execute --record incident.jsonl --audit-log audit.jsonl
+```
+
+To empty the whole queue without it:
 
 ```bash
 kubectl -n <ns> exec deploy/rabbitmq -- rabbitmqctl purge_queue <endpoint>_error
@@ -206,10 +242,13 @@ gone.
 1. **Replay everything**, then work whatever returns to the error queue as a
    smaller, uniform problem. Poison messages simply come back, which costs a
    round trip and loses nothing.
-2. Or **move the unreplayable ones out by hand first** — `get` with
-   `ackmode=ack_requeue_false` consumes exactly the messages it returns, so
-   with `count` set to the number you have identified and confirmed at the head
-   of the queue, that is a selective removal. Record each body before it goes.
+2. Or **move the unreplayable ones out first** — the tool's `discard` with a
+   `--message-id` for each takes exactly those, wherever they sit in the
+   queue, records each before it goes and returns the rest. By hand, `get`
+   with `ackmode=ack_requeue_false` consumes exactly the messages it returns,
+   so with `count` set to the number you have identified and confirmed at the
+   head of the queue, that is a selective removal. Record each body before it
+   goes.
 
 The first is almost always right. Reach for the second only when replaying
 would cause a side effect the inbox filter does not cover — §9.5 makes

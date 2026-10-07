@@ -52,6 +52,11 @@ docker compose exec rabbitmq rabbitmqctl list_permissions
 [`runbooks/error-queue.md`](../../docs/runbooks/error-queue.md) drives the
 Management API rather than these, and it is written against a **deployed**
 broker whose operator credential comes from the vault — not against this one.
+The one account here that is not a service's, `dead-letter-operator`, is
+tagged `management` and ships with **no password**, so nothing logs in as it
+until someone with the container sets one;
+[`tools/dead-letters`](../../tools/dead-letters/README.md) runs as it, and its
+README says how to set and clear one for the local stack.
 
 **Every port here and in every unit below is published on `127.0.0.1` rather
 than on every interface**, which is the control standing in front of those

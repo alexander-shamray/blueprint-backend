@@ -368,6 +368,22 @@ jobs:
         working-directory: tools/token-usage
         run: python -m unittest
 
+  # It gates nothing a build produces: the tool reaches a broker only when an
+  # operator runs it, so a red job is the signal that its dry-run default, a
+  # refusal or a replay's id and headers drifted from what the suite pins.
+  dead-letters:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test the dead-letter tool
+        working-directory: tools/dead-letters
+        run: python -m unittest
+
   # §15.1's fork: only services whose files changed are built and deployed. A
   # job of its own so that everything downstream can read one answer. The
   # filter is §15.1's, verbatim — including the shared anchor, which is the

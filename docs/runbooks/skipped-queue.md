@@ -38,10 +38,17 @@ kubectl -n <ns> exec deploy/rabbitmq -- \
 ## Read the message before deciding anything
 
 The message **type** is the whole diagnosis here, where the fault headers are
-in [`error-queue.md`](error-queue.md). Getting at it is that runbook's
-procedure with two words changed, and for its reasons: `rabbitmqctl` returns
-queue metadata rather than bodies, the credentials are not `guest/guest`, and
-they stay out of `argv`.
+in [`error-queue.md`](error-queue.md).
+[`tools/dead-letters`](../../tools/dead-letters/README.md) prints it, read out
+of the body for the reason given below:
+
+```bash
+py -3.12 tools/dead-letters/dead_letters.py inspect <endpoint>_skipped --limit 5
+```
+
+By hand, it is that runbook's procedure with two words changed, and for its
+reasons: `rabbitmqctl` returns queue metadata rather than bodies, the
+credentials are not `guest/guest`, and they stay out of `argv`.
 
 **`rabbitmqadmin` is not on the image this repository ships.** The broker
 builds from `rabbitmq:4.1-management-alpine` with the delayed-exchange and
@@ -98,7 +105,9 @@ insufficient.
 1. **Finish the rollout first.** Once every replica runs the new build, nothing
    further is skipped, and the queue stops growing. Do not roll back — the old
    build is the one that cannot handle these messages.
-2. **Then replay what was parked**, with the shovel procedure in
+2. **Then replay what was parked**, with the tool —
+   `dead_letters.py replay <endpoint>_skipped --all`, a dry run, then again
+   with `--execute --record FILE` — or with the shovel procedure in
    [`error-queue.md`](error-queue.md); the mechanics are identical and only the
    source queue name differs.
 3. **Record it against the release.** A skipped queue after a deploy is a
@@ -144,8 +153,10 @@ The tell is the destination rather than a second copy: the type in the envelope
 is one this endpoint has no business receiving at all, and no other queue is
 missing it.
 
-Discard with a record once the real destination has had it. Fixing the sender
-is what closes it.
+Discard with a record once the real destination has had it —
+`dead_letters.py discard <endpoint>_skipped --message-id <id> --execute
+--record FILE` writes the record and then removes exactly that message. Fixing
+the sender is what closes it.
 
 ## Closing it
 

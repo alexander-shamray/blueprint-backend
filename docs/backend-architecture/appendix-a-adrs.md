@@ -78,6 +78,7 @@ decision looks wrong.
 | **ADR-069** | [The migration Job is fenced by a hook policy of its own](adr/ADR-069-the-migration-job-is-fenced-by-a-hook-policy-of-its-own.md) |
 | **ADR-070** | [Payments calls its provider inside its consumers](adr/ADR-070-payments-calls-its-provider-inside-its-consumers.md) |
 | **ADR-071** | [Every image carries an SBOM, and signing waits on a registry](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md) |
+| **ADR-072** | [A person replays dead letters as a broker account of its own](adr/ADR-072-a-person-replays-dead-letters-as-a-broker-account-of-its-own.md) |
 
 ---
 
