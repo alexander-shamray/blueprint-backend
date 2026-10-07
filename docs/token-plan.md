@@ -273,8 +273,9 @@ sweeps parse are unchanged. The exit waits on step 1's quality set.
 ### Step 5 — the sweeps
 
 - Slices of at most 60k tokens from an explicit file list the parent builds
-  with `git ls-files`, about 36 over the corpus left after the exclusions,
-  each read whole.
+  with `git ls-files`, over the whole partition the sweeps assign, each read
+  whole; the exclusion list is `branch-reviewer`'s alone, as step 4
+  records.
 - Round 2 onwards follows the leads the rounds before it found, with the
   findings so far passed in, rather than re-reading the tree; the ceiling
   stays seven rounds, and the loop still ends on a round with nothing new.
