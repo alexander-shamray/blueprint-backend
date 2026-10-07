@@ -133,6 +133,13 @@ design, so a single applied edit could append a grant to a command's
 its `Read, Grep, Glob` tool list, as `/security-sweep` says outright: read-only
 there "is a property of the agent's tool grant, not a word in its prompt".
 
+**`branch-reviewer` rests on the same property.** It reads the diff the
+parent wrote under `artifacts/review/` — inside the checkout, where its
+reads stay — and returns JSON the parent verifies before acting on any of
+it. The residual is the parent's: it holds the shell the reviewer was
+denied, so a finding written to steer an edit is caught by that
+verification or not at all.
+
 **`.claude/skills/**` is the same argument one directory over.** A skill's
 `allowed-tools` is auto-approval, so a session that can rewrite `SKILL.md`
 widens the next invocation's Bash surface. The deny list in
