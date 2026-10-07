@@ -182,7 +182,7 @@ restart, verify readiness (`/health/ready` covers SQL —
 
 ### A broker credential
 
-`ConnectionStrings__RabbitMq`, and there is **one per account
+`ConnectionStrings__RabbitMq`, and there is **one per service account
 `definitions.json` declares** — each service's, and the BFF's under
 [ADR-051](backend-architecture/adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
 — since
@@ -373,7 +373,7 @@ to be tidied away:
 | SQL Server | `${SQL_PASSWORD:-Local_Dev_Pa55w0rd!}` |
 | BFF client secret | `${BFF_CLIENT_SECRET:-local-dev-secret}` |
 | Keycloak admin | `admin` / `admin` |
-| RabbitMQ | one `<name>-svc` / `local-dev-<name>` per account in `deploy/compose/rabbitmq/definitions.json` |
+| RabbitMQ | one `<name>-svc` / `local-dev-<name>` per service account in `deploy/compose/rabbitmq/definitions.json`; `dead-letter-operator` ships with no password ([ADR-072](backend-architecture/adr/ADR-072-a-person-replays-dead-letters-as-a-broker-account-of-its-own.md)) |
 | Redis | one `<name>-svc` / `local-dev-<name>` per service that calls `AddRedisConnections`, in `deploy/compose/redis/users.conf` |
 | Payment provider key | `local-dev-psp` |
 | Carrier key | `local-dev-carrier` |
