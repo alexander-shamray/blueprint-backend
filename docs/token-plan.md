@@ -152,9 +152,17 @@ transcripts' own `usage` sums.
   `Explore` before `general-purpose` for a search; nothing delegated that
   one `Grep` answers; one task per session, with `/clear` between tasks,
   because every turn re-sends the whole context.
-- A command whose work is mechanical stops being a prompt: `/check-links`
-  spent about 15.6M a run, mostly in agents it never asks for, on a check
-  a stdlib script does deterministically, and becomes one with a suite.
+- A review loop the model runs with its own agents gets a ceiling and a
+  narrowing: one pull request reached round 20 at about 15M a round. Round
+  2 onwards reads the diff since the last round and the open findings, not
+  the tree, and a round whose only findings are refused under the style
+  guide's *Comments* rule ends the loop. The ceiling is the owner's to set.
+- A plan-writing agent, about 7M a plan, gets the planning rule below, and
+  a comment sweep is handed the lines the comment gate flags rather than
+  whole suites to read.
+- `/check-links` becomes a stdlib script with a suite only if its own
+  spawns, measured apart from the work a session did after it, show the
+  cost the first window suggested.
 - The superpowers plugin stays enabled: the owner plans more work with it.
   Its cost is cut where it is spent, once `--spawns` shows what its
   `writing-plans` agents, 2.1M each, were given. `CLAUDE.md` gains a short
