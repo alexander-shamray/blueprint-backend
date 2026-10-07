@@ -311,7 +311,7 @@ sequenceDiagram
     C-->>A: 204 No Content
 
     Note over C,MQ: Outbox dispatcher, after commit
-    C->>R: Local lane → RemoveByTag("product:{id}")
+    C->>R: Local lane → RemoveByTag("product:{id}") (once it has a cache)
     C->>MQ: Broker lane → PriceChanged
     MQ->>O: PriceChanged
     O->>R: RemoveByTag("product:{id}")
