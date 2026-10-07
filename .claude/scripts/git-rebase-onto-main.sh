@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Rebase the current branch onto origin/main and publish it, the only force
 # push here. Guards: the branch is in hand and not main, the tree clean, origin
-# holds nothing unseen, a merge differs from git's only where it conflicted, a
-# replay keeps its todo and skips no stop, and a retry forces it at the lease.
+# has nothing unseen, a two-parent merge differs from git's only in conflicts,
+# a replay keeps its todo, skips no stop, and a retry forces it at the lease.
 
 # Four modes, because a conflict is the case rebase is here for. `start`
 # leaves a conflicted rebase in progress rather than aborting it: backing out
