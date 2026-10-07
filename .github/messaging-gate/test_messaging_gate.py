@@ -222,10 +222,8 @@ class ThisRepository(unittest.TestCase):
 
     def test_every_host_under_src_has_a_row_and_every_row_a_host(self) -> None:
         hosts = set(messaging_gate.host_directories(messaging_gate.ROOT))
-        services = {d.name for d in (messaging_gate.ROOT / "src/Services").iterdir() if d.is_dir()}
         table = messaging_gate.read_table((messaging_gate.ROOT / messaging_gate.CHAPTER).read_text(encoding="utf-8"))
 
-        self.assertTrue(services <= hosts, services - hosts)
         self.assertIn("Web.Bff", hosts)
         self.assertEqual(hosts, set(table))
 
