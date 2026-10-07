@@ -729,11 +729,11 @@ a failed push no longer descends from the commit `publish` recorded, so
 resetting it for the caller would discard the amend, which is the work. And
 `abort` mid-replay discards uncommitted edits as `git rebase --abort` does,
 because discarding the stop's work is what an abort is for; the helper lists
-them before it aborts. And a merge on the branch is held to git's own merge of
-its parents only in the files that merged cleanly: a conflicted file is left
-to `--cc`, which cannot see a clean hunk dropped inside it when the merge took
-one side of that file whole, so the replay brings the hunk back unannounced
-(#583).
+them before it aborts. And a two-parent merge on the branch is held to git's
+own merge of its parents only in the files that merged cleanly, and an octopus
+not at all: a conflicted file, and every file of an octopus, is left to
+`--cc`, which cannot see a clean hunk dropped when the merge took one side of
+a file whole, so the replay brings the hunk back unannounced (#583).
 
 The third is `Bash(git fetch origin:*)`, which no longer admits a URL but still
 admits a trailing flag; `--upload-pack`, `--receive-pack` and `--exec` are
