@@ -125,7 +125,7 @@ py -3.12 tools/dead-letters/dead_letters.py replay <endpoint>_error --all \
 
 `--message-id <id>`, repeatable, replays only those and returns the rest. Each
 message keeps its `MessageId`, its headers and its body's bytes, and each move
-is an audit line; its README says how, and where the one window is.
+is an audit line; its README says how, and what a run can lose and where.
 
 **Or move it back with the Management API's shovel**, declared as a one-shot
 parameter, which needs an operator credential carrying `policymaker` — more
