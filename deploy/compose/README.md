@@ -257,6 +257,29 @@ is a JSON *string* with the quotes still on it, which `{id:guid}` cannot bind,
 so interpolating it into `/v1/orders/$ORDER/cancel` needs `| jq -r .` — a
 shell trick rather than the service.
 
+## Walking an order
+
+```bash
+bash deploy/compose/walk-an-order.sh
+```
+
+It places one order as `demo` through the gateway and watches the BFF's read
+of it until the goods have left, printing each status as it changes. Exit 0
+means the BFF said `dispatched` or `delivered`, so the order crossed every
+service and every host that §3.2 puts on the fulfilment path. Exit 1 means it
+ended anywhere else or ran out of time. `PRODUCT` picks the seeded id, and
+the last row of the table above, the door mat, is the walk that ends
+`out_of_stock`.
+
+**Run it after `up` on a stack you mean to trust.** The Compose workflow
+checks the model, the start order and the health probes, and it places no
+order: it runs only when this tree or a host's start-up files change, so it
+would miss the service changes a walk is for. The CI half is the journey test
+#426 asks of `Platform.IntegrationTests`, which does not exist yet. Run
+`docker compose down -v` first on a machine that has applied an earlier draft
+of a migration: its row stays in `__EFMigrationsHistory` on the named volume,
+and the migrator then applies nothing and reports success.
+
 Override connection strings with `<SERVICE>_CONNECTION` /
 `<SERVICE>_MIGRATOR_CONNECTION` — one pair per service, every one commented out
 in `.env.example` so the nested `${SQL_PASSWORD:-…}` keeps following an
