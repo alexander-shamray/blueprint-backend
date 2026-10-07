@@ -1,7 +1,7 @@
 # Repo map
 
-**What every entry in the tree is, and why it is shaped the way it is.**
-This file is the tree's one owner: `CLAUDE.md` carries only a locator of
+**What every entry in the tree below is, and why it is shaped the way it
+is.** This file is that tree's one owner: `CLAUDE.md` carries only a locator of
 the documents a session reads first, and cites this file for the rest.
 
 **It is load-bearing whenever a fact it records changes** — an entry added or
