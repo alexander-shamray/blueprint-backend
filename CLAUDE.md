@@ -84,8 +84,8 @@ source, §14.1's local-development defaults the one stated exception.
 commits, issues, review threads and the round touch set. Two of them fire
 without an edit to prompt a look: **uncommitted work in the tree belongs
 in the PR being worked on — never revert it to clean the tree**; and
-**`TODO.md` is updated the moment a PR or issue is opened, merged, closed
-or reopened**.
+**`TODO.md` is updated the moment a session opens, merges or closes a
+PR, or files, closes or reopens an issue**.
 
 ## Subagents, review rounds and plans
 
