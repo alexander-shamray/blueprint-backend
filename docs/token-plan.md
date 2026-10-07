@@ -158,7 +158,11 @@ counted under `/ship`.
   2 onwards reads the diff since the last round and the open findings, not
   the tree, and a round whose only findings are refused under the style
   guide's *Comments* rule ends the loop. The ceiling is seven rounds,
-  the sweeps' own.
+  the sweeps' own. The loop is defined today in the owner's user-level
+  memory, not here, and a ceiling written beside "repeat until clean" would
+  contradict it; so its definition moves into the repository, where this
+  plan can own it, and the memory rule is cut to cite it in the same
+  change.
 - A plan-writing agent, about 7M a plan, gets the planning rule below, and
   a comment sweep is handed the lines the comment gate flags rather than
   whole suites to read.
