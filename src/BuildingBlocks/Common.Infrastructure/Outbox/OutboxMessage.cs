@@ -18,7 +18,7 @@ public sealed class OutboxMessage
     /// <summary>A W3C <c>traceparent</c> at version 00, the only version an activity writes.</summary>
     public const int TraceParentMaxLength = 55;
 
-    /// <summary>The W3C ceiling on <c>tracestate</c>; a longer one is not staged rather than truncated.</summary>
+    /// <summary>The <c>tracestate</c> W3C asks a vendor to carry at least; a longer one is not staged.</summary>
     public const int TraceStateMaxLength = 512;
 
     public long Id { get; private set; }
