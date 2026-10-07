@@ -688,6 +688,42 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
                       "the conflicted file that dropped a clean hunk is not named")
         self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip(), "nothing was replayed")
 
+    def test_a_non_ascii_name_is_read_rather_than_passed_as_clean(self):
+        # git quotes such a name by default, and a quoted name is one rev-parse cannot read.
+        self.at('git checkout -q main && seq 1 60 > café.txt && git add -A && git commit -qm "café.txt" '
+                '&& git push -q origin main && git checkout -q feat/x && git rebase -q main '
+                '&& git push -q -f origin feat/x '
+                '&& git checkout -q main && sed -i "1s/.*/main-one/;50s/.*/main-fifty/" café.txt '
+                '&& git commit -qam "main edits café.txt" && git push -q origin main '
+                '&& git checkout -q feat/x && sed -i "50s/.*/branch-fifty/" café.txt '
+                '&& git commit -qam "the branch edits café.txt" '
+                '&& { git merge -q main || true; } && git checkout -q --ours café.txt && git add café.txt '
+                '&& git commit -q --no-edit && git push -q -f origin feat/x')
+        before = self.at("git rev-parse HEAD").stdout.strip()
+
+        result = self.helper()
+        self.assertEqual(10, result.returncode, result.stderr)
+        # Matched loosely around the é, which the runner may decode in another code page; quoted it would open "caf\.
+        self.assertRegex(result.stderr, rf"{before} caf\S+\.txt\n", "the conflicted file is not named")
+        self.assertNotIn('"caf\\', result.stderr, "the name reached the check still quoted")
+
+    def test_a_binary_file_taken_whole_is_left_to_the_replay(self):
+        # A binary has no clean hunk to drop, and merge-file refuses one, which must not stop every rebase.
+        self.at('git checkout -q main && printf "a\\0base\\n" > b.bin && git add -A && git commit -qm "b.bin" '
+                '&& git push -q origin main && git checkout -q feat/x && git rebase -q main '
+                '&& git push -q -f origin feat/x '
+                '&& git checkout -q main && printf "a\\0main\\n" > b.bin && git commit -qam "main edits b.bin" '
+                '&& git push -q origin main && git checkout -q feat/x && printf "a\\0branch\\n" > b.bin '
+                '&& git commit -qam "the branch edits b.bin" '
+                '&& { git merge -q main || true; } && git checkout -q --ours b.bin && git add b.bin '
+                '&& git commit -q --no-edit && git push -q -f origin feat/x')
+        self.assertEqual("", self.at("git status --porcelain").stdout, "the merge was not committed")
+        self.addCleanup(lambda: self.at("git rebase --abort"))
+
+        result = self.helper()
+        self.assertNotIn("cannot replay the clean hunks", result.stderr)
+        self.assertEqual(8, result.returncode, result.stderr)
+
     def test_a_conflict_the_merge_resolved_to_one_side_is_left_to_the_replay(self):
         # A side taken whole that drops none of the other's clean hunks passes,
         # and here the replay meets the same conflict.
