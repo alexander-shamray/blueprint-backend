@@ -709,11 +709,18 @@ class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
 
     def test_a_binary_file_taken_whole_is_left_to_the_replay(self):
         # A binary has no clean hunk to drop, and merge-file refuses one, which must not stop every rebase.
-        self.at('git checkout -q main && printf "a\\0base\\n" > b.bin && git add -A && git commit -qm "b.bin" '
+        self.binary_taken_whole("a\\0base", "a\\0main", "a\\0branch")
+
+    def test_a_file_whose_base_alone_is_binary_is_left_to_the_replay(self):
+        # merge-file refuses a binary base as it does a binary side.
+        self.binary_taken_whole("a\\0base", "main", "branch")
+
+    def binary_taken_whole(self, base, on_main, on_branch):
+        self.at(f'git checkout -q main && printf "{base}\\n" > b.bin && git add -A && git commit -qm "b.bin" '
                 '&& git push -q origin main && git checkout -q feat/x && git rebase -q main '
                 '&& git push -q -f origin feat/x '
-                '&& git checkout -q main && printf "a\\0main\\n" > b.bin && git commit -qam "main edits b.bin" '
-                '&& git push -q origin main && git checkout -q feat/x && printf "a\\0branch\\n" > b.bin '
+                f'&& git checkout -q main && printf "{on_main}\\n" > b.bin && git commit -qam "main edits b.bin" '
+                f'&& git push -q origin main && git checkout -q feat/x && printf "{on_branch}\\n" > b.bin '
                 '&& git commit -qam "the branch edits b.bin" '
                 '&& { git merge -q main || true; } && git checkout -q --ours b.bin && git add b.bin '
                 '&& git commit -q --no-edit && git push -q -f origin feat/x')
