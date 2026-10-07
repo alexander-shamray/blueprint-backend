@@ -341,6 +341,21 @@ jobs:
       # `tools/new-service/README.md` gives; here the checkout is discarded
       # with the runner.
 
+  # It gates nothing: the report reads local transcripts, and a red job is the
+  # whole signal that its parser drifted from what its suite pins.
+  token-usage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test the token-usage report
+        working-directory: tools/token-usage
+        run: python -m unittest
+
   # §15.1's fork: only services whose files changed are built and deployed. A
   # job of its own so that everything downstream can read one answer. The
   # filter is §15.1's, verbatim — including the shared anchor, which is the

@@ -58,6 +58,7 @@ deploy/helm/                 §15.3's charts — one library chart, one user per
 deploy/observability/        §13.8's dashboards, §13.6's rules, §13.7's k6 run
 tools/new-service/           §4.5's scaffold, with Catalog as its template
 tools/bff-replay/            ADR-051's rebuild: the BFF's projection replayed from the publishers' outboxes
+tools/token-usage/           the transcripts' token usage per command and agent, for docs/token-plan.md
 src/BuildingBlocks/          Common.Domain, .Application, .Contracts, .Infrastructure, .Web
 src/Gateway/Gateway.Api/     the edge, and the second host
 src/BFF/Web.Bff/             the third host, and the one caller on a request path
