@@ -128,14 +128,18 @@ time.
 
 - `tools/token-usage/` reads Claude Code's transcripts and reports input,
   cache writes, cache reads and output per command and per subagent type,
-  with a suite.
-- `docs/token-usage.md` records the baseline: two or three `/ship` runs and
-  one sweep, measured on the machine whose transcripts hold them.
+  with a suite. Landed.
+- `docs/token-usage.md` records the baseline. An all-history total and a
+  three-week window landed; a measurement of two or three named `/ship`
+  runs and one sweep is still owed.
 - The quality sets: the issues earlier sweeps filed, with the commits they
   were found on; the findings earlier review rounds raised on merged PRs.
+  Still owed, and until they land no step whose exit test holds recall on
+  them can pass.
 
-**Exit.** The report runs over real transcripts and its totals match the
-transcripts' own `usage` sums.
+**Exit.** Attribution holds on a known session: for one named `/ship` run,
+every response between its command and the next prompt a person typed is
+counted under `/ship`.
 
 ### Step 2 — the subagents the model starts, and what fills a session
 
