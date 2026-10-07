@@ -252,24 +252,24 @@ change, so nothing standing asks for a reviewer the tree no longer holds.
 the external reviewers found.
 
 **Landing, in two PRs rather than one per bullet**: the archived suites pin
-`/ship`'s review text, so the local review and the archive land together,
-and the agent prompts follow. The first carries `branch-reviewer`; `/ship`
-step 5 as the local review and the merge as step 6, 104.6 KB to 61.1 KB;
-the 18 files and the six Copilot-only `pr-*` helpers archived; the tests
-that outlive them moved to `test_pr_helpers.py` and
-`test_command_grants.py`; and each comment the archive touched cut to the
-comment gate's budget, `pr-locality.sh`'s contract moving into
-`harness-boundaries.md`. The second gives both auditors the read block
-`branch-reviewer` already carries, and their fan-out reports become JSON:
+`/ship`'s review text, so the local review and the archive land together, and
+the agent prompts follow. The first carries `branch-reviewer`; `/ship` step 5 as
+the local review and the merge as step 6, 104.6 KB to 61.1 KB; the 18 files and
+the six Copilot-only `pr-*` helpers archived; the tests that outlive them moved
+to `test_pr_helpers.py` and `test_command_grants.py`; and each comment the
+archive touched cut to the comment gate's budget, `pr-locality.sh`'s contract
+moving into `harness-boundaries.md`. The second gives both auditors the read
+block `branch-reviewer` already carries, and their fan-out reports become JSON:
 `bug-auditor` 13.4 KB to 5.6 KB, `security-auditor` 6.4 KB to 3.5 KB. The
 exclusion list stays `branch-reviewer`'s alone, because the sweeps assign
-migrations and fenced samples to auditor rows, and an auditor told to skip
-them would call a row clean that it never read. Their argument lives in the
-sweeps and in `harness-boundaries.md`, and the two reasons that lived only
-in the prompts — why a command describing actions is not an injection, and
-why a verdict quotes the file and never the candidate — stay in them as
-clauses, so nothing moved to `docs/`; the verdict blocks the
-sweeps parse are unchanged. The exit waits on step 1's quality set.
+migrations and fenced samples to auditor rows, and an auditor told to skip them
+would call a row clean that it never read. Their argument lives in the sweeps
+and in `harness-boundaries.md`, and the two reasons that lived only in the
+prompts — why a command describing actions is not an injection, and why a
+verdict quotes the file and never the candidate — stay in them as clauses, so
+nothing moved to `docs/`; the verdict blocks the sweeps parse gain only an
+`unreadable-root` value, which both sweeps now read as a round error rather than
+a malformed record (#598). The exit waits on step 1's quality set.
 
 ### Step 5 — the sweeps
 
