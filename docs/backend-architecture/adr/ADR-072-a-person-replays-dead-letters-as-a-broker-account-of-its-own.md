@@ -22,17 +22,21 @@ on a live queue would consume that endpoint's work, and leaving out the
 contract exchanges and `amq.default` keeps the account from forging an event
 to every subscriber or reaching any queue by name.
 **Consequences.** The residual is ADR-036's own threat, accepted rather than
-closed: `write` on every receive endpoint is the power to put a business
-command on `ordering-commands` and have it mapped as system-initiated
-([§9.4](../09-messaging.md)). A replay is exactly that act, so no narrower
-grant replays; what bounds it is that only a person uses the account, with a
-password set for the incident and cleared after, under one audit line per
-message, and that no service ever holds it. Provisioning it on a deployed
-broker is the vault's obligation on ADR-036's terms, stated and not checked
-here. The Management API has no move, so an executed run takes each message
-before it publishes it, and a run that dies between the two leaves that
-message only in the record file the tool requires; a take whose answer is
-lost may leave it in neither, which the run reports rather than hides.
+closed: `write` on every receive endpoint is the power to put a business command
+on `ordering-commands` and have it mapped as system-initiated
+([§9.4](../09-messaging.md)). A replay is exactly that act, so no narrower grant
+replays; what bounds it is that only a person uses the account, with a password
+set for the incident and cleared after, under one audit line per message, and
+that no service ever holds it. A pattern cannot tell a queue from an exchange,
+so the same grant also lets the account purge a dead-letter queue, unbind it
+from its exchange so later faults are dropped unseen, and bind a dead-letter
+exchange to its live queue so faults loop; the tool does none of these, and they
+are accepted on the same terms. Provisioning it on a deployed broker is the
+vault's obligation on ADR-036's terms, stated and not checked here. The
+Management API has no move, so an executed run takes each message before it
+publishes it, and a run that dies between the two leaves that message only in
+the record file the tool requires; a take whose answer is lost may leave it in
+neither, which the run reports rather than hides.
 
 ---
 
