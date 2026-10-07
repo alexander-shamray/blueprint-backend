@@ -462,7 +462,8 @@ case "$mode" in
     git merge-base --is-ancestor "$recorded_head" HEAD ||
       { echo "HEAD does not descend from $recorded_head, the commit this helper replayed:" >&2
         echo "put that commit back under the branch and run 'publish' again; 'abort' only clears the" >&2
-        echo "record, and starting over needs $branch reset by hand to ${recorded_before:-its tip before the replay}" >&2
+        echo "record, and starting over needs $branch reset by hand to" >&2
+        echo "${recorded_before:-its tip before the replay}" >&2
         exit 9; }
     # The remote must still be where the guard left it. If it moved, this lease
     # was approved against a tip that no longer exists and re-approving it here
