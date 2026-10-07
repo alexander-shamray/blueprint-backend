@@ -228,7 +228,7 @@ change, so nothing standing asks for a reviewer the tree no longer holds.
 - Tag `archive/external-reviewers` on `main` and push it; remove the 18
   files from the tree and the references to them — the deny in
   `settings.json`, both sweeps' `disallowed-tools`, `guard-edit-target.py`
-  and its suite, `CLAUDE.md`'s command table, `harness-boundaries.md` — and
+  and its suite, `harness-boundaries.md` — and
   leave one line in `harness-boundaries.md` naming the tag and the
   `git checkout` that restores them.
 - A `branch-reviewer` agent with `Read`, `Grep` and `Glob` on the parent's
