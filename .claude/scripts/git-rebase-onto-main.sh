@@ -223,7 +223,9 @@ dropped_a_clean_hunk() {
   elif [ "$took" != "$ours" ]; then
     return 1
   fi
-  [ "$(git diff --numstat "$ours" "$theirs" | cut -f1)" != "-" ] || return 1
+  # merge-file refuses if any of the three is binary, and a pair reads "-" if either is.
+  [ "$(git diff --numstat "$from" "$ours" | cut -f1)" != "-" ] || return 1
+  [ "$(git diff --numstat "$from" "$theirs" | cut -f1)" != "-" ] || return 1
   redone=$(git merge-file --object-id --ours "$ours" "$from" "$theirs") || true
   [ -n "$redone" ] ||
     { echo "cannot replay the clean hunks of $path in $merge, so what a replay drops is unknown" >&2
