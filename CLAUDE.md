@@ -220,7 +220,8 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   `file:line`, not prose. `Explore` before `general-purpose` for a search;
   nothing is delegated that one `Grep` answers; a step's reads go in one
   message.
-- **The review loop is this, and only this.** A PR is reviewed in rounds of
+- **The review loop.** With the external reviewers switched off, and until
+  `docs/token-plan.md` step 4 archives them, a PR is reviewed in rounds of
   one read-only subagent each. Round 1 reads the branch diff; each later
   round reads the diff since the round before and the findings still open,
   not the tree. The diff is written under `artifacts/review/`, since
