@@ -31,6 +31,25 @@ COMMANDS = {
     "index_stats": ("stats", (), False),
 }
 
+# The options a subcommand's own `--help` lists a flag for, as option: (flag,
+# what it holds); an option missing here leaves its call the bare form.
+OPTIONS = {
+    "search": {"limit": ("--limit", "count"), "offset": ("--offset", "count"),
+               "token_budget": ("--token-budget", "count"), "mode": ("--mode", ("hybrid", "fts", "symbol", "vector")),
+               "raw": ("--raw", "switch")},
+    "explain": {"token_budget": ("--token-budget", "count"), "raw": ("--raw", "switch")},
+}
+
+
+def flag(option: tuple, value: object) -> list[str] | None:
+    """The words carrying one option's value, or None when it cannot."""
+    name, holds = option
+    if holds == "switch":
+        return [name] if value is True else [] if value is False else None
+    if holds == "count":
+        return [name, str(value)] if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+    return [name, value] if value in holds else None
+
 
 def checkout_root(start: Path) -> Path | None:
     """The checkout `start` sits in, by the `.git` at or above it."""
@@ -63,7 +82,8 @@ def command(tool: str, given: dict) -> str:
     sub, positional, tagged = COMMANDS[tool]
     bare = f"`{CBX} {sub}` with the call's arguments and `--json`"
     kind = given.get("kind")
-    known = {*positional, *(("session",) if tagged else ()), *(("kind",) if sub == "refs" else ())}
+    options = OPTIONS.get(sub, {})
+    known = {*positional, *options, *(("session",) if tagged else ()), *(("kind",) if sub == "refs" else ())}
     if any(value is not None and key not in known for key, value in given.items()) or (
             kind is not None and kind not in ("callers", "all")):
         return bare
@@ -75,6 +95,12 @@ def command(tool: str, given: dict) -> str:
         words.append(shlex.quote(value))
     if kind is not None:
         words += ["--kind", kind]
+    for key, option in options.items():
+        if given.get(key) is not None:
+            carrying = flag(option, given[key])
+            if carrying is None:
+                return bare
+            words += carrying
     session = given.get("session")
     if session is not None:
         if not carried(session):
