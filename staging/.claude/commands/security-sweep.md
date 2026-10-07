@@ -438,13 +438,13 @@ Each round is the review done once, end to end:
    mutate, must agree — and the audited tree never enters the one invocation
    that holds `gh-issue-create.sh`. A verdict of `unreadable-root` is a round
    error under *Never fail open*, not a dropped record, and is read before the
-   location check below. A verdict of `refuted` or `outside-root` drops the
-   candidate; a record that is not in the declared shape is dropped as malformed
-   and counted; and **a record whose `file` and `line` are not the candidate's
-   as dispatched is dropped the same way**, whatever its verdict says — two
-   readings that disagree on where the defect is have not agreed, and a
-   `confirmed` at another location is a redirect, not a confirmation. Drop what
-   does not survive.
+   shape and location checks below. A verdict of `refuted` or `outside-root`
+   drops the candidate; a record that is not in the declared shape is dropped as
+   malformed and counted; and **a record whose `file` and `line` are not the
+   candidate's as dispatched is dropped the same way**, whatever its verdict
+   says — two readings that disagree on where the defect is have not agreed, and
+   a `confirmed` at another location is a redirect, not a confirmation. Drop
+   what does not survive.
 3. **De-duplicate.** Check each survivor against the tracked set and the
    already-tracked rule above.
 4. **File.** One issue per survivor, most severe first, in the house body form:
