@@ -336,6 +336,33 @@ class TheAuditTrail(unittest.TestCase):
                               "destination": None, "reason": None}, line)
         self.assertEqual(err.splitlines(), log.read_text(encoding="utf-8").splitlines())
 
+    def test_a_take_that_fails_is_an_audit_line(self):
+        api = FakeApi({"ordering-commands_error": [message("m-1")], "ordering-commands": []})
+        real_call = api.__call__
+
+        def refuse_takes(method, path, body):
+            if (body or {}).get("ackmode") == "ack_requeue_false":
+                raise dead_letters.AnswerLost(f"POST {path}: the answer was lost (TimeoutError: timed out)")
+            return real_call(method, path, body)
+
+        _, _, err = run(refuse_takes, "discard", "ordering-commands_error", "--all", "--execute",
+                        "--record", str(self.root / "record.jsonl"))
+        [line] = audit_lines(err)
+        self.assertEqual("failed", line["action"])
+        self.assertIn("in neither ordering-commands_error nor --record", line["reason"])
+
+    def test_an_unrecorded_message_whose_return_fails_is_written_out_and_not_called_safe(self):
+        api = FakeApi({"ordering-commands_error": [message("m-1")], "ordering-commands": []},
+                      unbound={"ordering-commands_error"})
+        with mock.patch.object(dead_letters.Run, "record", side_effect=OSError("No space left on device")):
+            _, out, err = run(api, "discard", "ordering-commands_error", "--all", "--execute",
+                              "--record", str(self.root / "record.jsonl"), "--json")
+        [failed] = json.loads(out)["actions"]
+        self.assertIn("--record does not hold it", failed["reason"])
+        self.assertNotIn("the --record file holds it", failed["reason"])
+        [dumped] = [line for line in err.splitlines() if line.startswith("unrecorded ")]
+        self.assertEqual("m-1", json.loads(dumped[len("unrecorded "):])["message"]["properties"]["message_id"])
+
     def test_a_discarded_message_is_in_the_record_before_it_is_gone(self):
         api = FakeApi({"ordering-commands_error": [message("m-1")]})
         record = self.root / "record.jsonl"

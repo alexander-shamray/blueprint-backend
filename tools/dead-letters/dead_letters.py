@@ -316,16 +316,19 @@ def command_move(run: Run, verb: str) -> int:
         except AnswerLost as error:
             reason = f"{error}; the take may have removed a message that is now in neither {queue} nor --record"
             actions.append({"message_id": None, "action": "failed", "destination": None, "reason": reason})
+            run.audit(queue, {}, "failed", None, reason)
             break
         except Refused as error:
             actions.append({"message_id": None, "action": "failed", "destination": None, "reason": str(error)})
+            run.audit(queue, {}, "failed", None, str(error))
             break
         if message is None:
             break
         try:
             run.record(queue, message)
         except OSError as error:
-            put_back(run, queue, message, "failed", f"--record could not be written: {error}", actions)
+            put_back(run, queue, message, "failed", f"--record could not be written: {error}", actions,
+                     recorded=False)
             break
         identity = message_id(message)
         if wanted is not None and identity not in wanted:
@@ -370,17 +373,22 @@ def refusal(message: dict, endpoint: str) -> str | None:
     return None
 
 
-def put_back(run: Run, queue: str, message: dict, action: str, reason: str, actions: list[dict]) -> None:
+def put_back(run: Run, queue: str, message: dict, action: str, reason: str, actions: list[dict],
+             recorded: bool = True) -> None:
     """Return a taken message to the queue it came from, unchanged, at its tail."""
+    held = "the --record file holds it" if recorded else "--record does not hold it, so it is written whole to stderr"
     try:
         returned: bool | None = run.broker.publish(queue, message)
     except AnswerLost as error:
         returned, reason = None, f"{reason}; returning it lost its answer ({error}), so it may be back on {queue}, " \
-                                 f"and the --record file holds it"
+                                 f"and {held}"
     except Refused as error:
         returned, reason = False, f"{reason}; returning it failed too: {error}"
     if returned is False:
-        reason = f"{reason}; it is not on {queue} any more and the --record file holds it"
+        reason = f"{reason}; it is not on {queue} any more and {held}"
+    if returned is not True and not recorded:
+        # The last copy this run holds; prefixed, so no reader of the audit lines takes it for one.
+        print("unrecorded " + json.dumps({"queue": queue, "message": message}), file=run.err)
     actions.append({"message_id": message_id(message), "action": action, "destination": queue, "reason": reason})
     run.audit(queue, message, action, queue, reason)
 

@@ -57,7 +57,7 @@ syncs that file to disk, and only then publishes it:
 - **a message the run did not select** back to the queue it came from, through
   that queue's own exchange, at the tail.
 
-**Two windows remain, and both are around the take.** A run that dies
+**Three windows remain, and all are around the take.** A run that dies
 between the take and the publish has removed a message from the broker and
 left it in the record file, and nowhere else; republish it from the record by
 hand. That window is why `--record` is required rather than offered, and why a
@@ -67,7 +67,10 @@ anything is purged. The other is a take whose answer never arrives — a
 timeout or a reset after the request was sent — which may have removed a
 message the tool never saw: the run stops and reports it as `failed`, saying
 the message may be in neither the queue nor the record, and only the
-broker's own statistics can then say whether one left.
+broker's own statistics can then say whether one left. The third is a record
+that cannot be written after the take: the message is returned, and if the
+return fails too it is in neither place, so the run writes it whole to
+stderr on a line beginning `unrecorded`, and that line is the last copy.
 
 A run takes at most as many messages as its first read saw, which `--limit`
 bounds (100 by default), and stops early once every named id is handled, or
@@ -127,7 +130,13 @@ threat
 [ADR-036](../../docs/backend-architecture/adr/ADR-036-the-broker-has-a-per-service-identity.md)
 removed from the services. A replay is exactly that act, so the grant cannot
 be narrower than it; what bounds it is that a person uses it, under the audit
-line below, and no service ever does.
+line below, and no service ever does. Because a pattern cannot tell a queue
+from an exchange, the grant also admits three acts the tool never makes —
+purging a dead-letter queue, unbinding it from its exchange so later faults
+are dropped unseen, and binding a dead-letter exchange to its live queue so
+faults loop — and
+[ADR-072](../../docs/backend-architecture/adr/ADR-072-a-person-replays-dead-letters-as-a-broker-account-of-its-own.md)
+accepts them on the same terms.
 
 **It ships with no password.** `deploy/compose/rabbitmq/definitions.json`
 declares it with an empty `password_hash`, so it exists with this grant on the
@@ -144,8 +153,9 @@ On a deployed broker it is provisioned from the vault, on the terms ADR-036
 sets for every account: an obligation this repository states and does not
 check. **`check_permissions.py` holds the grant to the code**, in
 `check_operator`: the dead letters and endpoints of every receive endpoint the
-services declare are covered, nothing in the table's last column is, and the
-password hash is empty.
+services declare are covered; no `configure`, no read on a live or `_delay`
+queue, and no write on a contract, framework, private, `_delay` or default
+exchange is; and the password hash is empty.
 
 ## The credential
 
