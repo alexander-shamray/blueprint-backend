@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Catalog.Application.Tests;
 
-/// <summary>The price rules are <c>PublishProductValidator</c>'s, so these cases show they reach this command.</summary>
+/// <summary>The price rules are <c>PriceRules</c>', so these cases show they reach this command.</summary>
 public class ChangePriceValidatorTests
 {
     private static readonly ChangePriceValidator Validator = new();
