@@ -1454,11 +1454,15 @@ cutoff `RetentionPurgeService` computes in SQL are two halves of one guarantee
 so a service scaffolded with the table and without the default ages its markers
 on the writing pod's clock while the purge ages them on the server's — the skew
 that migration exists to remove, reintroduced in every new service by omission.
-**The last one adds that table's `rowversion` and travels on the sharpest
-version of the argument yet**: `RetentionPurgeService` names the column in both
-of its marker statements, so a service scaffolded without the migration fails
-its own purge with `Invalid column name 'RowVersion'` on the first pass
+**`AddIdempotencyMarkerRowVersion` adds that table's `rowversion` and travels
+on the sharpest version of the argument yet**: `RetentionPurgeService` names
+the column in both of its marker statements, so a service scaffolded without
+the migration fails its own purge with `Invalid column name 'RowVersion'` on
+the first pass
 ([ADR-041](adr/ADR-041-the-markers-delete-identifies-a-row-by-a-rowversion-not-a-timestamp.md)).
+`AddOutboxTraceContext` travels on the same argument one table over: the
+outbox dispatcher's claim reads both trace columns ([§9.4](09-messaging.md)),
+so a publishing service without them fails its first claim.
 It then edits the shared files: `Platform.slnx`, the Compose index — one
 `include:` line for the unit it just created — the `infra-only` override, which
 excludes both halves of the pair, `.env.example`
