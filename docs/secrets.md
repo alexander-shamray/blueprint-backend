@@ -236,14 +236,14 @@ the procedure:
   External Secrets to reconcile, restart the host's pods, confirm, then revoke
   the old key at the provider.
 - **Where it holds one at a time**, as a relay with a single SMTP password
-  commonly does, §15.4's order — restart before the old credential is
+  commonly does, §15.3's order — restart before the old credential is
   revoked — cannot be met, because changing the key at the provider is the
   revocation. Change it there, update the vault, then reconcile and restart at
   once. Every call between the change and the restart is refused, and each
-  host reads the refusal as the party being down: Shipping's and
-  Notifications' workers back the row off, and Payments' kill switch stops its
-  endpoint once enough messages have exhausted their retries. Keep that gap
-  short.
+  host waits it out as it would an outage: Shipping's and Notifications'
+  workers back the row off, and Payments' kill switch stops its endpoint once
+  enough messages have exhausted their retries. Notifications alone counts the
+  refusal apart from an outage, as `cause=credential`. Keep that gap short.
 
 Confirm the same way for both. For Payments, `payments.provider.unavailable`
 stays flat while authorisations succeed; for Shipping,
@@ -251,7 +251,7 @@ stays flat while authorisations succeed; for Shipping,
 Notifications, `notifications.mail.unavailable` with `cause=credential` stays
 flat while notifications leave `Pending`. A flat count is also what a host that
 has called nothing since its restart shows, so the work moving is the positive
-signal. **After a leak, the overlap is the leak's window**: §15.4's order keeps
+signal. **After a leak, the overlap is the leak's window**: §15.3's order keeps
 the old key live until the restart, so run the two-key route's steps without
 pause, or take the one-key route's outage to close it sooner.
 
