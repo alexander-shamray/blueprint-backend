@@ -97,18 +97,18 @@ either end of it.
 > never reaches a service, so there is nothing at a host to observe it with.
 > **Neither is observed at a host and both are now observed in the realm**, and
 > the distinction is worth keeping: ADR-040 bounds what a token can cost, and
-> [ADR-042](adr/ADR-042-the-deployed-realm-is-checked-at-deploy-time.md)
-> reads the configuration that issued it. Both settings remain obligations on
-> whoever provisions the deployed realm — a repository cannot make somebody
-> else's realm correct — but a realm that fails to hold them now fails the
-> rollout instead of passing unnoticed
+> [ADR-042](adr/ADR-042-the-deployed-realm-is-checked-at-deploy-time.md) reads
+> the configuration that issued it. Both settings remain obligations on whoever
+> provisions the deployed realm — a repository cannot make somebody else's realm
+> correct — but a realm that fails to hold them now fails the rollout instead of
+> passing unnoticed
 > ([#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)).
 > What was left was the window between rollouts, and since
-> [ADR-043](adr/ADR-043-the-deployed-realm-is-checked-between-rollouts.md)
-> the same predicate reads the deployed realm on a schedule as well, so a realm
+> [ADR-043](adr/ADR-043-the-deployed-realm-is-checked-between-rollouts.md) the
+> same predicate reads the deployed realm on a schedule as well, so a realm
 > edited after a rollout is seen at the next scheduled run — nominally within
-> the hour, and only as reliably as GitHub runs a schedule — rather than at
-> the next deploy
+> the hour `.github/workflows/realm.yml`'s `schedule` sets, and only as reliably
+> as GitHub runs a schedule — rather than at the next deploy
 > ([#176](https://github.com/alexander-shamray/blueprint-backend/issues/176),
 > closed).
 >
@@ -116,10 +116,11 @@ either end of it.
 > by the SSO session, so the user sees a login when that session has ended
 > rather than when the access token expires. **The residual is an access token,
 > and it is stated rather than closed:** an XSS still yields one, which a
-> service will accept for up to the 330 seconds §11.3 derives below — the
-> lifetime plus the skew, not the lifetime alone, and since ADR-040 a ceiling
-> every host enforces rather than a figure it assumes the realm honoured. What
-> bounds it is that number and nothing else — there is no revocation path
+> service will accept for up to `RevocationBound`'s 330 seconds, which §11.3
+> derives below — the lifetime plus the skew, not the lifetime alone, and since
+> ADR-040 a ceiling every host enforces rather than a figure it assumes the
+> realm honoured. What bounds it is that number and nothing else — there is no
+> revocation path
 > ([ADR-033](adr/ADR-033-revocation-is-bounded-by-the-token-lifetime-and-no-denylist-exists.md)),
 > which is the same fact §11.3 states from the other side.
 >
@@ -1377,7 +1378,7 @@ every retry replays the token the first attempt built — see the ordering in
 >
 > **It is not that the token is newly minted, and saying so was the last thing
 > wrong with this paragraph.** `CachingTokenClient` serves a cached token until
-> its expiry guard, so two attempts milliseconds apart normally present
+> its `ExpiryGuard`, so two attempts milliseconds apart normally present
 > identical bytes — which is the cache working. What the ordering buys is the
 > narrower case of a token that expired *between* attempts. The test's cache
 > answers differently every time precisely because a constant one cannot show
@@ -1434,7 +1435,7 @@ satisfy.
 > **The realm file is a full Keycloak export, and shrinking it breaks the
 > platform silently.** A hand-written import naming only the `commerce-api`
 > client scope is the obvious first attempt — it is thirty readable lines
-> against two and a half thousand — and Keycloak treats a `clientScopes` array
+> against the export's thousands — and Keycloak treats a `clientScopes` array
 > as the **complete** set: supply one and the built-ins are never created. The
 > realm imports, the login succeeds, and the access token loses `sub`,
 > `preferred_username`, `email` and `realm_access` at once. `sub` is the one
