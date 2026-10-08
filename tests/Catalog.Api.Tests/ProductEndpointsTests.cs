@@ -137,7 +137,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         // In the platform's one error shape (§10.5), which a bodiless challenge gets from UseStatusCodePages.
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         int rows = await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.Products");
         rows.ShouldBe(0, "a refused request must not reach the handler");
@@ -152,7 +152,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             permissions: "catalog:read");
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         int rows = await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.Products");
         rows.ShouldBe(0, "a refused request must not reach the handler");
@@ -322,7 +322,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         // The code is what separates this 404 from a route that matched nothing (§10.5).
         string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);

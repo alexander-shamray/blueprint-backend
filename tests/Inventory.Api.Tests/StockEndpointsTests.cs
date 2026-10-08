@@ -113,7 +113,7 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         get.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        get.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        get.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
         string body = await get.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         body.ShouldContain("\"code\":\"stock.not_found\"");
     }

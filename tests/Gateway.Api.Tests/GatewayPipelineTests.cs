@@ -75,7 +75,7 @@ public sealed class GatewayPipelineTests(GatewayFactory factory) : IClassFixture
     /// <summary>§10.5's one error shape, which a 401 or 403 gets only from <c>UseStatusCodePages</c>.</summary>
     private static async Task ShouldBeProblemJson(HttpResponseMessage response)
     {
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         using JsonDocument body =
             JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));

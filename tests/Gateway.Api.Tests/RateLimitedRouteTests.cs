@@ -40,7 +40,7 @@ public sealed class RateLimitedRouteTests(StubDestination stub) : IClassFixture<
         HttpResponseMessage rejected = await client.GetAsync(PublicRoute, ct);
 
         rejected.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
-        rejected.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        rejected.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         // Present, not rounded: a minute's window leaves tens of seconds, which floor and ceiling both pass.
         rejected.Headers.RetryAfter.ShouldNotBeNull();
