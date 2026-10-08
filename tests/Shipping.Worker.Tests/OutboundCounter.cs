@@ -15,6 +15,12 @@ internal static class OutboundCounter
         return Of(services, "shipping.carrier.unavailable");
     }
 
+    public static OutboundCount NotYetKnown(IServiceProvider services)
+    {
+        services.GetRequiredService<CarrierMetrics>();
+        return Of(services, "shipping.carrier.not_yet_known");
+    }
+
     public static OutboundCount Refused(IServiceProvider services)
     {
         services.GetRequiredService<AddressMetrics>();

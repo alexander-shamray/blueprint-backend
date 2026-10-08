@@ -229,15 +229,19 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     }
 
     [Fact]
-    public async Task A_carrier_that_has_not_heard_of_the_booking_answers_an_empty_page()
+    public async Task A_carrier_that_has_not_heard_of_the_booking_answers_an_empty_page_and_is_counted()
     {
         _server
             .Given(Request.Create().WithPath("/v1/shipments/crr_new/events").UsingGet())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(404));
+        using OutboundCount notYetKnown = OutboundCounter.NotYetKnown(_factory.Services);
+        using OutboundCount unavailable = OutboundCounter.Unavailable(_factory.Services);
 
         (await Carrier().GetEventsAsync("crr_new", TestContext.Current.CancellationToken)).ShouldBeEmpty();
         Calls("/v1/shipments/crr_new/events").ShouldBe(1, "a 404 is an answer, and the pipeline does not retry it");
+        notYetKnown.Value.ShouldBe(1, "a missing route answers 404 too, and only the count tells a fleet of them");
+        unavailable.Value.ShouldBe(0, "an answer, not a fault, so the row does not back off");
     }
 
     [Theory]
@@ -384,6 +388,68 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
 
         counted.Value.ShouldBe(1, "one attempt, answered with a body this adapter cannot read");
+    }
+
+    [Theory]
+    [InlineData("https://evil.example/track")]
+    [InlineData("TRK@evil.example")]
+    [InlineData("TRK.1")]
+    [InlineData("TRK  12")]
+    [InlineData(" TRK1")]
+    [InlineData("TRK:1")]
+    public async Task A_tracking_number_outside_the_contracts_alphabet_is_no_booking(string tracking)
+    {
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+            .AtPriority(0)
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(201)
+                    .WithBodyAsJson(new { status = "booked", reference = "crr_x", trackingNumber = tracking }));
+        using OutboundCount counted = OutboundCounter.Unavailable(_factory.Services);
+
+        await Should.ThrowAsync<CarrierUnavailableException>(() =>
+            Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(1, "the despatch email carries it word for word, so only the alphabet passes (ADR-084)");
+    }
+
+    [Theory]
+    [InlineData("TRK 12 34")]
+    [InlineData("1Z999-AA_10")]
+    [InlineData("KZ-ӘҒҚ-0042")]
+    public async Task A_tracking_number_in_the_contracts_alphabet_is_booked(string tracking)
+    {
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+            .AtPriority(0)
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(201)
+                    .WithBodyAsJson(new { status = "booked", reference = "crr_x", trackingNumber = tracking }));
+
+        (await Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken))
+            .ShouldBe(new BookingResult.Booked("crr_x", tracking));
+    }
+
+    [Theory]
+    [InlineData("crr_\r\nforged")]
+    [InlineData("crr_\u202Ex")]
+    public async Task A_reference_holding_a_control_or_bidi_character_is_no_booking(string reference)
+    {
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+            .AtPriority(0)
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(201)
+                    .WithBodyAsJson(new { status = "booked", reference, trackingNumber = "TRK1" }));
+
+        await Should.ThrowAsync<CarrierUnavailableException>(() =>
+            Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
     }
 
     [Fact]

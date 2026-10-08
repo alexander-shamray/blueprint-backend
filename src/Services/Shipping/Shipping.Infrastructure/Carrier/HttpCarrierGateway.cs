@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Common.Contracts.Shipping.V1;
+using Common.Infrastructure;
 using Polly;
 using Shipping.Application.Carrier;
 using Shipping.Domain.Shipments;
@@ -47,16 +49,19 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
 
         if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
         {
-            return answer is { Status: "refused", Code: { } code } && Recordable(code, CarrierLimits.MaxReasonLength)
+            return answer is { Status: "refused", Code: { } code } &&
+                ThirdPartyText.Recordable(code, CarrierLimits.MaxReasonLength)
                 ? new BookingResult.Refused(code)
                 : throw Unavailable("The carrier refused with a body that is not a refusal.");
         }
 
-        // The reference is a later path segment, and EscapeDataString leaves a dot segment to resolve away.
+        // The reference is a later path segment, and EscapeDataString leaves a dot segment to resolve away. The
+        // tracking number reaches the customer, so it is held to the contract's alphabet too (ADR-084).
         return answer is { Status: "booked", Reference: { } reference, TrackingNumber: { } tracking } &&
-            Recordable(reference, CarrierLimits.MaxReferenceLength) &&
+            ThirdPartyText.Recordable(reference, CarrierLimits.MaxReferenceLength) &&
             reference is not ("." or "..") &&
-            Recordable(tracking, CarrierLimits.MaxTrackingNumberLength)
+            ThirdPartyText.Recordable(tracking, CarrierLimits.MaxTrackingNumberLength) &&
+            TrackingNumbers.IsWellFormed(tracking)
             ? new BookingResult.Booked(reference, tracking)
             : throw Unavailable("The carrier booked with a body that is not a booking.");
     }
@@ -96,9 +101,13 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
 
         using HttpResponseMessage response = await SendAsync(message, ct);
 
-        // An answer, not a fault: the carrier has not heard of the booking before its first scan.
+        // An answer, not a fault: the carrier has not heard of the booking before its first scan. Counted, because
+        // a missing route answers the same and only a fleet of them, steadily, tells the two apart.
         if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            metrics.NotYetKnown();
             return [];
+        }
 
         if (response.StatusCode != HttpStatusCode.OK)
             throw Unavailable($"The carrier answered an events read with {(int)response.StatusCode}.");
@@ -119,7 +128,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
     private CarrierEvent Translate(EventAnswer answer, DateTimeOffset ceiling)
     {
         if (answer is not { Id: { } id, Status: { } status, OccurredAt: { } occurredAt } ||
-            !Recordable(id, CarrierLimits.MaxCarrierEventIdLength))
+            !ThirdPartyText.Recordable(id, CarrierLimits.MaxCarrierEventIdLength))
         {
             throw Unavailable("The carrier sent an event this adapter cannot key.");
         }
@@ -139,10 +148,6 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
         "delivered" => TrackingStatus.Delivered,
         _ => TrackingStatus.Unrecognised
     };
-
-    // A blank or over-long string records nothing, so it is refused before a row is written.
-    private static bool Recordable(string value, int maxLength) =>
-        !string.IsNullOrWhiteSpace(value) && value.Length <= maxLength;
 
     private async Task<T?> ReadAsync<T>(HttpResponseMessage response, string act, CancellationToken ct)
     {
