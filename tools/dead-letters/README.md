@@ -8,7 +8,8 @@ RabbitMQ's Management API, the broker account it runs as, and the JSON it
 prints for anything that drives it.
 
 ```bash
-export DEAD_LETTERS_CREDENTIALS="$HOME/.rabbit.curl"   # the runbooks' curl config
+read -rs -p 'dead-letter-operator password: ' DEAD_LETTERS_PASSWORD; echo
+export DEAD_LETTERS_PASSWORD          # read, so it reaches no shell history
 py -3.12 tools/dead-letters/dead_letters.py list
 py -3.12 tools/dead-letters/dead_letters.py inspect ordering-commands_error --limit 5
 py -3.12 tools/dead-letters/dead_letters.py replay ordering-commands_error --message-id <id>
@@ -162,8 +163,9 @@ exchange is; and the password hash is empty.
 **Never on the command line**, for the reason the runbooks give: `argv` is
 visible to every user on the box. In order:
 
-1. `--credentials FILE`, or `DEAD_LETTERS_CREDENTIALS`, naming the runbooks'
-   mode-0600 curl config — one line, `user = "NAME:PASSWORD"`;
+1. `--credentials FILE`, or `DEAD_LETTERS_CREDENTIALS`, naming a mode-0600
+   curl config — one line, `user = "NAME:PASSWORD"`, with a backslash or a
+   double quote in it escaped as curl's config syntax escapes it;
 2. `DEAD_LETTERS_PASSWORD`, with `DEAD_LETTERS_USER` defaulting to
    `dead-letter-operator`.
 
