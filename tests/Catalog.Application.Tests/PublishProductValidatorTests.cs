@@ -113,7 +113,7 @@ public class PublishProductValidatorTests
             nameof(PublishProductCommand.ThumbnailUrl),
             Valid() with { ThumbnailUrl = "data:text/html;base64,PHNjcmlwdD4=" }
         },
-        // A scheme with no use here; the rule is an allow-list of two rather than a deny-list.
+        // A scheme with no use here; the rule is an allow-list of one, https, rather than a deny-list.
         { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "file:///etc/passwd" } },
         // Mixed content on the buyer's https page, and readable on the wire (ADR-085).
         { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "http://cdn.example/desk.jpg" } },
