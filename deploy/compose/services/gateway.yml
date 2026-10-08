@@ -7,6 +7,9 @@ services:
     build:
       context: ../../..
       dockerfile: src/Gateway/Gateway.Api/Dockerfile
+    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
+    read_only: true
+    tmpfs: [ /tmp ]
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       # The authority, because the gateway validates JWTs like every other host
