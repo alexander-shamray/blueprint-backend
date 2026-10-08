@@ -68,6 +68,18 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_lower_case_currency_is_quoted_in_the_upper_case_an_order_carries()
+    {
+        using HttpClient client = Caller();
+
+        QuoteResponse? quote = await client.Quote("gbp", TestContext.Current.CancellationToken, (Chair, 1));
+
+        quote.ShouldNotBeNull();
+        quote.Currency.ShouldBe("GBP", "Catalog and Ordering return the code upper case, and the quote is compared");
+        quote.Total.ShouldBe(49.99m);
+    }
+
+    [Fact]
     public async Task A_product_with_no_price_is_named_rather_than_dropped()
     {
         using HttpClient client = Caller();
