@@ -580,6 +580,22 @@ class TheBrowserClientsCode(Fixture):
         found = self.one(realm(browser(redirectUris=["https://user:hunter2@*.example/"])))
         self.assertNotIn("hunter2", found)
 
+    def test_a_relative_redirect_is_judged_as_its_root_url_resolves_it(self):
+        for root in ("http://spa.example", "https://*.spa.example", 7):
+            with self.subTest(root=root):
+                found = self.one(realm(browser(rootUrl=root, redirectUris=["/*"])))
+                self.assertIn("redirectUris entry at index 0", found)
+
+    def test_a_relative_redirect_on_a_named_https_root_is_accepted(self):
+        client = browser(rootUrl="https://spa.example/", redirectUris=["/*"])
+        self.assertEqual(self.problems(realm(client)), [])
+
+    def test_a_relative_redirect_on_keycloak_own_root_is_accepted(self):
+        for root in (*realm_check.KEYCLOAK_ROOTS, ""):
+            with self.subTest(root=root):
+                client = browser(rootUrl=root, redirectUris=["/realms/commerce/account/*"])
+                self.assertEqual(self.problems(realm(client)), [])
+
 
 class EveryClient(Fixture):
     """What holds on clients no constant names: built-in ones and new ones."""
@@ -1618,6 +1634,10 @@ class WhatTheGateHolds(unittest.TestCase):
         self.assertEqual(client["webOrigins"], ["https://spa.example"])
         self.assertEqual(
             realm_check.check_realm(held, realm_check.DEPLOYED, 300), [])
+
+    def test_the_root_url_survives_to_resolve_a_relative_redirect(self):
+        held = realm_check.judged({"clients": [{"clientId": "x", "rootUrl": "https://a.example"}]})
+        self.assertEqual(held["clients"][0]["rootUrl"], "https://a.example")
 
     def test_an_absent_key_stays_absent(self):
         """Half the checks turn on absence, so a projection must not default one."""
