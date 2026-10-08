@@ -1459,8 +1459,10 @@ price history with it.
 > one before it, and its row version serialises the writes, so one product's
 > stamps follow the order they committed in, whichever replica's clock each
 > read ([ADR-075](adr/ADR-075-a-products-events-are-stamped-in-the-order-its-writes-committed.md)).
-> Two prices for one product never share a stamp, and a tie the strict
-> comparison does see is a redelivery, tying with itself.
+> Two prices for one product then never share a stamp, and a tie the strict
+> comparison does see is a redelivery, tying with itself; the record names
+> the one window where the order does not yet hold, beside the previous
+> release.
 >
 > A **watermark** rather than a flag, for the reason `UpdatedAt` is a
 > comparison: delivery is unordered, so what the projection must refuse is a
@@ -1470,8 +1472,9 @@ price history with it.
 > there, and a price change after it is refused at the source
 > ([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)).
 > "Newer" is the stamps' order, and the stamps follow the commits', so a price
-> committed before a withdrawal is never stamped after it, even on a replica
-> whose clock runs ahead.
+> committed before a withdrawal is not stamped after it, even on a replica
+> whose clock runs ahead — once every replica runs the release that orders
+> them; ADR-075 names the window before that.
 >
 > **The upsert's read of that watermark needs its own `HOLDLOCK`, and taking
 > it first is what stops the two statements deadlocking.** The answer that
