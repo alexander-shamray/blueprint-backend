@@ -1,4 +1,4 @@
-using System.Globalization;
+using Common.Application;
 using FluentValidation;
 
 namespace Catalog.Application.Products.PublishProduct;
@@ -34,25 +34,8 @@ public sealed class PublishProductValidator : AbstractValidator<PublishProductCo
     private static bool BeAnHttpsUrl(string? candidate) =>
         Uri.TryCreate(candidate, UriKind.Absolute, out Uri? uri) && uri.Scheme == Uri.UriSchemeHttps;
 
-    // Every buyer reads the name, so one that reads differently from what it holds is a spoof (ADR-085). Per code
-    // point, so a pair is one character and a lone half reads as Surrogate. Null and blank are NotEmpty's.
-    private static bool BeVisibleText(string? name)
-    {
-        if (string.IsNullOrEmpty(name))
-            return true;
-
-        for (int i = 0; i < name.Length; i++)
-        {
-            if (CharUnicodeInfo.GetUnicodeCategory(name, i) is UnicodeCategory.Control or UnicodeCategory.Format or
-                UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator or UnicodeCategory.Surrogate)
-            {
-                return false;
-            }
-
-            if (char.IsHighSurrogate(name[i]))
-                i++;
-        }
-
-        return true;
-    }
+    // Every buyer reads the name, so one that reads differently from what it holds is a spoof (ADR-085): the
+    // categories ThirdPartyText refuses (ADR-084). Its bound is MaximumLength's, and null and blank are NotEmpty's.
+    private static bool BeVisibleText(string? name) =>
+        string.IsNullOrWhiteSpace(name) || ThirdPartyText.Recordable(name, int.MaxValue);
 }
