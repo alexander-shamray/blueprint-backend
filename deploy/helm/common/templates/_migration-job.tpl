@@ -49,7 +49,7 @@ spec:
         runAsNonRoot: true
       containers:
         - name: migrate
-          image: "{{ include "commerce.require" (list .Values.image.registry "image.registry is required: cleared, the hook image has no host and the migration never runs (§7.4).") }}/{{ $migrator }}:{{ $tag }}"
+          image: "{{ include "commerce.require" (list .Values.image.registry "image.registry is required: cleared, the hook image has no host and the migration never runs (§7.4).") }}/{{ $migrator }}:{{ $tag }}{{ include "commerce.digest" (list .Values.image.migratorDigest "image.migratorDigest") }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false

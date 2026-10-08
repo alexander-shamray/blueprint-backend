@@ -611,6 +611,11 @@ registry exists, the job that pushes signs each digest keyless and attaches its
 SBOM and provenance, and the rollout verifies the signature before Helm runs
 ([ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md));
 until then nothing is signed or verified, and the build stops at the SBOM.
+**A verified digest is what a release will pull.** Every chart takes
+`image.digest` and `image.migratorDigest` and pins the reference to them when
+they are set; the rollout passes them once there is a registry to resolve them
+from
+([ADR-081](adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md)).
 
 ## 15.3 Deployment
 
