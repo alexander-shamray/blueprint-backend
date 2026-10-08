@@ -187,7 +187,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         problem.ShouldNotBeNull();
-        problem.Extensions["code"]?.ToString().ShouldBe(
+        problem.Extensions["code"].ShouldNotBeNull().ToString().ShouldBe(
             "order.already_shipped",
             "the code is a §9.8 dimension value and splitting it would halve the series");
         // The exact string, since this customer-facing sentence must be true of both statuses.
