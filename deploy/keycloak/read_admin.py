@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-"""Fetch a deployed realm through Keycloak's admin API and write it out in an export's shape.
+"""Fetch a deployed realm through Keycloak's admin API and write it in an export's shape.
 
-`realm_check.py` decides and this fetches, `deploy/canary`'s split, so one predicate
-judges this and §14.1's export alike (deploy/keycloak/README.md). Stdlib `urllib` only.
-
-    py -3.12 deploy/keycloak/read_admin.py --out realm.json
-"""
+`realm_check.py` decides, so one predicate judges this and §14.1's export alike
+(deploy/keycloak/README.md): `py -3.12 deploy/keycloak/read_admin.py --out realm.json`."""
 
 from __future__ import annotations
 
