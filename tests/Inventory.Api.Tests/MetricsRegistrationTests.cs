@@ -7,6 +7,7 @@ using Common.Application;
 using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -144,9 +145,12 @@ public class MetricsRegistrationTests
         services.AddMetrics();
         services.AddLogging();
 
+        // Stats that answer, since a failed read emits nothing and a listener enabling these gauges would pass.
+        services.Replace(ServiceDescriptor.Singleton<IOutboxStats>(new ForeignOutboxStats()));
+
         using ServiceProvider foreign = services.BuildServiceProvider();
 
-        // Registers gauges named like this test's, on the same meter name, over stats that fail on any read.
+        // Registers gauges named like this test's, on the same meter name, over stats the stub's values never match.
         foreign.GetRequiredService<OutboxMetrics>().ShouldNotBeNull();
 
         using IMeterFactory factory = new ServiceCollection()
@@ -291,6 +295,16 @@ public class MetricsRegistrationTests
             lock (this.errors)
                 this.errors.Add(exception);
         }
+    }
+
+    /// <summary>A value <see cref="StubOutboxStats"/> never answers, so a collected foreign gauge shows.</summary>
+    private sealed class ForeignOutboxStats : IOutboxStats
+    {
+        public double OldestAgeSeconds(OutboxLane lane) => 99;
+
+        public int PendingCount(OutboxLane lane) => 99;
+
+        public int AbandonedCount(OutboxLane lane) => 99;
     }
 
     /// <summary>A distinct number per lane and per question, so no value is read off the wrong call.</summary>
