@@ -57,6 +57,11 @@ records, not a round trip whose return leg is an event.
 | **Shipping** | Supporting | Isolates the carrier's API behind an anti-corruption layer, `ICarrierGateway`: a carrier's change lands in its adapter on the carrier's schedule, and never in the domain. |
 | **Notifications** | Generic | Not a differentiator. Would be replaced by an off-the-shelf product without regret. |
 
+Each anti-corruption layer holds the strings its third party supplies to a
+character set before it records one, and the tracking number to the Shipping
+contract's own alphabet
+([ADR-084](adr/ADR-084-a-third-partys-answer-is-held-to-a-character-set-before-it-is-recorded.md)).
+
 ## 3.2 Service responsibilities
 
 Each service is described by what it owns, what it publishes, and what it

@@ -90,6 +90,7 @@ decision looks wrong.
 | **ADR-081** | [A workload image may be pinned by digest, and the rollout pins it once a registry exists](adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md) |
 | **ADR-082** | [Every pod meets Pod Security "restricted", with a read-only root filesystem](adr/ADR-082-every-pod-meets-pod-security-restricted-with-a-read-only-root-filesystem.md) |
 | **ADR-083** | [The edge starts a root trace, and a caller's trace context stops there](adr/ADR-083-the-edge-starts-a-root-trace-and-a-callers-trace-context-stops-there.md) |
+| **ADR-084** | [A third party's answer is held to a character set before it is recorded](adr/ADR-084-a-third-partys-answer-is-held-to-a-character-set-before-it-is-recorded.md) |
 | **ADR-085** | [A published product's name is visible text, and its thumbnail is https from a host the seller chooses](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md) |
 
 ---
