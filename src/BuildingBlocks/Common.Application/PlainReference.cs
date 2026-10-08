@@ -1,11 +1,13 @@
+using System.Globalization;
 using System.Text;
 
 namespace Common.Application;
 
-/// <summary>A reference a third party mints and a customer reads, in an alphabet that links nowhere (ADR-084).</summary>
+/// <summary>A reference a third party mints and a customer reads, in an alphabet that links nowhere.</summary>
 /// <remarks>
 /// Letters and digits in any script, with hyphens, underscores and single spaces between them: no scheme, slash, dot
-/// or at sign a mail client could make a link of. Here, not in the contract, which §4.3 keeps free of validation.
+/// or at sign a mail client could make a link of (ADR-084). A modifier letter is refused too, as several are drawn
+/// as a dot or a colon. Here, not in the contract, which §4.3 keeps free of validation.
 /// </remarks>
 public static class PlainReference
 {
@@ -19,12 +21,15 @@ public static class PlainReference
         foreach (Rune rune in value.EnumerateRunes())
         {
             bool joiner = rune.Value is '-' or '_' || (rune.Value == ' ' && previous.Value != ' ');
-            if (!(Rune.IsLetterOrDigit(rune) || (joiner && previous != default)))
+            if (!(IsCharacter(rune) || (joiner && previous != default)))
                 return false;
 
             previous = rune;
         }
 
-        return Rune.IsLetterOrDigit(previous);
+        return IsCharacter(previous);
     }
+
+    private static bool IsCharacter(Rune rune) =>
+        Rune.IsLetterOrDigit(rune) && Rune.GetUnicodeCategory(rune) != UnicodeCategory.ModifierLetter;
 }
