@@ -137,7 +137,7 @@ public sealed class CompressedResponseTests(StubDestination stub) : IClassFixtur
             ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        response.Headers.CacheControl?.NoTransform.ShouldBe(
+        response.Headers.CacheControl.ShouldNotBeNull().NoTransform.ShouldBe(
             true,
             "the directive survived the hop, so this is a statement about the middleware and not about YARP");
 
