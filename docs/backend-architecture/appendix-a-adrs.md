@@ -87,6 +87,7 @@ decision looks wrong.
 | **ADR-078** | [The realm check requires view-realm](adr/ADR-078-the-realm-check-requires-view-realm.md) |
 | **ADR-080** | [A NetworkPolicy peer is refused wider than a /8, or with selectors that name nothing](adr/ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-or-with-selectors-that-name-nothing.md) |
 | **ADR-081** | [A workload image may be pinned by digest, and the rollout pins it once a registry exists](adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md) |
+| **ADR-082** | [Every pod meets Pod Security "restricted", with a read-only root filesystem](adr/ADR-082-every-pod-meets-pod-security-restricted-with-a-read-only-root-filesystem.md) |
 
 ---
 
