@@ -123,8 +123,9 @@ PUSH_ALLOWED_FLAGS = {
 }
 
 # A ref this guard is willing to read: no `*`, no `+`, no `:` beyond the one
-# separator, nothing that could be a pattern or an option.
-SAFE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+# separator, nothing that could be a pattern or an option. Parentheses form
+# none of those, and /branch's `feat(<scope>)/` names carry them (#605).
+SAFE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/()-]*$")
 SAFE_REMOTE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 # Sources that name no destination of their own. `git push origin HEAD` updates
