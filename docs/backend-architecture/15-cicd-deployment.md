@@ -434,6 +434,10 @@ The tag already in the cluster is the only correct answer, so read it back:
     # Fail rather than default. A config deploy that cannot say which image is
     # running is a config deploy that must not proceed.
     [ -n "$TAG" ] && [ "$TAG" != "null" ] || exit 1
+    # The OCI tag grammar, matched against the whole value. Whoever can edit a
+    # release writes this string, and a newline in it would add lines to this
+    # job's environment for every later step.
+    [[ "$TAG" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$ ]] || exit 1
     echo "IMAGE_TAG=$TAG" >> "$GITHUB_ENV"
 ```
 
