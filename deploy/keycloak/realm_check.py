@@ -1051,6 +1051,24 @@ def check_scope_documents(realm: dict) -> list[str]:
             "the realm document carries no roles.client object, so whether a "
             "worker defines a role of its own, which is in its token's scope "
             "whatever its mappings say, would go unjudged (ADR-077)")
+
+    entries = list(realm["scopeMappings"]) if isinstance(realm.get("scopeMappings"), list) else []
+    owners = realm.get("clientScopeMappings")
+    for owner, listed in owners.items() if isinstance(owners, dict) else []:
+        if isinstance(listed, list):
+            entries += listed
+        else:
+            problems.append(
+                f"clientScopeMappings holds a {type(listed).__name__} for {owner!r} where "
+                "Keycloak serialises an array, so the roles it maps would go unjudged")
+    if any(not isinstance(entry, dict)
+           or not any(isinstance(entry.get(side), str) for side in ("client", "clientScope"))
+           or not isinstance(entry.get("roles"), list)
+           or not all(isinstance(role, str) for role in entry["roles"]) for entry in entries):
+        problems.append(
+            "a scope-mapping entry is not an object naming a client or a client "
+            "scope with a list of role names, which Keycloak never serialises, so "
+            "the roles it maps would go unjudged")
     return problems
 
 
@@ -1114,31 +1132,25 @@ def check_token_writers(realm: dict, client: dict, name: str) -> list[str]:
     return problems
 
 
-def mapped_roles(realm: dict, side: str, subject: str) -> tuple[set[str], dict[str, set[str]], bool]:
+def mapped_roles(realm: dict, side: str, subject: str) -> tuple[set[str], dict[str, set[str]]]:
     """The realm roles and each client's roles mapped into one subject's scope.
 
-    `side` is `client` or `clientScope`, an export's two subject keys. The
-    third value says a mapping entry was malformed, which the caller refuses."""
+    `side` is `client` or `clientScope`, an export's two subject keys. A
+    malformed entry is skipped here because `check_scope_documents` refuses it."""
     realm_roles: set[str] = set()
     client_roles: dict[str, set[str]] = {}
-    malformed = False
     owners = realm.get("clientScopeMappings")
     groups = [(None, realm.get("scopeMappings"))] + (
         list(owners.items()) if isinstance(owners, dict) else [])
     for owner, entries in groups:
         for entry in entries if isinstance(entries, list) else []:
-            if not isinstance(entry, dict):
-                malformed = True
-                continue
-            if entry.get(side) != subject:
+            if not isinstance(entry, dict) or entry.get(side) != subject:
                 continue
             roles = entry.get("roles")
-            if not isinstance(roles, list) or not all(isinstance(role, str) for role in roles):
-                malformed = True
-                continue
-            target = realm_roles if owner is None else client_roles.setdefault(owner, set())
-            target.update(roles)
-    return realm_roles, {owner: roles for owner, roles in client_roles.items() if roles}, malformed
+            if isinstance(roles, list) and all(isinstance(role, str) for role in roles):
+                target = realm_roles if owner is None else client_roles.setdefault(owner, set())
+                target.update(roles)
+    return realm_roles, {owner: roles for owner, roles in client_roles.items() if roles}
 
 
 def described(realm_roles: set[str], client_roles: dict[str, set[str]]) -> str:
@@ -1162,10 +1174,7 @@ def check_scope_cap(realm: dict, client: dict, name: str) -> list[str]:
             "(ADR-077)")
 
     expected = {owner: set(roles) for owner, roles in SCOPE_CAPS[name].items()}
-    realm_roles, client_roles, malformed = mapped_roles(realm, "client", name)
-    if malformed:
-        problems.append(f"client {name!r} has a scope-mapping entry that is not an object with a "
-                        "list of role names, which Keycloak never serialises")
+    realm_roles, client_roles = mapped_roles(realm, "client", name)
     if realm_roles or client_roles != expected:
         problems.append(
             f"client {name!r} maps {described(realm_roles, client_roles)} into its scope, "
@@ -1177,7 +1186,7 @@ def check_scope_cap(realm: dict, client: dict, name: str) -> list[str]:
     for scope in held_scopes(client):
         if scope not in scopes:
             continue
-        scope_realm, scope_clients, _ = mapped_roles(realm, "clientScope", scope)
+        scope_realm, scope_clients = mapped_roles(realm, "clientScope", scope)
         if scope_realm or scope_clients:
             problems.append(
                 f"client {name!r} holds the client scope {scope!r}, which maps "

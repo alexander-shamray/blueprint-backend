@@ -631,7 +631,28 @@ class TheScopeCap(Fixture):
     def test_a_malformed_mapping_entry_is_refused(self):
         found = self.problems(self.mapped("commerce-api", [{
             "client": realm_check.WORKER_CLIENT, "roles": "orders:delivery-address"}]))
-        self.assertTrue(any("not an object with a list of role names" in problem for problem in found), found)
+        self.assertTrue(any("not an object naming a client" in problem for problem in found), found)
+
+    def test_a_malformed_entry_on_a_held_scope_is_refused_rather_than_skipped(self):
+        """Whatever its subject: a skipped entry is a role nobody judged."""
+        document = realm(browser())
+        document["scopeMappings"] = [{"clientScope": "profile", "roles": "offline_access"}]
+        self.assertIn("not an object naming a client", self.one(document))
+
+    def test_a_role_that_is_not_a_name_is_refused(self):
+        document = realm(browser())
+        document["scopeMappings"] = [{"clientScope": "profile", "roles": [7]}]
+        self.assertIn("not an object naming a client", self.one(document))
+
+    def test_an_entry_naming_no_subject_is_refused_once_and_not_per_worker(self):
+        document = realm(browser())
+        document["scopeMappings"] = [{"roles": ["offline_access"]}]
+        self.assertIn("not an object naming a client", self.one(document))
+
+    def test_an_owner_whose_value_is_not_an_array_is_refused(self):
+        document = realm(browser())
+        document["clientScopeMappings"]["account"] = {"client": "x", "roles": ["r"]}
+        self.assertIn("holds a dict for 'account'", self.one(document))
 
     def test_the_bff_is_not_held_to_a_cap_no_record_gives_it(self):
         self.assertEqual(self.problems(realm(browser(), bff(fullScopeAllowed=True))), [])
