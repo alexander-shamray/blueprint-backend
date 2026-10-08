@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -237,6 +238,68 @@ class AForbiddenGrantAdded(unittest.TestCase):
             f"the gate accepted a peer that can forge a saga timeout: {failures}")
 
 
+class AForbiddenGrantNamedExactly(unittest.TestCase):
+    """A write naming one real foreign resource, which an invented probe name cannot match."""
+
+    def catalog_write_with(self, alternative: str) -> list[str]:
+        definitions = real()
+        entry = permission(definitions, "catalog-svc")
+        entry["write"] = entry["write"].replace("|MassTransit:)", f"|MassTransit:|{alternative})")
+        self.assertIn(alternative, entry["write"], "the case, not the gate")
+        return run_against(definitions)
+
+    def test_one_peer_event_exchange(self):
+        failures = self.catalog_write_with(r"Common\.Contracts\.Ordering\.V1:OrderPlaced")
+        self.assertTrue(
+            any("write COVERS `Common.Contracts.Ordering.V1:OrderPlaced`" in f for f in failures), failures)
+
+    def test_one_peer_saga_timeout(self):
+        failures = self.catalog_write_with(r"Ordering\.Infrastructure\.Messaging:PaymentAuthorisationExpired")
+        self.assertTrue(
+            any("write COVERS `Ordering.Infrastructure.Messaging:PaymentAuthorisationExpired`" in f
+                for f in failures), failures)
+
+    def test_one_peer_delay_exchange(self):
+        # The delay exchange republishes into the peer's queue after the delay.
+        failures = self.catalog_write_with("inventory-commands_delay")
+        self.assertTrue(any("write COVERS `inventory-commands_delay`" in f for f in failures), failures)
+
+    def test_every_delay_exchange(self):
+        definitions = real()
+        entry = permission(definitions, "catalog-svc")
+        entry["write"] = entry["write"] + "|_delay$"
+        failures = run_against(definitions)
+        self.assertTrue(any("catalog-svc: write COVERS `inventory-commands_delay`" in f for f in failures), failures)
+
+    def test_the_operator_on_one_peer_event_exchange(self):
+        definitions = real()
+        entry = permission(definitions, gate.OPERATOR)
+        entry["write"] = entry["write"] + r"|^Common\.Contracts\.Ordering\.V1:OrderPlaced$"
+        failures = run_against(definitions)
+        self.assertTrue(
+            any(f"{gate.OPERATOR}: write COVERS `Common.Contracts.Ordering.V1:OrderPlaced`" in f
+                for f in failures), failures)
+
+    def test_the_probes_are_the_names_the_source_declares(self):
+        # The subject: names read from the tree, not a list beside it.
+        directories = gate.messaging_dirs()
+        names = gate.declared_names([*gate.CONTRACTS.rglob("*.cs"), *(
+            path for directory in directories.values() for path in directory.glob("*.cs"))])
+        self.assertIn("OrderPlaced", names["Common.Contracts.Ordering.V1:"])
+        self.assertIn("PaymentAuthorisationExpired", names["Ordering.Infrastructure.Messaging:"])
+
+    def test_a_pattern_that_reads_no_type_is_refused(self):
+        original = gate.TYPE_DECLARATION
+        gate.TYPE_DECLARATION = re.compile(r"(?!)")
+        try:
+            failures = run_against(real())
+        finally:
+            gate.TYPE_DECLARATION = original
+        self.assertTrue(
+            any("`Common.Contracts.Ordering.V1:` declares no type the pattern can read" in f
+                for f in failures), failures)
+
+
 class TheAccountsThemselves(unittest.TestCase):
     def test_guest_is_refused(self):
         definitions = real()
@@ -434,6 +497,12 @@ class CheckThreeFollowsTheSelector(unittest.TestCase):
 
     def test_a_service_that_publishes_nothing_is_not_owed_the_interface_exchange(self):
         self.assertEqual([], self.run_with_catalog(publishes=False, write=self.UNPUBLISHED_WRITE))
+
+    def test_a_service_that_publishes_nothing_is_refused_one_named_contract(self):
+        failures = self.run_with_catalog(
+            publishes=False, write=r"^(catalog-|Common\.Contracts\.Catalog\.V1:PriceChanged|MassTransit:)")
+        self.assertTrue(
+            any("write COVERS `Common.Contracts.Catalog.V1:PriceChanged`" in f for f in failures), failures)
 
     def test_a_publisher_still_owes_the_interface_exchange(self):
         failures = self.run_with_catalog(publishes=True, write=self.UNPUBLISHED_WRITE)
