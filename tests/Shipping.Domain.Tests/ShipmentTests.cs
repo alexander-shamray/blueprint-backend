@@ -167,6 +167,35 @@ public class ShipmentTests
     }
 
     [Fact]
+    public void A_booking_kept_on_a_row_voided_while_pending_is_booked_with_the_voids_cancellation()
+    {
+        Shipment shipment = Pending();
+        shipment.Cancel(Now).ShouldBeTrue();
+
+        shipment.KeepUnreturnedBooking("car_1", "TRK1", Now.AddMinutes(1)).ShouldBeTrue();
+
+        shipment.Status.ShouldBe(ShipmentStatus.Booked);
+        shipment.CarrierReference.ShouldBe("car_1");
+        shipment.CancellationRequestedAt.ShouldBe(Now, "the cancellation is the void's, not the keep's");
+        shipment.TerminalAt.ShouldBeNull();
+        shipment.NextPollAt.ShouldBe(Now.AddMinutes(1));
+        shipment.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Only_a_row_voided_while_pending_keeps_an_unreturned_booking()
+    {
+        Pending().KeepUnreturnedBooking("car_1", "TRK1", Now).ShouldBeFalse("a pending row is booked, not kept");
+        Booked().KeepUnreturnedBooking("car_2", "TRK2", Now).ShouldBeFalse();
+
+        Shipment cancelledAtTheCarrier = Booked();
+        cancelledAtTheCarrier.Cancel(Now).ShouldBeTrue();
+        cancelledAtTheCarrier.CarrierCancelled(Now).ShouldBeTrue();
+        cancelledAtTheCarrier.KeepUnreturnedBooking("car_2", "TRK2", Now).ShouldBeFalse(
+            "a booking the carrier already took back is finished");
+    }
+
+    [Fact]
     public void A_collected_event_despatches_a_booked_shipment()
     {
         Shipment shipment = Booked();

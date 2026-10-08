@@ -53,7 +53,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             LogLevel.Error,
             new EventId(4, nameof(Orphaned)),
             "Shipment {ShipmentId} on order {OrderId} was voided during its booking, and carrier booking " +
-            "{CarrierReference} could not be handed back; it needs cancelling at the carrier.");
+            "{CarrierReference} could not be handed back or kept for another try; it needs cancelling at the carrier.");
 
     private static readonly Action<ILogger, Guid, Guid, string, Exception?> BookingUncommitted =
         LoggerMessage.Define<Guid, Guid, string>(
@@ -82,6 +82,13 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             LogLevel.Error,
             new EventId(8, nameof(BackOffFailed)),
             "Backing off shipment {ShipmentId} on order {OrderId} failed; it is tried again when its lease lapses.");
+
+    private static readonly Action<ILogger, Guid, Guid, string, Exception?> HandBackDeferred =
+        LoggerMessage.Define<Guid, Guid, string>(
+            LogLevel.Warning,
+            new EventId(9, nameof(HandBackDeferred)),
+            "Shipment {ShipmentId} on order {OrderId} was voided during its booking, and carrier booking " +
+            "{CarrierReference} was not handed back yet; it is kept as booked with its cancellation requested.");
 
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -279,35 +286,63 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         if (committed.Status != ShipmentStatus.Voided)
             return committed.Status == ShipmentStatus.Booked;
 
-        await HandBackAsync(carrier, id, work, booked.Reference, ct);
+        await HandBackAsync(sp, carrier, id, work, booked, ct);
 
         return false;
     }
 
-    /// <summary>Hands back a booking made while the order was cancelled, logging one the carrier keeps.</summary>
+    /// <summary>Hands back a booking made while the order was cancelled; one the carrier keeps is kept here.</summary>
     private async Task HandBackAsync(
+        IServiceProvider sp,
         ICarrierGateway carrier,
         ShipmentId id,
         FulfilmentWork work,
-        string reference,
+        BookingResult.Booked booked,
         CancellationToken ct)
     {
         CancellationResult result;
 
         try
         {
-            result = await carrier.CancelAsync(new CancellationRequest(id, reference), ct);
+            result = await carrier.CancelAsync(new CancellationRequest(id, booked.Reference), ct);
         }
         catch (Exception ex)
         {
-            Orphaned(log, work.Id, work.OrderId, reference, ex);
+            await KeepUnreturnedAsync(sp, id, work, booked, ex, ct);
             return;
         }
 
         if (result is CancellationResult.Cancelled)
             Superseded(log, work.Id, work.OrderId, null);
         else
-            Orphaned(log, work.Id, work.OrderId, reference, null);
+            await KeepUnreturnedAsync(sp, id, work, booked, null, ct);
+    }
+
+    // Kept on the row rather than only in a log: the claim then asks the carrier again on its ladder, and a too-late
+    // answer is recorded as any refused cancellation is. Only a commit that fails here leaves the booking unrecorded.
+    private async Task KeepUnreturnedAsync(
+        IServiceProvider sp,
+        ShipmentId id,
+        FulfilmentWork work,
+        BookingResult.Booked booked,
+        Exception? cause,
+        CancellationToken ct)
+    {
+        try
+        {
+            await CommitAsync(
+                sp,
+                id,
+                (shipment, now) => shipment.KeepUnreturnedBooking(booked.Reference, booked.TrackingNumber, now),
+                ct);
+        }
+        catch (Exception ex)
+        {
+            Orphaned(log, work.Id, work.OrderId, booked.Reference, ex);
+            return;
+        }
+
+        HandBackDeferred(log, work.Id, work.OrderId, booked.Reference, cause);
     }
 
     /// <summary>

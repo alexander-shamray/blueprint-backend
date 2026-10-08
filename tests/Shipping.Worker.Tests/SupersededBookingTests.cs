@@ -117,35 +117,64 @@ public sealed class SupersededBookingTests
     }
 
     [Fact]
-    public async Task A_carrier_too_late_to_take_the_booking_back_is_logged_as_an_orphan()
+    public async Task A_booking_the_carrier_is_too_late_to_take_back_is_kept_for_the_claim_to_ask_again()
     {
+        Shipment voided = Voided();
         RecordingCarrier carrier = new() { CancelAnswer = () => new CancellationResult.TooLate() };
         RecordingLogger log = new();
 
-        bool moved = await PassAsync(carrier, new InlineUnitOfWork(), log, Voided());
+        bool moved = await PassAsync(carrier, new InlineUnitOfWork(), log, voided);
 
         moved.ShouldBeFalse();
-        LogEntry orphaned = log.Entries.ShouldHaveSingleItem("a booking the carrier kept was not handed back");
+        ShouldBeKeptForTheClaim(voided);
+        LogEntry deferred = log.Entries.ShouldHaveSingleItem("the booking is on the row, not only in a log line");
+        deferred.Id.Name.ShouldBe("HandBackDeferred");
+        deferred.Level.ShouldBe(LogLevel.Warning);
+        deferred.Message.ShouldContain(RecordingCarrier.Reference);
+    }
+
+    [Fact]
+    public async Task A_hand_back_the_carrier_never_answers_is_kept_for_the_claim_and_not_thrown()
+    {
+        Shipment voided = Voided();
+        CarrierUnavailableException outage = new("carrier down");
+        RecordingCarrier carrier = new() { CancelAnswer = () => throw outage };
+        RecordingLogger log = new();
+
+        // Not thrown: the row is kept as a booked one whose cancellation the claim retries on its own ladder.
+        bool moved = await PassAsync(carrier, new InlineUnitOfWork(), log, voided);
+
+        moved.ShouldBeFalse();
+        ShouldBeKeptForTheClaim(voided);
+        LogEntry deferred = log.Entries.ShouldHaveSingleItem();
+        deferred.Id.Name.ShouldBe("HandBackDeferred");
+        deferred.Exception.ShouldBeSameAs(outage);
+    }
+
+    [Fact]
+    public async Task A_hand_back_that_cannot_even_be_kept_is_logged_as_an_orphan()
+    {
+        Shipment voided = Voided();
+        RecordingCarrier carrier = new() { CancelAnswer = () => new CancellationResult.TooLate() };
+        RecordingLogger log = new();
+
+        bool moved = await PassAsync(carrier, new FailingSecondUnitOfWork(), log, voided);
+
+        moved.ShouldBeFalse();
+        LogEntry orphaned = log.Entries.ShouldHaveSingleItem("only a booking neither handed back nor kept is lost");
         orphaned.Id.Name.ShouldBe("Orphaned");
         orphaned.Level.ShouldBe(LogLevel.Error);
         orphaned.Message.ShouldContain(RecordingCarrier.Reference);
     }
 
-    [Fact]
-    public async Task A_hand_back_the_carrier_never_answers_is_logged_as_an_orphan_and_not_thrown()
+    // What the fulfilment claim takes as a booked row to cancel, dated from the void.
+    private static void ShouldBeKeptForTheClaim(Shipment shipment)
     {
-        CarrierUnavailableException outage = new("carrier down");
-        RecordingCarrier carrier = new() { CancelAnswer = () => throw outage };
-        RecordingLogger log = new();
-
-        // Not thrown, because the row's catch would back off a Voided row the
-        // claim never takes again and report it as a row that will retry.
-        bool moved = await PassAsync(carrier, new InlineUnitOfWork(), log, Voided());
-
-        moved.ShouldBeFalse();
-        LogEntry orphaned = log.Entries.ShouldHaveSingleItem();
-        orphaned.Id.Name.ShouldBe("Orphaned");
-        orphaned.Exception.ShouldBeSameAs(outage);
+        shipment.Status.ShouldBe(ShipmentStatus.Booked);
+        shipment.CarrierReference.ShouldBe(RecordingCarrier.Reference);
+        shipment.CancellationRequestedAt.ShouldBe(Now, "the order was cancelled when the row was voided");
+        shipment.CancellationRefusedAt.ShouldBeNull();
+        shipment.TerminalAt.ShouldBeNull();
     }
 
     [Fact]
@@ -358,6 +387,19 @@ public sealed class SupersededBookingTests
             await operation(ct);
             return await operation(ct);
         }
+    }
+
+    /// <summary>The second unit of work fails outright, as a database that went away between the two would.</summary>
+    private sealed class FailingSecondUnitOfWork : InlineUnitOfWork
+    {
+        private int _units;
+
+        public override Task<TResult> ExecuteAsync<TResult>(
+            Func<CancellationToken, Task<TResult>> operation,
+            CancellationToken ct) =>
+            ++_units == 2
+                ? throw new InvalidOperationException("the database refused the second unit")
+                : operation(ct);
     }
 
     /// <summary>The first unit's save loses to another writer's, as a row version refuses it.</summary>
