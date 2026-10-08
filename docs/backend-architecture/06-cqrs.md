@@ -61,59 +61,30 @@ public interface IDispatcher
 }
 ```
 
-The implementation caches one invoker instance per concrete request type,
-result type and kind, so the reflection cost is paid once per combination
-rather than per call.
+The implementation, `Common.Application/Dispatcher.cs`, caches one invoker
+instance per concrete request type, result type and kind, so the reflection
+cost is paid once per combination rather than per call:
 
 ```csharp
-internal sealed class Dispatcher(IServiceProvider services) : IDispatcher
+private static readonly ConcurrentDictionary<(Type Request, Type Result, Type Kind), object> Invokers = new();
+
+private static Invoker<TResult> GetInvoker<TResult>(Type requestType, Type openInvoker) =>
+    (Invoker<TResult>)Invokers.GetOrAdd(
+        (requestType, typeof(TResult), openInvoker),
+        static key => Activator.CreateInstance(key.Kind.MakeGenericType(key.Request, key.Result))!);
+```
+
+Each invoker resolves its handler, then wraps it in the behaviours in reverse,
+so the first-registered behaviour is the outermost. `CommandInvoker` and
+`QueryInvoker` are identical but for the handler interface they resolve:
+
+```csharp
+foreach (IPipelineBehavior<TCommand, TResult> behavior in services
+    .GetServices<IPipelineBehavior<TCommand, TResult>>()
+    .Reverse())
 {
-    // Keyed on all three parts of what the invoker closes over — see below.
-    private static readonly ConcurrentDictionary<(Type Request, Type Result, Type Kind), object> Invokers = new();
-
-    public Task<TResult> SendAsync<TResult>(ICommand<TResult> command, CancellationToken ct = default) =>
-        GetInvoker<TResult>(command.GetType(), typeof(CommandInvoker<,>))
-            .InvokeAsync(services, command, ct);
-
-    public Task<TResult> QueryAsync<TResult>(IQuery<TResult> query, CancellationToken ct = default) =>
-        GetInvoker<TResult>(query.GetType(), typeof(QueryInvoker<,>))
-            .InvokeAsync(services, query, ct);
-
-    private static Invoker<TResult> GetInvoker<TResult>(Type requestType, Type openInvoker) =>
-        (Invoker<TResult>)Invokers.GetOrAdd(
-            (requestType, typeof(TResult), openInvoker),
-            static key => Activator.CreateInstance(key.Kind.MakeGenericType(key.Request, key.Result))!);
-
-    private abstract class Invoker<TResult>
-    {
-        public abstract Task<TResult> InvokeAsync(IServiceProvider services, object request, CancellationToken ct);
-    }
-
-    private sealed class CommandInvoker<TCommand, TResult> : Invoker<TResult>
-        where TCommand : ICommand<TResult>
-    {
-        public override Task<TResult> InvokeAsync(IServiceProvider services, object request, CancellationToken ct)
-        {
-            TCommand typed = (TCommand)request;
-            ICommandHandler<TCommand, TResult> handler =
-                services.GetRequiredService<ICommandHandler<TCommand, TResult>>();
-
-            NextDelegate<TResult> pipeline = () => handler.HandleAsync(typed, ct);
-
-            // Reversed so the first-registered behaviour is the outermost.
-            foreach (IPipelineBehavior<TCommand, TResult> behavior in services
-                .GetServices<IPipelineBehavior<TCommand, TResult>>()
-                .Reverse())
-            {
-                NextDelegate<TResult> next = pipeline;
-                pipeline = () => behavior.HandleAsync(typed, next, ct);
-            }
-
-            return pipeline();
-        }
-    }
-
-    // QueryInvoker<TQuery, TResult> is identical but resolves IQueryHandler<,>.
+    NextDelegate<TResult> next = pipeline;
+    pipeline = () => behavior.HandleAsync(typed, next, ct);
 }
 ```
 
@@ -164,8 +135,8 @@ be scanned — one that exists but is never registered resolves to an empty
 collection or throws at first use, and neither failure points at the omission.
 
 The list is declared **once**, in `Common.Application`, and both the scan and
-the test below read it. That is the point: the previous version kept two copies,
-and adding a fifth interface meant remembering both:
+the test below read it, so adding an interface means editing one place, not
+remembering two:
 
 ```csharp
 namespace Common.Application;
@@ -237,10 +208,10 @@ services.AddPluggableFrom(typeof(OrderRepository).Assembly);
 > green. [§9.4](09-messaging.md) closes this by throwing when a `Local` row finds no handler, and
 > the registration test below catches it at build time instead.
 >
-> The trap has a second form worth naming, because this document fell into it:
-> a *list* of interfaces duplicated between the registration and the test that
-> guards it. Both copies drift together or not at all, and the guard silently
-> stops covering whatever the newest interface is. One list, two readers.
+> The trap has a second form worth naming: a *list* of interfaces duplicated
+> between the registration and the test that guards it. Both copies drift
+> together or not at all, and the guard silently stops covering whatever the
+> newest interface is. One list, two readers.
 
 Three mechanisms guard wiring, and none subsumes the others:
 
@@ -264,46 +235,37 @@ starts as happily as ever. `ServiceIdentityOptions` unbound fails only
 back an empty instance.
 
 **What "fails only the test" does *not* mean is that nothing notices at
-runtime**, and the middle example is the one where that distinction became
-real. While no endpoint bound Catalog's events, an unregistered
-`ProductPriceProjection` was silent in the fullest sense: nothing resolved
-`IIntegrationEventHandler<ProductPublished>`, so nothing missed it. Once
-`ordering-catalog-events` binds those three types ([§9.8](09-messaging.md)),
-`IntegrationEventConsumer<T>` resolves the handler list on every delivery and
-**throws** on an empty one — §9.4's "the endpoint binds this type, so
-something should handle it". So the registration test remains the only one of
-the three *startup* guards that fires, which is what this row is about, and
-the failure behind it moved from silence to a message on the error queue.
+runtime.** `ordering-catalog-events` binds Catalog's product events
+([§9.8](09-messaging.md)), so `IntegrationEventConsumer<T>` resolves the
+handler list on every delivery and **throws** on an empty one — §9.4's "the
+endpoint binds this type, so something should handle it". An unregistered
+`ProductPriceProjection` is therefore a message on the error queue, and the
+registration test is still the only one of the three *startup* guards that
+fires, which is what the row is about. A guard's value is what it catches
+before deployment; how loudly the gap announces itself afterwards is a
+separate axis.
 
-A guard's value is what it catches before deployment; how loudly the gap
-announces itself afterwards is a separate axis. The two are easy to collapse
-into one sentence, and this paragraph exists because they were.
+The test builds its container with `BuildProvider()`, the real registration
+path rather than a test-only container, and the same helper §6.3 uses. It runs
+both `AddOrderingApplication` and `AddOrderingInfrastructure`,
+which is the property the test depends on: a version that ran only the
+Application half would report every Infrastructure handler as unregistered.
+Building the provider forces both assemblies to load, and the test derives
+the set rather than listing it, so a new layer is covered without editing the
+test; it reads the same `PluggableInterfaces.All` the scan does, so a new
+interface is covered the moment it is added there:
 
 ```csharp
 [Fact]
 public void Every_handler_implementation_is_registered()
 {
-    // BuildProvider() — the real registration path, not a test-only container,
-    // and the same helper §6.3 and §13.6 use rather than a second copy of the
-    // three calls. It runs BOTH AddOrderingApplication and
-    // AddOrderingInfrastructure, which is the property this test depends on:
-    // a hand-rolled version that ran only the Application half would find the
-    // Infrastructure handlers absent and report the layer it forgot to build
-    // as an unregistered handler.
-    //
     // Handlers are scoped; resolving them from the root provider throws.
     using IServiceScope scope = BuildProvider().CreateScope();
 
-    // Every service assembly, not just Application. Building the provider above
-    // has forced both to load, and deriving the set here means a new layer is
-    // covered without editing this test — the same reason the interface list
-    // is not duplicated either.
     IEnumerable<Assembly> assemblies = AppDomain.CurrentDomain
         .GetAssemblies()
         .Where(a => a.GetName().Name?.StartsWith("Ordering.") == true);
 
-    // Same list the scan uses — a new interface is covered the moment it is
-    // added to PluggableInterfaces, with no second place to remember.
     IEnumerable<(Type Implementation, Type Service)> implementations =
         assemblies
             .SelectMany(a => a.GetTypes())
@@ -493,11 +455,8 @@ public sealed class ValidationBehavior<TRequest, TResult>(IEnumerable<IValidator
 > its one empty field is two empty fields. `Task.WhenAll` runs the validators
 > concurrently besides, which makes the shared list a race as well as a
 > duplication. A context per validator costs an allocation per rule set and
-> removes both.
->
-> This was written the other way first and a test found it — two validators, one
-> empty string, four failures. It is the kind of defect that is invisible in the
-> single-validator case every sample uses.
+> removes both. The duplication is invisible in the single-validator case every
+> sample uses.
 
 **The sequence is read twice — `Any()` and then `Select` — and that is not a
 double resolution.** `Microsoft.Extensions.DependencyInjection` materialises an
@@ -505,8 +464,9 @@ double resolution.** `Microsoft.Extensions.DependencyInjection` materialises an
 the validators exist before `HandleAsync` is entered and both reads walk the
 same array. Materialising it again inside the method would buy nothing. This is
 the same shape as the constraint note above — a library behaviour the code
-leans on with nothing in the C# to say so — so it is pinned by a test rather
-than left to be re-argued in review, which it has been once already.
+leans on with nothing in the C# to say so — so it is pinned by a test,
+`Enumerating_the_injected_validators_twice_constructs_them_once`, rather than
+left to be re-argued in review.
 
 Transaction — this is the behaviour that makes the domain-event and outbox
 mechanism work, and it is the one worth reading closely.
@@ -536,9 +496,12 @@ public interface IUnitOfWork
 }
 ```
 
-The behaviour depends only on that:
+The behaviour depends only on that. It is
+`Common.Application/TransactionBehavior.cs`, whole:
 
 ```csharp
+namespace Common.Application;
+
 public sealed class TransactionBehavior<TCommand, TResult>(
     IUnitOfWork unitOfWork,
     IDomainEventDispatcher domainEvents,
@@ -553,41 +516,26 @@ public sealed class TransactionBehavior<TCommand, TResult>(
         if (unitOfWork.HasActiveTransaction)
             return await next();
 
-        // Read ONCE, here, and never again inside the unit below. A nested
-        // dispatch would run its own IdempotencyBehavior and overwrite the
-        // context while this transaction is open, so re-reading after next()
-        // would mark the inner command's key against the outer command's rows.
+        // Read once, before the unit, so a nested dispatch that overwrites the context marks nothing here.
         string? key = idempotency.Key;
 
         return await unitOfWork.ExecuteAsync(
             async token =>
             {
-                // §8.5's durable half, and BEFORE the handler rather than after:
-                // an attempt whose commit landed and whose acknowledgement was
-                // lost released its Redis claim on the way out, so this retry
-                // holds a fresh claim over work that is already done. Knowing
-                // before next() costs a lookup instead of a rolled-back handler.
+                // Before the handler, so a duplicate whose commit landed costs a lookup (ADR-037).
                 if (key is not null && await markers.ExistsAsync(key, token))
                     throw new CommandAlreadyCommittedException(key);
 
                 TResult result = await next();
 
-                // A handler that returns a failed Result has rejected the command.
-                // Returning here skips both the staging and the save, so the
-                // transaction commits nothing and no outbox row announces a state
-                // change that did not happen. Result<T> derives from Result, so one
-                // pattern covers every command shape without reflection.
+                // A rejected command stages nothing, saves nothing and writes no marker.
                 if (result is Result { IsFailure: true })
                     return result;
 
-                // Stages outbox rows only — no handler runs here (§7.5).
-                // Reactions happen after commit, driven by the outbox.
+                // Stages outbox rows only; reactions run after commit (§7.5).
                 await domainEvents.DispatchAsync(token);
 
-                // Principle 3 (§2.3), asserted rather than trusted — see below for
-                // why it is here and not in a code review checklist. After
-                // dispatch, so the staged rows of a legitimate single-root command
-                // are already in the tracker and not miscounted.
+                // Principle 3 (§2.3), asserted at run time rather than by an architecture test (§6.3).
                 if (unitOfWork.ModifiedAggregateCount > 1)
                 {
                     throw new InvariantViolationException(
@@ -596,16 +544,7 @@ public sealed class TransactionBehavior<TCommand, TResult>(
                         "the second aggregate should react to a domain event after commit (§7.5).");
                 }
 
-                // Staged last and committed with everything else, which is what
-                // makes the marker exactly as durable as the rows it guards. It
-                // is after the guard above deliberately: a command this
-                // transaction is about to refuse must leave nothing behind that
-                // would refuse its retry.
-                //
-                // No timestamp passed, and that is the row's clock rather than
-                // an omission: CommittedAt carries a SYSDATETIMEOFFSET() column
-                // default, so the row is aged by the database that stores it
-                // and not by this pod (§8.5, ADR-038).
+                // After the count check, so a command about to be refused leaves no marker to refuse its retry.
                 if (key is not null)
                     await markers.MarkAsync(key, token);
 
@@ -625,6 +564,13 @@ loses whichever fragment the reader did not scroll to, and the missing piece is
 silent in all three cases: no failure guard commits rejected commands, no
 dispatch publishes nothing, no count check makes principle 3 advisory.
 
+The failure guard is one pattern for every command shape, without reflection,
+because `Result<T>` derives from `Result`; returning there skips the staging
+and the save, so the transaction commits nothing and no outbox row announces a
+state change that did not happen. The count check runs after dispatch, so the
+outbox rows a legitimate single-root command stages are already in the tracker
+and are not miscounted.
+
 > **A rejected command must not have written anything, and one guard is not
 > enough to promise that.** This one skips the staging and the save, which
 > covers everything EF is tracking. It does nothing about a write that already
@@ -636,10 +582,12 @@ dispatch publishes nothing, no count check makes principle 3 advisory.
 >
 > **Validate first, mutate second** remains the rule, because the guards make
 > breaking it cost a discarded write rather than a committed lie — but a rule
-> whose enforcement is two checks in two types is a rule worth testing. PR-09
-> covers both: `SaveChanges` once on success and never on failure, and a
-> handler that calls `ExecuteRawAsync` and then returns `Result.Failure` leaves
-> no row behind.
+> whose enforcement is two checks in two types is a rule worth testing, and
+> both are tested: `TransactionBehaviorTests` asserts `SaveChanges` once on
+> success and never on failure, and Ordering's
+> `The_behaviour_leaves_no_row_when_a_handler_writes_raw_and_then_fails` that
+> a handler that calls `ExecuteRawAsync` and then returns `Result.Failure`
+> leaves no row behind.
 
 > **The two marker calls are the only thing in this behaviour that belongs to
 > another section, and where each one sits is the whole of what it buys.**
@@ -736,105 +684,87 @@ Query handlers must never resolve `IUnitOfWork`. The behaviour is constrained to
 `ICommand<TResult>` precisely so the read path cannot open a write transaction
 or touch the outbox.
 
-The EF Core implementation lives in Infrastructure:
+The EF Core implementation lives in Infrastructure, one per service; Ordering's
+is `Ordering.Infrastructure/Persistence/EfUnitOfWork.cs`. Its `ExecuteAsync`
+is where the retry, the reset and the commit decision meet:
 
 ```csharp
-namespace Ordering.Infrastructure.Persistence;
-
-internal sealed class EfUnitOfWork(OrderingDbContext db) : IUnitOfWork
+public async Task<TResult> ExecuteAsync<TResult>(
+    Func<CancellationToken, Task<TResult>> operation,
+    CancellationToken ct)
 {
-    public bool HasActiveTransaction => db.Database.CurrentTransaction is not null;
+    IExecutionStrategy strategy = db.Database.CreateExecutionStrategy();
 
-    public async Task<TResult> ExecuteAsync<TResult>(
-        Func<CancellationToken, Task<TResult>> operation,
-        CancellationToken ct)
-    {
-        IExecutionStrategy strategy = db.Database.CreateExecutionStrategy();
+    return await strategy.ExecuteAsync(
+        async token =>
+        {
+            db.ChangeTracker.Clear();
 
-        // The token-aware overload, so cancellation is observed by the strategy
-        // itself. With the parameterless one the token reaches only the calls
-        // inside the delegate, so a cancel during a retry backoff is not seen
-        // until the delay elapses and the next attempt reaches one of them.
-        return await strategy.ExecuteAsync(
-            async token =>
+            await using IDbContextTransaction tx =
+                await db.Database.BeginTransactionAsync(token);
+            TResult result = await operation(token);
+
+            if (result is Result { IsFailure: true })
             {
-                // Every attempt starts from committed state. EF does not reset
-                // the change tracker when a transaction rolls back, so without
-                // this line a retry re-runs the domain method on attempt 1's
-                // tracked, already-mutated aggregates out of the identity map,
-                // and one SaveChanges commits the mutation twice.
                 db.ChangeTracker.Clear();
 
-                await using IDbContextTransaction tx =
-                    await db.Database.BeginTransactionAsync(token);
-                TResult result = await operation(token);
-
-                // The commit decision belongs with the commit. §6.3's behaviour
-                // declines to SaveChanges on a failed Result — but
-                // ExecuteRawAsync writes on this transaction's connection
-                // immediately, and only a rollback undoes that. Returning
-                // without committing disposes the transaction, which rolls it
-                // back.
-                if (result is Result { IsFailure: true })
-                {
-                    // And the tracker goes with it, because a rollback that
-                    // leaves the rejected mutations tracked is only half a
-                    // rollback. This line was once unnecessary and this comment
-                    // once said so: "declines to SaveChanges … which is enough
-                    // for tracked changes" held while this behaviour was the
-                    // ONLY caller of SaveChanges on the scope.
-                    //
-                    // §9.5's inbox filter is the second. It runs after the
-                    // consumer returns and saves unconditionally — it has its
-                    // own row to write — so anything a rejected handler left
-                    // tracked would be persisted by it, outside the transaction
-                    // just rolled back. A domain refusal committing its own
-                    // mutations is the one outcome this boundary exists to
-                    // prevent.
-                    db.ChangeTracker.Clear();
-
-                    return result;
-                }
-
-                await tx.CommitAsync(token);
                 return result;
-            },
-            ct);
-    }
+            }
 
-    public Task<int> SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
-
-    // Owned children (OrderLine) are not roots and do not count — that is the
-    // difference between an aggregate and a table (§6.3, principle 3).
-    public int ModifiedAggregateCount => db.ChangeTracker
-        .Entries()
-        .Count(e => e.Entity is IAggregateRoot &&
-                    e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
-
-    // The transaction's own connection and transaction, explicitly passed —
-    // this is what makes a raw write part of the command rather than beside it.
-    public Task ExecuteRawAsync(string sql, object parameters, CancellationToken ct)
-    {
-        // Not CurrentTransaction?.GetDbTransaction(). A null-conditional here
-        // hands Dapper transaction: null, and a command with no transaction
-        // autocommits — so the one call this member exists to prevent would
-        // succeed silently, on its own connection, outside the unit the caller
-        // believes it is in. Checked rather than trusted, for the reason the
-        // aggregate count above is.
-        IDbContextTransaction transaction = db.Database.CurrentTransaction ??
-            throw new InvalidOperationException(
-                "ExecuteRawAsync was called outside IUnitOfWork.ExecuteAsync. The write would commit " +
-                "immediately on its own connection, outside the command's transaction (§6.3).");
-
-        return db.Database.GetDbConnection().ExecuteAsync(
-            new CommandDefinition(
-                sql,
-                parameters,
-                transaction: transaction.GetDbTransaction(),
-                cancellationToken: ct));
-    }
+            await tx.CommitAsync(token);
+            return result;
+        },
+        ct);
 }
 ```
+
+The strategy is called through its token-aware overload, so cancellation is
+observed by the strategy itself; with the parameterless one the token reaches
+only the calls inside the delegate, and a cancel during a retry backoff is not
+seen until the delay elapses and the next attempt reaches one of them.
+
+**The commit decision belongs with the commit.** §6.3's behaviour declines to
+`SaveChanges` on a failed `Result`, but `ExecuteRawAsync` writes on this
+transaction's connection immediately, and only a rollback undoes that.
+Returning without committing disposes the transaction, which rolls it back. The
+tracker is cleared on that path too, because a rollback that leaves the
+rejected mutations tracked is only half a rollback: §9.5's inbox filter runs
+after the consumer returns and saves unconditionally — it has its own row to
+write — so anything a rejected handler left tracked would be persisted by it,
+outside the transaction just rolled back. A domain refusal committing its own
+mutations is the one outcome this boundary exists to prevent.
+
+The two members the count and the raw write need:
+
+```csharp
+public int ModifiedAggregateCount => db.ChangeTracker
+    .Entries()
+    .Count(e => e.Entity is IAggregateRoot &&
+                e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
+
+public Task ExecuteRawAsync(string sql, object parameters, CancellationToken ct)
+{
+    IDbContextTransaction transaction = db.Database.CurrentTransaction ??
+        throw new InvalidOperationException(
+            "ExecuteRawAsync was called outside IUnitOfWork.ExecuteAsync. The write would commit " +
+            "immediately on its own connection, outside the command's transaction (§6.3).");
+
+    return db.Database.GetDbConnection().ExecuteAsync(
+        new CommandDefinition(
+            sql,
+            parameters,
+            transaction: transaction.GetDbTransaction(),
+            cancellationToken: ct));
+}
+```
+
+The raw write is handed the transaction's own connection and transaction,
+explicitly, which is what makes it part of the command rather than beside it.
+It is not `CurrentTransaction?.GetDbTransaction()`: a null-conditional there
+hands Dapper `transaction: null`, and a command with no transaction
+autocommits — so the one call this member exists to prevent would succeed
+silently, on its own connection, outside the unit the caller believes it is
+in. It is checked rather than trusted, for the reason the aggregate count is.
 
 Two details worth keeping:
 
@@ -865,6 +795,8 @@ repositories; the transaction through `IUnitOfWork`; nothing else.
 ## 6.4 A command
 
 Commands are imperative, named for the business intent, and immutable.
+`PlaceOrderCommand`, its validator and its handler are in
+`Ordering.Application/Orders/PlaceOrder/`:
 
 ```csharp
 namespace Ordering.Application.Orders.PlaceOrder;
@@ -893,60 +825,61 @@ public sealed record PlaceOrderCommand(
 }
 
 public sealed record PlaceOrderItem(Guid ProductId, int Quantity);
+```
 
-public sealed class PlaceOrderValidator : AbstractValidator<PlaceOrderCommand>
+The validator's rules over the currency and the items, which
+`PlaceOrderValidator` holds beside its rules for the command id and the
+address:
+
+```csharp
+RuleFor(x => x.Currency).NotEmpty().Matches(@"^[A-Za-z]{3}\z");
+RuleFor(x => x.Items)
+    .Cascade(CascadeMode.Stop)
+    .NotEmpty()
+    .Must(items => items.Count <= OrderLimits.MaxLines)
+    .WithMessage($"An order cannot contain more than {OrderLimits.MaxLines} items.");
+RuleForEach(x => x.Items).ChildRules(item =>
 {
-    public PlaceOrderValidator()
-    {
-        // NotEmpty first: Matches alone skips null, and a JSON "currency":
-        // null would reach the domain as a 500 rather than this 400. Letters,
-        // not just length — Money.Of refuses "1$?" as a bug; this refuses it
-        // as input (§5.7's division). \z, not $: .NET's $ matches before a
-        // trailing newline, and "EUR\n" must fail here, not in the domain.
-        RuleFor(x => x.Currency).NotEmpty().Matches(@"^[A-Za-z]{3}\z");
-        // A maximum as well as a minimum, and the bounds are OrderLimits'
-        // rather than this validator's: Web.Bff quotes for the order this
-        // command places, so the two must refuse exactly the same baskets
-        // (ADR-045). The reader expands the product ids into one SQL parameter
-        // each and adds @Currency beside them; SQL Server's limit is 2,100, so
-        // an unbounded list turns a well-formed request into a 500 rather than
-        // a 400. Cascade(Stop) is load-bearing
-        // rather than tidiness: FluentValidation runs every validator in a
-        // rule by default, so on an explicit "items": null the NotEmpty
-        // records its failure and the size predicate then dereferences the
-        // null it just rejected.
-        RuleFor(x => x.Items)
-            .Cascade(CascadeMode.Stop)
-            .NotEmpty()
-            .Must(items => items.Count <= OrderLimits.MaxLines)
-            .WithMessage($"An order cannot contain more than {OrderLimits.MaxLines} items.");
-        RuleForEach(x => x.Items).ChildRules(item =>
-        {
-            item.RuleFor(i => i.ProductId).NotEmpty();
-            item
-                .RuleFor(i => i.Quantity)
-                .GreaterThanOrEqualTo(OrderLimits.MinQuantity)
-                .LessThanOrEqualTo(OrderLimits.MaxQuantity);
-        });
-        // And again over the MERGED quantity, because the rule above is not a
-        // bound on the order: a repeated product is legitimate and
-        // Order.AddLine merges the lines, so two items at the ceiling placed an
-        // order for twice it (ADR-045). Summed as long because Enumerable.Sum
-        // over int is checked, and this rule runs before RuleForEach reports
-        // either item.
-        RuleFor(x => x.Items)
-            .Must(items => items
-                .GroupBy(i => i.ProductId)
-                .All(product => product.Sum(i => (long)i.Quantity) <= OrderLimits.MaxQuantity))
-            .WithMessage($"An order cannot contain more than {OrderLimits.MaxQuantity} of one product.")
-            .When(x => x.Items is not null && x.Items.All(i => i is not null));
-    }
-}
+    item.RuleFor(i => i.ProductId).NotEmpty();
+    item
+        .RuleFor(i => i.Quantity)
+        .GreaterThanOrEqualTo(OrderLimits.MinQuantity)
+        .LessThanOrEqualTo(OrderLimits.MaxQuantity);
+});
+RuleFor(x => x.Items)
+    .Must(items => items
+        .GroupBy(i => i.ProductId)
+        .All(product => product.Sum(i => (long)i.Quantity) <= OrderLimits.MaxQuantity))
+    .WithMessage($"An order cannot contain more than {OrderLimits.MaxQuantity} of one product.")
+    .When(x => x.Items is not null && x.Items.All(i => i is not null));
+```
 
-// ICurrentUser (§11.4) is the only source of the subject on this path. A
-// command that reaches here is HTTP-borne — nothing publishes PlaceOrder as a
-// message — so the principal is always present, and Id throwing on an
-// unauthenticated call is the right failure rather than a case to guard.
+- **`NotEmpty` before `Matches`**, because `Matches` alone skips null, and a
+  JSON `"currency": null` would reach the domain as a 500 rather than this 400.
+  Letters, not just length — `Money.Of` refuses `"1$?"` as a bug; this refuses
+  it as input (§5.7's division). `\z`, not `$`: .NET's `$` matches before a
+  trailing newline, and `"EUR\n"` must fail here, not in the domain.
+- **A maximum as well as a minimum, and the bounds are `OrderLimits`'** rather
+  than this validator's: `Web.Bff` quotes for the order this command places, so
+  the two must refuse exactly the same baskets (ADR-045). The reader expands the
+  product ids into one SQL parameter each and adds `@Currency` beside them;
+  SQL Server's limit is 2100, so an unbounded list turns a well-formed request
+  into a 500 rather than a 400.
+- **`Cascade(Stop)` is load-bearing** rather than tidiness: FluentValidation
+  runs every validator in a rule by default, so on an explicit `"items": null`
+  the `NotEmpty` records its failure and the size predicate then dereferences
+  the null it just rejected.
+- **The quantity is bounded again over the merged lines**, because the
+  per-item rule is not a bound on the order: a repeated product is legitimate
+  and `Order.AddLine` merges the lines, so two items at the ceiling would place
+  an order for twice it (ADR-045). It is summed as `long` because
+  `Enumerable.Sum` over `int` is checked, and this rule runs before
+  `RuleForEach` reports either item.
+
+The handler, less the order-total ceiling `PlaceOrderHandler` checks between
+the prices and the order:
+
+```csharp
 public sealed class PlaceOrderHandler(
     IOrderRepository orders,
     IProductPriceReader prices,
@@ -956,9 +889,6 @@ public sealed class PlaceOrderHandler(
 {
     public async Task<Result<Guid>> HandleAsync(PlaceOrderCommand command, CancellationToken ct)
     {
-        // Distinct: two lines naming the same product are a legitimate basket,
-        // and without it each repetition costs another SQL parameter against
-        // the same 2,100 ceiling OrderLimits.MaxLines is measured against.
         ProductId[] productIds =
             [.. command.Items.Select(i => new ProductId(i.ProductId)).Distinct()];
         IReadOnlyDictionary<ProductId, Money> priceList =
@@ -984,20 +914,31 @@ public sealed class PlaceOrderHandler(
 
         orders.Add(order);
 
-        // No metric here. "Orders placed" is a count of orders that committed,
-        // and this line runs inside a transaction that may still roll back —
-        // or be replayed whole by EF's retrying execution strategy (§6.3),
-        // which would count the same order once per attempt. It is recorded by
-        // the projection instead (§13.3).
         return Result.Success(order.Id.Value);
     }
 }
 ```
 
 The handler is thin by design. It loads what the domain needs, calls one domain
-operation, and returns. All the business rules — line merging, currency
-consistency, minimum one line — live in `Order`. If a handler grows past about
-forty lines, logic has usually leaked out of the aggregate.
+operation, and returns. The order's own rules — line merging, currency
+consistency, minimum one line — live in `Order`, and the handler checks the
+order total against its ceiling. If a handler grows past about forty lines,
+logic has usually leaked out of the aggregate.
+
+`ICurrentUser` ([§11.4](11-identity-authorization.md)) is the only source of
+the subject on this path. A command that reaches here is HTTP-borne — nothing
+publishes `PlaceOrder` as a message — so the principal is always present, and
+`Id` throwing on an unauthenticated call is the right failure rather than a
+case to guard. The product ids are `Distinct`: two lines naming the same
+product are a legitimate basket, and without it each repetition costs another
+SQL parameter against the same 2100 ceiling `OrderLimits.MaxLines` is measured
+against.
+
+There is no metric in the handler. "Orders placed" is a count of orders that
+committed, and the handler runs inside a transaction that may still roll back —
+or be replayed whole by EF's retrying execution strategy (§6.3), which would
+count the same order once per attempt. It is recorded by the projection instead
+([§13.3](13-observability.md)).
 
 Note the handler does not call `SaveChanges`. The transaction behaviour owns
 that. And note `TimeProvider` — the .NET abstraction for the clock, which makes
@@ -1016,58 +957,39 @@ Instead, `IProductPriceReader` reads a **local projection** in Ordering's own
 database, kept current by all three of Catalog's product events —
 `ProductPublished`, `PriceChanged` and `ProductDiscontinued` (§6.6). The third
 is easy to leave off a list like this one and is what stops a withdrawn product
-staying orderable:
+staying orderable. `ProjectedPriceReader`, in
+`Ordering.Infrastructure/Persistence/ProjectedPriceReader.cs`, reads only the
+rows still on sale:
+
+```sql
+SELECT ProductId, Amount, Currency
+FROM ordering.ProductPrices
+WHERE ProductId IN @ProductIds
+    AND Currency = @Currency
+    AND IsAvailable = 1;
+```
+
+It binds the currency upper-cased:
 
 ```csharp
-internal sealed class ProjectedPriceReader(IDbConnectionFactory connections)
-    : IProductPriceReader
+new
 {
-    private const string Sql =
-        """
-        SELECT ProductId, Amount, Currency
-        FROM ordering.ProductPrices
-        WHERE ProductId IN @ProductIds
-            AND Currency = @Currency
-            AND IsAvailable = 1;
-        """;
-
-    public async Task<IReadOnlyDictionary<ProductId, Money>> GetAsync(
-        IReadOnlyCollection<ProductId> productIds,
-        string currency,
-        CancellationToken ct)
-    {
-        // Asking for no prices is a legal thing for a caller to do — the
-        // validator refuses an empty Items, but this port is not only that
-        // caller's — and answering it here saves opening a connection and a
-        // round trip that can only return nothing.
-        //
-        // NOT because Dapper would refuse the query: measured against the
-        // pinned 2.1.66, an empty expansion is rewritten to
-        // `IN (SELECT @Ids WHERE 1 = 0)`, which is valid and returns no rows.
-        // This comment claimed the opposite for as long as it existed.
-        if (productIds.Count == 0)
-            return new Dictionary<ProductId, Money>();
-
-        using IDbConnection connection = connections.Create();
-        IEnumerable<PriceRow> rows = await connection.QueryAsync<PriceRow>(
-            new CommandDefinition(
-                Sql,
-                // Upper-cased because the PROJECTION upper-cases on write
-                // (§6.6) — not because Money.Of does, which is true of the
-                // domain and not of the wire the projection reads from.
-                // Comparing the caller's string as it arrived makes a valid
-                // request depend on the server's collation.
-                new
-                {
-                    ProductIds = productIds.Select(p => p.Value),
-                    Currency = currency.ToUpperInvariant()
-                },
-                cancellationToken: ct));
-
-        return rows.ToDictionary(r => new ProductId(r.ProductId), r => Money.Of(r.Amount, r.Currency));
-    }
-}
+    ProductIds = productIds.Select(p => p.Value),
+    Currency = currency.ToUpperInvariant()
+},
 ```
+
+Upper-cased because the **projection** upper-cases on write (§6.6) — not
+because `Money.Of` does, which is true of the domain and not of the wire the
+projection reads from. Comparing the caller's string as it arrived makes a
+valid request depend on the server's collation.
+
+Asking for no prices is a legal thing for a caller to do — the validator
+refuses an empty `Items`, but this port is not only that caller's — so the
+reader answers it without opening a connection, saving a round trip that can
+only return nothing. That is an optimisation, not a repair: Dapper rewrites an
+empty expansion to `IN (SELECT @Ids WHERE 1 = 0)`, which is valid and returns
+no rows.
 
 Three consequences, and the middle one is the point:
 
@@ -1236,7 +1158,7 @@ Rules for the read side:
   because an unbounded `IN` list is the same unbounded read wearing a
   different hat.
 - `limit` is clamped server-side, to a ceiling each read owns. A client
-  asking for 100,000 rows gets that ceiling, not an error.
+  asking for 100000 rows gets that ceiling, not an error.
 - Avoid `COUNT(*)` alongside a page. Fetching `limit + 1` rows answers "is there
   more?" without scanning the table. Return a total only where the UI genuinely
   displays one.
@@ -1262,12 +1184,12 @@ It is uncached, as the listing is, for the reason
 both** ([ADR-073](adr/ADR-073-the-product-listing-takes-a-search-and-a-closed-sort-and-its-cursor-carries-both.md)).
 `GetProductsQuery` adds `Q`, a contains-match on the name in which the
 caller's text is never a pattern, and `Sort`, one of `ProductSort`'s values.
-A sort key that is not one instant no longer fits `Cursor.Encode`, so
+A sort key that is not one instant does not fit `Cursor.Encode`, so
 `ProductCursor` lays out its own payload and makes it opaque through
 `Cursor.Wrap`; it holds the ordering and the search beside the seek, and
 `GetProductsValidator` refuses a cursor minted under another pair rather than
 reading it as a position in this one. The cursor stays opaque, as the
-decision above says. What it no longer implies is a single ordering: there is
+decision above says. What it does not imply is a single ordering: there is
 one per sort, each with its keyset index, and none by price, since each
 product keeps its own currency.
 
@@ -1285,19 +1207,19 @@ product names and images, which live in Catalog and are not in the Ordering
 database at all. Joining across services is impossible; calling Catalog per row
 is an N+1 over the network.
 
-> **The buyer's half of that screen is served from the BFF now.**
+> **The buyer's half of that screen is served from the BFF.**
 > [ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
 > puts the buyer's own order history in a projection `Web.Bff` owns, because
 > that screen also needs payment and shipment facts Ordering does not hold. It
 > meets this same trigger for this same reason one host out, with Catalog's
 > stream feeding the names.
 >
-> **The escalation below is still Ordering's, and its lifecycle half is
-> built.** `OrderSummaryProjection` keeps `ordering.OrderSummaries` from the
-> five lifecycle events, is §13.3's `OrderMetrics`' only call site, and gives
+> **The escalation below is Ordering's, and its lifecycle half is built.**
+> `OrderSummaryProjection` keeps `ordering.OrderSummaries` from the five
+> lifecycle events, is §13.3's `OrderMetrics`' only call site, and gives
 > Ordering's `projection.lag` its first writer. `ordering.Products`, its
 > `ProductPublished` handler and the escalated history query are not built:
-> the screen they serve is the BFF's now. What moved is one screen, not the
+> the screen they serve is the BFF's. ADR-051 takes one screen, not the
 > progression this section exists to demonstrate.
 
 The upgrade adds denormalised tables inside Ordering's own database, kept
@@ -1433,8 +1355,8 @@ CREATE TABLE ordering.ProductWithdrawals
 placed must still be explicable months later, and a row that vanishes takes its
 price history with it.
 
-> **A withdrawal has to survive having no row to write to, and the first
-> version of this section did not.** The obvious discontinue is a single
+> **A withdrawal has to survive having no row to write to.** The obvious
+> discontinue is a single
 > `UPDATE` over `ProductPrices`, and it reaches only the rows that exist when
 > it runs. [§9.4](09-messaging.md) guarantees no ordering, so a withdrawal can
 > be claimed ahead of a publish still retrying behind it: the `UPDATE` matches
@@ -1492,157 +1414,94 @@ price history with it.
 > order, so the upsert takes them in that order as well, which is the whole of
 > the deadlock argument.
 
-```csharp
-// Infrastructure, not Application: raw SQL and a connection factory. Registered
-// by AddOrderingInfrastructure's scan (§6.2) — Application's scan would not
-// see it. Public, because that scan is public-only: an internal handler is
-// registered as nothing at all, silently, with the endpoint still bound.
-namespace Ordering.Infrastructure.Projections;
+The projection is
+`Ordering.Infrastructure/Projections/ProductPriceProjection.cs`. It lives in
+Infrastructure, not Application — raw SQL and a connection factory — so
+`AddOrderingInfrastructure`'s scan (§6.2) registers it, and Application's scan
+would not see it. It is public because that scan is public-only: an internal
+handler is registered as nothing at all, silently, with the endpoint still
+bound. `ProductPublished` and `PriceChanged` run one upsert:
 
-public sealed class ProductPriceProjection(IDbConnectionFactory connections)
-    : IIntegrationEventHandler<ProductPublished>,
-      IIntegrationEventHandler<PriceChanged>,
-      IIntegrationEventHandler<ProductDiscontinued>
-{
-    private const string UpsertSql =
-        """
-        -- WITH (HOLDLOCK) is not decoration. A bare MERGE takes no range lock
-        -- over the key it failed to find, so two deliveries for one
-        -- (ProductId, Currency) can both take the NOT MATCHED branch and the
-        -- loser violates the primary key. The endpoint (§9.8) sets no
-        -- ConcurrentMessageLimit, so deliveries can overlap and that is
-        -- ordinary rather than contrived — and its retry would absorb it,
-        -- which is the argument FOR closing it here: a correctness property
-        -- repaired by a retry policy stops holding the day somebody tunes the
-        -- retry policy.
-        SET XACT_ABORT ON;
-        BEGIN TRANSACTION;
+```sql
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
 
-        -- The second guard: a withdrawal newer than this event means Catalog
-        -- has since pulled the product, whether or not a row for this currency
-        -- existed when the withdrawal ran.
-        --
-        -- HOLDLOCK because the interesting answer is an ABSENCE, and at read
-        -- committed that lock is released at once — a discontinuation can then
-        -- commit between this read and the insert below and leave a withdrawn
-        -- product available. HOLDLOCK on ProductPrices does not reach this
-        -- table. FIRST because the discontinue statement takes the two tables
-        -- in this order too: same order, no deadlock.
-        DECLARE @IsAvailable bit =
-            CASE
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM ordering.ProductWithdrawals WITH (HOLDLOCK)
-                    WHERE ProductId = @ProductId
-                        AND WithdrawnAt >= @OccurredAt)
-                THEN 0
-                ELSE 1
-            END;
+DECLARE @IsAvailable bit =
+    CASE
+        WHEN EXISTS (
+            SELECT 1
+            FROM ordering.ProductWithdrawals WITH (HOLDLOCK)
+            WHERE ProductId = @ProductId
+                AND WithdrawnAt >= @OccurredAt)
+        THEN 0
+        ELSE 1
+    END;
 
-        MERGE ordering.ProductPrices WITH (HOLDLOCK) AS target
-        USING (SELECT ProductId = @ProductId, Currency = @Currency) AS source
-            ON target.ProductId = source.ProductId
-            AND target.Currency = source.Currency
-        -- NOT MATCHED is the branch no UpdatedAt comparison can cover, because
-        -- there is no target row to compare against.
-        WHEN NOT MATCHED THEN
-            INSERT (ProductId, Currency, Amount, IsAvailable, UpdatedAt)
-            VALUES (@ProductId, @Currency, @Amount, @IsAvailable, @OccurredAt)
-        -- Same out-of-order guard as OrderSummaries: a retried stale event
-        -- must not overwrite a newer price. Strict, unlike the withdrawal
-        -- comparison above — the callout under the DDL says why the two ties
-        -- break differently.
-        WHEN MATCHED AND target.UpdatedAt < @OccurredAt THEN
-            UPDATE SET Amount = @Amount, IsAvailable = @IsAvailable, UpdatedAt = @OccurredAt;
+MERGE ordering.ProductPrices WITH (HOLDLOCK) AS target
+USING (SELECT ProductId = @ProductId, Currency = @Currency) AS source
+    ON target.ProductId = source.ProductId
+    AND target.Currency = source.Currency
+WHEN NOT MATCHED THEN
+    INSERT (ProductId, Currency, Amount, IsAvailable, UpdatedAt)
+    VALUES (@ProductId, @Currency, @Amount, @IsAvailable, @OccurredAt)
+WHEN MATCHED AND target.UpdatedAt < @OccurredAt THEN
+    UPDATE SET Amount = @Amount, IsAvailable = @IsAvailable, UpdatedAt = @OccurredAt;
 
-        COMMIT;
-        """;
-
-    private const string DiscontinueSql =
-        """
-        SET XACT_ABORT ON;
-        BEGIN TRANSACTION;
-
-        -- The watermark first, because it is the half that must survive having
-        -- no price row to write to. Monotonic: a stale withdrawal must not
-        -- move it back over a later one.
-        MERGE ordering.ProductWithdrawals WITH (HOLDLOCK) AS target
-        USING (SELECT ProductId = @ProductId) AS source
-            ON target.ProductId = source.ProductId
-        WHEN NOT MATCHED THEN
-            INSERT (ProductId, WithdrawnAt)
-            VALUES (@ProductId, @OccurredAt)
-        WHEN MATCHED AND target.WithdrawnAt < @OccurredAt THEN
-            UPDATE SET WithdrawnAt = @OccurredAt;
-
-        -- Then the rows that already exist. The watermark covers the ones that
-        -- do not, so between them every currency is reached.
-        UPDATE ordering.ProductPrices
-        SET IsAvailable = 0, UpdatedAt = @OccurredAt
-        WHERE ProductId = @ProductId
-            AND UpdatedAt <= @OccurredAt;
-
-        -- One transaction, because the two halves are one fact: the watermark
-        -- alone leaves existing prices orderable, the rows alone leave the
-        -- hole. Redelivery repairs either, a message that exhausts §9.8's
-        -- retries does not, and XACT_ABORT is what rolls the first statement
-        -- back when the second fails.
-        COMMIT;
-        """;
-
-    public Task HandleAsync(ProductPublished integrationEvent, CancellationToken ct) =>
-        UpsertAsync(
-            integrationEvent.ProductId,
-            integrationEvent.Currency,
-            integrationEvent.Amount,
-            integrationEvent.OccurredAt,
-            ct);
-
-    public Task HandleAsync(PriceChanged integrationEvent, CancellationToken ct) =>
-        UpsertAsync(
-            integrationEvent.ProductId,
-            integrationEvent.Currency,
-            integrationEvent.Amount,
-            integrationEvent.OccurredAt,
-            ct);
-
-    public Task HandleAsync(ProductDiscontinued integrationEvent, CancellationToken ct) =>
-        ExecuteAsync(
-            DiscontinueSql,
-            new { integrationEvent.ProductId, integrationEvent.OccurredAt },
-            ct);
-
-    // The currency is upper-cased HERE, and in the reader (§6.4) as well.
-    // Nothing between Catalog's Money and this statement normalises anything:
-    // Currency crosses the wire as a string like any other, so what arrives is
-    // whatever the publisher put in the contract. Under a case-sensitive
-    // collation an unnormalised one writes a row the reader cannot find, and a
-    // second primary-key row beside the one it can — so both sides normalise,
-    // and neither call is redundant.
-    private Task UpsertAsync(
-        Guid productId,
-        string currency,
-        decimal amount,
-        DateTimeOffset occurredAt,
-        CancellationToken ct) =>
-        ExecuteAsync(
-            UpsertSql,
-            new
-            {
-                ProductId = productId,
-                Currency = currency.ToUpperInvariant(),
-                Amount = amount,
-                OccurredAt = occurredAt
-            },
-            ct);
-
-    private async Task ExecuteAsync(string sql, object parameters, CancellationToken ct)
-    {
-        using IDbConnection connection = connections.Create();
-        await connection.ExecuteAsync(new CommandDefinition(sql, parameters, cancellationToken: ct));
-    }
-}
+COMMIT;
 ```
+
+`WITH (HOLDLOCK)` on the `MERGE` is not decoration. A bare `MERGE` takes no
+range lock over the key it failed to find, so two deliveries for one
+`(ProductId, Currency)` can both take the `NOT MATCHED` branch and the loser
+violates the primary key. The endpoint (§9.8) sets no
+`ConcurrentMessageLimit`, so deliveries can overlap and that is ordinary
+rather than contrived — and its retry would absorb it, which is the argument
+for closing it here: a correctness property repaired by a retry policy stops
+holding the day somebody tunes the retry policy. The `MATCHED` branch is the
+same out-of-order guard as `OrderSummaries`', so a retried stale event cannot
+overwrite a newer price; it is strict where the withdrawal comparison is not,
+and the callout above says why the two ties break differently.
+
+`ProductDiscontinued` runs the other statement:
+
+```sql
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+
+MERGE ordering.ProductWithdrawals WITH (HOLDLOCK) AS target
+USING (SELECT ProductId = @ProductId) AS source
+    ON target.ProductId = source.ProductId
+WHEN NOT MATCHED THEN
+    INSERT (ProductId, WithdrawnAt)
+    VALUES (@ProductId, @OccurredAt)
+WHEN MATCHED AND target.WithdrawnAt < @OccurredAt THEN
+    UPDATE SET WithdrawnAt = @OccurredAt;
+
+UPDATE ordering.ProductPrices
+SET IsAvailable = 0, UpdatedAt = @OccurredAt
+WHERE ProductId = @ProductId
+    AND UpdatedAt <= @OccurredAt;
+
+COMMIT;
+```
+
+The watermark goes first, because it is the half that must survive having no
+price row to write to, and it is monotonic: a stale withdrawal must not move
+it back over a later one. The `UPDATE` then reaches the rows that already
+exist, and the watermark covers the ones that do not, so between them every
+currency is reached. The two are one transaction because they are one fact:
+the watermark alone leaves existing prices orderable, the rows alone leave the
+hole. Redelivery repairs either, a message that exhausts §9.8's retries does
+not, and `XACT_ABORT` is what rolls the first statement back when the second
+fails.
+
+The currency is upper-cased in the projection, and in the reader (§6.4) as
+well. Nothing between Catalog's `Money` and this statement normalises
+anything: `Currency` crosses the wire as a string like any other, so what
+arrives is whatever the publisher put in the contract. Under a case-sensitive
+collation an unnormalised one writes a row the reader cannot find, and a
+second primary-key row beside the one it can — so both sides normalise, and
+neither call is redundant.
 
 `ProjectedPriceReader` (§6.4) filters on `IsAvailable = 1`, so a discontinued
 product produces the same `ProductsUnavailable` failure as one this service
@@ -1676,19 +1535,16 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > That is the same silence the callout above describes, with a cause nobody can
 > see from Ordering.
 >
-> **A republish is not the only thing that ends it, and this callout used to
-> say it was.** `PriceChanged` runs the same upsert and inserts on the same
-> `NOT MATCHED` branch, so an ordinary price change lists that product with no
-> rebuild having happened — carrying a price and nothing else, because
-> `PriceChanged` has no `Name` or `ThumbnailUrl` to carry. That is a door
-> rather than a repair, and [ADR-027](adr/ADR-027-the-order-summary-stores-product-ids-and-resolves-the-name-locally.md) turns on
-> it: an order placed through this door is the one a repair that read names at
-> *insert* time could never fill, because at insert there is no name to read.
-> The old patch handler would eventually fill it, whenever `ProductPublished`
-> arrived — which is why that door refutes the cheaper repair rather than the
-> design being replaced, and §12.4's grid says so. A product whose price never
-> changes stays absent indefinitely, which is why the republish is still the
-> procedure that is owed.
+> **A republish is not the only thing that ends it.** `PriceChanged` runs the
+> same upsert and inserts on the same `NOT MATCHED` branch, so an ordinary
+> price change lists that product with no rebuild having happened — carrying a
+> price and nothing else, because `PriceChanged` has no `Name` or
+> `ThumbnailUrl` to carry. That is a door rather than a repair, and
+> [ADR-027](adr/ADR-027-the-order-summary-stores-product-ids-and-resolves-the-name-locally.md)
+> turns on it: an order placed through this door is the one a repair that read
+> names at *insert* time could never fill, because at insert there is no name
+> to read. A product whose price never changes stays absent indefinitely,
+> which is why the republish is the procedure that is owed.
 >
 > **The republish must carry each product's original `OccurredAt`, and this is
 > the part that is easy to get wrong.** A loop that re-emits `ProductPublished`
@@ -1700,10 +1556,11 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > is cheaper than discovering it during an incident, which is when a rebuild is
 > reached for.
 
-The projection reacts to two different sources, so it implements two different
-interfaces (§9.4): `IProjectionHandler<T>` for this service's own events,
-arriving after commit through the local outbox lane, and
-`IIntegrationEventHandler<T>` for Catalog's events, arriving from the broker.
+Ordering's read models react to two different sources through two different
+interfaces (§9.4): `OrderSummaryProjection` implements `IProjectionHandler<T>`
+for this service's own events, arriving after commit through the local outbox
+lane, and `ProductPriceProjection` implements `IIntegrationEventHandler<T>` for
+Catalog's events, arriving from the broker.
 
 Both run **after** the originating transaction has committed, on their own
 connection. That is deliberate — a projection must never run inside the write
@@ -1712,256 +1569,178 @@ transaction still holds and would turn a read-model bug into a write-path
 failure. The cost is a few milliseconds of lag; the benefit is that a broken
 projection can be fixed and replayed without touching the write path.
 
-Both must therefore be idempotent:
+Both must therefore be idempotent. The lifecycle half is
+`Ordering.Infrastructure/Projections/OrderSummaryProjection.cs`. It handles
+every lifecycle event, not just the first: a projection that handles only
+creation shows a status frozen at whatever the aggregate was when it was
+born — and the SQL still looks correct, because the `UPDATE` branch exists and
+simply never fires. `OrderStockConfirmed` is handled here but deliberately
+absent from §9.3's publish allow-list: `AwaitingPayment` is a state the
+customer sees on their own history screen and no other service has any
+business knowing.
+
+The placement is one `MERGE`:
+
+```sql
+MERGE ordering.OrderSummaries WITH (HOLDLOCK) AS target
+USING (SELECT OrderId = @OrderId) AS source
+    ON target.OrderId = source.OrderId
+WHEN NOT MATCHED THEN
+    INSERT (OrderId, CustomerId, Status, TotalAmount, Currency, LineCount, Products, PlacedAt, UpdatedAt)
+    VALUES (@OrderId, @CustomerId, @Status, @Total, @Currency, @LineCount, @Products, @OccurredAt, @OccurredAt)
+-- PlacedAt IS NULL fires once: a redelivery finds it set and writes nothing.
+WHEN MATCHED AND target.PlacedAt IS NULL THEN
+    UPDATE SET
+        CustomerId  = @CustomerId,
+        TotalAmount = @Total,
+        Currency    = @Currency,
+        LineCount   = @LineCount,
+        Products    = @Products,
+        PlacedAt    = @OccurredAt,
+        Status      = CASE WHEN target.UpdatedAt < @OccurredAt THEN @Status ELSE target.Status END,
+        UpdatedAt   = CASE WHEN target.UpdatedAt < @OccurredAt THEN @OccurredAt ELSE target.UpdatedAt END;
+```
+
+`@OccurredAt` is the event's own time, from the domain event the handler
+receives, and stamps both the placement and the row's last change.
+
+The matched branch is guarded by `PlacedAt IS NULL`, not by `UpdatedAt`: the
+row exists because a status event arrived first, and the descriptive columns
+have never been written. Matching on that condition fires exactly once — a
+redelivery finds `PlacedAt` set and does nothing, which is what keeps the
+counter below honest. The descriptive facts are immutable and always safe to
+write; `Status` is not, because something later already set it and this event
+is the older one. `Products` is written as a bare `Guid` array of the lines'
+product ids, and only ids: what the screen shows beside each one is Catalog's
+fact about the product, resolved on read from `ordering.Products`, so nothing
+is left blank for a later event to fill
+([ADR-027](adr/ADR-027-the-order-summary-stores-product-ids-and-resolves-the-name-locally.md)).
+With no member names on the wire there is nothing for the two sides to
+disagree about.
+
+The status transitions share one statement, because they differ only in the
+value written — and because a per-event copy is how one of them ends up
+missing the out-of-order guard:
+
+```sql
+MERGE ordering.OrderSummaries WITH (HOLDLOCK) AS target
+USING (SELECT OrderId = @OrderId) AS source
+    ON target.OrderId = source.OrderId
+WHEN NOT MATCHED THEN
+    INSERT (OrderId, Status, UpdatedAt, ConfirmedAt, CancelReason)
+    VALUES (@OrderId, @Status, @OccurredAt, @ConfirmedAt, @CancelReason)
+WHEN MATCHED THEN
+    UPDATE SET
+        Status       = CASE WHEN target.UpdatedAt < @OccurredAt
+                            THEN @Status ELSE target.Status END,
+        UpdatedAt    = CASE WHEN target.UpdatedAt < @OccurredAt
+                            THEN @OccurredAt ELSE target.UpdatedAt END,
+        ConfirmedAt  = COALESCE(target.ConfirmedAt,  @ConfirmedAt),
+        CancelReason = COALESCE(target.CancelReason, @CancelReason);
+```
+
+An `UPDATE` here would be the whole defect: §9.4 claims ordering is not
+required, and a `Cancelled` claimed before its `OrderPlaced` would match no
+row, change nothing, and be marked processed. The order would read
+`AwaitingStock` for ever, with no error anywhere. The status guard is per
+column, not on the branch: a redelivered `Confirmed` must not undo a `Shipped`
+that followed, but it must still write `ConfirmedAt`. Guarded on the branch, a
+`Confirmed` claimed after its `Shipped` would change nothing, and the
+fulfilment claim below would never fire for that order. `ConfirmedAt` and
+`CancelReason` each happen once, so the first value written stands. The
+cancellation's reason is its wire code, not the enum: a metric tag is a string
+either way, and `ToString()` on an enum makes its member names the dimension
+values — renaming a member would silently split the series in two (§13.3).
+
+Every write then calls `RecordPendingFactsAsync`, which records every business
+fact the row now supports and has not yet been counted for — after each write,
+because any write can be the one that completes a pair. The placement does not
+count on rows affected: its row may have been created by a status event that
+outran its `OrderPlaced`, in which case a cancellation is already sitting on
+it uncounted — and an `OrderConfirmed` may be too. One call records whatever is
+now true. For the same reason the status write returns nothing: handing the
+next reader an `applied` on a status write is an invitation to write
+`if (applied > 0)`, which is the bug, not the fix.
+
+Each fact is an atomic claim: the flag flips and the values come back in one
+`UPDATE`, so two dispatcher replicas racing the same order record it once.
+This is the outbox's lease idiom (§9.4) applied to a counter — a metric is not
+idempotent, so "it already fired" is state:
+
+```sql
+UPDATE ordering.OrderSummaries
+SET PlacedCounted = 1
+OUTPUT inserted.TotalAmount, inserted.Currency
+WHERE OrderId = @OrderId
+    AND PlacedAt IS NOT NULL
+    AND PlacedCounted = 0;
+
+UPDATE ordering.OrderSummaries
+SET CancelledCounted = 1
+OUTPUT inserted.CancelReason
+WHERE OrderId = @OrderId
+    AND PlacedCounted = 1
+    AND CancelReason IS NOT NULL
+    AND CancelledCounted = 0;
+
+UPDATE ordering.OrderSummaries
+SET FulfilmentCounted = 1
+OUTPUT inserted.PlacedAt, inserted.ConfirmedAt
+WHERE OrderId = @OrderId
+    AND PlacedAt IS NOT NULL
+    AND ConfirmedAt IS NOT NULL
+    AND FulfilmentCounted = 0;
+```
+
+`PlacedAt` is the first claim's predicate, but `TotalAmount` and `Currency`
+are what come back — non-null only because the placement `MERGE` writes all
+three in one statement. They stay in one statement: a split that set
+`PlacedAt` earlier would hand the claim a NULL decimal, and `PlacedFact`'s
+non-nullable `TotalAmount` has nowhere to put it. The cancellation claim takes
+`PlacedCounted = 1` in its predicate, not merely `PlacedAt IS NOT NULL`: a
+cancellation must never be counted before the placement it belongs to.
+Ordering is not guaranteed on the lane (§9.4), and `cancelled` exceeding
+`placed` is a state the write model cannot reach — a reconciliation that finds
+it should be finding a real defect. The placed total reaches the metric
+through `Money.Of`, not `new Money`, because the constructor is private
+(§5.3); the column only ever holds `Money`'s own three letters, so `CHAR(3)`
+returns it unpadded.
+
+The escalation adds Catalog's `ProductPublished` to the same class, as an
+`IIntegrationEventHandler<ProductPublished>` writing `ordering.Products`:
 
 ```csharp
-namespace Ordering.Infrastructure.Projections;
-
-public sealed class OrderSummaryProjection(IDbConnectionFactory connections, OrderMetrics metrics)
-    // Every lifecycle event, not just the first. A projection that handles
-    // only creation shows a status frozen at whatever the aggregate was when
-    // it was born — and the SQL still looks correct, because the UPDATE branch
-    // exists and simply never fires.
-    : IProjectionHandler<OrderPlacedDomainEvent>,
-      IProjectionHandler<OrderStockConfirmedDomainEvent>,
-      IProjectionHandler<OrderConfirmedDomainEvent>,
-      IProjectionHandler<OrderShippedDomainEvent>,
-      IProjectionHandler<OrderCancelledDomainEvent>,
-      IIntegrationEventHandler<ProductPublished>  // Catalog's event, from the broker
+public async Task HandleAsync(ProductPublished e, CancellationToken ct)
 {
-    public async Task HandleAsync(OrderPlacedDomainEvent e, CancellationToken ct)
-    {
-        using IDbConnection connection = connections.Create();
-        await connection.ExecuteAsync(
-            """
-            MERGE ordering.OrderSummaries WITH (HOLDLOCK) AS target
-            USING (SELECT OrderId = @OrderId) AS source
-                ON target.OrderId = source.OrderId
-            WHEN NOT MATCHED THEN
-                INSERT (OrderId, CustomerId, Status, TotalAmount, Currency, LineCount, Products, PlacedAt, UpdatedAt)
-                VALUES (@OrderId, @CustomerId, @Status, @Total, @Currency, @LineCount, @Products, @PlacedAt, @UpdatedAt)
-            -- PlacedAt IS NULL, not an UpdatedAt guard: the row exists because
-            -- a status event arrived first, and the descriptive columns have
-            -- never been written. Matching on that condition fires exactly
-            -- once — a redelivery finds PlacedAt set and does nothing, which
-            -- is what keeps the counter below honest.
-            WHEN MATCHED AND target.PlacedAt IS NULL THEN
-                UPDATE SET
-                    CustomerId  = @CustomerId,
-                    TotalAmount = @Total,
-                    Currency    = @Currency,
-                    LineCount   = @LineCount,
-                    Products    = @Products,
-                    PlacedAt    = @PlacedAt,
-                    -- The facts above are immutable and always safe to write.
-                    -- Status is not: something later already set it, and this
-                    -- event is the older one.
-                    Status      = CASE WHEN target.UpdatedAt < @UpdatedAt
-                                       THEN @Status ELSE target.Status END,
-                    UpdatedAt   = CASE WHEN target.UpdatedAt < @UpdatedAt
-                                       THEN @UpdatedAt ELSE target.UpdatedAt END;
-            """,
-            new
-            {
-                OrderId = e.OrderId.Value,
-                CustomerId = e.CustomerId.Value,
-                Status = nameof(OrderStatus.AwaitingStock),
-                Total = e.Total.Amount,
-                Currency = e.Total.Currency,
-                LineCount = e.Lines.Count,
-                // Ids, and only ids. What the screen shows beside each one
-                // is Catalog's fact about the product, resolved on read from
-                // ordering.Products — so nothing here is left blank for a
-                // later event to fill, which is what this line used to do.
-                //
-                // A bare Guid array rather than a record: with no member names
-                // on the wire there is nothing for the two sides to disagree
-                // about, which is what the callout below used to be for.
-                Products = JsonSerializer.Serialize(e.Lines.Select(l => l.ProductId.Value)),
-                PlacedAt = e.OccurredAt,
-                UpdatedAt = e.OccurredAt
-            });
-
-        // Not "if (applied > 0) metrics.Placed(...)". This row may have been
-        // created by a status event that outran its OrderPlaced, in which case
-        // a cancellation is already sitting on it uncounted — and an
-        // OrderConfirmed may be too. One call records whatever is now true.
-        await RecordPendingFactsAsync(connection, e.OrderId);
-    }
-
-    // The status transitions. One statement, because they differ only in the
-    // value written — and because a per-event copy is how one of them ends up
-    // missing the out-of-order guard.
-    //
-    // OrderStockConfirmed is handled here but deliberately absent from §9.3's
-    // publish allow-list: AwaitingPayment is a state the customer sees on their
-    // own history screen and no other service has any business knowing.
-    public Task HandleAsync(OrderStockConfirmedDomainEvent e, CancellationToken ct) =>
-        SetStatusAsync(e.OrderId, OrderStatus.AwaitingPayment, e.OccurredAt);
-
-    public Task HandleAsync(OrderConfirmedDomainEvent e, CancellationToken ct) =>
-        SetStatusAsync(e.OrderId, OrderStatus.Confirmed, e.OccurredAt, confirmedAt: e.OccurredAt);
-
-    public Task HandleAsync(OrderShippedDomainEvent e, CancellationToken ct) =>
-        SetStatusAsync(e.OrderId, OrderStatus.Shipped, e.OccurredAt);
-
-    public Task HandleAsync(OrderCancelledDomainEvent e, CancellationToken ct) =>
-        // The wire code, not the enum: a metric tag is a string either way, and
-        // ToString() on an enum makes its member names the dimension values —
-        // renaming a member would silently split the series in two (§13.3).
-        SetStatusAsync(
-            e.OrderId,
-            OrderStatus.Cancelled,
-            e.OccurredAt,
-            cancelReason: CancellationReasons.ToCode(e.Reason));
-
-    // Returns nothing. It used to return rows affected, for callers that
-    // decided whether to count a metric from it — and that is precisely the
-    // reasoning RecordPendingFactsAsync replaced. Handing the next reader an
-    // `applied` on a status write is an invitation to write `if (applied > 0)`
-    // again, which is the bug, not the fix.
-    private async Task SetStatusAsync(
-        OrderId orderId,
-        OrderStatus status,
-        DateTimeOffset occurredAt,
-        DateTimeOffset? confirmedAt = null,
-        string? cancelReason = null)
-    {
-        using IDbConnection connection = connections.Create();
-
-        await connection.ExecuteAsync(
-            """
-            MERGE ordering.OrderSummaries WITH (HOLDLOCK) AS target
-            USING (SELECT OrderId = @OrderId) AS source
-                ON target.OrderId = source.OrderId
-            -- An UPDATE here would be the whole defect: §9.4 claims ordering
-            -- is not required, and a Cancelled claimed before its OrderPlaced
-            -- would match no row, change nothing, and be marked processed. The
-            -- order would read AwaitingStock for ever, with no error anywhere.
-            WHEN NOT MATCHED THEN
-                INSERT (OrderId, Status, UpdatedAt, ConfirmedAt, CancelReason)
-                VALUES (@OrderId, @Status, @OccurredAt, @ConfirmedAt, @CancelReason)
-            -- The status guard is per column, not on the branch: a redelivered
-            -- Confirmed must not undo a Shipped that followed, but it must
-            -- still write ConfirmedAt. Guarded on the branch, a Confirmed
-            -- claimed after its Shipped would change nothing, and the
-            -- fulfilment claim below would never fire for that order.
-            WHEN MATCHED THEN
-                UPDATE SET
-                    Status       = CASE WHEN target.UpdatedAt < @OccurredAt
-                                        THEN @Status ELSE target.Status END,
-                    UpdatedAt    = CASE WHEN target.UpdatedAt < @OccurredAt
-                                        THEN @OccurredAt ELSE target.UpdatedAt END,
-                    -- Each happens once, so the first value written stands.
-                    ConfirmedAt  = COALESCE(target.ConfirmedAt,  @ConfirmedAt),
-                    CancelReason = COALESCE(target.CancelReason, @CancelReason);
-            """,
-            new { OrderId = orderId.Value, Status = status.ToString(), occurredAt, confirmedAt, cancelReason });
-
-        await RecordPendingFactsAsync(connection, orderId);
-    }
-
-    /// <summary>
-    /// Records every business fact the row now supports and has not yet been
-    /// counted for. Called after each write, because any write can be the one
-    /// that completes a pair.
-    /// </summary>
-    private async Task RecordPendingFactsAsync(IDbConnection connection, OrderId orderId)
-    {
-        // Each statement is an atomic claim: the flag flips and the values come
-        // back in one UPDATE, so two dispatcher replicas racing the same order
-        // record it once. This is the outbox's lease idiom (§9.4) applied to a
-        // counter — a metric is not idempotent, so "it already fired" is state.
-        var args = new { OrderId = orderId.Value };
-
-        // PlacedAt is the predicate, but TotalAmount and Currency are what come
-        // back — non-null only because the MERGE above writes all three in one
-        // statement. Keep them in one statement: a future split that sets
-        // PlacedAt earlier would hand this a NULL decimal, and PlacedFact's
-        // non-nullable TotalAmount has nowhere to put it.
-        PlacedFact? placed = await connection.QuerySingleOrDefaultAsync<PlacedFact>(
-            """
-            UPDATE ordering.OrderSummaries
-            SET PlacedCounted = 1
-            OUTPUT inserted.TotalAmount, inserted.Currency
-            WHERE OrderId = @OrderId
-                AND PlacedAt IS NOT NULL
-                AND PlacedCounted = 0;
-            """, args);
-
-        // Money.Of, not new Money: the constructor is private (§5.3). The
-        // column only ever holds Money's own three letters, so CHAR(3)
-        // returns it unpadded.
-        if (placed is not null)
-            metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency));
-
-        // PlacedCounted = 1 in the predicate, not merely PlacedAt IS NOT NULL:
-        // a cancellation must never be counted before the placement it belongs
-        // to. Ordering is not guaranteed on the lane (§9.4), and `cancelled`
-        // exceeding `placed` is a state the write model cannot reach — a
-        // reconciliation that finds it should be finding a real defect.
-        string? cancelled = await connection.QuerySingleOrDefaultAsync<string>(
-            """
-            UPDATE ordering.OrderSummaries
-            SET CancelledCounted = 1
-            OUTPUT inserted.CancelReason
-            WHERE OrderId = @OrderId
-                AND PlacedCounted = 1
-                AND CancelReason IS NOT NULL
-                AND CancelledCounted = 0;
-            """, args);
-
-        if (cancelled is not null)
-            metrics.Cancelled(cancelled);
-
-        FulfilmentFact? fulfilment =
-            await connection.QuerySingleOrDefaultAsync<FulfilmentFact>(
-                """
-                UPDATE ordering.OrderSummaries
-                SET FulfilmentCounted = 1
-                OUTPUT inserted.PlacedAt, inserted.ConfirmedAt
-                WHERE OrderId = @OrderId
-                    AND PlacedAt IS NOT NULL
-                    AND ConfirmedAt IS NOT NULL
-                    AND FulfilmentCounted = 0;
-                """, args);
-
-        if (fulfilment is not null)
-            metrics.Fulfilled(fulfilment.ConfirmedAt - fulfilment.PlacedAt);
-    }
-
-    public async Task HandleAsync(ProductPublished e, CancellationToken ct)
-    {
-        // One row per product, guarded by that product's own watermark. There
-        // is no summary to scan and no array element to find: a rename lands
-        // once here, and every order that ever referenced the product shows it
-        // on the next read.
-        using IDbConnection connection = connections.Create();
-        await connection.ExecuteAsync(
-            """
-            MERGE ordering.Products WITH (HOLDLOCK) AS target
-            USING (SELECT ProductId = @ProductId) AS source
-                ON target.ProductId = source.ProductId
-            WHEN NOT MATCHED THEN
-                INSERT (ProductId, Name, ThumbnailUrl, UpdatedAt)
-                VALUES (@ProductId, @Name, @Thumbnail, @OccurredAt)
-            -- The insert branch is what lets this handler arrive before any
-            -- order references the product, which is the ordinary case:
-            -- PlaceOrder reads ordering.ProductPrices, and the same event
-            -- fills that too. Ordinary rather than guaranteed — the two
-            -- handlers commit separately, so an order can slip into the gap
-            -- between them. HOLDLOCK for the same reason
-            -- ProductPriceProjection's two upserts carry it: this branch makes
-            -- concurrent deliveries for one key able to both insert, and the
-            -- endpoint's retry would absorb the violation rather than surface
-            -- it. The two OrderSummaries MERGEs carry it for the same reason:
-            -- §9.4's dispatcher claims with READPAST, so two lifecycle events
-            -- for one order can be in flight together.
-            WHEN MATCHED AND target.UpdatedAt < @OccurredAt THEN
-                UPDATE SET Name = @Name, ThumbnailUrl = @Thumbnail, UpdatedAt = @OccurredAt;
-            """,
-            new { ProductId = e.ProductId, Name = e.Name, Thumbnail = e.ThumbnailUrl, e.OccurredAt });
-    }
+    // One row per product, guarded by that product's own watermark. There
+    // is no summary to scan and no array element to find: a rename lands
+    // once here, and every order that ever referenced the product shows it
+    // on the next read.
+    using IDbConnection connection = connections.Create();
+    await connection.ExecuteAsync(
+        """
+        MERGE ordering.Products WITH (HOLDLOCK) AS target
+        USING (SELECT ProductId = @ProductId) AS source
+            ON target.ProductId = source.ProductId
+        WHEN NOT MATCHED THEN
+            INSERT (ProductId, Name, ThumbnailUrl, UpdatedAt)
+            VALUES (@ProductId, @Name, @Thumbnail, @OccurredAt)
+        -- The insert branch is what lets this handler arrive before any
+        -- order references the product, which is the ordinary case:
+        -- PlaceOrder reads ordering.ProductPrices, and the same event
+        -- fills that too. Ordinary rather than guaranteed — the two
+        -- handlers commit separately, so an order can slip into the gap
+        -- between them. HOLDLOCK for the same reason
+        -- ProductPriceProjection's two upserts carry it: this branch makes
+        -- concurrent deliveries for one key able to both insert, and the
+        -- endpoint's retry would absorb the violation rather than surface
+        -- it. The two OrderSummaries MERGEs carry it for the same reason:
+        -- §9.4's dispatcher claims with READPAST, so two lifecycle events
+        -- for one order can be in flight together.
+        WHEN MATCHED AND target.UpdatedAt < @OccurredAt THEN
+            UPDATE SET Name = @Name, ThumbnailUrl = @Thumbnail, UpdatedAt = @OccurredAt;
+        """,
+        new { ProductId = e.ProductId, Name = e.Name, Thumbnail = e.ThumbnailUrl, e.OccurredAt });
 }
 ```
 
@@ -1975,63 +1754,30 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
 > Ordering's clock would push `UpdatedAt` into the future; the next
 > `OrderConfirmed` then fails `target.UpdatedAt < @OccurredAt`, its status is
 > held, and it is marked processed. The order keeps the status it already
-> had and never shows `Confirmed`, which is the outcome `SetStatusAsync`'s
-> own comment says its `MERGE` exists to prevent.
+> had and never shows `Confirmed`, which is the outcome the status `MERGE`
+> above exists to prevent.
 >
-> **An earlier revision bought that separation with a second column on the
-> summary, and a second column was one watermark for as many sequences as the
-> order had products.** Every product is its own `ProductPublished` stream: a
-> rename of product A at a later `OccurredAt` than one of product B discarded
-> B's, and B kept the stale name until Catalog republished it. That residual
-> was named rather than closed, and closing it inside the array meant a fourth
-> JSON member compared after a `CAST` in an `OPENJSON` predicate. Keying the
-> table the way the fact is keyed retires it instead: `ordering.Products`
-> holds one row and one `UpdatedAt` per product, so each stream has a watermark
-> of its own by construction and there is no array element to compare.
+> **A second watermark column on the summary would not separate them either:
+> it would be one watermark for as many sequences as the order has
+> products.** Every product is its own `ProductPublished` stream, so a rename
+> of product A at a later `OccurredAt` than one of product B would discard
+> B's. Keying the table the way the fact is keyed avoids that:
+> `ordering.Products` holds one row and one `UpdatedAt` per product, so each
+> stream has a watermark of its own by construction and there is no array
+> element to compare.
 
 > **Decision — the summary stores product ids and resolves the name locally.**
 > See [ADR-027](adr/ADR-027-the-order-summary-stores-product-ids-and-resolves-the-name-locally.md).
-
-> **The shape this replaced filled a name only by accident, and the reason is
-> worth keeping.** An earlier revision inserted `name` and `thumb` as empty
-> strings
-> and left them for "a later `ProductPublished`" to patch in. Ordinarily none
-> comes: a product must be published before it can be ordered — `PlaceOrder`
-> reads `ordering.ProductPrices`, which the same event fills — so it is
-> ordinarily consumed *before* the summary row exists, and a patch scoped to
-> summaries that already contain the product then touches nothing. **In the
-> normal flow every summary carried empty names**, which is the payload this
-> section exists to deliver.
->
-> **"Ordinarily", not "always", and the gap is worth keeping.** The two
-> handlers run sequentially under one `IntegrationEventConsumer`, but each
-> commits on its own connection — so an order placed in the window after the
-> price handler commits and before the patch handler runs *would* find its
-> summary row and have it patched. That window is narrow and nothing depends
-> on it; what depends on the distinction is that this section is describing a
-> common outcome rather than an impossible ordering.
->
-> The handler was also the expensive one: `OrderPlacedDomainEvent` writes one
-> row, and a single `ProductPublished` scanned every summary that had ever
-> contained that product. It was justified on the grounds that "joining at read
-> time is not an option — the products live in Catalog", and **that sentence is
-> the defect rather than the statement below it**. The products do not live in
-> Catalog once Ordering projects them; a primary-key lookup against a table in
-> the same database is not the cross-service join the argument was about.
-> Catalog's facts were **already** projected into this database as prices, so
-> the premise had been false since PR-20 — and the name was then copied a
-> second time into every order's JSON, which is the copy this change removes.
-> `ordering.ProductPrices` never held a name and is not what changed here.
 
 Three details that are easy to miss and expensive to discover later:
 
 - **The `MERGE` is idempotent.** Redelivery of `OrderPlacedDomainEvent` inserts
   nothing new.
-- **`UpdatedAt < @UpdatedAt` guards against out-of-order delivery — of
+- **`UpdatedAt < @OccurredAt` guards against out-of-order delivery — of
   Ordering's lifecycle events, and of nothing else.** Messages can and do
   arrive out of sequence, especially after a retry. Without this check a
   redelivered `AwaitingPayment` overwrites a `Confirmed` that already followed
-  it — and because all five lifecycle events now feed this table (above), that
+  it — and because all five lifecycle events feed this table (above), that
   is a sequence the projection genuinely sees rather than a hypothetical.
   Catalog's `ProductPublished` is a different sequence, does not touch this
   table at all, and is guarded by its own row's watermark in
@@ -2074,20 +1820,20 @@ not the correctness.
 
 **It does not survive everything, and the case it loses is worth naming.** The
 cancellation claim requires `PlacedCounted = 1`. If the `OrderPlaced` row is
-abandoned after `MaxAttempts` (§9.4 permits this and alerts on it), that flag
-never flips, and the cancellation is never counted at all. A phantom
-cancellation was traded for a missing one.
+abandoned after `OutboxDispatcher.MaxAttempts` (§9.4 permits this and alerts on
+it), that flag never flips, and the cancellation is never counted at all. The
+claim trades a phantom cancellation for a missing one.
 
 That is the right direction to fail in — `cancelled > placed` is a state the
 write model cannot reach, and a metric that reports it is worse than one that
-under-reports — but "the right direction" is not "no consequence", and a
-permanent silent drop is the same defect §13.3 describes the old fulfilment
-guard having. The difference is that this one is bounded by an alert that
-already exists: a row reaches `MaxAttempts` only by failing ten times (§9.4),
-across ten leases with a growing gap between them, which the abandoned-row
-alert (§13.6) pages on. Ten dispatcher attempts, not the five of
-`UseMessageRetry` (§9.8) — that limit governs a consumer redelivering a message
-it already received, and a row that never left the outbox has not reached one. **The metric's correctness therefore
+under-reports — but "the right direction" is not "no consequence": the drop is
+permanent and silent. What bounds it is an alert that already exists: a row
+reaches `OutboxDispatcher.MaxAttempts` only by failing that many times (§9.4),
+across as many leases with a growing gap between them, which the abandoned-row
+alert (§13.6) pages on. Those are dispatcher attempts, not the
+`RetryPolicy.RetryLimit` retries of `UseMessageRetry` (§9.8) — that limit
+governs a consumer redelivering a message it already received, and a row that
+never left the outbox has not reached one. **The metric's correctness therefore
 depends on that alert being answered**, which is a dependency worth stating out
 loud rather than a property of the pattern.
 
@@ -2126,19 +1872,15 @@ public sealed record OrderSummaryDto(
     DateTimeOffset PlacedAt,
     IReadOnlyList<SummaryProduct> Products);
 
-// The element of the DTO above, and nothing else now — the column holds bare
-// ids and this record is composed on read from ordering.Products. It used to
-// do two jobs, with its JSON names PINNED by attribute because a third place
-// spelled them: the JSON_MODIFY paths in the patch handler, which are string
-// literals no compiler reads. There is no third place any more, and no member
-// name on the wire at all, so the pinning left with the handler that needed
-// it — Dapper binds these members from the aliases NamesSql spells instead.
+// The element of the DTO above, and nothing else — the column holds bare ids
+// and this record is composed on read from ordering.Products. No member name
+// crosses the wire, so nothing pins one by attribute: Dapper binds these
+// members from the aliases NamesSql spells.
 //
 // Thumb is NULLABLE and Name is not, and that is Catalog's shape rather than
 // storage's: ProductPublished.ThumbnailUrl is `string?`, because a product may
 // genuinely have no image. ordering.Products declares the two columns the same
-// way one level down, so the nullability is stated once and inherited — where
-// before it was a property of how a JSON key happened to be written.
+// way one level down, so the nullability is stated once and inherited.
 public sealed record SummaryProduct(Guid Id, string Name, string? Thumb);
 
 public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, ICurrentUser currentUser)
@@ -2167,8 +1909,8 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
     // arrive as ONE parameter holding a JSON array, not as an expanded IN
     // list, and the difference is a hard limit rather than a preference: a
     // page is clamped to 100 orders (§6.5) and PlaceOrder admits 100 items
-    // (§10.5's validator), so an IN list is 10,000 parameters at the top of
-    // its range against SQL Server's ceiling of 2,100. The clamp bounds the
+    // (§10.5's validator), so an IN list is 10000 parameters at the top of
+    // its range against SQL Server's ceiling of 2100. The clamp bounds the
     // number of ROWS and multiplies the number of IDS, which is the step that
     // makes "bounded by the same clamp" the wrong reassurance.
     //
@@ -2177,8 +1919,7 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
     // knowledge, not Catalog's act: Product.Publish is the factory, so every
     // product Catalog holds was published, and an absent row means the event
     // has not reached this table — dropped before the queue was bound, or
-    // still in flight. This section then shows a name or shows no product,
-    // where it used to show an empty string for every product on every order.
+    // still in flight. This section then shows a name or shows no product.
     private const string NamesSql =
         """
         SELECT Id = p.ProductId, p.Name, Thumb = p.ThumbnailUrl
@@ -2254,7 +1995,7 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
 > both sides agree.** The parameterless `JsonSerializer` overloads use
 > `JsonSerializerOptions.Default`, where `PropertyNameCaseInsensitive` is
 > **`false`** — the web defaults that would set it true are not in play on a
-> database column. While this column held `{"id": …, "name": …}` that made a
+> database column. A column holding `{"id": …, "name": …}` would make a
 > member rename on the reading record a silent data loss: a `{"id": …}` written
 > by the projection does not bind to a constructor parameter called `Id`, and
 > the failure is the quiet kind. `System.Text.Json` builds the record through
@@ -2281,15 +2022,13 @@ twenty and the wrong one at a page of a thousand, which is another reason the
 
 The second statement is **one** round trip for the page rather than one per
 row, and it seeks a primary key — so what it adds is a key lookup per distinct
-product, against a patch handler that used to scan every summary in the table
-on every rename.
+product.
 
-**What it is not is bounded by the page clamp, and saying so was the error
-worth naming.** The clamp bounds rows; each row carries up to §10.5's hundred
-items, so the ids multiply to ten thousand at the top of the range. That is why
-they travel as one JSON parameter read through `OPENJSON` rather than as an
-expanded `IN` list, which at that size exceeds SQL Server's 2,100-parameter
-limit and fails the request outright.
+**What it is not is bounded by the page clamp.** The clamp bounds rows; each
+row carries up to §10.5's hundred items, so the ids multiply to ten thousand at
+the top of the range. That is why they travel as one JSON parameter read
+through `OPENJSON` rather than as an expanded `IN` list, which at that size
+exceeds SQL Server's 2100-parameter limit and fails the request outright.
 
 The benefit being bought is visible in the shape of both: no `GROUP BY` and no
 cross-service call. What bounds them is **not** the same quantity — the page
