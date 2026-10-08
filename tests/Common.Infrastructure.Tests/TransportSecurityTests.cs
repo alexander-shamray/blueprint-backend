@@ -166,7 +166,7 @@ public sealed class TransportSecurityTests
     [Fact]
     public void Every_project_that_builds_a_rabbitmq_bus_asks_the_scheme_for_tls()
     {
-        // MassTransit reads TLS from the port alone, so a bus built without asking dials amqps:// in plaintext.
+        // MassTransit turns TLS on for 5671 alone and trusts an untrusted chain there, so every bus must ask.
         string root = RepositoryRoot();
         string[] buses =
         [
