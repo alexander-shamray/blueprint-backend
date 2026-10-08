@@ -46,8 +46,11 @@ public static class TransportSecurity
 
     private static bool Is(string key, string name) => string.Equals(key, name, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Whether a broker address asks for TLS, which each host's bus applies itself (ADR-079).</summary>
+    public static bool IsTls(Uri broker) => broker.Scheme == "amqps";
+
     private static string? Broker(string value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) && uri.Scheme == "amqps"
+        Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) && IsTls(uri)
             ? null
             : "is not an amqps:// address";
 

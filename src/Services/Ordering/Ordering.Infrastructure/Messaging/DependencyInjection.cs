@@ -1,10 +1,12 @@
 using System.Data;
+using System.Net.Security;
 using Common.Application;
 using Common.Contracts.Catalog.V1;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
+using Common.Infrastructure.Transport;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -89,7 +91,13 @@ public static class DependencyInjection
 
             x.UsingRabbitMq((context, cfg) =>
             {
-                cfg.Host(new Uri(connectionString));
+                Uri broker = new(connectionString);
+                cfg.Host(broker, host =>
+                {
+                    // MassTransit reads TLS from the port and trusts any chain, so the scheme asks (ADR-079).
+                    if (TransportSecurity.IsTls(broker))
+                        host.UseSsl(ssl => ssl.EnforcePolicyErrors(SslPolicyErrors.RemoteCertificateChainErrors));
+                });
 
                 // ADR-021's transport half, the delayed-exchange plugin; on a broker without it scheduling hangs.
                 cfg.UseDelayedMessageScheduler();

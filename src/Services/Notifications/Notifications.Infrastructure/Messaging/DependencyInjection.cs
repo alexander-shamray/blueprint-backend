@@ -1,8 +1,10 @@
+using System.Net.Security;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
 using Common.Contracts.Shipping.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
+using Common.Infrastructure.Transport;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,7 +46,13 @@ public static class DependencyInjection
 
             x.UsingRabbitMq((context, cfg) =>
             {
-                cfg.Host(new Uri(connectionString));
+                Uri broker = new(connectionString);
+                cfg.Host(broker, host =>
+                {
+                    // MassTransit reads TLS from the port and trusts any chain, so the scheme asks (ADR-079).
+                    if (TransportSecurity.IsTls(broker))
+                        host.UseSsl(ssl => ssl.EnforcePolicyErrors(SslPolicyErrors.RemoteCertificateChainErrors));
+                });
 
                 cfg.ReceiveEndpoint(
                     EventsQueue,
