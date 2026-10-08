@@ -1653,6 +1653,20 @@ refuses 'a CORS origin with a trailing path fails the render' 'is not a browser 
 refuses 'an Ingress with no Service fails the render' 'ingress.enabled requires service.enabled' \
     $GATEWAY_OVERLAY --set service.enabled=false
 
+# Only the gateway has an Ingress (§10.1), so every other chart with a Service
+# refuses one; the workers have none and are refused above for that.
+served=0
+for chart in $SERVICE_CHARTS; do
+    if [ "$chart" = gateway ] ||
+        grep -qE '^  enabled: false$' <(awk '/^service:/ { s = 1; next } /^[a-z]/ { s = 0 } s' "$CHARTS_DIR/$chart/values.yaml"); then
+        continue
+    fi
+    served=$((served + 1))
+    refuses_chart "$chart" "an Ingress on $chart fails the render" \
+        'only the gateway has an Ingress' --set ingress.enabled=true
+done
+check 'the gateway-only Ingress rule was asked of some served chart' test "$served" -gt 0
+
 # TLS terminates at the Ingress (§10.1) and every hop past it is plain http on
 # that premise — including §9.7's. An overlay clearing it rendered a valid
 # plaintext Ingress and falsified the premise silently.
