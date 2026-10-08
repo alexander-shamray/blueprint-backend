@@ -374,6 +374,33 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1), "a lease in the past is no lease");
     }
 
+    /// <summary>A pass that outlived its lease backs off nothing another pass now holds, nor counts it an attempt.</summary>
+    [Fact]
+    public async Task A_backoff_under_a_lapsed_lease_leaves_the_new_holders_lease_alone()
+    {
+        (Guid order, Guid customer) = Ids();
+        Notification owed = await OwedAsync(order, customer);
+        using NotificationsWorkerFactory host = fixture.NewWorkerHost();
+        await using AsyncServiceScope scope = host.Services.CreateAsyncScope();
+        SendClaims claims = scope.ServiceProvider.GetRequiredService<SendClaims>();
+
+        SendWork lapsed = (await claims.ClaimAsync(Ct)).ShouldHaveSingleItem();
+        await fixture.ExecuteAsync(
+            "UPDATE notifications.NotificationLog SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
+            "WHERE NotificationId = {0};",
+            owed.NotificationId);
+        SendWork holder = (await claims.ClaimAsync(Ct)).ShouldHaveSingleItem();
+
+        (await claims.BackOffAsync(owed.NotificationId, lapsed.LockedUntil, Ct)).ShouldBeFalse();
+
+        Notification held = await fixture.NotificationAsync(owed.NotificationId);
+        held.LockedUntil.ShouldBe(holder.LockedUntil, "the second pass still holds its lease");
+        held.Attempts.ShouldBe(0, "the lapsed pass's fault is not the holder's attempt");
+
+        (await claims.BackOffAsync(owed.NotificationId, holder.LockedUntil, Ct)).ShouldBeTrue();
+        (await fixture.NotificationAsync(owed.NotificationId)).Attempts.ShouldBe(1);
+    }
+
     [Fact]
     public async Task Two_workers_overlapping_claim_one_row_once()
     {
