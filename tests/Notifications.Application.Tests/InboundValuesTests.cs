@@ -16,6 +16,38 @@ public class InboundValuesTests
         InboundValues.Text(value, InboundValues.MaxTrackingNumberLength).ShouldBe(value);
     }
 
+    [Theory]
+    [InlineData("1Z999AA10123456784")]
+    [InlineData("KZ-ӘҒҚ-0042")]
+    [InlineData("TRK 12 34")]
+    public void A_tracking_number_in_the_contracts_alphabet_is_kept(string value)
+    {
+        InboundValues.TrackingNumber(value).ShouldBe(value);
+    }
+
+    /// <summary>Each is visible and bounded, so <c>Text</c> keeps it; a mail client could make a link of it.</summary>
+    [Theory]
+    [InlineData("https://evil.example/track")]
+    [InlineData("www.evil.example")]
+    [InlineData("TRK@evil.example")]
+    [InlineData("TRK  12")]
+    [InlineData("-TRK1")]
+    public void A_tracking_number_outside_the_contracts_alphabet_is_dropped(string value)
+    {
+        InboundValues.Text(value, InboundValues.MaxTrackingNumberLength).ShouldBe(value);
+        InboundValues.TrackingNumber(value).ShouldBeNull();
+    }
+
+    [Fact]
+    public void A_tracking_number_is_held_to_its_bound_as_well_as_its_alphabet()
+    {
+        string atBound = new('9', InboundValues.MaxTrackingNumberLength);
+
+        InboundValues.TrackingNumber(atBound).ShouldBe(atBound);
+        InboundValues.TrackingNumber(atBound + "9").ShouldBeNull();
+        InboundValues.TrackingNumber(null).ShouldBeNull();
+    }
+
     /// <summary>Code points that would change what a customer reads without being seen.</summary>
     [Theory]
     [InlineData(0x0000)]
