@@ -179,6 +179,7 @@ public class ShipmentTests
         shipment.CancellationRequestedAt.ShouldBe(Now, "the cancellation is the void's, not the keep's");
         shipment.TerminalAt.ShouldBeNull();
         shipment.NextPollAt.ShouldBe(Now.AddMinutes(1));
+        shipment.NextAttemptAt.ShouldBe(Now.AddMinutes(1), "due from the keep, when the claim could first take it");
         shipment.DomainEvents.ShouldBeEmpty();
     }
 
