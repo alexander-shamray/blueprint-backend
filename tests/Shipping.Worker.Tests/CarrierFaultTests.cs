@@ -140,12 +140,21 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task An_open_circuit_makes_no_call_at_all()
     {
-        // The breaker sits inside the retry, so one call is MaxRetryAttempts + 1 attempts toward the throughput.
+        // The breaker sits inside the retry, so one call is MaxRetryAttempts + 1 attempts toward the throughput. Bounded
+        // by that throughput, since each call that reaches the stub logs at least one request: a call that throws
+        // before any request would otherwise loop for ever, and here it fails on the count below.
         CancellationToken ct = TestContext.Current.CancellationToken;
-        while (Calls("/v1/shipments") < CarrierHop.CircuitBreakerMinimumThroughput)
+        for (int call = 0;
+            call < CarrierHop.CircuitBreakerMinimumThroughput &&
+            Calls("/v1/shipments") < CarrierHop.CircuitBreakerMinimumThroughput;
+            call++)
         {
             await Should.ThrowAsync<CarrierUnavailableException>(() => Carrier().BookAsync(Booking("SIM-DOWN"), ct));
         }
+
+        Calls("/v1/shipments").ShouldBeGreaterThanOrEqualTo(
+            CarrierHop.CircuitBreakerMinimumThroughput,
+            "the calls never reached the carrier, so the breaker had nothing to count");
 
         int before = Calls("/v1/shipments");
 
