@@ -1109,7 +1109,7 @@ WebApplication app = builder.Build();
 // take it off the 500.
 app.UseSecurityHeaders();
 app.UseExceptionHandler();
-app.UseCorrelationId();           // §10.4 — assigns or replaces the client's
+app.UseCorrelationId();           // §10.4 — adopts a plausible client ID, replaces any other
 app.UseRequestTimeouts();         // §9.7, ADR-066 — below the exception handler
 
 // High enough to wrap every writer below it, because this middleware acts by
