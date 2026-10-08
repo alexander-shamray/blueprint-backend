@@ -66,13 +66,13 @@ Each such collection starts its own container set
 daemon they fail on `Failed to connect to Docker endpoint`, which is a true
 statement about the machine rather than a defect in the branch.
 
-`dotnet test Platform.slnx` runs those projects at once against one local
-daemon, which CI never does because it splits them across jobs, and a daemon
-that busy can refuse a container start or an image build that a moment later
-succeeds. Every fixture therefore makes those calls through `DaemonRetry` in
-`Common.TestSupport`, which tries a refused one again a bounded number of times
-and then lets the last refusal through, so a machine with no daemon still fails
-rather than skips.
+`dotnet test Platform.slnx` runs all of those projects at once against one local
+daemon, where CI shards them so that no runner's daemon carries them all, and a
+daemon that busy can refuse a container start or an image build that a moment
+later succeeds. Every fixture therefore makes those calls through `DaemonRetry`
+in `Common.TestSupport`, which tries a refused one again a bounded number of
+times and then lets the last refusal through, so a machine with no daemon still
+fails rather than skips.
 
 **They are not skipped when the daemon is absent, and that is a decision.** A
 skip on a missing daemon **fails open**: CI goes green on a runner whose Docker
