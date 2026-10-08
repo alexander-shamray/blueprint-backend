@@ -1991,10 +1991,10 @@ section 'Every pod carries the restricted posture ADR-082 sets'
 every_pod_is_restricted() {
     awk '
         function close_doc() {
-            held = nonroot && seccomp && tmp && bounded && images && !hostile
+            held = nonroot && seccomp && tmp && empty && bounded && images && !hostile
             held = held && ro >= images && esc >= images && drop >= images
             if (pods && !held) { print kind " " name " is not restricted"; bad = 1 }
-            pods = nonroot = seccomp = tmp = bounded = hostile = ro = esc = drop = images = 0; kind = name = ""
+            pods = nonroot = seccomp = tmp = empty = bounded = hostile = ro = esc = drop = images = 0; kind = name = ""
         }
         /^---$/ { close_doc(); next }
         /^kind: (Deployment|Job|CronJob|StatefulSet|DaemonSet|ReplicaSet|ReplicationController|Pod)$/ {
@@ -2004,6 +2004,7 @@ every_pod_is_restricted() {
         /^ +runAsNonRoot: true[ ]*$/ { nonroot = 1 }
         /^          type: RuntimeDefault[ ]*$/ { seccomp = 1 }
         /^ +mountPath: \/tmp[ ]*$/ { tmp = 1 }
+        /^ +emptyDir:[ ]*$/ { empty = 1 }
         /^ +sizeLimit: [0-9]/ { bounded = 1 }
         /^ +(- )?image: / { images++ }
         /^ +readOnlyRootFilesystem: true[ ]*$/ { ro++ }
@@ -2040,6 +2041,7 @@ sed 's/^          type: RuntimeDefault/              type: RuntimeDefault/' "$OU
     >"$OUT/restricted-container-profile.yaml"
 sed '/sizeLimit/d' "$OUT/restricted-one.yaml" >"$OUT/restricted-unbounded.yaml"
 sed 's/emptyDir:/hostPath:/' "$OUT/restricted-one.yaml" >"$OUT/restricted-hostpath.yaml"
+sed 's/emptyDir:/persistentVolumeClaim:/' "$OUT/restricted-one.yaml" >"$OUT/restricted-pvc.yaml"
 not_restricted() { ! every_pod_is_restricted "$@"; }
 check 'the restricted check passes a compliant pod' every_pod_is_restricted "$OUT/restricted-one.yaml"
 check 'a second container without the fields is not covered by the first' \
@@ -2055,6 +2057,7 @@ check "a container's RuntimeDefault does not stand in for the pod's own" \
     not_restricted "$OUT/restricted-container-profile.yaml"
 check 'a /tmp emptyDir with no sizeLimit is refused' not_restricted "$OUT/restricted-unbounded.yaml"
 check 'a hostPath volume is refused' not_restricted "$OUT/restricted-hostpath.yaml"
+check 'a /tmp backed by anything but an emptyDir is refused' not_restricted "$OUT/restricted-pvc.yaml"
 # One per clause: the compliant pod less one line, or with one forbidden line
 # beside the compliant ones, so no clause is only ever met alongside another.
 for field in runAsNonRoot allowPrivilegeEscalation readOnlyRootFilesystem drop; do
