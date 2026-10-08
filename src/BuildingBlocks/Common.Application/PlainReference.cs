@@ -5,9 +5,8 @@ namespace Common.Application;
 
 /// <summary>A reference a third party mints and a customer reads, in an alphabet that links nowhere.</summary>
 /// <remarks>
-/// Letters and digits in any script, with hyphens, underscores and single spaces between them: no scheme, slash, dot
-/// or at sign a mail client could make a link of (ADR-084). A modifier letter is refused too, as several are drawn
-/// as a dot or a colon. Here, not in the contract, which §4.3 keeps free of validation.
+/// Letters and digits in any script, joined singly by hyphens, underscores or spaces, with no modifier letter, as
+/// some are drawn as a dot or a colon (ADR-084). Here, not in the contract, which §4.3 keeps free of validation.
 /// </remarks>
 public static class PlainReference
 {
