@@ -66,7 +66,8 @@ public sealed class PricingContractTests : IAsyncLifetime
         Guid[] expected = [.. priced.Aliases.Select(alias => published[alias])];
 
         quote.ShouldNotBeNull();
-        quote.Currency.ShouldBe(interaction.Currency);
+        // Upper case whatever the caller typed, the code an order carries.
+        quote.Currency.ShouldBe(interaction.Currency.ToUpperInvariant());
         quote.Lines.Select(line => line.ProductId).ShouldBe(expected, ignoreOrder: true);
         quote.Total.ShouldBe(priced.Aliases.Sum(alias => PricingContract.Product(interaction, alias).Amount));
 
