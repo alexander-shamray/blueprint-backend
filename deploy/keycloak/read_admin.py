@@ -79,33 +79,13 @@ TIMEOUT_SECONDS = 30
 # skip when the ceiling is the whole realm.
 CLIENT_LIMIT = 10000
 
-# THE ROLE THAT MAKES A COMPLETE ANSWER POSSIBLE, and it is checked rather than
-# assumed. Keycloak applies `max` to the client-model stream and then drops the
-# representations the caller may not see, so a client this account cannot view
-# is absent from a response that is otherwise indistinguishable from a complete
-# one — a short list proves nothing, and neither does a ceiling.
-#
-# There is no clients/count endpoint to compare against, and the export that
-# would be authoritative needs rights this credential deliberately does not
-# hold. What CAN be established is the premise the completeness rests on: with
-# view rights over the realm's clients, nothing is filtered. So the token is
-# read for the grant that was actually issued, and a run whose account cannot
-# see every client stops instead of judging the ones it can.
-#
-# `view-realm` IS NOT ONE OF THEM, and an earlier revision of this list said it
-# was on the reasoning that it implies `view-clients`. It does not, and this
-# repository ships the proof: in `deploy/compose/keycloak/realm-export.json`
-# the `realm-management` role `view-realm` is `"composite": false` with no
-# composites at all, while `view-clients` is a separate role composing
-# `query-clients`. Accepting it would have approved a credential with no client
-# visibility for a check whose entire purpose is to establish that it has some.
-#
-# `realm-admin` stays because it composes `view-clients` in that same file. The
-# suite asserts both of those facts against the export rather than restating
-# them here, so a realm that reorganises its roles fails a test instead of
-# quietly widening what this accepts.
+# Without view-clients Keycloak filters the client list silently (ADR-042), so
+# it is required; every realm-management role held must also be a read role
+# below, because a grant wider than a read is one a leaked secret hands over
+# whole (docs/secrets.md). view-realm composes nothing, as the suite asserts.
 REALM_MANAGEMENT = "realm-management"
-COMPLETENESS_ROLES = ("view-clients", "realm-admin")
+COMPLETENESS_ROLES = ("view-clients",)
+PERMITTED_ROLES = ("view-clients", "query-clients", "view-realm")
 
 
 def environment() -> dict[str, str]:
@@ -263,6 +243,15 @@ def clients(base: str, realm: str, access_token: str) -> list:
             "short list would look exactly like a complete one. `view-realm` "
             "is NOT enough and does not compose `view-clients`; "
             "docs/secrets.md carries what the account needs.")
+
+    wider = sorted(held - set(PERMITTED_ROLES))
+    if wider:
+        raise SystemExit(
+            f"read_admin: this account holds {', '.join(wider)} on "
+            f"{REALM_MANAGEMENT}, beyond the read roles "
+            f"{', '.join(PERMITTED_ROLES)}. Its secret is exercised from a CI "
+            "runner, so a grant wider than a read is one a leak hands "
+            "over whole; docs/secrets.md carries what the account holds.")
 
     query = urllib.parse.urlencode({"max": CLIENT_LIMIT})
     answer = get(f"{base}/admin/realms/{realm}/clients?{query}", access_token)

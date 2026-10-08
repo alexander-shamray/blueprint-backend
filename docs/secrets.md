@@ -244,9 +244,12 @@ client-model stream and then drops the representations the caller may not see,
 so an account short of that role produces a client list that is silently
 incomplete and looks exactly like a complete one. `read_admin.py` reads the
 roles out of its own access token and stops before asking for anything unless
-`view-clients` or `realm-admin` is among them — a credential provisioned too
-narrowly fails the deploy loudly instead of passing a realm nobody saw the end
-of.
+`view-clients` is among them — a credential provisioned too narrowly fails the
+deploy loudly instead of passing a realm nobody saw the end of. **It stops as
+well on one provisioned too widely**: any `realm-management` role beyond
+`read_admin.py`'s `PERMITTED_ROLES`, the read roles, refuses the run, so
+`realm-admin` is refused although it composes `view-clients`, and "nothing
+else" above is checked rather than only provisioned.
 
 **`view-realm` is not one of them, and it reads as though it should be.** It is
 a *non-composite* role in Keycloak's own model — §14.1's export shows it

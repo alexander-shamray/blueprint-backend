@@ -235,10 +235,28 @@ class TheGrant(Stubbed):
         self.answers({"realm": "commerce"}, [{"clientId": "web-app"}])
         self.assertEqual(len(read_admin.fetch(self.values)["clients"]), 1)
 
-    def test_realm_admin_is_accepted_because_it_composes_view_clients(self):
-        read_admin.token = lambda *args: self.jwt(["realm-admin"])
+    def test_every_permitted_read_role_together_is_accepted(self):
+        read_admin.token = lambda *args: self.jwt(list(read_admin.PERMITTED_ROLES))
         self.answers({"realm": "commerce"}, [{"clientId": "web-app"}])
         self.assertEqual(len(read_admin.fetch(self.values)["clients"]), 1)
+
+    def test_realm_admin_is_refused_as_too_wide_before_it_asks(self):
+        """It composes view-clients, and everything else besides."""
+        asked = []
+        read_admin.token = lambda *args: self.jwt(["realm-admin", "view-clients", "query-clients"])
+        read_admin.get = lambda url, _a: asked.append(url) or {"realm": "commerce"}
+        with self.assertRaises(SystemExit) as stop:
+            read_admin.fetch(self.values)
+        self.assertIn("holds realm-admin", str(stop.exception))
+        self.assertEqual([u for u in asked if "/clients" in u], [])
+
+    def test_one_write_role_beside_view_clients_is_refused(self):
+        read_admin.token = lambda *args: self.jwt(["view-clients", "manage-clients"])
+        self.answers({"realm": "commerce"}, [])
+        with self.assertRaises(SystemExit) as stop:
+            read_admin.fetch(self.values)
+        self.assertIn("holds manage-clients", str(stop.exception))
+        self.assertNotIn("view-clients,", str(stop.exception).split("beyond")[0])
 
     def test_view_realm_alone_is_refused_because_it_composes_nothing(self):
         """The role that reads like it should be enough, and is not.
@@ -331,6 +349,16 @@ class TheRolesThisGateAccepts(unittest.TestCase):
                 accepted == "view-clients" or "view-clients" in self.composed_by(accepted),
                 f"{accepted} is accepted by read_admin but neither is nor composes "
                 "view-clients, so it does not establish that the client list is complete")
+
+    def test_what_view_clients_composes_is_permitted_so_its_own_token_passes(self):
+        """Keycloak expands a composite into the token, so its parts arrive too."""
+        for composed in self.composed_by("view-clients"):
+            self.assertIn(composed, read_admin.PERMITTED_ROLES)
+
+    def test_no_permitted_role_composes_anything_beyond_the_permitted_set(self):
+        for permitted in read_admin.PERMITTED_ROLES:
+            self.assertIn(permitted, self.realm_management_roles())
+            self.assertLessEqual(self.composed_by(permitted), set(read_admin.PERMITTED_ROLES))
 
     def test_view_realm_is_not_accepted_and_the_export_says_why(self):
         """The specific mistake, pinned against the artefact that disproves it."""
