@@ -501,7 +501,6 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         fixture.ContactAnswers(customer, Mailbox, "en", delay: TimeSpan.FromMilliseconds(800));
         Notification owed = await OwedAsync(order, customer);
         using NotificationsWorkerFactory host = fixture.NewWorkerHost();
-        using OutboundCount resent = ResentCounter.Resent(host.Services);
         SendWorker worker = host.Services.GetRequiredService<SendWorker>();
 
         await worker.StartAsync(Ct);
@@ -516,7 +515,14 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         sent.Status.ShouldBe(NotificationStatus.Sent, "a stop drains the pass under way rather than cancel it");
         sent.Attempts.ShouldBe(0);
         (await fixture.Relay.SingleAsync(Ct)).ShouldNotBeNull();
-        resent.Value.ShouldBe(0, "nothing is left for a later pass to send again");
+
+        // A later pass, past any lease the stopped one held: a drain that left the row resendable would send it again.
+        await fixture.ExecuteAsync(
+            "UPDATE notifications.NotificationLog SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
+            "WHERE NotificationId = {0};",
+            owed.NotificationId);
+        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(0, 0), "nothing is left for a later pass to send");
+        (await fixture.Relay.SingleAsync(Ct)).ShouldNotBeNull("the relay still holds the one message");
     }
 
     private static (Guid Order, Guid Customer) Ids() => (Guid.CreateVersion7(), Guid.CreateVersion7());
