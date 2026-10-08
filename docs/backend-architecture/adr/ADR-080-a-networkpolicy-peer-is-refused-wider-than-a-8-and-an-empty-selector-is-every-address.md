@@ -21,9 +21,11 @@ narrow enough that a peer can no longer be most of the internet.
 **Consequences.** A deployment that wants a range wider than a /8 cannot state
 it, and the refusal names the key to narrow. A selector-based peer has to name
 its namespace or its pods, which the shipped DNS and telemetry peers already
-do. An extra peer narrower than the floor still renders, and
-`deploy/helm/smoke.sh` is what refuses it: each workload policy must name
-exactly the addresses its values state.
+do. The floor bounds each peer and not the list: enough /8 blocks still cover
+every address, and nothing refuses them, because a chart cannot tell a long
+list of narrow ranges from a wrong one. `deploy/helm/smoke.sh` holds each
+workload policy to exactly the addresses the values it renders state, which
+catches a template that adds a peer, not a deployment that states too many.
 
 ---
 
