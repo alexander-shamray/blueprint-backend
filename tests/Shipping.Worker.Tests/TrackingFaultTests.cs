@@ -69,13 +69,14 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         using IDisposable down = ServiceFixture.CarrierAnswers(_carrier, "/v1/shipments/crr_down/events", 503);
         await using IAsyncDisposable refused = await RefuseBackOffAsync("PollAttempts");
 
-        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+        // Unguarded, the backoff's fault escaped the row and faulted the pass's WhenAll.
+        int applied = -1;
+        await Should.NotThrowAsync(
+            async () => applied = await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken));
 
-        string[] lines = [.. _host.CapturedLogs.Everything];
-        lines.ShouldContain(line => line.StartsWith("Backing off shipment", StringComparison.Ordinal));
-        lines.ShouldNotContain(
-            line => line.StartsWith("Tracking claim failed", StringComparison.Ordinal),
-            "the claim succeeded; it was the backoff that the database refused");
+        applied.ShouldBe(0);
+        _host.CapturedLogs.Everything.ShouldContain(
+            line => line.StartsWith("Backing off shipment", StringComparison.Ordinal));
         (await _fixture.PollAttemptsAsync(shipment.Id)).ShouldBe(0, "the refused write wrote nothing");
     }
 

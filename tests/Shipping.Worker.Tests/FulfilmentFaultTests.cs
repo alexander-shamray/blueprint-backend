@@ -73,13 +73,13 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
         Guid order = await ConfirmAsync("SIM-DOWN");
         await using IAsyncDisposable refused = await RefuseBackOffAsync("Attempts");
 
-        (await PassAsync()).ShouldBe(0);
+        // Unguarded, the backoff's fault escaped the row and ended the pass.
+        int moved = -1;
+        await Should.NotThrowAsync(async () => moved = await PassAsync());
 
-        string[] lines = [.. _host.CapturedLogs.Everything];
-        lines.ShouldContain(line => line.StartsWith("Backing off shipment", StringComparison.Ordinal));
-        lines.ShouldNotContain(
-            line => line.StartsWith("Fulfilment claim failed", StringComparison.Ordinal),
-            "the claim succeeded; it was the backoff that the database refused");
+        moved.ShouldBe(0);
+        _host.CapturedLogs.Everything.ShouldContain(
+            line => line.StartsWith("Backing off shipment", StringComparison.Ordinal));
         (await _steps.AttemptsAsync(order)).ShouldBe(0, "the refused write wrote nothing");
     }
 

@@ -137,7 +137,7 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         return true;
     }
 
-    /// <summary>Keeps one carrier arrival whether or not it moves the shipment, and says if it did.</summary>
+    /// <summary>Applies one carrier arrival, kept up to the bound, and says if it moved the shipment.</summary>
     public bool Record(string carrierEventId, TrackingStatus status, DateTimeOffset occurredAt, DateTimeOffset now)
     {
         Require(carrierEventId, ShipmentLimits.MaxCarrierEventIdLength, "the carrier's event id");
