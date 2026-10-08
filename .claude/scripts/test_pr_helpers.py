@@ -133,7 +133,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         code = [
             line for line in text.splitlines() if not line.lstrip().startswith("#")
         ]
-        # `gh_read` is `gh` under gh-read-bound.sh's bound, so both spellings are calls (#603).
+        # `gh_read` is `gh` under gh-read-bound.sh's bound, so both spellings are calls.
         gh_calls = [line.strip() for line in code if "gh " in line or "gh_read " in line]
         self.assertEqual(
             [
@@ -177,12 +177,11 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         )
 
     def test_a_stalled_gh_read_fails_at_the_bound_in_every_helper(self):
-        # #603: an unbounded `gh pr view` held pr-locality.sh, and every step
-        # chained behind it, with nothing printed. The stub outlives the
-        # bound by far, so a return inside it is the bound firing rather
-        # than the stub finishing, and the message is what tells the two
-        # apart from an ordinary `gh` failure. The glob is the subject, so a
-        # helper added later is held to the bound without being named here.
+        # An unbounded `gh pr view` held pr-locality.sh, and every step behind
+        # it, with nothing printed. The stub outlives the bound by far, so a
+        # return inside it is the bound firing, and the message tells that
+        # from an ordinary `gh` failure. The glob is the subject, so a helper
+        # added later is held to the bound without being named here.
         helpers = sorted(p.name for p in SCRIPTS.glob("pr-*.sh"))
         # Named, so a glob that stopped finding one fails rather than passing on fewer.
         self.assertLessEqual(

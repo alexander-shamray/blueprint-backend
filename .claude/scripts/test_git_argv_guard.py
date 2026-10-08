@@ -197,7 +197,7 @@ class TheGitArgvGuard(unittest.TestCase):
                 self.assertAdmitted(command)
 
     def test_a_scoped_branch_from_branchs_table_is_admitted(self):
-        # #605: /branch names a feature branch `feat(<scope>)/kebab`, and the
+        # /branch names a feature branch `feat(<scope>)/kebab`, and the
         # first push of one was refused as not a plain branch name. A
         # parenthesis forms no refspec pattern, so admitting it widens nothing
         # the allow-list is there to stop: a wildcard beside one still refuses.

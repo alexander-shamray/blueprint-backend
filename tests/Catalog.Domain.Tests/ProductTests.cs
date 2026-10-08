@@ -190,7 +190,7 @@ public class ProductTests
     [Fact]
     public void Withdraw_on_a_clock_behind_the_last_price_stamps_after_that_price()
     {
-        // #607: the price committed first on a replica whose clock runs ahead; Ordering's projection keeps a
+        // The price committed first on a replica whose clock runs ahead; Ordering's projection keeps a
         // price row the withdrawal's stamp does not cover, so the stamp must follow the commits (ADR-075).
         var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
         DateTimeOffset aheadClock = Now.AddMilliseconds(500);
