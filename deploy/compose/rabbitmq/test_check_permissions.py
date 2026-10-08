@@ -440,6 +440,17 @@ class ConfigureAndReadAreBoundedToo(unittest.TestCase):
             self.assertEqual({"Common.Contracts.Shipping.V1:"}, gate.referenced_contexts(Path(directory), self.names()))
             self.assertEqual(({"shipping-commands"}, {"probe-replies"}), gate.sends_and_consumes(Path(directory)))
 
+    def test_a_namespace_in_a_messaging_subdirectory_is_private_too(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "DependencyInjection.cs").write_text(
+                "namespace Probe.Infrastructure.Messaging;\n", encoding="utf-8")
+            nested = Path(directory) / "Sagas"
+            nested.mkdir()
+            (nested / "Timeouts.cs").write_text("namespace Probe.Infrastructure.Messaging.Sagas;\n"
+                                                "public sealed record Expired;\n", encoding="utf-8")
+            self.assertEqual({"Probe.Infrastructure.Messaging:", "Probe.Infrastructure.Messaging.Sagas:"},
+                             gate.private_namespaces(Path(directory)))
+
     def test_a_pattern_that_finds_no_context_is_refused(self):
         original = gate.referenced_contexts
         gate.referenced_contexts = lambda directory, names: set()

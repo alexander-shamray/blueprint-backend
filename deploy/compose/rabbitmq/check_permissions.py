@@ -202,23 +202,13 @@ def sends_and_consumes(directory: Path) -> tuple[set[str], set[str]]:
     return sends, consumes
 
 
-def private_namespace(directory: Path) -> str | None:
-    """The exchange prefix for a service's own internal messages.
+def private_namespaces(directory: Path) -> set[str]:
+    """The exchange prefixes of a service's own messages: every namespace its Messaging tree declares.
 
-    §9.6's scheduled timeouts are declared in the service's `Messaging`
-    namespace rather than in `Common.Contracts`, so they carry a prefix like
-    `Ordering.Infrastructure.Messaging:` — the five `*Expired` messages the
-    saga sends itself. They are the service's PRIVATE vocabulary: nothing else
-    publishes them and nothing else may, or a peer could forge a saga timeout.
-
-    Read from the namespace the source declares rather than assembled from the
-    directory name, so a moved or renamed namespace changes this with it.
+    §9.6's timeouts live there rather than in `Common.Contracts`, and no peer may publish
+    them, or it could forge a saga timeout. Read from the source, so a renamed one moves with it.
     """
-    for path in sorted(directory.glob("*.cs")):
-        found = NAMESPACE.findall(read(path))
-        if found:
-            return f"{found[0]}:"
-    return None
+    return {f"{namespace}:" for path in sorted(directory.rglob("*.cs")) for namespace in NAMESPACE.findall(read(path))}
 
 
 def referenced_contexts(directory: Path, names: dict[str, set[str]]) -> set[str]:
@@ -358,7 +348,7 @@ def main() -> int:
     directories = messaging_dirs()
     prefixes = contract_prefixes()
     code = {name: sends_and_consumes(path) for name, path in directories.items()}
-    private = {name: private_namespace(path) for name, path in directories.items()}
+    private = {name: private_namespaces(path) for name, path in directories.items()}
     names = declared_names([*CONTRACTS.rglob("*.cs"), *(
         path for directory in directories.values() for path in directory.rglob("*.cs"))])
     referenced = {name: referenced_contexts(path, names) & prefixes for name, path in directories.items()}
@@ -382,7 +372,7 @@ def main() -> int:
     if not any(referenced.values()):
         fail("no service's Messaging code names a Common.Contracts context — the pattern, not the "
              "source. Every configure and read bound below would refuse the contexts consumed")
-    for prefix in sorted(prefixes | set(filter(None, private.values()))):
+    for prefix in sorted(prefixes | set().union(*private.values())):
         if not names.get(prefix):
             fail(f"`{prefix}` declares no type the pattern can read — the pattern, not the "
                  f"source. A write naming one of its messages would be probed with none")
@@ -490,7 +480,7 @@ def main() -> int:
 
         # 3d. A fault's publish binds `ReceiveFault` and each `Fault--<type>--` to the
         #     root `Fault` interface, so read is owed on those sources and never on the root.
-        consumed = referenced[service] | ({owned_contract(user)} & prefixes) | ({private[service]} - {None})
+        consumed = referenced[service] | ({owned_contract(user)} & prefixes) | private[service]
         sources = [f"{FRAMEWORK_PREFIX}ReceiveFault", *(fault_of(prefix) for prefix in sorted(consumed))]
         for resource in sources:
             if not matches(entry["read"], resource):
@@ -594,10 +584,8 @@ def main() -> int:
         # letting it forge a saga timeout, which is #44's own class of defect
         # one namespace over. Found by Copilot on PR #160 and reproduced before
         # it was believed.
-        mine = private.get(next(k for k in directories if k.lower() == name))
-        for owner, prefix in sorted(private.items()):
-            if not prefix or prefix == mine:
-                continue
+        mine = private[next(k for k in directories if k.lower() == name)]
+        for owner, prefix in sorted((owner, prefix) for owner, held in private.items() for prefix in held - mine):
             for verb in ("configure", "write", "read"):
                 resource = first_covered(entry[verb], probes(prefix, names))
                 if resource:
@@ -633,7 +621,7 @@ def check_operator(definitions: dict, permissions: dict, code: dict, prefixes: s
     # Somebody else's vocabulary, and the default exchange, whose write reaches every queue by name.
     foreign = [[f"{FRAMEWORK_PREFIX}ReceiveFault"], [INTERFACE_EXCHANGE], ["amq.default"],
                *(probes(prefix, names) for prefix in sorted(prefixes)),
-               *(probes(prefix, names) for prefix in sorted(filter(None, private.values())))]
+               *(probes(prefix, names) for prefix in sorted(set().union(*private.values())))]
     for queue in endpoints:
         dead = [f"{queue}_error", f"{queue}_skipped"]
         for resource in dead:
