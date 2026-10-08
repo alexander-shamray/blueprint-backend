@@ -90,8 +90,8 @@ public sealed class CatalogSeeder(CatalogDbContext db, ILogger<CatalogSeeder> lo
 
         int inserted = await db.Database.ExecuteSqlAsync(
             $"""
-            INSERT INTO catalog.Products (Id, Name, ThumbnailUrl, PriceAmount, PriceCurrency, PublishedAt)
-            SELECT {id}, {product.Name}, NULL, {product.Amount}, {Currency}, {publishedAt}
+            INSERT INTO catalog.Products (Id, Name, ThumbnailUrl, PriceAmount, PriceCurrency, PublishedAt, LastEventAt)
+            SELECT {id}, {product.Name}, NULL, {product.Amount}, {Currency}, {publishedAt}, {publishedAt}
             WHERE NOT EXISTS (SELECT 1 FROM catalog.Products WHERE Id = {id});
             """,
             ct);

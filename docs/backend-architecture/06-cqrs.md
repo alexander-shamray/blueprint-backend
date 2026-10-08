@@ -1448,24 +1448,19 @@ price history with it.
 > the fact instead, and the upsert consults it on exactly the branch that has
 > nothing else to consult.
 >
-> **`OccurredAt` is not a total order, and the tie rule only covers the pair
-> that has a business answer.** A withdrawal and a price sharing a timestamp
-> settle deterministically because there is a rule to appeal to — only a
-> *later* price re-lists, so a tie is not later and the withdrawal wins. Two
-> *prices* sharing one are a different matter: the publisher has said they
-> happened at the same instant, so nothing in the data ranks them, and whichever
-> reaches SQL first wins while the other is refused. Delivery order therefore
-> decides the projected amount in that case.
->
-> **Closing it is a §9.1 change, not a projection change**, which is why it is
-> written down here rather than fixed in the `MERGE`: the ordering information
-> has to come from the publisher, as a per-product sequence in the envelope
-> every contract shares. That is a fourth envelope field for all six services,
-> a versioning decision under §9.2, and a monotonic counter Catalog would have
-> to persist. The narrower reading is that two distinct prices at one tick are
-> a publisher saying they were simultaneous, and last-writer-wins is a
-> defensible answer to that — but it is an answer nobody chose, so it is named
-> rather than left to be discovered.
+> **The tie rule only covers the pair that has a business answer, and Catalog
+> is what keeps the other pair from arising.** A withdrawal and a price
+> sharing a timestamp settle deterministically because there is a rule to
+> appeal to — only a *later* price re-lists, so a tie is not later and the
+> withdrawal wins. Two *prices* sharing one would be a different matter:
+> nothing in the data would rank them, and whichever reached SQL first would
+> win. The projection cannot answer that, because the order has to come from
+> the publisher, and Catalog gives it: a product stamps each event after the
+> one before it, and its row version serialises the writes, so one product's
+> stamps follow the order they committed in, whichever replica's clock each
+> read ([ADR-075](adr/ADR-075-a-products-events-are-stamped-in-the-order-its-writes-committed.md)).
+> Two prices for one product never share a stamp, and a tie the strict
+> comparison does see is a redelivery, tying with itself.
 >
 > A **watermark** rather than a flag, for the reason `UpdatedAt` is a
 > comparison: delivery is unordered, so what the projection must refuse is a
@@ -1474,11 +1469,9 @@ price history with it.
 > not, and Catalog makes no price change after a withdrawal: one is final
 > there, and a price change after it is refused at the source
 > ([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)).
-> "Newer" is still the stamps' order, not the commits', so this rests on the
-> same publisher clock the tie rule above does: a price committed just before
-> a withdrawal, on a replica whose clock runs ahead, can carry the later stamp
-> and keep the product orderable. That is the residual the per-product
-> sequence above would close, and it is named rather than guarded.
+> "Newer" is the stamps' order, and the stamps follow the commits', so a price
+> committed before a withdrawal is never stamped after it, even on a replica
+> whose clock runs ahead.
 >
 > **The upsert's read of that watermark needs its own `HOLDLOCK`, and taking
 > it first is what stops the two statements deadlocking.** The answer that

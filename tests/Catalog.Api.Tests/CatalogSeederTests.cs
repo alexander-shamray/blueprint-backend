@@ -98,8 +98,9 @@ public class CatalogSeederTests(ServiceFixture fixture)
         {
             await db.Database.ExecuteSqlAsync(
                 $"""
-                INSERT INTO catalog.Products (Id, Name, ThumbnailUrl, PriceAmount, PriceCurrency, PublishedAt)
-                VALUES ({taken}, N'Written by hand', NULL, 1, 'EUR', SYSDATETIMEOFFSET());
+                INSERT INTO catalog.Products
+                    (Id, Name, ThumbnailUrl, PriceAmount, PriceCurrency, PublishedAt, LastEventAt)
+                VALUES ({taken}, N'Written by hand', NULL, 1, 'EUR', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
                 """,
                 TestContext.Current.CancellationToken);
         }

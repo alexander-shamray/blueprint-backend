@@ -67,10 +67,9 @@ public sealed class ProductPriceProjection(IDbConnectionFactory connections)
         -- STRICT here, where the withdrawal comparison is not, and §6.6 argues
         -- the asymmetry: a tie between a price and a withdrawal has a business
         -- answer (only a later price re-lists), and a tie between two prices
-        -- has none — the publisher said they happened at the same instant, so
-        -- delivery order decides and OccurredAt is not a total order. Ranking
-        -- them needs a per-product sequence in §9.1's envelope, which is a
-        -- platform decision rather than this statement's.
+        -- has none. Catalog never sends one: it stamps a product's events in
+        -- the order they committed (ADR-075), so a tie that reaches this line
+        -- is a redelivery, tying with itself.
         WHEN MATCHED AND target.UpdatedAt < @OccurredAt THEN
             UPDATE SET Amount = @Amount, IsAvailable = @IsAvailable, UpdatedAt = @OccurredAt;
 

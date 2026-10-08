@@ -49,6 +49,13 @@ orders that bought it, which is the reason to keep it. A deep link to a
 withdrawn product now answers 404 where it answered the product, including
 for a buyer who ordered it.
 
+**Amended by
+[ADR-075](ADR-075-a-products-events-are-stamped-in-the-order-its-writes-committed.md)**,
+which stamps a product's events in the order its writes committed. The
+*Why*'s residual, two replicas' skew stamping a price committed before a
+withdrawal later than it, stands as written because it was true when it was
+written, and the record that closed it is ADR-075.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

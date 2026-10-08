@@ -22,6 +22,9 @@ public sealed class Product : AggregateRoot<ProductId>
     /// <summary>Set once by <see cref="Withdraw"/> and never cleared: a withdrawal is final (ADR-074).</summary>
     public DateTimeOffset? WithdrawnAt { get; private set; }
 
+    /// <summary>The stamp of the newest event this product raised; the next is stamped after it (ADR-075).</summary>
+    public DateTimeOffset LastEventAt { get; private set; }
+
     // EF Core materialisation only; null-forgiving, so a defaulted Name cannot hide a mapping hole.
     private Product() => Name = null!;
 
@@ -38,6 +41,7 @@ public sealed class Product : AggregateRoot<ProductId>
         ThumbnailUrl = thumbnailUrl;
         Price = price;
         PublishedAt = publishedAt;
+        LastEventAt = publishedAt;
         Seller = seller;
     }
 
@@ -83,7 +87,7 @@ public sealed class Product : AggregateRoot<ProductId>
             return;
 
         Price = price;
-        Raise(new PriceChangedDomainEvent(Id, price, now));
+        Raise(new PriceChangedDomainEvent(Id, price, NextStamp(now)));
     }
 
     /// <summary>Takes the product off sale for good; the listing hides it and new orders cannot price it.</summary>
@@ -93,7 +97,18 @@ public sealed class Product : AggregateRoot<ProductId>
         if (WithdrawnAt is not null)
             throw new DomainException("The product is already withdrawn.");
 
-        WithdrawnAt = now;
-        Raise(new ProductDiscontinuedDomainEvent(Id, now));
+        WithdrawnAt = NextStamp(now);
+        Raise(new ProductDiscontinuedDomainEvent(Id, WithdrawnAt.Value));
+    }
+
+    /// <summary><paramref name="now"/>, or a tick after the last stamp where the clock has not passed it.</summary>
+    /// <remarks>
+    /// The row version serialises a product's commits, so stamps that follow them give Ordering's projection the
+    /// commits' order, which one replica's skewed clock would otherwise invert (§6.6, ADR-075).
+    /// </remarks>
+    private DateTimeOffset NextStamp(DateTimeOffset now)
+    {
+        LastEventAt = now > LastEventAt ? now : LastEventAt.AddTicks(1);
+        return LastEventAt;
     }
 }

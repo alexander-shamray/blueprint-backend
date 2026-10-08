@@ -81,6 +81,7 @@ decision looks wrong.
 | **ADR-072** | [A person replays dead letters as a broker account of its own](adr/ADR-072-a-person-replays-dead-letters-as-a-broker-account-of-its-own.md) |
 | **ADR-073** | [The product listing takes a search and a closed sort, and its cursor carries both](adr/ADR-073-the-product-listing-takes-a-search-and-a-closed-sort-and-its-cursor-carries-both.md) |
 | **ADR-074** | [A seller reads their own products and withdraws one, and a withdrawal is final](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md) |
+| **ADR-075** | [A product's events are stamped in the order its writes committed](adr/ADR-075-a-products-events-are-stamped-in-the-order-its-writes-committed.md) |
 
 ---
 

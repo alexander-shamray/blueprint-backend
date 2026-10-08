@@ -186,4 +186,49 @@ public class ProductTests
         product.Price.ShouldBe(Money.Of(19.99m, "EUR"));
         product.DomainEvents.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void Withdraw_on_a_clock_behind_the_last_price_stamps_after_that_price()
+    {
+        // #607: the price committed first on a replica whose clock runs ahead; Ordering's projection keeps a
+        // price row the withdrawal's stamp does not cover, so the stamp must follow the commits (ADR-075).
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+        DateTimeOffset aheadClock = Now.AddMilliseconds(500);
+        product.ChangePrice(Money.Of(24.50m, "EUR"), aheadClock);
+        product.ClearDomainEvents();
+
+        product.Withdraw(Now.AddMilliseconds(400));
+
+        ProductDiscontinuedDomainEvent discontinued = product.DomainEvents
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<ProductDiscontinuedDomainEvent>();
+        discontinued.OccurredAt.ShouldBe(aheadClock.AddTicks(1));
+        product.WithdrawnAt.ShouldBe(discontinued.OccurredAt);
+        product.LastEventAt.ShouldBe(discontinued.OccurredAt);
+    }
+
+    [Fact]
+    public void ChangePrice_on_a_clock_behind_the_last_price_stamps_after_that_price()
+    {
+        // Two prices at one stamp, or in the stamps' wrong order, leave delivery order to decide the amount (§6.6).
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+        product.ChangePrice(Money.Of(24.50m, "EUR"), Now);
+        product.ClearDomainEvents();
+
+        product.ChangePrice(Money.Of(29.00m, "EUR"), Now.AddMilliseconds(-200));
+
+        PriceChangedDomainEvent changed = product.DomainEvents
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<PriceChangedDomainEvent>();
+        changed.OccurredAt.ShouldBe(Now.AddTicks(2));
+        product.LastEventAt.ShouldBe(changed.OccurredAt);
+    }
+
+    [Fact]
+    public void Publish_starts_the_products_stamps_at_its_publication()
+    {
+        var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
+
+        product.LastEventAt.ShouldBe(Now);
+    }
 }
