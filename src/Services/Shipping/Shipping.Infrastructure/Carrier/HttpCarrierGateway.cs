@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Common.Application;
-using Common.Infrastructure;
 using Polly;
 using Shipping.Application.Carrier;
 using Shipping.Domain.Shipments;

@@ -1,12 +1,14 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
-namespace Common.Infrastructure;
+namespace Common.Application;
 
 /// <summary>Whether a string a third party supplied may be recorded: bounded, and printable (ADR-084).</summary>
-/// <remarks>Notifications' <c>InboundValues.Text</c> spells the same rule on the Application side (ADR-084).</remarks>
+/// <remarks>Here, where both adapters and Notifications' <c>InboundValues.Text</c> reach it, so the rule has one
+/// spelling (ADR-084).</remarks>
 public static class ThirdPartyText
 {
-    public static bool Recordable(string value, int maxLength)
+    public static bool Recordable([NotNullWhen(true)] string? value, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > maxLength)
             return false;
