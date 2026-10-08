@@ -78,8 +78,9 @@ public static class TransportSecurity
 
         if (Setting(builder, "Encrypt") is { } encrypt && encrypt is "false" or "no" or "optional")
             return "sets Encrypt to " + encrypt;
-        string? trust = Setting(builder, "TrustServerCertificate") ?? Setting(builder, "Trust Server Certificate");
-        if (trust is "true" or "yes")
+        // SqlClient folds the two spellings into one key and keeps the last, so either one set is a downgrade.
+        if (Setting(builder, "TrustServerCertificate") is "true" or "yes" ||
+            Setting(builder, "Trust Server Certificate") is "true" or "yes")
             return "trusts any server certificate";
         return null;
     }
