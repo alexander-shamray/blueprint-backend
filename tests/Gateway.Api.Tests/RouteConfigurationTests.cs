@@ -26,8 +26,8 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
             ["inventory"] = "/v1/inventory",
             ["payments"] = "/v1/payments",
 
-            // A second namespace (§10.2), stripped whole, so the BFF serves under the root it receives.
-            ["web-bff"] = "/"
+            // A second namespace (§10.2), stripped whole; only the BFF's versioned API is routed.
+            ["web-bff"] = "/v1"
         };
 
     /// <summary><see cref="IProxyStateLookup"/> is YARP's answer, so a dropped route shows as a missing id.</summary>

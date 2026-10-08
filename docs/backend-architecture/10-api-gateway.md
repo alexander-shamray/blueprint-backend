@@ -176,7 +176,7 @@ the subset a resource would need.
       },
       "web-bff": {
         "ClusterId": "web-bff",
-        "Match": { "Path": "/bff/{**catch-all}" },
+        "Match": { "Path": "/bff/v1/{**catch-all}" },
         "AuthorizationPolicy": "authenticated",
         "RateLimiterPolicy": "authenticated",
         "Transforms": [ { "PathRemovePrefix": "/bff" } ]
@@ -332,7 +332,11 @@ and none of those fail. §10.1 calls the gateway the single entry point for
 external clients — so a service behind it with no route is not deployed
 privately, it is deployed unreachably. `/bff` rather than `/api`, because a
 client picks one or the other: aggregated responses shaped for a screen, or the
-service APIs shaped for a resource.
+service APIs shaped for a resource. **It matches `/bff/v1`, not the whole
+namespace**: the BFF maps its anonymous health endpoints on the port its API
+listens on, and a catch-all over `/bff` published them to every signed-in
+caller, each probe a database check. `ProxiedRouteTests` holds every path
+outside `/bff/v1` to a 404 that never reaches the BFF.
 
 **This file ships whole, ahead of the services it routes to** — which is the
 opposite of the rule [§14.1](14-local-development.md)'s Compose file follows —
@@ -1291,13 +1295,13 @@ rule is that the screen's question is the whole of the request:
 | | Path |
 |---|---|
 | Client calls | `/bff/v1/orders?cursor=&limit=` |
-| Gateway matches | `/bff/{**catch-all}` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
 | Gateway strips | `/bff` |
 | Service receives | `/v1/orders` |
 | Service maps | `MapGroup("/v1/orders")` |
 
 The detail route is that group's `/{id:guid}`. Neither needs a gateway change:
-§10.2's `web-bff` route already matches the whole `/bff` namespace. The path
+§10.2's `web-bff` route already matches the BFF's whole `/bff/v1` API. The path
 repeats Ordering's `/v1/orders` deliberately — §10.2 strips a different prefix
 to reach each, and `/api` and `/bff` are the two namespaces that distinction
 exists to keep apart.
