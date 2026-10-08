@@ -305,7 +305,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     private async Task ShouldBeRefusedWithoutAHop(HttpResponseMessage response)
     {
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         // Field-keyed errors, which is why the endpoint throws rather than returning a problem (ADR-045).
         string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -325,7 +325,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         // A body too, which §10.5's promise reaches through UseStatusCodePages.
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         _catalog.Calls.ShouldBeEmpty();
     }
@@ -341,7 +341,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         // Catalog refused what the BFF built from the caller's basket, so the caller must change something.
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
     }
 
     [Fact]
@@ -354,7 +354,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
 
         response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         // One call, as an HTTP pipeline cannot retry a gRPC status riding an HTTP 200 (§9.7).
         _catalog.Calls.Count.ShouldBe(1);
