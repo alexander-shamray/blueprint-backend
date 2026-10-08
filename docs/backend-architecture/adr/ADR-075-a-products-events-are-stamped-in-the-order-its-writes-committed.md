@@ -30,8 +30,8 @@ the withdrawal pair and leaves the two-price inversion open.
 skew between two replicas, plus a tick for each event the product raises
 before the slower clock catches up: it moves a tick past the last one only
 where the clock has not. Two prices for one product no longer share a
-stamp, so the projection's strict comparison refuses only a redelivery,
-which ties with itself. The order holds once every replica runs this
+stamp, so a tie the projection's strict comparison refuses is only a
+redelivery, which ties with itself. The order holds once every replica runs this
 release. Until then, during a canary
 ([ADR-022](ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md))
 or after a rollback, the previous release changes prices without advancing
