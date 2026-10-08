@@ -2040,7 +2040,8 @@ sed '/mountPath: \/tmp/d' "$OUT/restricted-one.yaml" >"$OUT/restricted-notmp.yam
 sed 's/^          type: RuntimeDefault/              type: RuntimeDefault/' "$OUT/restricted-one.yaml" \
     >"$OUT/restricted-container-profile.yaml"
 sed '/sizeLimit/d' "$OUT/restricted-one.yaml" >"$OUT/restricted-unbounded.yaml"
-sed 's/emptyDir:/hostPath:/' "$OUT/restricted-one.yaml" >"$OUT/restricted-hostpath.yaml"
+{ cat "$OUT/restricted-one.yaml"; printf '%s\n' '        - name: host' '          hostPath:' '            path: /'; } \
+    >"$OUT/restricted-hostpath.yaml"
 sed 's/emptyDir:/persistentVolumeClaim:/' "$OUT/restricted-one.yaml" >"$OUT/restricted-pvc.yaml"
 not_restricted() { ! every_pod_is_restricted "$@"; }
 check 'the restricted check passes a compliant pod' every_pod_is_restricted "$OUT/restricted-one.yaml"
