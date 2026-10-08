@@ -222,10 +222,10 @@ def private_namespace(directory: Path) -> str | None:
 
 
 def referenced_contexts(directory: Path, names: dict[str, set[str]]) -> set[str]:
-    """Every `Common.Contracts.<Context>.V<n>:` prefix a service's Messaging code names, or names a type of.
+    """Every `Common.Contracts.<Context>.V<n>:` prefix a service's Messaging code names, or consumes a type of.
 
-    These are the contexts whose exchanges it declares and binds. A type one
-    context alone declares counts, so a namespace a global using imports is not missed.
+    A type argument one context alone declares counts, as in `IntegrationEventConsumer<T>` or
+    `Event<T>`, so a namespace a global using imports is not missed and a property of that name is.
     """
     owners: dict[str, set[str]] = {}
     for prefix, declared in names.items():
@@ -236,7 +236,7 @@ def referenced_contexts(directory: Path, names: dict[str, set[str]]) -> set[str]
     for path in sorted(directory.rglob("*.cs")):
         code = code_only(read(path), keep_strings=False)
         found |= {f"{match}:" for match in re.findall(r"\bCommon\.Contracts\.[A-Za-z0-9_]+\.V\d+\b", code)}
-        for identifier in set(re.findall(r"\b[A-Za-z_]\w*\b", code)):
+        for identifier in set(re.findall(r"[<,]\s*([A-Za-z_]\w*)\s*(?=[,>])", code)):
             if len(owners.get(identifier, ())) == 1:
                 found |= owners[identifier]
     return found
