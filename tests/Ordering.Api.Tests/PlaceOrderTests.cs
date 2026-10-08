@@ -255,10 +255,40 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
-    private HttpClient Authenticated()
+    [Fact]
+    public async Task A_command_id_claimed_by_one_customer_does_not_replay_to_another()
+    {
+        // §12's disclosure case through the host: the subject the key is scoped by is bound from the principal by
+        // the real pipeline, which the behaviour's own unit tests stand in for.
+        Guid product = Guid.CreateVersion7();
+        await SeedPriceAsync(product, 5m, "EUR");
+        Guid commandId = Guid.CreateVersion7();
+        Guid other = Guid.Parse("44444444-4444-4444-4444-444444444444");
+
+        HttpResponseMessage mine = await PlaceAsync(product, commandId: commandId);
+        HttpResponseMessage theirs = await PlaceAsync(product, commandId: commandId, caller: other);
+        HttpResponseMessage mineAgain = await PlaceAsync(product, commandId: commandId);
+
+        mine.StatusCode.ShouldBe(HttpStatusCode.OK);
+        theirs.StatusCode.ShouldBe(HttpStatusCode.OK);
+        Guid first = await IdOfAsync(mine);
+
+        // Different orders, not two successes: an unscoped key answers the second caller with the first's id.
+        (await IdOfAsync(theirs)).ShouldNotBe(first, "another customer's command id must not replay this order");
+
+        // The replay is what says the varying segment is the subject, not anything else that differs per request.
+        (await IdOfAsync(mineAgain)).ShouldBe(first);
+        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM ordering.Orders")).ShouldBe(2);
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM ordering.Orders WHERE CustomerId = {0}",
+            other))
+            .ShouldBe(1, "the second order is the second caller's own");
+    }
+
+    private HttpClient Authenticated(Guid? caller = null)
     {
         HttpClient client = fixture.Factory.CreateClient();
-        client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Caller.ToString());
+        client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, (caller ?? Caller).ToString());
         client.DefaultRequestHeaders.Add(TestAuthHandler.PermissionsHeader, OrderingPermissions.Write);
 
         return client;
@@ -269,8 +299,9 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         Guid product,
         int quantity = 1,
         string currency = "EUR",
-        Guid? commandId = null) =>
-        Authenticated().PostAsJsonAsync(
+        Guid? commandId = null,
+        Guid? caller = null) =>
+        Authenticated(caller).PostAsJsonAsync(
             "/v1/orders",
             new PlaceOrderCommand(
                 commandId ?? Guid.CreateVersion7(),
