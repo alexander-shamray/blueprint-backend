@@ -23,12 +23,13 @@ false reason on the order and put the fix in every query.
 **Consequences.** A support agent holding `orders:admin` cancels through the
 same endpoint, so a cancellation made by staff for a stock or payment reason
 records `customer_request`; a reason staff may state is a new code, with its
-own permission, not one of these four. `Origin` stays, and the BFF's
-origin-first map with it: the saga's compensation forwards `customer_request`
-too, and a payload with no origin can still arrive from an error queue, so the
-reason alone still cannot say who cancelled. An order a caller already
-cancelled with a workflow code keeps that reason. A client that offered a
-caller the whole vocabulary now gets a 400 for four of the five codes.
+own permission, not one of the workflow's. `Origin` stays, and the BFF's
+origin-first map with it: an event recorded before this rule can pair a user
+origin with a workflow code, and a payload with no origin can still arrive
+from an error queue, so the reason alone still cannot say who cancelled. An
+order a caller already cancelled with a workflow code keeps that reason. A
+client that offered a caller the whole vocabulary now gets a 400 for every
+code but `customer_request`.
 
 ---
 
