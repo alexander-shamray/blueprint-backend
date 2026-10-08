@@ -43,7 +43,7 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(
         GatewayRateLimiterPolicies.Anonymous,
         context => RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            partitionKey: RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 100,
@@ -56,8 +56,7 @@ builder.Services.AddRateLimiter(options =>
         GatewayRateLimiterPolicies.Authenticated,
         context => RateLimitPartition.GetTokenBucketLimiter(
             partitionKey: context.User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-                context.Connection.RemoteIpAddress?.ToString() ??
-                "unknown",
+                RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
             factory: _ => new TokenBucketRateLimiterOptions
             {
                 TokenLimit = 300,
