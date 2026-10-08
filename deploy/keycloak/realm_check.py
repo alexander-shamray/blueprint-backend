@@ -613,6 +613,14 @@ def check_every_client(clients: list[dict], kind: str) -> list[str]:
                 "deployed realm any client keeping it mints a token from a "
                 "username and password with no browser flow and no PKCE")
 
+        origins = client.get("webOrigins")
+        if (name not in (BROWSER_CLIENT, MOBILE_CLIENT) and isinstance(origins, list)
+                and ORIGIN_WILDCARD in origins):
+            problems.append(
+                f"client {name!r} declares {ORIGIN_WILDCARD!r} as a web origin, "
+                "which lets every page on the internet read its token "
+                "responses; no client here needs it")
+
         if client.get("standardFlowEnabled") is not True or name == MOBILE_CLIENT:
             continue
         problems += check_redirect_uris(client, kind)
@@ -624,14 +632,6 @@ def check_every_client(clients: list[dict], kind: str) -> list[str]:
                 f"sets pkce.code.challenge.method to {method!r}, not \"S256\". "
                 "It holds no secret, so PKCE is what stops an intercepted "
                 "authorization code being redeemed by whoever intercepted it")
-
-        origins = client.get("webOrigins")
-        if (name != BROWSER_CLIENT and isinstance(origins, list)
-                and ORIGIN_WILDCARD in origins):
-            problems.append(
-                f"client {name!r} declares {ORIGIN_WILDCARD!r} as a web origin, "
-                "which lets every page on the internet read its token "
-                "responses; no client here needs it")
     return problems
 
 
