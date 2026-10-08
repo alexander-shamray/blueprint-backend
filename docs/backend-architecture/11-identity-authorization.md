@@ -1393,11 +1393,16 @@ every retry replays the token the first attempt built — see the ordering in
 > advertising a plain-HTTP endpoint puts the secret on the wire in the clear,
 > having passed every check before that point.
 >
-> So the discovered endpoint is refused unless it is HTTP(S), and refused again
-> if it is weaker than the channel the document arrived over. **Not an
-> unconditional "must be HTTPS"** — `Identity:Authority` is permitted to be
-> plain HTTP in Development (§11.3), and a rule that forbade it there would be
-> one every local run has to turn off.
+> So the discovered endpoint is refused unless it is HTTP(S), refused again
+> if it is weaker than the channel the document arrived over, and refused a
+> third time if it names another host or port than the authority: Keycloak
+> serves it on the authority's own, §14.1's dynamic backchannel included.
+> **Not an unconditional "must be HTTPS"** — `Identity:Authority` is
+> permitted to be plain HTTP in Development (§11.3), and a rule that forbade
+> it there would be one every local run has to turn off. A redirect is the
+> same question asked one hop later — a 307 replays the form, secret and all,
+> to wherever it points — so `AddTokenClient` registers the token client
+> with redirects off.
 
 ### The scope has to become an audience
 

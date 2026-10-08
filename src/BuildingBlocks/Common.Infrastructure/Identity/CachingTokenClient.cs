@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -21,6 +22,9 @@ public sealed partial class CachingTokenClient(
 
     /// <summary>How long before real expiry a cached token stops being handed out.</summary>
     private static readonly TimeSpan ExpiryGuard = TimeSpan.FromSeconds(30);
+
+    /// <summary>The most this reads of a discovery or token answer; either is a few kilobytes from Keycloak.</summary>
+    public const int MaxAnswerBytes = 64 * 1024;
 
     private readonly ConcurrentDictionary<string, CachedToken> _tokens = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -81,7 +85,8 @@ public sealed partial class CachingTokenClient(
             ["scope"] = scope
         });
 
-        using HttpResponseMessage response = await client.PostAsync(endpoint, form, ct);
+        using HttpRequestMessage request = new(HttpMethod.Post, endpoint) { Content = form };
+        using HttpResponseMessage response = await SendBoundedAsync(client, request, ct);
         string body = await response.Content.ReadAsStringAsync(ct);
 
         if (!response.IsSuccessStatusCode)
@@ -99,7 +104,7 @@ public sealed partial class CachingTokenClient(
             throw new InvalidOperationException(Failure(response.StatusCode, body));
         }
 
-        using JsonDocument document = JsonDocument.Parse(body);
+        using JsonDocument document = Parse(body, "token endpoint's success answer");
         JsonElement root = document.RootElement;
 
         // Blank counts as missing, as for §11.3's authority: a blank token would be cached and sent.
@@ -114,14 +119,94 @@ public sealed partial class CachingTokenClient(
         }
 
         // expires_in is optional (RFC 6749 §5.1); absent, the token counts as expired, the safe direction.
-        int lifetime = root.TryGetProperty("expires_in", out JsonElement expiresIn) &&
+        int declared = root.TryGetProperty("expires_in", out JsonElement expiresIn) &&
             expiresIn.TryGetInt32(out int seconds)
             ? seconds
             : 0;
 
+        // Never past the token's own exp, so a wrong expires_in keeps no dead token; one with no exp is not kept.
+        DateTimeOffset now = clock.GetUtcNow();
+        DateTimeOffset declaredAt = now.AddSeconds(Math.Max(declared, 0));
+        DateTimeOffset expiresAt = OwnExpiry(accessToken.GetString()!) is not { } own ? now
+            : own < declaredAt ? own
+            : declaredAt;
+
+        int lifetime = (int)Math.Max((expiresAt - now).TotalSeconds, 0);
         TokenFetched(logger, scope, lifetime);
 
-        return new CachedToken(accessToken.GetString()!, clock.GetUtcNow().AddSeconds(lifetime));
+        return new CachedToken(accessToken.GetString()!, expiresAt);
+    }
+
+    /// <summary>A JWT's <c>exp</c>, read unverified as nothing is authorised on it here; null when absent.</summary>
+    private static DateTimeOffset? OwnExpiry(string token)
+    {
+        string[] parts = token.Split('.');
+
+        if (parts.Length != 3)
+            return null;
+
+        try
+        {
+            string payload = parts[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + ((4 - (payload.Length % 4)) % 4), '=');
+            using JsonDocument claims = JsonDocument.Parse(Convert.FromBase64String(payload));
+
+            return claims.RootElement.ValueKind == JsonValueKind.Object &&
+                claims.RootElement.TryGetProperty("exp", out JsonElement exp) &&
+                exp.TryGetInt64(out long epoch)
+                ? DateTimeOffset.FromUnixTimeSeconds(epoch)
+                : null;
+        }
+        catch (Exception e) when (e is FormatException or JsonException or ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Sends, reading the answer under <see cref="MaxAnswerBytes"/> as every other hop does.</summary>
+    private static async Task<HttpResponseMessage> SendBoundedAsync(
+        HttpClient client,
+        HttpRequestMessage request,
+        CancellationToken ct)
+    {
+        HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+        try
+        {
+            await response.Content.LoadIntoBufferAsync(MaxAnswerBytes, ct);
+
+            return response;
+        }
+        catch (HttpRequestException e) when (e.HttpRequestError == HttpRequestError.ConfigurationLimitExceeded)
+        {
+            response.Dispose();
+
+            throw new InvalidOperationException(
+                $"The identity provider answered '{request.RequestUri}' with more than {MaxAnswerBytes} bytes, " +
+                "which no discovery document or token response comes near; this is a misrouted authority (§11.5).",
+                e);
+        }
+        catch
+        {
+            response.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>A 200 that is not JSON is a misrouted authority, refused as one rather than escaping.</summary>
+    private static JsonDocument Parse(string body, string what)
+    {
+        try
+        {
+            return JsonDocument.Parse(body);
+        }
+        catch (JsonException e)
+        {
+            throw new InvalidOperationException(
+                $"The identity provider's {what} is not JSON, so the authority is not an OpenID provider or a " +
+                "proxy answers in its place (§11.5). The body is not echoed (§13.4).",
+                e);
+        }
     }
 
     /// <summary>Source-generated, because CA1848 and CA1873 are errors under ADR-019.</summary>
@@ -136,10 +221,11 @@ public sealed partial class CachingTokenClient(
     /// <summary>The token endpoint from the discovery document §11.3's JWT handler reads, not a built path.</summary>
     private async Task<Uri> DiscoverTokenEndpointAsync(HttpClient client, CancellationToken ct)
     {
-        using HttpResponseMessage response = await client.GetAsync(".well-known/openid-configuration", ct);
+        using HttpRequestMessage request = new(HttpMethod.Get, ".well-known/openid-configuration");
+        using HttpResponseMessage response = await SendBoundedAsync(client, request, ct);
         response.EnsureSuccessStatusCode();
 
-        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        using JsonDocument document = Parse(await response.Content.ReadAsStringAsync(ct), "discovery document");
 
         if (!document.RootElement.TryGetProperty("token_endpoint", out JsonElement endpoint) ||
             endpoint.ValueKind != JsonValueKind.String ||
@@ -162,6 +248,15 @@ public sealed partial class CachingTokenClient(
                 Unusable(client, parsed, "downgrades the HTTPS authority to plain HTTP"));
         }
 
+        // Keycloak serves it on the authority's own host and port, both routes in §14.1's Compose included.
+        if (client.BaseAddress is { } authority &&
+            Uri.Compare(parsed, authority, UriComponents.HostAndPort, UriFormat.Unescaped,
+                StringComparison.OrdinalIgnoreCase) != 0)
+        {
+            throw new InvalidOperationException(
+                Unusable(client, parsed, "is on another host or port than the authority"));
+        }
+
         return parsed;
     }
 
@@ -180,8 +275,11 @@ public sealed partial class CachingTokenClient(
         {
             using JsonDocument document = JsonDocument.Parse(body);
 
-            if (document.RootElement.TryGetProperty("error", out JsonElement error) &&
-                error.ValueKind == JsonValueKind.String)
+            // Only in an error code's shape, so the endpoint cannot write prose or a secret into a log.
+            if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                document.RootElement.TryGetProperty("error", out JsonElement error) &&
+                error.ValueKind == JsonValueKind.String &&
+                ErrorCode().IsMatch(error.GetString()!))
             {
                 detail = $" ({error.GetString()})";
             }
@@ -198,6 +296,10 @@ public sealed partial class CachingTokenClient(
             $"'{ServiceIdentityOptions.SectionName}' is this host's credential set (§11.5), " +
             "so this is a deployment fault rather than a caller's.";
     }
+
+    /// <summary>Every RFC 6749 §5.2 code's shape: narrower than its NQSCHAR, which admits an echoed form.</summary>
+    [GeneratedRegex("^[a-z_]{1,40}$", RegexOptions.CultureInvariant)]
+    private static partial Regex ErrorCode();
 
     /// <summary>A 5xx, 408 or 429: the shapes <c>AddStandardResilienceHandler</c> treats as transient.</summary>
     private static bool IsTransient(HttpStatusCode status) =>

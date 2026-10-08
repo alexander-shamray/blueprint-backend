@@ -1,5 +1,7 @@
+using System.Buffers.Text;
 using System.Collections.Concurrent;
 using System.Net;
+using System.Text.Json;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Builder;
@@ -46,6 +48,27 @@ public sealed class StubIdentityProvider : IAsyncLifetime
     /// <summary>A <c>token_endpoint</c> to advertise in place of this stub's own, hostile if a test needs.</summary>
     public string? AdvertisedTokenEndpoint { get; set; }
 
+    /// <summary>The clock each token's <c>exp</c> is written against, the client's own in a cache test.</summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
+
+    /// <summary>Seconds to the token's own <c>exp</c>, where it differs from <see cref="ExpiresIn"/>.</summary>
+    public int? OwnExpirySeconds { get; set; }
+
+    /// <summary>Issue a token that is not a JWT, so it carries no <c>exp</c> at all.</summary>
+    public bool OpaqueToken { get; set; }
+
+    /// <summary>A raw 200 body for the token endpoint in place of a token, malformed or oversized.</summary>
+    public string? TokenSuccessBody { get; set; }
+
+    /// <summary>A raw 200 body for the discovery document, malformed or oversized.</summary>
+    public string? DiscoveryBody { get; set; }
+
+    /// <summary>Answer the token request with a 307 to this address, as a hijacked route would.</summary>
+    public Uri? RedirectTokenTo { get; set; }
+
+    /// <summary>The token endpoint this stub serves, for a redirect another stub points here.</summary>
+    public Uri TokenEndpoint => new(Authority, "protocol/openid-connect/token");
+
     public async ValueTask InitializeAsync()
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
@@ -73,6 +96,9 @@ public sealed class StubIdentityProvider : IAsyncLifetime
             {
                 Discoveries++;
 
+                if (DiscoveryBody is not null)
+                    return Results.Content(DiscoveryBody, "application/json");
+
                 return OmitTokenEndpoint
                     ? Results.Json(new { issuer = $"{Authority}" })
                     : Results.Json(new
@@ -88,12 +114,18 @@ public sealed class StubIdentityProvider : IAsyncLifetime
                 IFormCollection form = await context.Request.ReadFormAsync();
                 TokenRequests.Enqueue(form.ToDictionary(f => f.Key, f => f.Value.ToString(), StringComparer.Ordinal));
 
+                if (RedirectTokenTo is not null)
+                    return Results.Redirect(RedirectTokenTo.ToString(), permanent: false, preserveMethod: true);
+
                 if (TokenStatus != StatusCodes.Status200OK)
                     return Results.Content(TokenFailureBody, "application/json", statusCode: TokenStatus);
 
+                if (TokenSuccessBody is not null)
+                    return Results.Content(TokenSuccessBody, "application/json");
+
                 Dictionary<string, object> body = new(StringComparer.Ordinal)
                 {
-                    ["access_token"] = BlankAccessToken ? "" : $"issued-{TokenRequests.Count}",
+                    ["access_token"] = BlankAccessToken ? "" : Issue(TokenRequests.Count),
                     ["token_type"] = "Bearer"
                 };
 
@@ -113,6 +145,18 @@ public sealed class StubIdentityProvider : IAsyncLifetime
             await _app.DisposeAsync();
 
         _certificate?.Dispose();
+    }
+
+    /// <summary>A JWT-shaped token, unsigned since the client verifies nothing, with its own <c>exp</c>.</summary>
+    private string Issue(int sequence)
+    {
+        if (OpaqueToken)
+            return $"issued-{sequence}";
+
+        long exp = Clock.GetUtcNow().AddSeconds(OwnExpirySeconds ?? ExpiresIn ?? 300).ToUnixTimeSeconds();
+        string payload = Base64Url.EncodeToString(JsonSerializer.SerializeToUtf8Bytes(new { exp, sequence }));
+
+        return $"header.{payload}.signature";
     }
 
     /// <summary>A loopback certificate generated in process, so no runner needs <c>dotnet dev-certs</c>.</summary>
