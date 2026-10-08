@@ -109,6 +109,11 @@ INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 OPERATOR = "dead-letter-operator"
 OPERATOR_TAGS = ["management"]
 
+NAMESPACE = re.compile(r"^namespace\s+([A-Za-z0-9_.]+);", re.M)
+TYPE_DECLARATION = re.compile(
+    r"^\s*(?:(?:public|internal|sealed|static|partial|abstract|readonly|file)\s+)*"
+    r"(?:record\s+(?:struct|class)|record|class|interface|struct|enum)\s+([A-Za-z_]\w*)", re.M)
+
 failures: list[str] = []
 
 
@@ -193,10 +198,33 @@ def private_namespace(directory: Path) -> str | None:
     directory name, so a moved or renamed namespace changes this with it.
     """
     for path in sorted(directory.glob("*.cs")):
-        found = re.findall(r"^namespace\s+([A-Za-z0-9_.]+);", read(path), re.M)
+        found = NAMESPACE.findall(read(path))
         if found:
             return f"{found[0]}:"
     return None
+
+
+def declared_names(paths) -> dict[str, set[str]]:
+    """Every type each file declares, keyed by its namespace's exchange prefix.
+
+    MassTransit names a message's exchange `<namespace>:<type>`, so these are
+    the real names a foreign write is probed with, beside one invented name.
+    """
+    names: dict[str, set[str]] = {}
+    for path in paths:
+        text = read(path)
+        for namespace in NAMESPACE.findall(text):
+            names.setdefault(f"{namespace}:", set()).update(TYPE_DECLARATION.findall(text))
+    return names
+
+
+def probes(prefix: str, names: dict[str, set[str]]) -> list[str]:
+    """The resources a write on one namespace is tested against."""
+    return [f"{prefix}Anything", *(f"{prefix}{name}" for name in sorted(names.get(prefix, ())))]
+
+
+def first_covered(pattern: str, resources) -> str | None:
+    return next((resource for resource in resources if matches(pattern, resource)), None)
 
 
 def publishes(service: str) -> bool:
@@ -212,7 +240,7 @@ def contract_prefixes() -> set[str]:
     """Every `Common.Contracts.<Context>.V1:` exchange prefix, from namespaces."""
     prefixes = set()
     for path in CONTRACTS.rglob("*.cs"):
-        for namespace in re.findall(r"^namespace\s+([A-Za-z0-9_.]+);", read(path), re.M):
+        for namespace in NAMESPACE.findall(read(path)):
             if namespace.count(".") >= 2:
                 prefixes.add(f"{namespace}:")
     return prefixes
@@ -234,6 +262,8 @@ def main() -> int:
     prefixes = contract_prefixes()
     code = {name: sends_and_consumes(path) for name, path in directories.items()}
     private = {name: private_namespace(path) for name, path in directories.items()}
+    names = declared_names([*CONTRACTS.rglob("*.cs"), *(
+        path for directory in directories.values() for path in directory.glob("*.cs"))])
 
     # THE GATE'S OWN SUBJECT, before anything relies on it. A scan that found
     # nothing would agree with any permission set at all, which is this
@@ -251,6 +281,10 @@ def main() -> int:
     if not any(private.values()):
         fail("no service's Messaging namespace could be read — the pattern, not the "
              "source. Every private-vocabulary check below would pass vacuously")
+    for prefix in sorted(prefixes | set(filter(None, private.values()))):
+        if not names.get(prefix):
+            fail(f"`{prefix}` declares no type the pattern can read — the pattern, not the "
+                 f"source. A write naming one of its messages would be probed with none")
     if failures:
         return report()
 
@@ -338,8 +372,9 @@ def main() -> int:
         # 3b. A service that publishes nothing writes no contract exchange at
         #     all, the interface one and its own context's included (ADR-036).
         if not publishes(service):
-            for resource in (INTERFACE_EXCHANGE, f"{owned_contract(user)}Anything"):
-                if matches(entry["write"], resource):
+            covered = (first_covered(entry["write"], [INTERFACE_EXCHANGE]),
+                       first_covered(entry["write"], probes(owned_contract(user), names)))
+            for resource in filter(None, covered):
                     fail(f"{user}: write COVERS `{resource}`, and the service has no Domain "
                          f"project to publish from (§4.1, §3.2)")
 
@@ -386,21 +421,25 @@ def main() -> int:
         entry = permissions[user]
         name = user[: -len(USER_SUFFIX)]
         sends, _ = code[next(k for k in directories if k.lower() == name)]
+        addressed = set().union(*(derived_names(queue) for queue in sends))
 
+        # A delay exchange republishes into its queue, so a foreign endpoint's derived names are its own.
         for queue in sorted(every_endpoint - sends):
             if queue.startswith(f"{name}-"):
                 continue
-            if matches(entry["write"], queue):
-                fail(f"{user}: write COVERS `{queue}`, which is neither its own nor "
+            resource = first_covered(entry["write"], sorted(derived_names(queue) - addressed))
+            if resource:
+                fail(f"{user}: write COVERS `{resource}`, which is neither its own nor "
                      f"addressed by its source. Broker write access would again be "
                      f"sufficient to execute another service's business command (#44)")
 
         for prefix in sorted(prefixes - {owned_contract(user)}):
             if prefix == f"{INTERFACE_EXCHANGE.split(':')[0]}:":
                 continue
-            if matches(entry["write"], f"{prefix}Anything"):
-                fail(f"{user}: write COVERS `{prefix}`, another context's contracts. "
-                     f"A service that can publish a peer's events can forge them")
+            resource = first_covered(entry["write"], probes(prefix, names))
+            if resource:
+                fail(f"{user}: write COVERS `{resource}`, another context's contracts "
+                     f"`{prefix}`. A service that can publish a peer's events can forge them")
 
         # AND NOBODY ELSE'S PRIVATE VOCABULARY. `Common.Contracts` is the
         # published half; a service also owns messages nothing outside it ever
@@ -414,13 +453,14 @@ def main() -> int:
         for owner, prefix in sorted(private.items()):
             if not prefix or prefix == mine:
                 continue
-            if matches(entry["write"], f"{prefix}Anything"):
-                fail(f"{user}: write COVERS `{prefix}`, which is {owner}'s private "
+            resource = first_covered(entry["write"], probes(prefix, names))
+            if resource:
+                fail(f"{user}: write COVERS `{resource}`, in {owner}'s private "
                      f"messaging vocabulary. Nothing outside that service publishes "
                      f"those messages, and a peer that can is a peer that can forge "
                      f"a scheduled timeout (§9.6)")
 
-    check_operator(definitions, permissions, code, prefixes, private)
+    check_operator(definitions, permissions, code, prefixes, private, names)
 
     # 6. The two ways the broker's configuration reaches a container agree.
     check_fixture_matches_dockerfile()
@@ -430,7 +470,8 @@ def main() -> int:
     return report()
 
 
-def check_operator(definitions: dict, permissions: dict, code: dict, prefixes: set[str], private: dict) -> None:
+def check_operator(definitions: dict, permissions: dict, code: dict, prefixes: set[str], private: dict,
+                   names: dict[str, set[str]]) -> None:
     """The dead-letter operator's grant: dead letters and the endpoints they replay to, and nothing else."""
     account = next((user for user in definitions["users"] if user["name"] == OPERATOR), None)
     if account is None or OPERATOR not in permissions:
@@ -444,9 +485,9 @@ def check_operator(definitions: dict, permissions: dict, code: dict, prefixes: s
     entry = permissions[OPERATOR]
     endpoints = sorted(set().union(*(consumes for _, consumes in code.values())))
     # Somebody else's vocabulary, and the default exchange, whose write reaches every queue by name.
-    foreign = [f"{FRAMEWORK_PREFIX}ReceiveFault", INTERFACE_EXCHANGE, "amq.default",
-               *(f"{prefix}Anything" for prefix in sorted(prefixes)),
-               *(f"{prefix}Anything" for prefix in sorted(filter(None, private.values())))]
+    foreign = [[f"{FRAMEWORK_PREFIX}ReceiveFault"], [INTERFACE_EXCHANGE], ["amq.default"],
+               *(probes(prefix, names) for prefix in sorted(prefixes)),
+               *(probes(prefix, names) for prefix in sorted(filter(None, private.values())))]
     for queue in endpoints:
         dead = [f"{queue}_error", f"{queue}_skipped"]
         for resource in dead:
@@ -460,14 +501,15 @@ def check_operator(definitions: dict, permissions: dict, code: dict, prefixes: s
             if matches(entry["read"], resource):
                 fail(f"{OPERATOR}: read COVERS `{resource}`, a live queue. The tool reads dead "
                      f"letters, and a read here is a consume of the endpoint's own work")
-        foreign.append(f"{queue}_delay")
+        foreign.append([f"{queue}_delay"])
         for resource in derived_names(queue):
             if matches(entry["configure"], resource):
                 fail(f"{OPERATOR}: configure COVERS `{resource}`. The tool declares nothing, "
                      f"so it may delete nothing")
     for verb in ("configure", "write", "read"):
-        for resource in foreign:
-            if matches(entry[verb], resource):
+        for group in foreign:
+            resource = first_covered(entry[verb], group)
+            if resource:
                 fail(f"{OPERATOR}: {verb} COVERS `{resource}`, which no dead-letter move needs")
 
 
