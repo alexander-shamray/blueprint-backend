@@ -26,14 +26,55 @@ public class PublishProductValidatorTests
 
     [Theory]
     [InlineData("https://cdn.example/desk.jpg")]
-    [InlineData("http://cdn.example/desk.jpg")]
     [InlineData("HTTPS://CDN.EXAMPLE/desk.jpg")]
     [InlineData("https://cdn.example/desk.jpg?v=2&size=large")]
-    public void An_http_thumbnail_is_valid(string url)
+    public void An_https_thumbnail_is_valid(string url)
     {
         // The positive half, since a rule refusing every URL passes every case in Invalid(). The upper-case
         // scheme is here because Uri.Scheme normalises to lower case.
         Validator.Validate(Valid() with { ThumbnailUrl = url }).IsValid.ShouldBeTrue(url);
+    }
+
+    /// <summary>The positive half of the name rule: a pair is one character, and a script is not a control.</summary>
+    [Theory]
+    [InlineData("Walnut desk \U0001F333")]
+    [InlineData("Schreibtisch aus Nussbaum")]
+    [InlineData("\u66F8\u304D\u7269\u673A")]
+    [InlineData("\u0645\u0643\u062A\u0628")]
+    public void A_name_of_visible_characters_in_any_script_is_valid(string name)
+    {
+        Validator.Validate(Valid() with { Name = name }).IsValid.ShouldBeTrue(name);
+    }
+
+    /// <summary>Each character a buyer would read differently from what the name holds (ADR-085).</summary>
+    [Theory]
+    [InlineData("Walnut\u202Edesk")]
+    [InlineData("Walnut\u2066desk\u2069")]
+    [InlineData("Wal\u200Bnut desk")]
+    [InlineData("Walnut\u200Ddesk")]
+    [InlineData("Walnut\ndesk")]
+    [InlineData("Walnut\rdesk")]
+    [InlineData("Walnut\u2028desk")]
+    [InlineData("Walnut\u2029desk")]
+    [InlineData("Walnut\u0000desk")]
+    public void A_name_with_an_invisible_or_broken_character_fails(string name)
+    {
+        ValidationResult result = Validator.Validate(Valid() with { Name = name });
+
+        result.Errors.ShouldContain(f => f.PropertyName == nameof(PublishProductCommand.Name), name);
+    }
+
+    /// <summary>Built at run time: xUnit serialises theory data, and a lone surrogate comes back as U+FFFD.</summary>
+    [Fact]
+    public void A_name_with_half_a_surrogate_pair_fails()
+    {
+        string[] broken = ["Walnut desk" + '\uD83C', '\uDF33' + "Walnut desk"];
+
+        foreach (string name in broken)
+        {
+            Validator.Validate(Valid() with { Name = name }).Errors
+                .ShouldContain(f => f.PropertyName == nameof(PublishProductCommand.Name));
+        }
     }
 
     [Fact]
@@ -74,6 +115,8 @@ public class PublishProductValidatorTests
         },
         // A scheme with no use here; the rule is an allow-list of two rather than a deny-list.
         { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "file:///etc/passwd" } },
+        // Mixed content on the buyer's https page, and readable on the wire (ADR-085).
+        { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "http://cdn.example/desk.jpg" } },
         // Relative: no scheme to refuse, and nothing here serves an origin the
         // catalogue's images would be relative to.
         { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "/images/desk.jpg" } },

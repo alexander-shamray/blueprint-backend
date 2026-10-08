@@ -1087,6 +1087,12 @@ Three consequences, and the middle one is the point:
 render the order form before anything is submitted. A display read may be
 synchronous and may fail with a spinner. The write path may not.
 
+**What a seller publishes, every buyer reads, so the validator holds it to
+reading as it holds.** `PublishProductValidator` refuses a name with an
+invisible or broken character and a thumbnail that is not `https`, and leaves
+the thumbnail's host to the seller
+([ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)).
+
 ## 6.5 A query
 
 Queries bypass the domain model entirely. There is no benefit to loading an
