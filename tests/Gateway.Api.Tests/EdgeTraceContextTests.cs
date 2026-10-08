@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>A caller's W3C trace context stops at the edge, so it cannot choose the trace its work joins (§13.2).</summary>
+/// <summary>A caller's W3C trace context stops at the edge, so it cannot choose its work's trace (ADR-083).</summary>
 public sealed class EdgeTraceContextTests(StubDestination stub) : IClassFixture<StubDestination>
 {
     private const string ClientTraceId = "0af7651916cd43dd8448eb211c80319c";
