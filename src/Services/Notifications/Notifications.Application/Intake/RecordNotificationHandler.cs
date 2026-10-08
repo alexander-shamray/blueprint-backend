@@ -101,7 +101,7 @@ public sealed class RecordNotificationHandler(
                 command,
                 nameof(given.TrackingNumber),
                 given.TrackingNumber,
-                v => InboundValues.Text(v, InboundValues.MaxTrackingNumberLength)),
+                InboundValues.TrackingNumber),
             CancelReason = Kept(command, nameof(given.CancelReason), given.CancelReason, InboundValues.Code),
         };
     }

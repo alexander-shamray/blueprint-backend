@@ -1,4 +1,5 @@
 using System.Globalization;
+using Common.Contracts.Shipping.V1;
 using Notifications.Application.Records;
 
 namespace Notifications.Application.Intake;
@@ -34,6 +35,10 @@ public static class InboundValues
 
         return value;
     }
+
+    /// <summary>A tracking number at Shipping's width and in the contract's alphabet, or null (ADR-084).</summary>
+    public static string? TrackingNumber(string? value) =>
+        Text(value, MaxTrackingNumberLength) is { } kept && TrackingNumbers.IsWellFormed(kept) ? kept : null;
 
     /// <summary>A wire code: lower-case ASCII letters, digits and underscores, as the contracts spell one.</summary>
     public static string? Code(string? value)
