@@ -35,7 +35,7 @@ tests/Common.Web.Tests/SensitiveKeysTests.cs | connection-string-password | f52f
 tests/Common.Infrastructure.Tests/CachingTokenClientTests.cs | credential-assignment | eb26d4a9a0ef | Section 11.5's local BFF client default, bound in a test fixture.
 tests/Common.Infrastructure.Tests/CachingTokenClientTests.cs | credential-assignment | ca2a7d5ccd7e | An invented bearer value in a stub error body, asserted never to be logged.
 tests/Web.Bff.Tests/KeycloakIdentityTests.cs | credential-assignment | eb26d4a9a0ef | The same local BFF client default in the identity suite.
-tests/Web.Bff.Tests/KeycloakIdentityTests.cs | credential-assignment | 5d7c40ed1628 | An invented wrong value, asserted to be refused by the provider.
+tests/Web.Bff.Tests/KeycloakIdentityTests.cs | credential-assignment | 5d7c40ed1628 | The invented secret of the throwaway client the suite creates against its container, never in a shipped realm.
 tests/Web.Bff.Tests/KeycloakFixture.cs | credential-assignment | afcf12beb59c | ADR-052's second local client default, held where the fixture and the realm meet.
 tests/Common.Infrastructure.Tests/TokenEndpointSchemeTests.cs | credential-assignment | eb26d4a9a0ef | The same local BFF client default in the scheme suite.
 tests/Common.Infrastructure.Tests/TokenEndpointSchemeTests.cs | credential-assignment | 96b2735306f5 | A non-HTTP endpoint URL asserted to be refused. A URL, not a credential.
