@@ -731,6 +731,16 @@ refuses_chart ordering 'ordering: a database with no peer stated fails the rende
 refuses_chart ordering 'ordering: a broker peer of every address fails the render' \
     'wider than a /8' --set 'networkPolicy.broker.to[0].ipBlock.cidr=0.0.0.0/0'
 
+# ADR-079's opt-out reaches the pod by name, and only a connection name passes.
+"$HELM" template ordering "$CHARTS_DIR/ordering" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+    $(overlay_for ordering) --set 'transport.plaintext[0]=RabbitMq' >"$OUT/plaintext.yaml" 2>&1
+check 'ordering: transport.plaintext renders Transport__Plaintext__0 into the ConfigMap' \
+    in_configmap "$OUT/plaintext.yaml" '^  Transport__Plaintext__0: "RabbitMq"$'
+check 'ordering: and nothing else carries it, the migration Job included' \
+    test "$(count 'Transport__Plaintext' "$OUT/plaintext.yaml")" -eq 1
+refuses_chart ordering 'ordering: a plaintext entry that names no connection fails the render' \
+    'names no connection string' --set 'transport.plaintext[0]=Rabbit Mq'
+
 # Every address has more spellings than its two literals, so a prefix floor and
 # the selectors are what is held (ADR-080), and a /8 is the widest peer kept.
 refuses_chart ordering 'ordering: a broker peer of ::/0 fails the render' \
