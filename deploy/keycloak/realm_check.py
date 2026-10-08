@@ -111,6 +111,17 @@ WORKER_CLIENT = "shipping-worker"
 # neither of its lists, and roles, the scope it requests, is in one.
 CONTACT_CLIENT = "notifications-worker"
 
+# The BFF's client credential (§11.5), on the address reader's terms.
+BFF_CLIENT = "web-bff"
+
+NAMED_CLIENTS = (BROWSER_CLIENT, MOBILE_CLIENT, WORKER_CLIENT, CONTACT_CLIENT, BFF_CLIENT)
+
+# Grants a client turns on by attribute rather than by flag. No obligation
+# names one for any client, so each is refused wherever it is on; Keycloak
+# reads only "true" as on, and this refuses anything but "false".
+GRANT_ATTRIBUTES = ("oauth2.device.authorization.grant.enabled", "oidc.ciba.grant.enabled",
+                    "standard.token.exchange.enabled")
+
 # The two entries Keycloak accepts in `webOrigins` that are not origins, named
 # because the check below has to tell them apart rather than refuse both alike.
 # `*` answers every page on the internet; `+` means the origins this client's
@@ -174,7 +185,7 @@ CLIENT_FIELDS = ("clientId", "enabled", "standardFlowEnabled", "implicitFlowEnab
                  "directAccessGrantsEnabled", "serviceAccountsEnabled", "publicClient",
                  "redirectUris", "defaultClientScopes", "optionalClientScopes", "webOrigins")
 CLIENT_ATTRIBUTES = ("use.refresh.tokens", "access.token.lifespan",
-                     "pkce.code.challenge.method")
+                     "pkce.code.challenge.method", *GRANT_ATTRIBUTES)
 
 LOCAL = "local"
 DEPLOYED = "deployed"
@@ -441,9 +452,17 @@ def check_realm(realm: dict, kind: str, lifetime: int) -> list[str]:
             "client by what it reads when its secret is stolen, and every "
             "obligation below is a property of the client object")
 
+    bff = [c for c in clients if isinstance(c, dict) and c.get("clientId") == BFF_CLIENT]
+    if len(bff) != 1:
+        problems.append(
+            f"the realm declares the BFF client {BFF_CLIENT!r} {len(bff)} "
+            "time(s), expected exactly one. Section 11.5's client-credentials "
+            "obligations are a property of the client object")
+
     problems += check_flags_are_booleans(clients)
     problems += check_lifetime(realm, clients, lifetime)
     problems += check_implicit_flow(clients)
+    problems += check_every_client(clients, kind)
     if named:
         problems += check_browser_client(named[0], kind)
         problems += check_web_origins(named[0], BROWSER_CLIENT)
@@ -455,6 +474,8 @@ def check_realm(realm: dict, kind: str, lifetime: int) -> list[str]:
         problems += check_worker_client(worker[0])
     if contact:
         problems += check_contact_client(contact[0])
+    if bff:
+        problems += check_bff_client(bff[0])
     return problems
 
 
@@ -561,6 +582,103 @@ def check_implicit_flow(clients: list[dict]) -> list[str]:
     return problems
 
 
+def check_every_client(clients: list[dict], kind: str) -> list[str]:
+    """What holds on every client, so a built-in or newly added one is judged too.
+
+    The named clients' own checks own these settings for them, and are not
+    repeated here; `mobile-app`'s redirect and PKCE checks are exact.
+    """
+    problems: list[str] = []
+    for client in clients:
+        if not isinstance(client, dict):
+            continue
+        name = client.get("clientId")
+        attributes = client.get("attributes")
+        attributes = attributes if isinstance(attributes, dict) else {}
+
+        for key in GRANT_ATTRIBUTES:
+            value = attributes.get(key)
+            if value is not None and str(value).strip().lower() != "false":
+                problems.append(
+                    f"client {name!r} sets {key} to something other than "
+                    "\"false\". No obligation names that grant for any client, "
+                    "and on a confidential client it makes a leaked secret a "
+                    "token for whichever person approves the request")
+
+        if (kind == DEPLOYED and name not in NAMED_CLIENTS
+                and client.get("directAccessGrantsEnabled") is True):
+            problems.append(
+                f"client {name!r} has directAccessGrantsEnabled=True. Section "
+                "11.2's password grant is a local affordance, and in a "
+                "deployed realm any client keeping it mints a token from a "
+                "username and password with no browser flow and no PKCE")
+
+        if client.get("standardFlowEnabled") is not True or name == MOBILE_CLIENT:
+            continue
+        problems += check_redirect_uris(client, kind)
+
+        method = attributes.get("pkce.code.challenge.method")
+        if client.get("publicClient") is True and method != "S256":
+            problems.append(
+                f"client {name!r} is a public client with the standard flow and "
+                f"sets pkce.code.challenge.method to {method!r}, not \"S256\". "
+                "It holds no secret, so PKCE is what stops an intercepted "
+                "authorization code being redeemed by whoever intercepted it")
+
+        origins = client.get("webOrigins")
+        if (name != BROWSER_CLIENT and isinstance(origins, list)
+                and ORIGIN_WILDCARD in origins):
+            problems.append(
+                f"client {name!r} declares {ORIGIN_WILDCARD!r} as a web origin, "
+                "which lets every page on the internet read its token "
+                "responses; no client here needs it")
+    return problems
+
+
+def check_redirect_uris(client: dict, kind: str) -> list[str]:
+    """Each redirect is realm-relative, or absolute on a host with no wildcard.
+
+    A deployed realm's web redirects are https as well. The values are not
+    pinned, because a deployed realm's hosts are no file here (ADR-042).
+    """
+    name = client.get("clientId")
+    redirects = client.get("redirectUris")
+    if redirects is None:
+        return []
+    if not isinstance(redirects, list):
+        return [f"client {name!r} has a redirectUris that is not an array, "
+                "which Keycloak never serialises; this is a hand-edited realm"]
+
+    refused: list[int] = []
+    for index, uri in enumerate(redirects):
+        if isinstance(uri, str) and uri.startswith("/") and not uri.startswith("//"):
+            continue
+        scheme = REDIRECT_SCHEME.match(uri) if isinstance(uri, str) else None
+        if scheme is None:
+            refused.append(index)
+            continue
+        try:
+            parts = urlsplit(uri)
+        except ValueError:
+            refused.append(index)
+            continue
+        web = scheme.group(1).lower() in WEB_SCHEME_NAMES
+        if ("*" in parts.netloc or (web and not parts.hostname)
+                or (web and kind == DEPLOYED and scheme.group(1).lower() != "https")):
+            refused.append(index)
+
+    if not refused:
+        return []
+    return [
+        f"client {name!r} has a redirectUris entry at index "
+        f"{', '.join(str(i) for i in refused)} that is neither realm-relative "
+        "nor absolute on a named host with no wildcard"
+        + (", on https" if kind == DEPLOYED else "") +
+        ". A wider pattern is an authorization code delivered wherever it also "
+        "matches. The value is not echoed, on check_web_origins's reasoning"
+    ]
+
+
 def check_browser_client(client: dict, kind: str) -> list[str]:
     """ADR-034's refresh-token rule, and §11.2's password grant.
 
@@ -594,6 +712,13 @@ def check_browser_client(client: dict, kind: str) -> list[str]:
             f"client {BROWSER_CLIENT!r} does not enable the standard flow. "
             "The refresh-token obligation above then holds because the client "
             "mints no token at all, which is not the guarantee ADR-034 states")
+
+    if client.get("publicClient") is not True:
+        problems.append(
+            f"client {BROWSER_CLIENT!r} has publicClient="
+            f"{client.get('publicClient')!r}. Section 11.2's browser client "
+            "runs in a page and can keep no secret, so a confidential posture "
+            "is a credential shipped in the bundle")
 
     grants = client.get("directAccessGrantsEnabled")
     if kind == DEPLOYED and grants is not False:
@@ -697,7 +822,8 @@ def check_mobile_client(client: dict) -> list[str]:
 
 
 def check_service_account_client(
-        client: dict, name: str, read: str, leak: str) -> tuple[list[str], list, list]:
+        client: dict, name: str, read: str, leak: str,
+        owner: str = "ADR-052") -> tuple[list[str], list, list]:
     """What every ADR-052 service-account reader shares: confidential, enabled,
     minting for itself alone."""
     problems: list[str] = []
@@ -729,7 +855,7 @@ def check_service_account_client(
         if client.get(flag) is not False:
             problems.append(
                 f"client {name!r} has {flag}={client.get(flag)!r}, "
-                f"which gives it {what}. {leak} (ADR-052)")
+                f"which gives it {what}. {leak} ({owner})")
 
     defaults = client.get("defaultClientScopes")
     optional = client.get("optionalClientScopes")
@@ -791,6 +917,29 @@ def check_contact_client(client: dict) -> list[str]:
             "The worker requests it by name and Keycloak refuses a scope the "
             "client does not hold; its mapper is also what writes "
             "resource_access, the claim the worker's grant check reads")
+
+    return problems
+
+
+def check_bff_client(client: dict) -> list[str]:
+    """Section 11.5's row for the BFF, on `check_worker_client`'s terms."""
+    problems, defaults, optional = check_service_account_client(
+        client, BFF_CLIENT, "service",
+        "Its secret is a deployment value, so a leak of it must stay the BFF's "
+        "own calls and never a token for a person in this realm", "§11.5")
+
+    if "commerce-api" not in defaults:
+        problems.append(
+            f"client {BFF_CLIENT!r} does not hold commerce-api as a default "
+            "client scope. A client-credentials token requests no scope by "
+            "name, so it carries no audience and every call the BFF makes is "
+            "refused (§11.5)")
+
+    if "commerce-api" in optional:
+        problems.append(
+            f"client {BFF_CLIENT!r} also holds commerce-api as an optional "
+            "scope, which resolves in the wrong direction for a grant that "
+            "names no scope (§11.5)")
 
     return problems
 

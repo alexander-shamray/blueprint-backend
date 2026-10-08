@@ -32,16 +32,18 @@ import realm_check
 
 
 def browser(**overrides) -> dict:
-    """A compliant deployed `web-app`: no refresh token, standard flow, no password
-    grant, and an origin its own token exchange can be read from."""
+    """A compliant deployed `web-app`: no refresh token, standard flow with PKCE,
+    no password grant, an https redirect, and an origin its own token exchange
+    can be read from."""
     client = {
         "clientId": realm_check.BROWSER_CLIENT,
         "standardFlowEnabled": True,
         "implicitFlowEnabled": False,
         "directAccessGrantsEnabled": False,
         "publicClient": True,
+        "redirectUris": ["https://spa.example/*"],
         "webOrigins": ["https://spa.example"],
-        "attributes": {"use.refresh.tokens": "false"},
+        "attributes": {"use.refresh.tokens": "false", "pkce.code.challenge.method": "S256"},
     }
     client.update(overrides)
     return client
@@ -107,6 +109,13 @@ def contact(**overrides) -> dict:
     return client
 
 
+def bff(**overrides) -> dict:
+    """A compliant `web-bff`: the address reader's shape, under §11.5's row."""
+    client = worker(clientId=realm_check.BFF_CLIENT)
+    client.update(overrides)
+    return client
+
+
 def realm(*clients, **overrides) -> dict:
     """A realm document of the shape both an export and the admin API produce.
 
@@ -114,13 +123,13 @@ def realm(*clients, **overrides) -> dict:
     supplied one; the browser is the caller's, so its absence can be a case."""
     if clients:
         client_list = list(clients)
-        for required in (mobile, worker, contact):
+        for required in (mobile, worker, contact, bff):
             name = required()["clientId"]
             if not any(isinstance(c, dict) and c.get("clientId") == name
                        for c in client_list):
                 client_list.append(required())
     else:
-        client_list = [browser(), mobile(), worker(), contact()]
+        client_list = [browser(), mobile(), worker(), contact(), bff()]
 
     document = {
         "realm": "commerce",
@@ -186,7 +195,7 @@ class TheLifetime(Fixture):
         A realm at 300 with one client at 18000 issues five-hour tokens to that
         client, and a realm-level assertion alone calls it compliant.
         """
-        client = browser(attributes={"use.refresh.tokens": "false",
+        client = browser(attributes={"use.refresh.tokens": "false", "pkce.code.challenge.method": "S256",
                                      "access.token.lifespan": "18000"})
         self.assertIn("access.token.lifespan", self.one(realm(client)))
 
@@ -197,25 +206,25 @@ class TheLifetime(Fixture):
         exists to catch, so reading it as an override would fail the rollout on
         the shape of the fix.
         """
-        client = browser(attributes={"use.refresh.tokens": "false",
+        client = browser(attributes={"use.refresh.tokens": "false", "pkce.code.challenge.method": "S256",
                                      "access.token.lifespan": ""})
         self.assertEqual(self.problems(realm(client)), [])
 
     def test_an_override_that_is_not_a_number_is_refused(self):
         """Cannot say what that client issues, which is not the same as saying it is fine."""
-        client = browser(attributes={"use.refresh.tokens": "false",
+        client = browser(attributes={"use.refresh.tokens": "false", "pkce.code.challenge.method": "S256",
                                      "access.token.lifespan": "5 min"})
         self.assertIn("not a number of seconds", self.one(realm(client)))
 
     def test_an_override_equal_to_the_realm_value_is_not_a_finding(self):
         """Redundant is not wrong, and refusing it would fail a compliant realm."""
-        client = browser(attributes={"use.refresh.tokens": "false",
+        client = browser(attributes={"use.refresh.tokens": "false", "pkce.code.challenge.method": "S256",
                                      "access.token.lifespan": "300"})
         self.assertEqual(self.problems(realm(client)), [])
 
     def test_the_override_is_compared_as_text_because_keycloak_stores_it_that_way(self):
         """Client attributes are a string map; an integer 300 there is still 300."""
-        client = browser(attributes={"use.refresh.tokens": "false",
+        client = browser(attributes={"use.refresh.tokens": "false", "pkce.code.challenge.method": "S256",
                                      "access.token.lifespan": 300})
         self.assertEqual(self.problems(realm(client)), [])
 
@@ -291,7 +300,7 @@ class TheImplicitFlow(Fixture):
 
 class TheRefreshToken(Fixture):
     def test_an_issued_refresh_token_is_caught(self):
-        client = browser(attributes={"use.refresh.tokens": "true"})
+        client = browser(attributes={"use.refresh.tokens": "true", "pkce.code.challenge.method": "S256"})
         self.assertIn("use.refresh.tokens", self.one(realm(client)))
 
     def test_an_absent_attribute_is_the_violation_and_not_a_silence(self):
@@ -301,12 +310,16 @@ class TheRefreshToken(Fixture):
         ADR-034 rests on optional — and Keycloak's default is the opposite of
         what ADR-034 states, so absence is the failure.
         """
-        self.assertIn("declares no use.refresh.tokens", self.one(realm(browser(attributes={}))))
+        client = browser(attributes={"pkce.code.challenge.method": "S256"})
+        self.assertIn("declares no use.refresh.tokens", self.one(realm(client)))
 
     def test_a_client_with_no_attributes_map_at_all_is_caught(self):
         client = browser()
         del client["attributes"]
-        self.assertIn("declares no use.refresh.tokens", self.one(realm(client)))
+        found = self.problems(realm(client))
+        self.assertEqual(len(found), 2, found)
+        self.assertTrue(any("declares no use.refresh.tokens" in f for f in found), found)
+        self.assertTrue(any("pkce.code.challenge.method to None" in f for f in found), found)
 
     def test_the_standard_flow_has_to_be_on_for_the_attribute_to_mean_anything(self):
         """A client that mints no token issues no refresh token either.
@@ -512,6 +525,164 @@ class TheContactClient(Fixture):
         found = self.problems(realm(browser(), contact(serviceAccountsEnabled="true")))
         self.assertTrue(any("boolean" in problem for problem in found), found)
         self.assertTrue(any("service accounts disabled" in problem for problem in found), found)
+
+
+class TheBrowserClientsCode(Fixture):
+    """`web-app` is public, PKCE-bound and redirected only to hosts it names."""
+
+    def test_an_absent_pkce_method_is_caught(self):
+        client = browser(attributes={"use.refresh.tokens": "false"})
+        self.assertIn("pkce.code.challenge.method to None", self.one(realm(client)))
+
+    def test_pkce_weakened_to_plain_is_caught(self):
+        client = browser(attributes={"use.refresh.tokens": "false",
+                                     "pkce.code.challenge.method": "plain"})
+        self.assertIn("'plain'", self.one(realm(client)))
+
+    def test_a_confidential_browser_is_caught(self):
+        self.assertIn("publicClient=False", self.one(realm(browser(publicClient=False))))
+
+    def test_a_bare_wildcard_redirect_is_caught(self):
+        self.assertIn("redirectUris entry at index 0", self.one(realm(browser(redirectUris=["*"]))))
+
+    def test_a_wildcard_in_the_host_is_caught(self):
+        found = self.one(realm(browser(redirectUris=["https://*.spa.example/*"])))
+        self.assertIn("redirectUris entry at index 0", found)
+
+    def test_a_protocol_relative_redirect_is_not_realm_relative(self):
+        found = self.one(realm(browser(redirectUris=["//elsewhere.example/*"])))
+        self.assertIn("redirectUris entry at index 0", found)
+
+    def test_a_web_redirect_with_no_host_is_caught(self):
+        self.assertIn("redirectUris entry", self.one(realm(browser(redirectUris=["https:///cb"]))))
+
+    def test_only_the_refused_entries_are_named(self):
+        found = self.one(realm(browser(redirectUris=["https://spa.example/*", "*"])))
+        self.assertIn("at index 1 ", found)
+
+    def test_http_is_refused_deployed_and_accepted_locally(self):
+        client = browser(redirectUris=["http://localhost:5173/*"])
+        self.assertIn("on https", self.one(realm(client)))
+        local = browser(redirectUris=["http://localhost:5173/*"], directAccessGrantsEnabled=True)
+        self.assertEqual(self.problems(realm(local), realm_check.LOCAL), [])
+
+    def test_a_path_wildcard_a_relative_path_and_a_custom_scheme_are_accepted(self):
+        client = browser(redirectUris=[
+            "https://spa.example/*", "/realms/commerce/account/*", "com.example.app:/cb"])
+        self.assertEqual(self.problems(realm(client)), [])
+
+    def test_a_redirect_list_that_is_absent_is_not_a_finding(self):
+        client = browser()
+        del client["redirectUris"]
+        self.assertEqual(self.problems(realm(client)), [])
+
+    def test_the_refused_value_is_not_echoed(self):
+        found = self.one(realm(browser(redirectUris=["https://user:hunter2@*.example/"])))
+        self.assertNotIn("hunter2", found)
+
+
+class EveryClient(Fixture):
+    """What holds on clients no constant names: built-in ones and new ones."""
+
+    def public(self, **overrides) -> dict:
+        client = {"clientId": "account", "publicClient": True, "standardFlowEnabled": True,
+                  "redirectUris": ["/realms/commerce/account/*"], "webOrigins": [],
+                  "attributes": {"pkce.code.challenge.method": "S256"}}
+        client.update(overrides)
+        return client
+
+    def test_the_compliant_built_in_shape_passes(self):
+        self.assertEqual(self.problems(realm(browser(), self.public())), [])
+
+    def test_a_public_standard_flow_client_without_pkce_is_caught(self):
+        found = self.one(realm(browser(), self.public(attributes={})))
+        self.assertIn("'account' is a public client", found)
+
+    def test_a_wildcard_redirect_on_another_client_is_caught(self):
+        found = self.one(realm(browser(), self.public(clientId="shop", redirectUris=["*"])))
+        self.assertIn("client 'shop' has a redirectUris entry", found)
+
+    def test_a_wildcard_web_origin_on_another_client_is_caught(self):
+        found = self.one(realm(browser(), self.public(webOrigins=["*"])))
+        self.assertIn("'account' declares '*'", found)
+
+    def test_a_confidential_client_is_held_to_its_redirects_but_not_to_pkce(self):
+        portal = self.public(clientId="portal", publicClient=False, attributes={},
+                             redirectUris=["https://*"])
+        found = self.one(realm(browser(), portal))
+        self.assertIn("client 'portal' has a redirectUris entry", found)
+
+    def test_a_client_with_no_standard_flow_is_not_held_to_pkce(self):
+        api = self.public(clientId="commerce-api", standardFlowEnabled=False, attributes={},
+                          redirectUris=["*"])
+        self.assertEqual(self.problems(realm(browser(), api)), [])
+
+    def test_admin_cli_keeping_the_password_grant_is_caught_only_when_deployed(self):
+        admin = {"clientId": "admin-cli", "publicClient": True, "standardFlowEnabled": False,
+                 "directAccessGrantsEnabled": True}
+        self.assertIn("'admin-cli' has directAccessGrantsEnabled=True",
+                      self.one(realm(browser(), admin)))
+        local = realm(browser(directAccessGrantsEnabled=True), admin)
+        self.assertEqual(self.problems(local, realm_check.LOCAL), [])
+
+    def test_a_named_client_is_not_judged_twice_for_the_password_grant(self):
+        self.assertIn("Section 11.2 documents",
+                      self.one(realm(browser(directAccessGrantsEnabled=True))))
+
+    def test_each_grant_attribute_is_caught_on_a_worker(self):
+        for key in realm_check.GRANT_ATTRIBUTES:
+            with self.subTest(key=key):
+                found = self.one(realm(browser(), worker(attributes={key: "true"})))
+                self.assertIn(f"'shipping-worker' sets {key}", found)
+
+    def test_each_grant_attribute_is_caught_on_a_public_client(self):
+        for key in realm_check.GRANT_ATTRIBUTES:
+            with self.subTest(key=key):
+                attributes = dict(mobile()["attributes"], **{key: "TRUE"})
+                self.assertIn(f"'mobile-app' sets {key}",
+                              self.one(realm(browser(), mobile(attributes=attributes))))
+
+    def test_a_grant_attribute_set_to_false_is_not_a_finding(self):
+        attributes = {key: "false" for key in realm_check.GRANT_ATTRIBUTES}
+        self.assertEqual(self.problems(realm(browser(), worker(attributes=attributes))), [])
+
+    def test_a_grant_attribute_survives_the_load_path_to_be_judged(self):
+        document = realm(browser(), worker(attributes={realm_check.GRANT_ATTRIBUTES[0]: "true"}))
+        held = realm_check.judged(realm_check.redact(document))
+        self.assertIn(realm_check.GRANT_ATTRIBUTES[0], self.one(held))
+
+
+class TheBffClient(Fixture):
+    def test_a_missing_bff_client_is_caught_rather_than_passed(self):
+        document = realm()
+        document["clients"] = [c for c in document["clients"]
+                               if c.get("clientId") != realm_check.BFF_CLIENT]
+        self.assertIn("'web-bff' 0 time(s)", self.one(document))
+
+    def test_a_duplicated_bff_client_is_caught(self):
+        self.assertIn("2 time(s)", self.one(realm(browser(), bff(), bff())))
+
+    def test_a_public_bff_client_is_caught(self):
+        self.assertIn("publicClient", self.one(realm(browser(), bff(publicClient=True))))
+
+    def test_service_accounts_turned_off_is_caught(self):
+        self.assertIn("service accounts disabled",
+                      self.one(realm(browser(), bff(serviceAccountsEnabled=False))))
+
+    def test_each_interactive_flow_is_caught_on_its_own(self):
+        for flag in ("standardFlowEnabled", "directAccessGrantsEnabled", "implicitFlowEnabled"):
+            with self.subTest(flag=flag):
+                found = self.problems(realm(browser(), bff(**{flag: True})))
+                self.assertTrue(any(f"'web-bff' has {flag}=" in f and "(§11.5)" in f
+                                    for f in found), found)
+
+    def test_a_missing_audience_scope_is_caught(self):
+        self.assertIn("default client scope",
+                      self.one(realm(browser(), bff(defaultClientScopes=["basic"]))))
+
+    def test_an_optional_audience_scope_is_caught(self):
+        found = self.one(realm(browser(), bff(optionalClientScopes=["commerce-api"])))
+        self.assertIn("as an optional scope", found)
 
 
 class TheWebOrigins(Fixture):
@@ -729,8 +900,8 @@ class TheWebOrigins(Fixture):
     def test_a_malformed_redirect_uri_list_stays_conservative(self):
         """Not an array is a hand-edited realm, and what Keycloak makes of it
         is not this gate's to predict — so `+` is not judged on it."""
-        self.assertEqual(self.problems(realm(
-            browser(webOrigins=["+"], redirectUris="not-an-array"), mobile())), [])
+        found = self.one(realm(browser(webOrigins=["+"], redirectUris="not-an-array"), mobile()))
+        self.assertIn("redirectUris that is not an array", found)
 
     # A character set closes the class of hosts that differ by a character, and
     # these three differ by parse. `ends_in_a_number` is WHATWG's own test
@@ -853,7 +1024,7 @@ class WhatTheGateIsLookingAt(Fixture):
     def test_a_realm_missing_the_mobile_client_is_refused(self):
         """The refresh-token obligation is a property of `mobile-app` and cannot be checked without it."""
         other = {"clientId": "commerce-api"}
-        found = self.problems(realm(clients=[browser(), other, worker(), contact()]))
+        found = self.problems(realm(clients=[browser(), other, worker(), contact(), bff()]))
         self.assertEqual(len(found), 1, found)
         self.assertIn("0 time(s)", found[0])
 
@@ -1396,6 +1567,8 @@ class WhatTheGateHolds(unittest.TestCase):
                 "standardFlowEnabled": True,
                 "implicitFlowEnabled": False,
                 "directAccessGrantsEnabled": False,
+                "publicClient": True,
+                "redirectUris": ["https://spa.example/*"],
                 "webOrigins": ["https://spa.example"],
                 "secret": self.MARKERS["client"],
                 "protocolMappers": [{"name": "x"}],
@@ -1418,7 +1591,7 @@ class WhatTheGateHolds(unittest.TestCase):
                     "web-origins", "acr", "profile", "roles", "basic", "commerce-api", "email"],
                 "attributes": {"use.refresh.tokens": "true",
                                "pkce.code.challenge.method": "S256"},
-            }, worker(), contact()],
+            }, worker(), contact(), bff()],
         }
 
     def test_no_credential_bearing_field_survives_the_projection(self):
@@ -1456,7 +1629,7 @@ class WhatTheGateHolds(unittest.TestCase):
                             for p in realm_check.check_realm(held, realm_check.LOCAL, 300)))
 
     def test_an_unknown_attribute_does_not_survive(self):
-        """The attribute allow-list is three keys, and the realm ships more."""
+        """The attribute allow-list is shorter than what the realm ships."""
         held = realm_check.judged(self.realm_with_secrets())
         self.assertNotIn("realm_client", held["clients"][0]["attributes"])
 
