@@ -340,7 +340,11 @@ public sealed class ServiceFixture : IAsyncLifetime
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (see below).
     public async ValueTask InitializeAsync()
     {
-        await Task.WhenAll(_sql.StartAsync(), _cache.StartAsync(), _coordination.StartAsync(), _rabbit.StartAsync());
+        await Task.WhenAll(
+            DaemonRetry.StartAsync(_sql),
+            DaemonRetry.StartAsync(_cache),
+            DaemonRetry.StartAsync(_coordination),
+            DaemonRetry.StartAsync(_rabbit));
 
         Factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(b => b
