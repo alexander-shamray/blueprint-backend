@@ -15,6 +15,11 @@ worker's Service off and leaves the edge's Ingress on. */}}
 {{- if not .Values.service.enabled }}
 {{- fail "ingress.enabled requires service.enabled: the Ingress backend is this workload's Service, so with no Service the release installs cleanly and the controller answers 503 for every request (§15.3)." }}
 {{- end }}
+{{- /* The header's rule, enforced: any other chart's Ingress would publish its
+Service past the edge's rate limiting, CORS and forwarded-header handling. */}}
+{{- if ne .Chart.Name "gateway" }}
+{{- fail (printf "ingress.enabled is set on the %s chart, and only the gateway has an Ingress (§10.1): any other would publish its Service past the edge's rate limiting, CORS and forwarded-header handling." .Chart.Name) }}
+{{- end }}
 {{- /* Required, because TLS terminates here (§10.1): the gateway's scheme
 rewrite, ADR-020's compression decision and the BFF's plain `http://` hop all
 rest on it, and without it a valid plaintext Ingress renders. */}}
