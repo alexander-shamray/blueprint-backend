@@ -247,6 +247,7 @@ OMITTED = frozenset(
         "tests/Catalog.Api.Tests/UnitOfWorkRollbackTests.cs",
         "tests/Catalog.Api.Tests/ProductEndpointsTests.cs",
         "tests/Catalog.Api.Tests/StockLevelsSchemaTests.cs",
+        "tests/Catalog.Api.Tests/ProductsSchemaTests.cs",
         "tests/Catalog.Api.Tests/StockLevelProjectionTests.cs",
         "tests/Catalog.Api.Tests/StockLevelRegistrationTests.cs",
         "tests/Catalog.Api.Tests/InventoryEventEndpointTests.cs",

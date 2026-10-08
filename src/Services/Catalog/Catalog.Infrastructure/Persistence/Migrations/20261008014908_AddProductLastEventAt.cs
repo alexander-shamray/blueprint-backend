@@ -4,7 +4,7 @@ namespace Catalog.Infrastructure.Persistence.Migrations;
 
 /// <summary>
 /// The stamp ADR-075 orders a product's events after. An existing row takes its newest recorded event, its withdrawal
-/// or else its publication: a price change left no column, but any made before this deploy is older than a skew.
+/// or else its publication; the default is for the release still running beside this one, whose insert omits it.
 /// </summary>
 public partial class AddProductLastEventAt : Migration
 {
@@ -15,23 +15,14 @@ public partial class AddProductLastEventAt : Migration
             schema: "catalog",
             table: "Products",
             type: "datetimeoffset(7)",
-            nullable: true);
+            nullable: false,
+            defaultValueSql: "SYSDATETIMEOFFSET()");
 
         migrationBuilder.Sql(
             """
             UPDATE catalog.Products
             SET LastEventAt = COALESCE(WithdrawnAt, PublishedAt);
             """);
-
-        migrationBuilder.AlterColumn<DateTimeOffset>(
-            name: "LastEventAt",
-            schema: "catalog",
-            table: "Products",
-            type: "datetimeoffset(7)",
-            nullable: false,
-            oldClrType: typeof(DateTimeOffset),
-            oldType: "datetimeoffset(7)",
-            oldNullable: true);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)

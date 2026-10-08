@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Catalog.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(CatalogDbContext))]
-    [Migration("20261008011310_AddProductLastEventAt")]
+    [Migration("20261008014908_AddProductLastEventAt")]
     partial class AddProductLastEventAt
     {
         /// <inheritdoc />
@@ -33,7 +33,9 @@ namespace Catalog.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("LastEventAt")
-                        .HasColumnType("datetimeoffset(7)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset(7)")
+                        .HasDefaultValueSql("SYSDATETIMEOFFSET()");
 
                     b.Property<string>("Name")
                         .IsRequired()
