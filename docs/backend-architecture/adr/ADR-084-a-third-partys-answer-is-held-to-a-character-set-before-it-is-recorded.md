@@ -5,14 +5,16 @@ whether an approval reference, a decline or refusal code, a carrier reference,
 an event id or a tracking number, is recorded only when it is printable: it
 holds no control, format, line or paragraph separator, and no broken surrogate,
 which are the categories Notifications' intake already refuses.
-`ThirdPartyText.Recordable` in `Common.Infrastructure` holds that rule for both
-adapters, and an answer that breaks it is a fault, counted and backed off, as an
+`ThirdPartyText.Recordable` in `Common.Application` holds that rule for both
+adapters and for Notifications' intake, which now reads it rather than spelling
+it again, and an answer that breaks it is a fault, counted and backed off, as an
 over-long one already is. A tracking number, which reaches the customer, is held
 further to `PlainReference.IsWellFormed` in `Common.Application`: letters and
 digits in any script, with hyphens, underscores and single spaces between them,
-and so no scheme, slash, dot or at sign a mail client could make a link of.
-Shipping's adapter refuses a booking whose tracking number breaks it, and
-Notifications' intake and the BFF's projection drop one that arrives anyway.
+and so no scheme, slash, dot or at sign a mail client could make a link of, and
+no modifier letter, since several are drawn as a dot or a colon. Shipping's
+adapter refuses a booking whose tracking number breaks it, and Notifications'
+intake and the BFF's projection drop one that arrives anyway.
 **Why.** Both adapters held these strings to length alone, so a provider or a
 carrier could put a line break or a bidirectional override into a log line, the
 payments admin view or Ordering's record, and a URL into a tracking number that
@@ -30,9 +32,13 @@ give-up age until the alphabet is widened here, for every reader at once. The
 refusal names no value, so finding the character takes the carrier's own record.
 Ordering's `TrackingNumber` and `PaymentReference` keep their presence and
 length checks, since their values now arrive only through adapters held to this.
-Notifications' intake keeps its own printable check, the same rule on the
-Application side of [§4.2](../04-solution-structure.md), so the rule has two
-spellings that a change to one must carry to the other.
+A booking or an approval refused for its text is still live at the third party:
+the carrier holds a booking the shipment gives up on at its give-up age, and the
+provider an authorisation nothing voids, each found in that party's own record
+by the shipment id or idempotency key the request carried, since the refusal
+quotes nothing it was sent. A letter that merely looks like punctuation, a
+katakana ノ drawn as a slash among them, still passes: no mail client links it,
+but a customer may read it as part of an address.
 
 ---
 
