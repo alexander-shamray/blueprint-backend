@@ -243,11 +243,11 @@ rather than assuming it.** Keycloak applies a list request's `max` to the
 client-model stream and then drops the representations the caller may not see,
 so an account short of that role produces a client list that is silently
 incomplete and looks exactly like a complete one. `read_admin.py` reads the
-roles out of its own access token and stops before asking for anything unless
-`view-clients` is among them — a credential provisioned too narrowly fails the
-deploy loudly instead of passing a realm nobody saw the end of. **It stops as
-well on one provisioned too widely**: any `realm-management` role beyond
-`read_admin.py`'s `PERMITTED_ROLES`, the read roles, refuses the run, so
+roles out of its own access token and stops before asking for the client list
+unless `view-clients` is among them — a credential provisioned too narrowly
+fails the deploy loudly instead of passing a realm nobody saw the end of. **It
+stops as well on one provisioned too widely**: any `realm-management` role
+beyond `read_admin.py`'s `PERMITTED_ROLES`, the read roles, refuses the run, so
 `realm-admin` is refused although it composes `view-clients`, and "nothing
 else" above is checked rather than only provisioned
 ([ADR-076](backend-architecture/adr/ADR-076-the-realm-check-refuses-a-credential-wider-than-a-read.md)).
