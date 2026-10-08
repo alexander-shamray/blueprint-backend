@@ -12,8 +12,12 @@ public sealed class RecipientRefusalTests
     [InlineData(550, "5.1.1 <a@example.test>: Recipient address rejected: User unknown")]
     [InlineData(553, "5.1.3 Bad recipient address syntax")]
     [InlineData(554, "5.1.1 No such user")]
+    [InlineData(550, "5.1.10 Recipient address rejected: domain has null MX")]
+    [InlineData(550, "5.2.1 The email account that you tried to reach is disabled")]
+    [InlineData(552, "5.2.2 Mailbox full")]
     [InlineData(550, "Requested action not taken: mailbox unavailable")]
     [InlineData(551, "User not local")]
+    [InlineData(552, "Requested mail action aborted: exceeded storage allocation")]
     [InlineData(553, "Requested action not taken: mailbox name not allowed")]
     public void A_refusal_of_the_mailbox_is_the_customers(int status, string reply) =>
         SmtpMailChannel.RefusesTheMailbox(Recipient(status, reply)).ShouldBeTrue(reply);
@@ -22,8 +26,12 @@ public sealed class RecipientRefusalTests
     [InlineData(554, "5.7.1 <a@example.test>: Relay access denied")]
     [InlineData(550, "5.7.1 Unable to relay")]
     [InlineData(550, "5.7.54 SMTP; Unable to relay recipient in non-accepted domain")]
+    [InlineData(553, "5.1.7 <noreply@example>: Sender address rejected: bad sender address syntax")]
+    [InlineData(550, "5.1.8 <noreply@example.test>: Sender address rejected: Domain not found")]
+    [InlineData(550, "5.1.0 <noreply@example.test>: Sender address rejected: User unknown")]
+    [InlineData(552, "5.2.3 Message size exceeds fixed maximum message size")]
+    [InlineData(550, "5.4.1 Recipient address rejected: Access denied")]
     [InlineData(554, "Transaction failed")]
-    [InlineData(552, "Requested mail action aborted: exceeded storage allocation")]
     public void A_refusal_of_this_deployment_is_not(int status, string reply) =>
         SmtpMailChannel.RefusesTheMailbox(Recipient(status, reply)).ShouldBeFalse(reply);
 
