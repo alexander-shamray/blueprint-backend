@@ -288,6 +288,21 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
         row.TrackingNumber.ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData("https://evil.example/track")]
+    [InlineData("TRK@evil.example")]
+    public async Task A_tracking_number_outside_the_contracts_alphabet_is_dropped_and_the_step_kept(string tracking)
+    {
+        Guid order = Guid.CreateVersion7();
+
+        await ApplyAsync(OrderEvents.Dispatched(order, At, tracking));
+
+        ProjectedOrder row = (await fixture.OrderAsync(order)).ShouldNotBeNull(
+            "the customer's view would show it as a link, so it is dropped like a value that cannot fit (ADR-084)");
+        row.DispatchedAt.ShouldBe(At);
+        row.TrackingNumber.ShouldBeNull();
+    }
+
     [Fact]
     public async Task A_blank_tracking_number_is_not_stored_and_a_later_real_one_is()
     {

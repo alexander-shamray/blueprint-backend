@@ -192,7 +192,8 @@ public sealed class OrderProjection(
         LoggerMessage.Define<string, Guid, int>(
             LogLevel.Warning,
             new EventId(2, nameof(ValueDropped)),
-            "Dropped {Field} on order {OrderId}: blank or longer than its column's {Width} characters.");
+            "Dropped {Field} on order {OrderId}: blank, longer than its column's {Width} characters, or outside its " +
+            "contract's alphabet.");
 
     public Task HandleAsync(OrderPlaced integrationEvent, CancellationToken ct)
     {
@@ -350,16 +351,22 @@ public sealed class OrderProjection(
     private string? CurrencyOf(string? currency, Guid orderId) =>
         Fitting(currency, ProjectionLimits.CurrencyLength, "Currency", orderId);
 
+    // The customer reads it, so it is held to the Shipping contract's alphabet as well as the column (ADR-084).
     private string? TrackingOf(string? trackingNumber, Guid orderId) =>
-        Fitting(trackingNumber, ProjectionLimits.TrackingNumberMaxLength, "TrackingNumber", orderId);
+        Fitting(
+            trackingNumber,
+            ProjectionLimits.TrackingNumberMaxLength,
+            "TrackingNumber",
+            orderId,
+            TrackingNumbers.IsWellFormed);
 
     /// <summary>Another service's text, kept only when non-blank and fitting; a stored one is never replaced.</summary>
-    private string? Fitting(string? value, int width, string field, Guid orderId)
+    private string? Fitting(string? value, int width, string field, Guid orderId, Func<string, bool>? alphabet = null)
     {
         if (value is null)
             return null;
 
-        if (!string.IsNullOrWhiteSpace(value) && value.Length <= width)
+        if (!string.IsNullOrWhiteSpace(value) && value.Length <= width && (alphabet is null || alphabet(value)))
             return value;
 
         ValueDropped(log, field, orderId, width, null);
