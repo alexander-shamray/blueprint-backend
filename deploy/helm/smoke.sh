@@ -1983,17 +1983,18 @@ check 'a CronJob is held to it too' mounts_token "$OUT/token-cronjob.yaml"
 check 'every pod template disables the service-account token' every_pod_disables_token "$OUT/platform.yaml"
 
 # --------------------------------------------------------------------------
-section 'Every pod meets Pod Security "restricted" (ADR-082)'
+section 'Every pod carries the restricted posture ADR-082 sets'
 # --------------------------------------------------------------------------
 # Per document again, and the container fields per container: a pod's count
 # of each must reach its count of images, so one container cannot cover two.
+# The pod's own profile sits at the pod spec's depth, so a container's is not it.
 every_pod_is_restricted() {
     awk '
         function close_doc() {
-            held = nonroot && seccomp && tmp && images
+            held = nonroot && seccomp && tmp && bounded && images && !hostile
             held = held && ro >= images && esc >= images && drop >= images
             if (pods && !held) { print kind " " name " is not restricted"; bad = 1 }
-            pods = nonroot = seccomp = tmp = ro = esc = drop = images = 0; kind = name = ""
+            pods = nonroot = seccomp = tmp = bounded = hostile = ro = esc = drop = images = 0; kind = name = ""
         }
         /^---$/ { close_doc(); next }
         /^kind: (Deployment|Job|CronJob|StatefulSet|DaemonSet|ReplicaSet|ReplicationController|Pod)$/ {
@@ -2001,13 +2002,15 @@ every_pod_is_restricted() {
         }
         /^  name: / && name == "" { name = $2 }
         /^ +runAsNonRoot: true[ ]*$/ { nonroot = 1 }
-        /^ +type: RuntimeDefault[ ]*$/ { seccomp = 1 }
+        /^          type: RuntimeDefault[ ]*$/ { seccomp = 1 }
         /^ +mountPath: \/tmp[ ]*$/ { tmp = 1 }
+        /^ +sizeLimit: [0-9]/ { bounded = 1 }
         /^ +(- )?image: / { images++ }
         /^ +readOnlyRootFilesystem: true[ ]*$/ { ro++ }
         /^ +allowPrivilegeEscalation: false[ ]*$/ { esc++ }
         /^ +drop: \[ALL\][ ]*$/ { drop++ }
-        /privileged: true|allowPrivilegeEscalation: true|readOnlyRootFilesystem: false|type: Unconfined/ { bad = 1 }
+        /privileged: true|allowPrivilegeEscalation: true|readOnlyRootFilesystem: false|type: Unconfined/ { hostile = 1 }
+        /^ +(hostPath|hostPort):|^ +host(Network|PID|IPC): true|^ +add:|^ +runAsUser: 0[ ]*$/ { hostile = 1 }
         END { close_doc(); exit (bad || seen == 0) ? 1 : 0 }
     ' "$1"
 }
@@ -2015,7 +2018,8 @@ every_pod_is_restricted() {
 restricted_pod() {
     # restricted_pod <kind> <name> <images> -> one compliant pod document, each image its own container
     printf '%s\n' "kind: $1" 'metadata:' "  name: $2" '      securityContext:' '        runAsNonRoot: true' \
-        '        seccompProfile:' '          type: RuntimeDefault'
+        '        seccompProfile:' '          type: RuntimeDefault' '      volumes:' '        - name: tmp' \
+        '          emptyDir:' '            sizeLimit: 64Mi'
     for _ in $(seq 1 "$3"); do
         printf '%s\n' '        - image: x' '            allowPrivilegeEscalation: false' \
             '            readOnlyRootFilesystem: true' '            drop: [ALL]' '              mountPath: /tmp'
@@ -2032,6 +2036,10 @@ sed '/RuntimeDefault/d' "$OUT/restricted-one.yaml" >"$OUT/restricted-noseccomp.y
     >"$OUT/restricted-container-unconfined.yaml"
 sed '/mountPath: \/tmp/d' "$OUT/restricted-one.yaml" >"$OUT/restricted-notmp.yaml"
 { restricted_pod Deployment a 0; echo '              mountPath: /tmp'; } >"$OUT/restricted-noimage.yaml"
+sed 's/^          type: RuntimeDefault/              type: RuntimeDefault/' "$OUT/restricted-one.yaml" \
+    >"$OUT/restricted-container-profile.yaml"
+sed '/sizeLimit/d' "$OUT/restricted-one.yaml" >"$OUT/restricted-unbounded.yaml"
+sed 's/emptyDir:/hostPath:/' "$OUT/restricted-one.yaml" >"$OUT/restricted-hostpath.yaml"
 not_restricted() { ! every_pod_is_restricted "$@"; }
 check 'the restricted check passes a compliant pod' every_pod_is_restricted "$OUT/restricted-one.yaml"
 check 'a second container without the fields is not covered by the first' \
@@ -2043,18 +2051,23 @@ check "a container's own Unconfined profile is refused under the pod's RuntimeDe
     not_restricted "$OUT/restricted-container-unconfined.yaml"
 check 'a read-only pod with nowhere writable at /tmp is refused' not_restricted "$OUT/restricted-notmp.yaml"
 check 'a pod document with no container the check can read is refused' not_restricted "$OUT/restricted-noimage.yaml"
+check "a container's RuntimeDefault does not stand in for the pod's own" \
+    not_restricted "$OUT/restricted-container-profile.yaml"
+check 'a /tmp emptyDir with no sizeLimit is refused' not_restricted "$OUT/restricted-unbounded.yaml"
+check 'a hostPath volume is refused' not_restricted "$OUT/restricted-hostpath.yaml"
 # One per clause: the compliant pod less one line, or with one forbidden line
 # beside the compliant ones, so no clause is only ever met alongside another.
 for field in runAsNonRoot allowPrivilegeEscalation readOnlyRootFilesystem drop; do
     sed "/$field/d" "$OUT/restricted-one.yaml" >"$OUT/restricted-no-$field.yaml"
     check "a pod without $field is refused" not_restricted "$OUT/restricted-no-$field.yaml"
 done
-for line in 'privileged: true' 'allowPrivilegeEscalation: true' 'readOnlyRootFilesystem: false'; do
+for line in 'privileged: true' 'allowPrivilegeEscalation: true' 'readOnlyRootFilesystem: false' \
+    'hostNetwork: true' 'hostPID: true' 'hostIPC: true' 'hostPort: 8080' 'add: [NET_RAW]' 'runAsUser: 0'; do
     { cat "$OUT/restricted-one.yaml"; echo "            $line"; } >"$OUT/restricted-extra.yaml"
     check "a container setting $line is refused beside the compliant fields" \
         not_restricted "$OUT/restricted-extra.yaml"
 done
-check 'every pod template meets Pod Security "restricted"' every_pod_is_restricted "$OUT/platform.yaml"
+check 'every pod template carries the restricted posture' every_pod_is_restricted "$OUT/platform.yaml"
 
 # --------------------------------------------------------------------------
 section 'The Service forwards to a port something is listening on'
