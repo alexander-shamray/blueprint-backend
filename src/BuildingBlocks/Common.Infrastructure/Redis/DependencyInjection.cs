@@ -49,10 +49,10 @@ public static class DependencyInjection
             {
                 options.DefaultEntryOptions = new HybridCacheEntryOptions
                 {
-                    Expiration = TimeSpan.FromMinutes(10),            // L2, Redis
-                    LocalCacheExpiration = TimeSpan.FromMinutes(1)    // L1, in-process
+                    Expiration = CacheDefaults.Expiration,
+                    LocalCacheExpiration = CacheDefaults.LocalCacheExpiration
                 };
-                options.MaximumPayloadBytes = 1024 * 1024;
+                options.MaximumPayloadBytes = CacheDefaults.MaximumPayloadBytes;
             });
 
             // Here, not in Common.Web (§13.2): the parameterless overload finds no keyed connection.

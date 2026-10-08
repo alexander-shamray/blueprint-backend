@@ -30,6 +30,9 @@ public sealed class RetentionPurgeService : BackgroundService
     // Two parameters a row against SQL Server's limit of 2,100, with room to spare.
     private const int RowsPerDelete = 900;
 
+    // A rowversion's width: an unsized binary parameter goes over as varbinary(max) against a binary(8).
+    private const int RowVersionBytes = 8;
+
     private readonly IServiceScopeFactory _scopes;
     private readonly RetentionPolicy _policy;
     private readonly ILogger<RetentionPurgeService> _log;
@@ -218,9 +221,7 @@ public sealed class RetentionPurgeService : BackgroundService
             for (int index = 0; index < chunk.Length; index++)
             {
                 parameters.Add($"k{index}", chunk[index].Key, DbType.String);
-
-                // Sized: an unsized binary parameter goes over as varbinary(max) against a binary(8).
-                parameters.Add($"v{index}", chunk[index].RowVersion, DbType.Binary, size: 8);
+                parameters.Add($"v{index}", chunk[index].RowVersion, DbType.Binary, size: RowVersionBytes);
             }
 
             deleted += await connection.ExecuteAsync(
