@@ -132,7 +132,8 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     private Task<HttpResponseMessage> CancelAsync(
         OrderId order,
         Guid? asUser,
-        string? permissions = null)
+        string? permissions = null,
+        string reason = CancelReasons.CustomerRequest)
     {
         HttpClient client = fixture.Factory.CreateClient();
         if (asUser is not null)
@@ -145,8 +146,30 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
 
         return client.PostAsJsonAsync(
             $"/v1/orders/{order.Value}/cancel",
-            new CancelOrderRequest(CancelReasons.CustomerRequest),
+            new CancelOrderRequest(reason),
             TestContext.Current.CancellationToken);
+    }
+
+    [Theory]
+    [InlineData(CancelReasons.OutOfStock)]
+    [InlineData(CancelReasons.StockTimeout)]
+    [InlineData(CancelReasons.PaymentDeclined)]
+    [InlineData(CancelReasons.PaymentTimeout)]
+    public async Task A_workflow_reason_from_a_caller_is_refused_naming_the_field(string reason)
+    {
+        // Known codes, so the parse passes and only the caller's vocabulary refuses them (ADR-087).
+        OrderId order = await SeedOrderAsync(Bob);
+
+        HttpResponseMessage response = await CancelAsync(order, asUser: Bob, reason: reason);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        ValidationProblemDetails problem = (await response.Content.ReadFromJsonAsync<ValidationProblemDetails>(
+            TestContext.Current.CancellationToken))!;
+        problem.Errors.ShouldContainKey(nameof(CancelOrderRequest.Reason));
+        problem.Errors[nameof(CancelOrderRequest.Reason)].ShouldHaveSingleItem().ShouldContain(
+            CancelReasons.CustomerRequest);
+        (await StatusOfAsync(order)).ShouldBe(nameof(OrderStatus.AwaitingStock), "a refused reason cancels nothing");
+        (await fixture.OutboxAsync()).ShouldBeEmpty("and publishes no OrderCancelled to count");
     }
 
     [Fact]

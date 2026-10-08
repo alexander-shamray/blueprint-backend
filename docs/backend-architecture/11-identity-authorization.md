@@ -821,6 +821,18 @@ public static class OrderEndpoints
                         });
                     }
 
+                    // The other four codes are facts only the workflow can
+                    // state; from a caller they are a claim nobody checks,
+                    // recorded on the order and counted (ADR-087).
+                    if (reason != CancellationReason.CustomerRequest)
+                    {
+                        return Results.ValidationProblem(new Dictionary<string, string[]>
+                        {
+                            [nameof(request.Reason)] =
+                                ["A caller cancels with customer_request; the other reasons are the workflow's."]
+                        });
+                    }
+
                     // CommandOrigin.User is a literal, not a bound value. The
                     // origin says which path the command arrived on, so a
                     // request that could set it would be the fail-open this
