@@ -370,6 +370,19 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_upstream_cancelled_with_the_buyer_still_waiting_stays_a_500_rather_than_a_499()
+    {
+        // Catalog's own Cancelled is not the buyer leaving, which only an aborted request says (§13.2).
+        _catalog.FailNextWith.Enqueue(StatusCode.Cancelled);
+
+        using HttpClient client = Caller();
+
+        HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
+    }
+
+    [Fact]
     public async Task An_upstream_outage_is_503()
     {
         _catalog.FailNextWith.Enqueue(StatusCode.Unavailable);
