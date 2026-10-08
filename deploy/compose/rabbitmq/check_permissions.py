@@ -440,8 +440,8 @@ def main() -> int:
             covered = (first_covered(entry["write"], [INTERFACE_EXCHANGE]),
                        first_covered(entry["write"], probes(owned_contract(user), names)))
             for resource in filter(None, covered):
-                    fail(f"{user}: write COVERS `{resource}`, and the service has no Domain "
-                         f"project to publish from (§4.1, §3.2)")
+                fail(f"{user}: write COVERS `{resource}`, and the service has no Domain "
+                     f"project to publish from (§4.1, §3.2)")
 
         # 4. It may publish its OWN context's contracts — WHERE IT HAS ANY.
         #
