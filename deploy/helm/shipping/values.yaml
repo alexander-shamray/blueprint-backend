@@ -200,5 +200,5 @@ networkPolicy:
       - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
   identity: { to: [] }
   database: { port: 1433, to: [] }
-  broker: { port: 5672, to: [] }
+  broker: { port: 5671, to: [] }   # amqps, as ADR-079 requires; a broker named plaintext dials 5672
   carrier: { to: [] }
