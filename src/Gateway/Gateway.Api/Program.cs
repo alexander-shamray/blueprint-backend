@@ -190,7 +190,7 @@ WebApplication app = builder.Build();
 // §10.6's header on every response, the exception handler's 500 included.
 app.UseSecurityHeaders();
 app.UseExceptionHandler();        // §10.5 — catches every fault below it
-app.UseCorrelationId();           // §10.4 — assigns or replaces the client's
+app.UseCorrelationId();           // §10.4 — adopts a plausible client ID, replaces any other
 app.UseRequestTimeouts();         // §9.7 — below the exception handler, which would answer 499
 
 // Above every writer it has to compress, because it works by replacing the response body feature.
