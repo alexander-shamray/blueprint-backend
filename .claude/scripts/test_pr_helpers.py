@@ -200,8 +200,9 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
     def test_no_pr_helper_calls_gh_past_the_bound(self):
         # The case above proves the first read of each helper is bounded; a
         # second read spelt `gh` directly would pass it, so every call line
-        # is read too. Comments are skipped, since they name `gh pr view`.
-        bare = re.compile(r"(?<![\w-])gh (pr|api|repo|issue|run)\b")
+        # is read too, for any subcommand. Comments are skipped, since they
+        # name `gh pr view`.
+        bare = re.compile(r"(?<![\w-])gh\s")
         for path in sorted(SCRIPTS.glob("pr-*.sh")):
             code = [
                 line for line in path.read_text(encoding="utf-8").splitlines()
