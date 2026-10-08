@@ -120,7 +120,7 @@ public class MessagingRegistrationTests
         foreach (Type consumer in consumers)
         {
             services.ShouldContain(
-                d => d.ImplementationType == consumer || d.ServiceType == consumer,
+                d => Registers(d, consumer),
                 $"{consumer.Name} is in §3.2's Consumes column and has no AddConsumer");
         }
     }
@@ -133,20 +133,13 @@ public class MessagingRegistrationTests
         services.AddMassTransit(x => x.AddConsumer<ProbeConsumer>());
 
         services.ShouldContain(
-            d => IsConsumerRegistration(d),
-            "if this cannot see a consumer that IS registered, an assertion built on the predicate proves nothing");
+            d => Registers(d, typeof(ProbeConsumer)),
+            "if the gate's own predicate cannot see a consumer that IS registered, the gate proves nothing");
     }
 
-    /// <summary>A registration MassTransit made for a consumer, judged by what its type implements.</summary>
-    internal static bool IsConsumerRegistration(ServiceDescriptor descriptor)
-    {
-        Type? candidate = descriptor.ImplementationType ?? descriptor.ServiceType;
-
-        return candidate is not null &&
-            Array.Exists(
-                candidate.GetInterfaces(),
-                i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IConsumer<>));
-    }
+    /// <summary>The gate's predicate, shared with its control so the control proves the one the gate runs.</summary>
+    private static bool Registers(ServiceDescriptor descriptor, Type consumer) =>
+        descriptor.ImplementationType == consumer || descriptor.ServiceType == consumer;
 
     [Fact]
     public void Usage_telemetry_is_disabled_by_the_production_registration_alone()
