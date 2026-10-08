@@ -78,7 +78,7 @@ public static class TransportSecurity
 
         if (Setting(builder, "Encrypt") is { } encrypt && encrypt is "false" or "no" or "optional")
             return "sets Encrypt to " + encrypt;
-        // SqlClient folds the two spellings into one key and keeps the last, so either one set is a downgrade.
+        // SqlClient keeps the last of the two spellings; refusing either one set is stricter, whatever the order.
         if (Setting(builder, "TrustServerCertificate") is "true" or "yes" ||
             Setting(builder, "Trust Server Certificate") is "true" or "yes")
             return "trusts any server certificate";
