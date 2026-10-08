@@ -335,8 +335,9 @@ client picks one or the other: aggregated responses shaped for a screen, or the
 service APIs shaped for a resource. **It matches `/bff/v1`, not the whole
 namespace**: the BFF maps its anonymous health endpoints on the port its API
 listens on, and a catch-all over `/bff` published them to every signed-in
-caller, each probe a database check. `ProxiedRouteTests` holds every path
-outside `/bff/v1` to a 404 that never reaches the BFF.
+caller, its readiness and startup probes each a database check.
+`ProxiedRouteTests` holds the three health paths, and an unversioned one, to a
+404 that never reaches the BFF.
 
 **This file ships whole, ahead of the services it routes to** — which is the
 opposite of the rule [§14.1](14-local-development.md)'s Compose file follows —
