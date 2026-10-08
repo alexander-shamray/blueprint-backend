@@ -3,7 +3,7 @@ namespace Notifications.Infrastructure.Delivery;
 /// <summary>One leased row: what the pass decides on, and the stamp a resend renders again.</summary>
 /// <remarks>
 /// No mailbox is projected, since the row holds none (ADR-053 rule 4). The trace pair is the intake's, which the
-/// pass restores as its parent (§9.4).
+/// pass restores as its parent (§9.4). <c>LockedUntil</c> is the lease this pass took, which its backoff names.
 /// </remarks>
 public sealed record SendWork(
     Guid NotificationId,
@@ -18,4 +18,5 @@ public sealed record SendWork(
     int? TemplateVersion,
     string? Languages,
     string? TraceParent,
-    string? TraceState);
+    string? TraceState,
+    DateTimeOffset LockedUntil);

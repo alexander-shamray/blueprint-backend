@@ -33,11 +33,12 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
             COALESCE(NULLIF(inserted.CorrelationId, '{Guid.Empty:D}'), inserted.OrderId) AS CorrelationId,
             inserted.OrderId, inserted.CustomerId, inserted.TemplateKey, inserted.Parameters, inserted.CreatedAt,
             inserted.SendStartedAt, inserted.TemplateVersion, inserted.Languages, inserted.TraceParent,
-            inserted.TraceState;
+            inserted.TraceState, inserted.LockedUntil;
         """;
 
     // The dispatcher's ladder, read from its constants so the two cannot drift; the lease drops with it. No count
-    // abandons a row: waiting ends at DeliveryOptions.GiveUpAge (ADR-052).
+    // abandons a row: waiting ends at DeliveryOptions.GiveUpAge (ADR-052). Only under the lease the caller took, so a
+    // pass that outlived it cannot drop a lease another replica has since taken, nor count an attempt for it.
     private static readonly string BackOffSql =
         $"""
         UPDATE notifications.NotificationLog
@@ -50,7 +51,7 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
                               THEN {OutboxDispatcher.BackoffAttemptCap}
                               ELSE Attempts END) * {OutboxDispatcher.BackoffBaseSeconds},
                 SYSDATETIMEOFFSET())
-        WHERE NotificationId = @NotificationId AND Status = 'Pending';
+        WHERE NotificationId = @NotificationId AND Status = 'Pending' AND LockedUntil = @Lease;
         """;
 
     public async Task<IReadOnlyList<SendWork>> ClaimAsync(CancellationToken ct)
@@ -61,11 +62,15 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
         return [.. await connection.QueryAsync<SendWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
     }
 
-    public async Task BackOffAsync(Guid notificationId, CancellationToken ct)
+    /// <summary>Backs the row off, if it is still under <paramref name="lease"/>; true when it was.</summary>
+    public async Task<bool> BackOffAsync(Guid notificationId, DateTimeOffset lease, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
 
-        await connection.ExecuteAsync(
-            new CommandDefinition(BackOffSql, new { NotificationId = notificationId }, cancellationToken: ct));
+        return await connection.ExecuteAsync(
+            new CommandDefinition(
+                BackOffSql,
+                new { NotificationId = notificationId, Lease = lease },
+                cancellationToken: ct)) == 1;
     }
 }
