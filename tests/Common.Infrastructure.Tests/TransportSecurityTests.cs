@@ -11,7 +11,8 @@ namespace Common.Infrastructure.Tests;
 /// <summary>ADR-079's rule, connection by connection, and the start-up check that applies it.</summary>
 public sealed class TransportSecurityTests
 {
-    private const string Secret = "s3cret-value";
+    // Stands in for a credential, so a refusal that echoes the value it read is caught.
+    private const string Echo = "echoed-value";
 
     private static string? Refusal(string environment, params (string Key, string? Value)[] settings)
     {
@@ -25,13 +26,13 @@ public sealed class TransportSecurityTests
         Refusal(Environments.Production, ($"ConnectionStrings:{name}", value));
 
     [Theory]
-    [InlineData("RabbitMq", $"amqp://svc:{Secret}@broker:5672")]
-    [InlineData("RedisCache", $"redis-cache:6379,user=svc,password={Secret}")]
-    [InlineData("RedisCoordination", $"redis-coordination:6379,ssl=false,password={Secret}")]
-    [InlineData("Ordering", $"Server=sql;Database=Ordering;User Id=svc;Password={Secret};Encrypt=False")]
-    [InlineData("Ordering", $"Server=sql;Database=Ordering;Password={Secret};Encrypt=Optional")]
-    [InlineData("OrderingMigrator", $"Server=sql;Database=Ordering;Password={Secret};TrustServerCertificate=True")]
-    [InlineData("Ordering", $"Server=sql;Password={Secret};Trust Server Certificate=yes")]
+    [InlineData("RabbitMq", $"amqp://svc:{Echo}@broker:5672")]
+    [InlineData("RedisCache", $"redis-cache:6379,user=svc,password={Echo}")]
+    [InlineData("RedisCoordination", $"redis-coordination:6379,ssl=false,password={Echo}")]
+    [InlineData("Ordering", $"Server=sql;Database=Ordering;User Id=svc;Password={Echo};Encrypt=False")]
+    [InlineData("Ordering", $"Server=sql;Database=Ordering;Password={Echo};Encrypt=Optional")]
+    [InlineData("OrderingMigrator", $"Server=sql;Database=Ordering;Password={Echo};TrustServerCertificate=True")]
+    [InlineData("Ordering", $"Server=sql;Password={Echo};Trust Server Certificate=yes")]
     [InlineData("Ordering", "Server=sql;Password=\"unterminated")]
     public void A_plaintext_or_unverified_hop_is_refused_outside_development(string name, string value)
     {
@@ -40,15 +41,15 @@ public sealed class TransportSecurityTests
         refusal.ShouldNotBeNull();
         refusal.ShouldStartWith($"ConnectionStrings:{name} ");
         refusal.ShouldContain(TransportSecurity.PlaintextKey);
-        refusal.ShouldNotContain(Secret, Case.Insensitive, "a refusal is logged, and the value carries the credential");
+        refusal.ShouldNotContain(Echo, Case.Insensitive, "a refusal is logged, and the value carries the credential");
     }
 
     [Theory]
     [InlineData("RabbitMq", "amqps://svc:p@broker:5671")]
-    [InlineData("RedisCache", "redis-cache:6380,ssl=true,user=svc,password=p")]
-    [InlineData("Ordering", "Server=sql;Database=Ordering;User Id=svc;Password=p")]
-    [InlineData("Ordering", "Server=sql;Database=Ordering;Password=p;Encrypt=Strict")]
-    [InlineData("Ordering", "Server=sql;Database=Ordering;Password=p;Encrypt=True;TrustServerCertificate=False")]
+    [InlineData("RedisCache", "redis-cache:6380,ssl=true,user=svc")]
+    [InlineData("Ordering", "Server=sql;Database=Ordering;User Id=svc")]
+    [InlineData("Ordering", "Server=sql;Database=Ordering;Encrypt=Strict")]
+    [InlineData("Ordering", "Server=sql;Database=Ordering;Encrypt=True;TrustServerCertificate=False")]
     public void An_encrypted_and_verified_hop_is_accepted(string name, string value) =>
         InProduction(name, value).ShouldBeNull();
 
@@ -58,7 +59,7 @@ public sealed class TransportSecurityTests
         Refusal(
                 Environments.Development,
                 ("ConnectionStrings:RabbitMq", "amqp://svc:p@rabbitmq:5672"),
-                ("ConnectionStrings:Ordering", "Server=sql;Password=p;TrustServerCertificate=True"))
+                ("ConnectionStrings:Ordering", "Server=sql;TrustServerCertificate=True"))
             .ShouldBeNull();
     }
 
@@ -68,7 +69,7 @@ public sealed class TransportSecurityTests
         (string, string?)[] settings =
         [
             ("ConnectionStrings:RabbitMq", "amqp://svc:p@rabbitmq:5672"),
-            ("ConnectionStrings:Ordering", "Server=sql;Password=p;TrustServerCertificate=True"),
+            ("ConnectionStrings:Ordering", "Server=sql;TrustServerCertificate=True"),
             ($"{TransportSecurity.PlaintextKey}:0", "RabbitMq"),
         ];
 
