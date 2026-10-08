@@ -73,10 +73,18 @@ internal sealed class KeycloakContactSource(HttpClient http, ContactMetrics metr
 
         string? email = Email(user);
 
-        return string.IsNullOrWhiteSpace(email)
-            ? new ContactLookup.NoSuchCustomer()
-            : new ContactLookup.Found(email, Locale(user));
+        if (string.IsNullOrWhiteSpace(email))
+            return new ContactLookup.NoSuchCustomer();
+
+        // An address nobody proved is anyone's to set, a stolen session's included, so it is no contact (ADR-086).
+        return Verified(user) ? new ContactLookup.Found(email, Locale(user)) : new ContactLookup.NoSuchCustomer();
     }
+
+    private static bool Verified(JsonElement user) =>
+        user.TryGetProperty("emailVerified", out JsonElement verified) &&
+        verified.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? verified.GetBoolean()
+            : throw new InvalidOperationException("Keycloak answered a user with no boolean emailVerified.");
 
     // The field, never the value: a mailbox in a message is what a log carries (§13.4).
     private static string? Email(JsonElement user)

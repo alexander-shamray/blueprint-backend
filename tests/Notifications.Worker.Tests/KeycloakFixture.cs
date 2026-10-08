@@ -113,12 +113,17 @@ public sealed class KeycloakFixture : IAsyncLifetime
     }
 
     /// <summary>A user created through the admin API, with a name the adapter must never bind; its id.</summary>
-    public async Task<Guid> CreateUserAsync(string? email, bool enabled = true, string? locale = null)
+    public async Task<Guid> CreateUserAsync(
+        string? email,
+        bool enabled = true,
+        string? locale = null,
+        bool verified = true)
     {
         Dictionary<string, object?> user = new()
         {
             ["username"] = $"customer-{Guid.CreateVersion7():N}",
             ["enabled"] = enabled,
+            ["emailVerified"] = verified,
             ["firstName"] = "Айгерім",
             ["lastName"] = "Сейітқызы"
         };

@@ -64,6 +64,15 @@ public sealed class KeycloakContactSourceTests(KeycloakFixture keycloak)
         (await ReadAsync(keycloak.Granted, customer)).ShouldBeOfType<ContactLookup.NoSuchCustomer>();
     }
 
+    /// <summary>Keycloak's own flag, read off a real user: an address nobody proved is no contact (ADR-086).</summary>
+    [Fact]
+    public async Task A_user_whose_email_is_unverified_is_no_such_customer()
+    {
+        Guid customer = await keycloak.CreateUserAsync(Mailbox(), verified: false);
+
+        (await ReadAsync(keycloak.Granted, customer)).ShouldBeOfType<ContactLookup.NoSuchCustomer>();
+    }
+
     [Fact]
     public async Task A_user_with_no_email_is_no_such_customer()
     {

@@ -2921,8 +2921,9 @@ has a Shipping worker read a delivery address from Ordering with nothing
 waiting on the answer, so it spends no hop of this budget and §2.3's callout
 records the departure. The same record has a Notifications worker read a
 mailbox from Keycloak's admin API on the same terms, which reaches no service
-of the platform at all. The fan-out allowance is stated because it is the rule
-a reviewer needs.
+of the platform at all, and only a verified one
+([ADR-086](adr/ADR-086-an-unverified-email-is-no-contact.md)). The fan-out
+allowance is stated because it is the rule a reviewer needs.
 
 That said, fan-out is not free — each additional call adds a failure mode and
 another dependency to the caller's availability. Beyond about three, the data
