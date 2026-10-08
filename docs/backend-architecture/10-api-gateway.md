@@ -822,6 +822,13 @@ since this platform is not the only thing that mints one. In
 "too long is replaced" passes just as well against a middleware that replaces
 everything.
 
+**The trace is the identifier a caller cannot choose.** The gateway reads no
+`traceparent`, `tracestate` or `baggage`, so every request starts a root trace
+at the edge, and that trace, not one the caller named, is what reaches every
+service, outbox row and worker span
+([ADR-083](adr/ADR-083-the-edge-starts-a-root-trace-and-a-callers-trace-context-stops-there.md)).
+`EdgeTraceContextTests` holds all three to stopping at the edge.
+
 ### Leaving the process
 
 **The middleware is the inbound half, and on its own it does not keep the
