@@ -45,16 +45,27 @@ spec:
       credential (§7.1), the platform's one identity with DDL rights, and
       connects to nothing but its database. */}}
       automountServiceAccountToken: false
+      {{- /* The Deployment's posture, for the same reasons (ADR-082). */}}
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
       containers:
         - name: migrate
           image: "{{ include "commerce.require" (list .Values.image.registry "image.registry is required: cleared, the hook image has no host and the migration never runs (§7.4).") }}/{{ $migrator }}:{{ $tag }}{{ include "commerce.digest" (list .Values.image.migratorDigest "image.migratorDigest") }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           env:
             {{- /* The migrator identity (DDL), not the runtime one: §7.1's split,
             and this Secret is mounted into no API pod. */}}

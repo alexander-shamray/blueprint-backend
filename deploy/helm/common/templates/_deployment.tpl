@@ -44,12 +44,19 @@ spec:
       {{- /* Above HostOptions.ShutdownTimeout, the longest in-flight operation
       there is, which Kubernetes' default grace period only equals (§15.3). */}}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- /* Pod Security "restricted" (ADR-082). runAsNonRoot asserts what the
+      image already does (§15.2), and RuntimeDefault keeps the node's syscall
+      filter where the kubelet's own default would leave the pod Unconfined. */}}
       securityContext:
-        {{- /* An assertion about the image, which already runs as a non-root user
-        (§15.2), so a base image that starts running as root fails to start.
-        readOnlyRootFilesystem is a decision no chapter has taken, and is not
-        asserted untested against these images. */}}
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      {{- /* The root filesystem is read-only, so /tmp is the one writable path:
+      the runtime's diagnostic sockets live there (ADR-082). */}}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
       {{- /* Across nodes and zones (§15.3), counted per track and per revision so
       that neither the canary nor a rollout's surge is held back by the other
       pods' placement. */}}
@@ -79,8 +86,12 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           ports:
             {{- range .Values.ports }}
             - name: {{ .name }}

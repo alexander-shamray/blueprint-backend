@@ -1983,6 +1983,69 @@ check 'a CronJob is held to it too' mounts_token "$OUT/token-cronjob.yaml"
 check 'every pod template disables the service-account token' every_pod_disables_token "$OUT/platform.yaml"
 
 # --------------------------------------------------------------------------
+section 'Every pod meets Pod Security "restricted" (ADR-082)'
+# --------------------------------------------------------------------------
+# Per document again, and the container fields per container: a pod's count
+# of each must reach its count of images, so one container cannot cover two.
+every_pod_is_restricted() {
+    awk '
+        function close_doc() {
+            held = nonroot && seccomp && tmp && images
+            held = held && ro >= images && esc >= images && drop >= images
+            if (pods && !held) { print kind " " name " is not restricted"; bad = 1 }
+            pods = nonroot = seccomp = tmp = ro = esc = drop = images = 0; kind = name = ""
+        }
+        /^---$/ { close_doc(); next }
+        /^kind: (Deployment|Job|CronJob|StatefulSet|DaemonSet|ReplicaSet|ReplicationController|Pod)$/ {
+            pods = 1; kind = $2; seen++
+        }
+        /^  name: / && name == "" { name = $2 }
+        /^ +runAsNonRoot: true[ ]*$/ { nonroot = 1 }
+        /^ +type: RuntimeDefault[ ]*$/ { seccomp = 1 }
+        /^ +mountPath: \/tmp[ ]*$/ { tmp = 1 }
+        /^ +(- )?image: / { images++ }
+        /^ +readOnlyRootFilesystem: true[ ]*$/ { ro++ }
+        /^ +allowPrivilegeEscalation: false[ ]*$/ { esc++ }
+        /^ +drop: \[ALL\][ ]*$/ { drop++ }
+        /privileged: true|allowPrivilegeEscalation: true|readOnlyRootFilesystem: false|type: Unconfined/ { bad = 1 }
+        END { close_doc(); exit (bad || seen == 0) ? 1 : 0 }
+    ' "$1"
+}
+
+restricted_pod() {
+    # restricted_pod <kind> <name> <images> -> one compliant pod document, each image its own container
+    printf '%s\n' "kind: $1" 'metadata:' "  name: $2" '      securityContext:' '        runAsNonRoot: true' \
+        '        seccompProfile:' '          type: RuntimeDefault'
+    for _ in $(seq 1 "$3"); do
+        printf '%s\n' '        - image: x' '            allowPrivilegeEscalation: false' \
+            '            readOnlyRootFilesystem: true' '            drop: [ALL]' '              mountPath: /tmp'
+    done
+}
+restricted_pod Deployment a 1 >"$OUT/restricted-one.yaml"
+{ restricted_pod Deployment a 1; echo '        - image: y'; } >"$OUT/restricted-sidecar.yaml"
+{ restricted_pod Deployment a 1; echo '---'; restricted_pod Job b 1 |
+    grep -v 'runAsNonRoot\|RuntimeDefault\|mountPath'; } >"$OUT/restricted-second.yaml"
+sed 's/RuntimeDefault/Unconfined/' "$OUT/restricted-one.yaml" >"$OUT/restricted-unconfined.yaml"
+sed '/RuntimeDefault/d' "$OUT/restricted-one.yaml" >"$OUT/restricted-noseccomp.yaml"
+# A container's own profile overrides the pod's, so Unconfined is refused anywhere.
+{ cat "$OUT/restricted-one.yaml"; printf '%s\n' '            seccompProfile:' '              type: Unconfined'; } \
+    >"$OUT/restricted-container-unconfined.yaml"
+sed '/mountPath: \/tmp/d' "$OUT/restricted-one.yaml" >"$OUT/restricted-notmp.yaml"
+{ restricted_pod Deployment a 0; echo '              mountPath: /tmp'; } >"$OUT/restricted-noimage.yaml"
+not_restricted() { ! every_pod_is_restricted "$@"; }
+check 'the restricted check passes a compliant pod' every_pod_is_restricted "$OUT/restricted-one.yaml"
+check 'a second container without the fields is not covered by the first' \
+    not_restricted "$OUT/restricted-sidecar.yaml"
+check 'one pod document carrying the fields does not cover the next' not_restricted "$OUT/restricted-second.yaml"
+check 'an Unconfined seccomp profile is refused' not_restricted "$OUT/restricted-unconfined.yaml"
+check 'a pod with no seccomp profile is refused' not_restricted "$OUT/restricted-noseccomp.yaml"
+check "a container's own Unconfined profile is refused under the pod's RuntimeDefault" \
+    not_restricted "$OUT/restricted-container-unconfined.yaml"
+check 'a read-only pod with nowhere writable at /tmp is refused' not_restricted "$OUT/restricted-notmp.yaml"
+check 'a pod document with no container the check can read is refused' not_restricted "$OUT/restricted-noimage.yaml"
+check 'every pod template meets Pod Security "restricted"' every_pod_is_restricted "$OUT/platform.yaml"
+
+# --------------------------------------------------------------------------
 section 'The Service forwards to a port something is listening on'
 # --------------------------------------------------------------------------
 # The routing gate above compares caller URLs with rendered Service ports and

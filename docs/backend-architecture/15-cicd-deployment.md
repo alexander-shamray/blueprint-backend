@@ -694,6 +694,16 @@ Job's pods to a policy that exists before them.
 > [ADR-069](adr/ADR-069-the-migration-job-is-fenced-by-a-hook-policy-of-its-own.md),
 > which fences the migration Job.
 
+**Every pod meets Pod Security "restricted".** Both pod templates run as
+non-root under the `RuntimeDefault` seccomp profile, with no privilege
+escalation, no capabilities and a read-only root filesystem, and an `emptyDir`
+at `/tmp` is the one writable path. The namespace's enforcement label is the
+installer's to set.
+
+> **Decision — every pod meets Pod Security "restricted", with a read-only
+> root filesystem.** See
+> [ADR-082](adr/ADR-082-every-pod-meets-pod-security-restricted-with-a-read-only-root-filesystem.md).
+
 **The templates live once, in a library chart.** `deploy/helm/common` is a
 `type: library` chart every **deployable** chart takes as a `file://`
 dependency, and each one's templates are one-line includes of it. The umbrella

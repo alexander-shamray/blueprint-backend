@@ -220,11 +220,14 @@ notifications:
   hostname policy is the deployment's to layer on top, and none is rendered
   here. Whether the cluster's network plugin enforces any of it is a
   fact about the cluster the render cannot see.
-- **`readOnlyRootFilesystem`.** The right posture, and a decision no chapter
-  has taken. Asserting it untested against the chiselled runtime images would
-  trade a review question for a CrashLoop. `runAsNonRoot` IS set, because it
-  asserts what the image already does — UID 1654, measured off the base
-  image's own config.
+- ~~**`readOnlyRootFilesystem`.**~~ **It joined once it was tested, which is
+  what this entry asked for.** Every host and migrator ran read-only in the
+  Compose stack, migrated, went healthy and walked an order to delivered, so
+  every container now sets it, with an `emptyDir` at `/tmp` for the runtime's
+  diagnostic socket, and every pod meets Pod Security "restricted"
+  ([ADR-082](../../docs/backend-architecture/adr/ADR-082-every-pod-meets-pod-security-restricted-with-a-read-only-root-filesystem.md)).
+  `runAsNonRoot` asserts what the image already does: UID 1654, measured off
+  the base image's own config.
 - **A canary that anyone has watched split traffic.** Since PR-25 the gate
   renders the canary track of every chart and asserts what comes out — that its
   pods still carry the `app.kubernetes.io/name` the *stable* Service selects
