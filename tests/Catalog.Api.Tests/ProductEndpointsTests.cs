@@ -164,7 +164,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
 
         AuthenticationScheme? forbid = await schemes.GetDefaultForbidSchemeAsync();
 
-        forbid?.Name.ShouldBe(TestAuthHandler.SchemeName);
+        forbid.ShouldNotBeNull().Name.ShouldBe(TestAuthHandler.SchemeName);
     }
 
     [Fact]
