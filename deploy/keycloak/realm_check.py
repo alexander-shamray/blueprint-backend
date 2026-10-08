@@ -1052,10 +1052,8 @@ def canonical_origin(text: object) -> str | None:
 def redirects_cannot_imply_an_origin(client: dict) -> bool:
     """True only where `+` provably derives nothing from this client.
 
-    That is a client whose every redirect is absolute and on a scheme no page
-    is served from; a relative one resolves against `rootUrl`, so it is no
-    evidence and answers False.
-    """
+    Every redirect absolute and on a scheme no page is served from; a relative
+    one resolves against `rootUrl`, so it is no evidence and answers False."""
     redirects = client.get("redirectUris")
     # Absent and empty are the answer, not "cannot tell": Keycloak drops `+`
     # and derives from what is left, and what is left is nothing.
