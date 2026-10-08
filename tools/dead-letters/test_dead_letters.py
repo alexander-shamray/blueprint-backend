@@ -387,6 +387,15 @@ class TheCredential(unittest.TestCase):
             self.assertEqual(("dead-letter-operator", "not-a-real-password"),
                              dead_letters.load_credential(str(path), {}))
 
+    def test_a_quoted_password_is_unescaped_as_curl_reads_it(self):
+        # The runbooks escape a backslash and a double quote for curl's config syntax; the tool must read the
+        # same password curl sends, or it fails to authenticate on exactly the passwords the escape exists for.
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "rabbit.curl"
+            path.write_text('user = "dead-letter-operator:a\\\\b\\"c d:e@f\\""\n', encoding="utf-8")
+            self.assertEqual(("dead-letter-operator", 'a\\b"c d:e@f"'),
+                             dead_letters.load_credential(str(path), {}))
+
     def test_no_credential_is_refused(self):
         code, _, err = run(FakeApi({}), "list", env={})
         self.assertEqual(2, code)
