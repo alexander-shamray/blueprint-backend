@@ -98,7 +98,11 @@ FRAMEWORK_PREFIX = "MassTransit:"
 # and `Fault<T>` both extend the root `Fault`, and a generic's argument sits
 # between `--` separators with its own namespace.
 FAULT_ROOT = f"{FRAMEWORK_PREFIX}Fault"
-FAULT_SOURCES = (f"{FRAMEWORK_PREFIX}ReceiveFault", f"{FRAMEWORK_PREFIX}Fault--Common.Contracts.Anything.V1:Anything--")
+
+
+def fault_of(prefix: str) -> str:
+    """The fault exchange for a message in one namespace, `MassTransit:Fault--<ns>:<type>--`."""
+    return f"{FAULT_ROOT}--{prefix}Anything--"
 
 # The polymorphic publish exchange. MassTransit binds each concrete contract
 # exchange to one exchange per interface the message implements, and the
@@ -478,7 +482,9 @@ def main() -> int:
 
         # 3d. A fault's publish binds `ReceiveFault` and each `Fault--<type>--` to the
         #     root `Fault` interface, so read is owed on those sources and never on the root.
-        for resource in FAULT_SOURCES:
+        consumed = referenced[service] | ({owned_contract(user)} & prefixes) | ({private[service]} - {None})
+        sources = [f"{FRAMEWORK_PREFIX}ReceiveFault", *(fault_of(prefix) for prefix in sorted(consumed))]
+        for resource in sources:
             if not matches(entry["read"], resource):
                 fail(f"{user}: read does not cover `{resource}`, the source of the binding a "
                      f"fault's publish declares, so the fault is refused (§13.6)")
