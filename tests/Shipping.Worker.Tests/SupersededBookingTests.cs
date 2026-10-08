@@ -167,6 +167,35 @@ public sealed class SupersededBookingTests
         orphaned.Message.ShouldContain(RecordingCarrier.Reference);
     }
 
+    [Fact]
+    public async Task A_stop_during_the_hand_back_still_keeps_the_booking()
+    {
+        Shipment voided = Voided();
+        using CancellationTokenSource stop = new();
+        RecordingCarrier carrier = new()
+        {
+            CancelAnswer = () =>
+            {
+                stop.Cancel();
+                throw new OperationCanceledException(stop.Token);
+            }
+        };
+        RecordingLogger log = new();
+
+        bool moved = await PassAsync(
+            new KnownAddress(),
+            carrier,
+            new TokenHonouringUnitOfWork(),
+            log,
+            stop.Token,
+            voided);
+
+        moved.ShouldBeFalse();
+        ShouldBeKeptForTheClaim(voided);
+        log.Entries.ShouldHaveSingleItem("the stop's token would have refused the keep's commit").Id.Name
+            .ShouldBe("HandBackDeferred");
+    }
+
     // What the fulfilment claim takes as a booked row to cancel, dated from the void.
     private static void ShouldBeKeptForTheClaim(Shipment shipment)
     {
@@ -215,13 +244,22 @@ public sealed class SupersededBookingTests
         IUnitOfWork unitOfWork,
         RecordingLogger log,
         params Shipment[] loads) =>
-        PassAsync(new KnownAddress(), carrier, unitOfWork, log, loads);
+        PassAsync(new KnownAddress(), carrier, unitOfWork, log, TestContext.Current.CancellationToken, loads);
+
+    private static Task<bool> PassAsync(
+        IDeliveryAddressStore store,
+        RecordingCarrier carrier,
+        IUnitOfWork unitOfWork,
+        RecordingLogger log,
+        params Shipment[] loads) =>
+        PassAsync(store, carrier, unitOfWork, log, TestContext.Current.CancellationToken, loads);
 
     private static async Task<bool> PassAsync(
         IDeliveryAddressStore store,
         RecordingCarrier carrier,
         IUnitOfWork unitOfWork,
         RecordingLogger log,
+        CancellationToken ct,
         params Shipment[] loads)
     {
         ServiceCollection services = new();
@@ -253,7 +291,7 @@ public sealed class SupersededBookingTests
             null,
             first.CreatedAt.AddSeconds(FulfilmentWorker.LeaseSeconds));
 
-        return await worker.FulfilAsync(provider, work, TestContext.Current.CancellationToken);
+        return await worker.FulfilAsync(provider, work, ct);
     }
 
     private sealed class RecordingCarrier : ICarrierGateway
@@ -386,6 +424,18 @@ public sealed class SupersededBookingTests
         {
             await operation(ct);
             return await operation(ct);
+        }
+    }
+
+    /// <summary>A unit that refuses a cancelled token, as EF Core's does before it opens a connection.</summary>
+    private sealed class TokenHonouringUnitOfWork : InlineUnitOfWork
+    {
+        public override Task<TResult> ExecuteAsync<TResult>(
+            Func<CancellationToken, Task<TResult>> operation,
+            CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return operation(ct);
         }
     }
 
