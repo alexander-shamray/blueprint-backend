@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Common.Contracts.Payments.V1;
+using Common.Infrastructure;
 using Payments.Application;
 using Payments.Application.Provider;
 using Polly;
@@ -35,34 +36,23 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
         if (response.StatusCode is not (HttpStatusCode.Created or HttpStatusCode.PaymentRequired))
             throw Unavailable($"The provider answered an authorisation with {(int)response.StatusCode}.");
 
-        AuthoriseAnswer? answer;
-        try
-        {
-            answer = await response.Content.ReadFromJsonAsync<AuthoriseAnswer>(ct);
-        }
-        catch (JsonException e)
-        {
-            throw Unavailable("The provider answered an authorisation with no JSON body.", e);
-        }
+        AuthoriseAnswer? answer = await ReadAsync<AuthoriseAnswer>(response, "an authorisation", ct);
 
         // A body that contradicts its status is a fault. An over-long value is refused here, not at the insert,
         // where it would leave money authorised with no PaymentAuthorised committed for it.
         if (response.StatusCode == HttpStatusCode.PaymentRequired)
         {
-            return answer is { Status: "declined", Code: { } code } && Recordable(code, ProviderLimits.MaxReasonLength)
+            return answer is { Status: "declined", Code: { } code } &&
+                ThirdPartyText.Recordable(code, ProviderLimits.MaxReasonLength)
                 ? new AuthorisationResult.Declined(code)
                 : throw Unavailable("The provider declined with a body that is not a decline.");
         }
 
         return answer is { Status: "approved", Reference: { } reference } &&
-            Recordable(reference, PaymentLimits.MaxReferenceLength)
+            ThirdPartyText.Recordable(reference, PaymentLimits.MaxReferenceLength)
             ? new AuthorisationResult.Authorised(reference)
             : throw Unavailable("The provider approved with a body that is not an approval.");
     }
-
-    // A blank reference or reason records nothing, so it is refused before a verdict exists.
-    private static bool Recordable(string value, int maxLength) =>
-        !string.IsNullOrWhiteSpace(value) && value.Length <= maxLength;
 
     public async Task VoidAsync(VoidRequest request, CancellationToken ct)
     {
@@ -77,18 +67,23 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
         if (response.StatusCode != HttpStatusCode.OK)
             throw Unavailable($"The provider answered a void with {(int)response.StatusCode}.");
 
-        VoidAnswer? answer;
-        try
-        {
-            answer = await response.Content.ReadFromJsonAsync<VoidAnswer>(ct);
-        }
-        catch (JsonException e)
-        {
-            throw Unavailable("The provider answered a void with no JSON body.", e);
-        }
+        VoidAnswer? answer = await ReadAsync<VoidAnswer>(response, "a void", ct);
 
         if (answer is not { Status: "voided" })
             throw Unavailable("The provider answered a void with a body that is not a void.");
+    }
+
+    private async Task<T?> ReadAsync<T>(HttpResponseMessage response, string act, CancellationToken ct)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<T>(ct);
+        }
+        // An undecodable charset surfaces as InvalidOperationException before the parser runs.
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
+        {
+            throw Unavailable($"The provider answered {act} with no JSON body.", e);
+        }
     }
 
     // Counts an answer the pipeline passed but the adapter cannot read; the pipeline counts its own failures.
