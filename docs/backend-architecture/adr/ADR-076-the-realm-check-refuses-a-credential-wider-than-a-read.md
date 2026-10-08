@@ -1,9 +1,10 @@
 # ADR-076 — The realm check refuses a credential wider than a read
 
-**Decision.** `deploy/keycloak/read_admin.py` stops before it reads a realm
-unless its token holds `view-clients` on `realm-management`, and stops as well
-when the token holds any `realm-management` role outside `PERMITTED_ROLES`,
-the read roles that file declares. `realm-admin` composes `view-clients` and
+**Decision.** `deploy/keycloak/read_admin.py` stops before it asks for a
+realm's client list unless its token holds `view-clients` on
+`realm-management`, and stops as well when the token holds any
+`realm-management` role outside `PERMITTED_ROLES`, the read roles that file
+declares. `realm-admin` composes `view-clients` and
 is refused all the same, so it no longer satisfies the completeness premise
 [ADR-042](ADR-042-the-deployed-realm-is-checked-at-deploy-time.md) names it
 beside; `view-realm` is permitted and is still not enough on its own.
