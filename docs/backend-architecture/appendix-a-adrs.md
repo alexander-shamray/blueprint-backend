@@ -83,6 +83,7 @@ decision looks wrong.
 | **ADR-074** | [A seller reads their own products and withdraws one, and a withdrawal is final](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md) |
 | **ADR-075** | [A product's events are stamped in the order its writes committed](adr/ADR-075-a-products-events-are-stamped-in-the-order-its-writes-committed.md) |
 | **ADR-076** | [The realm check refuses a credential wider than a read](adr/ADR-076-the-realm-check-refuses-a-credential-wider-than-a-read.md) |
+| **ADR-077** | [A worker's token is capped by its client's scope, and the realm gate reads the cap](adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md) |
 
 ---
 

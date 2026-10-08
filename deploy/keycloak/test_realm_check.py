@@ -85,6 +85,7 @@ def worker(**overrides) -> dict:
             "web-origins", "acr", "profile", "roles", "basic", "email", "commerce-api"],
         "optionalClientScopes": ["address", "phone", "organization"],
         "webOrigins": [],
+        "fullScopeAllowed": False,
     }
     client.update(overrides)
     return client
@@ -104,6 +105,7 @@ def contact(**overrides) -> dict:
         "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "basic", "email"],
         "optionalClientScopes": ["address", "phone", "organization"],
         "webOrigins": [],
+        "fullScopeAllowed": False,
     }
     client.update(overrides)
     return client
@@ -112,8 +114,41 @@ def contact(**overrides) -> dict:
 def bff(**overrides) -> dict:
     """A compliant `web-bff`: the address reader's shape, under §11.5's row."""
     client = worker(clientId=realm_check.BFF_CLIENT)
+    del client["fullScopeAllowed"]
     client.update(overrides)
     return client
+
+
+def mapper(name: str, kind: str, claim: str | None = None) -> dict:
+    """A protocol mapper as an export holds one, narrowed to what the gate reads."""
+    found = {"name": name, "protocolMapper": kind}
+    if claim is not None:
+        found["config"] = {"claim.name": claim}
+    return found
+
+
+# The scopes the fixture clients hold, each with nothing mapped into it, and
+# the audience scope with the two mappers that are its whole purpose.
+HELD_SCOPES = ("web-origins", "acr", "profile", "roles", "basic", "email",
+               "address", "phone", "organization")
+AUDIENCE_MAPPERS = [mapper("commerce-api-audience", "oidc-audience-mapper"),
+                    mapper("permission", "oidc-usermodel-client-role-mapper", "permission")]
+
+
+def scope_documents() -> dict:
+    """The four documents the token cap is read from, holding exactly ADR-052's grants."""
+    return {
+        "clientScopes": [{"name": name, "protocolMappers": []} for name in HELD_SCOPES]
+        + [{"name": "commerce-api", "protocolMappers": list(AUDIENCE_MAPPERS)}],
+        "scopeMappings": [],
+        "clientScopeMappings": {
+            "commerce-api": [{"client": realm_check.WORKER_CLIENT,
+                              "roles": ["orders:delivery-address"]}],
+            "realm-management": [{"client": realm_check.CONTACT_CLIENT,
+                                  "roles": ["view-users"]}],
+        },
+        "roles": {"client": {}},
+    }
 
 
 def realm(*clients, **overrides) -> dict:
@@ -138,6 +173,7 @@ def realm(*clients, **overrides) -> dict:
         "revokeRefreshToken": True,
         "refreshTokenMaxReuse": 0,
         "clients": client_list,
+        **scope_documents(),
     }
     document.update(overrides)
     return document
@@ -525,6 +561,149 @@ class TheContactClient(Fixture):
         found = self.problems(realm(browser(), contact(serviceAccountsEnabled="true")))
         self.assertTrue(any("boolean" in problem for problem in found), found)
         self.assertTrue(any("service accounts disabled" in problem for problem in found), found)
+
+
+class TheScopeCap(Fixture):
+    """With fullScopeAllowed off, the client's mappings are its token's ceiling (ADR-077)."""
+
+    def mapped(self, owner: str, entries: list) -> dict:
+        document = realm(browser())
+        document["clientScopeMappings"][owner] = entries
+        return document
+
+    def test_full_scope_left_on_is_caught_on_each_worker(self):
+        for make, name in ((worker, realm_check.WORKER_CLIENT), (contact, realm_check.CONTACT_CLIENT)):
+            with self.subTest(client=name):
+                found = self.one(realm(browser(), make(fullScopeAllowed=True)))
+                self.assertIn(f"client {name!r} has fullScopeAllowed=True", found)
+
+    def test_full_scope_left_unset_is_caught_because_keycloak_turns_it_on(self):
+        client = worker()
+        del client["fullScopeAllowed"]
+        self.assertIn("fullScopeAllowed=None", self.one(realm(browser(), client)))
+
+    def test_a_string_false_is_refused_and_the_cap_limb_speaks_too(self):
+        found = self.problems(realm(browser(), contact(fullScopeAllowed="false")))
+        self.assertTrue(any("boolean" in problem for problem in found), found)
+        self.assertTrue(any("has fullScopeAllowed='false'" in problem for problem in found), found)
+
+    def test_a_role_mapped_beside_the_grant_is_caught(self):
+        found = self.one(self.mapped("commerce-api", [{
+            "client": realm_check.WORKER_CLIENT, "roles": ["orders:delivery-address", "catalog:write"]}]))
+        self.assertIn("catalog:write", found)
+        self.assertIn("not exactly", found)
+
+    def test_a_wider_admin_role_on_the_contact_reader_is_caught(self):
+        found = self.one(self.mapped("realm-management", [{
+            "client": realm_check.CONTACT_CLIENT, "roles": ["view-users", "manage-users"]}]))
+        self.assertIn("manage-users", found)
+
+    def test_a_realm_role_mapped_to_a_worker_is_caught(self):
+        document = realm(browser())
+        document["scopeMappings"] = [{"client": realm_check.WORKER_CLIENT, "roles": ["offline_access"]}]
+        self.assertIn("realm ['offline_access']", self.one(document))
+
+    def test_a_grant_missing_from_the_mappings_is_caught_as_a_refused_read(self):
+        found = self.one(self.mapped("commerce-api", []))
+        self.assertIn(f"client {realm_check.WORKER_CLIENT!r} maps nothing", found)
+
+    def test_a_scope_the_worker_holds_mapping_a_role_is_caught(self):
+        document = realm(browser())
+        document["scopeMappings"] = [{"clientScope": "profile", "roles": ["offline_access"]}]
+        found = self.problems(document)
+        self.assertEqual(len(found), 2, found)
+        self.assertTrue(all("'profile', which maps realm ['offline_access']" in problem for problem in found))
+
+    def test_a_scope_no_worker_holds_may_map_a_role(self):
+        """The control: Keycloak's offline_access scope maps one, and no worker holds it."""
+        document = realm(browser())
+        document["clientScopes"].append({"name": "offline_access", "protocolMappers": []})
+        document["scopeMappings"] = [{"clientScope": "offline_access", "roles": ["offline_access"]}]
+        self.assertEqual(self.problems(document), [])
+
+    def test_a_role_of_the_worker_s_own_is_caught_and_an_empty_list_is_not(self):
+        document = realm(browser())
+        document["roles"]["client"][realm_check.CONTACT_CLIENT] = []
+        self.assertEqual(self.problems(document), [])
+        document["roles"]["client"][realm_check.CONTACT_CLIENT] = [{"name": "everything"}]
+        self.assertIn("defines roles of its own", self.one(document))
+
+    def test_a_malformed_mapping_entry_is_refused(self):
+        found = self.problems(self.mapped("commerce-api", [{
+            "client": realm_check.WORKER_CLIENT, "roles": "orders:delivery-address"}]))
+        self.assertTrue(any("not an object with a list of role names" in problem for problem in found), found)
+
+    def test_the_bff_is_not_held_to_a_cap_no_record_gives_it(self):
+        self.assertEqual(self.problems(realm(browser(), bff(fullScopeAllowed=True))), [])
+
+
+class TheScopeDocuments(Fixture):
+    """The vacuous half: a cap judged against documents nobody read is no cap."""
+
+    def test_each_absent_document_is_refused(self):
+        for key in ("clientScopes", "scopeMappings", "clientScopeMappings", "roles"):
+            with self.subTest(key=key):
+                document = realm(browser())
+                del document[key]
+                found = self.problems(document)
+                self.assertTrue(any(f"carries no {key}" in problem for problem in found), found)
+
+    def test_roles_without_a_client_object_is_refused(self):
+        self.assertIn("roles.client", self.one(realm(browser(), roles={"realm": []})))
+
+    def test_an_absent_scope_list_is_one_finding_and_not_one_per_scope(self):
+        document = realm(browser())
+        del document["clientScopes"]
+        self.assertIn("carries no clientScopes", self.one(document))
+
+
+class TheTokenWriters(Fixture):
+    """Only the commerce-api scope names the audience or writes the permission claim (ADR-077)."""
+
+    def test_an_audience_mapper_on_the_contact_reader_itself_is_caught(self):
+        found = self.one(realm(browser(), contact(protocolMappers=[
+            mapper("aud", "oidc-audience-mapper")])))
+        self.assertIn(f"client {realm_check.CONTACT_CLIENT!r}", found)
+        self.assertIn("the client itself's mapper 'aud'", found)
+
+    def test_an_audience_mapper_on_a_scope_the_contact_reader_holds_is_caught(self):
+        """Every holder of the scope gains it, so each service-account client is named."""
+        document = realm(browser())
+        scopes = {scope["name"]: scope for scope in document["clientScopes"]}
+        scopes["profile"]["protocolMappers"].append(mapper("aud", "oidc-audience-mapper"))
+        found = self.problems(document)
+        self.assertEqual(len(found), 3, found)
+        self.assertTrue(any(realm_check.CONTACT_CLIENT in problem for problem in found), found)
+
+    def test_a_hardcoded_permission_claim_on_the_address_reader_is_caught(self):
+        found = self.one(realm(browser(), worker(protocolMappers=[
+            mapper("grant", "oidc-hardcoded-claim-mapper", "permission")])))
+        self.assertIn("'grant'", found)
+
+    def test_any_mapper_writing_aud_by_claim_name_is_caught(self):
+        found = self.one(realm(browser(), bff(protocolMappers=[
+            mapper("aud", "oidc-usermodel-attribute-mapper", " aud ")])))
+        self.assertIn(f"client {realm_check.BFF_CLIENT!r}", found)
+
+    def test_the_audience_scope_s_own_mappers_are_its_purpose(self):
+        """The control: the fixture's commerce-api scope carries both, and passes."""
+        document = realm(browser())
+        audience = [scope for scope in document["clientScopes"] if scope["name"] == "commerce-api"]
+        self.assertEqual(audience[0]["protocolMappers"], AUDIENCE_MAPPERS)
+        self.assertEqual(self.problems(document), [])
+
+    def test_the_note_mappers_keycloak_adds_to_a_service_account_client_are_accepted(self):
+        notes = [mapper(claim, "oidc-usersessionmodel-note-mapper", claim)
+                 for claim in ("client_id", "clientHost", "clientAddress")]
+        self.assertEqual(self.problems(realm(browser(), bff(protocolMappers=notes))), [])
+
+    def test_a_held_scope_the_realm_does_not_define_is_refused(self):
+        found = self.one(realm(browser(), contact(optionalClientScopes=["undefined-scope"])))
+        self.assertIn("'undefined-scope', which the realm does not define", found)
+
+    def test_mappers_that_are_not_an_array_are_refused(self):
+        found = self.one(realm(browser(), contact(protocolMappers={"name": "aud"})))
+        self.assertIn("not an array", found)
 
 
 class TheBrowserClientsCode(Fixture):
@@ -1633,6 +1812,7 @@ class WhatTheGateHolds(unittest.TestCase):
                 "attributes": {"use.refresh.tokens": "true",
                                "pkce.code.challenge.method": "S256"},
             }, worker(), contact(), bff()],
+            **scope_documents(),
         }
 
     def test_no_credential_bearing_field_survives_the_projection(self):
@@ -1677,6 +1857,29 @@ class WhatTheGateHolds(unittest.TestCase):
         """The attribute allow-list is shorter than what the realm ships."""
         held = realm_check.judged(self.realm_with_secrets())
         self.assertNotIn("realm_client", held["clients"][0]["attributes"])
+
+    def test_a_mapper_keeps_its_name_type_and_claim_and_nothing_else(self):
+        found = {"name": "n", "protocolMapper": "t", "id": "i",
+                 "config": {"claim.name": "c", "included.client.audience": "a", "user.attribute": "u"}}
+        held = realm_check.judged({"clients": [{"clientId": "x", "protocolMappers": [found]}],
+                                   "clientScopes": [{"name": "s", "id": "i", "protocolMappers": [found]}]})
+        narrowed = {"name": "n", "protocolMapper": "t", "config": {"claim.name": "c"}}
+        self.assertEqual(held["clients"][0]["protocolMappers"], [narrowed])
+        self.assertEqual(held["clientScopes"], [{"name": "s", "protocolMappers": [narrowed]}])
+
+    def test_scope_mappings_and_client_roles_keep_their_names_and_realm_roles_go(self):
+        held = realm_check.judged({
+            "scopeMappings": [{"clientScope": "s", "roles": ["r"], "extra": 1}],
+            "clientScopeMappings": {"c": [{"client": "w", "roles": ["r"], "extra": 1}]},
+            "roles": {"realm": [{"name": "r"}], "client": {"w": [{"name": "o", "composite": True}]}}})
+        self.assertEqual(held["scopeMappings"], [{"clientScope": "s", "roles": ["r"]}])
+        self.assertEqual(held["clientScopeMappings"], {"c": [{"client": "w", "roles": ["r"]}]})
+        self.assertEqual(held["roles"], {"client": {"w": [{"name": "o"}]}})
+
+    def test_absent_scope_documents_stay_absent_to_be_refused(self):
+        held = realm_check.judged({"clients": [], "roles": {"realm": []}})
+        for key in ("clientScopes", "scopeMappings", "clientScopeMappings", "roles"):
+            self.assertNotIn(key, held)
 
 
 def commands_of(relative: str) -> str:

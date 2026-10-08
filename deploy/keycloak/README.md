@@ -20,7 +20,13 @@ This file is that tree's operational reference, on
 **One predicate judges both subjects**, because a Keycloak realm export and the
 admin API's `RealmRepresentation` are the same document — the export is that
 representation serialised, and the client list a full export carries under
-`clients` is what `GET /admin/realms/{realm}/clients` answers. **And one
+`clients` is what `GET /admin/realms/{realm}/clients` answers. The client
+scopes, every client's and scope's scope mappings and each client's own roles
+are fetched too, and regrouped under the keys an export files them by
+(`clientScopes`, `scopeMappings`, `clientScopeMappings`, `roles.client`).
+`read_admin.py` never interprets: a missing key stays missing and an unknown
+client is written out unchanged, because only the file with a suite decides.
+**And one
 derivation names the deployed one at both moments**: the scheduled job derives
 the realm out of each release's `identity.authority` exactly as the rollout
 does, pins the origin from the same Environment variable, and the suite asserts
@@ -87,10 +93,25 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   than enumerated here, because
   [ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
   argues each of them and `check_worker_client` is the list. The grant itself
-  is not among them: a service account's roles live on its user, which a
-  deployed realm's client list does not carry and the projection drops from an
-  export, so `check_worker_client` reaches the client object and the token
-  client's own check is the other half (ADR-052).
+  is not among them: a service account's roles live on its user, which this
+  gate does not read, so the token client's own check is the other half
+  (ADR-052).
+- **Each worker's token is capped at its grant**, in both realm kinds:
+  `shipping-worker` and `notifications-worker` turn full scope off, map
+  exactly ADR-052's role into their own scope, hold no scope that maps a
+  role, and define no role of their own — cited rather than enumerated,
+  because
+  [ADR-077](../../docs/backend-architecture/adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md)
+  argues it and `check_scope_cap` is the list. An over-grant on the account
+  then reaches no token, which is why the account itself can stay unread.
+- **Only the `commerce-api` scope names the audience or writes the
+  `permission` claim** on `shipping-worker`, `notifications-worker` and
+  `web-bff`: no audience mapper, and no mapper whose claim is `aud` or
+  `permission`, on the client itself or on any other scope it holds
+  (`check_token_writers`, ADR-077). The `roles` scope's audience-resolve
+  mapper still adds each client whose roles the token carries, which the cap
+  bounds: for `notifications-worker` that is `realm-management`, an audience
+  no service validates.
 - **`notifications-worker`'s own shape**, as far as a client object reaches:
   one such client, confidential, service accounts on, no interactive flow,
   `commerce-api` in neither scope list and `roles` in one — cited rather than
@@ -98,9 +119,8 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   [ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
   and [§11.5](../../docs/backend-architecture/11-identity-authorization.md)'s
   table argue them and `check_contact_client` is the list. Its grant,
-  `view-users` on `realm-management`, is out of reach for the reason the
-  bullet above gives, and the worker's check on its own token is the other
-  half.
+  `view-users` on `realm-management`, is unread for the reason the
+  `shipping-worker` bullet gives, and capped as the cap bullet says.
 - **`web-bff`'s own shape**, on the address reader's terms: one such client,
   confidential, service accounts on, no interactive flow, and `commerce-api`
   a default client scope and not an optional one — §11.5's row, and
@@ -122,14 +142,23 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   something that does not exist.
 - **Everything else in the realm — and it does not merely decline to check
   it, it does not hold it.** What the gate judges is a projection of the keys
-  `REALM_FIELDS`, `CLIENT_FIELDS` and `CLIENT_ATTRIBUTES` name, so the audience
-  mapper, the permission vocabulary, the client scopes' own definitions and
-  their mappers, the two development logins and every client secret are not in
-  the object at all — a client's two scope lists are, for the obligations
-  above that read them. Those belong
+  `REALM_FIELDS`, `CLIENT_FIELDS` and `CLIENT_ATTRIBUTES` name, plus each
+  mapper's name, type and claim (`MAPPER_FIELDS`, `MAPPER_CONFIG`), each
+  scope's name, the scope mappings' subjects and role names, and the names of
+  each client's own roles. So the audience a mapper names, the rest of its
+  configuration, the realm's roles, every role's composites,
+  the users and their role mappings, the two development logins and every
+  client secret are not in the object at all. Those belong
   to `tests/Common.Web.Tests/RealmImportTests.cs`, which is not superseded.
   The projection is also why no message here can leak a credential: there is
   none to leak.
+- **A worker's service account, or what a mapped role composes, in a deployed
+  realm.** Reading users would hand this credential every profile in the
+  realm, so the account is left unread and its token capped instead
+  (ADR-077). The cap is judged as mapped: a deployed realm that redefined
+  what `view-users` composes widens it unseen. §14.1's export pins that
+  composition in `RealmImportTests`, and the contact worker refuses a token
+  whose `realm-management` roles are not exactly the three.
 - **A realm with more clients than the ceiling.** The client list is read in
   one request asking for far more than any realm this platform will have, and a
   response *at* that ceiling stops the run rather than being truncated.
@@ -228,7 +257,7 @@ evaluated before the job enters its Environment.
 and they arrive from two different places on purpose. **Two callers hold
 them**: the rollout, once per dispatch, and the scheduled job, once an hour —
 the second consumer [`docs/secrets.md`](../../docs/secrets.md) argues as a
-second grant, and it is the same account with the same two reads.
+second grant, and it is the same account with the same reads.
 
 **Two are configured.** `KEYCLOAK_CHECK_CLIENT_ID` and
 `KEYCLOAK_CHECK_CLIENT_SECRET` come from the `production` GitHub Environment;

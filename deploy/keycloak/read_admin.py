@@ -1,37 +1,8 @@
 #!/usr/bin/env python3
-"""Fetch a deployed realm through Keycloak's admin API and write it out.
+"""Fetch a deployed realm through Keycloak's admin API and write it out in an export's shape.
 
-The one file in `deploy/keycloak` that talks to anything. It is deliberately
-thin and deliberately separate: `realm_check.py` decides, this fetches, and
-keeping the network on the other side of a file boundary is what lets the
-decision have a suite at all — `deploy/canary`'s split, adopted rather than
-re-invented.
-
-**What it writes is a realm export, not a new format.** Keycloak's
-`GET /admin/realms/{realm}` answers a `RealmRepresentation` and
-`GET /admin/realms/{realm}/clients` answers the `ClientRepresentation` list
-that a full export carries under `clients`; joining the two produces the same
-document shape `deploy/compose/keycloak/realm-export.json` holds. That is why
-one predicate can judge both, and it is the whole reason this file exists in
-this form rather than as a second checker.
-
-**It never interprets.** A missing key stays missing and a client this
-repository has never heard of is written out unchanged, because the only thing
-that may decide whether a realm is compliant is the file that has a suite.
-
-**Credentials fail closed.** Every one of the four environment variables is
-required and an absent one stops the run naming it. There is no "check what we
-can": a realm-obligation check that quietly degrades to checking nothing is the
-fail-open shape §12's gate-coverage rule refuses, and it would report a pass on
-the exact realm this gate was filed for.
-
-**Plain HTTP is refused.** The admin API carries a bearer token that can read
-every client secret in the realm, and §11.2 already refuses metadata over plain
-HTTP outside Development. There is no development affordance here because there
-is no local subject: the Compose realm is checked from its file.
-
-Stdlib `urllib`, so `deploy/keycloak` adds no dependency and no
-licence-register entry. Two GETs and a form POST is not a client library.
+`realm_check.py` decides and this fetches, `deploy/canary`'s split, so one predicate
+judges this and §14.1's export alike (deploy/keycloak/README.md). Stdlib `urllib` only.
 
     py -3.12 deploy/keycloak/read_admin.py --out realm.json
 """
@@ -268,8 +239,58 @@ def clients(base: str, realm: str, access_token: str) -> list:
     return answer
 
 
+def role_names(answer: object, where: str) -> list[str]:
+    if not isinstance(answer, list) or not all(
+            isinstance(role, dict) and isinstance(role.get("name"), str) for role in answer):
+        raise SystemExit(f"read_admin: {where} did not answer a list of named roles.")
+    return [role["name"] for role in answer]
+
+
+def scope_documents(base: str, realm: str, access_token: str, every_client: list) -> dict:
+    """Client scopes, every scope mapping and each client's own roles, keyed as an export keys them.
+
+    The admin API answers a mapping per subject and an export lists them per
+    role owner, so each answer is regrouped and nothing is dropped (ADR-077)."""
+    admin = f"{base}/admin/realms/{realm}"
+    scopes = get(f"{admin}/client-scopes", access_token)
+    if not isinstance(scopes, list):
+        raise SystemExit("read_admin: the admin API did not answer a client-scope list.")
+
+    realm_side: list = []
+    client_side: dict[str, list] = {}
+    own_roles: dict[str, list] = {}
+    subjects = [("client", item, f"{admin}/clients") for item in every_client]
+    subjects += [("clientScope", item, f"{admin}/client-scopes") for item in scopes]
+    for side, item, parent in subjects:
+        name = item.get("clientId" if side == "client" else "name") if isinstance(item, dict) else None
+        ident = item.get("id") if isinstance(item, dict) else None
+        if not isinstance(name, str) or not isinstance(ident, str):
+            raise SystemExit(f"read_admin: a {side} carries no id and name, so its scope cannot be read.")
+        path = f"{parent}/{urllib.parse.quote(ident, safe='')}"
+
+        mapped = get(f"{path}/scope-mappings", access_token)
+        owners = mapped.get("clientMappings", {}) if isinstance(mapped, dict) else None
+        if not isinstance(owners, dict):
+            raise SystemExit(f"read_admin: the scope mappings of {side} {name!r} are not a mapping document.")
+        roles = role_names(mapped.get("realmMappings", []), f"the realm roles mapped to {side} {name!r}")
+        if roles:
+            realm_side.append({side: name, "roles": roles})
+        for owner, entry in owners.items():
+            listed = entry.get("mappings", []) if isinstance(entry, dict) else None
+            roles = role_names(listed, f"the {owner} roles mapped to {side} {name!r}")
+            if roles:
+                client_side.setdefault(owner, []).append({side: name, "roles": roles})
+
+        if side == "client":
+            own_roles[name] = [{"name": role} for role in role_names(
+                get(f"{path}/roles", access_token), f"client {name!r}'s own roles")]
+
+    return {"clientScopes": scopes, "scopeMappings": realm_side,
+            "clientScopeMappings": client_side, "roles": {"client": own_roles}}
+
+
 def fetch(values: dict[str, str]) -> dict:
-    """The realm representation with its clients joined in, exactly as an export holds them."""
+    """The realm representation with its clients and their scopes joined in, exactly as an export holds them."""
     base = values[BASE_URL]
     realm = urllib.parse.quote(values[REALM], safe="")
     access = token(base, values[REALM], values[CLIENT_ID], values[CLIENT_SECRET])
@@ -279,18 +300,18 @@ def fetch(values: dict[str, str]) -> dict:
         raise SystemExit("read_admin: the admin API did not answer a realm representation.")
 
     every_client = clients(base, realm, access)
+    joined = {"clients": every_client, **scope_documents(base, realm, access, every_client)}
 
-    # The realm representation carries no `clients` key of its own, so this
-    # adds rather than overwrites. Asserting that keeps a future Keycloak
-    # answering a partial list from being silently replaced by a full one, or
-    # the reverse.
-    if "clients" in representation:
-        raise SystemExit(
-            "read_admin: the realm representation already carries a clients "
-            "key. Joining the client list would overwrite it, and which of the "
-            "two the checker should judge is a decision this file must not "
-            "take on its own.")
-    representation["clients"] = every_client
+    # The realm representation carries none of these keys of its own, so this
+    # adds rather than overwrites; which of two lists is judged is not this file's call.
+    for key, value in joined.items():
+        if key in representation:
+            raise SystemExit(
+                f"read_admin: the realm representation already carries a {key} "
+                "key. Joining the fetched one would overwrite it, and which of the "
+                "two the checker should judge is a decision this file must not "
+                "take on its own.")
+        representation[key] = value
 
     # PROJECTED BEFORE IT IS WRITTEN, not only before it is judged. Redacting
     # here was the first answer and it was the weaker one: it still wrote the

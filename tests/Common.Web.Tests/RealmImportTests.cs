@@ -503,6 +503,63 @@ public class RealmImportTests
         account.TryGetProperty("groups", out _).ShouldBeFalse();
     }
 
+    [Theory]
+    [InlineData(WorkerCredentialClient, Audience, "orders:delivery-address")]
+    [InlineData(ContactCredentialClient, RealmManagement, "view-users")]
+    public void Each_worker_client_caps_its_token_at_exactly_its_grant(string clientId, string owner, string role)
+    {
+        // With full scope off, Keycloak keeps only these roles in the token whatever the account holds (ADR-077).
+        Root
+            .GetProperty("clients")
+            .EnumerateArray()
+            .Single(c => c.GetProperty("clientId").GetString() == clientId)
+            .GetProperty("fullScopeAllowed")
+            .GetBoolean()
+            .ShouldBeFalse($"'{clientId}' would carry every role its service account holds");
+
+        string[] mapped =
+        [
+            .. Root
+                .GetProperty("clientScopeMappings")
+                .EnumerateObject()
+                .SelectMany(o => o.Value
+                    .EnumerateArray()
+                    .Where(e => e.TryGetProperty("client", out JsonElement c) && c.GetString() == clientId)
+                    .SelectMany(e => e.GetProperty("roles").EnumerateArray().Select(r => $"{o.Name}/{r.GetString()}")))
+        ];
+
+        mapped.ShouldBe([$"{owner}/{role}"]);
+        Root
+            .GetProperty("scopeMappings")
+            .EnumerateArray()
+            .Any(e => e.TryGetProperty("client", out JsonElement c) && c.GetString() == clientId)
+            .ShouldBeFalse($"'{clientId}' would carry a realm role beside its grant");
+    }
+
+    [Fact]
+    public void No_scope_but_the_audience_scope_names_an_audience()
+    {
+        // Any other audience mapper reaches every holder's token, the contact reader's included (ADR-077).
+        // The roles scope's resolve mapper names only clients whose roles the capped token carries.
+        foreach (JsonElement scope in ClientScopes.Where(s => s.GetProperty("name").GetString() != Audience))
+        {
+            if (!scope.TryGetProperty("protocolMappers", out JsonElement mappers))
+                continue;
+
+            mappers
+                .EnumerateArray()
+                .Any(m => m.GetProperty("protocolMapper").GetString() == "oidc-audience-mapper")
+                .ShouldBeFalse($"scope '{scope.GetProperty("name").GetString()}' writes an audience");
+        }
+
+        Root
+            .GetProperty("clients")
+            .EnumerateArray()
+            .Single(c => c.GetProperty("clientId").GetString() == ContactCredentialClient)
+            .TryGetProperty("protocolMappers", out _)
+            .ShouldBeFalse($"'{ContactCredentialClient}' takes no mapper of its own, so none can write an audience");
+    }
+
     [Fact]
     public void View_users_composes_exactly_the_two_query_roles_and_neither_composes_further()
     {

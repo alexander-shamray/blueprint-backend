@@ -255,6 +255,15 @@ is the record that moved it.
 `tools/new-service/scaffold/render.py` row names were cut by later comment
 sweeps, so that row describes text no longer in the tree.
 
+**Amended by
+[ADR-077](ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md)**,
+which turns full scope off on both workers and makes each client's one scope
+mapping its grant, so the issuer caps the token and the realm gate reads the
+cap. **Each client holds itself to its grant, because the realm gate cannot**
+still holds of the service account's roles, which stay unread; what moved is
+that no token can carry more than the grant, and that Keycloak's default roles
+are no longer in either worker's token.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

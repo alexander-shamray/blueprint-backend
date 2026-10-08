@@ -156,16 +156,19 @@ flip.
 **Step 3 is the one that gets skipped**, and skipping it produces a rotation
 that appears to work until the next unrelated restart.
 
-**What each worker's client holds is a provisioning obligation, because no
-gate can read it.** A service account's roles are in neither document the
-realm gate reads (ADR-052), so a deployed realm is held to them here.
-`shipping-worker`'s service account holds `orders:delivery-address` on
+**What each worker's service account holds is a provisioning obligation,
+because no gate reads it.** A service account's roles live on its user, which
+the realm gate does not read (ADR-052), so a deployed realm is held to them
+here. `shipping-worker`'s service account holds `orders:delivery-address` on
 `commerce-api` and nothing else. `notifications-worker`'s holds `view-users`
 on `realm-management` — Keycloak composes `query-groups` and `query-users`
-into it — and nothing else; its scope lists are the realm gate's to check.
-Each worker refuses a token wider than its grant at
-its first read; a grant on some other client is outside that check, and this
-paragraph is what says it must not exist.
+into it — and nothing else. **What reaches the token is capped by the client,
+and that the gate does read**
+([ADR-077](backend-architecture/adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md)):
+each worker client is created with full scope off, its grant as its one scope
+mapping, `offline_access` taken out of its optional scopes, and no role of its
+own, so a role added to the account later is issued to nobody. Each worker
+also refuses a token wider than its grant at its first read.
 
 ### A database credential
 
@@ -236,7 +239,8 @@ which is the moment the rollout cannot be
 **It is a service account of the realm being checked, with realm-read rights and
 nothing else.** Explicitly *not* a cross-realm admin account: one of those would
 hold rights over realms this check has no business reading, and what the check
-needs is two reads — the realm representation and its client list.
+needs is the realm representation, its client list, and the client scopes,
+scope mappings and client roles behind them, all within the reads below.
 
 **`view-clients` on `realm-management` is not optional, and the gate checks it
 rather than assuming it.** Keycloak applies a list request's `max` to the
@@ -268,8 +272,8 @@ to be covered by the first.** PR-36's row in
 [`docs/pr-decision-log.md`](pr-decision-log.md) said that a second unattended
 consumer — #176's scheduled run — would be a second grant to argue when it
 arrived, and it has arrived. What it holds is the same service account, in
-the same Environment, making the same two reads — the realm representation
-and its client list — and it asks for no wider role: the schedule adds a
+the same Environment, making the same reads, and it asks for no wider role:
+the schedule adds a
 moment, not a right. What it changes is exposure. A credential the rollout
 exercised once per dispatch is now exercised twenty-four times a day from a
 runner, so a leaked or over-granted one is leaked or over-granted on every
