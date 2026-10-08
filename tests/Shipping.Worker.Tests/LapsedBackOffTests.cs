@@ -26,7 +26,9 @@ public sealed class LapsedBackOffTests(ServiceFixture fixture) : IAsyncLifetime
 
         TrackingWork lapsed = (await claims.ClaimAsync(ct)).Single(w => w.Id == shipment.Id.Value);
         await fixture.ExpireLeasesAsync();
+        await PastTheClaimAsync(lapsed.LockedUntil, TrackingWorker.LeaseSeconds);
         TrackingWork holder = (await claims.ClaimAsync(ct)).Single(w => w.Id == shipment.Id.Value);
+        holder.LockedUntil.ShouldNotBe(lapsed.LockedUntil, "two passes' leases, or the test proves nothing");
 
         await claims.FailAsync(lapsed.Id, lapsed.LockedUntil, ct);
 
@@ -50,7 +52,9 @@ public sealed class LapsedBackOffTests(ServiceFixture fixture) : IAsyncLifetime
 
         FulfilmentWork lapsed = (await claims.ClaimAsync(ct)).Single(w => w.Id == shipment.Id.Value);
         await fixture.ExpireLeasesAsync();
+        await PastTheClaimAsync(lapsed.LockedUntil, FulfilmentWorker.LeaseSeconds);
         FulfilmentWork holder = (await claims.ClaimAsync(ct)).Single(w => w.Id == shipment.Id.Value);
+        holder.LockedUntil.ShouldNotBe(lapsed.LockedUntil, "two passes' leases, or the test proves nothing");
 
         await claims.FailAsync(lapsed.Id, lapsed.LockedUntil, ct);
 
@@ -62,4 +66,10 @@ public sealed class LapsedBackOffTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.AttemptsAsync(shipment.Id)).ShouldBe(1, "the holder's own backoff still lands");
         (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull();
     }
+
+    // A real reclaim follows a lapse of the whole lease, so its stamp is always later. This test lapses the lease by
+    // hand within milliseconds, and the engine's clock can read one tick for both claims, so it waits that tick out.
+    private Task PastTheClaimAsync(DateTimeOffset firstLease, int leaseSeconds) =>
+        ServiceFixture.WaitUntilAsync(
+            async () => await fixture.DatabaseNowAsync() > firstLease.AddSeconds(-leaseSeconds));
 }
