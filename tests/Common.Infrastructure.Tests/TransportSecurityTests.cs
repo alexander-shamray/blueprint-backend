@@ -1,9 +1,11 @@
+using Common.Infrastructure.Redis;
 using Common.Infrastructure.Transport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Shouldly;
+using StackExchange.Redis;
 using Xunit;
 
 namespace Common.Infrastructure.Tests;
@@ -107,6 +109,32 @@ public sealed class TransportSecurityTests
 
         refused.Message.ShouldContain("ConnectionStrings:RabbitMq is not an amqps:// address");
         recorder.Started.ShouldBeFalse("a hosted service that connects would already have sent the credential");
+    }
+
+    [Fact]
+    public async Task A_redis_connection_resolved_while_the_hosted_services_are_built_is_refused_before_it_connects()
+    {
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder(
+            new HostApplicationBuilderSettings { EnvironmentName = Environments.Production });
+        builder.Configuration["ConnectionStrings:RedisCache"] = "127.0.0.1:1,ssl=true";
+        builder.Configuration["ConnectionStrings:RedisCoordination"] = "127.0.0.1:1";
+        builder.Services.AddTransportSecurity();
+        builder.Services.AddRedisConnections(builder.Configuration);
+        bool connected = false;
+        builder.Services.AddSingleton<IHostedService>(provider =>
+        {
+            // As RetentionPurgeService does, through the idempotency store its constructor takes.
+            provider.GetRequiredKeyedService<IConnectionMultiplexer>(RedisConnections.Coordination);
+            connected = true;
+            return new RecordingService();
+        });
+        using IHost host = builder.Build();
+
+        Exception refused = await Should.ThrowAsync<Exception>(
+            () => host.StartAsync(TestContext.Current.CancellationToken));
+
+        refused.Message.ShouldContain("ConnectionStrings:RedisCoordination does not set ssl=true");
+        connected.ShouldBeFalse("the host builds its hosted services before it runs the start-up check");
     }
 
     [Fact]
