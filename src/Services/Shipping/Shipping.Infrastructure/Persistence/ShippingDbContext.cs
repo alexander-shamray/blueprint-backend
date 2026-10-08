@@ -56,8 +56,9 @@ public sealed class ShippingDbContext(DbContextOptions<ShippingDbContext> option
         configurationBuilder.Properties<DateTimeOffset>().HaveColumnType("datetimeoffset(7)");
     }
 
-    // The two writes that hand the fulfilment worker a pass, a recorded shipment and a requested cancellation, keep
-    // the trace they ran in, so the booking and what it publishes join it (§9.4). The worker's own writes do not.
+    // The writes that hand the fulfilment worker a pass, a recorded shipment and a requested cancellation, keep the
+    // trace they ran in, so the booking and what it publishes join it (§9.4). The worker's own writes do not, save
+    // the keep of a booking the carrier would not take back, whose retried cancel so joins the pass that booked it.
     private void StampFulfilmentTraces()
     {
         foreach (EntityEntry<Shipment> entry in ChangeTracker.Entries<Shipment>())
