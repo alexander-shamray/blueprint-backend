@@ -847,6 +847,17 @@ hold authority, an `outside` line is a finding, and an `inside` line is not
 a licence for anything the caller's grant refuses. `test_pr_helpers.py`
 pins all of it.
 
+**Every `gh` read these helpers make is bounded, because one that stalls
+holds every step chained behind it.** #603 was `pr-locality.sh` printing
+nothing for minutes in a review round, the round's locality file left empty,
+and a rerun a minute later answering in seconds. Each `pr-*.sh` sources
+`gh-read-bound.sh` and reads through its `gh_read`, which ends a read still
+running at `GH_READ_BOUND_SECONDS` with `timeout`'s exit 124 and a line on
+stderr naming the call. A stall then fails as loudly as a refused login
+does, rather than looking like a slow API. `test_pr_helpers.py` runs every
+`pr-*.sh` against a `gh` that never answers, so a helper added later is held
+to the bound by the glob rather than by someone remembering it.
+
 ## Sweep push denies and chained commands
 
 The fifth is **`git push` under the two sweeps**, and it is the one that looks

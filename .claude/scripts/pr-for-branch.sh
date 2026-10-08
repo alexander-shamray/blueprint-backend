@@ -9,6 +9,7 @@
 # compares the tip with the head a row MERGED into `main` records, and neither
 # carries anything an author wrote beyond a ref name.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"
 # The branch is optional and defaults to the checkout's current branch. When
 # given it is shape-checked, because it reaches an argument position: a value
 # starting with `-` would be read as a flag, and `gh pr list` has flags that
@@ -27,7 +28,7 @@ esac
 # branch landed and /pr whether one is open: the head repository must also be this checkout's. Both sides are the
 # filesystem's — `gh repo view` reads the checkout, and the branch came from `git branch --show-current` or was
 # shape-checked above — and the value reaches jq through `--arg`, never as program text.
-repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
+repo=$(gh_read repo view --json nameWithOwner --jq .nameWithOwner) ||
   { echo "cannot resolve this checkout's repository" >&2; exit 2; }
 # Blank counts as missing, and `||` does not see it: `gh` printing an empty
 # string exits 0, and the comparison below would then match every row whose
@@ -35,7 +36,7 @@ repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
 # pull request precisely when its owner cannot be established.
 [ -n "$repo" ] ||
   { echo "this checkout's repository resolved to nothing" >&2; exit 2; }
-gh pr list --state all --head "$branch" --json number,state,url,headRepository,headRefOid,baseRefName |
+gh_read pr list --state all --head "$branch" --json number,state,url,headRepository,headRefOid,baseRefName |
   jq --arg repo "$repo" \
     '[ .[] | select((.headRepository.nameWithOwner // "") == $repo)
        | {number, state, url, headRefOid, baseRefName} ]'

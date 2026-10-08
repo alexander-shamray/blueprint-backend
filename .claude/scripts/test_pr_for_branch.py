@@ -110,7 +110,7 @@ class OnlyThisCheckoutsPullRequestsSurvive(unittest.TestCase):
         # The stub answers any field list, so the request is read from source:
         # a field jq projects and `gh` was never asked for comes back null.
         source = self.HELPER.read_text(encoding="utf-8")
-        listed = next(ln for ln in source.splitlines() if ln.startswith("gh pr list"))
+        listed = next(ln for ln in source.splitlines() if ln.startswith("gh_read pr list"))
         asked = listed.split("--json", 1)[1]
         self.assertIn("headRefOid", asked)
         self.assertIn("baseRefName", asked)
