@@ -2066,7 +2066,8 @@ check "a container's RuntimeDefault does not stand in for the pod's own" \
 check 'a /tmp emptyDir with no sizeLimit is refused' not_restricted "$OUT/restricted-unbounded.yaml"
 check 'a hostPath volume is refused' not_restricted "$OUT/restricted-hostpath.yaml"
 check 'a /tmp backed by anything but an emptyDir is refused' not_restricted "$OUT/restricted-pvc.yaml"
-check 'a compliant CronJob passes, its profile at its own pod spec' every_pod_is_restricted "$OUT/restricted-cronjob.yaml"
+check 'a compliant CronJob passes, its profile at its own pod spec' \
+    every_pod_is_restricted "$OUT/restricted-cronjob.yaml"
 check 'a compliant bare Pod passes, its profile at its own pod spec' \
     every_pod_is_restricted "$OUT/restricted-bare-pod.yaml"
 check "a bare Pod's container profile does not stand in for the pod's" \
