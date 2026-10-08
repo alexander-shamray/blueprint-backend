@@ -81,7 +81,9 @@ esc=${OPERATOR_PASSWORD//\\/\\\\}; esc=${esc//\"/\\\"}
 printf 'user = "%s:%s"\n' "$OPERATOR" "$esc" > "$HOME/.rabbit.curl"
 unset esc
 
-curl -sS --config "$HOME/.rabbit.curl" -X POST   -H 'content-type: application/json'   -d @- http://localhost:15672/api/queues/%2F/<endpoint>_skipped/get <<'EOF'
+curl -sS --config "$HOME/.rabbit.curl" -X POST \
+  -H 'content-type: application/json' \
+  -d @- http://localhost:15672/api/queues/%2F/<endpoint>_skipped/get <<'EOF'
 {"count":5,"ackmode":"ack_requeue_true","encoding":"auto"}
 EOF
 ```
