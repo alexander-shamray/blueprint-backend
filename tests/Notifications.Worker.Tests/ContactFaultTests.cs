@@ -130,10 +130,14 @@ public sealed class ContactFaultTests : IAsyncLifetime
     {
         _keycloak.Given(Request.Create().WithPath(Path).UsingGet()).RespondWith(Response.Create().WithStatusCode(503));
 
-        // The breaker sits inside the retry, so one read is MaxRetryAttempts + 1 attempts toward the throughput.
-        while (Calls < ContactHop.CircuitBreakerMinimumThroughput)
+        // The breaker sits inside the retry, so one read is MaxRetryAttempts + 1 attempts toward the throughput. Each
+        // read that reaches the stub makes a call, so this many suffice, and a read that makes none fails.
+        int needed = ContactHop.CircuitBreakerMinimumThroughput;
+
+        for (int read = 0; read < needed && Calls < needed; read++)
             await Should.ThrowAsync<Exception>(() => ReadAsync());
 
+        Calls.ShouldBeGreaterThanOrEqualTo(needed, "every read reached the owner");
         int before = Calls;
 
         await Should.ThrowAsync<Exception>(() => ReadAsync());
