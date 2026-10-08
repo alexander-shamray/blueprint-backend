@@ -82,8 +82,8 @@ api 'connections?columns=user,state'
 
    The limit and the mode arrive either as queue `arguments`
    (`x-max-length`, `x-overflow`) or from a `policy`, so both have to be read —
-   `list_queues name messages` alone shows a full queue and nothing about what
-   it does when full.
+   `queues?columns=name,messages` alone shows a full queue and nothing about
+   what it does when full.
 
    If the mode is `drop-head`, **this alert is not your problem and the missing
    messages are**: go and find out what was dropped. If it rejects, drain the
