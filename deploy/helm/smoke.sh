@@ -1987,7 +1987,8 @@ section 'Every pod carries the restricted posture ADR-082 sets'
 # --------------------------------------------------------------------------
 # Per document again, and the container fields per container: a pod's count
 # of each must reach its count of images, so one container cannot cover two.
-# The pod's own profile sits at the pod spec's depth, so a container's is not it.
+# The pod's own profile sits at its pod spec's depth, which the kind decides,
+# so a container's is not it.
 every_pod_is_restricted() {
     awk '
         function close_doc() {
@@ -1999,10 +2000,11 @@ every_pod_is_restricted() {
         /^---$/ { close_doc(); next }
         /^kind: (Deployment|Job|CronJob|StatefulSet|DaemonSet|ReplicaSet|ReplicationController|Pod)$/ {
             pods = 1; kind = $2; seen++
+            depth = kind == "Pod" ? 6 : kind == "CronJob" ? 14 : 10
         }
         /^  name: / && name == "" { name = $2 }
         /^ +runAsNonRoot: true[ ]*$/ { nonroot = 1 }
-        /^          type: RuntimeDefault[ ]*$/ { seccomp = 1 }
+        /^ +type: RuntimeDefault[ ]*$/ && match($0, /^ +/) && RLENGTH == depth { seccomp = 1 }
         /^ +mountPath: \/tmp[ ]*$/ { tmp = 1 }
         /^ +emptyDir:[ ]*$/ { empty = 1 }
         /^ +sizeLimit: [0-9]/ { bounded = 1 }
@@ -2043,6 +2045,11 @@ sed '/sizeLimit/d' "$OUT/restricted-one.yaml" >"$OUT/restricted-unbounded.yaml"
 { cat "$OUT/restricted-one.yaml"; printf '%s\n' '        - name: host' '          hostPath:' '            path: /'; } \
     >"$OUT/restricted-hostpath.yaml"
 sed 's/emptyDir:/persistentVolumeClaim:/' "$OUT/restricted-one.yaml" >"$OUT/restricted-pvc.yaml"
+# A CronJob's pod spec sits four deeper and a bare Pod's four shallower.
+restricted_pod CronJob c 1 | sed '4,$s/^/    /' >"$OUT/restricted-cronjob.yaml"
+restricted_pod Pod p 1 | sed '4,$s/^    //' >"$OUT/restricted-bare-pod.yaml"
+sed 's/^      type: RuntimeDefault/          type: RuntimeDefault/' "$OUT/restricted-bare-pod.yaml" \
+    >"$OUT/restricted-bare-pod-container-profile.yaml"
 not_restricted() { ! every_pod_is_restricted "$@"; }
 check 'the restricted check passes a compliant pod' every_pod_is_restricted "$OUT/restricted-one.yaml"
 check 'a second container without the fields is not covered by the first' \
@@ -2059,6 +2066,11 @@ check "a container's RuntimeDefault does not stand in for the pod's own" \
 check 'a /tmp emptyDir with no sizeLimit is refused' not_restricted "$OUT/restricted-unbounded.yaml"
 check 'a hostPath volume is refused' not_restricted "$OUT/restricted-hostpath.yaml"
 check 'a /tmp backed by anything but an emptyDir is refused' not_restricted "$OUT/restricted-pvc.yaml"
+check 'a compliant CronJob passes, its profile at its own pod spec' every_pod_is_restricted "$OUT/restricted-cronjob.yaml"
+check 'a compliant bare Pod passes, its profile at its own pod spec' \
+    every_pod_is_restricted "$OUT/restricted-bare-pod.yaml"
+check "a bare Pod's container profile does not stand in for the pod's" \
+    not_restricted "$OUT/restricted-bare-pod-container-profile.yaml"
 # One per clause: the compliant pod less one line, or with one forbidden line
 # beside the compliant ones, so no clause is only ever met alongside another.
 for field in runAsNonRoot allowPrivilegeEscalation readOnlyRootFilesystem drop; do
