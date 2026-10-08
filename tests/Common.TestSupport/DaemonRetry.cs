@@ -6,7 +6,7 @@ namespace Common.TestSupport;
 /// <summary>A fixture's calls to the daemon, made again after a refusal, so one busy daemon fails no suite.</summary>
 /// <remarks>
 /// The last attempt's exception propagates, so a machine with no daemon still fails rather than skips
-/// (docs/testing.md, Docker is not optional).
+/// (§12.4).
 /// </remarks>
 public static class DaemonRetry
 {
