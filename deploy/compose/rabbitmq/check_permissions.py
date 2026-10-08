@@ -109,6 +109,8 @@ INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 OPERATOR = "dead-letter-operator"
 OPERATOR_TAGS = ["management"]
 
+VHOST = "/"
+
 NAMESPACE = re.compile(r"^namespace\s+([A-Za-z0-9_.]+);", re.M)
 TYPE_DECLARATION = re.compile(
     r"^\s*(?:(?:public|internal|sealed|static|partial|abstract|readonly|file)\s+)*"
@@ -246,6 +248,30 @@ def contract_prefixes() -> set[str]:
     return prefixes
 
 
+def check_definitions_shape(definitions: dict) -> None:
+    """One vhost, and one entry per account and per grant.
+
+    RabbitMQ keeps one grant per user and vhost, and the checks below key a
+    grant by its user, so a second vhost or a second entry would be unread.
+    """
+    vhosts = [vhost.get("name") for vhost in definitions.get("vhosts") or []]
+    if vhosts != [VHOST]:
+        fail(f"definitions.json: vhosts are {vhosts}, not exactly `{VHOST}`. The Dockerfile "
+             f"keeps one vhost deliberately, and a grant on another is one this gate keys wrongly")
+    seen: set[str] = set()
+    for entry in definitions.get("permissions") or []:
+        if entry.get("vhost") != VHOST:
+            fail(f"{entry.get('user')}: holds a grant on vhost `{entry.get('vhost')}`, not `{VHOST}`")
+        if entry.get("user") in seen:
+            fail(f"{entry.get('user')}: holds two permission entries, and only one is judged")
+        seen.add(entry.get("user"))
+    named: set[str] = set()
+    for user in definitions.get("users") or []:
+        if user.get("name") in named:
+            fail(f"{user.get('name')}: is declared twice, and only one declaration's tags are judged")
+        named.add(user.get("name"))
+
+
 def main() -> int:
     for path in (DEFINITIONS, WORKFLOW, SERVICES, HOSTS, CONTRACTS, DOCKERFILE, TESTS):
         if not path.exists():
@@ -254,6 +280,9 @@ def main() -> int:
         return report()
 
     definitions = json.loads(read(DEFINITIONS))
+    check_definitions_shape(definitions)
+    if failures:
+        return report()
     permissions = {entry["user"]: entry for entry in definitions["permissions"]}
     users = {user["name"] for user in definitions["users"]}
     tags = {user["name"]: user.get("tags") or [] for user in definitions["users"]}

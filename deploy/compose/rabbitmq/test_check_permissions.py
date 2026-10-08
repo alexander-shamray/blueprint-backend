@@ -300,6 +300,39 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
                 for f in failures), failures)
 
 
+class TheFileHoldsOnlyWhatIsJudged(unittest.TestCase):
+    """One vhost, and one entry per account, so nothing keyed by name is dropped."""
+
+    def test_a_broad_grant_on_the_root_hidden_behind_a_second_vhost(self):
+        definitions = real()
+        definitions["vhosts"].append({"name": "shadow"})
+        broad = permission(definitions, "catalog-svc")
+        broad["write"] = ".*"
+        compliant = copy.deepcopy(permission(real(), "catalog-svc"))
+        compliant["vhost"] = "shadow"
+        definitions["permissions"].append(compliant)
+
+        failures = run_against(definitions)
+        self.assertTrue(any("not exactly `/`" in f for f in failures), failures)
+        self.assertTrue(any("catalog-svc: holds a grant on vhost `shadow`" in f for f in failures), failures)
+
+    def test_a_second_entry_on_the_root_is_refused(self):
+        definitions = real()
+        broad = copy.deepcopy(permission(definitions, "catalog-svc"))
+        broad["write"] = ".*"
+        definitions["permissions"].insert(0, broad)
+        failures = run_against(definitions)
+        self.assertTrue(any("catalog-svc: holds two permission entries" in f for f in failures), failures)
+
+    def test_a_user_declared_twice_is_refused(self):
+        definitions = real()
+        user = copy.deepcopy(next(u for u in definitions["users"] if u["name"] == "catalog-svc"))
+        user["tags"] = ["administrator"]
+        definitions["users"].insert(0, user)
+        failures = run_against(definitions)
+        self.assertTrue(any("catalog-svc: is declared twice" in f for f in failures), failures)
+
+
 class TheAccountsThemselves(unittest.TestCase):
     def test_guest_is_refused(self):
         definitions = real()
