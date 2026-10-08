@@ -112,14 +112,17 @@ public sealed class TransportSecurityTests
     [Fact]
     public void Every_project_that_reads_a_connection_string_applies_the_check()
     {
-        // The subject is the tree: a host added later is held to the rule by this, not by a list beside it.
+        // The subject is every project under src/, so a host added anywhere later is held to the rule. The building
+        // blocks are left out: their readers run inside a host's registration, which is the one that applies it.
         string root = RepositoryRoot();
+        string blocks = Path.Combine(root, "src", "BuildingBlocks") + Path.DirectorySeparatorChar;
         string[] projects =
         [
-            .. Directory.GetDirectories(Path.Combine(root, "src", "Services"), "*", SearchOption.TopDirectoryOnly)
-                .SelectMany(Directory.GetDirectories),
-            .. Directory.GetDirectories(Path.Combine(root, "src", "BFF")),
+            .. Directory.GetFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories)
+                .Select(file => Path.GetDirectoryName(file)!)
+                .Where(project => !project.StartsWith(blocks, StringComparison.Ordinal))
         ];
+        projects.ShouldContain(p => Path.GetFileName(p) == "Gateway.Api", "a scan missing a host proves nothing of it");
         string[] reading = [.. projects.Where(p => Sources(p).Any(s => s.Contains("GetConnectionString(")))];
 
         reading.ShouldNotBeEmpty("a scan that found no reader would pass every tree");

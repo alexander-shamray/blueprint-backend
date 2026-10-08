@@ -13,8 +13,8 @@ it as a start-up check that runs before any hosted service connects, each
 migrator, which is never started, calls it before it builds through its own
 Infrastructure's `MigratorTransport`, the one path
 [§4.2](../04-solution-structure.md) leaves it, and
-`TransportSecurityTests` holds every project that reads a connection string to
-one of the two.
+`TransportSecurityTests` holds every project under `src/` that reads a
+connection string, the building blocks aside, to one of the two.
 **Why.** A host's own HTTP hops are plain by
 [§10.1](../10-api-gateway.md)'s decision because each is a Service name inside
 the cluster, and a third party, the token endpoint and the SMTP relay already
