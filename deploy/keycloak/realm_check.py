@@ -145,13 +145,14 @@ WEB_SCHEME_NAMES = ("http", "https")
 # with nothing saying why.
 HOST_CHARACTERS = re.compile(r"[a-z0-9._-]+")
 
-# A redirect URI's scheme, when it has one at all: Keycloak resolves a
-# relative redirect against the client's `rootUrl` before taking an origin
-# from it, so `/*` on a client with a `rootUrl` is an ordinary configuration
-# whose origin this gate cannot see. Matching the scheme rather than the
-# prefix is what lets `check_web_origins` tell "provably derives nothing" from
-# "cannot tell", and refuse only the first.
+# A redirect URI's scheme, when it has one at all. Keycloak resolves a
+# relative redirect against the client's `rootUrl`, so `check_web_origins`
+# reads one as "cannot tell" rather than "derives nothing".
 REDIRECT_SCHEME = re.compile(r"^([A-Za-z][A-Za-z0-9+.\-]*):")
+
+# The `rootUrl` placeholders Keycloak resolves to its own host, where a
+# relative redirect lands on Keycloak itself; an absent one does the same.
+KEYCLOAK_ROOTS = ("${authBaseUrl}", "${authAdminUrl}")
 
 # Dropped from the canonical origin when the scheme implies them, because a
 # browser drops them: `https://id.example.com:443` is never what arrives in an
@@ -183,7 +184,8 @@ REDACTED = "<redacted by realm_check>"
 REALM_FIELDS = ("accessTokenLifespan", "revokeRefreshToken", "refreshTokenMaxReuse")
 CLIENT_FIELDS = ("clientId", "enabled", "standardFlowEnabled", "implicitFlowEnabled",
                  "directAccessGrantsEnabled", "serviceAccountsEnabled", "publicClient",
-                 "redirectUris", "defaultClientScopes", "optionalClientScopes", "webOrigins")
+                 "redirectUris", "defaultClientScopes", "optionalClientScopes", "webOrigins",
+                 "rootUrl")
 CLIENT_ATTRIBUTES = ("use.refresh.tokens", "access.token.lifespan",
                      "pkce.code.challenge.method", *GRANT_ATTRIBUTES)
 
@@ -636,13 +638,14 @@ def check_every_client(clients: list[dict], kind: str) -> list[str]:
 
 
 def check_redirect_uris(client: dict, kind: str) -> list[str]:
-    """Each redirect is realm-relative, or absolute on a host with no wildcard.
+    """Each redirect lands on Keycloak, or on a named host with no wildcard.
 
-    A deployed realm's web redirects are https as well. The values are not
-    pinned, because a deployed realm's hosts are no file here (ADR-042).
+    A relative one is judged as its `rootUrl` makes it. A deployed realm's web
+    redirects are https as well; the hosts are not pinned (ADR-042).
     """
     name = client.get("clientId")
     redirects = client.get("redirectUris")
+    root = client.get("rootUrl")
     if redirects is None:
         return []
     if not isinstance(redirects, list):
@@ -652,7 +655,9 @@ def check_redirect_uris(client: dict, kind: str) -> list[str]:
     refused: list[int] = []
     for index, uri in enumerate(redirects):
         if isinstance(uri, str) and uri.startswith("/") and not uri.startswith("//"):
-            continue
+            if root is None or root == "" or root in KEYCLOAK_ROOTS:
+                continue
+            uri = f"{root.rstrip('/')}{uri}" if isinstance(root, str) else None
         scheme = REDIRECT_SCHEME.match(uri) if isinstance(uri, str) else None
         if scheme is None:
             refused.append(index)
@@ -671,8 +676,8 @@ def check_redirect_uris(client: dict, kind: str) -> list[str]:
         return []
     return [
         f"client {name!r} has a redirectUris entry at index "
-        f"{', '.join(str(i) for i in refused)} that is neither realm-relative "
-        "nor absolute on a named host with no wildcard"
+        f"{', '.join(str(i) for i in refused)} that resolves neither to "
+        "Keycloak's own host nor to a named host with no wildcard"
         + (", on https" if kind == DEPLOYED else "") +
         ". A wider pattern is an authorization code delivered wherever it also "
         "matches. The value is not echoed, on check_web_origins's reasoning"
@@ -1047,16 +1052,9 @@ def canonical_origin(text: object) -> str | None:
 def redirects_cannot_imply_an_origin(client: dict) -> bool:
     """True only where `+` provably derives nothing from this client.
 
-    Asked in the direction that fails silent rather than loud: a relative
-    redirect like `/*` is resolved against the client's `rootUrl` before an
-    origin is taken from it, and this gate does not hold `rootUrl`, so a URI
-    with no scheme is not evidence of anything and returns False. What remains
-    provable is a client every one of whose redirect URIs is absolute and on a
-    scheme no page is served from, where `+` resolves to nothing while reading
-    in a console as though the question had been answered. A redirect of
-    `https://` with no host is knowingly let through, because mirroring
-    Keycloak's resolution means reimplementing one this repository does not
-    own.
+    That is a client whose every redirect is absolute and on a scheme no page
+    is served from; a relative one resolves against `rootUrl`, so it is no
+    evidence and answers False.
     """
     redirects = client.get("redirectUris")
     # Absent and empty are the answer, not "cannot tell": Keycloak drops `+`
