@@ -740,7 +740,7 @@ The two members the count and the raw write need:
 public int ModifiedAggregateCount => db.ChangeTracker
     .Entries()
     .Count(e => e.Entity is IAggregateRoot &&
-                e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
+        e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
 
 public Task ExecuteRawAsync(string sql, object parameters, CancellationToken ct)
 {
@@ -889,8 +889,7 @@ public sealed class PlaceOrderHandler(
 {
     public async Task<Result<Guid>> HandleAsync(PlaceOrderCommand command, CancellationToken ct)
     {
-        ProductId[] productIds =
-            [.. command.Items.Select(i => new ProductId(i.ProductId)).Distinct()];
+        ProductId[] productIds = [.. command.Items.Select(i => new ProductId(i.ProductId)).Distinct()];
         IReadOnlyDictionary<ProductId, Money> priceList =
             await prices.GetAsync(productIds, command.Currency, ct);
 
@@ -1631,11 +1630,9 @@ WHEN NOT MATCHED THEN
     VALUES (@OrderId, @Status, @OccurredAt, @ConfirmedAt, @CancelReason)
 WHEN MATCHED THEN
     UPDATE SET
-        Status       = CASE WHEN target.UpdatedAt < @OccurredAt
-                            THEN @Status ELSE target.Status END,
-        UpdatedAt    = CASE WHEN target.UpdatedAt < @OccurredAt
-                            THEN @OccurredAt ELSE target.UpdatedAt END,
-        ConfirmedAt  = COALESCE(target.ConfirmedAt,  @ConfirmedAt),
+        Status       = CASE WHEN target.UpdatedAt < @OccurredAt THEN @Status ELSE target.Status END,
+        UpdatedAt    = CASE WHEN target.UpdatedAt < @OccurredAt THEN @OccurredAt ELSE target.UpdatedAt END,
+        ConfirmedAt  = COALESCE(target.ConfirmedAt, @ConfirmedAt),
         CancelReason = COALESCE(target.CancelReason, @CancelReason);
 ```
 
