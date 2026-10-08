@@ -587,8 +587,9 @@ def check_implicit_flow(clients: list[dict]) -> list[str]:
 def check_every_client(clients: list[dict], kind: str) -> list[str]:
     """What holds on every client, so a built-in or newly added one is judged too.
 
-    The named clients' own checks own the password grant and web origins for
-    them, and `mobile-app`'s exact checks its redirect and PKCE too.
+    A named client's own check owns its password grant; `check_web_origins`
+    owns web-app's and mobile-app's origins, and mobile-app's exact checks
+    own its redirect and PKCE.
     """
     problems: list[str] = []
     for client in clients:
