@@ -689,10 +689,11 @@ class TheBffClient(Fixture):
         self.assertIn("§11.5", found)
         self.assertNotIn("ADR-052", found)
 
-    def test_service_accounts_turned_off_is_caught_under_its_own_owner(self):
+    def test_service_accounts_turned_off_is_caught_under_section_11_5(self):
         found = self.one(realm(browser(), bff(serviceAccountsEnabled=False)))
         self.assertIn("service accounts disabled", found)
-        self.assertIn("(§11.5)", found)
+        self.assertIn("§11.5's table", found)
+        self.assertNotIn("ADR-052", found)
 
     def test_each_interactive_flow_is_caught_on_its_own(self):
         for flag in ("standardFlowEnabled", "directAccessGrantsEnabled", "implicitFlowEnabled"):
