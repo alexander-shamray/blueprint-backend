@@ -179,7 +179,7 @@ internal sealed partial class SmtpMailChannel(
     /// <summary>Whether a permanent answer to RCPT TO refuses the mailbox, rather than this deployment.</summary>
     /// <remarks>
     /// An enhanced status decides where the relay sends one: 5.1.x is the address, and any other, such as 5.7.1's
-    /// "relay access denied", is a fault the row backs off from (RFC 3463). Without one, only 550, 551 and 553 do.
+    /// "relay access denied", is a fault <see cref="Classify"/> names (RFC 3463). Without one, only 550, 551 and 553 do.
     /// </remarks>
     internal static bool RefusesTheMailbox(SmtpCommandException e)
     {
