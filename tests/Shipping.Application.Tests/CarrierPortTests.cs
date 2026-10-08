@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Shipping.Application.Carrier;
 using Shipping.Domain.Shipments;
 using Shouldly;
@@ -24,7 +26,7 @@ public class CarrierPortTests
     public void A_booking_is_booked_or_refused_and_nothing_else()
     {
         typeof(BookingResult)
-            .GetNestedTypes()
+            .GetNestedTypes(AnyVisibility)
             .Where(t => t.IsSubclassOf(typeof(BookingResult)))
             .Select(t => t.Name)
             .ShouldBe(
@@ -37,7 +39,7 @@ public class CarrierPortTests
     public void A_cancellation_is_cancelled_or_too_late_and_nothing_else()
     {
         typeof(CancellationResult)
-            .GetNestedTypes()
+            .GetNestedTypes(AnyVisibility)
             .Where(t => t.IsSubclassOf(typeof(CancellationResult)))
             .Select(t => t.Name)
             .ShouldBe(
@@ -49,12 +51,22 @@ public class CarrierPortTests
     [Fact]
     public void A_carrier_event_carries_no_link_of_the_carriers()
     {
-        // No URL is stored, checked on the shape: a field is the one way a link could be kept.
+        // No URL is stored, checked on the shape: a data member is the one way a link could be kept, so every field
+        // and property counts, public or not, bar the record's own EqualityContract and the compiler's backing fields.
         typeof(CarrierEvent)
-            .GetProperties()
+            .GetProperties(AnyVisibility | BindingFlags.Instance)
             .Select(p => p.Name)
+            .Where(name => name != "EqualityContract")
             .ShouldBe(["CarrierEventId", "Status", "OccurredAt"], ignoreOrder: true);
+        typeof(CarrierEvent)
+            .GetFields(AnyVisibility | BindingFlags.Instance | BindingFlags.Static)
+            .Where(f => f.GetCustomAttribute<CompilerGeneratedAttribute>() is null)
+            .Select(f => f.Name)
+            .ShouldBeEmpty("a field is a data member a link could ride on");
     }
+
+    // Public and not: a private constructor admits a non-public nested case as readily as a public one.
+    private const BindingFlags AnyVisibility = BindingFlags.Public | BindingFlags.NonPublic;
 
     private static DeliveryAddress Address() =>
         new("1 Abay Avenue", null, "Almaty", "050000", "KZ");
