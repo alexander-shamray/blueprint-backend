@@ -1,8 +1,10 @@
 using Common.Application;
+using Common.Infrastructure.Transport;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Trace;
 using StackExchange.Redis;
 
@@ -21,10 +23,10 @@ public static class DependencyInjection
 
             services.AddKeyedSingleton<IConnectionMultiplexer>(
                 RedisConnections.Cache,
-                (_, _) => Connect(cacheConnection));
+                (provider, _) => Connect(provider, cacheConnection));
             services.AddKeyedSingleton<IConnectionMultiplexer>(
                 RedisConnections.Coordination,
-                (_, _) => Connect(coordinationConnection));
+                (provider, _) => Connect(provider, coordinationConnection));
 
             services.AddSingleton<RedisKeys>();
             services.AddSingleton<IDistributedLockFactory, RedisDistributedLockFactory>();
@@ -82,8 +84,14 @@ public static class DependencyInjection
             : connectionString;
     }
 
-    private static ConnectionMultiplexer Connect(string connectionString)
+    private static ConnectionMultiplexer Connect(IServiceProvider provider, string connectionString)
     {
+        // A hosted service's constructor may resolve this, and the host builds those before its start-up check
+        // runs, so the connection applies ADR-079 itself. A container with no host environment is no host's.
+        if (provider.GetService<IHostEnvironment>() is { } environment &&
+            TransportSecurity.Refusal(provider.GetRequiredService<IConfiguration>(), environment) is { } refusal)
+            throw new InvalidOperationException(refusal);
+
         ConfigurationOptions options = ConfigurationOptions.Parse(connectionString);
 
         // Degrade, don't die (§8.1): coordination callers still fail closed, since their operations throw.

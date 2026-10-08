@@ -11,7 +11,7 @@ public static class DependencyInjection
 {
     extension(IServiceCollection services)
     {
-        /// <summary>Refuses to start, before any hosted service connects, on a connection ADR-079 refuses.</summary>
+        /// <summary>Refuses to start, before any hosted service starts, on a connection ADR-079 refuses.</summary>
         /// <remarks>Idempotent, so each registration that opens a connection may ask for it (ADR-079).</remarks>
         public IServiceCollection AddTransportSecurity()
         {
