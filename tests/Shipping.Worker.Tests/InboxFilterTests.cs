@@ -164,6 +164,9 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
 
+        DeliveryRecorder recorder = new();
+        harness.Bus.ConnectReceiveObserver(recorder);
+
         var id = Guid.CreateVersion7();
         var messageId = Guid.CreateVersion7();
 
@@ -182,10 +185,16 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
             c => c.MessageId = messageId,
             TestContext.Current.CancellationToken);
 
-        // Both deliveries, since the filter runs ahead of the consumer and a dropped one is still consumed.
+        // Both deliveries received, read off the receive pipe: harness.Consumed never lists the one the inbox drops.
         await Eventually(
-            () => Task.FromResult<IReadOnlyList<object>>(
-                [.. harness.Consumed.Select<ProbeMessage>()]),
+            () =>
+            {
+                lock (recorder.Deliveries)
+                {
+                    return Task.FromResult<IReadOnlyList<bool>>(
+                        [.. recorder.Deliveries.Where(d => d.MessageId == messageId).Select(d => d.Delivered)]);
+                }
+            },
             expected: 2);
 
         FirstConsumer.Consumed.ShouldBe([id], "the filter must drop the second delivery");
@@ -365,6 +374,7 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
             await Task.Delay(50, TestContext.Current.CancellationToken);
         }
 
-        return rows;
+        // Failed, not returned short: a short read would pass every assertion written for the full one.
+        throw new ShouldAssertException($"Waited five seconds for {expected} and read {rows.Count}.");
     }
 }
