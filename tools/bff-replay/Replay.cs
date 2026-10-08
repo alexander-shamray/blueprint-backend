@@ -1,5 +1,7 @@
+using System.Net.Security;
 using Common.Contracts;
 using Common.Infrastructure.Outbox;
+using Common.Infrastructure.Transport;
 using Dapper;
 using MassTransit;
 using Microsoft.Data.SqlClient;
@@ -26,7 +28,13 @@ public static class Replay
         OutboxJson json = new([]);
         List<SqlConnection> sources = [];
         List<DateTimeOffset> cutoffs = [];
-        IBusControl bus = Bus.Factory.CreateUsingRabbitMq(cfg => cfg.Host(new Uri(settings.Broker)));
+        Uri broker = new(settings.Broker);
+        IBusControl bus = Bus.Factory.CreateUsingRabbitMq(cfg => cfg.Host(broker, host =>
+        {
+            // As each host's bus does: MassTransit reads TLS from the port and trusts any chain (ADR-079).
+            if (TransportSecurity.IsTls(broker))
+                host.UseSsl(ssl => ssl.EnforcePolicyErrors(SslPolicyErrors.RemoteCertificateChainErrors));
+        }));
         bool started = false;
 
         try

@@ -51,9 +51,9 @@ The integration suites' containers are such hops, and their job hosts, which run
 as Production, name their SQL connections as a deployer would. The rule reads
 connection strings, not the network, so a TLS connection to the wrong peer is
 not its to catch; `tools/bff-replay` is an operator's tool, not a host, and
-reads no environment name, so its six strings are its operator's to choose; and
-Development keeps Compose's plaintext defaults
-([§14.1](../14-local-development.md)).
+reads no environment name, so its six strings are its operator's to choose,
+though its bus dials an `amqps://` address as a host's does; and Development
+keeps Compose's plaintext defaults ([§14.1](../14-local-development.md)).
 
 ---
 
