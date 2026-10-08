@@ -1,7 +1,5 @@
 using Common.Infrastructure.Identity;
 using Common.Web;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
@@ -14,51 +12,46 @@ public class OptionsValidationTests
     /// <summary>A field, since CA1861 is an error under ADR-019.</summary>
     private static readonly string[] Members = ["ClientId", "ClientSecret", "Scope"];
 
-    /// <summary>Any exception, as a disposal race in the factory can replace the validation failure.</summary>
-    /// <remarks>
-    /// <see cref="Each_credential_is_required_and_named_in_the_failure"/> names the missing member.
-    /// </remarks>
+    /// <summary>Hosts started on one blank credential, re-asked past a disposal race that hides the reason.</summary>
+    private const int StartAttempts = 5;
+
+    /// <summary>The host's own registration refuses the blank credential, and its failure names the member.</summary>
     [Theory]
     [InlineData("ClientId")]
     [InlineData("ClientSecret")]
     [InlineData("Scope")]
-    public void The_host_refuses_to_start_without_each_credential(string member)
+    public void The_host_refuses_to_start_without_each_credential_and_names_it(string member)
     {
-        using MissingSettingFactory factory = new(member);
+        OptionsValidationException refusal = Refusal(member).ShouldBeOfType<OptionsValidationException>();
 
-        // The factory builds the host on first use.
-        Should.Throw<Exception>(() => factory.CreateClient());
+        refusal.OptionsType.ShouldBe(typeof(ServiceIdentityOptions));
+        refusal.Message.ShouldContain(member);
     }
 
-    /// <summary>The startup validator the host runs, invoked directly so no host starts and nothing races.</summary>
-    [Theory]
-    [InlineData("ClientId")]
-    [InlineData("ClientSecret")]
-    [InlineData("Scope")]
-    public void Each_credential_is_required_and_named_in_the_failure(string member)
+    /// <summary>Starts hosts missing one credential until one says why, not that its provider is disposed.</summary>
+    /// <remarks>
+    /// A failed start can dispose the provider the factory still reads, reporting <see cref="ObjectDisposedException"/>
+    /// with no inner exception; only a failed start does that, so a re-ask cannot invent a refusal.
+    /// </remarks>
+    private static Exception Refusal(string member)
     {
-        ServiceCollection services = new();
-        services.AddSingleton<IConfiguration>(
-            new ConfigurationBuilder()
-                .AddInMemoryCollection(
-                    Members.Select(name =>
-                        new KeyValuePair<string, string?>(
-                            $"{ServiceIdentityOptions.SectionName}:{name}",
-                            string.Equals(name, member, StringComparison.Ordinal) ? "" : "supplied")))
-                .Build());
+        Exception? refusal = null;
 
-        services
-            .AddOptions<ServiceIdentityOptions>()
-            .BindConfiguration(ServiceIdentityOptions.SectionName)
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+        for (int attempt = 0; attempt < StartAttempts; attempt++)
+        {
+            using MissingSettingFactory factory = new(member);
 
-        using ServiceProvider provider = services.BuildServiceProvider();
+            // The factory builds the host on first use.
+            refusal = Record.Exception(() => factory.CreateClient())
+                .ShouldNotBeNull("a blank credential must stop the host");
 
-        OptionsValidationException thrown = Should.Throw<OptionsValidationException>(
-            () => provider.GetRequiredService<IStartupValidator>().Validate());
+            if (refusal is not ObjectDisposedException { ObjectName: nameof(IServiceProvider) })
+                return refusal;
+        }
 
-        thrown.Message.ShouldContain(member);
+        throw new InvalidOperationException(
+            "Every host started here reported a disposed provider, so none of them said why it refused to start.",
+            refusal);
     }
 
     [Fact]
