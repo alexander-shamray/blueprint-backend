@@ -328,13 +328,14 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         Exception? cause,
         CancellationToken ct)
     {
+        // Not on the pass's token: a stop that cancelled the hand-back must not also lose the booking it made.
         try
         {
             await CommitAsync(
                 sp,
                 id,
                 (shipment, now) => shipment.KeepUnreturnedBooking(booked.Reference, booked.TrackingNumber, now),
-                ct);
+                CancellationToken.None);
         }
         catch (Exception ex)
         {
