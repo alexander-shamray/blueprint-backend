@@ -25,9 +25,16 @@ public sealed partial class NoCertificateBypassTests
     [InlineData("client.ServerCertificateValidationCallback = (_, _, _, _) => true;")]
     [InlineData("new SslClientAuthenticationOptions { RemoteCertificateValidationCallback = Accept }")]
     [InlineData("ServicePointManager.ServerCertificateValidationCallback += Accept;")]
+    [InlineData("new SslStream(inner, false, (_, _, _, _) => true)")]
+    [InlineData("options.CertificateChainPolicy = new X509ChainPolicy { TrustMode = CustomRootTrust };")]
+    [InlineData("chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;")]
+    [InlineData("policy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;")]
+    [InlineData("client.CheckCertificateRevocation = false;")]
     public void Each_spelling_of_a_bypass_is_caught(string source) => Bypass().IsMatch(source).ShouldBeTrue(source);
 
-    // HttpClientHandler puts Custom inside the name, and its accept-anything validator names no callback at all.
-    [GeneratedRegex(@"Certificate\w*ValidationCallback|DangerousAcceptAny\w*CertificateValidator")]
+    // A callback under any name, SslStream's by position, a replaced chain policy, or revocation switched off.
+    [GeneratedRegex(@"Certificate\w*ValidationCallback|DangerousAcceptAny\w*CertificateValidator" +
+        @"|new\s+SslStream\s*\([^;]*,[^;]*,|CertificateChainPolicy|X509ChainTrustMode|X509VerificationFlags" +
+        @"|CheckCertificateRevocation\s*=\s*false")]
     private static partial Regex Bypass();
 }
