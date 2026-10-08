@@ -1,6 +1,7 @@
 {{- /* A list of NetworkPolicy peers the deployment states, required: a rule with no
-peer admits every address on its port, the opposite of a fence. An ipBlock of
-every address is refused for the same reason (ADR-065). */}}
+peer admits every address on its port, the opposite of a fence. A peer as wide
+as every address is refused for the same reason, by ADR-080's floor rather than
+by spelling: two /1 blocks or an empty selector are every address too. */}}
 {{- define "commerce.networkPolicyPeers" -}}
 {{- $peers := index . 0 -}}
 {{- $key := index . 1 -}}
@@ -9,8 +10,18 @@ every address is refused for the same reason (ADR-065). */}}
 {{- fail (printf "networkPolicy.%s is required: %s A rule with no peer admits every address on its port, so the chart refuses to render one (ADR-065)." $key $why) }}
 {{- end }}
 {{- range $peers }}
-{{- if has ((.ipBlock).cidr | default "" | toString) (list "0.0.0.0/0" "::/0") }}
-{{- fail (printf "networkPolicy.%s names %s, which admits every address: state the peer's own range (ADR-065)." $key .ipBlock.cidr) }}
+{{- $cidr := (.ipBlock).cidr | default "" | toString }}
+{{- if and $cidr (not (regexMatch "/[0-9]{1,3}$" $cidr)) }}
+{{- fail (printf "networkPolicy.%s names %s, which is not a CIDR: an ipBlock is an address and its prefix length (ADR-080)." $key $cidr) }}
+{{- end }}
+{{- if and $cidr (lt (atoi (last (splitList "/" $cidr))) 8) }}
+{{- fail (printf "networkPolicy.%s names %s, which is wider than a /8 and so admits every address or most of it: state the peer's own range (ADR-080)." $key $cidr) }}
+{{- end }}
+{{- if and (hasKey . "namespaceSelector") (not (or (.namespaceSelector).matchLabels (.namespaceSelector).matchExpressions)) }}
+{{- fail (printf "networkPolicy.%s has an empty namespaceSelector, which selects every pod in every namespace: name the namespace (ADR-080)." $key) }}
+{{- end }}
+{{- if and (hasKey . "podSelector") (not (hasKey . "namespaceSelector")) (not (or (.podSelector).matchLabels (.podSelector).matchExpressions)) }}
+{{- fail (printf "networkPolicy.%s has an empty podSelector and no namespaceSelector, which selects every pod in this namespace: name the pods (ADR-080)." $key) }}
 {{- end }}
 {{- end }}
 {{- toYaml $peers }}

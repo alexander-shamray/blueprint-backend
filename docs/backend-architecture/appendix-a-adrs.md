@@ -85,6 +85,7 @@ decision looks wrong.
 | **ADR-076** | [The realm check refuses a credential wider than a read](adr/ADR-076-the-realm-check-refuses-a-credential-wider-than-a-read.md) |
 | **ADR-077** | [A worker's token is capped by its client's scope, and the realm gate reads the cap](adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md) |
 | **ADR-078** | [The realm check requires view-realm](adr/ADR-078-the-realm-check-requires-view-realm.md) |
+| **ADR-080** | [A NetworkPolicy peer is refused wider than a /8, and an empty selector is every address](adr/ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-and-an-empty-selector-is-every-address.md) |
 
 ---
 

@@ -71,6 +71,11 @@ they are outside this fence and owed one.
 > [ADR-069](ADR-069-the-migration-job-is-fenced-by-a-hook-policy-of-its-own.md)'s**:
 > a second policy, a hook rendered with the Job.
 
+**Amended by
+[ADR-080](ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-and-an-empty-selector-is-every-address.md)**,
+which holds "a peer of every address" by a /8 prefix floor and a refusal of
+empty selectors, rather than by the two literals the chart compared with.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

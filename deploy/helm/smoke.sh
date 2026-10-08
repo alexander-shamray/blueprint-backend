@@ -587,6 +587,16 @@ for chart in $SERVICE_CHARTS; do
         check "$chart has no Service, so its policy admits no ingress at all" \
             grep -qE '^  ingress: \[\]$' "$OUT/$chart.policy.yaml"
     fi
+    # And no address beyond them: the identity provider, each declared
+    # capability's peer and, on the gateway, the ingress controller. Presence
+    # alone stays green beside an extra peer, however narrow.
+    addresses=1
+    for cap in database redis broker carrier mail paymentProvider; do
+        if declares "$chart" "$cap"; then addresses=$((addresses + 1)); fi
+    done
+    if [ "$chart" = gateway ]; then addresses=$((addresses + 1)); fi
+    check "$chart's policy names exactly the $addresses address(es) its values state" \
+        test "$(count 'cidr:' "$OUT/$chart.policy.yaml")" -eq "$addresses"
 done
 
 check 'only the gateway admits the ingress controller' \
@@ -705,6 +715,23 @@ refuses_chart ordering 'ordering: a database with no peer stated fails the rende
     'networkPolicy.database.to is required' --set networkPolicy.database.to=null
 refuses_chart ordering 'ordering: a broker peer of every address fails the render' \
     'admits every address' --set 'networkPolicy.broker.to[0].ipBlock.cidr=0.0.0.0/0'
+
+# Every address has more spellings than its two literals, so a prefix floor and
+# the selectors are what is held (ADR-080), and a /8 is the widest peer kept.
+refuses_chart ordering 'ordering: a broker peer of ::/0 fails the render' \
+    'wider than a /8' --set 'networkPolicy.broker.to[0].ipBlock.cidr=::/0'
+refuses_chart ordering 'ordering: two /1 broker peers fail the render' \
+    'wider than a /8' --set 'networkPolicy.broker.to[0].ipBlock.cidr=0.0.0.0/1' \
+    --set 'networkPolicy.broker.to[1].ipBlock.cidr=128.0.0.0/1'
+refuses_chart ordering 'ordering: an empty namespaceSelector fails the render' \
+    'empty namespaceSelector' --set-json 'networkPolicy.broker.to=[{"namespaceSelector":{}}]'
+refuses_chart ordering 'ordering: a bare empty podSelector fails the render' \
+    'empty podSelector' --set-json 'networkPolicy.broker.to=[{"podSelector":{}}]'
+refuses_chart ordering 'ordering: a broker peer with no prefix length fails the render' \
+    'is not a CIDR' --set 'networkPolicy.broker.to[0].ipBlock.cidr=10.0.0.1'
+check 'ordering: a /8 broker peer still renders' \
+    "$HELM" template ordering "$CHARTS_DIR/ordering" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+    $(overlay_for ordering) --set 'networkPolicy.broker.to[0].ipBlock.cidr=10.0.0.0/8'
 refuses_chart gateway 'gateway: an Ingress with no controller peer stated fails the render' \
     'networkPolicy.ingressController.from is required' --set networkPolicy.ingressController.from=null
 
