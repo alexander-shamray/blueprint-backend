@@ -34,6 +34,7 @@ public sealed class TransportSecurityTests
     [InlineData("OrderingMigrator", $"Server=sql;Database=Ordering;Password={Echo};TrustServerCertificate=True")]
     [InlineData("Ordering", $"Server=sql;Password={Echo};Trust Server Certificate=yes")]
     [InlineData("Ordering", "Server=sql;Password=\"unterminated")]
+    [InlineData("rediscache", $"redis-cache:6379,user=svc,password={Echo}")]
     public void A_plaintext_or_unverified_hop_is_refused_outside_development(string name, string value)
     {
         string? refusal = InProduction(name, value);
@@ -46,6 +47,7 @@ public sealed class TransportSecurityTests
 
     [Theory]
     [InlineData("RabbitMq", "amqps://svc:p@broker:5671")]
+    [InlineData("rabbitmq", "amqps://svc:p@broker:5671")]
     [InlineData("RedisCache", "redis-cache:6380,ssl=true,user=svc")]
     [InlineData("Ordering", "Server=sql;Database=Ordering;User Id=svc")]
     [InlineData("Ordering", "Server=sql;Database=Ordering;Encrypt=Strict")]
