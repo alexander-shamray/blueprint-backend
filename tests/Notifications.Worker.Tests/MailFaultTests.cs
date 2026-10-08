@@ -82,6 +82,36 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
         counted.Of("rejected").ShouldBe(1, "a permanent refusal is not retried in the client");
     }
 
+    /// <summary>
+    /// Through MailKit's own exception, so the enhanced status RefusesTheMailbox reads is shown to reach it: one
+    /// basic code, 550, ends a row as the customer's under 5.1.1 and backs it off as the relay's under 5.7.1.
+    /// </summary>
+    [Theory]
+    [InlineData("550 5.1.1 <aigerim@example.test>: Recipient address rejected: User unknown", true)]
+    [InlineData("550 5.7.1 <aigerim@example.test>: Relay access denied", false)]
+    public async Task One_basic_code_at_rcpt_is_split_by_its_enhanced_status(string reply, bool customers)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await using ScriptedRelay relay = new("250 relay.test", "250 2.1.0 Ok", reply);
+        using NotificationsWorkerFactory host = new(
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            mailHost: "127.0.0.1",
+            mailPort: relay.Port);
+        IMailChannel channel = host.Services.GetRequiredService<IMailChannel>();
+
+        if (customers)
+        {
+            (await channel.SendAsync(Mail(), ct)).ShouldBe(new MailResult.Refused(MailRefusal.RecipientRefused));
+            return;
+        }
+
+        MailUnavailableException thrown =
+            await Should.ThrowAsync<MailUnavailableException>(() => channel.SendAsync(Mail(), ct));
+        thrown.Cause.ShouldBe(MailFault.Rejected);
+        thrown.SmtpStatus.ShouldBe(550);
+    }
+
     /// <summary>A 554 at RCPT TO is a policy answer, such as the relay dropping this host, not the mailbox.</summary>
     [Fact]
     public async Task A_recipient_refused_on_policy_backs_off_as_a_relay_fault_and_is_counted()
