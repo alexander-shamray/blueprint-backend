@@ -214,7 +214,7 @@ def private_namespaces(directory: Path) -> set[str]:
 def type_arguments(code: str) -> set[str]:
     """Every bare identifier in a `<...>` list, read innermost first so a nested list leaves its neighbours whole."""
     found: set[str] = set()
-    innermost = re.compile(r"<([^<>()]*)>")
+    innermost = re.compile(r"<([^<>(){};=]*)>")
     while listed := innermost.findall(code):
         found |= {part.strip() for group in listed for part in group.split(",")
                   if re.fullmatch(r"\s*[A-Za-z_]\w*\s*", part)}
