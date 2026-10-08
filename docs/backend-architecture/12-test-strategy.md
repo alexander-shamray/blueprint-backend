@@ -56,9 +56,9 @@ than buying a sixth project a container set.
 What no level above covers is whether the *deployed* system responds under load
 and against real infrastructure. That is the **k6 run against staging**
 ([§13.7](13-observability.md)) — `deploy/observability/slo/slo.js` — asserting
-the SLO rows it can evaluate; not a test suite, and [§15.1](15-cicd-deployment.md) stages it as
-what it is. **One tool, named**: this said "k6 or NBomber" until §13.7 picked
-one, on the grounds that a stage naming two tools names none.
+the SLO rows it can evaluate; not a test suite, and
+[§15.1](15-cicd-deployment.md) stages it as what it is. **One tool, named**,
+because a stage naming two tools names none.
 
 Naming it accurately is the point: a load run that is honestly a load run gets
 maintained; an "E2E suite" that is actually three fragile scripts gets disabled
@@ -297,299 +297,121 @@ Server provider. A test suite green against it will still fail in production.
 Testcontainers starts a real SQL Server in a few seconds; the fidelity is worth
 it.
 
+`ServiceFixture` is one shared body,
+`tests/Common.TestSupport/ServiceFixture.cs`, from which each service's fixture
+derives with its own names, migrator and stubs
+([ADR-056](adr/ADR-056-a-services-fixture-derives-from-one-shared-body-under-tests.md));
+Ordering's is `tests/Ordering.TestSupport/ServiceFixture.cs`, and the host it
+starts is `OrderingApiFactory` beside it. The excerpts below are the parts that
+carry a rule.
+
+**The containers run the engines the Compose baseline runs.** Each tag is read
+from §14.1's files through `ComposeImage` rather than copied, so a suite and a
+developer's stack cannot disagree about the engine. A service that claims keys
+on Redis (§8.5) gets two servers, matching §8.1's split, because otherwise the
+suite cannot catch a coordination key written to the evicting instance:
+
 ```csharp
-public sealed class ServiceFixture : IAsyncLifetime
-{
-    // The tag is the one the Compose baseline runs, read from its file rather
-    // than copied (§14.1), so a suite and a developer's stack run one engine.
-    private readonly MsSqlContainer _sql = new MsSqlBuilder()
-        .WithImage(ComposeImage.Of("sql"))
-        .Build();
+private readonly MsSqlContainer _sql = new MsSqlBuilder()
+    .WithImage(ComposeImage.Of("sql"))
+    .Build();
 
-    // Two Redis containers, matching the production split in §8.1 — otherwise
-    // the tests cannot catch a coordination key written to the evicting instance.
-    private readonly RedisContainer _cache = new RedisBuilder()
-        .WithImage(ComposeImage.Of("redis-cache"))
-        .WithCommand("--maxmemory-policy", "allkeys-lru")
-        .Build();
+_redisCache = new RedisBuilder()
+    .WithImage(ComposeImage.Of("redis-cache"))
+    .WithCommand("--maxmemory-policy", "allkeys-lru")
+    .Build();
 
-    private readonly RedisContainer _coordination = new RedisBuilder()
-        .WithImage(ComposeImage.Of("redis-coordination"))
-        .WithCommand("--maxmemory-policy", "noeviction")
-        .Build();
-
-    // The base tag §14.1's broker Dockerfile builds from, read from its FROM
-    // line for the reason the SQL tag is read: a test and a developer machine
-    // cannot disagree about the engine.
-    //
-    // A service that SCHEDULES cannot use a tag at all. Since ADR-021 §14.1
-    // builds the broker rather than pulling it, and the delayed exchange lives
-    // in a plugin no official image carries — so Ordering's fixture builds the
-    // same Dockerfile through ImageFromDockerfileBuilder and runs the result.
-    // The failure that forces it is a quiet one: a stock broker connects and
-    // reports healthy, because the exchange is not declared until something
-    // schedules, and the schedule that does then HANGS on a declare the broker
-    // refuses. ADR-021 has the measurement.
-    private readonly RabbitMqContainer _rabbit = new RabbitMqBuilder()
-        .WithImage(ComposeImage.BaseOf("rabbitmq"))
-        .Build();
-
-    public WebApplicationFactory<Program> Factory { get; private set; } = null!;
-    private Respawner _respawner = null!;
-
-    // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (see below).
-    public async ValueTask InitializeAsync()
-    {
-        await Task.WhenAll(
-            DaemonRetry.StartAsync(_sql),
-            DaemonRetry.StartAsync(_cache),
-            DaemonRetry.StartAsync(_coordination),
-            DaemonRetry.StartAsync(_rabbit));
-
-        Factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(b => b
-                .UseSetting("ConnectionStrings:Ordering", _sql.GetConnectionString())
-                .UseSetting("ConnectionStrings:RedisCache", _cache.GetConnectionString())
-                .UseSetting("ConnectionStrings:RedisCoordination", _coordination.GetConnectionString())
-                .UseSetting("ConnectionStrings:RabbitMq", _rabbit.GetConnectionString())
-                // AddJwtAuthentication reads this key eagerly and throws
-                // naming it (§11.3), so the fixture supplies it for the same
-                // reason it supplies the connection strings: without it the
-                // host does not start, InitializeAsync throws, and every test
-                // in the suite fails before it runs. Deliberately fake and
-                // deliberately unreachable — .invalid never resolves, so a
-                // test that accidentally dials the authority fails loudly
-                // rather than reaching a real identity provider.
-                //
-                // Not ValidateOnStart and not OptionsValidationException: the
-                // authority is read eagerly rather than bound (§11.3), so
-                // there is no options class here to validate.
-                //
-                // No Identity:Client here. Ordering does not call a peer, so it
-                // never binds ServiceIdentityOptions (§9.7) and supplying one
-                // would be config the host ignores — which is how a fixture
-                // ends up disagreeing with the deployment about what a service
-                // requires, in the direction that hides a missing secret.
-                .UseSetting("Identity:Authority", "https://identity.invalid/realms/test")
-                .ConfigureServices(services =>
-                {
-                    // Replace the JWT scheme rather than configuring it: the
-                    // endpoints under test are behind RequireAuthorization
-                    // (§11.4), and the alternative is either 401 on every call
-                    // or a fixture that fetches OIDC metadata over the network.
-                    // TestAuthHandler issues the principal each test asks for,
-                    // including its permission claims, so the authorization
-                    // policies are exercised for real.
-                    // Only authenticate and challenge are set, and forbid
-                    // follows the challenge one — DefaultForbidScheme is unset,
-                    // and the scheme provider falls back to
-                    // DefaultChallengeScheme before DefaultScheme. So the 403
-                    // comes from TestAuthHandler's inherited forbid, which is a
-                    // bare status code touching no metadata, and the
-                    // wrong-permission test needs no identity provider either.
-                    services.Configure<AuthenticationOptions>(o =>
-                    {
-                        o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
-                        o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
-                    });
-                    services
-                        .AddAuthentication()
-                        .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
-                            TestAuthHandler.SchemeName,
-                            _ => { });
-
-                    // Remove ONLY the two background services this suite
-                    // drives, not every hosted service: MassTransit registers
-                    // its bus as one, so RemoveAll<IHostedService>() would stop
-                    // the broker from starting and silently disable every
-                    // consumption test.
-                    //
-                    // The dispatcher polls every 500 ms; left running it drains
-                    // outbox rows underneath assertions about them. Tests that
-                    // want it call fixture.ProcessOutboxBatchAsync() explicitly.
-                    //
-                    // Both matches are on ImplementationType, which is why
-                    // §4.2 registers each with the generic AddHostedService<T>
-                    // rather than a factory: a factory registration leaves that
-                    // property null and these removals would match nothing.
-                    foreach (Type background in (Type[])[typeof(OutboxDispatcher), typeof(RetentionPurgeService)])
-                    {
-                        ServiceDescriptor hosted = services.Single(
-                            d => d.ServiceType == typeof(IHostedService) &&
-                                d.ImplementationType == background);
-                        services.Remove(hosted);
-                    }
-
-                    // Still resolvable directly, so tests can drive one pass of
-                    // each. The purge's timer is an hour rather than 500 ms, so
-                    // it would not race an assertion in a run this short — but a
-                    // test asserting that an abandoned row SURVIVES retention
-                    // cannot tell "the pass spared the row" from "the pass never
-                    // ran" unless it drives the pass itself.
-                    services.AddSingleton<OutboxDispatcher>();
-                    services.AddSingleton<RetentionPurgeService>();
-
-                    // ICurrentUser (§11.4) has two callers with incompatible
-                    // needs, so the double DELEGATES rather than replacing.
-                    // Over HTTP the principal must keep coming from
-                    // TestAuthHandler through HttpContext, exactly as
-                    // production resolves it — a flat replacement would make
-                    // Hides_another_customers_order_behind_a_404 pass because
-                    // the default subject happens to differ from the owner,
-                    // which is passing for the wrong reason, and would break
-                    // every HTTP path that needs the header principal.
-                    services.RemoveAll<ICurrentUser>();
-                    services.AddScoped<TestCurrentUser>();
-                    services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<TestCurrentUser>());
-                }));
-
-        // Tests deliberately collapse the two database identities of §7.1 —
-        // the container's sa login holds both DML and DDL. Production keeps
-        // them separate, and migrations run as a job, never from a host (ADR-007).
-        using IServiceScope scope = Factory.Services.CreateScope();
-        await scope.ServiceProvider
-            .GetRequiredService<OrderingDbContext>()
-            .Database.MigrateAsync();
-
-        // Reset between tests by truncating, which is far faster than
-        // recreating the schema or wrapping every test in a rolled-back
-        // transaction (which would hide transaction-related bugs).
-        _respawner = await Respawner.CreateAsync(
-            _sql.GetConnectionString(),
-            new RespawnerOptions { SchemasToInclude = ["ordering"] });
-    }
-
-    public Task ResetAsync() => _respawner.ResetAsync(_sql.GetConnectionString());
-
-    /// <summary>Runs exactly one claim-and-deliver pass. No timers, no waiting.</summary>
-    public Task<int> ProcessOutboxBatchAsync(CancellationToken ct = default) =>
-        Factory.Services.GetRequiredService<OutboxDispatcher>().ProcessBatchAsync(ct);
-
-    /// <summary>
-    /// The host's own map and payload format (§9.4), with this assembly's
-    /// events and the service's converters in them — so a row a test stages is
-    /// a row the running dispatcher can read back.
-    /// </summary>
-    public MessageTypeMap MessageTypes => Factory.Services.GetRequiredService<MessageTypeMap>();
-
-    public OutboxJson OutboxJson => Factory.Services.GetRequiredService<OutboxJson>();
-
-    /// <summary>
-    /// Dispatches below HTTP with a stated principal (§11.4's subject rule).
-    /// The scope is what makes that safe: TestCurrentUser is scoped, so a
-    /// principal set here cannot leak into another test or into a concurrent
-    /// request.
-    /// </summary>
-    public async Task<TResult> DispatchAsync<TResult>(
-        ICommand<TResult> command,
-        ICurrentUser currentUser,
-        CancellationToken ct = default)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<TestCurrentUser>().Set(currentUser);
-
-        return await scope.ServiceProvider
-            .GetRequiredService<IDispatcher>()
-            .SendAsync(command, ct);
-    }
-
-    /// <summary>
-    /// The query half, which the read-side subject test needs. Written out
-    /// rather than described as "the same with IQuery": §6.2 gives IDispatcher
-    /// two methods, so swapping only the constraint leaves SendAsync refusing
-    /// an IQuery. The body differs too, and that is the whole of the difference.
-    /// </summary>
-    public async Task<TResult> DispatchAsync<TResult>(
-        IQuery<TResult> query,
-        ICurrentUser currentUser,
-        CancellationToken ct = default)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<TestCurrentUser>().Set(currentUser);
-
-        return await scope.ServiceProvider
-            .GetRequiredService<IDispatcher>()
-            .QueryAsync(query, ct);
-    }
-
-    /// <summary>
-    /// Runs a statement outside any unit of work, for arranging. Placeholders
-    /// are {0}-style and EF turns each into a real SQL parameter — a formatted
-    /// string here would be both an injection shape and a CA1305.
-    /// </summary>
-    public async Task ExecuteAsync(string sql, params object[] parameters)
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        OrderingDbContext db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
-
-        await db.Database.ExecuteSqlRawAsync(sql, parameters, TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>
-    /// Persists a real aggregate through the DbContext, so the row satisfies
-    /// every invariant §5 enforces. A raw INSERT drifts from the aggregate the
-    /// first time it gains a column, and drifts silently.
-    /// </summary>
-    public async Task<Guid> SeedOrderAsync(Guid customerId)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        OrderingDbContext db =
-            scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
-
-        Order order = OrderBuilder.Placed(customer: new CustomerId(customerId));
-        db.Orders.Add(order);
-        await db.SaveChangesAsync();
-        return order.Id.Value;
-    }
-
-    public async Task<IReadOnlyList<OutboxMessage>> OutboxAsync()
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        return await scope.ServiceProvider
-            .GetRequiredService<OrderingDbContext>()
-            .OutboxMessages.AsNoTracking()
-            .ToListAsync();
-    }
-
-    public async Task StageOutboxAsync(params OutboxMessage[] rows)
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        OrderingDbContext db =
-            scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
-        db.OutboxMessages.AddRange(rows);
-        await db.SaveChangesAsync();
-    }
-
-    /// <summary>
-    /// Seeds a prior attempt count through the same column the dispatcher
-    /// writes. Explicit rather than hidden in a builder, so no state carries
-    /// between tests (§12.8).
-    /// </summary>
-    public Task SetOutboxAttemptsAsync(Guid messageId, int attempts) =>
-        ExecuteAsync(
-            "UPDATE ordering.OutboxMessages SET Attempts = {0} WHERE MessageId = {1};",
-            attempts,
-            messageId);
-
-    /// <summary>
-    /// Clears retry backoff leases so the next pass is gated only by the
-    /// attempt cap. Lets a test distinguish "backed off" from "abandoned"
-    /// without sleeping.
-    /// </summary>
-    public Task ExpireOutboxLeasesAsync() =>
-        ExecuteAsync("UPDATE ordering.OutboxMessages SET LockedUntil = NULL WHERE ProcessedAt IS NULL;");
-
-    public async ValueTask DisposeAsync()
-    {
-        await Factory.DisposeAsync();
-        await Task.WhenAll(
-            _sql.DisposeAsync().AsTask(),
-            _cache.DisposeAsync().AsTask(),
-            _coordination.DisposeAsync().AsTask(),
-            _rabbit.DisposeAsync().AsTask());
-    }
-}
+_redisCoordination = new RedisBuilder()
+    .WithImage(ComposeImage.Of("redis-coordination"))
+    .WithCommand("--maxmemory-policy", "noeviction")
+    .Build();
 ```
+
+**A service that schedules cannot use a tag at all.** §14.1 builds the broker
+rather than pulling it, and the delayed exchange lives in a plugin no official
+image carries, so the fixture of a service that schedules builds the same
+Dockerfile through `ImageFromDockerfileBuilder` and runs the result. The
+failure that forces it is a quiet one: a stock broker connects and reports
+healthy, because the exchange is not declared until something schedules, and
+the schedule that does then hangs on a declare the broker refuses.
+[ADR-021](adr/ADR-021-saga-timeouts-are-scheduled-by-the-broker.md) has the
+measurement.
+
+**The host is the real one, with three substitutions, and each is narrow.** The
+first is configuration. `AddJwtAuthentication` reads the authority eagerly and
+throws naming it (§11.3), so the factory supplies one, deliberately fake and
+deliberately unreachable: `.invalid` never resolves, so a test that dials the
+authority fails loudly rather than reaching a real identity provider. It is not
+`ValidateOnStart`, because the authority is read rather than bound and there is
+no options class to validate. The factory supplies only what its host reads:
+Ordering calls no peer and never binds `ServiceIdentityOptions` (§9.7), so it
+is given no `Identity:Client`, since config the host ignores is how a fixture
+ends up disagreeing with the deployment about what a service requires, in the
+direction that hides a missing secret.
+
+The second is the scheme. The endpoints under test are behind
+`RequireAuthorization` (§11.4), and the alternatives are a 401 on every call or
+a fixture that fetches OIDC metadata over the network, so the JWT scheme is
+replaced rather than configured:
+
+```csharp
+services.Configure<AuthenticationOptions>(o =>
+{
+    o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+    o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+});
+
+services
+    .AddAuthentication()
+    .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+```
+
+Only authenticate and challenge are set, and forbid follows the challenge:
+`DefaultForbidScheme` is unset, and the scheme provider falls back to
+`DefaultChallengeScheme` before `DefaultScheme`. So the 403 comes from
+`TestAuthHandler`'s inherited forbid, a bare status code touching no metadata,
+and the wrong-permission test needs no identity provider either.
+
+The third is the background services, removed one by one rather than all
+together: MassTransit registers its bus as a hosted service, so
+`RemoveAll<IHostedService>()` would stop the broker from starting and silently
+disable every consumption test.
+
+```csharp
+ServiceDescriptor hosted = services.Single(d =>
+    d.ServiceType == typeof(IHostedService) &&
+    d.ImplementationType == typeof(OutboxDispatcher));
+services.Remove(hosted);
+
+// Still resolvable directly, so tests can drive one pass.
+services.AddSingleton<OutboxDispatcher>();
+```
+
+The dispatcher polls every `OutboxDispatcher.PollInterval`, and left running it
+drains outbox rows underneath assertions about them; tests that want it call
+`fixture.ProcessOutboxBatchAsync()`. `RetentionPurgeService` is removed and
+re-added the same way: its timer would not race an assertion, but a test
+asserting that an abandoned row *survives* retention cannot tell "the pass
+spared the row" from "the pass never ran" unless it drives the pass itself.
+Every match is on `ImplementationType`, which is why §4.2 registers each with
+the generic `AddHostedService<T>` rather than a factory: a factory registration
+leaves that property null and the removal would match nothing.
+
+**The rest of the fixture arranges and resets.** Tests collapse §7.1's two
+database identities onto the container's `sa` login while keeping separate
+keys; production keeps them separate, and the fixture migrates by running the
+service's real §7.4 job, never from a host (ADR-007). Between tests the schema
+is truncated with Respawn, which is far faster than recreating it or wrapping
+every test in a rolled-back transaction, and the second would hide
+transaction-related bugs. `ExecuteAsync` takes `{0}`-style placeholders that EF
+turns into real SQL parameters, because a formatted string would be both an
+injection shape and a CA1305. `SeedOrderAsync` persists a real aggregate
+through the `DbContext`, so the row satisfies every invariant §5 enforces: a
+raw INSERT drifts from the aggregate the first time it gains a column, and
+drifts silently. The outbox helpers, `SetOutboxAttemptsAsync` and
+`ExpireOutboxLeasesAsync`, write state explicitly through the columns the
+dispatcher writes, so no state carries between tests (§12.8) and a test can
+tell "backed off" from "abandoned" without sleeping.
 
 > **`IAsyncLifetime` returns `ValueTask` in xUnit v3.** In v2 both members
 > returned `Task`; v3 changed `InitializeAsync` to `ValueTask` and derives the
@@ -602,48 +424,39 @@ public sealed class ServiceFixture : IAsyncLifetime
 > a claim about an API as well as a licence. Pinning a major you have not
 > compiled against buys the licence guarantee and none of the correctness.
 
-The test scheme itself. Tests state who they are in headers, so authorization
-runs against a real principal rather than being switched off:
+The test scheme itself is `tests/Ordering.TestSupport/TestAuthHandler.cs`. Tests
+state who they are in headers, so authorization runs against a real principal
+rather than being switched off, and no header means anonymous rather than
+authenticated as nobody, because otherwise every 401 test silently passes:
 
 ```csharp
-public sealed class TestAuthHandler(
-    IOptionsMonitor<AuthenticationSchemeOptions> options,
-    ILoggerFactory logger,
-    UrlEncoder encoder)
-    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+// SchemeName, not Scheme: AuthenticationHandler<T> declares a Scheme, and CS0108 fails the build.
+public const string SchemeName = "Test";
+public const string UserHeader = "X-Test-User";
+public const string PermissionsHeader = "X-Test-Permissions";
+
+protected override Task<AuthenticateResult> HandleAuthenticateAsync()
 {
-    // SchemeName, not Scheme. AuthenticationHandler<T> already declares a
-    // Scheme — the AuthenticationScheme this handler was resolved for — so a
-    // constant of that name hides it, and CS0108 is an error under ADR-019's
-    // TreatWarningsAsErrors.
-    public const string SchemeName = "Test";
-    public const string UserHeader = "X-Test-User";
-    public const string PermissionsHeader = "X-Test-Permissions";
+    // No header means anonymous, not authenticated as nobody.
+    if (!Request.Headers.TryGetValue(UserHeader, out StringValues userId))
+        return Task.FromResult(AuthenticateResult.NoResult());
 
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    List<Claim> claims = [new(ClaimTypes.NameIdentifier, userId.ToString())];
+
+    // PermissionClaim.Type, not a literal, so the claim is the one §11.4's policies require.
+    if (Request.Headers.TryGetValue(PermissionsHeader, out StringValues granted))
     {
-        // No header means anonymous, not "authenticated as nobody" — otherwise
-        // every 401 test silently passes.
-        if (!Request.Headers.TryGetValue(UserHeader, out StringValues userId))
-            return Task.FromResult(AuthenticateResult.NoResult());
-
-        List<Claim> claims = [new(ClaimTypes.NameIdentifier, userId.ToString())];
-
-        // The same claim type §11.4's policies require. A test that grants
-        // itself "orders:cancel" is exercising the policy, not bypassing it.
-        if (Request.Headers.TryGetValue(PermissionsHeader, out StringValues granted))
-        {
-            claims.AddRange(
-                granted
-                    .ToString()
-                    .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                    .Select(p => new Claim(PermissionClaim.Type, p)));
-        }
-
-        ClaimsPrincipal principal = new(new ClaimsIdentity(claims, SchemeName));
-        return Task.FromResult(
-            AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName)));
+        claims.AddRange(
+            granted
+                .ToString()
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(p => new Claim(PermissionClaim.Type, p)));
     }
+
+    ClaimsPrincipal principal = new(new ClaimsIdentity(claims, SchemeName));
+
+    return Task.FromResult(
+        AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName)));
 }
 ```
 
@@ -654,163 +467,38 @@ public sealed class TestAuthHandler(
 > that test's user should have, and keep at least one test per policy that
 > grants nothing and expects the rejection.
 
+The handler suite is `tests/Ordering.Api.Tests/PlaceOrderTests.cs`, over HTTP
+because the handler binds a subject. Prices are seeded straight into
+`ordering.ProductPrices`, which has no aggregate a raw INSERT could drift from,
+and a test that places an order seeds one first: the write path reads prices
+locally (§6.4), so an unseeded projection refuses the order as unavailable,
+which reads as a domain assertion failing rather than as missing fixture data.
+
+Two assertions belong to the slice beyond its own cases; the split between the
+lanes, the contract type on the Broker lane (§9.3's allow-list) and the domain
+type on the Local lane (§7.5), is asserted below it, in
+`tests/Common.Application.Tests/DomainEventDispatcherTests.cs`. A repeated
+`CommandId` is served entirely by §8.5's replay branch, so the handler runs
+once, and both the row count and the replayed value are asserted because they
+detect different things: a second persisted order, and a replay that returned
+something other than what was stored. And a command id reused by another
+customer:
+
 ```csharp
-[Collection(nameof(IntegrationCollection))]
-public class PlaceOrderHandlerTests(ServiceFixture fixture) : IAsyncLifetime
-{
-    public async ValueTask InitializeAsync()
-    {
-        await fixture.ResetAsync();
+HttpResponseMessage mine = await PlaceAsync(product, commandId: commandId);
+HttpResponseMessage theirs = await PlaceAsync(product, commandId: commandId, caller: other);
+HttpResponseMessage mineAgain = await PlaceAsync(product, commandId: commandId);
 
-        // Respawn truncates the price projection, and the write path reads
-        // prices locally (§6.4). Seed here rather than per test: an unseeded
-        // projection fails a PlaceOrder with ProductsUnavailable, which reads
-        // as a domain assertion failing rather than missing fixture data.
-        await SeedPriceAsync(SeedData.ProductId, 12.50m, "EUR");
-    }
+mine.StatusCode.ShouldBe(HttpStatusCode.OK);
+theirs.StatusCode.ShouldBe(HttpStatusCode.OK);
+Guid first = await IdOfAsync(mine);
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+// Different orders, not two successes: an unscoped key answers the second caller with the first's id.
+(await IdOfAsync(theirs)).ShouldNotBe(first, "another customer's command id must not replay this order");
 
-    [Fact]
-    public async Task Placing_an_order_persists_it_and_writes_an_outbox_message()
-    {
-        using IServiceScope scope = fixture.Factory.Services.CreateScope();
-        IDispatcher dispatcher =
-            scope.ServiceProvider.GetRequiredService<IDispatcher>();
-        OrderingDbContext db =
-            scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
-
-        // No CustomerId on the command — the handler reads it from
-        // ICurrentUser (§11.4). This scope has no HttpContext, so the
-        // fixture's TestCurrentUser answers as Principals.Default: a test
-        // that does not care about the subject says nothing about it. The
-        // subject tests below state one per dispatch instead.
-        Result<Guid> result = await dispatcher.SendAsync(
-            new PlaceOrderCommand(
-                CommandId: Guid.CreateVersion7(),
-                Items: [ new PlaceOrderItem(SeedData.ProductId, 2) ],
-                ShippingAddress: AddressBuilder.ValidDto(),
-                Currency: "EUR"));
-
-        result.IsSuccess.ShouldBeTrue();
-
-        Order order =
-            await db.Orders.SingleAsync(o => o.Id == new OrderId(result.Value));
-        order.Status.ShouldBe(OrderStatus.AwaitingStock);
-        order.Lines.ShouldHaveSingleItem().Quantity.ShouldBe(2);
-
-        // The outbox rows are the real assertion: they prove the reactions are
-        // staged atomically with the state change, and that nothing has run yet.
-        // Only meaningful because the fixture removed the dispatcher — otherwise
-        // this races a background service that drains these rows twice a second.
-        List<OutboxMessage> outbox = await db.OutboxMessages.ToListAsync();
-        outbox.ShouldAllBe(m => m.ProcessedAt == null);
-
-        // Broker lane carries the CONTRACT type (§9.3 allow-list)...
-        outbox.ShouldContain(m => m.Lane == OutboxLane.Broker &&
-            m.MessageType.Contains(nameof(V1.OrderPlaced)));
-
-        // ...and the Local lane carries the DOMAIN type (§7.5). Distinct names
-        // are what make this an assertion about which type is on which lane,
-        // rather than merely that both lanes got a row.
-        outbox.ShouldContain(m => m.Lane == OutboxLane.Local &&
-            m.MessageType.Contains(nameof(OrderPlacedDomainEvent)));
-
-        // The domain type must never reach the broker — that is the leak §9.3
-        // exists to prevent, and it is only checkable because the names differ.
-        outbox.ShouldNotContain(m => m.Lane == OutboxLane.Broker &&
-            m.MessageType.Contains(nameof(OrderPlacedDomainEvent)));
-    }
-
-    [Fact]
-    public async Task The_same_command_id_is_processed_once()
-    {
-        var commandId = Guid.CreateVersion7();
-        PlaceOrderCommand command =
-            CommandBuilder.PlaceOrder() with { CommandId = commandId };
-
-        using IServiceScope scope = fixture.Factory.Services.CreateScope();
-        IDispatcher dispatcher =
-            scope.ServiceProvider.GetRequiredService<IDispatcher>();
-
-        Result<Guid> first = await dispatcher.SendAsync(command);
-        Result<Guid> second = await dispatcher.SendAsync(command);
-
-        // Served ENTIRELY by the replay branch (§8.5) — the handler runs once,
-        // so this value is the stored one rebuilt through Result.Success<T>
-        // rather than a second handler's return. Both assertions are needed
-        // because they detect different things, not because either covers a
-        // case the other lets through: the row count catches a SECOND
-        // PERSISTED ORDER, and the equality catches a replay that returned
-        // something other than what was stored.
-        second.Value.ShouldBe(first.Value);
-
-        OrderingDbContext db =
-            scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
-        (await db.Orders.CountAsync()).ShouldBe(1);
-    }
-
-    [Fact]
-    public async Task A_command_id_claimed_by_one_customer_does_not_replay_to_another()
-    {
-        PlaceOrderCommand command =
-            CommandBuilder.PlaceOrder() with { CommandId = Guid.CreateVersion7() };
-
-        // The same command, the same CommandId, two principals. Nothing about
-        // the request distinguishes them, which is the point: CommandId is
-        // client-generated, so this is the collision a second caller can
-        // arrange (§8.5).
-        Result<Guid> mine = await fixture.DispatchAsync(
-            command,
-            Principals.Authenticated(SeedData.CustomerId));
-        Result<Guid> theirs = await fixture.DispatchAsync(
-            command,
-            Principals.Authenticated(Guid.CreateVersion7()));
-
-        // Not "both succeeded" — that is true of an unscoped key too, because
-        // the second caller is handed the FIRST caller's order id and reads it
-        // as a success. The assertion has to be that they are different orders.
-        theirs.Value.ShouldNotBe(mine.Value);
-
-        // And the third dispatch is what makes the second one mean anything.
-        // Two different ids prove only that SOMETHING varies per caller — a key
-        // scoped by a correlation id, or no IdempotencyBehavior registered at
-        // all, produces them just as well. Replaying the FIRST subject's own
-        // claim is what says the varying segment is the subject.
-        Result<Guid> mineAgain = await fixture.DispatchAsync(
-            command,
-            Principals.Authenticated(SeedData.CustomerId));
-
-        mineAgain.Value.ShouldBe(mine.Value);
-
-        // CreateScope, not the root provider: OrderingDbContext is scoped, and
-        // DispatchAsync opened and closed its own scopes above. Resolving it
-        // from Factory.Services directly throws under ValidateScopes and, where
-        // that is off, hands back a context living as long as the host.
-        using IServiceScope scope = fixture.Factory.Services.CreateScope();
-        OrderingDbContext db =
-            scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
-        (await db.Orders.CountAsync()).ShouldBe(2);
-    }
-
-    /// <summary>
-    /// Seeds the price projection (§6.6). Required before any PlaceOrder test:
-    /// the handler reads prices locally, so an unseeded projection makes every
-    /// order fail ProductsUnavailable rather than erroring visibly. Private to
-    /// the suite rather than on the fixture: it is one INSERT over
-    /// ExecuteAsync, and the fixture carries what more than one suite needs.
-    /// </summary>
-    private Task SeedPriceAsync(Guid product, decimal amount, string currency, bool available = true) =>
-        fixture.ExecuteAsync(
-            """
-            INSERT INTO ordering.ProductPrices (ProductId, Currency, Amount, IsAvailable, UpdatedAt)
-            VALUES ({0}, {1}, {2}, {3}, SYSDATETIMEOFFSET());
-            """,
-            product,
-            currency,
-            amount,
-            available);
-}
+// The replay is what says the varying segment is the subject, not anything else that differs per request.
+(await IdOfAsync(mineAgain)).ShouldBe(first);
+(await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM ordering.Orders")).ShouldBe(2);
 ```
 
 `A_command_id_claimed_by_one_customer_does_not_replay_to_another` is the one
@@ -822,7 +510,7 @@ and with it §11.4's binding of the subject from the principal. That is why the
 assertion is `ShouldNotBe` against the first caller's value and not
 `IsSuccess.ShouldBeTrue()`.
 
-**Three dispatches rather than two, and the third is the one that carries the
+**Three requests rather than two, and the third is the one that carries the
 claim.** `ShouldNotBe` establishes only that the key varies with *something*;
 a key scoped by a correlation id would satisfy it, and so would a pipeline with
 no `IdempotencyBehavior` in it at all — which §6.3's registration-order test
@@ -838,152 +526,107 @@ isolation and attempt accounting — and neither is observable from a test that
 lets the background service run:
 
 ```csharp
-[Collection(nameof(IntegrationCollection))]
-public class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifetime
+[Fact]
+public async Task A_row_stops_being_claimed_at_the_attempt_cap()
 {
-    public ValueTask InitializeAsync() => new(fixture.ResetAsync());
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    OutboxMessage poison = OutboxRows.Poison(fixture);
+    await fixture.StageOutboxAsync(poison);
+    await fixture.SetOutboxAttemptsAsync(poison.MessageId, 9);
 
-    [Fact]
-    public async Task A_failing_row_does_not_block_healthy_rows()
-    {
-        await fixture.StageOutboxAsync(
-            OutboxRows.Poison(fixture),          // its handler always throws
-            OutboxRows.Healthy(fixture),
-            OutboxRows.Healthy(fixture));
+    (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);   // 9 → 10
 
-        await fixture.ProcessOutboxBatchAsync();
+    // Clears the backoff lease, so the second pass is blocked by the attempt cap alone.
+    await fixture.ExpireOutboxLeasesAsync();
 
-        IReadOnlyList<OutboxMessage> rows = await fixture.OutboxAsync();
+    (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
 
-        rows.Count(r => r.ProcessedAt is not null).ShouldBe(2);
+    OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+    row.Attempts.ShouldBe(10);                // not 11 — never re-claimed
+    row.ProcessedAt.ShouldBeNull();           // visible to the §13.6 alert
+}
 
-        OutboxMessage poison = rows.Single(r => r.ProcessedAt is null);
-        poison.Attempts.ShouldBe(1);
-        poison.LastError.ShouldNotBeNullOrEmpty();
-        poison.LockedUntil.ShouldNotBeNull();     // backed off, not abandoned
-    }
+[Fact]
+public async Task A_local_row_with_no_registered_handler_fails_loudly()
+{
+    // A projection that never runs would otherwise leave every dashboard green.
+    await fixture.StageOutboxAsync(OutboxRows.Unhandled(fixture));
 
-    [Fact]
-    public async Task A_row_stops_being_claimed_at_the_attempt_cap()
-    {
-        OutboxMessage poison = OutboxRows.Poison(fixture);
-        await fixture.StageOutboxAsync(poison);
-        await fixture.SetOutboxAttemptsAsync(poison.MessageId, 9);
+    await fixture.ProcessOutboxBatchAsync();
 
-        (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);   // 9 → 10
-
-        // Clear the backoff lease, so the second pass is blocked by the
-        // attempt cap and nothing else. Without this the test would pass
-        // even if the cap were removed entirely.
-        await fixture.ExpireOutboxLeasesAsync();
-
-        (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
-
-        OutboxMessage row = (await fixture.OutboxAsync()).Single();
-        row.Attempts.ShouldBe(10);                // not 11 — never re-claimed
-        row.ProcessedAt.ShouldBeNull();           // visible to the §13.6 alert
-    }
-
-    [Fact]
-    public async Task A_local_row_with_no_registered_handler_fails_loudly()
-    {
-        await fixture.StageOutboxAsync(OutboxRows.Unhandled(fixture));
-
-        await fixture.ProcessOutboxBatchAsync();
-
-        OutboxMessage row = (await fixture.OutboxAsync()).Single();
-        row.ProcessedAt.ShouldBeNull();           // NOT silently completed
-        row.LastError.ShouldContain("IProjectionHandler");
-    }
+    OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+    row.ProcessedAt.ShouldBeNull();           // not silently completed
+    row.LastError.ShouldNotBeNull().ShouldContain("IProjectionHandler");
 }
 ```
 
-The third test is the one worth keeping forever. It asserts the failure mode
-that would otherwise be invisible: a projection that never runs while every
-dashboard stays green.
+The suite is `tests/Ordering.Api.Tests/OutboxDispatcherTests.cs`, and it holds
+per-row isolation beside these: a poison row staged ahead of healthy ones is
+backed off with its attempt counted and its error recorded, and the healthy
+rows are delivered in the same pass. The second test above is the one worth
+keeping forever. It asserts the failure mode that would otherwise be invisible:
+a projection that never runs while every dashboard stays green.
 
 Contract messages come from a builder rather than inline object initialisers.
 `required` members make partial construction a compile error, so every test
-would otherwise repeat eight assignments to vary one:
+would otherwise repeat eight assignments to vary one. The saga suite's is
+`tests/Ordering.Application.Tests/SagaContracts.cs`, and its instant is fixed,
+as every builder's here is: `OccurredAt` is what §13.3's lag is measured from
+and what the saga copies onto its own state, and a builder reaching for the
+system clock would have every test assert against a value it had just made.
 
 ```csharp
-internal static class Contracts
+internal static OrderPlaced OrderPlaced(Guid orderId, Guid customerId) => new()
 {
-    // A fixed instant, as the outbox builders below use: OccurredAt is what
-    // §13.7's delivery lag is measured from, and a builder reaching for the
-    // system clock would have every test assert against a lag it just made.
-    private static readonly DateTimeOffset Raised = new(2026, 8, 11, 0, 0, 0, TimeSpan.Zero);
-
-    public static V1.OrderPlaced OrderPlaced(Guid orderId, decimal total = 25.00m, string currency = "EUR") => new()
-    {
-        MessageId = Guid.CreateVersion7(),
-        CorrelationId = orderId,
-        OccurredAt = Raised,
-        OrderId = orderId,
-        CustomerId = Guid.CreateVersion7(),
-        TotalAmount = total,
-        Currency = currency,
-        Lines = [new V1.PlacedLine(SeedData.ProductId, 1, total)]
-    };
-}
+    MessageId = Guid.CreateVersion7(),
+    CorrelationId = orderId,
+    OccurredAt = Occurred,
+    OrderId = orderId,
+    CustomerId = customerId,
+    TotalAmount = Total,
+    Currency = Currency,
+    Lines = [new PlacedLine(Product, 2, 64.99m)]
+};
 ```
 
-The builders those tests use are ordinary factories over `OutboxMessage`, one
-class rather than one per case — they differ only in which event they stage,
-and three classes with a `Row` method each said that three times:
+The builders the dispatcher tests use are ordinary factories over
+`OutboxMessage`, in `tests/Ordering.TestSupport/Outbox/OutboxRows.cs`: one
+class rather than one per case, since they differ only in which event they
+stage. The map and the payload format are the real ones, resolved from the
+fixture's provider (§9.4), because a double for either would let a test stage a
+row the running host cannot read back, which is the one thing these builders
+exist to prove does not happen. They take the fixture rather than the map alone
+because a staged row needs both halves of the host's agreement about the
+format, the persisted name and the converters: a row written without the
+`Money` converter round-trips to a zero amount and a null currency.
 
 ```csharp
-// The map and the payload format are the real ones, resolved from the
-// fixture's provider (§9.4). A double for either would let a test stage a row
-// the running host cannot read back, which is the one thing these builders
-// exist to prove does not happen.
-public static class OutboxRows
-{
-    // A fixed instant, not the system clock: OccurredAt is what §13.7's
-    // projection lag is measured from, and a test that staged "now" would
-    // assert against a lag it had just created.
-    private static readonly DateTimeOffset Raised = new(2026, 8, 11, 0, 0, 0, TimeSpan.Zero);
+public static OutboxMessage Poison(ServiceFixture fixture) =>
+    Local(new AlwaysThrows { OccurredAt = Raised }, fixture);
 
-    public static OutboxMessage Poison(ServiceFixture fixture) =>
-        Local(new AlwaysThrows { OccurredAt = Raised }, fixture);
+public static OutboxMessage Healthy(ServiceFixture fixture) =>
+    Local(new NoOpEvent { OccurredAt = Raised }, fixture);
 
-    public static OutboxMessage Healthy(ServiceFixture fixture) =>
-        Local(new NoOpEvent { OccurredAt = Raised }, fixture);
+public static OutboxMessage Unhandled(ServiceFixture fixture) =>
+    Local(new UnhandledEvent { OccurredAt = Raised }, fixture);
 
-    public static OutboxMessage Unhandled(ServiceFixture fixture) =>
-        Local(new UnhandledEvent { OccurredAt = Raised }, fixture);
-
-    // The fixture rather than the map alone, because a staged row needs both
-    // halves of the host's agreement about the format: the persisted name and
-    // the converters. A row written without the Money converter round-trips
-    // to a zero amount and a null currency.
-    private static OutboxMessage Local(object message, ServiceFixture fixture) =>
-        OutboxMessage.Stage(
-            message,
-            OutboxLane.Local,
-            Guid.CreateVersion7(),
-            fixture.MessageTypes,
-            fixture.OutboxJson);
-}
+private static OutboxMessage Local(object message, ServiceFixture fixture) =>
+    OutboxMessage.Stage(
+        message,
+        OutboxLane.Local,
+        Guid.CreateVersion7(),
+        fixture.MessageTypes,
+        fixture.OutboxJson);
 ```
 
 `AlwaysThrows` has a registered `IProjectionHandler<AlwaysThrows>` that throws;
 `NoOpEvent` has one that does nothing; `UnhandledEvent` has none, which is
-precisely what the third test exercises. All three are `IDomainEvent`
-implementations in the test assembly, so the fixture registers that assembly
-before the map is built — one line beside the `TestAuthHandler` replacement:
+precisely what the unhandled-row test exercises. All three are `IDomainEvent`
+implementations in the test-support assembly, so `OrderingApiFactory` registers
+that assembly before the map is built, beside the `TestAuthHandler`
+replacement:
 
 ```csharp
-// §9.4. Adding, not replacing: the production assemblies stay, so a test
-// cannot stage a type the real host would refuse. Without this, NameOf throws
-// on the first builder call and every outbox test fails before its assertion.
-//
-// The registered instance is mutated, not re-registered. Constructing a second
-// source here would compile, pass, and quietly restate the production list —
-// so the day §4.2 gains an assembly, this line is a copy that no longer
-// matches and nothing points at it. MessageTypeSource is mutable for exactly
-// this, and the map is built from it on first resolve.
+// §9.4: added to rather than replaced, so a test cannot stage a type the real host would refuse.
 services
     .Single(d => d.ServiceType == typeof(MessageTypeSource))
     .ImplementationInstance
@@ -991,26 +634,29 @@ services
     .Add(typeof(AlwaysThrows).Assembly);
 ```
 
+Without it, `NameOf` throws on the first builder call and every outbox test
+fails before its assertion. The registered instance is mutated, not
+re-registered: constructing a second source would compile, pass, and quietly
+restate the production list, so the day §4.2 gains an assembly it would be a
+copy that does not match and that nothing points at. `MessageTypeSource` is
+mutable for exactly this, and the map is built from it on first resolve.
+
 Two assertions belong beside these. The first is the cheapest guard on the
-single-identity rule of [§9.1](09-messaging.md), and it takes no fixture at all — the thing that
-can regress is a pure function:
+single-identity rule of [§9.1](09-messaging.md), and it takes no fixture at
+all, because the thing that can regress is a pure function.
+
+`tests/Common.Infrastructure.Tests/OutboxMessageTests.cs` holds it, with no
+`[Collection]` and no fixture, because `Stage` touches nothing. It is not a
+§12.3 test either: that level is `*.Domain.Tests`, and `OutboxMessage` is
+`Common.Infrastructure`, which is where §12.1's table homes the outbox's table
+and type map. A fast test does not have to be a domain test, and moving it to
+reach a container it does not use is how a suite acquires a minute of startup
+for one assertion. The envelope is that assembly's own `SampleIntegrationEvent`
+rather than a service contract, because `Common.Infrastructure.Tests`
+references `Common.Infrastructure` and nothing downstream of it — the same fact
+that makes the test cheap, read from the other side.
 
 ```csharp
-// Common.Infrastructure.Tests, no [Collection] and no fixture: Stage touches
-// nothing. It is not a §12.3 test either — that level is *.Domain.Tests, and
-// OutboxMessage is Common.Infrastructure, which is where §12.1's table homes
-// the outbox's table and type map. A fast test does not have to be a domain
-// test, and moving it to reach a container it does not use is how a suite
-// acquires a minute of startup for one assertion.
-//
-// The envelope is this assembly's own SampleIntegrationEvent rather than a
-// service contract, because Common.Infrastructure.Tests references
-// Common.Infrastructure and nothing downstream of it — which is the same
-// fact that makes the test cheap, read from the other side.
-private static readonly DateTimeOffset Now = new(2026, 8, 11, 2, 26, 0, TimeSpan.Zero);
-private static readonly MessageTypeMap Types = new([typeof(SampleDomainEvent).Assembly]);
-private static readonly OutboxJson Json = new([]);
-
 [Fact]
 public void Stage_takes_both_identities_from_the_envelope()
 {
@@ -1029,14 +675,16 @@ public void Stage_takes_both_identities_from_the_envelope()
         types: Types,
         json: Json);
 
-    // Both from the envelope, not minted here — and CorrelationId in
-    // particular, because a caller-supplied one is passed in and ignored for
-    // an IIntegrationEvent. That argument being silently dropped is the
-    // regression this test exists for.
+    // Both from the envelope, since the mapper decides the correlation (§9.3).
     row.MessageId.ShouldBe(message.MessageId);
     row.CorrelationId.ShouldBe(message.CorrelationId);
 }
 ```
+
+Both come from the envelope rather than being minted, and `CorrelationId` in
+particular, because a caller-supplied one is passed in and ignored for an
+`IIntegrationEvent`. That argument being silently dropped is the regression the
+test exists for.
 
 > **There is deliberately no test asserting the transport headers here.**
 > Observing what reached the broker needs an `ITestHarness`, and this fixture
@@ -1054,33 +702,32 @@ public void Stage_takes_both_identities_from_the_envelope()
 > `fixture.Harness` to host it is how a suite acquires infrastructure nobody
 > can explain later.
 
-The second is the `Local` lane's payload contract (§9.4). It needs no
-containers, but it lives here rather than in §12.6 because the set it iterates
-comes from the fixture's `MessageTypeMap` and §12.6 selects on the contracts
-namespace, which no domain event is in:
+The second is the `Local` lane's payload contract (§9.4), in
+`tests/Ordering.Application.Tests/OutboxSerialisationTests.cs`. It needs no
+containers, and it lives here rather than in §12.6 because the set it iterates
+comes from the service's registered `MessageTypeMap`, and §12.6 selects on the
+contracts namespace, which no domain event is in. The options are the
+registered ones, converters included: a hand-built `OutboxJson` listing the
+service's converters would assert that they work — which nobody doubts — and
+stay green if a registration were deleted, while the running host wrote a
+zero-valued `Money` into every row. Registration is what can silently go
+missing, so registration is what the test resolves:
 
 ```csharp
-[Fact]
-public void Every_stageable_domain_event_round_trips_through_the_outbox_options()
+// Not "every IDomainEvent": the map is the set the outbox can actually carry.
+using ServiceProvider provider = Registered();
+JsonSerializerOptions options = provider.GetRequiredService<OutboxJson>().Options;
+
+foreach (Type type in provider.GetRequiredService<MessageTypeMap>().StageableDomainEvents)
 {
-    // Not "every IDomainEvent": the map is the set the outbox can actually
-    // carry, and a type it does not know cannot reach a payload column.
-    // The REGISTERED options, converters included. A hand-built OutboxJson
-    // listing the service's converters would assert that they work — which
-    // nobody doubts — and stay green if a registration were deleted, while the
-    // running host wrote a zero-valued Money into every row. Registration is
-    // what can silently go missing, so registration is what this resolves.
-    JsonSerializerOptions options = fixture.OutboxJson.Options;
+    object sample = DomainEventSamples.Create(type);
+    string json = JsonSerializer.Serialize(sample, type, options);
+    object? read = JsonSerializer.Deserialize(json, type, options);
 
-    foreach (Type type in fixture.MessageTypes.StageableDomainEvents)
-    {
-        object sample = DomainEventSamples.Create(type);
-        string json = JsonSerializer.Serialize(sample, type, options);
-
-        JsonSerializer
-            .Deserialize(json, type, options)
-            .ShouldBeEquivalentTo(sample, $"{type.Name} cannot survive the Local lane");
-    }
+    // Through the payload, because a record compares its list members by reference.
+    JsonSerializer
+        .Serialize(read, type, options)
+        .ShouldBe(json, $"{type.Name} cannot survive the Local lane");
 }
 ```
 
@@ -1101,15 +748,14 @@ Respawn between tests keeps them isolated at a fraction of the cost.
 > which is exactly why the library exists.
 >
 > **Ordering is the exception, and it is the code's rather than this
-> section's.** Its handler tests moved to `Ordering.Api.Tests`, because
+> section's.** Its handler tests live in `Ordering.Api.Tests`, because
 > `ICurrentUser` is `HttpContextCurrentUser` and a handler resolved in a bare
 > scope has no principal to bind a subject from — so
-> `Ordering.Application.Tests` references no `TestSupport`, declares no
+> `Ordering.Application.Tests` references no `Ordering.TestSupport`, declares no
 > collection, and holds §12.5's saga suite instead, which needs no
 > infrastructure at all. The library is still right for the reason above; it
 > simply has one consumer there rather than two. `docs/testing.md` says the
-> same thing from the other side, and this paragraph exists because that file
-> would otherwise contradict this one.
+> same thing from the other side.
 >
 > The `[CollectionDefinition]` does **not** move there. xUnit resolves
 > collections within an assembly, so each test project declares its own, naming
@@ -1133,31 +779,9 @@ Respawn between tests keeps them isolated at a fraction of the cost.
 > `Common.Infrastructure.Tests`, `Category=Integration` selects the
 > thirty-four tests of the three classes in the collection and
 > `Category!=Integration` selects the other seventy-two — 106 as the runner
-> counts them, with no third state and nothing counted twice. Those figures
-> read ten/81, then twenty/91, then twenty-three/94, then twenty-four/95, then
-> twenty-six/97, then twenty-six/98, then twenty-seven/99, and every retake up
-> to the last three was the suite growing while the callout did not. **The
-> count of retakes is not written here either**, for the reason the figures
-> keep demonstrating: it has been wrong at each of them. What a reader can
-> check is whether this pair matches a run.
->
-> **One retake was the first to go *down*, and the direction is worth
-> naming.** ADR-033 withdrew the token-denylist claim, so
-> `RedisKeys.Denylist` and the case pinning its shape went with it and the
-> fast half was seventy where it had been seventy-one. It went back up on the
-> next branch: [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)'s
-> floor on `RetentionPolicy.IdempotencyWindow` brought cases of its own; the
-> branch that retired that floor's allowance
-> ([ADR-038](adr/ADR-038-the-marker-and-its-claim-are-ordered-by-construction-not-a-margin.md))
-> then added one integration case and rewrote the floor's own rather than
-> adding to them, so only the integration half moved. The branch after it
-> ([ADR-039](adr/ADR-039-the-markers-purge-asks-the-claim-rather-than-out-counting-it.md))
-> moved the same half again and by more — seven cases for the port's fifth
-> member, every one of them needing the server it asks — and left the fast half
-> at seventy-two for the third retake running. The pair above is what a
-> run reports now. A figure that has only ever
-> grown teaches the next reader to check whether it is *behind*; one that
-> moves both ways has to be re-measured instead.
+> counts them, with no third state and nothing counted twice. The figures move
+> with the suite, in both directions, so what a reader can check is whether
+> this pair matches a run.
 >
 > **The fast half starts no container, and that is proved rather than
 > inferred**: `docker events --filter event=create` over a solution-wide
@@ -1174,19 +798,17 @@ Respawn between tests keeps them isolated at a fraction of the cost.
 > container and forgets the collection fails loudly in the fast half, which is
 > the direction this has to fail in.
 >
-> **CI runs the halves separately since PR-25**, as §15.1's two test nodes,
-> with §4.2's architecture gates ahead of every instrumented run of the build
-> they read, for the instrumentation reason `docs/testing.md` gives. The
-> category shipped a release ahead of the stage
-> that depends on it, which is what let the stage be written against a filter
-> already known to select what it claims.
+> **CI runs the halves separately**, as §15.1's two test nodes, with §4.2's
+> architecture gates ahead of every instrumented run of the build they read,
+> for the instrumentation reason `docs/testing.md` gives.
 >
-> **Three stages are three new ways to select nothing**, and that is what
-> PR-25's quality gate is for: `dotnet test` exits **zero** on a filter that
-> matches no test, so each stage can be green and empty. The gate asserts a
-> floor on each stage's count, that every test project in `Platform.slnx` ran
-> in one of them, and that none ran in two — the last of which is what makes
-> "exhaustive and disjoint" a check rather than a claim.
+> **Three stages are three new ways to select nothing**, and that is what the
+> pipeline gate's `stages` check (`.github/pipeline-gate/`) is for: `dotnet
+> test` exits **zero** on a filter that matches no test, so each stage can be
+> green and empty. The gate asserts a floor on each stage's count, that every
+> test project in `Platform.slnx` ran in one of them, and that no test ran in
+> two — the last of which is what makes "exhaustive and disjoint" a check rather
+> than a claim.
 >
 > The consequence is worth stating rather than discovering from a slow
 > pipeline: two assemblies mean two collections and therefore **two sets of
@@ -1201,10 +823,10 @@ Respawn between tests keeps them isolated at a fraction of the cost.
 
 §6.6's projection is the worked case for a set of tests whose subjects are
 *different* counterfactuals rather than different inputs, and it is here
-because the design it replaced looked correct and delivered its payload only
-by accident — in the ordinary flow it delivered nothing, which is the failure
-the grid below locates precisely
-([ADR-027](adr/ADR-027-the-order-summary-stores-product-ids-and-resolves-the-name-locally.md)).
+because a design can look correct and deliver its payload only by accident: the
+one [ADR-027](adr/ADR-027-the-order-summary-stores-product-ids-and-resolves-the-name-locally.md)
+rejected delivered nothing in the ordinary flow, which is the failure the grid
+below locates precisely.
 
 | | |
 |---|---|
@@ -1225,7 +847,7 @@ the shape Catalog actually promises.
 
 **Neither case subsumes the other, and working out which design each one
 refutes is what shows why both are owed.** Three designs are in play: the
-shipped one (empty strings, patched by a later `ProductPublished`), the
+rejected one (empty strings, patched by a later `ProductPublished`), the
 tempting repair (read the names at insert time), and this one (store ids,
 resolve on read).
 
@@ -1257,7 +879,7 @@ grid:
 | | |
 |---|---|
 | **The unresolved id** | Read the page **before** delivering `ProductPublished`. The unnamed product is absent from `Products` and `LineCount` still counts it. Without this, deleting the reader's `Where(named.ContainsKey)` filter — and throwing on the dictionary lookup instead — satisfies every other case here |
-| **The wide page** | Seed enough orders to put more than 2,100 distinct ids on one page: twenty-two orders of a hundred items reaches 2,200, which is well inside §6.5's clamp of a hundred orders. The page returns. Without this, an implementation that expands the ids into an `IN` list passes every other case, because they all use a handful of products, and fails in production on SQL Server's parameter ceiling |
+| **The wide page** | Seed enough orders to put more than 2100 distinct ids on one page: twenty-two orders of a hundred items reaches 2200, which is well inside §6.5's clamp of a hundred orders. The page returns. Without this, an implementation that expands the ids into an `IN` list passes every other case, because they all use a handful of products, and fails in production on SQL Server's parameter ceiling |
 
 **The second is the one that would otherwise be documentation rather than a
 rule.** ADR-027 argues the parameter limit at length and the sample uses
@@ -1265,14 +887,14 @@ rule.** ADR-027 argues the parameter limit at length and the sample uses
 A limit stated in prose and enforced by no case is the shape this repository
 already names — a claim that reads as settled and is not.
 
-So the ordinary flow is what catches the design that shipped, the late arrival
-is what catches the cheaper repair that would otherwise look equivalent, the
-replay is what catches an update path neither of the others enters, and the
-last two catch reader branches that no case about the *design* reaches. A
-suite carrying only one of them leaves a whole design indistinguishable from
-this one — which is §12.4's rule about negatives applied to a design rather
-than to an assertion: a case that two candidates both satisfy is not evidence
-about which is present.
+So the ordinary flow is what catches the design ADR-027 rejected, the late
+arrival is what catches the cheaper repair that would otherwise look
+equivalent, the replay is what catches an update path neither of the others
+enters, and the last two catch reader branches that no case about the *design*
+reaches. A suite carrying only one of them leaves a whole design
+indistinguishable from this one — which is §12.4's rule about negatives applied
+to a design rather than to an assertion: a case that two candidates both
+satisfy is not evidence about which is present.
 
 **Every case above is a §12.4-level test and all of them belong in
 `Ordering.Api.Tests`, which is not a contradiction.** The level is about what
@@ -1292,127 +914,63 @@ what the levels below it structurally cannot: the endpoint's authorization, its
 status codes, and its serialisation. A handler test proves the decision; only
 this proves the decision reaches the wire intact.
 
+The cancel endpoint's suite is
+`tests/Ordering.Api.Tests/OrderOwnershipTests.cs`, and each case asserts a
+status and, where the request was refused, that the order is unchanged:
+
 ```csharp
-[Collection(nameof(IntegrationCollection))]
-public class CancelOrderEndpointTests(ServiceFixture fixture) : IAsyncLifetime
+[Fact]
+public async Task User_A_cancelling_user_B_s_order_gets_404_and_not_403()
 {
-    private HttpClient _client = null!;
+    // 404 rather than 403, which would confirm the order exists; and the order must still be there after.
+    OrderId order = await SeedOrderAsync(Bob);
 
-    public ValueTask InitializeAsync()
-    {
-        _client = fixture.Factory.CreateClient();
-        return new(fixture.ResetAsync());
-    }
+    HttpResponseMessage response = await CancelAsync(order, asUser: Alice);
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-    [Fact]
-    public async Task Rejects_a_request_with_no_token()
-    {
-        // No X-Test-User header, so TestAuthHandler returns NoResult and the
-        // challenge stands. What this catches is the POLICY being dropped from
-        // the endpoint — not UseAuthentication being dropped from the pipeline,
-        // which is what this comment claimed until PR-16 tried it. See the
-        // callout below the four tests.
-        HttpResponseMessage response = await _client.PostAsJsonAsync(
-            $"/v1/orders/{Guid.CreateVersion7()}/cancel",
-            new CancelOrderRequest(CancelReasons.CustomerRequest));
-
-        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task Rejects_a_caller_holding_the_wrong_permission()
-    {
-        // Authenticated, but with orders:read where the endpoint wants
-        // orders:cancel — the case a fixture that grants everything hides.
-        // A literal, and there is no constant to reach for anyway: the
-        // vocabulary holds what endpoints require, and nothing reads. The
-        // point is a permission
-        // this endpoint's policy does not accept, and naming it from the
-        // vocabulary would read as though one existed for it.
-        HttpResponseMessage response = await SendAsAsync(Guid.CreateVersion7(), "orders:read", Guid.CreateVersion7());
-
-        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task Hides_another_customers_order_behind_a_404()
-    {
-        var owner = Guid.CreateVersion7();
-        Guid orderId = await fixture.SeedOrderAsync(customerId: owner);
-
-        HttpResponseMessage response = await SendAsAsync(
-            Guid.CreateVersion7(),   // a different customer
-            OrderingPermissions.Cancel,
-            orderId);
-
-        // 404, not 403 — §11.4. A 403 here would confirm the order exists,
-        // which is the whole point of the check, and it is invisible to a
-        // handler test that asserts on Result.Failure alone.
-        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
-    public async Task Rejects_a_reason_outside_the_wire_vocabulary()
-    {
-        HttpRequestMessage request = new(HttpMethod.Post, $"/v1/orders/{Guid.CreateVersion7()}/cancel")
-        {
-            // The enum's member name, not the wire code — accepted by
-            // Enum.TryParse and rejected here, which is the difference.
-            Content = JsonContent.Create(new CancelOrderRequest("CustomerRequest"))
-        };
-        request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
-        request.Headers.Add(TestAuthHandler.PermissionsHeader, OrderingPermissions.Cancel);
-
-        HttpResponseMessage response = await _client.SendAsync(request);
-
-        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-    }
-
-    private Task<HttpResponseMessage> SendAsAsync(Guid userId, string permissions, Guid orderId)
-    {
-        HttpRequestMessage request = new(HttpMethod.Post, $"/v1/orders/{orderId}/cancel")
-        {
-            Content = JsonContent.Create(new CancelOrderRequest(CancelReasons.CustomerRequest))
-        };
-        request.Headers.Add(TestAuthHandler.UserHeader, userId.ToString());
-        request.Headers.Add(TestAuthHandler.PermissionsHeader, permissions);
-
-        return _client.SendAsync(request);
-    }
+    response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    (await StatusOfAsync(order)).ShouldBe(
+        nameof(OrderStatus.AwaitingStock),
+        "the 404 must be a refusal, not a cancellation reported as a miss");
 }
 ```
 
-Four tests, four distinct failures, none reachable from below the HTTP
-boundary: an endpoint that lost its `RequireAuthorization` (401 becomes 200), a
-policy name that resolves to nothing (403 becomes 200), a resource check
-returning the wrong status (404 becomes 403, leaking existence), and a reason
-parsed by `Enum.TryParse` instead of the wire vocabulary (400 becomes 200, and
-the enum's member names quietly become API surface). Each is a defect this
-document has argued about in prose and, until now, asserted nowhere.
+Four of its cases are four distinct failures, none reachable from below the
+HTTP boundary: an endpoint that lost its `RequireAuthorization` (401 becomes
+200), a policy name that resolves to nothing (403 becomes 200), a resource
+check returning the wrong status (404 becomes 403, leaking existence), and a
+reason parsed by `Enum.TryParse` instead of the wire vocabulary (400 becomes
+200, and the enum's member names quietly become API surface). Each is a defect
+this document argues about in prose, and these are where it is asserted. The
+401 case sends no `X-Test-User` header, so `TestAuthHandler` returns
+`NoResult` and the challenge stands; what it catches is the *policy* being
+dropped from the endpoint, not `UseAuthentication` being dropped from the
+pipeline. The 403 case authenticates with a permission the endpoint's policy
+does not accept — the case a fixture that grants everything hides — and writes
+it as a literal, because the vocabulary holds what endpoints require, and
+naming a refused permission from it would read as though one existed for it.
+The 404 case is §11.4's: a 403 would confirm the order exists, and it is
+invisible to a handler test that asserts on `Result.Failure` alone.
 
 > **None of them catches a missing `UseAuthentication`, and nothing in a
-> `WebApplication` host can.** The first row read that way until PR-16 deleted
-> the line from `Catalog.Api/Program.cs` and every test in the repository
-> stayed green. `WebApplication` adds the authentication and authorization
-> middleware **itself** whenever the matching services are registered; an
-> explicit call moves them earlier in the pipeline, which is what a composition
-> root wants — they have to sit above anything that logs the caller — but it is
-> not what puts them there.
+> `WebApplication` host can.** Delete the line from a host's `Program.cs` and
+> every test in the repository stays green. `WebApplication` adds the
+> authentication and authorization middleware **itself** whenever the matching
+> services are registered; an explicit call moves them earlier in the pipeline,
+> which is what a composition root wants — they have to sit above anything that
+> logs the caller — but it is not what puts them there.
 >
 > Keep the explicit calls: they are §4.2's specified shape, they are required
 > by any host that is not a `WebApplication`, and a pipeline whose order is
-> implicit is one nobody can review. What changed is the claim about what would
-> notice their absence. `Common.Web.Tests` carries the four assertions that
-> are actually true — that the middleware is what populates `HttpContext.User`,
-> that the authorization middleware does not authenticate on its own, that a
-> `WebApplication` auto-adds it, and that auto-insertion does **not** repair
-> the two calls being written in the wrong order. The third is a regression
-> guard on the framework: were a release to stop doing it, every service would
-> hand anonymous callers to its handlers while its authorization kept passing.
-> The fourth is what [§4.2](04-solution-structure.md)'s ordering row rests on,
-> and it is the reason that row no longer says reversal is harmless.
+> implicit is one nobody can review. `Common.Web.Tests` carries the four
+> assertions that are actually true — that the middleware is what populates
+> `HttpContext.User`, that the authorization middleware does not authenticate
+> on its own, that a `WebApplication` auto-adds it, and that auto-insertion
+> does **not** repair the two calls being written in the wrong order. The third
+> is a regression guard on the framework: were a release to stop doing it,
+> every service would hand anonymous callers to its handlers while its
+> authorization kept passing. The fourth is what
+> [§4.2](04-solution-structure.md)'s ordering row rests on, and why that row
+> does not call reversal harmless.
 
 ### The subject rule, enforced
 
@@ -1421,167 +979,77 @@ holds by omission — a command with no `CustomerId` field cannot be pointed at
 another customer — and a rule that holds by omission is one a later refactor
 reinstates without noticing. These five are what make it fail loudly instead.
 
+They are a dispatcher-level suite over the fixture's `DispatchAsync`, and each
+of the first three carries one rule:
+
+- **An order is attributed to the caller.** The row's owner comes from the
+  principal, and what makes the assertion meaningful is the compile error a
+  reinstated `CustomerId` field would cause in `CommandBuilder`.
+- **A customer reads only their own orders.** The order is seeded through the
+  write path — dispatch, then drain the outbox — rather than `SeedOrderAsync`,
+  which persists the aggregate through EF and nothing else: §6.6 rewrites this
+  slice in place to read `ordering.OrderSummaries`, an EF-seeded aggregate
+  never reaches that table, and the stranger's empty page would then pass for
+  the wrong reason. The owner's same query returns the seeded row, so the
+  filter is discriminating rather than broken; one assertion without the other
+  passes against a handler that returns nothing to anybody.
+- **An owner cancels their own order.** The positive user-origin case, and the
+  suite is unsound without it: every other `CommandOrigin.User` assertion is a
+  refusal, so a handler that rejected the user path outright would pass them
+  all while disabling customer cancellation completely. The status assertion
+  is the half that matters — `IsSuccess` alone is satisfied by a handler that
+  returns success and writes nothing.
+
+The last two are a pair:
+
 ```csharp
-using static Ordering.TestSupport.Principals;   // Authenticated, Anonymous
-
-[Collection(nameof(IntegrationCollection))]
-public class SubjectBindingTests(ServiceFixture fixture) : IAsyncLifetime
+[Fact]
+public async Task A_user_command_with_no_caller_is_refused()
 {
-    public async ValueTask InitializeAsync()
-    {
-        await fixture.ResetAsync();
+    // The one case HTTP cannot produce: §11.4's endpoint group carries
+    // RequireAuthorization, so an unauthenticated request never reaches
+    // the handler and a 401 would prove nothing about the check inside it.
+    var owner = Guid.CreateVersion7();
+    Guid orderId = await fixture.SeedOrderAsync(customerId: owner);
 
-        // Same reason the PlaceOrder suite seeds here: the write path reads
-        // prices locally (§6.4), and an unseeded projection fails every
-        // PlaceOrder with ProductsUnavailable — which would read as the
-        // subject assertion failing rather than as missing fixture data.
-        // Arranged inline rather than through a shared helper: it is one
-        // INSERT, and a second suite needing it is not yet a fixture member.
-        await fixture.ExecuteAsync(
-            """
-            INSERT INTO ordering.ProductPrices (ProductId, Currency, Amount, IsAvailable, UpdatedAt)
-            VALUES ({0}, {1}, {2}, 1, SYSDATETIMEOFFSET());
-            """,
-            SeedData.ProductId,
-            "EUR",
-            12.50m);
-    }
+    Result result = await fixture.DispatchAsync(
+        new CancelOrderCommand(orderId, CancellationReason.CustomerRequest, CommandOrigin.User),
+        currentUser: Anonymous);
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    result.Error.ShouldBe(OrderErrors.NotFound);
+}
 
-    [Fact]
-    public async Task An_order_is_attributed_to_the_caller()
-    {
-        var caller = Guid.CreateVersion7();
+[Fact]
+public async Task A_system_initiated_command_cancels_without_a_caller()
+{
+    // The control, and the reason the origin exists at all. Without it
+    // the test above passes against a handler that refuses every
+    // compensation, which would break §9.6's saga in a way no ordering
+    // test would catch.
+    var owner = Guid.CreateVersion7();
+    Guid orderId = await fixture.SeedOrderAsync(customerId: owner);
 
-        Result<Guid> result = await fixture.DispatchAsync(
-            CommandBuilder.PlaceOrder(),
-            currentUser: Authenticated(caller));
+    Result result = await fixture.DispatchAsync(
+        new CancelOrderCommand(orderId, CancellationReason.OutOfStock, CommandOrigin.System),
+        currentUser: Anonymous);
 
-        using IServiceScope scope = fixture.Factory.Services.CreateScope();
-        OrderingDbContext db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
-        Order order = await db.Orders.SingleAsync(o => o.Id == new OrderId(result.Value));
+    result.IsSuccess.ShouldBeTrue();
 
-        // The row's owner came from the principal. Before the subject rule
-        // this assertion passed for the wrong reason — the command carried a
-        // CustomerId and the handler copied it — so what makes it meaningful
-        // now is the compile error a reinstated field would cause in
-        // CommandBuilder.
-        order.CustomerId.ShouldBe(new CustomerId(caller));
-    }
+    // The status, for the same reason the owner case asserts it: a handler that
+    // short-circuits system commands with Result.Success() and touches no
+    // aggregate satisfies IsSuccess while leaving every compensation ineffective.
+    using IServiceScope scope = fixture.Factory.Services.CreateScope();
+    OrderingDbContext db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
+    Order order = await db.Orders.SingleAsync(o => o.Id == new OrderId(orderId));
 
-    [Fact]
-    public async Task A_customer_reads_only_their_own_orders()
-    {
-        var owner = Guid.CreateVersion7();
-        var stranger = Guid.CreateVersion7();
-
-        // Seeded through the write path, not SeedOrderAsync. That helper
-        // persists an Order and its lines through EF and nothing else, which
-        // the level-1 query reads — but §6.6 rewrites this slice IN PLACE to
-        // read ordering.OrderSummaries, and an EF-seeded aggregate never
-        // reaches that table. A test seeded that way would pass today and
-        // start failing on the PR that escalates the read side, with the
-        // stranger's empty page still passing for the wrong reason.
-        // Dispatching and draining the outbox fills whatever the live handler
-        // reads: the aggregate at level 1, the projection at level 2.
-        await fixture.DispatchAsync(
-            CommandBuilder.PlaceOrder(),
-            currentUser: Authenticated(owner));
-        await fixture.ProcessOutboxBatchAsync();
-
-        CursorPage<OrderSummaryDto> seen = await fixture.DispatchAsync(
-            new GetOrderSummariesQuery(Cursor: null, Limit: 20),
-            currentUser: Authenticated(stranger));
-
-        // Empty, and provably not empty by accident: the same query as the
-        // owner returns the seeded row, so the filter is discriminating rather
-        // than broken. One assertion without the other passes against a
-        // handler that returns nothing to anybody.
-        seen.Items.ShouldBeEmpty();
-
-        CursorPage<OrderSummaryDto> own = await fixture.DispatchAsync(
-            new GetOrderSummariesQuery(Cursor: null, Limit: 20),
-            currentUser: Authenticated(owner));
-
-        own.Items.ShouldHaveSingleItem();
-    }
-
-    [Fact]
-    public async Task An_owner_cancels_their_own_order()
-    {
-        // The positive user-origin case, and the suite is unsound without it:
-        // every other CommandOrigin.User assertion here is a refusal, so a
-        // handler that rejected the user path outright would pass everything
-        // below while disabling customer cancellation completely. The status
-        // assertion is the half that matters — IsSuccess alone is satisfied by
-        // a handler that returns Success and writes nothing.
-        var owner = Guid.CreateVersion7();
-        Guid orderId = await fixture.SeedOrderAsync(customerId: owner);
-
-        Result result = await fixture.DispatchAsync(
-            new CancelOrderCommand(orderId, CancellationReason.CustomerRequest, CommandOrigin.User),
-            currentUser: Authenticated(owner));
-
-        result.IsSuccess.ShouldBeTrue();
-
-        using IServiceScope scope = fixture.Factory.Services.CreateScope();
-        OrderingDbContext db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
-        Order order = await db.Orders.SingleAsync(o => o.Id == new OrderId(orderId));
-
-        order.Status.ShouldBe(OrderStatus.Cancelled);
-    }
-
-    [Fact]
-    public async Task A_user_command_with_no_caller_is_refused()
-    {
-        // The one case HTTP cannot produce: §11.4's endpoint group carries
-        // RequireAuthorization, so an unauthenticated request never reaches
-        // the handler and a 401 would prove nothing about the check inside it.
-        // This is the fail-open the old IsAuthenticated guard admitted — a
-        // command on the user path with no principal behind it.
-        var owner = Guid.CreateVersion7();
-        Guid orderId = await fixture.SeedOrderAsync(customerId: owner);
-
-        Result result = await fixture.DispatchAsync(
-            new CancelOrderCommand(orderId, CancellationReason.CustomerRequest, CommandOrigin.User),
-            currentUser: Anonymous);
-
-        result.Error.ShouldBe(OrderErrors.NotFound);
-    }
-
-    [Fact]
-    public async Task A_system_initiated_command_cancels_without_a_caller()
-    {
-        // The control, and the reason the origin exists at all. Without it
-        // the test above passes against a handler that refuses every
-        // compensation, which would break §9.6's saga in a way no ordering
-        // test would catch.
-        var owner = Guid.CreateVersion7();
-        Guid orderId = await fixture.SeedOrderAsync(customerId: owner);
-
-        Result result = await fixture.DispatchAsync(
-            new CancelOrderCommand(orderId, CancellationReason.OutOfStock, CommandOrigin.System),
-            currentUser: Anonymous);
-
-        result.IsSuccess.ShouldBeTrue();
-
-        // The status, for the same reason the owner case asserts it: a handler
-        // that short-circuits system commands with Result.Success() and touches
-        // no aggregate satisfies IsSuccess while leaving every compensation
-        // ineffective — which is the failure this pair exists to catch, wearing
-        // a success code.
-        using IServiceScope scope = fixture.Factory.Services.CreateScope();
-        OrderingDbContext db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
-        Order order = await db.Orders.SingleAsync(o => o.Id == new OrderId(orderId));
-
-        order.Status.ShouldBe(OrderStatus.Cancelled);
-    }
+    order.Status.ShouldBe(OrderStatus.Cancelled);
 }
 ```
 
-`DispatchAsync` is the fixture helper above: it opens a scope, points that
-scope's `TestCurrentUser` at the principal named, and dispatches. The double
+`DispatchAsync` is a fixture helper with one overload per `IDispatcher` method
+(§6.2): it opens a scope, points that scope's `TestCurrentUser` at the principal
+named, and dispatches, and the scope is what keeps that principal from leaking
+into another test or a concurrent request. The double
 itself is the part worth reading, because a simpler one breaks the HTTP suite:
 
 ```csharp
@@ -1597,8 +1065,8 @@ public sealed class TestCurrentUser(IHttpContextAccessor accessor) : ICurrentUse
     //
     // Unset below HTTP: an authenticated stand-in, so a handler test that
     // says nothing about the caller still has one. Without this branch every
-    // pre-existing dispatcher test would throw on currentUser.Id the moment
-    // §6.4's handler started reading it.
+    // handler test that names no caller throws on currentUser.Id, because
+    // §6.4's handler reads it.
     //
     // Set: whatever the test said. The only route to a handler with no
     // caller at all, which is the state RequireAuthorization stops a request
@@ -1664,10 +1132,10 @@ where the absence *is* the state being modelled.
 **Delegating rather than replacing is the whole design**, and the flat version
 is worth naming because it looks simpler and is wrong. A double that always
 answers from its own field would make
-`Hides_another_customers_order_behind_a_404` pass because the fixture's default
-subject happens not to be the seeded owner — the right status for the wrong
-reason, on the one test whose entire point is that the status is right — and
-would strand every HTTP path that needs the header principal.
+`User_A_cancelling_user_B_s_order_gets_404_and_not_403` pass because the
+fixture's default subject happens not to be the seeded owner — the right status
+for the wrong reason, on the one test whose entire point is that the status is
+right — and would strand every HTTP path that needs the header principal.
 
 **A double is the right call here and §12.7's rule says so**, though it needs
 reading twice to see it: `ICurrentUser` is a port over `HttpContext`, so the
@@ -1679,7 +1147,7 @@ rows in a real database, seeded through the aggregate.
 These five run at the dispatcher rather than over HTTP, and that is not a
 shortcut. Two of them describe states HTTP cannot produce against §11.4's
 endpoint group: `RequireAuthorization` turns a caller-less request into a 401
-before any handler runs, so the fail-open the old guard admitted is invisible
+before any handler runs, so a fail-open in the handler's own check is invisible
 from outside, and the compensation path has no HTTP surface at all. The
 API-contract tests above cover the boundary; these cover the check.
 
@@ -1705,10 +1173,9 @@ public void The_mapper_is_what_makes_a_message_system_initiated()
     CancelOrderCommand command = new CancelOrderMapper().Map(
         new CancelOrder(Guid.CreateVersion7(), CancelReasons.OutOfStock));
 
-    // Both halves of what the mapper does. The stamp is the new one, but the
-    // parse is the older claim and equally unasserted: every recognised code
-    // could map to the wrong domain reason and this test would still pass on
-    // the origin alone.
+    // Both halves of what the mapper does: every recognised code could map to
+    // the wrong domain reason and this test would still pass on the origin
+    // alone.
     command.InitiatedBy.ShouldBe(CommandOrigin.System);
     command.Reason.ShouldBe(CancellationReason.OutOfStock);
 }
@@ -1745,10 +1212,11 @@ section that starts no container — the edge owns no database
 ([§10.1](10-api-gateway.md)) — and the one that reads a shipped configuration
 file as a subject rather than as setup.
 
-Two of its assertions have no other home. The first is that the host accepted
-every route in the file: policy names are resolved when
-[§10.2](10-api-gateway.md)'s configuration loads, and a route whose id went in
-and did not come out is a path that stopped existing.
+Two of its assertions have no other home, and they are in
+`tests/Gateway.Api.Tests/RouteConfigurationTests.cs` and `ProxiedRouteTests.cs`
+beside it. The first is that the host accepted every route in the file: policy
+names are resolved when [§10.2](10-api-gateway.md)'s configuration loads, and a
+route whose id went in and did not come out is a path that stopped existing.
 
 ```csharp
 [Fact]
@@ -1786,13 +1254,13 @@ public async Task The_service_receives_the_path_with_the_namespace_prefix_remove
 }
 ```
 
-> **A listener, not an address that refuses.** The first version pointed the
-> clusters at `127.0.0.1:1`, on the reasoning that a refused connection is free.
-> Measured, it cost about two seconds a request — so exhausting §10.3's
-> hundred-request window took three and a half minutes, the window replenished
-> before the last request arrived, and the rate-limit test failed while the
-> limiter was working perfectly. A stub that answers is faster *and* is the
-> only thing that can observe the forwarded path.
+> **A listener, not an address that refuses.** A refused connection looks free
+> and is not: measured, pointing the clusters at `127.0.0.1:1` costs about two
+> seconds a request, so exhausting §10.3's hundred-request window takes three
+> and a half minutes, the window replenishes before the last request arrives,
+> and the rate-limit test fails while the limiter is working perfectly. A stub
+> that answers is faster *and* is the only thing that can observe the forwarded
+> path.
 
 > **One property in this suite cannot be asserted over `TestServer` at all**,
 > and it is the case that says where the seam is. §10.1's body ceiling is a
@@ -1878,137 +1346,122 @@ compiles differently when the realm is wrong.
 ## 12.5 Testing the saga
 
 Saga logic is where cross-service bugs live, and MassTransit's in-memory test
-harness makes it testable without any infrastructure at all.
+harness makes it testable without any infrastructure at all. The suite is the
+`OrderFulfilmentSaga*Tests` classes in `tests/Ordering.Application.Tests/`, one
+per state, over the registration they share in
+`OrderFulfilmentSagaHarness.cs`:
+
+```csharp
+new ServiceCollection()
+    .AddMassTransitTestHarness(x =>
+    {
+        x.SetTestTimeouts(TestTimeout, InactivityTimeout);
+        x.AddDelayedMessageScheduler();
+        x
+            .AddSagaStateMachine<OrderFulfilmentSaga, OrderFulfilmentState>()
+            .InMemoryRepository();
+        x.UsingInMemory((context, cfg) =>
+        {
+            cfg.UseDelayedMessageScheduler();
+            cfg.ConfigureEndpoints(context);
+        });
+    })
+    .BuildServiceProvider(true);
+```
+
+`TestTimeout` is sixty seconds and `InactivityTimeout` ten, the ceiling
+deliberately six times the bound meant to fire. Thirty is MassTransit's own
+default for the test timeout, so a registration setting it there states nothing
+and inherits the number the trap below is about. The two scheduler lines are
+the ones production registers (ADR-021), and they are not optional here: §9.6's
+`Initially` arms `StockTimeout`, so the first `OrderPlaced` reaches for a
+scheduler. The in-memory transport implements the delay itself where RabbitMQ
+needs a plugin — the transports differ and the registration under test does
+not.
 
 ```csharp
 [Fact]
 public async Task Payment_declined_releases_stock_before_cancelling()
 {
-    await using ServiceProvider provider = new ServiceCollection()
-        .AddMassTransitTestHarness(x =>
-        {
-            // 60 and 10, and the ceiling is deliberately six times the bound
-            // meant to fire. 30 is MassTransit's OWN default for testTimeout,
-            // so a sample setting it there states nothing and inherits the
-            // number the trap below is about — this line read 30 while the
-            // suite it specifies ran 60.
-            x.SetTestTimeouts(testTimeout: TimeSpan.FromSeconds(60), testInactivityTimeout: TimeSpan.FromSeconds(10));
-            // The same two lines production registers (ADR-021), and they are
-            // not optional here: §9.6's Initially arms StockTimeout, so the
-            // first OrderPlaced reaches for a scheduler. The in-memory
-            // transport implements the delay itself where RabbitMQ needs a
-            // plugin — the transports differ and the registration under test
-            // does not.
-            x.AddDelayedMessageScheduler();
-            x
-                .AddSagaStateMachine<OrderFulfilmentSaga, OrderFulfilmentState>()
-                .InMemoryRepository();
-            x.UsingInMemory((context, cfg) =>
-            {
-                cfg.UseDelayedMessageScheduler();
-                cfg.ConfigureEndpoints(context);
-            });
-        })
-        .BuildServiceProvider(true);
-
-    ITestHarness harness = provider.GetRequiredService<ITestHarness>();
-    await harness.Start();
-
-    var orderId = Guid.CreateVersion7();
-
-    // Every member of every V1 contract is `required` unless §12.6's
-    // additive-member list names it — the §9.1 envelope included, and none of
-    // these — so there is no partial construction to elide anywhere here,
-    // and a builder keeps that from filling the test. `new StockReserved
-    // { OrderId = orderId }` does not compile: the three envelope members are
-    // as required as the payload, which is the point of §9.1 declaring them on
-    // an interface rather than leaving them to convention.
-    // `Publish` here is the suite's helper, not `harness.Bus.Publish`: it
-    // returns only once the saga has consumed the message, so the ordering
-    // below is its job and not the caller's. The `Sent` lines are assertions
-    // — each names the command a transition owes — and three bare
-    // `harness.Bus.Publish` calls in their place would be the race the trap
-    // below prices.
-    await Publish(harness, Contracts.OrderPlaced(orderId));
-    (await harness.Sent.Any<ReserveStock>(m => m.Context.Message.OrderId == orderId))
-        .ShouldBeTrue();
-
-    await Publish(harness, Contracts.StockReserved(orderId));
-    (await harness.Sent.Any<AuthorisePayment>(m => m.Context.Message.OrderId == orderId))
-        .ShouldBeTrue();
-
-    await Publish(harness, Contracts.PaymentDeclined(orderId, "insufficient_funds"));
-
-    // Sent, not Published — the saga issues these as commands to a single
-    // owner (§9.6). The harness tracks the two separately, so asserting on
-    // Published here would fail while looking like a saga defect.
-    (await harness.Sent.Any<ReleaseStock>(m => m.Context.Message.OrderId == orderId))
-        .ShouldBeTrue();
-
-    // CancelOrder must not be sent until stock is confirmed released — and
-    // "not yet" needs a point in time to be false *at*. The `Publish` above
-    // IS that point: it returned only once the saga had consumed
-    // PaymentDeclined, which is why no `Consumed` assertion stands here. It
-    // used to, and the barrier moving into the helper is what retired it.
-    //
-    // An already-cancelled token then reads the record as of that point: no
-    // wait, no deadline for a late saga to hide inside, and the harness's one
-    // shared inactivity token left unspent for the assertion after
-    // StockReleased. The traps below explain why each of those matters.
-    using CancellationTokenSource asRecorded = new();
-    asRecorded.Cancel();
-
-    (await harness.Sent.Any<CancelOrder>(m => m.Context.Message.OrderId == orderId, asRecorded.Token))
-        .ShouldBeFalse();
-
-    await Publish(harness, Contracts.StockReleased(orderId));
-
-    // The reason, not just the send. Both exits from Compensating read
-    // ctx.Saga.CancelReason (§9.6), so a transition that forgets to set it on
-    // entry produces a CancelOrder carrying null — which this assertion fails
-    // on and `Any<CancelOrder>` alone would not.
-    (await harness.Sent.Any<CancelOrder>(m =>
-        m.Context.Message.OrderId == orderId &&
-        m.Context.Message.Reason == CancelReasons.PaymentDeclined))
-        .ShouldBeTrue();
-}
-
-[Fact]
-public async Task Commands_are_sent_and_events_are_published()
-{
-    // The distinction §9.6 rests on, asserted directly: publishing a command
-    // would deliver it to every subscriber, and nothing else in the suite
-    // would notice.
-    //
-    // The shared helper registers the saga and states both harness bounds.
-    // The last assertion here is a negative — and the ONE negative in a saga
-    // suite that can never match, since the whole claim is that a command is
-    // not published. Left on the ordinary token it bills the inactivity
-    // timeout on every green run, so it reads the record as of the positive
-    // above it instead. See the traps below.
-    // The tuple is the helper's shape — it returns the provider as well as the
-    // harness, and the caller owns it. A bare
-    // `ITestHarness harness = await StartHarnessAsync()` does not compile
-    // against it, and dropping the `await using` leaks a running bus into
-    // whatever runs next.
     (ServiceProvider provider, ITestHarness harness) = await StartHarnessAsync();
     await using (provider)
     {
         var orderId = Guid.CreateVersion7();
 
-        // Every member of V1.OrderPlaced is `required`, so there is no partial
-        // construction to elide — a builder keeps that from filling the test.
-        await Publish(harness, Contracts.OrderPlaced(orderId));
+        await Publish(harness, SagaContracts.OrderPlaced(orderId, Customer));
+        (await Sent<ReserveStock>(harness, m => m.OrderId == orderId)).ShouldBeTrue();
 
-        (await harness.Sent.Any<ReserveStock>()).ShouldBeTrue();
+        await Publish(harness, SagaContracts.StockReserved(orderId));
+        (await Sent<AuthorisePayment>(harness, m => m.OrderId == orderId)).ShouldBeTrue();
 
-        using CancellationTokenSource spent = new();
-        spent.Cancel();
+        await Publish(harness, SagaContracts.PaymentDeclined(orderId, "insufficient_funds"));
 
-        (await harness.Published.Any<ReserveStock>(spent.Token)).ShouldBeFalse();
+        (await Sent<ReleaseStock>(harness, m => m.OrderId == orderId)).ShouldBeTrue();
+
+        // CancelOrder must not go until the release is confirmed.
+        (await NotYetSent<CancelOrder>(harness, m => m.OrderId == orderId)).ShouldBeFalse();
+
+        await Publish(harness, SagaContracts.StockReleased(orderId));
+
+        // The reason, not just the send, since a transition that never set it sends null.
+        (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.PaymentDeclined))
+            .ShouldBeTrue();
     }
 }
 ```
+
+The contracts come from `SagaContracts` because every member of every V1
+contract is `required` unless §12.6's additive-member list names it — the §9.1
+envelope included — so there is no partial construction to elide, and
+`new StockReserved { OrderId = orderId }` does not compile: the three envelope
+members are as required as the payload, which is the point of §9.1 declaring
+them on an interface rather than leaving them to convention. `Publish` is the
+suite's helper, not `harness.Bus.Publish`: it returns only once the saga has
+consumed the message, so the ordering is its job and not the caller's, and
+three bare `harness.Bus.Publish` calls in its place would be the race the trap
+below prices. The `Sent` lines are assertions, each naming the command a
+transition owes, and they are `Sent`, not `Published`, because the saga issues
+these as commands to a single owner (§9.6): the harness tracks the two
+separately, so asserting on `Published` would fail while looking like a saga
+defect.
+
+`CancelOrder` must not be sent until stock is confirmed released, and "not yet"
+needs a point in time to be false *at*. The `Publish` before it is that point,
+since it returned only once the saga had consumed `PaymentDeclined`, which is
+why no `Consumed` assertion stands there. `NotYetSent` then reads the record as
+of that point on an already-cancelled token: no wait, no deadline for a late
+saga to hide inside, and the harness's one shared inactivity token left unspent
+for the assertion after `StockReleased`. The traps below explain why each of
+those matters. The last assertion reads the reason, not just the send, because
+both exits from `Compensating` read `ctx.Saga.CancelReason` (§9.6), so a
+transition that forgets to set it on entry produces a `CancelOrder` carrying
+null, which `Any<CancelOrder>` alone would not catch.
+
+```csharp
+[Fact]
+public async Task Commands_are_sent_and_events_are_published()
+{
+    // §9.6's distinction: a command published rather than sent reaches every subscriber of its type.
+    (ServiceProvider provider, ITestHarness harness) = await StartHarnessAsync();
+    await using (provider)
+    {
+        var orderId = Guid.CreateVersion7();
+
+        await Publish(harness, SagaContracts.OrderPlaced(orderId, Customer));
+
+        // The positive first gives the negative a point in time to be false at.
+        (await Sent<ReserveStock>(harness, m => m.OrderId == orderId)).ShouldBeTrue();
+        (await NotYetPublished<ReserveStock>(harness, m => m.OrderId == orderId)).ShouldBeFalse();
+    }
+}
+```
+
+Its negative is the one in a saga suite that can never match, since the whole
+claim is that a command is not published; left on the ordinary token it would
+bill the inactivity timeout on every green run, so it reads the record as of
+the positive above it instead. `StartHarnessAsync` returns the provider as well
+as the harness, and the caller owns it: dropping the `await using` leaks a
+running bus into whatever runs next.
 
 > **Trap — two consecutive publishes are a race, and losing it fails a
 > different assertion.** `harness.Bus.Publish` returns when the message
@@ -2029,23 +1482,19 @@ public async Task Commands_are_sent_and_events_are_published()
 
 > **Put the wait inside the publish helper, not at the call sites.** Per-site
 > waits are the obvious fix and they fail open: the test that forgets one is
-> the test that flakes, and it flakes on a loaded runner and nowhere else.
-> Measured here — the first occurrence was fixed by interleaving waits into
-> the single test that had failed, twenty unfenced publishes remained across
-> fourteen of the twenty-seven harness tests the suite held then, and the very
-> run that
-> merged the fix went red on the next one. A helper that publishes and then
-> waits for **that message** to be consumed leaves nothing to forget, which is
-> the argument the assembly-wide parallelisation attribute won over a shared
-> collection. **On its own id, not its type**: a suite that delivers one type
-> twice — a redelivery, a duplicate — would otherwise match the first
-> delivery and fence nothing, silently. It costs nothing on a green run,
-> because the consume it waits for is the one already happening; what it
-> spends the inactivity bound on is a message no consumer takes, which is a
-> real defect reported where it occurs rather than four assertions later.
+> the test that flakes, and it flakes on a loaded runner and nowhere else. A
+> helper that publishes and then waits for **that message** to be consumed
+> leaves nothing to forget, which is the argument the assembly-wide
+> parallelisation attribute won over a shared collection. **On its own id, not
+> its type**: a suite that delivers one type twice — a redelivery, a duplicate
+> — would otherwise match the first delivery and fence nothing, silently. It
+> costs nothing on a green run, because the consume it waits for is the one
+> already happening; what it spends the inactivity bound on is a message no
+> consumer takes, which is a real defect reported where it occurs rather than
+> four assertions later.
 >
 > ```csharp
-> private static async Task Publish<T>(ITestHarness harness, T message)
+> internal static async Task Publish<T>(ITestHarness harness, T message)
 >     where T : class
 > {
 >     Guid? messageId = null;
@@ -2060,26 +1509,28 @@ public async Task Commands_are_sent_and_events_are_published()
 >                 context.CorrelationId = integrationEvent.CorrelationId;
 >             }
 >
+>             // The send context, because a scheduled expiry has no envelope to read an id from.
 >             messageId = context.MessageId;
 >         },
 >         TestContext.Current.CancellationToken);
 >
+>     // Unset, null == null would match the first consume of T and fence nothing.
 >     messageId.ShouldNotBeNull();
 >
->     (await harness.Consumed.Any<T>(
->         m => m.Context.MessageId == messageId,
->         TestContext.Current.CancellationToken))
->             .ShouldBeTrue(
->                 $"a published {typeof(T).Name} was never consumed, so this barrier " +
->                 "cannot say the next publish is ordered after it");
+>     (await ConsumedWithId<T>(harness, messageId)).ShouldBeTrue(
+>         $"a published {typeof(T).Name} was never consumed, so this barrier cannot say the " +
+>         "next publish is ordered after it — an unfenced publish is a race the runner loses " +
+>         "under load, and it fails a later assertion wearing the wrong component's name.");
 > }
 > ```
 >
-> **The failure text names no consumer**, and that is not fastidiousness: the
-> helper fences whatever is bound to the message, which in a saga suite is the
-> saga and in the barrier's own guard is a consumer the test holds open. A
-> message naming the saga sends a reader of a routing failure to a component
-> that was never registered.
+> `ConsumedWithId`, beside it in `OrderFulfilmentSagaHarness`, is
+> `harness.Consumed.Any<T>` matched on `Context.MessageId`. **The failure text
+> names no consumer**, and that is not fastidiousness: the helper fences
+> whatever is bound to the message, which in a saga suite is the saga and in
+> the barrier's own guard is a consumer the test holds open. A message naming
+> the saga sends a reader of a routing failure to a component that was never
+> registered.
 
 > **The wait reads the send context because that is the one handle both
 > kinds of message carry** — not because a contract has a second identity. It
@@ -2088,19 +1539,18 @@ public async Task Commands_are_sent_and_events_are_published()
 > second one" — **and that `CorrelationId` follows the same rule for the same
 > reason**. So the helper writes **both**, as `OutboxDispatcher` does; what it
 > reads back for a contract is the envelope's own value. Copying only the
-> message id is the half-measure this sample shipped first, which leaves the
-> correlation as the second identity the rule is about. A message with no
-> envelope — a scheduled timeout, or any bare record — needs no such write,
-> which is why the rule is about contracts rather than about publishes. A
-> saga's scheduled timeouts are not contracts — `StockReservationExpired`'s
-> own doc comment argues why — and have no envelope, which is the case the
-> send context covers and the payload cannot.
+> message id is a half-measure that leaves the correlation as the second
+> identity the rule is about. A message with no envelope — a scheduled timeout,
+> or any bare record — needs no such write, which is why the rule is about
+> contracts rather than about publishes. A saga's scheduled timeouts are not
+> contracts — `StockReservationExpired`'s own doc comment argues why — and have
+> no envelope, which is the case the send context covers and the payload
+> cannot.
 >
-> **Letting MassTransit mint the header instead is the trap `IIntegrationEvent`
-> names**, and it was written here before this was noticed: every event gets two
-> identities, one the payload carries and one the broker uses, and **nothing
-> fails** — the suite stayed green and the chapter confidently said the two ids
-> differ. Leave `messageId` unset and the comparison becomes `null == null`,
+> **Letting MassTransit mint the header instead is the trap
+> `IIntegrationEvent` names**: every event gets two identities, one the payload
+> carries and one the broker uses, and **nothing fails** — the suite stays
+> green. Leave `messageId` unset and the comparison becomes `null == null`,
 > which matches the first consume of the type and quietly restores the defect,
 > so assert it before waiting on it.
 >
@@ -2131,7 +1581,8 @@ public async Task Commands_are_sent_and_events_are_published()
 > flight and the spent-token read may legitimately see it.
 
 > **A guard that usually fails is the fail-open shape wearing a test's
-> clothes**, so the barrier gets a second test that does not ask the saga. A
+> clothes**, so the barrier gets a second test that does not ask the saga, in
+> `OrderFulfilmentSagaBarrierTests`. A
 > state machine's transitions return at once, so every question put through one
 > is answered by whichever of two fast operations finished first. Register a
 > consumer the test **holds open** — one that signals arrival and then awaits a
@@ -2144,10 +1595,10 @@ public async Task Commands_are_sent_and_events_are_published()
 >
 > **Release the gate in a `finally`.** Without one, a failing assertion leaves
 > the consumer blocked, the harness never drains and disposal never returns —
-> so the run **hangs** instead of going red. Measured that way round, on the
-> first counterfactual this test was put through: a ten-minute runner spent and
-> nothing named. A hang is a worse outcome than the race it replaces, because
-> a red says which assertion and a hang says nothing at all.
+> so the run **hangs** instead of going red. Measured that way round, a
+> ten-minute runner is spent and nothing named. A hang is a worse outcome than
+> the race it replaces, because a red says which assertion and a hang says
+> nothing at all.
 
 > **Trap — the harness gives up after 1.2 seconds, and the timeout named
 > `TestTimeout` is not the one that says so.** An `Any(…)` ends at the
@@ -2163,13 +1614,12 @@ public async Task Commands_are_sent_and_events_are_published()
 > **Inherit either and a saturated runner fails the suite wearing the
 > assertion's own message** — a saga that did not send, rather than a runner
 > that did not schedule. That costume is the danger, and it is not
-> hypothetical: the same mechanism failed CI on an in-memory harness test
+> hypothetical: the same mechanism has failed CI on an in-memory harness test
 > asserting a consume, which then passed on a re-run of the same commit with no
-> changes. That was a consume smoke rather than a saga, and PR-21's suite
-> inherited the same wait — which is why both bounds are stated in its
-> `StartHarnessAsync` rather than left to a default. State both, and keep the
-> ceiling clear of the bound meant to fire, so which one reported a failure is
-> never a detail of how long the publish took.
+> changes. The saga suite would inherit the same wait, which is why both bounds
+> are stated in `OrderFulfilmentSagaHarness` rather than left to a default.
+> State both, and keep the ceiling clear of the bound meant to fire, so which
+> one reported a failure is never a detail of how long the publish took.
 
 > **A matching assertion returns at once; an unmatched one bills the timeout —
 > but only the first one does.** MassTransit shares a single inactivity token
@@ -2200,73 +1650,52 @@ public async Task Commands_are_sent_and_events_are_published()
 > tool and fails open: a window is something a late-sending saga fits inside,
 > and the later positive would then accept the very command the negative was
 > there to forbid. A negative that is its test's last assertion *may* simply
-> wait — nothing after it is poisoned — but "may" is not "should", and the
-> second sample above is the case that showed why. It used to wait for a publish
-> the test's own subject guarantees will never come, so the wait was the full
-> inactivity bound, every run, for an answer already known; it now reads the
-> record like every other negative here. **Use the cancelled token for every
-> negative and the question stops arising.** PR-21's suite reached its second
-> review still paying that ten seconds under a comment claiming it never did —
-> and removing it took the suite from twelve seconds to two, which is the
-> measurement that priced the habit.
+> wait — nothing after it is poisoned — but "may" is not "should": the second
+> sample above, left to wait, would wait for a publish its own subject
+> guarantees will never come, and pay the full inactivity bound every run for
+> an answer already known. One such wait cost the saga suite ten of its twelve
+> seconds. **Use the cancelled token for every negative and the question stops
+> arising.**
 
 > **`Consumed` says a message arrived and never what happened to it.** The
 > harness records the delivery whether the pipeline returned or threw, so
 > "nothing changed" — no transition, no command sent — is exactly what a
 > saga event **faulting onto the error queue** looks like from every assertion
-> on this page. That is not a hypothetical: a state machine's default answer
-> to an event no state handles is `UnhandledEventException`
-> ([§9.6](09-messaging.md)), and the suite that proved a stale timeout
-> "changes nothing" was green against both outcomes for as long as it existed.
-> A test whose subject is absorption has to read
-> `harness.Consumed.Select<T>(spent).Select(m => m.Exception)` and assert every
-> element is **null** — and on the cancelled token, for the reason above, or
-> the read spends the shared bound and every assertion after it answers
-> falsely.
+> on this page. A state machine's default answer to an event no state handles
+> is `UnhandledEventException` ([§9.6](09-messaging.md)), so a suite that proves
+> a stale timeout "changes nothing" from `Consumed` alone is green against both
+> outcomes. A test whose subject is absorption has to read
+> `harness.Consumed.Select<T>(spent).Select(m => m.Exception)` — the harness's
+> `ConsumeFaults<T>` — and assert every element is **null**, and on the
+> cancelled token, for the reason above, or the read spends the shared bound
+> and every assertion after it answers falsely.
 >
 > **Null, not empty, and the difference is the whole test.** `Consumed` records
 > one entry per delivery whatever the outcome, and `Exception` is null on a
 > clean one — so the sequence has an element per absorbed message, and an
 > emptiness assertion fails on exactly the result the test exists to prove.
 > `ShouldAllBe(e => e == null)` is what the suite runs.
->
-> **This paragraph carried a PR attribution for that correction and no longer
-> does**, because none was supportable: it credited a PR that is not the saga
-> suite's, and the repair a reviewer proposed — the saga suite's own
-> number — is not supportable either. The callout is new here, and no
-> committed revision of that suite ever asserted emptiness. A claim about when
-> a repo's prose was wrong is checkable against its history, so it is worth
-> either checking or dropping; the fact above stands without it.
 
 > **A missing scheduler fails this suite in the costume the traps above
 > describe, which is why the registration is spelled out rather than trimmed.**
-> The sample above carried neither scheduler line until PR-21 compiled it, and
-> the two are easy to read as ceremony. They are not: with both deleted, eleven
-> of that PR's thirteen saga tests fail, **every one of them as a timeout**,
-> each reporting the command the saga did not send. The saga's exception faults
-> onto the error queue and no assertion ever sees it. The survivors were the
-> structural pair that construct the state machine without starting a bus,
-> which is worse than none — they leave a deleted registration looking
-> half-covered.
->
-> **That measurement is pinned to the suite PR-21 shipped and does not
-> re-run to the same numbers**, which is why it names that PR rather than the
-> file. The suite has grown since — #126 alone added five tests, one of them a
-> fourth bus-free structural one — so a reader reproducing it today gets a
-> different ratio from the same deletion. The proportion is not the point and
-> the **costume** is: whatever the count, the failures arrive as timeouts
+> The two scheduler lines are easy to read as ceremony. They are not: with both
+> deleted, the saga tests that start a bus fail, **every one of them as a
+> timeout**, each reporting the command the saga did not send. The saga's
+> exception faults onto the error queue and no assertion ever sees it. The
+> survivors are the structural tests that construct the state machine without
+> starting a bus, which is worse than none — they leave a deleted registration
+> looking half-covered. Whatever the count, the failures arrive as timeouts
 > naming a command, and the structural tests pass throughout.
 
-> **Where the numbers live is the other half.** The first sample states them in
-> the registration it shows; the second gets them from `StartHarnessAsync`, the
-> shared helper these excerpts call rather than define. Either way they are
-> stated once per harness: copy them per test and one test can quietly run on a
-> different wait from its neighbour, leave them out and it is the first trap
-> rather than a saving. **Neither sample spends the inactivity timeout**, which
-> is the whole point of the technique — both read the record on a cancelled
-> token instead of waiting. The bounds still have to be stated: they are what a
-> *positive* assertion waits under, and a saturated runner is exactly when one
-> takes longer than 1.2 seconds to arrive.
+> **Where the numbers live is the other half.** Both samples get them from
+> `StartHarnessAsync`, which builds `OrderFulfilmentSagaHarness`'s one
+> registration, so they are stated once per harness: copy them per test and one
+> test can quietly run on a different wait from its neighbour, leave them out
+> and it is the first trap rather than a saving. **Neither sample spends the
+> inactivity timeout**, which is the whole point of the technique — both read
+> the record on a cancelled token instead of waiting. The bounds still have to
+> be stated: they are what a *positive* assertion waits under, and a saturated
+> runner is exactly when one takes longer than 1.2 seconds to arrive.
 
 ## 12.6 Contract tests
 
@@ -2280,19 +1709,19 @@ says which call earns one.
 
 The contract assembly's rules are all stated elsewhere as things reviewers
 should notice: §9.1's "a contract may not name a domain type", §9.2's versioned
-namespace, `required` members, and — since
-[ADR-028](adr/ADR-028-a-money-movement-command-carries-no-subject.md) —
+namespace, `required` members, and
+[ADR-028](adr/ADR-028-a-money-movement-command-carries-no-subject.md)'s rule
 that a command carries no subject. The first three are mechanical, so each is a
 test rather than a review note.
 
 **The fourth is not, and saying so is the honest half.** "Spelled like a
 subject" is a list of six substrings, so `OwnerId` passes it — the deny-list
-failure this repository has already paid for once, in a check that enumerated
-the terminal states it refused instead of the one it accepted. What makes the
-rule hold is the allow-list beside it: every member the judged commands may
-carry is enumerated, and a name absent from that list fails the build. That
-does not classify the new member — it forces somebody to, which is the most a
-test can do about a rule whose vocabulary cannot be closed.
+failure, the shape of a check that enumerates the states it refuses instead of
+the one it accepts. What makes the rule hold is the allow-list beside it: every
+member the judged commands may carry is enumerated, and a name absent from that
+list fails the build. That does not classify the new member — it forces
+somebody to, which is the most a test can do about a rule whose vocabulary
+cannot be closed.
 
 **The fourth is the one whose gate needs a gate**, and it is worth saying here
 rather than only at the test. The other three fail against a type that is
@@ -2305,34 +1734,27 @@ must contain, asserting the exempt types are excluded, and exercising **every
 declared spelling** rather than the first — because a gate that has only ever
 been observed green is one nobody has established is looking at anything.
 
-**No count of them here, deliberately**: review added to that number twice, and
-a stated total is the half that goes stale. What the set is for is checkable;
-how many there are is not worth a second place to be wrong.
+**No count of them here, deliberately**: a stated total is the half that goes
+stale. What the set is for is checkable; how many there are is not worth a
+second place to be wrong.
 
-**The spelling vocabulary is the case worth naming, because the control had the
-defect it exists to catch — twice, and the second time inside the fix for the
-first.** Six spellings were declared and one was exercised, so removing or
-misspelling any of the other five left every assertion green — the coverage
-failure this repository keeps rediscovering, reproduced inside the control
-written to prevent it. The fix parameterised the assertion, added a probe
-carrying one member per spelling, and paired the two by size; its comment
-claimed that pairing failed in either direction.
+**The spelling vocabulary is the case worth naming, because a control can have
+the defect it exists to catch.** With six spellings declared and one exercised,
+removing or misspelling any of the other five leaves every assertion green —
+the coverage failure this repository keeps rediscovering, inside the control
+written to prevent it. So the assertion is parameterised over the vocabulary, a
+probe carries one member per spelling, and the two are paired by size. The
+cases are generated from the list rather than written beside it, because a case
+list is a second copy of the vocabulary: a spelling added to the list *and* to
+the probe, but not to the cases, satisfies the size check exactly and generates
+no case. Generating them is the only shape with nothing to forget, the argument
+§12.5's publish barrier wins over per-test discipline, arriving one suite along.
 
-**It did not, because the cases were a second copy of the vocabulary.** A
-spelling added to the list *and* to the probe, but not to the case list,
-satisfied the size check exactly and generated no case — the same entry
-unobserved, one layer up from where it was fixed. The cases are now generated
-from the list, which is the only shape with nothing to forget: the argument
-§12.5's publish barrier wins over per-test discipline, arriving one suite along
-and one round later.
-
-> **A control is code, and the reason it exists applies to it.** Both rounds of
-> this were caught by review rather than by the suite, and neither could have
-> been caught by the suite: a control that covers less than it claims is green
-> by construction. What settles it is the counterfactual — add the seventh
-> spelling, add its probe member, and count the cases. Six meant the claim was
-> false and seven means it holds, and no assertion in the file distinguishes
-> those two.
+> **A control is code, and the reason it exists applies to it.** A control that
+> covers less than it claims is green by construction, so the suite cannot
+> catch it. What settles it is the counterfactual — add a spelling, add its
+> probe member, and count the cases — and no assertion in the file
+> distinguishes a count that moved from one that did not.
 
 **Deciding what it judges is the other half, and both obvious answers are
 wrong in opposite directions.** §9.1 says commands do not implement
@@ -2362,84 +1784,66 @@ project and why that project holds contract shape and one other kind of check:
 two services' timings held to each other where the blueprint couples them,
 as [§3.2](03-bounded-contexts.md)'s wait for a missing order is held to
 [§9.6](09-messaging.md)'s payment timeout, because §4.2 lets neither service
-read the other's assembly. The contract shape is this:
+read the other's assembly. The contract shape is
+`tests/Platform.IntegrationTests/ContractTests.cs`, and everything in it starts
+from discovery:
 
 ```csharp
-public class ContractTests
+private static readonly Type[] Contracts =
+[
+    .. typeof(OrderPlaced).Assembly.GetTypes().Where(IsContract)
+];
+
+/// <summary>A concrete, visible type under <c>Common.Contracts</c>, its root included (§9.2).</summary>
+internal static bool IsContract(Type type) =>
+    type.IsVisible &&
+    type is { IsInterface: false, IsAbstract: false } &&
+    type.Namespace is string ns &&
+    (ns == "Common.Contracts" || ns.StartsWith("Common.Contracts.", StringComparison.Ordinal));
+```
+
+Concrete types only: the assembly also holds `IIntegrationEvent` (§9.1) and the
+static code vocabularies (`CancelReasons`, `CancelOrigins`, `ReviewReasons`),
+and a filter of everything public under `Common.Contracts` would demand a
+versioned namespace of an interface that is deliberately shared across all of
+them, and then ask `ContractSamples` for an instance of it. **The root
+namespace is included**, because `StartsWith("Common.Contracts.")` alone reads
+as "everything in the assembly" and is not: a concrete type declared straight
+into `Common.Contracts`, with no version namespace at all, would fall outside
+discovery and bypass the versioned-namespace check, the sample check and the
+round-trip, leaving the suite green over the one mistake §9.2 exists to reject.
+**`IsVisible`, not `IsPublic`**, for a hole of the same kind: `IsPublic` is
+false for every nested type, including one declared `public` inside a public
+class, and a contract nested in a public type is as reachable by a consumer as
+any other. `IsVisible` asks the question actually meant: can something outside
+this assembly name it. Each hole has a positive control —
+`Discovery_sees_a_contract_that_forgot_its_version_namespace` and
+`Discovery_sees_a_contract_nested_inside_a_public_type` — asking `IsContract`
+about a probe the test assembly declares.
+
+Over that set, `No_contract_names_a_domain_type` checks §9.1's rule at the
+assembly level, because a contract cannot reference a domain type without the
+reference, and the reference silently drags `Ordering.Domain` into every
+consuming service. `Every_contract_lives_in_a_versioned_namespace` holds
+§9.2's `Common.Contracts.<Service>.V<n>`, since a contract that lands one
+namespace short is a v1 that can never be superseded. And the round-trip
+catches the member type `System.Text.Json` cannot handle — the failure that
+otherwise appears as a message in the error queue, in staging, with a
+deserialisation stack trace and no obvious owner:
+
+```csharp
+foreach (Type type in Contracts)
 {
-    // Concrete types only. The assembly also holds IIntegrationEvent (§9.1)
-    // and the static code vocabularies (CancelReasons, CancelOrigins,
-    // ReviewReasons), and a filter of "everything public under
-    // Common.Contracts" would demand a versioned namespace of an interface
-    // that is deliberately shared across all of them — and then ask
-    // ContractSamples for an instance of it.
-    private static readonly Type[] Contracts =
-    [
-        .. typeof(OrderPlaced).Assembly.GetTypes().Where(IsContract)
-    ];
+    object instance = ContractSamples.Create(type);
+    string json = JsonSerializer.Serialize(instance, type);
+    object? returned = JsonSerializer.Deserialize(json, type);
 
-    // The ROOT namespace is included, and a trailing dot is what excluded it.
-    // `StartsWith("Common.Contracts.")` reads as "everything in the assembly"
-    // and is not: a concrete type declared straight into `Common.Contracts`,
-    // with no version namespace at all, falls outside discovery — so it
-    // bypasses the versioned-namespace check, the sample check and the
-    // round-trip, and leaves the suite green over the one mistake §9.2 exists
-    // to reject. Exposed as a method so a positive control can ask it about a
-    // type declared, in the *test* assembly, in exactly that namespace.
-    //
-    // IsVisible, not IsPublic, and that is a second hole of the same kind:
-    // IsPublic is false for EVERY nested type, including one declared `public`
-    // inside a public class — those report IsNestedPublic. A contract nested in
-    // a public type is as reachable by a consumer as any other and fell out of
-    // discovery entirely. IsVisible asks the question actually meant: can
-    // something outside this assembly name it.
-    internal static bool IsContract(Type type) =>
-        type.IsVisible &&
-        type is { IsInterface: false, IsAbstract: false } &&
-        type.Namespace is string ns &&
-        (ns == "Common.Contracts" || ns.StartsWith("Common.Contracts.", StringComparison.Ordinal));
-
-    [Fact]
-    public void No_contract_names_a_domain_type()
-    {
-        // §9.1's rule, and the one that silently drags Ordering.Domain into
-        // every consuming service. Checked at the assembly level because a
-        // contract cannot reference a domain type without the reference.
-        typeof(OrderPlaced).Assembly
-            .GetReferencedAssemblies()
-            .Select(a => a.Name!)
-            .ShouldNotContain(name => name.EndsWith(".Domain", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void Every_contract_lives_in_a_versioned_namespace()
-    {
-        // Common.Contracts.<Service>.V<n> — §9.2. A contract that lands one
-        // namespace short is a v1 that can never be superseded.
-        Contracts.ShouldAllBe(t =>
-            Regex.IsMatch(t.Namespace!, @"^Common\.Contracts\.[A-Za-z]+\.V\d+$"));
-    }
-
-    [Fact]
-    public void Every_contract_round_trips_through_the_bus_serialiser()
-    {
-        // Catches the member type System.Text.Json cannot handle — the failure
-        // that otherwise appears as a message in the error queue, in staging,
-        // with a deserialisation stack trace and no obvious owner.
-        foreach (Type type in Contracts)
-        {
-            object instance = ContractSamples.Create(type);
-            string json = JsonSerializer.Serialize(instance, type);
-            object? returned = JsonSerializer.Deserialize(json, type);
-
-            JsonSerializer.Serialize(returned, type).ShouldBe(json, type.FullName);
-        }
-    }
+    JsonSerializer.Serialize(returned, type).ShouldBe(json, type.FullName);
 }
 ```
 
-> **The comparison is between two serialised forms, and `ShouldBeEquivalentTo`
-> on the objects is what it replaced.** The object graph carries a detail the
+> **The comparison is between two serialised forms, not `ShouldBeEquivalentTo`
+> on the objects.** The object graph carries a detail the
 > contract does not specify: a collection expression assigned to an
 > `IReadOnlyList<T>` member compiles to a synthesised read-only list, and
 > `System.Text.Json` returns a `List<T>` — so an equivalence check fails on
@@ -2488,13 +1892,11 @@ public parameterless constructor must mark every settable property.
 > offset: `DateTimeOffset.MinValue` survives every serialiser bug there is.
 
 > **Trap — the rule and [§9.2](09-messaging.md)'s additive change cannot both
-> be obeyed, and the first member to be added found it.** §9.2 says a new
-> *optional* field is additive and needs no version bump. The rule above says
-> no contract may be constructible incompletely. So the additive path §9.2
-> promises had no reachable shape here until something tried to take it, and
-> what settled which side gives way was a measurement rather than an argument:
-> `System.Text.Json` refuses a payload missing a `required` member —
-> *JSON deserialization for type … was missing required properties* — so a
+> be obeyed.** §9.2 says a new *optional* field is additive and needs no
+> version bump. The rule above says no contract may be constructible
+> incompletely. What settles which side gives way is a measurement rather than
+> an argument: `System.Text.Json` refuses a payload missing a `required` member
+> — *JSON deserialization for type … was missing required properties* — so a
 > member shipped `required` faults every message the previous build staged and
 > has not yet published. On a rolling deploy that is not an edge case, it is
 > the ordinary state for the length of the deploy.
@@ -2509,22 +1911,18 @@ public parameterless constructor must mark every settable property.
 > deliberate gaps is only honest while something re-checks that they are still
 > gaps** — the same shape §13.6's unloaded alerts and their gate are in.
 
-> **The entry clears when the contract version does, and an earlier revision
-> of this callout said it clears when the member becomes `required`.** That
-> tightening is a breaking change and not a tidy-up: a payload predating the
-> field has no bound on how long it can arrive — `docs/runbooks/error-queue.md`
-> keeps a message until somebody handles it, outliving even its outbox row's
-> purge, and a replay can reintroduce one at any time — so requiring the member
-> would fail deserialisation on every retained one, before any consumer branch
-> could read the absent value. [§9.2](09-messaging.md) sends a breaking change
-> to a new version, so an additive member stays optional for the life of the
-> version it was added to, and the listing goes when that version does.
->
-> **The first framing was "§15.5's expand phase with a contract phase owed",
-> and it was wrong in the direction that reads as rigour.** It promised a
-> future tightening, which sounds like the exemption being temporary and is
-> actually a scheduled breakage — the honest version is a permanent tolerance
-> with a stated reason, which is the less tidy claim and the true one.
+> **The entry clears when the contract version does, never when the member
+> becomes `required`.** That tightening is a breaking change and not a
+> tidy-up: a payload predating the field has no bound on how long it can arrive
+> — `docs/runbooks/error-queue.md` keeps a message until somebody handles it,
+> outliving even its outbox row's purge, and a replay can reintroduce one at
+> any time — so requiring the member would fail deserialisation on every
+> retained one, before any consumer branch could read the absent value.
+> [§9.2](09-messaging.md) sends a breaking change to a new version, so an
+> additive member stays optional for the life of the version it was added to,
+> and the listing goes when that version does. It is a permanent tolerance with
+> a stated reason, not an exemption with a tightening owed: a promised
+> tightening reads as rigour and is a scheduled breakage.
 
 ### The recorded shape
 
@@ -2567,27 +1965,23 @@ file, two generated halves, so a field cannot be renamed on one side only. What
 it cannot pin is what the fields **mean**: that an unpriced product is absent
 rather than zero, that the amount is text to be parsed rather than compared,
 that a reply's currency is the amount's own label. `pricing.proto` says all
-three, in comments, and until PR-26 nothing checked any of them across the
-boundary.
+three, in comments, and a comment holds nothing across the boundary.
 
-**What stood in for a check was a stub, and a stub is a second specification
-nobody verifies.** `Web.Bff.Tests` drives its endpoint against `StubCatalog`, a
-hand-written gRPC server modelling Catalog. Four of its behaviours had drifted
-from the service it models — it filtered currency case-sensitively where Catalog
-does not, echoed the request's spelling of the currency rather than its own
-stored one, formatted amounts at the test's scale rather than the column's
-`decimal(19,4)`, and enforced no request ceiling at all.
+**A stub is a second specification nobody verifies.** `Web.Bff.Tests` drives
+its endpoint against `StubCatalog`, a hand-written gRPC server modelling
+Catalog, and a stub drifts from the service it models in exactly the details a
+consumer leans on: filtering currency case-sensitively where Catalog does not,
+echoing the request's spelling of the currency rather than its own stored one,
+formatting amounts at the test's scale rather than the column's
+`decimal(19,4)`, enforcing no request ceiling at all.
 
-> **The consumer's guard against the drift was itself unguarded, and that was
-> measured rather than argued.** `CheckoutEndpoints` compares a reply's currency
-> to the request's with `OrdinalIgnoreCase`, precisely because Catalog answers
-> `GBP` to a request for `gbp`. Because the stub echoed the request, the
-> comparison had never once been handed two spellings — so tightening it to
-> `Ordinal` left every one of that suite's 62 pre-PR tests that need no
-> container green, over a change that would answer 500 to every lower-case
-> currency a customer typed. That is the fast half rather than the whole
-> suite, which was 66 before this PR and is 81 after it; the four that want
-> a Keycloak were not run.
+> **A stub that echoes the request leaves the consumer's guard against that
+> drift unguarded.** `CheckoutEndpoints` compares a reply's currency to the
+> request's with `OrdinalIgnoreCase`, precisely because Catalog answers `GBP`
+> to a request for `gbp`. A stub echoing the request never hands that
+> comparison two spellings, so tightening it to `Ordinal` leaves every
+> stub-driven test green over a change that would answer 500 to every
+> lower-case currency a customer typed.
 
 So the consumer writes down what it needs, and the provider is verified against
 it. The expectations are **one file** — `PricingContract.cs`, in the consumer's
@@ -2648,10 +2042,9 @@ is what pins it, and a change in either direction fails verification on purpose.
 would refuse requests Catalog would have served, where a contract with one is
 the consumer saying which number it is relying on.
 
-> **The consumer stopped being able to drive the refusal half, and the
-> interaction stays anyway
-> ([ADR-045](adr/ADR-045-the-checkout-quote-takes-quantities.md)).** The quote
-> now bounds its own line count at `OrderLimits.MaxLines` — the bound the
+> **The consumer cannot drive the refusal half, and the interaction stays
+> anyway** ([ADR-045](adr/ADR-045-the-checkout-quote-takes-quantities.md)). The
+> quote bounds its own line count at `OrderLimits.MaxLines` — the bound the
 > *order* insists on, not a copy of Catalog's — so a basket past the ceiling
 > fails validation before the hop and Catalog is never asked. The consumer
 > suite asserts that instead, and the `InvalidArgument` mapping keeps its
@@ -2659,11 +2052,10 @@ the consumer saying which number it is relying on.
 > provoking it with a size.
 >
 > **An expectation the consumer cannot drive is still an expectation it
-> needs**, which is the case worth having met once: the provider verification
-> holds Catalog to the refusal either way, and the two bounds agree today only
-> by coincidence of value. The day one of them moves, this is the interaction
-> that says which — and had it been deleted as unreachable, the first symptom
-> would have been a quote refusing baskets Catalog would have priced, or
+> needs**: the provider verification holds Catalog to the refusal either way,
+> and the two bounds agree only by coincidence of value. The day one of them
+> moves, this is the interaction that says which — deleted as unreachable, the
+> first symptom would be a quote refusing baskets Catalog would have priced, or
 > accepting ones it would not.
 
 **It is not Pact, and the mechanism was a decision rather than a
@@ -2769,23 +2161,19 @@ The file filters the report to `.*\.Domain\.dll$` and emits Cobertura, and CI
 prints the figure to the job summary. **Reported, never gated** — a diagnostic
 wired to a build failure stops being read and starts being satisfied.
 
-**PR-25 took that decision rather than deferring it, and this passage used to
-defer.** It read "a threshold that fails a build is PR-25's quality gates",
-which named the pull request entitled to add one; that pull request declined,
-on the sentence above rather than on effort. What it gated instead is whether
-each stage *ran* — a fact, where a coverage percentage is a target — and
-[Appendix C](appendix-c-delivery-plan.md)'s "quality gates" is that. A later
-change may still argue for a threshold; it will be arguing against this
-paragraph rather than filling a gap it left open.
+What is gated instead is whether each stage *ran* — a fact, where a coverage
+percentage is a target — and that is
+[Appendix C](appendix-c-delivery-plan.md)'s "quality gates". A change that
+argues for a threshold argues against this paragraph.
 
-**The figure is now a union across stages, and that is forced rather than
-chosen.** §15.1 runs the unit and integration halves as separate `dotnet test`
-invocations, so there is no longer one run to read — and the sentence above
-asks for the domain assemblies "over the whole run". Measured on this
-repository: the unit stage covers 253 of 308 method lines and the integration
-stage 192, and the union is **257**. Four of those lines are reached only by a
-test that needs a container, so a figure taken from either half alone
-under-reports the thing it is named after.
+**The figure is a union across stages, and that is forced rather than chosen.**
+§15.1 runs the unit and integration halves as separate `dotnet test`
+invocations, so there is no one run to read — and the second point below asks
+for the domain assemblies "over the whole run". Measured on this repository:
+the unit stage covers 253 of 308 method lines and the integration stage 192,
+and the union is **257**. Four of those lines are reached only by a test that
+needs a container, so a figure taken from either half alone under-reports the
+thing it is named after.
 
 Three things about that filter are deliberate:
 
@@ -2805,8 +2193,8 @@ Three things about that filter are deliberate:
 > filter above instruments the Domain assemblies and nothing else — which are
 > exactly the assemblies the Domain gates read `GetReferencedAssemblies` on. On
 > the Linux runner an instrumented Domain assembly reports a `netstandard`
-> reference no source line can produce, and both gates went red on the first CI
-> run that collected coverage. It does not reproduce on Windows, where the same
+> reference no source line can produce, and both gates go red on a CI run that
+> collects coverage. It does not reproduce on Windows, where the same
 > collector leaves the file byte-identical.
 >
 > So CI runs the gates **first and uninstrumented**, and collects coverage over
