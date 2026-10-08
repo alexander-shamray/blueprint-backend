@@ -82,6 +82,22 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
         counted.Of("rejected").ShouldBe(1, "a permanent refusal is not retried in the client");
     }
 
+    /// <summary>A 554 at RCPT TO is a policy answer, such as the relay dropping this host, not the mailbox.</summary>
+    [Fact]
+    public async Task A_recipient_refused_on_policy_backs_off_as_a_relay_fault_and_is_counted()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        await fixture.Plain.RefuseRecipientsAsync(554, ct);
+        using OutboundCount counted = OutboundCounter.Unavailable(_host.Services);
+
+        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
+            Channel().SendAsync(Mail(), ct));
+
+        thrown.Cause.ShouldBe(MailFault.Rejected);
+        thrown.SmtpStatus.ShouldBe(554);
+        counted.Of("rejected").ShouldBe(1, "the relay's refusal is a deployment fault the row backs off from");
+    }
+
     [Fact]
     public async Task The_fault_names_the_message_and_never_the_mailbox_or_the_relays_words()
     {

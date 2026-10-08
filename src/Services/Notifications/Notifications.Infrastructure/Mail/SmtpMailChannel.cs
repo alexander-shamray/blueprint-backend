@@ -106,8 +106,7 @@ internal sealed partial class SmtpMailChannel(
             caller.ThrowIfCancellationRequested();
             throw new OperationCanceledException(attempt);
         }
-        catch (SmtpCommandException e)
-            when (e.ErrorCode == SmtpErrorCode.RecipientNotAccepted && (int)e.StatusCode >= 500)
+        catch (SmtpCommandException e) when (RefusesTheMailbox(e))
         {
             return new MailResult.Refused(MailRefusal.RecipientRefused);
         }
@@ -177,6 +176,24 @@ internal sealed partial class SmtpMailChannel(
             ? parsed
             : null;
 
+    /// <summary>Whether a permanent answer to RCPT TO refuses the mailbox, rather than this deployment.</summary>
+    /// <remarks>
+    /// An enhanced status decides where the relay sends one: 5.1.x is the address, and any other, such as 5.7.1's
+    /// "relay access denied", is a fault the row backs off from (RFC 3463). Without one, only 550, 551 and 553 do.
+    /// </remarks>
+    internal static bool RefusesTheMailbox(SmtpCommandException e)
+    {
+        if (e.ErrorCode != SmtpErrorCode.RecipientNotAccepted || (int)e.StatusCode < 500)
+            return false;
+
+        Match enhanced = EnhancedStatus().Match(e.Message);
+
+        return enhanced.Success
+            ? enhanced.Groups["subject"].Value == "1"
+            : e.StatusCode is SmtpStatusCode.MailboxUnavailable or SmtpStatusCode.UserNotLocalTryAlternatePath or
+                SmtpStatusCode.MailboxNameNotAllowed;
+    }
+
     // No silent fallback: an unbound value is a host the validator should not have started.
     private static SecureSocketOptions Socket(MailSecurity? security) => security switch
     {
@@ -230,4 +247,8 @@ internal sealed partial class SmtpMailChannel(
     // \z, not $, which also matches before a final line feed.
     [GeneratedRegex(@"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*\z")]
     private static partial Regex LanguageTag();
+
+    // RFC 3463's class.subject.detail at the start of the reply text, which MailKit keeps after the basic code.
+    [GeneratedRegex(@"\A\s*5\.(?<subject>\d{1,3})\.\d{1,3}(?=\s|\z)")]
+    private static partial Regex EnhancedStatus();
 }
