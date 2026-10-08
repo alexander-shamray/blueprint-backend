@@ -94,6 +94,12 @@ USER_SUFFIX = "-svc"
 # saga with no Inventory service to answer it.
 FRAMEWORK_PREFIX = "MassTransit:"
 
+# RabbitMqMessageNameFormatter's names for the fault hierarchy: `ReceiveFault`
+# and `Fault<T>` both extend the root `Fault`, and a generic's argument sits
+# between `--` separators with its own namespace.
+FAULT_ROOT = f"{FRAMEWORK_PREFIX}Fault"
+FAULT_SOURCES = (f"{FRAMEWORK_PREFIX}ReceiveFault", f"{FRAMEWORK_PREFIX}Fault--Common.Contracts.Anything.V1:Anything--")
+
 # The polymorphic publish exchange. MassTransit binds each concrete contract
 # exchange to one exchange per interface the message implements, and the
 # sender declares that binding: `exchange.bind` takes write on the
@@ -469,6 +475,19 @@ def main() -> int:
         if matches(entry["read"], INTERFACE_EXCHANGE):
             fail(f"{user}: read COVERS `{INTERFACE_EXCHANGE}`. A queue of its own bound there "
                  f"receives every integration event of every context")
+
+        # 3d. A fault's publish binds `ReceiveFault` and each `Fault--<type>--` to the
+        #     root `Fault` interface, so read is owed on those sources and never on the root.
+        for resource in FAULT_SOURCES:
+            if not matches(entry["read"], resource):
+                fail(f"{user}: read does not cover `{resource}`, the source of the binding a "
+                     f"fault's publish declares, so the fault is refused (§13.6)")
+        if matches(entry["read"], FAULT_ROOT):
+            fail(f"{user}: read COVERS `{FAULT_ROOT}`, which no fault's publish binds from. A "
+                 f"queue of its own bound there receives every service's faults")
+        if matches(entry["read"], f"{FRAMEWORK_PREFIX}Anything"):
+            fail(f"{user}: read COVERS `{FRAMEWORK_PREFIX}Anything`, beyond the fault exchanges "
+                 f"a fault's publish binds from")
 
         # 4. It may publish its OWN context's contracts — WHERE IT HAS ANY.
         #

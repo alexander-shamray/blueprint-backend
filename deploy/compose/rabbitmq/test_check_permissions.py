@@ -288,7 +288,7 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
             with self.subTest(verb=verb):
                 definitions = real()
                 entry = permission(definitions, "catalog-svc")
-                entry[verb] = entry[verb].replace("|MassTransit:", "|MassTransit:|ordering-", 1)
+                entry[verb] = entry[verb].replace("|MassTransit:", "|ordering-|MassTransit:", 1)
                 self.assertIn("|ordering-", entry[verb], "the case, not the gate")
                 failures = run_against(definitions)
                 self.assertTrue(
@@ -413,6 +413,38 @@ class ConfigureAndReadAreBoundedToo(unittest.TestCase):
         finally:
             gate.referenced_contexts = original
         self.assertTrue(any("names a Common.Contracts context" in f for f in failures), failures)
+
+
+class TheFaultExchangesAreReadOnlyAsSources(unittest.TestCase):
+    """Read on the framework prefix reaches the sources a fault's publish binds from, and not the root."""
+
+    NARROW = "MassTransit:(ReceiveFault$|Fault--))"
+
+    def failures_with(self, read_tail: str) -> list[str]:
+        definitions = real()
+        entry = permission(definitions, "catalog-svc")
+        self.assertTrue(entry["read"].endswith(self.NARROW), "the case, not the gate")
+        entry["read"] = entry["read"][: -len(self.NARROW)] + read_tail
+        return run_against(definitions)
+
+    def test_the_whole_prefix_is_refused(self):
+        failures = self.failures_with("MassTransit:)")
+        self.assertTrue(any("catalog-svc: read COVERS `MassTransit:Fault`, which no fault" in f for f in failures),
+                        failures)
+        self.assertTrue(any("catalog-svc: read COVERS `MassTransit:Anything`" in f for f in failures), failures)
+
+    def test_the_root_alone_is_refused(self):
+        failures = self.failures_with("MassTransit:(ReceiveFault$|Fault))")
+        self.assertTrue(any("catalog-svc: read COVERS `MassTransit:Fault`" in f for f in failures), failures)
+
+    def test_the_receive_fault_left_out(self):
+        failures = self.failures_with("MassTransit:Fault--)")
+        self.assertTrue(
+            any("catalog-svc: read does not cover `MassTransit:ReceiveFault`" in f for f in failures), failures)
+
+    def test_a_typed_fault_left_out(self):
+        failures = self.failures_with("MassTransit:ReceiveFault$)")
+        self.assertTrue(any("catalog-svc: read does not cover `MassTransit:Fault--" in f for f in failures), failures)
 
 
 class TheFileHoldsOnlyWhatIsJudged(unittest.TestCase):
