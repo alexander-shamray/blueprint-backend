@@ -215,9 +215,15 @@ than pulled. Three ways that breaks, all of which look like a hung saga:
    repeating channel error on RabbitMQ and a saga frozen mid-transition.
 
    ```bash
-   kubectl -n <ns> exec deploy/rabbitmq -- rabbitmq-plugins list | grep delayed
+   # The exchange types the node offers, with the curl config error-queue.md
+   # writes: no x-delayed-message means the plugin is absent.
+   curl -sS --config "$HOME/.rabbit.curl" http://localhost:15672/api/overview |
+     grep -o '"name":"x-delayed-message"'
    kubectl -n <ns> logs deploy/rabbitmq --since=10m | grep -i 'precondition_failed\|x-delayed-message'
    ```
+
+   Not `rabbitmq-plugins` through `kubectl exec`: that needs `pods/exec` on the
+   broker and its Erlang cookie, which is full control of the node.
 
 2. **The scheduler is not registered.** A registration nothing resolves at
    startup fails at the first message, not at boot — `ValidateOnBuild` never
