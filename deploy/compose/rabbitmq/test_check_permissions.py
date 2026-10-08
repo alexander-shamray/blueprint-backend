@@ -294,9 +294,13 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
                 "    private static string S() => \"{\";\n"
                 "    public sealed record Inner(int Value);\n"
                 "    public sealed class Middle\n    {\n        public sealed record Deepest;\n    }\n"
+                "    private protected sealed record Hidden;\n"
+                "    internal new readonly ref struct Shadowed { }\n"
                 "}\n\n"
+                "[Serializable] public sealed record Tagged;\n"
                 "public sealed record After(string Value)\n{\n    public int Size { get; init; }\n}\n")
-        self.assertEqual({"Outer", "Outer-Inner", "Outer-Middle", "Outer-Middle-Deepest", "After"},
+        self.assertEqual({"Outer", "Outer-Inner", "Outer-Middle", "Outer-Middle-Deepest", "Outer-Hidden",
+                          "Outer-Shadowed", "Tagged", "After"},
                          gate.type_names(text))
 
     def test_a_pattern_that_reads_no_type_is_refused(self):
