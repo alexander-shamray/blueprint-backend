@@ -487,17 +487,18 @@ def main() -> int:
         entry = permissions[user]
         name = user[: -len(USER_SUFFIX)]
         sends, _ = code[next(k for k in directories if k.lower() == name)]
-        addressed = set().union(*(derived_names(queue) for queue in sends))
-
         # A delay exchange republishes into its queue, so a foreign endpoint's derived names are its own.
-        for queue in sorted(every_endpoint - sends):
+        # A peer queue the source sends to is owed by check 1, and none of the names derived from it.
+        for queue in sorted(every_endpoint):
             if queue.startswith(f"{name}-"):
                 continue
-            resource = first_covered(entry["write"], sorted(derived_names(queue) - addressed))
-            if resource:
-                fail(f"{user}: write COVERS `{resource}`, which is neither its own nor "
-                     f"addressed by its source. Broker write access would again be "
-                     f"sufficient to execute another service's business command (#44)")
+            foreign = sorted(derived_names(queue) - sends)
+            for verb in ("configure", "write", "read"):
+                resource = first_covered(entry[verb], foreign)
+                if resource:
+                    fail(f"{user}: {verb} COVERS `{resource}`, which is neither its own nor "
+                         f"addressed by its source. Configure deletes it, write puts another "
+                         f"service's business command on it, and read consumes it (#44)")
 
         for prefix in sorted(prefixes - {owned_contract(user)}):
             if prefix == f"{INTERFACE_EXCHANGE.split(':')[0]}:":

@@ -69,9 +69,9 @@
     {
       "user": "ordering-svc",
       "vhost": "/",
-      "configure": "^(ordering-|inventory-commands|payments-commands|Common\\.Contracts|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "write": "^(ordering-|inventory-commands|payments-commands|Common\\.Contracts(\\.Ordering\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(ordering-|inventory-commands|payments-commands|Common\\.Contracts|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)"
+      "configure": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "write": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts(\\.Ordering\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "read": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)"
     },
     {
       "user": "inventory-svc",
