@@ -92,10 +92,9 @@ value at the prompt. The two substitutions escape a backslash or a double quote
 in it, which curl's config syntax would otherwise read as its own:
 
 ```bash
-kubectl -n <ns> port-forward svc/rabbitmq 15672:15672 &
-
-# Read, never typed into a command: neither value reaches the shell's history,
-# and printf is a builtin, so neither reaches a process list either.
+# The port-forward above still runs. Read, never typed into a command:
+# neither value reaches the shell's history, and printf is a builtin, so
+# neither reaches a process list either.
 umask 077
 read -r -p 'operator: ' OPERATOR
 read -rs -p 'password: ' OPERATOR_PASSWORD; echo
