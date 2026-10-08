@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Common.Infrastructure.Transport;
 using Ordering.Application.Orders;
 using Ordering.Domain.Orders;
 using Ordering.Infrastructure.Messaging;
@@ -25,6 +26,9 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // ADR-079, before any connection below is opened.
+        services.AddTransportSecurity();
+
         // §7.1's runtime identity, no DDL; EnableRetryOnFailure makes §6.3's CreateExecutionStrategy a real retry.
         services.AddDbContext<OrderingDbContext>(o =>
             o.UseSqlServer(

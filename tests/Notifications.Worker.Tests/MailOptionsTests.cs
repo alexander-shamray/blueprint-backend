@@ -1,3 +1,4 @@
+using Common.TestSupport;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -63,7 +64,8 @@ public sealed class MailOptionsTests
         // The factory's defaults are Development's: plain, anonymous, which Program.cs must refuse elsewhere.
         using NotificationsWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit);
         using WebApplicationFactory<Program> production =
-            factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+            factory.WithWebHostBuilder(b => b.UseEnvironment("Production").AcceptPlaintext(
+                "Notifications", "RabbitMq"));
 
         Should
             .Throw<InvalidOperationException>(() => production.Services)

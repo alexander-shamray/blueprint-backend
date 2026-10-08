@@ -1,3 +1,4 @@
+using Common.TestSupport;
 using MailKit.Security;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -52,7 +53,8 @@ public sealed class MailTlsTests(MailpitFixture fixture) : IAsyncLifetime
         CancellationToken ct = TestContext.Current.CancellationToken;
         using NotificationsWorkerFactory factory = StartTls(Mailpit.CertificateName, fixture.SelfSigned.Port);
         using WebApplicationFactory<Program> production =
-            factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+            factory.WithWebHostBuilder(b => b.UseEnvironment("Production").AcceptPlaintext(
+                "Notifications", "RabbitMq"));
         using OutboundCount counted = OutboundCounter.Unavailable(production.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
@@ -70,7 +72,8 @@ public sealed class MailTlsTests(MailpitFixture fixture) : IAsyncLifetime
         CancellationToken ct = TestContext.Current.CancellationToken;
         using NotificationsWorkerFactory factory = StartTls(fixture.Plain.Host, fixture.Plain.Port);
         using WebApplicationFactory<Program> production =
-            factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+            factory.WithWebHostBuilder(b => b.UseEnvironment("Production").AcceptPlaintext(
+                "Notifications", "RabbitMq"));
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
             production.Services.GetRequiredService<IMailChannel>().SendAsync(Mail(), ct));

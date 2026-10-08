@@ -1,3 +1,4 @@
+using Common.Infrastructure.Transport;
 using Inventory.Application.Reservations;
 using Inventory.Domain.Reservations;
 using Inventory.Domain.Stock;
@@ -25,6 +26,9 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // ADR-079, before any connection below is opened.
+        services.AddTransportSecurity();
+
         // §7.1's runtime identity, no DDL; EnableRetryOnFailure makes §6.3's CreateExecutionStrategy a real retry.
         services.AddDbContext<InventoryDbContext>(o =>
             o.UseSqlServer(

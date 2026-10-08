@@ -59,6 +59,8 @@ COPIED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/OutboxMessageConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/InboxMessageConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/IdempotencyMarkerConfiguration.cs",
+        # ADR-079's check as every migrator reaches it, through its own Infrastructure (§4.2).
+        "src/Services/Catalog/Catalog.Infrastructure/Persistence/MigratorTransport.cs",
         # §13.6's per-lane gauges. They travel for the reason the outbox table
         # does: every publishing service hosts the dispatcher, the alerts group by
         # service_name, and a rendered service without them is covered by

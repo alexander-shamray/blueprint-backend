@@ -1,3 +1,4 @@
+using Common.TestSupport;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -436,7 +437,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     {
         using ShippingWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit, address);
         using WebApplicationFactory<Program> production =
-            factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+            factory.WithWebHostBuilder(b => b.UseEnvironment("Production").AcceptPlaintext(
+                "Shipping", "RabbitMq"));
 
         if (starts)
             production.Services.GetRequiredService<ICarrierGateway>().ShouldNotBeNull();
