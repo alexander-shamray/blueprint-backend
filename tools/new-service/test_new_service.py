@@ -1066,7 +1066,8 @@ class EditsTheSharedFiles(unittest.TestCase):
         # And it binds no context the render does not subscribe it to: the
         # template's Inventory consumer is omitted, so its grant goes with it.
         self.assertEqual("^(zulu-|Common\\.Contracts(\\.Zulu\\.V1:|:)|MassTransit:)", permission["configure"])
-        self.assertEqual("^(zulu-|Common\\.Contracts\\.Zulu\\.V1:|MassTransit:)", permission["read"])
+        self.assertEqual("^(zulu-|Common\\.Contracts\\.Zulu\\.V1:|MassTransit:(ReceiveFault$|Fault--))",
+                         permission["read"])
 
     def test_the_service_gets_the_redis_user_its_unit_names(self):
         # §8.1's per-service ACL user: the unit's connection strings name it,
@@ -1900,8 +1901,9 @@ class RendersAPureConsumer(unittest.TestCase):
 
         definitions = json.loads(self.rendered.updated["deploy/compose/rabbitmq/definitions.json"])
         permission = next(e for e in definitions["permissions"] if e["user"] == f"{PROBE.lower()}-svc")
-        for verb in ("configure", "write", "read"):
+        for verb in ("configure", "write"):
             self.assertEqual(f"^({PROBE.lower()}-|MassTransit:)", permission[verb])
+        self.assertEqual(f"^({PROBE.lower()}-|MassTransit:(ReceiveFault$|Fault--))", permission["read"])
 
     def test_no_outbox_meter_line_is_written(self):
         self.assertNotIn(new_service.OBSERVABILITY, self.rendered.updated)

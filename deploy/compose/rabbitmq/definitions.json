@@ -64,49 +64,49 @@
       "vhost": "/",
       "configure": "^(catalog-|Common\\.Contracts(\\.Catalog\\.V1:|\\.Inventory\\.V1:|:)|MassTransit:)",
       "write": "^(catalog-|Common\\.Contracts(\\.Catalog\\.V1:|:)|MassTransit:)",
-      "read": "^(catalog-|Common\\.Contracts\\.Catalog\\.V1:|Common\\.Contracts\\.Inventory\\.V1:|MassTransit:)"
+      "read": "^(catalog-|Common\\.Contracts\\.Catalog\\.V1:|Common\\.Contracts\\.Inventory\\.V1:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "ordering-svc",
       "vhost": "/",
       "configure": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts(\\.(Catalog|Inventory|Ordering|Payments|Shipping)\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts(\\.Ordering\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts\\.(Catalog|Inventory|Ordering|Payments|Shipping)\\.V1:|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)"
+      "read": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts\\.(Catalog|Inventory|Ordering|Payments|Shipping)\\.V1:|Ordering\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "inventory-svc",
       "vhost": "/",
       "configure": "^(inventory-|Common\\.Contracts(\\.(Inventory|Ordering|Shipping)\\.V1:|:)|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(inventory-|Common\\.Contracts(\\.Inventory\\.V1:|:)|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(inventory-|Common\\.Contracts\\.(Inventory|Ordering|Shipping)\\.V1:|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)"
+      "read": "^(inventory-|Common\\.Contracts\\.(Inventory|Ordering|Shipping)\\.V1:|Inventory\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "payments-svc",
       "vhost": "/",
       "configure": "^(payments-|Common\\.Contracts(\\.(Ordering|Payments)\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(payments-|Common\\.Contracts(\\.Payments\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(payments-|Common\\.Contracts\\.(Ordering|Payments)\\.V1:|Payments\\.Infrastructure\\.Messaging:|MassTransit:)"
+      "read": "^(payments-|Common\\.Contracts\\.(Ordering|Payments)\\.V1:|Payments\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "shipping-svc",
       "vhost": "/",
       "configure": "^(shipping-|Common\\.Contracts(\\.(Ordering|Shipping)\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(shipping-|Common\\.Contracts\\.(Ordering|Shipping)\\.V1:|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)"
+      "read": "^(shipping-|Common\\.Contracts\\.(Ordering|Shipping)\\.V1:|Shipping\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "notifications-svc",
       "vhost": "/",
       "configure": "^(notifications-|Common\\.Contracts\\.(Ordering|Payments|Shipping)\\.V1:|MassTransit:)",
       "write": "^(notifications-|MassTransit:)",
-      "read": "^(notifications-|Common\\.Contracts\\.(Ordering|Payments|Shipping)\\.V1:|MassTransit:)"
+      "read": "^(notifications-|Common\\.Contracts\\.(Ordering|Payments|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "bff-svc",
       "vhost": "/",
       "configure": "^(bff-|Common\\.Contracts\\.(Catalog|Ordering|Payments|Shipping)\\.V1:|MassTransit:)",
       "write": "^(bff-|MassTransit:)",
-      "read": "^(bff-|Common\\.Contracts\\.(Catalog|Ordering|Payments|Shipping)\\.V1:|MassTransit:)"
+      "read": "^(bff-|Common\\.Contracts\\.(Catalog|Ordering|Payments|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "dead-letter-operator",

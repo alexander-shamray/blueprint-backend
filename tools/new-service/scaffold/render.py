@@ -1329,7 +1329,8 @@ def update_broker_definitions(repo_root: Path, names: Names) -> str:
         # nothing yet, so it binds no contract exchange, and writes only its own
         # endpoints and the fault exchanges, since §3.2 gives it nothing to publish.
         bound = f"^({names.lower}-|MassTransit:)"
-        grant = {"configure": bound, "write": bound, "read": bound}
+        faults = f"^({names.lower}-|MassTransit:(ReceiveFault$|Fault--))"
+        grant = {"configure": bound, "write": bound, "read": faults}
 
     definitions["permissions"].append({
         "user": user,

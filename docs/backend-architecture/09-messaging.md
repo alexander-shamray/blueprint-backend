@@ -1289,7 +1289,13 @@ public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, Cance
 > not offer. **Nor is `read` on a peer's command endpoint avoidable**: a send
 > to `queue:inventory-commands` declares and binds it, `queue.bind` takes
 > `read` on the exchange, and a RabbitMQ permission pattern cannot tell a queue
-> from an exchange — so granting the bind grants the consume.
+> from an exchange — so granting the bind grants the consume. **Nor are the
+> fault exchanges any service's own**: MassTransit names one per message type,
+> `MassTransit:Fault--<type>--`, and `MassTransit:ReceiveFault` is one
+> exchange every service may publish to, so the `read` and `configure` a
+> service needs to publish its own faults reach every service's — a queue of
+> its own bound to a peer's fault exchange receives the messages that faulted
+> there.
 
 **A command reachable both ways maps its origin only as a literal**, written
 where the command is constructed: `CommandOrigin.User` at the endpoint,
