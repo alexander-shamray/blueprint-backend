@@ -821,8 +821,8 @@ public static class OrderEndpoints
                         });
                     }
 
-                    // The other four codes are facts only the workflow can
-                    // state; from a caller they are a claim nobody checks,
+                    // Every other code is a fact only the workflow can
+                    // state; from a caller it is a claim nobody checks,
                     // recorded on the order and counted (ADR-087).
                     if (reason != CancellationReason.CustomerRequest)
                     {
