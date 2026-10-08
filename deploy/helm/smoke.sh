@@ -387,16 +387,45 @@ covered() {
         $0 == want { found = 1 }
         /\/\*\*$/ {
             prefix = substr($0, 1, length($0) - 3)
-            if (index(want, prefix) == 1) { found = 1 }
+            if (want == prefix || index(want, prefix "/") == 1) { found = 1 }
         }
         END { exit found ? 0 : 1 }
     ' "$2"
 }
 
-awk '/^  pull_request:/ { p = 1 } p && /^      - / { print } /^  push:/ { p = 0 }' \
-    "$ROOT/.github/workflows/helm.yml" >"$OUT/pr-paths.txt"
-awk '/^  push:/ { p = 1 } p && /^      - / { print }' \
-    "$ROOT/.github/workflows/helm.yml" >"$OUT/push-paths.txt"
+# One trigger's own `paths:` entries and nothing else, ended by the next key at
+# its depth: a renamed `paths-ignore:` or a step list later in the file is not a
+# filter, and reading either as one passed an inverted or narrowed trigger.
+trigger_paths() {
+    # trigger_paths <trigger> <workflow>
+    awk -v trigger="$1" '
+        /^  [^ ]/ { in_trigger = ($0 ~ "^  " trigger ":"); in_paths = 0; next }
+        in_trigger && /^    [^ ]/ { in_paths = ($0 ~ /^    paths:[ ]*$/); next }
+        in_paths && /^      - / { print }
+    ' "$2"
+}
+
+trigger_paths pull_request "$ROOT/.github/workflows/helm.yml" >"$OUT/pr-paths.txt"
+trigger_paths push "$ROOT/.github/workflows/helm.yml" >"$OUT/push-paths.txt"
+
+# The reader's own cases, so a change to it cannot quietly read nothing.
+printf '%s\n' 'on:' '  pull_request:' '    paths-ignore:' "      - 'deploy/helm/**'" \
+    >"$OUT/inverted.yml"
+printf '%s\n' 'on:' '  push:' '    paths:' "      - 'other/**'" 'jobs:' '  smoke:' '    steps:' \
+    "      - 'deploy/helm/**'" >"$OUT/steps.yml"
+printf '%s\n' "      - 'src/BFF/Web/**'" >"$OUT/narrowed.txt"
+printf '%s\n' 'on:' '  pull_request:' '    paths:' "      - 'a/**'" '  push:' '    paths:' "      - 'b/**'" \
+    >"$OUT/two-triggers.yml"
+not_covered() { ! covered "$@"; }
+check "one trigger's filter is not read as the other's" \
+    not_covered b/x <(trigger_paths pull_request "$OUT/two-triggers.yml")
+check 'a paths-ignore list is not read as a paths filter' \
+    test -z "$(trigger_paths pull_request "$OUT/inverted.yml")"
+check 'a step list after the trigger is not read as its filter' \
+    not_covered deploy/helm <(trigger_paths push "$OUT/steps.yml")
+check 'an entry narrowed to a sibling directory does not cover the input' \
+    not_covered src/BFF/Web.Bff "$OUT/narrowed.txt"
+check 'the push reader still finds a filter entry' covered other/x <(trigger_paths push "$OUT/steps.yml")
 
 # The workflow's own path and this gate's own tree are both on the list:
 # without the first, a change to the trigger lists does not run the gate
