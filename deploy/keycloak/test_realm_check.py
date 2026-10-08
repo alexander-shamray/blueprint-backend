@@ -633,6 +633,13 @@ class EveryClient(Fixture):
         found = self.one(realm(browser(), portal))
         self.assertIn("client 'portal' has a redirectUris entry", found)
 
+    def test_a_client_leaving_the_standard_flow_unset_is_judged_as_one_with_it(self):
+        unset = self.public(clientId="shop", attributes={}, redirectUris=["*"])
+        del unset["standardFlowEnabled"]
+        found = self.problems(realm(browser(), unset))
+        self.assertTrue(any("'shop' has a redirectUris entry" in f for f in found), found)
+        self.assertTrue(any("'shop' is a public client" in f for f in found), found)
+
     def test_a_client_with_no_standard_flow_is_not_held_to_pkce(self):
         api = self.public(clientId="commerce-api", standardFlowEnabled=False, attributes={},
                           redirectUris=["*"])

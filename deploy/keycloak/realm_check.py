@@ -623,7 +623,8 @@ def check_every_client(clients: list[dict], kind: str) -> list[str]:
                 "which lets every page on the internet read its token "
                 "responses; no client here needs it")
 
-        if client.get("standardFlowEnabled") is not True or name == MOBILE_CLIENT:
+        # Keycloak turns the standard flow on for a client that leaves it unset.
+        if client.get("standardFlowEnabled") is False or name == MOBILE_CLIENT:
             continue
         problems += check_redirect_uris(client, kind)
 
