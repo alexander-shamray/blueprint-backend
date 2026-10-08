@@ -606,6 +606,11 @@ class EveryClient(Fixture):
         found = self.one(realm(browser(), self.public(webOrigins=["*"])))
         self.assertIn("'account' declares '*'", found)
 
+    def test_a_wildcard_web_origin_without_the_standard_flow_is_caught_too(self):
+        admin = {"clientId": "admin-cli", "publicClient": True, "standardFlowEnabled": False,
+                 "webOrigins": ["*"]}
+        self.assertIn("'admin-cli' declares '*'", self.one(realm(browser(), admin)))
+
     def test_a_confidential_client_is_held_to_its_redirects_but_not_to_pkce(self):
         portal = self.public(clientId="portal", publicClient=False, attributes={},
                              redirectUris=["https://*"])
