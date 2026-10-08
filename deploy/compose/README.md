@@ -492,5 +492,6 @@ local login is one:
 
 ```bash
 export ConnectionStrings__CatalogMigrator='Server=localhost;Database=Catalog;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
+export DOTNET_ENVIRONMENT=Development   # the job host's default is Production, where ADR-079 refuses that string
 dotnet run --project src/Services/Catalog/Catalog.Migrator
 ```
