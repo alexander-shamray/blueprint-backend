@@ -182,14 +182,15 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         await worker.StartAsync(TestContext.Current.CancellationToken);
 
-        // Staged on the loop's own line, which the direct call above never logs.
+        // Two of the loop's own lines, which the direct call above never logs: only a tick after the first writes the
+        // second, so a loop that logs once and returns ends the wait on IsCompleted instead.
         await FulfilmentSteps.WaitUntil(() =>
-            Task.FromResult(ClaimFailedLogged(broken) || worker.ExecuteTask!.IsCompleted));
+            Task.FromResult(ClaimFailures(broken) >= 2 || worker.ExecuteTask!.IsCompleted));
 
-        // ExecuteTask is the loop, and a faulted one is the host on its way
-        // down: the default BackgroundServiceExceptionBehavior stops it.
-        worker.ExecuteTask!.IsFaulted.ShouldBeFalse();
-        ClaimFailedLogged(broken).ShouldBeTrue();
+        // ExecuteTask is the loop: faulted is the host on its way down under the default
+        // BackgroundServiceExceptionBehavior, and finished is a replica that never polls again.
+        worker.ExecuteTask!.IsCompleted.ShouldBeFalse();
+        ClaimFailures(broken).ShouldBeGreaterThanOrEqualTo(2);
 
         await worker.StopAsync(TestContext.Current.CancellationToken);
     }
@@ -308,8 +309,9 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         CancelKeys().ShouldBeEmpty("the carrier is told nothing about a parcel already collected");
     }
 
-    private static bool ClaimFailedLogged(ShippingWorkerFactory host) =>
-        host.CapturedLogs.Everything.Any(line => line.StartsWith("Fulfilment claim failed", StringComparison.Ordinal));
+    private static int ClaimFailures(ShippingWorkerFactory host) =>
+        host.CapturedLogs.Everything.Count(
+            line => line.StartsWith("Fulfilment claim failed", StringComparison.Ordinal));
 
     private TimeSpan GiveUpAge() =>
         fixture.Factory.Services.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge!.Value;
