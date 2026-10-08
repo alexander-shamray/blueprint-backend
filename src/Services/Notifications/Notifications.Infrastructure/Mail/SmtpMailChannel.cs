@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
@@ -34,6 +35,14 @@ internal sealed partial class SmtpMailChannel(
         AddressParserComplianceMode = RfcComplianceMode.Strict,
         AllowAddressesWithoutDomain = false
     };
+
+    /// <summary>RFC 3463's statuses of the recipient's address or mailbox, as subject.detail: never the sender's.</summary>
+    /// <remarks>
+    /// Bad mailbox, system or syntax, moved, no MX (X.1.1 to X.1.10); undefined, disabled or full (X.2.0 to X.2.2).
+    /// X.1.0 is left out, Postfix's answer for a sender it rejects, and X.4.x is routing, the relay's (RFC 3463).
+    /// </remarks>
+    private static readonly FrozenSet<string> MailboxStatuses =
+        new[] { "1.1", "1.2", "1.3", "1.6", "1.10", "2.0", "2.1", "2.2" }.ToFrozenSet(StringComparer.Ordinal);
 
     private enum Phase
     {
@@ -178,8 +187,8 @@ internal sealed partial class SmtpMailChannel(
 
     /// <summary>Whether a permanent answer to RCPT TO refuses the mailbox, rather than this deployment.</summary>
     /// <remarks>
-    /// An enhanced status decides where the relay sends one: 5.1.x is the address, and any other, such as 5.7.1's
-    /// "relay access denied", is a fault <see cref="Classify"/> names (RFC 3463). Without one, only 550, 551 and 553 do.
+    /// An enhanced status decides where the relay sends one, from <see cref="MailboxStatuses"/>; any other, a sender's
+    /// 5.1.7 or a policy's 5.7.1 among them, is a fault <see cref="Classify"/> names. Without one, 550 to 553 do.
     /// </remarks>
     internal static bool RefusesTheMailbox(SmtpCommandException e)
     {
@@ -189,9 +198,8 @@ internal sealed partial class SmtpMailChannel(
         Match enhanced = EnhancedStatus().Match(e.Message);
 
         return enhanced.Success
-            ? enhanced.Groups["subject"].Value == "1"
-            : e.StatusCode is SmtpStatusCode.MailboxUnavailable or SmtpStatusCode.UserNotLocalTryAlternatePath or
-                SmtpStatusCode.MailboxNameNotAllowed;
+            ? MailboxStatuses.Contains($"{enhanced.Groups["subject"].Value}.{enhanced.Groups["detail"].Value}")
+            : (int)e.StatusCode is >= 550 and <= 553;
     }
 
     // No silent fallback: an unbound value is a host the validator should not have started.
@@ -249,6 +257,6 @@ internal sealed partial class SmtpMailChannel(
     private static partial Regex LanguageTag();
 
     // RFC 3463's class.subject.detail at the start of the reply text, which MailKit keeps after the basic code.
-    [GeneratedRegex(@"\A\s*5\.(?<subject>\d{1,3})\.\d{1,3}(?=\s|\z)")]
+    [GeneratedRegex(@"\A\s*5\.(?<subject>\d{1,3})\.(?<detail>\d{1,3})(?=\s|\z)")]
     private static partial Regex EnhancedStatus();
 }
