@@ -298,7 +298,7 @@ public sealed partial class CachingTokenClient(
     }
 
     /// <summary>Every RFC 6749 §5.2 code's shape: narrower than its NQSCHAR, which admits an echoed form.</summary>
-    [GeneratedRegex("^[a-z_]{1,40}$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\A[a-z_]{1,40}\z", RegexOptions.CultureInvariant)]
     private static partial Regex ErrorCode();
 
     /// <summary>A 5xx, 408 or 429: the shapes <c>AddStandardResilienceHandler</c> treats as transient.</summary>

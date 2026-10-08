@@ -260,6 +260,7 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     [Theory]
     [InlineData("client_secret=local-dev-secret")]
     [InlineData("unauthorized_client\nforged log line")]
+    [InlineData("unauthorized_client\n")]
     [InlineData("Invalid client credentials")]
     [InlineData("an_error_code_long_past_every_registered_one")]
     public async Task An_error_member_not_shaped_like_a_code_is_left_out(string error)
