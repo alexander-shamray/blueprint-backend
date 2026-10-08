@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Common.Contracts.Shipping.V1;
+using Common.Application;
 using Common.Infrastructure;
 using Polly;
 using Shipping.Application.Carrier;
@@ -56,12 +56,12 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
         }
 
         // The reference is a later path segment, and EscapeDataString leaves a dot segment to resolve away. The
-        // tracking number reaches the customer, so it is held to the contract's alphabet too (ADR-084).
+        // tracking number reaches the customer, so it is held to an alphabet that links nowhere (ADR-084).
         return answer is { Status: "booked", Reference: { } reference, TrackingNumber: { } tracking } &&
             ThirdPartyText.Recordable(reference, CarrierLimits.MaxReferenceLength) &&
             reference is not ("." or "..") &&
             ThirdPartyText.Recordable(tracking, CarrierLimits.MaxTrackingNumberLength) &&
-            TrackingNumbers.IsWellFormed(tracking)
+            PlainReference.IsWellFormed(tracking)
             ? new BookingResult.Booked(reference, tracking)
             : throw Unavailable("The carrier booked with a body that is not a booking.");
     }

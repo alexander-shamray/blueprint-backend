@@ -193,7 +193,7 @@ public sealed class OrderProjection(
             LogLevel.Warning,
             new EventId(2, nameof(ValueDropped)),
             "Dropped {Field} on order {OrderId}: blank, longer than its column's {Width} characters, or outside its " +
-            "contract's alphabet.");
+            "alphabet.");
 
     public Task HandleAsync(OrderPlaced integrationEvent, CancellationToken ct)
     {
@@ -351,14 +351,14 @@ public sealed class OrderProjection(
     private string? CurrencyOf(string? currency, Guid orderId) =>
         Fitting(currency, ProjectionLimits.CurrencyLength, "Currency", orderId);
 
-    // The customer reads it, so it is held to the Shipping contract's alphabet as well as the column (ADR-084).
+    // The customer reads it, so it is held to an alphabet that links nowhere as well as the column (ADR-084).
     private string? TrackingOf(string? trackingNumber, Guid orderId) =>
         Fitting(
             trackingNumber,
             ProjectionLimits.TrackingNumberMaxLength,
             "TrackingNumber",
             orderId,
-            TrackingNumbers.IsWellFormed);
+            PlainReference.IsWellFormed);
 
     /// <summary>Another service's text, kept only when non-blank and fitting; a stored one is never replaced.</summary>
     private string? Fitting(string? value, int width, string field, Guid orderId, Func<string, bool>? alphabet = null)

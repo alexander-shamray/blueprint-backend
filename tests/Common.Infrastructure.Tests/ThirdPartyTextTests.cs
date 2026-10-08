@@ -1,10 +1,9 @@
-using Common.Contracts.Shipping.V1;
 using Shouldly;
 using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>ADR-084's two rules: a third party's string is printable, and a tracking number links nowhere.</summary>
+/// <summary>ADR-084's first rule: a string a third party supplies is recorded only when printable.</summary>
 public sealed class ThirdPartyTextTests
 {
     [Theory]
@@ -37,45 +36,17 @@ public sealed class ThirdPartyTextTests
     }
 
     [Fact]
-    public void A_lone_surrogate_is_a_broken_character_in_either_rule()
+    public void A_lone_surrogate_is_a_broken_character()
     {
         // Built here, as theory data would carry the lone half through serialisation as U+FFFD.
         string half = ((char)0xD800).ToString();
 
         ThirdPartyText.Recordable($"psp_{half}x", 64).ShouldBeFalse();
-        TrackingNumbers.IsWellFormed($"TRK{half}1").ShouldBeFalse();
     }
 
     [Fact]
     public void A_character_outside_the_basic_plane_is_one_character_not_a_broken_one()
     {
         ThirdPartyText.Recordable("psp_" + char.ConvertFromUtf32(0x1F4E6), 64).ShouldBeTrue();
-    }
-
-    [Theory]
-    [InlineData("1Z999AA10123456784")]
-    [InlineData("TRK-SIM-OK")]
-    [InlineData("TRK 12 34")]
-    [InlineData("KZ_ӘҒҚ_0042")]
-    public void A_tracking_number_of_letters_digits_and_single_joiners_is_well_formed(string value)
-    {
-        TrackingNumbers.IsWellFormed(value).ShouldBeTrue();
-    }
-
-    [Theory]
-    [InlineData("https://evil.example/track")]
-    [InlineData("www.evil.example")]
-    [InlineData("TRK@evil.example")]
-    [InlineData("TRK:1")]
-    [InlineData("TRK/1")]
-    [InlineData("TRK  12")]
-    [InlineData(" TRK1")]
-    [InlineData("TRK1-")]
-    [InlineData("-")]
-    [InlineData("")]
-    [InlineData(null)]
-    public void A_tracking_number_a_mail_client_could_link_or_that_ends_on_a_joiner_is_not(string? value)
-    {
-        TrackingNumbers.IsWellFormed(value).ShouldBeFalse();
     }
 }
