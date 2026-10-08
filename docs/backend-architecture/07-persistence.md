@@ -220,8 +220,7 @@ internal sealed class OrderLineConfiguration : IEntityTypeConfiguration<OrderLin
 ```
 
 Global conventions cover what would otherwise be repeated in every file.
-`OrderingDbContext` declares them, and `OrderAmounts.Precision` and
-`OrderAmounts.Scale` are 19 and 4:
+`OrderingDbContext` declares them:
 
 ```csharp
 protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
@@ -368,11 +367,12 @@ The Job takes the workload's name (§15.3), then `-migrate-` and the image tag.
 The chart validates the name's length rather than truncating it: Kubernetes
 stamps `job-name` onto the pods it creates and a label value may not exceed 63,
 and a cut can end on a character the API server refuses or give two tags one
-Job. A tag that does not fit is a deploy that must fail, not a name to mangle. `hook-succeeded` is in the delete
-policy as well, or the Jobs accumulate: `before-hook-creation` matches on name,
-and the name embeds the tag. A failed Job is left behind on purpose, because
-the runbook needs it. The connection string is the migrator identity (DDL), not
-the runtime one (§7.1), and its secret is mounted into no API pod.
+Job. A tag that does not fit is a deploy that must fail, not a name to mangle.
+`hook-succeeded` is in the delete policy as well, or the Jobs accumulate:
+`before-hook-creation` matches on name, and the name embeds the tag. A failed
+Job is left behind on purpose, because the runbook needs it. The connection
+string is the migrator identity (DDL), not the runtime one (§7.1), and its
+secret is mounted into no API pod.
 
 Because migrations and application code deploy separately, **every migration
 must be backward compatible with the currently running version**. Renaming a
