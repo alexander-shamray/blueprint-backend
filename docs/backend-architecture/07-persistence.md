@@ -25,7 +25,7 @@ different rights, used by different processes:
 | **Runtime** | The API and worker pods | `SELECT`/`INSERT`/`UPDATE`/`DELETE` on every table in the schema — business and technical alike, which §7.4 lists in three rows rather than two: this platform's outbox, inbox and §8.5 markers, **and MassTransit's own** `InboxState`/`OutboxState`/`OutboxMessage`, which ADR-032's saga middleware reads and writes at runtime. **No DDL.** Enumerating only the first row is how a provisioning script undergrants and the saga stops. | The application never alters schema, so it should be unable to. A SQL injection flaw or a compromised pod cannot drop a table |
 | **Migrator** | The `*.Migrator` job only | DDL on its own database | Elevated rights exist for the seconds the job runs, in a process with no network listener and no user input |
 
-The role grants are the same either way; **how the principal is created is not**,
+The grants are the same either way; **how the principal is created is not**,
 and the difference is the one that stops a copy-pasted script at the first
 semicolon. Managed environments:
 
@@ -55,9 +55,10 @@ CREATE USER [ordering-migrator] FOR LOGIN [ordering-migrator];
 
 ```sql
 -- Identical from here, and the only part worth reviewing.
--- Runtime: data plane only.
-ALTER ROLE db_datareader ADD MEMBER [ordering-runtime];
-ALTER ROLE db_datawriter ADD MEMBER [ordering-runtime];
+-- Runtime: data plane only, and only in the service's schema. Not the
+-- database-wide roles: EF keeps its migrations history in dbo, and a runtime
+-- that could write it could tell the migrator a pending migration had run.
+GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::[ordering] TO [ordering-runtime];
 
 -- Migrator: schema plane, used by the pre-deploy job only.
 ALTER ROLE db_ddladmin   ADD MEMBER [ordering-migrator];
