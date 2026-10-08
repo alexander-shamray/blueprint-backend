@@ -1,0 +1,19 @@
+# The indexer already skips whatever .gitignore ignores, so a line here is only
+# for a path git tracks or leaves untracked: stray binaries outside bin/, the
+# rest of .claude/cache/, and staging/, where a .claude change waits to apply.
+**/*.dll
+**/*.pdb
+.claude/cache/
+staging/
+
+# Closed records: never edited to match the code (CLAUDE.md), so a hit there is
+# history rather than the answer; grep them instead.
+docs/superpowers/
+docs/pr-decision-log.md
+docs/lessons.md
+
+# Generated EF Core migrations. They are 10% of the C# corpus and took 13% of
+# the top-three result slots, crowding out the code a question is about; the
+# filenames and `git log` are how a schema change is found instead.
+**/*.Designer.cs
+**/Migrations/

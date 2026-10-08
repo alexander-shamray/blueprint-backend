@@ -203,3 +203,40 @@ agents and CI watches reporting back, inside a run or after it.
 a2177270, read with `--session`: every response, and its two `Explore`
 and one `bug-auditor` subagents, counted under `/ship` in one context,
 16.2M in all.
+
+## 2026-10-08 — the code index, with and without `.codeindexignore`
+
+Measured with `codebase-index` from PyPI in a cloud session, against
+`main` at 2a15c63, each checkout indexed from scratch. Chunk tokens are
+the index's own `token_est`; a search slot is one of the top five results
+for twelve everyday questions, 60 slots in all, counted when it lands in
+a migration or a closed record.
+
+| `.codeindexignore` | Files | Chunks | Chunk tokens | Index | Slots on excluded paths |
+|---|---|---|---|---|---|
+| none | 1,994 | 16,797 | 4.32M | 39.7 MB | 7 (3 migrations, 4 closed records) |
+| the owner's local file | 1,829 | 16,465 | 4.11M | 36.4 MB | 4 (closed records) |
+| the tracked file | 1,759 | 12,691 | 2.79M | 28.1 MB | 0 |
+
+**The closed records were the larger cost.** `docs/superpowers/` alone was
+3,442 chunks and 1.18M chunk tokens, 27% of the index, against the
+migrations' 330 chunks and 209k.
+
+**The indexer already skips what `.gitignore` ignores**: with no file it
+indexed exactly the 1,994 tracked paths, and an ignored file written into
+`artifacts/`, a `bin/` or `.claude/worktrees/` stayed out after an update,
+while one in untracked `staging/` went in. So a line repeating
+`.gitignore` changes nothing.
+
+**An untracked file does not reach a `/branch` worktree.** Seeded from the
+main checkout's index, as `refresh-index.py` seeds it, a worktree without
+the file went from 1,829 files to 1,994 on its first update, all 165
+migration files back. With the file present it stayed at 1,829.
+
+**Running the CLI by hand rewrites the tracked skill.** One
+`codebase-index --help` from the checkout, without
+`CBX_NO_SKILL_AUTO_UPDATE=1`, replaced seven files under
+`.claude/skills/codebase-index/`, the pinned wrapper grants among them;
+they were restored from `HEAD`. The hooks set the variable and
+`settings.json` sets it for a session, but a shell that did not inherit
+it is not covered.
