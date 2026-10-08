@@ -477,9 +477,9 @@ which reads as a domain assertion failing rather than as missing fixture data.
 Two rules hold for every suite built this way. A helper one suite needs stays
 private to that suite, and the fixture carries only what more than one suite
 needs. And a test that reads a scoped service, `OrderingDbContext` among them,
-resolves it from `Factory.Services.CreateScope()`, never from `Factory.Services`
-itself, which throws under `ValidateScopes` and, where that is off, hands back
-an instance that lives as long as the host.
+resolves it from a scope, `Factory.Services.CreateAsyncScope()`, never from
+`Factory.Services` itself, which throws under `ValidateScopes` and, where that
+is off, hands back an instance that lives as long as the host.
 
 Two assertions belong to the slice beyond its own cases; the split between the
 lanes, the contract type on the Broker lane (§9.3's allow-list) and the domain
@@ -1684,14 +1684,16 @@ running bus into whatever runs next.
 > **A missing scheduler fails this suite in the costume the traps above
 > describe, which is why the registration is spelled out rather than trimmed.**
 > The two scheduler lines are easy to read as ceremony. They are not: with both
-> deleted, every test that places an order fails, **each one as a timeout**,
-> because `Initially` arms the stock timeout and the schedule throws; each
-> reports the command the saga did not send, while the saga's exception faults
-> onto the error queue where no assertion sees it. The tests that never schedule
-> pass throughout: the structural ones that construct the state machine without
-> a bus, and those whose subject schedules nothing, such as an event for an
-> order with no instance. Passing tests beside a deleted registration leave it
-> looking half-covered, which is worse than a suite that fails whole.
+> deleted, every test that places an order fails, because `Initially` arms the
+> stock timeout and the schedule throws, and the saga's exception faults onto
+> the error queue where no assertion sees it. **The ones that wait on a command
+> fail as timeouts**, each reporting the command the saga did not send; the
+> barrier test's as-of-now count fails at once, as its trap above says. The
+> tests that never schedule pass throughout: the structural ones that construct
+> the state machine without a bus, and those whose subject schedules nothing,
+> such as an event for an order with no instance. Passing tests beside a deleted
+> registration leave it looking half-covered, which is worse than a suite that
+> fails whole.
 
 > **Where the numbers live is the other half.** Both samples get them from
 > `StartHarnessAsync`, which builds `OrderFulfilmentSagaHarness`'s one
