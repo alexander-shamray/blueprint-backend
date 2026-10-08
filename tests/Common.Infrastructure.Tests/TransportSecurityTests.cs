@@ -163,6 +163,24 @@ public sealed class TransportSecurityTests
             .ShouldBeEmpty();
     }
 
+    [Fact]
+    public void Every_project_that_builds_a_rabbitmq_bus_asks_the_scheme_for_tls()
+    {
+        // MassTransit reads TLS from the port alone, so a bus built without asking dials amqps:// in plaintext.
+        string root = RepositoryRoot();
+        string[] buses =
+        [
+            .. Directory.GetFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories)
+                .Select(file => Path.GetDirectoryName(file)!)
+                .Where(project => Sources(project).Any(s => s.Contains("UsingRabbitMq(")))
+        ];
+
+        buses.Length.ShouldBeGreaterThan(1, "a scan that found no bus would pass every tree");
+        buses.Where(p => !Sources(p).Any(s => s.Contains("TransportSecurity.IsTls(")))
+            .Select(p => Path.GetRelativePath(root, p))
+            .ShouldBeEmpty();
+    }
+
     private static IEnumerable<string> Sources(string project) =>
         Directory.EnumerateFiles(project, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") &&

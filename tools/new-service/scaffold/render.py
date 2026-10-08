@@ -88,6 +88,7 @@ COPIED = frozenset(
         "tests/Catalog.Api.Tests/IntegrationCollection.cs",
         "tests/Catalog.Api.Tests/MessageTypeMapValidatorTests.cs",
         "tests/Catalog.Api.Tests/MessagingRegistrationTests.cs",
+        "tests/Catalog.Api.Tests/BrokerTlsTests.cs",
         "tests/Catalog.Api.Tests/MetricsRegistrationTests.cs",
         "tests/Catalog.Api.Tests/InboxFilterTests.cs",
         "tests/Catalog.Api.Tests/OutboxDispatcherTests.cs",

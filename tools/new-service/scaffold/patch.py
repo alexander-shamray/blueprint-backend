@@ -568,10 +568,10 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "            x.DisableUsageTelemetry();\n",
         ),
         (
-            "                cfg.Host(new Uri(connectionString));\n"
+            "                });\n"
             "\n"
             "                cfg.ConfigureStockLevelEndpoint(context);\n",
-            "                cfg.Host(new Uri(connectionString));\n",
+            "                });\n",
         ),
     ),
     # §8.5's marker suite travels, and its anti-vacuity floor is INVERTED for
