@@ -195,7 +195,7 @@ def sends_and_consumes(directory: Path) -> tuple[set[str], set[str]]:
     """
     sends: set[str] = set()
     consumes: set[str] = set()
-    for path in sorted(directory.glob("*.cs")):
+    for path in sorted(directory.rglob("*.cs")):
         text = read(path)
         sends |= set(re.findall(r'new\("queue:([A-Za-z0-9._-]+)"\)', text))
         consumes |= set(re.findall(r'Queue = "([A-Za-z0-9._-]+)"', text))
@@ -221,16 +221,25 @@ def private_namespace(directory: Path) -> str | None:
     return None
 
 
-def referenced_contexts(directory: Path) -> set[str]:
-    """Every `Common.Contracts.<Context>.V<n>:` prefix a service's Messaging code names.
+def referenced_contexts(directory: Path, names: dict[str, set[str]]) -> set[str]:
+    """Every `Common.Contracts.<Context>.V<n>:` prefix a service's Messaging code names, or names a type of.
 
-    These are the contexts whose exchanges it declares and binds, so the ones
-    its configure and read are owed and the only ones they may reach.
+    These are the contexts whose exchanges it declares and binds. A type counts
+    so a namespace arriving by a global using is not missed, and only a type
+    one context alone declares, so a shared name reaches neither.
     """
+    owners: dict[str, set[str]] = {}
+    for prefix, declared in names.items():
+        if prefix.startswith("Common.Contracts."):
+            for type_name in declared:
+                owners.setdefault(type_name, set()).add(prefix)
     found: set[str] = set()
-    for path in sorted(directory.glob("*.cs")):
+    for path in sorted(directory.rglob("*.cs")):
         code = code_only(read(path), keep_strings=False)
         found |= {f"{match}:" for match in re.findall(r"\bCommon\.Contracts\.[A-Za-z0-9_]+\.V\d+\b", code)}
+        for identifier in set(re.findall(r"\b[A-Za-z_]\w*\b", code)):
+            if len(owners.get(identifier, ())) == 1:
+                found |= owners[identifier]
     return found
 
 
@@ -352,8 +361,8 @@ def main() -> int:
     code = {name: sends_and_consumes(path) for name, path in directories.items()}
     private = {name: private_namespace(path) for name, path in directories.items()}
     names = declared_names([*CONTRACTS.rglob("*.cs"), *(
-        path for directory in directories.values() for path in directory.glob("*.cs"))])
-    referenced = {name: referenced_contexts(path) & prefixes for name, path in directories.items()}
+        path for directory in directories.values() for path in directory.rglob("*.cs"))])
+    referenced = {name: referenced_contexts(path, names) & prefixes for name, path in directories.items()}
 
     # THE GATE'S OWN SUBJECT, before anything relies on it. A scan that found
     # nothing would agree with any permission set at all, which is this

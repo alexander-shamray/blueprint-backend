@@ -401,13 +401,40 @@ class ConfigureAndReadAreBoundedToo(unittest.TestCase):
             planted.write_text("using Common.Contracts.Ordering.V1;\n"
                                "// Common.Contracts.Payments.V1 is not consumed here.\n"
                                "const string S = \"Common.Contracts.Shipping.V1\";\n", encoding="utf-8")
-            self.assertEqual({"Common.Contracts.Ordering.V1:"}, gate.referenced_contexts(Path(directory)))
-        found = gate.referenced_contexts(gate.messaging_dirs()["Shipping"])
+            self.assertEqual({"Common.Contracts.Ordering.V1:"}, gate.referenced_contexts(Path(directory), self.names()))
+        found = gate.referenced_contexts(gate.messaging_dirs()["Shipping"], self.names())
         self.assertEqual({"Common.Contracts.Ordering.V1:"}, found)
+
+    @staticmethod
+    def names() -> dict[str, set[str]]:
+        return gate.declared_names(gate.CONTRACTS.rglob("*.cs"))
+
+    def test_a_context_named_only_by_its_type_is_read(self):
+        # A namespace imported by a global using leaves the type alone in the file.
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "Consumers.cs").write_text(
+                "x.AddConsumer<IntegrationEventConsumer<PaymentDeclined>>();\n", encoding="utf-8")
+            self.assertEqual({"Common.Contracts.Payments.V1:"}, gate.referenced_contexts(Path(directory), self.names()))
+
+    def test_a_type_two_contexts_declare_reaches_neither(self):
+        names = {"Common.Contracts.Ordering.V1:": {"Line"}, "Common.Contracts.Payments.V1:": {"Line"}}
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "Consumers.cs").write_text("Line line = new();\n", encoding="utf-8")
+            self.assertEqual(set(), gate.referenced_contexts(Path(directory), names))
+
+    def test_a_subdirectory_of_messaging_is_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            nested = Path(directory) / "Sagas"
+            nested.mkdir()
+            (nested / "Saga.cs").write_text("using Common.Contracts.Shipping.V1;\n"
+                                            "Uri a = new(\"queue:shipping-commands\");\n"
+                                            "const string ReplyQueue = \"probe-replies\";\n", encoding="utf-8")
+            self.assertEqual({"Common.Contracts.Shipping.V1:"}, gate.referenced_contexts(Path(directory), self.names()))
+            self.assertEqual(({"shipping-commands"}, {"probe-replies"}), gate.sends_and_consumes(Path(directory)))
 
     def test_a_pattern_that_finds_no_context_is_refused(self):
         original = gate.referenced_contexts
-        gate.referenced_contexts = lambda directory: set()
+        gate.referenced_contexts = lambda directory, names: set()
         try:
             failures = run_against(real())
         finally:
