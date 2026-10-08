@@ -35,6 +35,7 @@ public sealed class TransportSecurityTests
     [InlineData("Ordering", $"Server=sql;Password={Echo};Trust Server Certificate=yes")]
     [InlineData("Ordering", "Server=sql;Password=\"unterminated")]
     [InlineData("rediscache", $"redis-cache:6379,user=svc,password={Echo}")]
+    [InlineData("Ordering", $"Server=sql;Password={Echo};TrustServerCertificate=False;Trust Server Certificate=True")]
     public void A_plaintext_or_unverified_hop_is_refused_outside_development(string name, string value)
     {
         string? refusal = InProduction(name, value);
