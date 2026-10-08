@@ -533,6 +533,22 @@
     }
   ],
   "clientScopeMappings": {
+    "commerce-api": [
+      {
+        "client": "shipping-worker",
+        "roles": [
+          "orders:delivery-address"
+        ]
+      }
+    ],
+    "realm-management": [
+      {
+        "client": "notifications-worker",
+        "roles": [
+          "view-users"
+        ]
+      }
+    ],
     "account": [
       {
         "client": "account-console",
@@ -1069,7 +1085,7 @@
         "backchannel.logout.revoke.offline.tokens": "false"
       },
       "authenticationFlowBindingOverrides": {},
-      "fullScopeAllowed": true,
+      "fullScopeAllowed": false,
       "nodeReRegistrationTimeout": -1,
       "defaultClientScopes": [
         "web-origins",
@@ -1084,7 +1100,6 @@
         "address",
         "phone",
         "organization",
-        "offline_access",
         "microprofile-jwt"
       ],
       "access": {
@@ -1121,7 +1136,7 @@
         "backchannel.logout.revoke.offline.tokens": "false"
       },
       "authenticationFlowBindingOverrides": {},
-      "fullScopeAllowed": true,
+      "fullScopeAllowed": false,
       "nodeReRegistrationTimeout": -1,
       "defaultClientScopes": [
         "web-origins",
@@ -1135,7 +1150,6 @@
         "address",
         "phone",
         "organization",
-        "offline_access",
         "microprofile-jwt"
       ],
       "access": {

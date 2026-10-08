@@ -127,21 +127,38 @@ class Stubbed(unittest.TestCase):
             json.dumps(claims).encode("utf-8")).decode("ascii").rstrip("=")
         return f"header.{payload}.signature"
 
-    def answers(self, representation, clients):
-        """One realm document and one client list, served the way Keycloak does.
+    def answers(self, representation, clients, scopes=(), mappings=None, own_roles=None):
+        """One realm, its clients and their scopes, served the way Keycloak does.
 
-        The `max` ceiling is honoured here rather than ignored, because a stub
-        that answered the whole list whatever was asked would make the ceiling
-        untested while looking covered.
-        """
+        The `max` ceiling is honoured, or it would be untested while looking
+        covered; a client given no `id` gets one, as Keycloak always answers it,
+        and `mappings` and `own_roles` are keyed by the subject's id."""
+        listed = [dict(client, id=client.get("id", f"client-id-{n}")) if isinstance(client, dict)
+                  else client for n, client in enumerate(clients)]
+
         def get(url: str, _access: str):
-            if "/clients" not in url:
+            path = urllib.parse.urlsplit(url).path
+            subject = urllib.parse.unquote(path.split("/")[-2])
+            if path.endswith("/scope-mappings"):
+                return (mappings or {}).get(subject, {})
+            if path.endswith("/roles"):
+                return (own_roles or {}).get(subject, [])
+            if path.endswith("/client-scopes"):
+                return list(scopes) if isinstance(scopes, (list, tuple)) else scopes
+            if not path.endswith("/clients"):
                 return representation
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
             most = int(query.get("max", [str(read_admin.CLIENT_LIMIT)])[0])
-            return clients[:most]
+            return listed[:most]
 
         read_admin.get = get
+
+    def recording(self) -> list[str]:
+        """Every URL the stub `answers` installed is asked, in order."""
+        asked: list[str] = []
+        served = read_admin.get
+        read_admin.get = lambda url, access: asked.append(url) or served(url, access)
+        return asked
 
 
 class TheJoin(Stubbed):
@@ -175,6 +192,70 @@ class TheJoin(Stubbed):
         self.assertIn("client list", str(stop.exception))
 
 
+class TheScopeJoin(Stubbed):
+    """Scope mappings and own roles are regrouped into an export's keys, and nothing is dropped (ADR-077)."""
+
+    CLIENTS = [{"clientId": "w", "id": "w-id"}, {"clientId": "b", "id": "b/id"}]
+    SCOPES = [{"id": "p-id", "name": "profile", "protocolMappers": []}]
+
+    def fetched(self, mappings=None, own_roles=None) -> dict:
+        self.answers({"realm": "commerce"}, self.CLIENTS, self.SCOPES, mappings, own_roles)
+        return read_admin.fetch(self.values)
+
+    def test_a_client_s_realm_and_client_mappings_land_where_an_export_keeps_them(self):
+        realm = self.fetched({"w-id": {
+            "realmMappings": [{"name": "offline_access"}],
+            "clientMappings": {"commerce-api": {"client": "commerce-api", "mappings": [{"name": "x"}]}}}})
+        self.assertEqual(realm["scopeMappings"], [{"client": "w", "roles": ["offline_access"]}])
+        self.assertEqual(realm["clientScopeMappings"], {"commerce-api": [{"client": "w", "roles": ["x"]}]})
+
+    def test_a_scope_s_mappings_name_it_as_a_client_scope(self):
+        realm = self.fetched({"p-id": {"realmMappings": [{"name": "offline_access"}]}})
+        self.assertEqual(realm["scopeMappings"], [{"clientScope": "profile", "roles": ["offline_access"]}])
+        self.assertEqual(realm["clientScopes"], [{"name": "profile", "protocolMappers": []}])
+
+    def test_each_client_s_own_roles_are_keyed_by_its_client_id_even_when_empty(self):
+        realm = self.fetched(own_roles={"w-id": [{"name": "own", "composite": True}]})
+        self.assertEqual(realm["roles"], {"client": {"w": [{"name": "own"}], "b": []}})
+
+    def test_an_id_is_one_path_segment_whatever_it_holds(self):
+        self.answers({"realm": "commerce"}, self.CLIENTS, self.SCOPES)
+        asked = self.recording()
+        read_admin.fetch(self.values)
+        self.assertIn("/clients/b%2Fid/roles", " ".join(asked))
+        self.assertFalse(any("/b/id/" in url for url in asked), asked)
+
+    def test_a_client_scope_answer_that_is_not_a_list_stops(self):
+        self.answers({"realm": "commerce"}, self.CLIENTS, {"name": "profile"})
+        with self.assertRaises(SystemExit) as stop:
+            read_admin.fetch(self.values)
+        self.assertIn("client-scope list", str(stop.exception))
+
+    def test_a_subject_with_no_id_stops_rather_than_going_unread(self):
+        self.answers({"realm": "commerce"}, self.CLIENTS, [{"name": "profile"}])
+        with self.assertRaises(SystemExit) as stop:
+            read_admin.fetch(self.values)
+        self.assertIn("carries no id and name", str(stop.exception))
+
+    def test_a_mapping_answer_that_is_not_a_mapping_document_stops(self):
+        with self.assertRaises(SystemExit) as stop:
+            self.fetched({"w-id": []})
+        self.assertIn("not a mapping document", str(stop.exception))
+
+    def test_an_unnamed_role_stops(self):
+        with self.assertRaises(SystemExit) as stop:
+            self.fetched(own_roles={"w-id": [{"id": "r"}]})
+        self.assertIn("list of named roles", str(stop.exception))
+
+    def test_a_representation_already_carrying_a_joined_key_stops(self):
+        for key in ("clientScopes", "scopeMappings", "clientScopeMappings", "roles"):
+            with self.subTest(key=key):
+                self.answers({"realm": "commerce", key: []}, self.CLIENTS, self.SCOPES)
+                with self.assertRaises(SystemExit) as stop:
+                    read_admin.fetch(self.values)
+                self.assertIn(f"already carries a {key} key", str(stop.exception))
+
+
 class TheCeiling(Stubbed):
     """Completeness is refused rather than inferred.
 
@@ -190,16 +271,10 @@ class TheCeiling(Stubbed):
         return [{"clientId": f"client-{n}"} for n in range(count)]
 
     def test_the_request_asks_for_the_whole_realm_at_once(self):
-        asked = []
-
-        def get(url: str, _access: str):
-            if "/clients" not in url:
-                return {"realm": "commerce"}
-            asked.append(url)
-            return self.realm_of(9)
-
-        read_admin.get = get
+        self.answers({"realm": "commerce"}, self.realm_of(9))
+        recorded = self.recording()
         self.assertEqual(len(read_admin.fetch(self.values)["clients"]), 9)
+        asked = [url for url in recorded if urllib.parse.urlsplit(url).path.endswith("/clients")]
         self.assertEqual(len(asked), 1, asked)
         self.assertIn(f"max={read_admin.CLIENT_LIMIT}", asked[0])
         # `first` is not sent: there is nothing to skip when the ceiling is the
@@ -469,6 +544,8 @@ class WhatItWrites(Stubbed):
                  "attributes": {"use.refresh.tokens": "true",
                                 "pkce.code.challenge.method": "S256"}},
                 {"clientId": realm_check.WORKER_CLIENT,
+                 "id": "worker-id",
+                 "fullScopeAllowed": False,
                  "enabled": True,
                  "standardFlowEnabled": False,
                  "implicitFlowEnabled": False,
@@ -479,6 +556,8 @@ class WhatItWrites(Stubbed):
                  "optionalClientScopes": ["address"],
                  "webOrigins": []},
                 {"clientId": realm_check.CONTACT_CLIENT,
+                 "id": "contact-id",
+                 "fullScopeAllowed": False,
                  "enabled": True,
                  "standardFlowEnabled": False,
                  "implicitFlowEnabled": False,
@@ -499,12 +578,24 @@ class WhatItWrites(Stubbed):
                  "optionalClientScopes": ["address"],
                  "webOrigins": []}]
 
+    def serve(self, representation: dict, mappings: dict | None = None) -> None:
+        """The compliant clients, their scopes, and each worker's grant as its only scope mapping."""
+        scopes = [{"id": f"{name}-id", "name": name, "protocolMappers": []}
+                  for name in ("basic", "roles", "address")]
+        scopes.append({"id": "commerce-api-id", "name": "commerce-api", "protocolMappers": [
+            {"name": "commerce-api-audience", "protocolMapper": "oidc-audience-mapper",
+             "config": {"included.client.audience": "commerce-api"}}]})
+        granted = {"worker-id": {"clientMappings": {"commerce-api": {
+                       "client": "commerce-api", "mappings": [{"name": "orders:delivery-address"}]}}},
+                   "contact-id": {"clientMappings": {"realm-management": {
+                       "client": "realm-management", "mappings": [{"name": "view-users"}]}}}}
+        self.answers(representation, self.clients(), scopes, {**granted, **(mappings or {})})
+
     def test_what_read_admin_writes_is_what_realm_check_accepts(self):
         import realm_check
 
-        self.answers({"realm": "commerce", "accessTokenLifespan": 300,
-                      "revokeRefreshToken": True, "refreshTokenMaxReuse": 0},
-                     self.clients())
+        self.serve({"realm": "commerce", "accessTokenLifespan": 300,
+                    "revokeRefreshToken": True, "refreshTokenMaxReuse": 0})
         self.assertEqual(self.run_main(), 0)
 
         # Read back through the deploy path's own two calls, not through json.
@@ -520,9 +611,8 @@ class WhatItWrites(Stubbed):
         """
         import realm_check
 
-        self.answers({"realm": "commerce", "accessTokenLifespan": 18000,
-                      "revokeRefreshToken": True, "refreshTokenMaxReuse": 0},
-                     self.clients())
+        self.serve({"realm": "commerce", "accessTokenLifespan": 18000,
+                    "revokeRefreshToken": True, "refreshTokenMaxReuse": 0})
         self.run_main()
         found = realm_check.check_realm(
             realm_check.load_realm(self.out), realm_check.DEPLOYED, 300)
@@ -534,13 +624,8 @@ class TheRealmSegmentIsEscaped(Stubbed):
     """`/` in a realm name must not change which realm is read."""
 
     def test_a_traversal_in_the_realm_name_does_not_reach_another_realm(self):
-        seen = []
-
-        def get(url: str, _access: str):
-            seen.append(url)
-            return [] if "/clients" in url else {"realm": "commerce"}
-
-        read_admin.get = get
+        self.answers({"realm": "commerce"}, [{"clientId": "web-app"}], [{"id": "s", "name": "basic"}])
+        seen = self.recording()
         self.values[read_admin.REALM] = "commerce/../master"
         read_admin.fetch(self.values)
         self.assertTrue(all("/../" not in url for url in seen), seen)

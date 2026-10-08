@@ -116,6 +116,19 @@ BFF_CLIENT = "web-bff"
 
 NAMED_CLIENTS = (BROWSER_CLIENT, MOBILE_CLIENT, WORKER_CLIENT, CONTACT_CLIENT, BFF_CLIENT)
 
+# Each worker's grant as ADR-052 names it, which its own scope mappings must
+# equal once fullScopeAllowed is off, so the issuer caps its token (ADR-077).
+SCOPE_CAPS = {
+    WORKER_CLIENT: {"commerce-api": ("orders:delivery-address",)},
+    CONTACT_CLIENT: {"realm-management": ("view-users",)},
+}
+
+# The scope whose mappers name the audience every service validates and write
+# §11.4's permission claim; on a service-account client nothing else may.
+AUDIENCE_SCOPE = "commerce-api"
+AUDIENCE_MAPPER = "oidc-audience-mapper"
+WRITTEN_CLAIMS = ("aud", "permission")
+
 # Grants a client turns on by attribute rather than by flag. No obligation
 # names one for any client, so each is refused wherever it is on; Keycloak
 # reads only "true" as on, and this refuses anything but "false".
@@ -185,9 +198,15 @@ REALM_FIELDS = ("accessTokenLifespan", "revokeRefreshToken", "refreshTokenMaxReu
 CLIENT_FIELDS = ("clientId", "enabled", "standardFlowEnabled", "implicitFlowEnabled",
                  "directAccessGrantsEnabled", "serviceAccountsEnabled", "publicClient",
                  "redirectUris", "defaultClientScopes", "optionalClientScopes", "webOrigins",
-                 "rootUrl")
+                 "rootUrl", "fullScopeAllowed")
 CLIENT_ATTRIBUTES = ("use.refresh.tokens", "access.token.lifespan",
                      "pkce.code.challenge.method", *GRANT_ATTRIBUTES)
+
+# What decides a service-account token's roles and claims: mappers by type and
+# claim, scope mappings by subject, and each client's own role names.
+MAPPER_FIELDS = ("name", "protocolMapper")
+MAPPER_CONFIG = ("claim.name",)
+MAPPING_FIELDS = ("client", "clientScope", "roles")
 
 LOCAL = "local"
 DEPLOYED = "deployed"
@@ -237,6 +256,7 @@ FLAGS = (
     "directAccessGrantsEnabled",
     "serviceAccountsEnabled",
     "enabled",
+    "fullScopeAllowed",
 )
 
 
@@ -308,11 +328,68 @@ def judged(document: dict) -> dict:
                 key: attributes[key] for key in CLIENT_ATTRIBUTES if key in attributes}
         elif "attributes" in client:
             narrowed["attributes"] = attributes
+        if "protocolMappers" in client:
+            narrowed["protocolMappers"] = narrowed_mappers(client["protocolMappers"])
         clients.append(narrowed)
 
     if "clients" in document:
         realm["clients"] = clients
+
+    scopes = document.get("clientScopes")
+    if isinstance(scopes, list):
+        realm["clientScopes"] = [
+            {key: narrowed_mappers(scope[key]) if key == "protocolMappers" else scope[key]
+             for key in ("name", "protocolMappers") if key in scope}
+            if isinstance(scope, dict) else scope for scope in scopes]
+    elif "clientScopes" in document:
+        realm["clientScopes"] = scopes
+
+    if "scopeMappings" in document:
+        realm["scopeMappings"] = narrowed_mappings(document["scopeMappings"])
+    mappings = document.get("clientScopeMappings")
+    if isinstance(mappings, dict):
+        realm["clientScopeMappings"] = {owner: narrowed_mappings(entries) for owner, entries in mappings.items()}
+    elif "clientScopeMappings" in document:
+        realm["clientScopeMappings"] = mappings
+
+    # Client roles only, by name: a client's own roles are always in its token's scope.
+    roles = document.get("roles")
+    if not isinstance(roles, dict):
+        if "roles" in document:
+            realm["roles"] = roles
+    elif isinstance(roles.get("client"), dict):
+        realm["roles"] = {"client": {
+            owner: [{"name": role.get("name")} if isinstance(role, dict) else role for role in own]
+            if isinstance(own, list) else own
+            for owner, own in roles["client"].items()}}
+    elif "client" in roles:
+        realm["roles"] = {"client": roles["client"]}
     return realm
+
+
+def narrowed_mappers(mappers: object) -> object:
+    """Each mapper cut to its name, its type and the claim it writes; a malformed one survives to be refused."""
+    if not isinstance(mappers, list):
+        return mappers
+    kept: list = []
+    for mapper in mappers:
+        if not isinstance(mapper, dict):
+            kept.append(mapper)
+            continue
+        one = {key: mapper[key] for key in MAPPER_FIELDS if key in mapper}
+        config = mapper.get("config")
+        if isinstance(config, dict):
+            one["config"] = {key: config[key] for key in MAPPER_CONFIG if key in config}
+        kept.append(one)
+    return kept
+
+
+def narrowed_mappings(entries: object) -> object:
+    """Scope-mapping entries cut to their subject and role names, in an export's shape."""
+    if not isinstance(entries, list):
+        return entries
+    return [{key: entry[key] for key in MAPPING_FIELDS if key in entry} if isinstance(entry, dict) else entry
+            for entry in entries]
 
 
 def authority_of(values: dict) -> str:
@@ -478,6 +555,14 @@ def check_realm(realm: dict, kind: str, lifetime: int) -> list[str]:
         problems += check_contact_client(contact[0])
     if bff:
         problems += check_bff_client(bff[0])
+
+    problems += check_scope_documents(realm)
+    for found, name in ((worker, WORKER_CLIENT), (contact, CONTACT_CLIENT), (bff, BFF_CLIENT)):
+        if found:
+            problems += check_token_writers(realm, found[0], name)
+    for found, name in ((worker, WORKER_CLIENT), (contact, CONTACT_CLIENT)):
+        if found:
+            problems += check_scope_cap(realm, found[0], name)
     return problems
 
 
@@ -871,11 +956,10 @@ def check_service_account_client(
 
 
 def check_worker_client(client: dict) -> list[str]:
-    """ADR-052's ceiling on the address reader, as far as a realm document reaches.
-
-    Its grant lives on its service account's user, out of reach of both
-    documents this gate reads; what is left is the client's own shape and the
-    scope whose mapper writes the `permission` claim at all."""
+    """ADR-052's ceiling on the address reader: the client's own shape, and the
+    scope whose mapper writes the `permission` claim at all. Its grant lives on
+    its service account's user, which this gate does not read; the cap on what
+    reaches its token is `check_scope_cap`'s (ADR-077)."""
     problems, defaults, optional = check_service_account_client(
         client, WORKER_CLIENT, "address",
         "Its secret is a deployment value, so the blast radius of that secret "
@@ -947,6 +1031,167 @@ def check_bff_client(client: dict) -> list[str]:
             "scope, which resolves in the wrong direction for a grant that "
             "names no scope (§11.5)")
 
+    return problems
+
+
+def check_scope_documents(realm: dict) -> list[str]:
+    """The four documents a service-account token's cap and claims are read from.
+
+    Absent is refused rather than read as empty: `read_admin.py` always writes
+    them, so a realm without one is a realm whose cap nobody read."""
+    shapes = {"clientScopes": (list, "array"), "scopeMappings": (list, "array"),
+              "clientScopeMappings": (dict, "object")}
+    problems = [
+        f"the realm document carries no {key} {shape}, so what a service-account "
+        "token carries would be judged against nothing (ADR-077)"
+        for key, (kind, shape) in shapes.items() if not isinstance(realm.get(key), kind)]
+    roles = realm.get("roles")
+    if not isinstance(roles, dict) or not isinstance(roles.get("client"), dict):
+        problems.append(
+            "the realm document carries no roles.client object, so whether a "
+            "worker defines a role of its own, which is in its token's scope "
+            "whatever its mappings say, would go unjudged (ADR-077)")
+    return problems
+
+
+def held_scopes(client: dict) -> list:
+    """Both scope lists, in order, ignoring what `check_service_account_client` refuses."""
+    held: list = []
+    for key in ("defaultClientScopes", "optionalClientScopes"):
+        listed = client.get(key)
+        held += listed if isinstance(listed, list) else []
+    return held
+
+
+def defined_scopes(realm: dict) -> dict:
+    scopes = realm.get("clientScopes")
+    return {scope["name"]: scope for scope in scopes if isinstance(scope, dict)
+            and isinstance(scope.get("name"), str)} if isinstance(scopes, list) else {}
+
+
+def check_token_writers(realm: dict, client: dict, name: str) -> list[str]:
+    """Only the commerce-api scope names the audience or writes the permission claim.
+
+    Read from the client's own mappers and every other scope it holds (ADR-077).
+    The roles scope's audience-resolve mapper names only the clients whose roles
+    the token carries, so the cap, not this check, bounds it."""
+    problems: list[str] = []
+    scopes = defined_scopes(realm)
+    sources = [("the client itself", client.get("protocolMappers"))]
+    for scope in held_scopes(client):
+        if scope not in scopes:
+            # An absent scope list is `check_scope_documents`' one finding, not one per scope.
+            if isinstance(realm.get("clientScopes"), list):
+                problems.append(
+                f"client {name!r} holds the client scope {scope!r}, which the realm "
+                "does not define, so what that scope maps and writes into the "
+                "token cannot be judged")
+        elif scope != AUDIENCE_SCOPE:
+            sources.append((f"the client scope {scope!r}", scopes[scope].get("protocolMappers")))
+
+    writers: list[str] = []
+    for where, mappers in sources:
+        if mappers is None:
+            continue
+        if not isinstance(mappers, list):
+            problems.append(f"client {name!r} reads protocolMappers from {where} that are not an array, "
+                            "which Keycloak never serialises; this is a hand-edited realm")
+            continue
+        for mapper in mappers:
+            config = mapper.get("config") if isinstance(mapper, dict) else None
+            claim = config.get("claim.name") if isinstance(config, dict) else None
+            if not isinstance(mapper, dict):
+                problems.append(f"client {name!r} reads a mapper from {where} that is not an object")
+            elif (mapper.get("protocolMapper") == AUDIENCE_MAPPER
+                  or (isinstance(claim, str) and claim.strip() in WRITTEN_CLAIMS)):
+                writers.append(f"{where}'s mapper {mapper.get('name')!r}")
+    if writers:
+        problems.append(
+            f"client {name!r} has the audience or the permission claim written by "
+            f"{', '.join(writers)}. Only the {AUDIENCE_SCOPE} scope may write either, "
+            "and a token carrying them is one every service accepts and authorises "
+            "(ADR-052, ADR-077)")
+    return problems
+
+
+def mapped_roles(realm: dict, side: str, subject: str) -> tuple[set[str], dict[str, set[str]], bool]:
+    """The realm roles and each client's roles mapped into one subject's scope.
+
+    `side` is `client` or `clientScope`, an export's two subject keys. The
+    third value says a mapping entry was malformed, which the caller refuses."""
+    realm_roles: set[str] = set()
+    client_roles: dict[str, set[str]] = {}
+    malformed = False
+    owners = realm.get("clientScopeMappings")
+    groups = [(None, realm.get("scopeMappings"))] + (
+        list(owners.items()) if isinstance(owners, dict) else [])
+    for owner, entries in groups:
+        for entry in entries if isinstance(entries, list) else []:
+            if not isinstance(entry, dict):
+                malformed = True
+                continue
+            if entry.get(side) != subject:
+                continue
+            roles = entry.get("roles")
+            if not isinstance(roles, list) or not all(isinstance(role, str) for role in roles):
+                malformed = True
+                continue
+            target = realm_roles if owner is None else client_roles.setdefault(owner, set())
+            target.update(roles)
+    return realm_roles, {owner: roles for owner, roles in client_roles.items() if roles}, malformed
+
+
+def described(realm_roles: set[str], client_roles: dict[str, set[str]]) -> str:
+    parts = [f"realm {sorted(realm_roles)}"] if realm_roles else []
+    parts += [f"{owner} {sorted(roles)}" for owner, roles in sorted(client_roles.items())]
+    return "; ".join(parts) or "nothing"
+
+
+def check_scope_cap(realm: dict, client: dict, name: str) -> list[str]:
+    """The issuer caps the worker's token at ADR-052's grant (ADR-077).
+
+    With fullScopeAllowed off, Keycloak keeps a role in the token only where the
+    client, a scope it holds or its own role list puts it in scope, so those
+    three are what is judged; the account's own roles are not read."""
+    problems: list[str] = []
+    if client.get("fullScopeAllowed") is not False:
+        problems.append(
+            f"client {name!r} has fullScopeAllowed={client.get('fullScopeAllowed')!r}. "
+            "Keycloak then puts every role its service account holds into the token, "
+            "and an over-grant on that account is in no document this gate reads "
+            "(ADR-077)")
+
+    expected = {owner: set(roles) for owner, roles in SCOPE_CAPS[name].items()}
+    realm_roles, client_roles, malformed = mapped_roles(realm, "client", name)
+    if malformed:
+        problems.append(f"client {name!r} has a scope-mapping entry that is not an object with a "
+                        "list of role names, which Keycloak never serialises")
+    if realm_roles or client_roles != expected:
+        problems.append(
+            f"client {name!r} maps {described(realm_roles, client_roles)} into its scope, "
+            f"not exactly {described(set(), expected)}. With fullScopeAllowed off that "
+            "is the ceiling on its token, so anything wider is a grant ADR-052 did not "
+            "size and anything narrower a read refused")
+
+    scopes = defined_scopes(realm)
+    for scope in held_scopes(client):
+        if scope not in scopes:
+            continue
+        scope_realm, scope_clients, _ = mapped_roles(realm, "clientScope", scope)
+        if scope_realm or scope_clients:
+            problems.append(
+                f"client {name!r} holds the client scope {scope!r}, which maps "
+                f"{described(scope_realm, scope_clients)} into the scope of every "
+                "client holding it, so the cap above is widened through it")
+
+    roles = realm.get("roles")
+    owned = roles.get("client", {}).get(name) if isinstance(roles, dict) and isinstance(
+        roles.get("client"), dict) else None
+    if owned:
+        problems.append(
+            f"client {name!r} defines roles of its own. Keycloak keeps a client's own "
+            "roles in its token's scope whatever its mappings say, so a composite one "
+            "carries what it composes past the cap")
     return problems
 
 

@@ -37,7 +37,7 @@ Its message names which of four it is:
 | The exception says | The cause |
 |---|---|
 | *did not issue this host a usable token* | The identity provider refused the `shipping-worker` client: its secret is wrong or rotated on one side only, or the client is disabled |
-| *permission(s) where ADR-052 names exactly one* | The `service-account-shipping-worker` user no longer holds exactly `orders:delivery-address` on `commerce-api`, one too few or one too many |
+| *permission(s) where ADR-052 names exactly one* | The token no longer carries exactly `orders:delivery-address`: the `service-account-shipping-worker` user lost that role, or the `shipping-worker` client's cap moved — its scope mapping changed, or full scope was turned back on ([ADR-077](../backend-architecture/adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md)) |
 | *a token that is not a JWT* | The realm is issuing opaque tokens to this client |
 | *Ordering refused this host's token with …* | Ordering rejected a token the worker accepted: `Unauthenticated` is an issuer or audience the two hosts disagree on, `PermissionDenied` a grant Ordering's policy does not find |
 
@@ -51,9 +51,10 @@ never reach Ordering's logs.
   match the client's secret in the realm, then restart the worker so it reads
   the new value.
 - **A grant.** Give the service account back exactly
-  `orders:delivery-address` and nothing more. A second permission is refused
-  too, deliberately: the worker holding more than it reads is the failure
-  ADR-052 exists to prevent.
+  `orders:delivery-address` and nothing more, and the client back its cap:
+  full scope off and that role its one scope mapping (ADR-077). A second
+  permission is refused too, deliberately: the worker holding more than it
+  reads is the failure ADR-052 exists to prevent.
 - **An issuer or audience.** Compare the two hosts' `Identity` configuration;
   both name the one realm ([§11.3](../backend-architecture/11-identity-authorization.md)).
 

@@ -54,7 +54,7 @@ with the refusal as its exception. Its message names which of four it is:
 | The exception says | The cause |
 |---|---|
 | *did not issue this host a usable token* | The identity provider refused the `notifications-worker` client: its secret is wrong or rotated on one side only, or the client is disabled |
-| *realm-management role(s) where ADR-052 names* | The `service-account-notifications-worker` user no longer holds exactly its grant on `realm-management`, one too few or one too many |
+| *realm-management role(s) where ADR-052 names* | The token no longer carries exactly the grant on `realm-management`: the `service-account-notifications-worker` user lost `view-users`, or the `notifications-worker` client's cap moved — its scope mapping changed, or full scope was turned back on ([ADR-077](../backend-architecture/adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md)) |
 | *a token that is not a JWT* | The realm is issuing opaque tokens to this client |
 | *Keycloak refused this host's token with …* | The admin API rejected a token the worker accepted: `401` is a token it does not accept for this realm, `403` a grant it does not find |
 
@@ -69,9 +69,10 @@ three never reach it.
   [`docs/secrets.md`](../secrets.md)'s client-secret procedure, then restart
   the worker so it reads the new value.
 - **A grant.** Give the service account back exactly the grant
-  [`docs/secrets.md`](../secrets.md) names for it, and nothing more. A wider
-  grant is refused too, deliberately: the worker holding more than it reads is
-  the failure ADR-052 exists to prevent.
+  [`docs/secrets.md`](../secrets.md) names for it, and nothing more, and the
+  client back its cap: full scope off and that role its one scope mapping
+  (ADR-077). A wider grant is refused too, deliberately: the worker holding
+  more than it reads is the failure ADR-052 exists to prevent.
 - **An issuer or realm.** Compare `identity.authority` with
   `contactSource.baseUrl` and `contactSource.realm`; the render refuses a
   realm that is not the authority's, so a mismatch here is a base URL pointing
