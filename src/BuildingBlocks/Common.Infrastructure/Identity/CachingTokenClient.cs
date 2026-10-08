@@ -179,12 +179,17 @@ public sealed partial class CachingTokenClient(
         }
         catch (HttpRequestException e) when (e.HttpRequestError == HttpRequestError.ConfigurationLimitExceeded)
         {
+            HttpStatusCode status = response.StatusCode;
             response.Dispose();
-
-            throw new InvalidOperationException(
+            string message =
                 $"The identity provider answered '{request.RequestUri}' with more than {MaxAnswerBytes} bytes, " +
-                "which no discovery document or token response comes near; this is a misrouted authority (§11.5).",
-                e);
+                "which no discovery document or token response comes near (§11.5).";
+
+            // A proxy's oversized error page on a transient status is still transient, so it stays retried.
+            if (IsTransient(status))
+                throw new HttpRequestException(message, e, status);
+
+            throw new InvalidOperationException(message, e);
         }
         catch
         {
