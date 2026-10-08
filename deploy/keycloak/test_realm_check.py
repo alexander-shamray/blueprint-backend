@@ -839,9 +839,8 @@ class TheWebOrigins(Fixture):
     def test_a_relative_redirect_is_not_evidence_that_plus_derives_nothing(self):
         """Keycloak resolves a relative redirect against the client's `rootUrl`.
 
-        So `+` beside `redirectUris: ["/*"]` is an ordinary configuration whose
-        origin this gate cannot see, and the first draft failed it — refusing a
-        realm that was correct. The gate holds no `rootUrl` and does not guess.
+        So `+` beside `redirectUris: ["/*"]` is an ordinary configuration, and
+        `check_web_origins` reads it as "cannot tell" rather than refusing it.
         """
         spa = browser(webOrigins=["+"], redirectUris=["/*"])
         self.assertEqual(self.problems(realm(spa, mobile())), [])
