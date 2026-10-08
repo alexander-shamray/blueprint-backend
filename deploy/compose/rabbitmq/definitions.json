@@ -69,44 +69,44 @@
     {
       "user": "ordering-svc",
       "vhost": "/",
-      "configure": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "configure": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts(\\.(Catalog|Inventory|Ordering|Payments|Shipping)\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts(\\.Ordering\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)"
+      "read": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts\\.(Catalog|Inventory|Ordering|Payments|Shipping)\\.V1:|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)"
     },
     {
       "user": "inventory-svc",
       "vhost": "/",
-      "configure": "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "configure": "^(inventory-|Common\\.Contracts(\\.(Inventory|Ordering|Shipping)\\.V1:|:)|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(inventory-|Common\\.Contracts(\\.Inventory\\.V1:|:)|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)"
+      "read": "^(inventory-|Common\\.Contracts\\.(Inventory|Ordering|Shipping)\\.V1:|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)"
     },
     {
       "user": "payments-svc",
       "vhost": "/",
-      "configure": "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "configure": "^(payments-|Common\\.Contracts(\\.(Ordering|Payments)\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(payments-|Common\\.Contracts(\\.Payments\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)"
+      "read": "^(payments-|Common\\.Contracts\\.(Ordering|Payments)\\.V1:|Payments\\.Infrastructure\\.Messaging:|MassTransit:)"
     },
     {
       "user": "shipping-svc",
       "vhost": "/",
-      "configure": "^(shipping-|Common\\.Contracts|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "configure": "^(shipping-|Common\\.Contracts(\\.(Ordering|Shipping)\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(shipping-|Common\\.Contracts|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)"
+      "read": "^(shipping-|Common\\.Contracts\\.(Ordering|Shipping)\\.V1:|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)"
     },
     {
       "user": "notifications-svc",
       "vhost": "/",
-      "configure": "^(notifications-|Common\\.Contracts|MassTransit:)",
+      "configure": "^(notifications-|Common\\.Contracts\\.(Ordering|Payments|Shipping)\\.V1:|MassTransit:)",
       "write": "^(notifications-|MassTransit:)",
-      "read": "^(notifications-|Common\\.Contracts|MassTransit:)"
+      "read": "^(notifications-|Common\\.Contracts\\.(Ordering|Payments|Shipping)\\.V1:|MassTransit:)"
     },
     {
       "user": "bff-svc",
       "vhost": "/",
-      "configure": "^(bff-|Common\\.Contracts|MassTransit:)",
+      "configure": "^(bff-|Common\\.Contracts\\.(Catalog|Ordering|Payments|Shipping)\\.V1:|MassTransit:)",
       "write": "^(bff-|MassTransit:)",
-      "read": "^(bff-|Common\\.Contracts|MassTransit:)"
+      "read": "^(bff-|Common\\.Contracts\\.(Catalog|Ordering|Payments|Shipping)\\.V1:|MassTransit:)"
     },
     {
       "user": "dead-letter-operator",

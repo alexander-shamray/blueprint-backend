@@ -1267,10 +1267,19 @@ def update_env_example(repo_root: Path, names: Names) -> str:
     return restore(text.rstrip("\n") + "\n\n" + block + "\n", newline)
 
 
+# What the template's configure and read grant for the StockLevelConsumer.cs the
+# render omits. A rendered service subscribes to nothing, and check_permissions.py
+# refuses an account that may bind a context its Messaging code never names.
+TEMPLATE_SUBSCRIPTION = {
+    "configure": r"\.Inventory\.V1:|",
+    "read": r"Common\.Contracts\.Inventory\.V1:|",
+}
+
+
 def update_broker_definitions(repo_root: Path, names: Names) -> str:
     """A broker account for the new service, without which it cannot authenticate (§14.1, ADR-036).
 
-    Catalog's publisher grant renamed, or a consumer's grant for a pure consumer; check_permissions.py
+    Catalog's publisher grant renamed less its subscription, or a consumer's for a pure consumer; check_permissions.py
     derives what each service needs and fails when a grant is short. The hash is computed, never copied,
     so the template's password does not authenticate under the new name."""
     import base64
@@ -1304,13 +1313,23 @@ def update_broker_definitions(repo_root: Path, names: Names) -> str:
         "hashing_algorithm": "rabbit_password_hashing_sha256",
         "tags": [],
     })
-    grant = {verb: names.rename(template_permission[verb]) for verb in ("configure", "write", "read")}
+    def unsubscribed(verb: str) -> str:
+        granted = template_permission[verb]
+        cut = TEMPLATE_SUBSCRIPTION.get(verb)
+        if cut is None:
+            return granted
+        if granted.count(cut) != 1:
+            raise ScaffoldError(
+                f"{relative}: {template_user}'s {verb} grant does not hold its subscription `{cut}` once")
+        return granted.replace(cut, "")
+
+    grant = {verb: names.rename(unsubscribed(verb)) for verb in ("configure", "write", "read")}
     if names.pure_consumer:
-        # A consumer's shape, not the template's publisher's: it declares and reads
-        # the contract exchanges it binds, and writes only its own endpoints and
-        # the fault exchanges, since §3.2 gives it nothing to publish (ADR-036).
-        bound = f"^({names.lower}-|Common\\.Contracts|MassTransit:)"
-        grant = {"configure": bound, "write": f"^({names.lower}-|MassTransit:)", "read": bound}
+        # A consumer's shape, not the template's publisher's: it subscribes to
+        # nothing yet, so it binds no contract exchange, and writes only its own
+        # endpoints and the fault exchanges, since §3.2 gives it nothing to publish.
+        bound = f"^({names.lower}-|MassTransit:)"
+        grant = {"configure": bound, "write": bound, "read": bound}
 
     definitions["permissions"].append({
         "user": user,

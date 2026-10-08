@@ -1063,6 +1063,11 @@ class EditsTheSharedFiles(unittest.TestCase):
         self.assertNotIn("Catalog", permission["write"])
         self.assertNotIn("ordering-", permission["write"])
 
+        # And it binds no context the render does not subscribe it to: the
+        # template's Inventory consumer is omitted, so its grant goes with it.
+        self.assertEqual("^(zulu-|Common\\.Contracts(\\.Zulu\\.V1:|:)|MassTransit:)", permission["configure"])
+        self.assertEqual("^(zulu-|Common\\.Contracts\\.Zulu\\.V1:|MassTransit:)", permission["read"])
+
     def test_the_service_gets_the_redis_user_its_unit_names(self):
         # §8.1's per-service ACL user: the unit's connection strings name it,
         # and an instance with no such user refuses every command it sends.
@@ -1895,9 +1900,8 @@ class RendersAPureConsumer(unittest.TestCase):
 
         definitions = json.loads(self.rendered.updated["deploy/compose/rabbitmq/definitions.json"])
         permission = next(e for e in definitions["permissions"] if e["user"] == f"{PROBE.lower()}-svc")
-        self.assertEqual(f"^({PROBE.lower()}-|MassTransit:)", permission["write"])
-        for verb in ("configure", "read"):
-            self.assertEqual(f"^({PROBE.lower()}-|Common\\.Contracts|MassTransit:)", permission[verb])
+        for verb in ("configure", "write", "read"):
+            self.assertEqual(f"^({PROBE.lower()}-|MassTransit:)", permission[verb])
 
     def test_no_outbox_meter_line_is_written(self):
         self.assertNotIn(new_service.OBSERVABILITY, self.rendered.updated)
@@ -2029,6 +2033,20 @@ class RefusesToRun(unittest.TestCase):
         for name in ("zulu", "Zulu.Api", "order-ing", "", "Zulu\n", "Zulu\nEvil"):
             with self.assertRaises(ScaffoldError):
                 render(name=name)
+
+    def test_a_template_grant_whose_subscription_moved(self):
+        # The render cuts the template's Inventory grant by its spelling; a respelt one must stop it, not pass through.
+        with tempfile.TemporaryDirectory() as directory:
+            root = template_copy(Path(directory))
+            definitions = root / "deploy/compose/rabbitmq/definitions.json"
+            text = definitions.read_text(encoding="utf-8")
+            respelt = text.replace("\\\\.Inventory\\\\.V1:|", "\\\\.Inventory\\\\.V2:|", 1)
+            self.assertNotEqual(text, respelt, "the case, not the render")
+            definitions.write_text(respelt, encoding="utf-8")
+
+            with self.assertRaises(ScaffoldError) as raised:
+                render(repo_root=root)
+            self.assertIn("does not hold its subscription", str(raised.exception))
 
     def test_the_template_cannot_be_its_own_copy(self):
         with self.assertRaises(ScaffoldError):

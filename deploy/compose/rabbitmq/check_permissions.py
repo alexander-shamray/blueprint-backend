@@ -211,6 +211,19 @@ def private_namespace(directory: Path) -> str | None:
     return None
 
 
+def referenced_contexts(directory: Path) -> set[str]:
+    """Every `Common.Contracts.<Context>.V<n>:` prefix a service's Messaging code names.
+
+    These are the contexts whose exchanges it declares and binds, so the ones
+    its configure and read are owed and the only ones they may reach.
+    """
+    found: set[str] = set()
+    for path in sorted(directory.glob("*.cs")):
+        code = code_only(read(path), keep_strings=False)
+        found |= {f"{match}:" for match in re.findall(r"\bCommon\.Contracts\.[A-Za-z0-9_]+\.V\d+\b", code)}
+    return found
+
+
 def declared_names(paths) -> dict[str, set[str]]:
     """Every type each file declares, keyed by its namespace's exchange prefix.
 
@@ -330,6 +343,7 @@ def main() -> int:
     private = {name: private_namespace(path) for name, path in directories.items()}
     names = declared_names([*CONTRACTS.rglob("*.cs"), *(
         path for directory in directories.values() for path in directory.glob("*.cs"))])
+    referenced = {name: referenced_contexts(path) & prefixes for name, path in directories.items()}
 
     # THE GATE'S OWN SUBJECT, before anything relies on it. A scan that found
     # nothing would agree with any permission set at all, which is this
@@ -347,6 +361,9 @@ def main() -> int:
     if not any(private.values()):
         fail("no service's Messaging namespace could be read — the pattern, not the "
              "source. Every private-vocabulary check below would pass vacuously")
+    if not any(referenced.values()):
+        fail("no service's Messaging code names a Common.Contracts context — the pattern, not the "
+             "source. Every configure and read bound below would refuse the contexts consumed")
     for prefix in sorted(prefixes | set(filter(None, private.values()))):
         if not names.get(prefix):
             fail(f"`{prefix}` declares no type the pattern can read — the pattern, not the "
@@ -443,6 +460,15 @@ def main() -> int:
             for resource in filter(None, covered):
                 fail(f"{user}: write COVERS `{resource}`, and the service has no Domain "
                      f"project to publish from (§4.1, §3.2)")
+            if matches(entry["configure"], INTERFACE_EXCHANGE):
+                fail(f"{user}: configure COVERS `{INTERFACE_EXCHANGE}`, which only a publisher "
+                     f"declares, and the service has no Domain project to publish from (§4.1)")
+
+        # 3c. Nobody reads the interface exchange: it is only ever a binding's
+        #     destination, and a queue bound to it receives every context's events.
+        if matches(entry["read"], INTERFACE_EXCHANGE):
+            fail(f"{user}: read COVERS `{INTERFACE_EXCHANGE}`. A queue of its own bound there "
+                 f"receives every integration event of every context")
 
         # 4. It may publish its OWN context's contracts — WHERE IT HAS ANY.
         #
@@ -456,9 +482,19 @@ def main() -> int:
         # The vacuity this skip could hide is caught once, globally, below.
         owned = owned_contract(user)
         if owned in prefixes:
-            for verb in ("configure", "write"):
+            # Read too: the publisher binds each contract to the interface exchange, which takes read on the source.
+            for verb in ("configure", "write", "read"):
                 if not matches(entry[verb], f"{owned}Anything"):
                     fail(f"{user}: {verb} does not cover its own contracts `{owned}`")
+
+        # 4b. It may declare and bind every context its Messaging code names.
+        for prefix in sorted(referenced[service]):
+            for verb in ("configure", "read"):
+                missing = next((r for r in probes(prefix, names) if not matches(entry[verb], r)), None)
+                if missing:
+                    fail(f"{user}: {verb} does not cover `{missing}`, in `{prefix}`, which its "
+                         f"Messaging code names. Its consumer cannot declare or bind the exchange, "
+                         f"and MassTransit retries the topology for ever, service healthy and silent")
 
     # The derivation's own subject, asserted once rather than per service. If
     # check 4 skipped EVERY service the `*-svc` -> `Common.Contracts.<Name>.V1:`
@@ -500,6 +536,7 @@ def main() -> int:
                          f"addressed by its source. Configure deletes it, write puts another "
                          f"service's business command on it, and read consumes it (#44)")
 
+        service = next(k for k in directories if k.lower() == name)
         for prefix in sorted(prefixes - {owned_contract(user)}):
             if prefix == f"{INTERFACE_EXCHANGE.split(':')[0]}:":
                 continue
@@ -507,6 +544,14 @@ def main() -> int:
             if resource:
                 fail(f"{user}: write COVERS `{resource}`, another context's contracts "
                      f"`{prefix}`. A service that can publish a peer's events can forge them")
+            if prefix in referenced[service]:
+                continue
+            for verb in ("configure", "read"):
+                resource = first_covered(entry[verb], probes(prefix, names))
+                if resource:
+                    fail(f"{user}: {verb} COVERS `{resource}`, in `{prefix}`, which its Messaging "
+                         f"code never names. Configure deletes that exchange, and read binds a "
+                         f"queue of its own to it and receives the context's events")
 
         # AND NOBODY ELSE'S PRIVATE VOCABULARY. `Common.Contracts` is the
         # published half; a service also owns messages nothing outside it ever
@@ -520,12 +565,13 @@ def main() -> int:
         for owner, prefix in sorted(private.items()):
             if not prefix or prefix == mine:
                 continue
-            resource = first_covered(entry["write"], probes(prefix, names))
-            if resource:
-                fail(f"{user}: write COVERS `{resource}`, in {owner}'s private "
-                     f"messaging vocabulary. Nothing outside that service publishes "
-                     f"those messages, and a peer that can is a peer that can forge "
-                     f"a scheduled timeout (§9.6)")
+            for verb in ("configure", "write", "read"):
+                resource = first_covered(entry[verb], probes(prefix, names))
+                if resource:
+                    fail(f"{user}: {verb} COVERS `{resource}`, in {owner}'s private "
+                         f"messaging vocabulary. Nothing outside that service declares, "
+                         f"publishes or consumes those messages, and a peer that can is a "
+                         f"peer that can forge or swallow a scheduled timeout (§9.6)")
 
     check_operator(definitions, permissions, code, prefixes, private, names)
 

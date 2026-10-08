@@ -339,6 +339,82 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
                 for f in failures), failures)
 
 
+class ConfigureAndReadAreBoundedToo(unittest.TestCase):
+    """Each account declares and binds its own context and the ones its Messaging code names, and no others."""
+
+    SERVICES = ("catalog-svc", "ordering-svc", "inventory-svc", "payments-svc", "shipping-svc",
+                "notifications-svc", "bff-svc")
+
+    def failures_with(self, user: str, verb: str, change) -> list[str]:
+        definitions = real()
+        entry = permission(definitions, user)
+        before = entry[verb]
+        entry[verb] = change(before)
+        self.assertNotEqual(before, entry[verb], "the case, not the gate")
+        return run_against(definitions)
+
+    def test_every_account_widened_to_everything_is_refused(self):
+        for user in self.SERVICES:
+            for verb in ("configure", "read"):
+                with self.subTest(user=user, verb=verb):
+                    failures = self.failures_with(user, verb, lambda _: ".*")
+                    self.assertTrue(any(f.startswith(f"{user}: {verb} COVERS") for f in failures), failures)
+
+    def test_a_context_the_service_does_not_consume(self):
+        for verb in ("configure", "read"):
+            with self.subTest(verb=verb):
+                failures = self.failures_with("shipping-svc", verb, lambda grant: grant.replace(
+                    "|MassTransit:", r"|Common\.Contracts\.Payments\.V1:|MassTransit:"))
+                self.assertTrue(
+                    any(f"shipping-svc: {verb} COVERS `Common.Contracts.Payments.V1:" in f for f in failures), failures)
+
+    def test_a_context_the_service_consumes_left_out(self):
+        for verb in ("configure", "read"):
+            with self.subTest(verb=verb):
+                failures = self.failures_with("shipping-svc", verb, lambda grant: grant.replace("Ordering|", ""))
+                self.assertTrue(
+                    any(f"shipping-svc: {verb} does not cover `Common.Contracts.Ordering.V1:" in f for f in failures),
+                    failures)
+
+    def test_its_own_contracts_left_out_of_read(self):
+        failures = self.failures_with(
+            "catalog-svc", "read", lambda grant: grant.replace(r"Common\.Contracts\.Catalog\.V1:|", ""))
+        self.assertTrue(any("catalog-svc: read does not cover its own contracts" in f for f in failures), failures)
+
+    def test_the_interface_exchange_read(self):
+        failures = self.failures_with(
+            "catalog-svc", "read", lambda grant: grant.replace("|MassTransit:", r"|Common\.Contracts:|MassTransit:"))
+        self.assertTrue(
+            any("catalog-svc: read COVERS `Common.Contracts:IIntegrationEvent`" in f for f in failures), failures)
+
+    def test_a_peer_s_private_vocabulary_configured(self):
+        failures = self.failures_with(
+            "catalog-svc", "configure",
+            lambda grant: grant.replace("|MassTransit:", r"|Ordering\.Infrastructure\.Messaging:|MassTransit:"))
+        self.assertTrue(
+            any("catalog-svc: configure COVERS `Ordering.Infrastructure.Messaging:" in f for f in failures), failures)
+
+    def test_the_contexts_are_the_ones_the_code_names(self):
+        # The subject: code, not a comment, and from the tree's own directories.
+        with tempfile.TemporaryDirectory() as directory:
+            planted = Path(directory) / "Consumers.cs"
+            planted.write_text("using Common.Contracts.Ordering.V1;\n"
+                               "// Common.Contracts.Payments.V1 is not consumed here.\n"
+                               "const string S = \"Common.Contracts.Shipping.V1\";\n", encoding="utf-8")
+            self.assertEqual({"Common.Contracts.Ordering.V1:"}, gate.referenced_contexts(Path(directory)))
+        found = gate.referenced_contexts(gate.messaging_dirs()["Shipping"])
+        self.assertEqual({"Common.Contracts.Ordering.V1:"}, found)
+
+    def test_a_pattern_that_finds_no_context_is_refused(self):
+        original = gate.referenced_contexts
+        gate.referenced_contexts = lambda directory: set()
+        try:
+            failures = run_against(real())
+        finally:
+            gate.referenced_contexts = original
+        self.assertTrue(any("names a Common.Contracts context" in f for f in failures), failures)
+
+
 class TheFileHoldsOnlyWhatIsJudged(unittest.TestCase):
     """What the broker imports at boot and the gate keys or reads."""
 
@@ -580,11 +656,14 @@ class CheckThreeFollowsTheSelector(unittest.TestCase):
 
     INTERFACE = "Common.Contracts:IIntegrationEvent"
     UNPUBLISHED_WRITE = "^(catalog-|MassTransit:)"
+    UNPUBLISHED_CONFIGURE = r"^(catalog-|Common\.Contracts\.Inventory\.V1:|MassTransit:)"
 
-    def run_with_catalog(self, publishes: bool, write: str | None = None) -> list[str]:
+    def run_with_catalog(self, publishes: bool, write: str | None = None, configure: str | None = None) -> list[str]:
         definitions = real()
         if write is not None:
             permission(definitions, "catalog-svc")["write"] = write
+        if configure is not None:
+            permission(definitions, "catalog-svc")["configure"] = configure
         original_publishes, original_prefixes = gate.publishes, gate.contract_prefixes
         gate.publishes = lambda service: publishes if service == "Catalog" else original_publishes(service)
         # A service with no Domain project has no contracts namespace either (§4.1).
@@ -600,7 +679,14 @@ class CheckThreeFollowsTheSelector(unittest.TestCase):
             any("write COVERS" in f and self.INTERFACE in f for f in failures), failures)
 
     def test_a_service_that_publishes_nothing_is_not_owed_the_interface_exchange(self):
-        self.assertEqual([], self.run_with_catalog(publishes=False, write=self.UNPUBLISHED_WRITE))
+        self.assertEqual([], self.run_with_catalog(
+            publishes=False, write=self.UNPUBLISHED_WRITE, configure=self.UNPUBLISHED_CONFIGURE))
+
+    def test_a_service_that_publishes_nothing_is_refused_the_interface_exchange_s_configure(self):
+        failures = self.run_with_catalog(publishes=False, write=self.UNPUBLISHED_WRITE)
+        self.assertTrue(
+            any(f"configure COVERS `{self.INTERFACE}`, which only a publisher declares" in f for f in failures),
+            failures)
 
     def test_a_service_that_publishes_nothing_is_refused_one_named_contract(self):
         failures = self.run_with_catalog(
