@@ -66,10 +66,9 @@ the image the repository ships is not a procedure, which that Dockerfile says
 about itself.
 
 ```bash
-kubectl -n <ns> port-forward svc/rabbitmq 15672:15672 &
-
-# Read, never typed into a command: neither value reaches the shell's history,
-# and printf is a builtin, so neither reaches a process list either.
+# The port-forward above still runs. Read, never typed into a command:
+# neither value reaches the shell's history, and printf is a builtin, so
+# neither reaches a process list either.
 umask 077
 read -r -p 'operator: ' OPERATOR
 read -rs -p 'password: ' OPERATOR_PASSWORD; echo
