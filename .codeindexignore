@@ -1,6 +1,7 @@
-# The indexer already skips whatever .gitignore ignores, so a line here is only
-# for a path git tracks or leaves untracked: stray binaries outside bin/, the
-# rest of .claude/cache/, and staging/, where a .claude change waits to apply.
+# The indexer already skips whatever .gitignore ignores (docs/token-usage.md,
+# 2026-10-08), so a line here is only for a path git tracks or leaves
+# untracked: stray binaries outside bin/, the rest of .claude/cache/, and an
+# untracked staging/.
 **/*.dll
 **/*.pdb
 .claude/cache/
@@ -12,8 +13,8 @@ docs/superpowers/
 docs/pr-decision-log.md
 docs/lessons.md
 
-# Generated EF Core migrations. They are 10% of the C# corpus and took 13% of
-# the top-three result slots, crowding out the code a question is about; the
-# filenames and `git log` are how a schema change is found instead.
+# Generated EF Core migrations crowd out the code a question is about
+# (docs/token-usage.md, 2026-10-08); the filenames and `git log` are how a
+# schema change is found instead.
 **/*.Designer.cs
 **/Migrations/

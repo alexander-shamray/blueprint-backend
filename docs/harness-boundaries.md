@@ -156,8 +156,11 @@ because the wrapper is not the only way the CLI runs.** A bare
 `codebase-index` call from a checkout, which the argv guard admits, replaced
 the tracked skill with the package's stock copy, measured on 2026-10-06:
 seven files, the wrappers' `-P` and `PYTHONSAFEPATH` among what went. The
-`env` block reaches every command a session runs, so no route is left to
-spell the variable.
+`env` block reaches every command a session runs **when the session applies
+it**, and a cloud session's shell on 2026-10-08 did not have it: one
+`codebase-index --help` there rewrote the same seven files and widened the
+skill's grants to `Bash(cbx *)` (`docs/token-usage.md`, 2026-10-08). So a
+run outside the wrapper and the hooks sets the variable itself.
 
 ## Index refresh and worktree seeding
 

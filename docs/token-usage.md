@@ -1,7 +1,8 @@
 # Token usage — the measurements
 
-What [`tools/token-usage/`](../tools/token-usage/README.md) reported, one
-dated section per measurement, for [`token-plan.md`](token-plan.md)'s
+What [`tools/token-usage/`](../tools/token-usage/README.md) reported, and
+the other measurements the plan's steps rest on, one dated section per
+measurement, for [`token-plan.md`](token-plan.md)'s
 baseline and each step's exit test. Every figure is a record of its day,
 per the contract's §2, and none is kept current.
 
@@ -233,10 +234,8 @@ main checkout's index, as `refresh-index.py` seeds it, a worktree without
 the file went from 1,829 files to 1,994 on its first update, all 165
 migration files back. With the file present it stayed at 1,829.
 
-**Running the CLI by hand rewrites the tracked skill.** One
-`codebase-index --help` from the checkout, without
-`CBX_NO_SKILL_AUTO_UPDATE=1`, replaced seven files under
-`.claude/skills/codebase-index/`, the pinned wrapper grants among them;
-they were restored from `HEAD`. The hooks set the variable and
-`settings.json` sets it for a session, but a shell that did not inherit
-it is not covered.
+**Running the CLI by hand rewrote the tracked skill again**, the residual
+`harness-boundaries.md`'s *Edit denies and agent self-protection* now
+states: this session's shell lacked `CBX_NO_SKILL_AUTO_UPDATE=1`, and one
+`codebase-index --help` replaced seven files under
+`.claude/skills/codebase-index/`, which were restored from `HEAD`.
