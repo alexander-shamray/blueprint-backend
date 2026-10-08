@@ -454,13 +454,14 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
         await worker.StartAsync(Ct);
 
-        // Staged on the loop's own line, which the direct call above never logs.
+        // Two of the loop's own lines, which the direct call above never logs: only a tick after the first writes the
+        // second, so a loop that logs once and returns ends the wait on IsCompleted instead.
         await ServiceFixture.WaitUntilAsync(() =>
-            Task.FromResult(ClaimFailedLogged(broken) || worker.ExecuteTask!.IsCompleted));
+            Task.FromResult(ClaimFailures(broken) >= 2 || worker.ExecuteTask!.IsCompleted));
 
-        // ExecuteTask is the loop, and a faulted one is the host on its way down.
-        worker.ExecuteTask!.IsFaulted.ShouldBeFalse();
-        ClaimFailedLogged(broken).ShouldBeTrue();
+        // ExecuteTask is the loop: faulted is the host on its way down, and finished is a loop that never ticks again.
+        worker.ExecuteTask!.IsCompleted.ShouldBeFalse();
+        ClaimFailures(broken).ShouldBeGreaterThanOrEqualTo(2);
 
         await worker.StopAsync(Ct);
     }
@@ -493,8 +494,9 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
     private static (Guid Order, Guid Customer) Ids() => (Guid.CreateVersion7(), Guid.CreateVersion7());
 
-    private static bool ClaimFailedLogged(NotificationsWorkerFactory host) =>
-        host.CapturedLogs.Everything.Any(line => line.Contains("Send claim failed", StringComparison.Ordinal));
+    // StartsWith, as the structured half repeats the template on an {OriginalFormat} line of its own.
+    private static int ClaimFailures(NotificationsWorkerFactory host) =>
+        host.CapturedLogs.Everything.Count(line => line.StartsWith("Send claim failed", StringComparison.Ordinal));
 
     /// <summary>A confirmed order's notice with its record made, so a pass meets nothing to wait on.</summary>
     private async Task<Notification> OwedAsync(Guid order, Guid customer)
