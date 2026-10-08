@@ -117,7 +117,8 @@ The line takes three commands away as well, `-scan -randomkey -dbsize`,
 because a key pattern binds only a command that names a key: those three name
 none, so `@keyspace` and `@read` would let one service list or count every
 other service's keys on the shared instance, their names if not their values.
-`RedisAclTests` provisions the rules `users.conf` ships and is refused all three.
+`RedisAclTests` provisions the rules `users.conf` ships and is refused all
+three.
 
 Two rules the helper library enforces rather than documents:
 
