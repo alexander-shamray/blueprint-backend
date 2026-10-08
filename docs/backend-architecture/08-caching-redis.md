@@ -90,7 +90,7 @@ a host deployed as `Ordering.Api` takes `~Ordering.Api:*`, and provisioning
 any other spelling is the silent-ACL failure §8.2 describes.
 
 ```
-user ordering-svc on >REDACTED ~ordering:* +@read +@write +@keyspace +@connection +eval -@dangerous +client|setname +client|setinfo
+user ordering-svc on >REDACTED ~ordering:* +@read +@write +@keyspace +@connection +eval -@dangerous -scan -randomkey -dbsize +client|setname +client|setinfo
 ```
 
 Three of those grants are easy to leave off, and the line above is the one a
@@ -112,6 +112,12 @@ kin before it carries a single command. And the two `+client|` subcommands
 because `StackExchange.Redis` names its connection on connect and
 `-@dangerous` takes `CLIENT` away wholesale — the subcommand grants give back
 the two harmless ones.
+
+The line takes three commands away as well, `-scan -randomkey -dbsize`,
+because a key pattern binds only a command that names a key: those three name
+none, so `@keyspace` and `@read` would let one service list or count every
+other service's keys on the shared instance, their names if not their values.
+`RedisAclTests` provisions the rules `users.conf` ships and is refused all three.
 
 Two rules the helper library enforces rather than documents:
 

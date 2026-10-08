@@ -89,24 +89,7 @@ public sealed class DistributedLockRedisTests(RedisFixture fixture)
         ConfigurationOptions admin = ConfigurationOptions.Parse(fixture.CoordinationConnectionString);
         admin.AllowAdmin = true;
         await using ConnectionMultiplexer adminConnection = await ConnectionMultiplexer.ConnectAsync(admin);
-        object[] grant =
-        [
-            "SETUSER",
-            "acl-svc",
-            "reset",
-            "on",
-            ">s3cret",
-            "~acl:*",
-            "+@read",
-            "+@write",
-            "+@keyspace",
-            "+@connection",
-            "+eval",
-            "-@dangerous",
-            "+client|setname",
-            "+client|setinfo"
-        ];
-        await adminConnection.GetServer(adminConnection.GetEndPoints()[0]).ExecuteAsync("ACL", grant);
+        await DocumentedRedisGrant.ProvisionAsync(adminConnection, "acl-svc", "s3cret", "acl:*");
 
         ConfigurationOptions restricted = ConfigurationOptions.Parse(fixture.CoordinationConnectionString);
         restricted.User = "acl-svc";
