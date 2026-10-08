@@ -100,8 +100,9 @@ public sealed class SendWorker(
         LoggerMessage.Define<Guid, Guid, Guid>(
             LogLevel.Warning,
             new EventId(10, nameof(NoSuchCustomer)),
-            "Notification {NotificationId} on order {OrderId} names customer {CustomerId}, whom the owner does not " +
-            "know; it is undeliverable and the contact row is deleted (ADR-052).");
+            "Notification {NotificationId} on order {OrderId} names customer {CustomerId}, for whom the owner gives " +
+            "no deliverable contact (unknown, disabled, no email or an unverified one); it is undeliverable and the " +
+            "contact row is deleted (ADR-052, ADR-086).");
 
     private static readonly Action<ILogger, Guid, Guid, Guid, Exception?> ServedStale =
         LoggerMessage.Define<Guid, Guid, Guid>(
