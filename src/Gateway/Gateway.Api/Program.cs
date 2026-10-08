@@ -23,8 +23,7 @@ builder.Host.UseDefaultServiceProvider(o =>
 
 builder.AddCommonWebDefaults(GatewayLimits.RequestTimeout);   // §13.2, §9.7
 
-// A root trace per request: the hosting layer reads its propagator from here, and the caller is the internet.
-// OpenTelemetry's instrumentation re-extracts the headers under any propagator but this one, so it is set too.
+// ADR-083's root trace per request, which needs both: the hosting layer's propagator and OpenTelemetry's.
 builder.Services.AddSingleton<DistributedContextPropagator, EdgeTracePropagator>();
 Sdk.SetDefaultTextMapPropagator(new TraceContextPropagator());
 
