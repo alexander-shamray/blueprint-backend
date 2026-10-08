@@ -396,6 +396,9 @@ class TheCredential(unittest.TestCase):
             self.assertEqual(("dead-letter-operator", 'a\\b"c d:e@f"'),
                              dead_letters.load_credential(str(path), {}))
 
+    def test_a_bare_value_ends_at_its_first_space_as_curl_reads_it(self):
+        self.assertEqual("dead-letter-operator:secret", dead_letters.curl_value("dead-letter-operator:secret tail"))
+
     def test_no_credential_is_refused(self):
         code, _, err = run(FakeApi({}), "list", env={})
         self.assertEqual(2, code)

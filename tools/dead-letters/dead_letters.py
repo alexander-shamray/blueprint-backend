@@ -176,9 +176,9 @@ CURL_ESCAPES = {"\\": "\\", '"': '"', "t": "\t", "n": "\n", "r": "\r", "v": "\v"
 
 
 def curl_value(raw: str) -> str:
-    """A config value as curl reads it: a quoted one unescaped up to its closing quote, a bare one as written."""
+    """A config value as curl reads it: a quoted one unescaped up to its closing quote, a bare one to a space."""
     if not raw.startswith('"'):
-        return raw
+        return raw.split(maxsplit=1)[0] if raw.strip() else ""
     out: list[str] = []
     chars = iter(raw[1:])
     for char in chars:
