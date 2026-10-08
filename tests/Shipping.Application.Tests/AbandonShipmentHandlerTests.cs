@@ -32,6 +32,24 @@ public class AbandonShipmentHandlerTests
     }
 
     [Fact]
+    public async Task A_shipment_delivered_since_the_claim_is_a_refusal_and_keeps_its_terminal_state()
+    {
+        Shipment shipment = Shipment.For(ShipmentId.New(), new OrderId(Guid.CreateVersion7()), Now);
+        shipment.Book("car_1", "TRK1", Now);
+        shipment.Record("e1", TrackingStatus.Delivered, Now, Now);
+        DateTimeOffset? delivered = shipment.TerminalAt;
+        shipment.ClearDomainEvents();
+
+        Result result = await Handle(new FakeShipments(shipment), shipment.Id);
+
+        result.IsFailure.ShouldBeTrue("the worker would log and count an abandon that changed nothing");
+        result.Error.ShouldBe(ShipmentErrors.NotTrackable);
+        shipment.Status.ShouldBe(ShipmentStatus.Delivered);
+        shipment.TerminalAt.ShouldBe(delivered);
+        shipment.DomainEvents.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task A_shipment_that_is_gone_is_a_refusal_and_not_a_throw()
     {
         Result result = await Handle(new FakeShipments(null), ShipmentId.New());

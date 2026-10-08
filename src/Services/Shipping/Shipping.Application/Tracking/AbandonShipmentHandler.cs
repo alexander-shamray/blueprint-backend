@@ -18,7 +18,10 @@ public sealed class AbandonShipmentHandler(IShipmentRepository shipments, TimePr
 
         DateTimeOffset now = clock.GetUtcNow();
 
-        shipment.Abandon(now);
+        // Delivered or voided since the claim: nothing to abandon, and PollApplied would release another pass's
+        // lease, so the worker is told it changed nothing.
+        if (!shipment.Abandon(now))
+            return Result.Failure(ShipmentErrors.NotTrackable);
 
         // Terminal, so no poll is scheduled whatever instant is passed.
         shipment.PollApplied(now);

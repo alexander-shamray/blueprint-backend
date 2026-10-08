@@ -7,4 +7,7 @@ public static class ShipmentErrors
 {
     public static readonly Error NotFound =
         Error.NotFound("shipment.not_found", "No shipment under that identifier.");
+
+    public static readonly Error NotTrackable =
+        Error.Rule("shipment.not_trackable", "The shipment is no longer tracked, so there is nothing to abandon.");
 }
