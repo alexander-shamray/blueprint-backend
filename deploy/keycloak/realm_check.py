@@ -641,9 +641,9 @@ def check_every_client(clients: list[dict], kind: str) -> list[str]:
 def check_redirect_uris(client: dict, kind: str) -> list[str]:
     """Each redirect lands on Keycloak, or on a named host with no wildcard.
 
-    A relative one is judged as its `rootUrl` makes it. A deployed realm's web
-    redirects are https as well; the hosts are not pinned (ADR-042).
-    """
+    A relative one is judged as its `rootUrl` makes it, and a custom scheme
+    needs a host only to end in a wildcard. Web redirects are https when
+    deployed; the hosts are not pinned (ADR-042)."""
     name = client.get("clientId")
     redirects = client.get("redirectUris")
     root = client.get("rootUrl")
@@ -669,7 +669,7 @@ def check_redirect_uris(client: dict, kind: str) -> list[str]:
             refused.append(index)
             continue
         web = scheme.group(1).lower() in WEB_SCHEME_NAMES
-        if ("*" in parts.netloc or (web and not parts.hostname)
+        if ("*" in parts.netloc or (not parts.hostname and (web or uri.endswith("*")))
                 or (web and kind == DEPLOYED and scheme.group(1).lower() != "https")):
             refused.append(index)
 
