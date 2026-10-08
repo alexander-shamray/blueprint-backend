@@ -216,8 +216,9 @@ than pulled. Three ways that breaks, all of which look like a hung saga:
 
    ```bash
    # The exchange types the node offers, with the curl config error-queue.md
-   # writes: no x-delayed-message means the plugin is absent.
-   curl -sS --config "$HOME/.rabbit.curl" http://localhost:15672/api/overview |
+   # writes. -f makes a refused credential fail aloud, so no output after a
+   # success, and only then, means the plugin is absent.
+   curl -fsS --config "$HOME/.rabbit.curl" http://localhost:15672/api/overview |
      grep -o '"name":"x-delayed-message"'
    kubectl -n <ns> logs deploy/rabbitmq --since=10m | grep -i 'precondition_failed\|x-delayed-message'
    ```
