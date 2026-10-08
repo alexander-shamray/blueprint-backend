@@ -8,8 +8,9 @@ withdrawal's stamp. The row version already serialises a product's commits
 ([§7.3](../07-persistence.md)), so a product's stamps follow the order
 its writes committed in, whichever replica's clock each read. The migration
 gives an existing row its withdrawal or else its publication, because a
-price change left no column behind; one made before the deploy is older than
-any skew the rule guards against.
+price change left no column behind. The column defaults to the database's
+time, because the release still running beside this one inserts without it
+([§7.4](../07-persistence.md)).
 
 **Why.** Ordering's price projection orders a product's events by
 `OccurredAt` alone ([§6.6](../06-cqrs.md)). Stamped from each replica's own
@@ -30,8 +31,15 @@ skew between two replicas, plus a tick for each event the product raises
 before the slower clock catches up: it moves a tick past the last one only
 where the clock has not. Two prices for one product no longer share a
 stamp, so the projection's strict comparison refuses only a redelivery,
-which ties with itself. The seeder writes `LastEventAt` beside `PublishedAt`,
-since it inserts rows in SQL rather than through `Product.Publish`. An
+which ties with itself. The order holds once every replica runs this
+release. Until then, during a canary
+([ADR-022](ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md))
+or after a rollback, the previous release changes prices without advancing
+`LastEventAt`, so a price or a withdrawal within one skew of such a change
+can still be stamped before it: the residual this record closes, narrowed to
+that window and named rather than guarded. The seeder writes `LastEventAt`
+beside `PublishedAt`, since it inserts rows in SQL rather than through
+`Product.Publish`. An
 operator who sets a column in SQL, as ADR-074's consequences allow for a
 seller, leaves `LastEventAt` alone, and nothing is wrong with that. Events
 from Ordering's own lifecycle and from every other service still carry their
