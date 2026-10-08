@@ -137,7 +137,7 @@ public class CommandConsumerTests
             () => consumer.Consume(Context(new ProbeMessage(Guid.CreateVersion7()))));
 
         // The code travels with the fault, the only record this outcome gets.
-        thrown.Error?.Code.ShouldBe(Unreachable.Code);
+        thrown.Error.ShouldNotBeNull().Code.ShouldBe(Unreachable.Code);
     }
 
     [Fact]
