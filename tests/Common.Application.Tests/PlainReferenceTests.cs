@@ -33,6 +33,15 @@ public sealed class PlainReferenceTests
         PlainReference.IsWellFormed(value).ShouldBeFalse();
     }
 
+    [Theory]
+    [InlineData("evil\uA4F8example")]
+    [InlineData("TRK\u02D01")]
+    [InlineData("TRK\uA4FD1")]
+    public void A_modifier_letter_drawn_as_a_dot_or_a_colon_is_not(string value)
+    {
+        PlainReference.IsWellFormed(value).ShouldBeFalse();
+    }
+
     [Fact]
     public void A_lone_surrogate_is_no_letter()
     {
