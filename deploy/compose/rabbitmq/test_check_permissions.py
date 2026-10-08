@@ -296,7 +296,7 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
                 "    public sealed class Middle\n    {\n        public sealed record Deepest;\n    }\n"
                 "}\n\n"
                 "public sealed record After(string Value)\n{\n    public int Size { get; init; }\n}\n")
-        self.assertEqual({"Outer", "Outer+Inner", "Outer+Middle", "Outer+Middle+Deepest", "After"},
+        self.assertEqual({"Outer", "Outer-Inner", "Outer-Middle", "Outer-Middle-Deepest", "After"},
                          gate.type_names(text))
 
     def test_a_pattern_that_reads_no_type_is_refused(self):

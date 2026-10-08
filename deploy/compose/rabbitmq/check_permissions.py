@@ -225,7 +225,7 @@ def declared_names(paths) -> dict[str, set[str]]:
 
 
 def type_names(text: str) -> set[str]:
-    """Each declared type by MassTransit's name for it: a nested one is `Outer+Inner`."""
+    """Each declared type by its exchange name: RabbitMqMessageNameFormatter joins a nested one `Outer-Inner`."""
     code = code_only(text, keep_strings=False)
     found: set[str] = set()
     enclosing: list[tuple[str, int]] = []
@@ -235,7 +235,7 @@ def type_names(text: str) -> set[str]:
         token = match.group(0)
         if token not in ("{", "}", ";"):
             declared = TYPE_DECLARATION.match(token).group(1)
-            pending = "+".join([*(name for name, _ in enclosing[-1:]), declared])
+            pending = "-".join([*(name for name, _ in enclosing[-1:]), declared])
             found.add(pending)
         elif token == "{":
             depth += 1
