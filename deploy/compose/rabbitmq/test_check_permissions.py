@@ -271,6 +271,29 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
         failures = run_against(definitions)
         self.assertTrue(any("catalog-svc: write COVERS `inventory-commands_delay`" in f for f in failures), failures)
 
+    def test_a_sent_to_peer_queue_reached_past_its_name(self):
+        # Ordering is owed `inventory-commands` itself; unanchored, the grant reaches its dead letters too.
+        definitions = real()
+        entry = permission(definitions, "ordering-svc")
+        for verb in ("configure", "write", "read"):
+            self.assertIn("inventory-commands$", entry[verb], "the case, not the gate")
+            entry[verb] = entry[verb].replace("inventory-commands$", "inventory-commands")
+        failures = run_against(definitions)
+        for verb in ("configure", "write", "read"):
+            self.assertTrue(
+                any(f"ordering-svc: {verb} COVERS `inventory-commands_" in f for f in failures), (verb, failures))
+
+    def test_a_peer_command_endpoint_read_or_configured(self):
+        for verb in ("configure", "read"):
+            with self.subTest(verb=verb):
+                definitions = real()
+                entry = permission(definitions, "catalog-svc")
+                entry[verb] = entry[verb].replace("|MassTransit:", "|MassTransit:|ordering-", 1)
+                self.assertIn("|ordering-", entry[verb], "the case, not the gate")
+                failures = run_against(definitions)
+                self.assertTrue(
+                    any(f"catalog-svc: {verb} COVERS `ordering-commands`" in f for f in failures), failures)
+
     def test_the_operator_on_one_peer_event_exchange(self):
         definitions = real()
         entry = permission(definitions, gate.OPERATOR)

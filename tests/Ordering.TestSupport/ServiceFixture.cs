@@ -32,7 +32,7 @@ public sealed class ServiceFixture()
 
     /// <summary>Widens <c>ordering-svc</c>'s write to publish the saga's inbound events (ADR-036).</summary>
     protected override string? HarnessWrite(string granted) =>
-        "^(ordering-|inventory-commands|payments-commands|Common\\.Contracts|" +
+        "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts|" +
         "Ordering\\.Infrastructure\\.Messaging:|MassTransit:)";
 
     /// <summary>
