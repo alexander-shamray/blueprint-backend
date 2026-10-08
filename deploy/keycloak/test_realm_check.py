@@ -571,6 +571,15 @@ class TheBrowserClientsCode(Fixture):
             "https://spa.example/*", "/realms/commerce/account/*", "com.example.app:/cb"])
         self.assertEqual(self.problems(realm(client)), [])
 
+    def test_a_custom_scheme_wildcard_with_no_host_is_caught(self):
+        for uri in ("myapp:*", "myapp:/*"):
+            with self.subTest(uri=uri):
+                found = self.one(realm(browser(redirectUris=[uri])))
+                self.assertIn("redirectUris entry at index 0", found)
+
+    def test_a_custom_scheme_wildcard_on_a_named_host_is_accepted(self):
+        self.assertEqual(self.problems(realm(browser(redirectUris=["myapp://cb/*"]))), [])
+
     def test_a_redirect_list_that_is_absent_is_not_a_finding(self):
         client = browser()
         del client["redirectUris"]
