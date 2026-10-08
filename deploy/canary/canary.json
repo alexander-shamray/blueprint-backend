@@ -2,7 +2,8 @@
   "$comment": [
     "§15.5's rollout, as data. canary.py reads this; deploy.yml reads canary.py.",
     "",
-    "The ladder is the chapter's, verbatim: 5, 25, 50, 100, ten minutes each.",
+    "The ladder is this file's and §15.5 cites it: 5, 25, 50, 100, ten",
+    "minutes on every rung but the last.",
     "It is NOT trimmed to what a three-replica deployment can express, and that",
     "is the point of tolerance.weightOvershootPoints being zero — with three",
     "stable pods a single canary already serves 25%, and a plan that silently",

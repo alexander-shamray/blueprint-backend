@@ -524,8 +524,8 @@ class PlanDocumentTests(unittest.TestCase):
         self.assertNotIn("$comment", out.getvalue())
         self.assertIn("catalog-api", out.getvalue().splitlines())
 
-    def test_the_ladder_is_the_chapters(self) -> None:
-        """§15.5, verbatim: 5, 25, 50, 100, ten minutes each. Not trimmed to
+    def test_the_ladder_is_the_one_the_chapter_cites(self) -> None:
+        """§15.5's numbers: 5, 25, 50, 100, ten minutes before each step up. Not trimmed to
         what three replicas can express — that is what the refusal is for."""
         self.assertEqual(
             [step["weight"] for step in self.document["steps"]],
