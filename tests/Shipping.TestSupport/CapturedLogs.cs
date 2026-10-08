@@ -23,8 +23,20 @@ public sealed class CapturedLogs : ILoggerProvider
 
     private sealed class Logger(ConcurrentQueue<string> lines) : ILogger
     {
+        // Common.Web sets IncludeScopes, so a scope's state reaches an exporter and is searched too.
         public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
+            where TState : notnull
+        {
+            lines.Enqueue(state.ToString() ?? string.Empty);
+
+            if (state is IEnumerable<KeyValuePair<string, object?>> values)
+            {
+                foreach (KeyValuePair<string, object?> value in values)
+                    lines.Enqueue($"{value.Key}={value.Value}");
+            }
+
+            return NoScope.Instance;
+        }
 
         // No filtering of its own: what the host's rules let through is what
         // a deployment's exporter receives, and that is what is searched.
@@ -48,6 +60,15 @@ public sealed class CapturedLogs : ILoggerProvider
 
             if (exception is not null)
                 lines.Enqueue(exception.ToString());
+        }
+    }
+
+    private sealed class NoScope : IDisposable
+    {
+        public static readonly NoScope Instance = new();
+
+        public void Dispose()
+        {
         }
     }
 }
