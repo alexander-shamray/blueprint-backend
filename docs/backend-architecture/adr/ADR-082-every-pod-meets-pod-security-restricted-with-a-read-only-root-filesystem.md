@@ -26,8 +26,9 @@ installer's, as the namespace is, and no chart sets it. Every application
 container in the Compose model runs the same way, so the Compose workflow's
 `up --wait` is what fails first when a host starts writing outside `/tmp`; it
 starts the hosts and migrators and walks no order, so a write made only on a
-request path is still found in a cluster. A full process dump does not fit in 64Mi, so taking one needs the limit raised
-for that pod or a debug container with its own volume.
+request path is still found in a cluster. A full process dump does not fit in
+64Mi, so taking one needs the limit raised for that pod or a debug container
+with its own volume.
 
 ---
 
