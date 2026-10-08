@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>ADR-079's broker half, read from the settings MassTransit dials with rather than from the string.</summary>
+/// <summary>ADR-079's broker half, read from the settings MassTransit dials with.</summary>
 public sealed class BrokerTlsTests
 {
     private static async Task<RabbitMqHostSettings> Settings(string connectionString)
@@ -36,6 +36,7 @@ public sealed class BrokerTlsTests
             .ShouldBe(SslPolicyErrors.None, "MassTransit accepts an untrusted chain unless told not to");
         (settings.AcceptablePolicyErrors & SslPolicyErrors.RemoteCertificateNameMismatch)
             .ShouldBe(SslPolicyErrors.None);
+        settings.SslServerName.ShouldBe("catalog-rabbit.invalid", "a blank name accepts any certificate's host");
     }
 
     [Fact]
