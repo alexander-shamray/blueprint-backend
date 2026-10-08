@@ -829,7 +829,7 @@ def check_mobile_client(client: dict) -> list[str]:
 def check_service_account_client(
         client: dict, name: str, read: str, leak: str,
         owner: str = "ADR-052") -> tuple[list[str], list, list]:
-    """What every ADR-052 service-account reader shares: confidential, enabled,
+    """What every service-account client here shares: confidential, enabled,
     minting for itself alone."""
     problems: list[str] = []
 
@@ -844,15 +844,15 @@ def check_service_account_client(
         problems.append(
             f"client {name!r} has publicClient="
             f"{client.get('publicClient')!r}. A public client presents no "
-            "secret, so the grant ADR-052 gives this reader is one Keycloak "
+            f"secret, so the grant {owner} gives this client is one Keycloak "
             "refuses outright")
 
     if client.get("serviceAccountsEnabled") is not True:
         problems.append(
             f"client {name!r} has service accounts disabled. Keycloak "
             "refuses the client-credentials grant with unauthorized_client, "
-            "which reaches the worker as a refused credential — ADR-052's "
-            "fourth row, a defect somebody must see rather than an outage")
+            "which reaches the host as a refused credential, a defect "
+            f"somebody must see rather than an outage ({owner})")
 
     for flag, what in (("standardFlowEnabled", "an authorization-code flow"),
                        ("directAccessGrantsEnabled", "a password grant"),
