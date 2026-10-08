@@ -1,7 +1,7 @@
 {{- /* A list of NetworkPolicy peers the deployment states, required: a rule with no
-peer admits every address on its port, the opposite of a fence. A peer that
-could be every address is refused for the same reason, by ADR-080's floor rather
-than by spelling: two /1 blocks, or selectors naming nothing, are that too. */}}
+peer admits every address on its port, the opposite of a fence. Every address
+has more spellings than 0.0.0.0/0, so ADR-080 refuses a peer wider than a /8,
+or selectors naming nothing, rather than a list of spellings. */}}
 {{- define "commerce.networkPolicyPeers" -}}
 {{- $peers := index . 0 -}}
 {{- $key := index . 1 -}}
