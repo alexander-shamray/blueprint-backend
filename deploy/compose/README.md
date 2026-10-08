@@ -390,8 +390,9 @@ path the PR exists to stop answering 502.
 The BFF is excluded too, and it needs more than an authority — its
 projection's database (ADR-051), which the override leaves running and the
 excluded `bff-migrator` would have migrated, so run the migrator first with
-`ConnectionStrings__BffMigrator` set to the same value; the broker that
-feeds it, under the BFF's own account (ADR-036); §15.4's three
+`ConnectionStrings__BffMigrator` set to the same value and
+`DOTNET_ENVIRONMENT=Development`, as the Catalog migrator below is; the
+broker that feeds it, under the BFF's own account (ADR-036); §15.4's three
 `Identity__Client__*` rows are required of a host that calls a peer,
 `ValidateOnStart` refuses to boot without all three, and its own hop needs
 Catalog's **gRPC** port rather than its REST one:
