@@ -5,7 +5,7 @@ namespace Gateway.Api;
 /// <summary>Reads no trace context from a caller, and writes the edge's own downstream as the default does.</summary>
 /// <remarks>
 /// The edge's callers are the internet, so a traceparent, tracestate or baggage they send would choose the trace
-/// every service, outbox row and worker span joins. Every request starts a root trace here instead (§13.2).
+/// every service, outbox row and worker span joins. Every request starts a root trace here instead (ADR-083).
 /// </remarks>
 public sealed class EdgeTracePropagator : DistributedContextPropagator
 {
