@@ -220,8 +220,35 @@ def declared_names(paths) -> dict[str, set[str]]:
     for path in paths:
         text = read(path)
         for namespace in NAMESPACE.findall(text):
-            names.setdefault(f"{namespace}:", set()).update(TYPE_DECLARATION.findall(text))
+            names.setdefault(f"{namespace}:", set()).update(type_names(text))
     return names
+
+
+def type_names(text: str) -> set[str]:
+    """Each declared type by MassTransit's name for it: a nested one is `Outer+Inner`."""
+    code = code_only(text, keep_strings=False)
+    found: set[str] = set()
+    enclosing: list[tuple[str, int]] = []
+    depth = 0
+    pending = None
+    for match in re.finditer(rf"{TYPE_DECLARATION.pattern}|[{{}};]", code, re.M):
+        token = match.group(0)
+        if token not in ("{", "}", ";"):
+            declared = TYPE_DECLARATION.match(token).group(1)
+            pending = "+".join([*(name for name, _ in enclosing[-1:]), declared])
+            found.add(pending)
+        elif token == "{":
+            depth += 1
+            if pending:
+                enclosing.append((pending, depth))
+                pending = None
+        elif token == "}":
+            if enclosing and enclosing[-1][1] == depth:
+                enclosing.pop()
+            depth -= 1
+        else:
+            pending = None
+    return found
 
 
 def probes(prefix: str, names: dict[str, set[str]]) -> list[str]:
