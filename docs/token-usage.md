@@ -238,4 +238,6 @@ migration files back. With the file present it stayed at 1,829.
 `harness-boundaries.md`'s *Edit denies and agent self-protection* now
 states: this session's shell lacked `CBX_NO_SKILL_AUTO_UPDATE=1`, and one
 `codebase-index --help` replaced seven files under
-`.claude/skills/codebase-index/`, which were restored from `HEAD`.
+`.claude/skills/codebase-index/`, the stock `SKILL.md` widening
+`allowed-tools` from the pinned `cbx` wrapper calls to `Bash(cbx *)` and
+bare `Bash(codebase-index … *)`; they were restored from `HEAD`.
