@@ -2207,8 +2207,10 @@ and nothing short of ordering Ordering's own outbox per aggregate reaches
 that.
 
 **The event's reason, not a literal, on every cancellation branch.** §11.4
-parses the whole `CancellationReasons` map, so a caller may cancel with any
-code and a literal here would overwrite what the aggregate reported. The
+accepts `customer_request` alone
+([ADR-087](adr/ADR-087-a-caller-cancels-an-order-only-as-a-customer-request.md)),
+but an event recorded before that rule can carry any code, and a literal here
+would overwrite what the aggregate reported. The
 decline and timeout branches keep their literals because those transitions
 *are* the decline and the timeout.
 
@@ -2297,10 +2299,11 @@ decline and timeout branches keep their literals because those transitions
 > its arrivals are the echo and some are not, so it takes neither and asks.
 >
 > **What it asks is `Origin`, and that field exists because `Reason` cannot
-> answer.** §11.4's endpoint parses the whole `CancellationReasons` map, so a
-> caller may send `payment_declined` as readily as `customer_request`, and
-> the saga's own compensation carries `customer_request` whenever that is
-> what it forwarded. The reason is what somebody asserted.
+> answer.** §11.4's endpoint takes `customer_request` alone
+> ([ADR-087](adr/ADR-087-a-caller-cancels-an-order-only-as-a-customer-request.md)),
+> but an event recorded before that rule can pair a caller with a workflow
+> code, and a payload with no origin can still arrive from an error queue. The
+> reason is what somebody asserted.
 > `OrderCancelled.Origin` is a `CancelOrigins` code written as a literal from
 > `CommandOrigin` at the handler — never bound from a request, which is what
 > keeps it from being a value a caller can claim — and §9.2 makes a new
