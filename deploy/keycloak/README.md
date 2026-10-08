@@ -48,12 +48,24 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   and carries it — an absent attribute is the violation, because Keycloak's
   default is to issue refresh tokens on the standard flow.
 - `web-app` enables the standard flow, without which the line above holds
-  because the client mints nothing at all.
-- `directAccessGrantsEnabled` is **off in a deployed realm and on in the local
-  one**. That is the one obligation that inverts, which is why `--kind` is
-  required and has no default: §11.2 documents the password grant as a local
-  affordance a deployed realm turns off, and §14.1's documented login *is* that
-  grant.
+  because the client mints nothing at all, and is a public client: it runs in
+  a page and can keep no secret.
+- `directAccessGrantsEnabled` is **off on every client in a deployed realm and
+  on for `web-app` in the local one**. That is the one obligation that
+  inverts, which is why `--kind` is required and has no default: §11.2
+  documents the password grant as a local affordance a deployed realm turns
+  off, and §14.1's documented login *is* that grant. Keycloak's built-in
+  `admin-cli` keeps it on by default, so a deployed realm turns it off there
+  too.
+- **Every client, named or not**, so a built-in or newly added one is judged:
+  no device-authorization, CIBA or token-exchange attribute is on
+  (`GRANT_ATTRIBUTES`); a standard-flow client's redirect URIs are each
+  realm-relative or absolute on a host with no wildcard, and `https` in a
+  deployed realm; a public standard-flow client sets PKCE to `S256`; and no
+  client declares `*` as a web origin.
+  `check_every_client` is the list. Keycloak's built-in `account` client
+  ships without PKCE, so a deployed realm sets `S256` on it or turns its
+  standard flow off.
 - **`web-app` and `mobile-app` each declare a browser origin.** Keycloak
   grants CORS to none by default, and a client that runs its token exchange
   from a page cannot read its own token response without one — silently,
@@ -86,6 +98,10 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   `view-users` on `realm-management`, is out of reach for the reason the
   bullet above gives, and the worker's check on its own token is the other
   half.
+- **`web-bff`'s own shape**, on the address reader's terms: one such client,
+  confidential, service accounts on, no interactive flow, and `commerce-api`
+  a default client scope and not an optional one — §11.5's row, and
+  `check_bff_client` is the list.
 
 ## What it does not check
 
