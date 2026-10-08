@@ -10,8 +10,9 @@ of its own. `deploy/keycloak/realm_check.py` judges all four in both realm
 kinds (`check_scope_cap`), and on both workers and `web-bff` it refuses an
 audience mapper, or a mapper writing `aud` or `permission`, anywhere but the
 `commerce-api` scope (`check_token_writers`); the `roles` scope's
-audience-resolve mapper is left to the cap, since it names only the clients
-whose roles the token carries. `read_admin.py` fetches what
+audience-resolve mapper names only the clients whose roles the token carries,
+so on the workers it is left to the cap, and `web-bff` already carries the
+audience every service validates. `read_admin.py` fetches what
 those checks read — the client scopes with their mappers, every client's and
 scope's scope mappings, and each client's own roles — and writes them under an
 export's keys.

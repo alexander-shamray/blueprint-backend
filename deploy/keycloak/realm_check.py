@@ -1091,8 +1091,8 @@ def check_token_writers(realm: dict, client: dict, name: str) -> list[str]:
     """Only the commerce-api scope names the audience or writes the permission claim.
 
     Read from the client's own mappers and every other scope it holds (ADR-077).
-    The roles scope's audience-resolve mapper names only the clients whose roles
-    the token carries, so the cap, not this check, bounds it."""
+    The roles scope's resolve mapper names only clients whose roles the token
+    carries: the cap bounds it on the workers; web-bff holds the audience anyway."""
     problems: list[str] = []
     scopes = defined_scopes(realm)
     sources = [("the client itself", client.get("protocolMappers"))]

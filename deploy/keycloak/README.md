@@ -109,9 +109,10 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   `web-bff`: no audience mapper, and no mapper whose claim is `aud` or
   `permission`, on the client itself or on any other scope it holds
   (`check_token_writers`, ADR-077). The `roles` scope's audience-resolve
-  mapper still adds each client whose roles the token carries, which the cap
-  bounds: for `notifications-worker` that is `realm-management`, an audience
-  no service validates.
+  mapper still adds each client whose roles the token carries. On the two
+  workers the cap bounds it: for `notifications-worker` that is
+  `realm-management`, an audience no service validates. `web-bff` has no cap
+  and already carries the audience every service validates.
 - **`notifications-worker`'s own shape**, as far as a client object reaches:
   one such client, confidential, service accounts on, no interactive flow,
   `commerce-api` in neither scope list and `roles` in one — cited rather than
