@@ -262,7 +262,12 @@ granting nothing else, where `view-clients` composes `query-clients` and
 `realm-admin` composes both — so an account holding it has no client visibility
 at all. Provisioning this credential with `view-realm` and expecting it to work
 is the plausible mistake here, and the gate refuses it by name rather than
-letting it through to a silently short list. The token it
+letting it through to a silently short list. **It is required all the same**,
+beside `view-clients`: without it Keycloak answers the realm with its token
+lifetime and refresh-token settings left out, so the account holds exactly
+`view-clients` and `view-realm`, and `read_admin.py` stops on either missing
+([ADR-078](backend-architecture/adr/ADR-078-the-realm-check-requires-view-realm.md)).
+The token it
 obtains can already see every client secret in the realm it does reach, which is
 why `read_admin.py` refuses a base URL that is not `https`, and why widening the
 grant costs more than widening it looks like it costs.
@@ -279,7 +284,7 @@ exercised once per dispatch is now exercised twenty-four times a day from a
 runner, so a leaked or over-granted one is leaked or over-granted on every
 one of those hours, and a token that could once read every client secret in
 the realm at a rollout can now do so at seventeen minutes past any hour.
-That is why the `view-clients`-only grant, and `read_admin.py`'s refusal of a
+That is why the read-only grant, and `read_admin.py`'s refusal of a
 base URL that is not `https` or that answers with a redirect, matter more
 under the schedule and not less — each was sized for a read that happened
 rarely, and the same size now bounds a read that happens hourly. The consumer

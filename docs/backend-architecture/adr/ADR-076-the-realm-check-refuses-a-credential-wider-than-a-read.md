@@ -25,6 +25,10 @@ rather than this check. Whether the realm read needs `view-realm` to see the
 token settings at all is not established here, which is why it is permitted
 rather than required.
 
+**Amended by [ADR-078](ADR-078-the-realm-check-requires-view-realm.md)**, which
+established against Keycloak 26.0 that the realm read does need `view-realm`
+for the token settings, and requires it beside `view-clients`.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
