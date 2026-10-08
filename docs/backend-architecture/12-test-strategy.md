@@ -1687,13 +1687,13 @@ running bus into whatever runs next.
 > deleted, every test that places an order fails, because `Initially` arms the
 > stock timeout and the schedule throws, and the saga's exception faults onto
 > the error queue where no assertion sees it. **The ones that wait on a command
-> fail as timeouts**, each reporting the command the saga did not send; the
-> barrier test's as-of-now count fails at once, as its trap above says. The
-> tests that never schedule pass throughout: the structural ones that construct
-> the state machine without a bus, and those whose subject schedules nothing,
-> such as an event for an order with no instance. Passing tests beside a deleted
-> registration leave it looking half-covered, which is worse than a suite that
-> fails whole.
+> or a saga state fail as timeouts**, each reporting what the saga never
+> reached; the barrier test's as-of-now count fails at once, as its trap above
+> says. The tests that never schedule pass throughout: the structural ones that
+> construct the state machine without a bus, and those whose subject schedules
+> nothing, such as an event for an order with no instance. Passing tests beside
+> a deleted registration leave it looking half-covered, which is worse than a
+> suite that fails whole.
 
 > **Where the numbers live is the other half.** Both samples get them from
 > `StartHarnessAsync`, which builds `OrderFulfilmentSagaHarness`'s one
