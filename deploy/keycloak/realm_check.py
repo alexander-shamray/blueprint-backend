@@ -852,8 +852,8 @@ def check_service_account_client(
         problems.append(
             f"client {name!r} has service accounts disabled. Keycloak "
             "refuses the client-credentials grant with unauthorized_client, "
-            "which reaches the host as a refused credential, a defect "
-            f"somebody must see rather than an outage ({owner})")
+            "which reaches the host as a refused credential; §11.5's table "
+            "turns service accounts on for every such client")
 
     for flag, what in (("standardFlowEnabled", "an authorization-code flow"),
                        ("directAccessGrantsEnabled", "a password grant"),
