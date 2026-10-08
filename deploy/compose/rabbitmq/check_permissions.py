@@ -224,9 +224,8 @@ def private_namespace(directory: Path) -> str | None:
 def referenced_contexts(directory: Path, names: dict[str, set[str]]) -> set[str]:
     """Every `Common.Contracts.<Context>.V<n>:` prefix a service's Messaging code names, or names a type of.
 
-    These are the contexts whose exchanges it declares and binds. A type counts
-    so a namespace arriving by a global using is not missed, and only a type
-    one context alone declares, so a shared name reaches neither.
+    These are the contexts whose exchanges it declares and binds. A type one
+    context alone declares counts, so a namespace a global using imports is not missed.
     """
     owners: dict[str, set[str]] = {}
     for prefix, declared in names.items():
