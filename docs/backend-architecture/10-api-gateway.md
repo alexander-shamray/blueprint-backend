@@ -9,13 +9,12 @@ genuinely cross-cutting at the edge, and nothing else.
 CORS · request/response logging with correlation IDs · response compression ·
 request size limits.
 
-> **All seven are configured, and the last two took a PR of their own because
-> each needed a decision rather than a line.** PR-17 delivered the first five
-> and PR-27 the remaining pair, which between them are four statements in
-> `Program.cs` — the delay was never effort. A size limit needs a **number**,
-> and Kestrel's 30 MB is a framework default rather than anything this platform
-> chose; compression needs the **HTTPS** question answered, and answering it
-> took [ADR-020](adr/ADR-020-the-edge-compresses-over-tls-and-says-so.md).
+> **All seven are configured, and the last two each needed a decision before
+> its line.** Both are statements in `src/Gateway/Gateway.Api/Program.cs`. A
+> size limit needs a **number**, and Kestrel's 30 MB is a framework default
+> rather than anything this platform chose; compression needs the **HTTPS**
+> question answered, and [ADR-020](adr/ADR-020-the-edge-compresses-over-tls-and-says-so.md)
+> answers it.
 >
 > **The number is one mebibyte**, in `GatewayLimits.MaxRequestBodyBytes`, and
 > it is a constant rather than configuration for §15.4's reason — it does not
@@ -61,8 +60,7 @@ carried no TLS, and response compression takes its decision at the first
 scheme although it is registered above the middleware that rewrote it
 ([ADR-020](adr/ADR-020-the-edge-compresses-over-tls-and-says-so.md)).
 Reasoning about what a response-side middleware "sees" from its position in
-the pipeline is reasoning about the wrong moment, and ADR-020's first argument
-did exactly that.
+the pipeline is reasoning about the wrong moment.
 
 **It does not:** contain business logic · aggregate responses from several
 services · transform payloads · access any database · know about domain
@@ -100,162 +98,52 @@ to Catalog ([§2.2](02-architecture-at-a-glance.md), §9.7) — the diagram is t
 **Aggregation is shaped for the screen, and the screen's question is the whole
 of the request.** A BFF that computes a figure the client cannot render has
 aggregated nothing: it has moved the arithmetic one hop and left the client to
-redo it.
-[ADR-045](adr/ADR-045-the-checkout-quote-takes-quantities.md) is where that was
-paid for — the checkout quote totalled a set of products while the caller held
-a basket — and it is why a BFF request carries what the screen has rather than
-the subset a resource would need.
+redo it. So a BFF request carries what the screen has rather than the subset a
+resource would need: the checkout quote takes the basket's quantities, not a
+set of products
+([ADR-045](adr/ADR-045-the-checkout-quote-takes-quantities.md)).
 
 ## 10.2 YARP configuration
 
+The route file is the `ReverseProxy` section of
+`src/Gateway/Gateway.Api/appsettings.json`. Four of its seven routes carry the
+rules below; `catalog-write` and `catalog-own` are described after them, and
+`payments-admin` has `inventory-admin`'s shape:
+
 ```json
-{
-  "ReverseProxy": {
-    "Routes": {
-      "catalog-public": {
-        "ClusterId": "catalog",
-        "Match": { "Path": "/api/v1/catalog/{**catch-all}", "Methods": [ "GET" ] },
-        // "anonymous" is YARP's own reserved value for AllowAnonymous, and it
-        // is here because Common.Web now sets a fallback authorization policy
-        // (§11.4): a route with no AuthorizationPolicy key would inherit the
-        // fallback and this public GET would start answering 401. Naming it
-        // also makes the one public path in this file a decision rather than
-        // an omission — the two read identically without it.
-        "AuthorizationPolicy": "anonymous",
-        "RateLimiterPolicy": "anonymous",
-        "Transforms": [
-          { "PathRemovePrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api" }
-        ]
-      },
-      // Catalog's write side, a route of its own so the public GET above
-      // cannot become a public publish by widening one line. The endpoint
-      // still requires catalog:write (§11.4); this is the edge's coarser check.
-      "catalog-write": {
-        "ClusterId": "catalog",
-        "Match": { "Path": "/api/v1/catalog/{**catch-all}", "Methods": [ "POST", "PUT" ] },
-        "AuthorizationPolicy": "authenticated",
-        "RateLimiterPolicy": "authenticated",
-        "Transforms": [
-          { "PathRemovePrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api" }
-        ]
-      },
-      // A seller's own products (ADR-074): a GET that names a caller, so a
-      // literal path that outranks catalog-public's catch-all.
-      "catalog-own": {
-        "ClusterId": "catalog",
-        "Match": { "Path": "/api/v1/catalog/products/mine", "Methods": [ "GET" ] },
-        "AuthorizationPolicy": "authenticated",
-        "RateLimiterPolicy": "authenticated",
-        "Transforms": [
-          { "PathRemovePrefix": "/api" },
-          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api" }
-        ]
-      },
-      "ordering": {
-        "ClusterId": "ordering",
-        "Match": { "Path": "/api/v1/orders/{**catch-all}" },
-        "AuthorizationPolicy": "authenticated",
-        "RateLimiterPolicy": "authenticated",
-        "Transforms": [ { "PathRemovePrefix": "/api" } ]
-      },
-      "inventory-admin": {
-        "ClusterId": "inventory",
-        "Match": { "Path": "/api/v1/inventory/{**catch-all}" },
-        "AuthorizationPolicy": "inventory:admin",
-        "RateLimiterPolicy": "authenticated",
-        "Transforms": [ { "PathRemovePrefix": "/api" } ]
-      },
-      "payments-admin": {
-        "ClusterId": "payments",
-        "Match": { "Path": "/api/v1/payments/{**catch-all}" },
-        "AuthorizationPolicy": "payments:admin",
-        "RateLimiterPolicy": "authenticated",
-        "Transforms": [ { "PathRemovePrefix": "/api" } ]
-      },
-      "web-bff": {
-        "ClusterId": "web-bff",
-        "Match": { "Path": "/bff/v1/{**catch-all}" },
-        "AuthorizationPolicy": "authenticated",
-        "RateLimiterPolicy": "authenticated",
-        "Transforms": [ { "PathRemovePrefix": "/bff" } ]
-      }
-    },
-    "Clusters": {
-      "catalog": {
-        "LoadBalancingPolicy": "PowerOfTwoChoices",
-        "HealthCheck": {
-          "Active": {
-            "Enabled": true,
-            "Interval": "00:00:10",
-            "Timeout": "00:00:05",
-            "Path": "/health/ready"
-          }
-        },
-        "Destinations": {
-          "d1": { "Address": "http://catalog-api:8080/" }
-        }
-      },
-      "ordering": {
-        "LoadBalancingPolicy": "PowerOfTwoChoices",
-        "HealthCheck": {
-          "Active": {
-            "Enabled": true,
-            "Interval": "00:00:10",
-            "Timeout": "00:00:05",
-            "Path": "/health/ready"
-          }
-        },
-        "Destinations": {
-          "d1": { "Address": "http://ordering-api:8080/" }
-        }
-      },
-      "inventory": {
-        "LoadBalancingPolicy": "PowerOfTwoChoices",
-        "HealthCheck": {
-          "Active": {
-            "Enabled": true,
-            "Interval": "00:00:10",
-            "Timeout": "00:00:05",
-            "Path": "/health/ready"
-          }
-        },
-        "Destinations": {
-          "d1": { "Address": "http://inventory-api:8080/" }
-        }
-      },
-      "payments": {
-        "LoadBalancingPolicy": "PowerOfTwoChoices",
-        "HealthCheck": {
-          "Active": {
-            "Enabled": true,
-            "Interval": "00:00:10",
-            "Timeout": "00:00:05",
-            "Path": "/health/ready"
-          }
-        },
-        "Destinations": {
-          "d1": { "Address": "http://payments-api:8080/" }
-        }
-      },
-      "web-bff": {
-        "LoadBalancingPolicy": "PowerOfTwoChoices",
-        "HealthCheck": {
-          "Active": {
-            "Enabled": true,
-            "Interval": "00:00:10",
-            "Timeout": "00:00:05",
-            "Path": "/health/ready"
-          }
-        },
-        "Destinations": {
-          "d1": { "Address": "http://web-bff:8080/" }
-        }
-      }
-    }
+"Routes": {
+  "catalog-public": {
+    "ClusterId": "catalog",
+    "Match": { "Path": "/api/v1/catalog/{**catch-all}", "Methods": [ "GET" ] },
+    "AuthorizationPolicy": "anonymous",
+    "RateLimiterPolicy": "anonymous",
+    "Transforms": [
+      { "PathRemovePrefix": "/api" },
+      { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api" }
+    ]
+  },
+  "ordering": {
+    "ClusterId": "ordering",
+    "Match": { "Path": "/api/v1/orders/{**catch-all}" },
+    "AuthorizationPolicy": "authenticated",
+    "RateLimiterPolicy": "authenticated",
+    "Transforms": [ { "PathRemovePrefix": "/api" } ]
+  },
+  "inventory-admin": {
+    "ClusterId": "inventory",
+    "Match": { "Path": "/api/v1/inventory/{**catch-all}" },
+    "AuthorizationPolicy": "inventory:admin",
+    "RateLimiterPolicy": "authenticated",
+    "Transforms": [ { "PathRemovePrefix": "/api" } ]
+  },
+  "web-bff": {
+    "ClusterId": "web-bff",
+    "Match": { "Path": "/bff/v1/{**catch-all}" },
+    "AuthorizationPolicy": "authenticated",
+    "RateLimiterPolicy": "authenticated",
+    "Transforms": [ { "PathRemovePrefix": "/bff" } ]
   }
-}
+},
 ```
 
 The two `"authenticated"` values on the `ordering` route are **not** the same
@@ -280,16 +168,15 @@ meaning the framework's default policy, and the same is true of it. A test
 asserting that every named policy resolves has to subtract both, or it fails on
 a route file that is correct.
 
-**`catalog-public` names `anonymous`, and that is now the only way to declare a
-route public.** Naming no policy at all was, until `AddCommonWebDefaults` set a
-fallback authorization policy
+**`catalog-public` names `anonymous`, and that is the only way to declare a
+route public.** `AddCommonWebDefaults` sets a fallback authorization policy
 ([§11.4](11-identity-authorization.md), [ADR-030](adr/ADR-030-authorization-is-deny-by-default-in-the-building-block.md)): a route
 with no `AuthorizationPolicy` key inherits the fallback, and the platform's one
 public path would answer 401. The key is also what makes the decision
 legible — a public path by omission and a public path by decision read
 identically in a route file, and only one of them survives someone else's edit.
 
-Note that `anonymous` now appears twice on `catalog-public`, meaning two
+Note that `anonymous` appears twice on `catalog-public`, meaning two
 different things: YARP's reserved `AllowAnonymous` in one key and §10.3's
 per-IP window in the other. That is the two-registries point above arriving on
 one route rather than across two, and it is the same point — not a second one.
@@ -302,29 +189,26 @@ linked to it. The one Catalog GET it must not serve is a seller's own list
 which names a caller: `catalog-own` matches that literal path, which routing
 ranks above the catch-all, and holds it to `authenticated`.
 
-> **A name it cannot resolve stops the gateway, and this passage said the
-> opposite for a long time.** It described a silent per-route drop — "the path
-> simply stops existing, and the gateway comes up healthy serving whichever
-> routes happened to validate" — and §4.2, §11.4 and Appendix C all repeated
-> it. Measured against the pinned YARP instead of argued:
+**Catalog's write side is a route of its own.** `catalog-write` matches the
+same path for `POST` and `PUT` under `authenticated`, so the public GET cannot
+become a public publish by widening one line. The endpoint still requires
+`catalog:write` (§11.4); the route's `authenticated` is the edge's coarser
+check.
+
+> **A name it cannot resolve stops the gateway.**
 > `ProxyConfigManager.InitialLoadAsync` throws out of `MapReverseProxy()` with
 > an `InvalidOperationException` naming the policy and the route, so the
-> process does not start. The correction runs the reassuring way — a
-> misconfigured edge fails at deployment rather than in production, and this is
-> the one place in the platform where an unregistered policy name fails
-> *better* than it does in a service, where §11.4's endpoint throws on the
-> first request that reaches it.
+> process does not start. A misconfigured edge fails at deployment rather than
+> in production, and this is the one place in the platform where an
+> unregistered policy name fails *better* than it does in a service, where
+> §11.4's endpoint throws on the first request that reaches it.
 >
-> **One more sentence in this callout has since gone the same way, for an
-> unrelated reason.** It used to close "a route naming no policy is still
-> public, and naming none is still the only way to say so", and the fallback
-> policy above makes both halves false: an absent name is a 401 now, and the
-> way to say public is to name `anonymous`. The two corrections are
-> independent — an unresolvable name stops the gateway, an absent name fails
-> closed on the route — and they run the same way, which is that a
-> misconfigured route no longer serves anything by accident.
-> `UnresolvablePolicyTests` in `Gateway.Api.Tests` is where both registries
-> were measured, one test each.
+> **An absent name is a different failure.** An unresolvable name stops the
+> gateway; an absent authorization policy fails closed on the route, under the
+> fallback policy above, so a misconfigured authorization policy serves nothing
+> by accident. An absent rate-limit policy leaves the route unlimited, as
+> below. `UnresolvablePolicyTests` in `Gateway.Api.Tests` holds both registries
+> to refusing to start, one test each.
 
 The `web-bff` route is what makes the BFF reachable, and it is easy to skip:
 the BFF has an image, a chart, a Keycloak client and a CI filter without one,
@@ -334,7 +218,7 @@ privately, it is deployed unreachably. `/bff` rather than `/api`, because a
 client picks one or the other: aggregated responses shaped for a screen, or the
 service APIs shaped for a resource. **It matches `/bff/v1`, not the whole
 namespace**: the BFF maps its anonymous health endpoints on the port its API
-listens on, and a catch-all over `/bff` published them to every signed-in
+listens on, and a catch-all over `/bff` would publish them to every signed-in
 caller, its readiness and startup probes each a database check.
 `ProxiedRouteTests` holds the three health paths, and an unversioned one, to a
 404 that never reaches the BFF.
@@ -360,24 +244,41 @@ applies no limit when the property is absent, so a route opts out of §10.1's
 rate limiting by omission — and the route most likely to be forgotten is the
 one added last, under pressure, to expose something internal. The
 `inventory-admin` route is authenticated and narrowly authorised, which is
-exactly the reasoning that
-justifies leaving it unlimited and exactly why that reasoning is wrong: an
-authorised client with a broken retry loop is still a flood, and this one
-reaches an inventory database. Assert the invariant rather than reviewing for
-it — deserialise the `Routes` section in a test and require the property on
-every entry.
+exactly the reasoning that justifies leaving it unlimited and exactly why that
+reasoning is wrong: an authorised client with a broken retry loop is still a
+flood, and this one reaches an inventory database. Assert the invariant rather
+than reviewing for it — deserialise the `Routes` section in a test and require
+the property on every entry.
 
-**Every route carries an `AuthorizationPolicy` too**, and that mirror invariant
-is the newer one: it used to be false by design, because a public route said so
-by omission. The fallback policy inverted it (§11.4), and both halves are
-asserted the same way — `Every_route_names_a_rate_limiter_policy` and
+**Every route carries an `AuthorizationPolicy` too**, the mirror invariant, and
+both halves are asserted the same way —
+`Every_route_names_a_rate_limiter_policy` and
 `Every_route_names_an_authorization_policy` in `Gateway.Api.Tests`, one
 `foreach` over the same deserialised section. The two are not the same kind of
-rule any more, though. The rate-limiter one is a security invariant, because an
-omission is an unmetered path; the authorization one is a readability rule,
-because an omission now fails closed. It is worth asserting for the thing the
+rule, though. The rate-limiter one is a security invariant, because an omission
+is an unmetered path; the authorization one is a readability rule, because an
+omission fails closed (§11.4). It is worth asserting for the thing the
 fallback cannot do: answer, in this file, the question the person reading it
 came with.
+
+Every cluster in the file has the same shape, Catalog's here:
+
+```json
+"catalog": {
+  "LoadBalancingPolicy": "PowerOfTwoChoices",
+  "HealthCheck": {
+    "Active": {
+      "Enabled": true,
+      "Interval": "00:00:10",
+      "Timeout": "00:00:05",
+      "Path": "/health/ready"
+    }
+  },
+  "Destinations": {
+    "d1": { "Address": "http://catalog-api:8080/" }
+  }
+},
+```
 
 `PowerOfTwoChoices` picks two destinations at random and routes to the less
 loaded of the pair. It avoids both the herd behaviour of least-requests and the
@@ -440,11 +341,11 @@ is an unlimited copy carrying no authorization decision of its own:
 }
 ```
 
-**That copy used to be a public one and is a 401 one now**, which is a smaller
-defect and still a defect. The fallback policy (§11.4) catches the missing
-`AuthorizationPolicy`, so a copy of an authenticated route is right by accident
-and a copy of `catalog-public` stops serving the anonymous callers it exists
-for — the same omission failing in whichever direction the original was
+**Under the fallback policy that copy is a 401 one rather than a public one**,
+which is a smaller defect and still a defect. The fallback (§11.4) catches the
+missing `AuthorizationPolicy`, so a copy of an authenticated route is right by
+accident and a copy of `catalog-public` stops serving the anonymous callers it
+exists for — the same omission failing in whichever direction the original was
 declared. Nothing catches the missing `RateLimiterPolicy` at all, which is what
 the invariant above is asserted for.
 
@@ -457,13 +358,13 @@ the invariant above is asserted for.
 > **The in-process API tests do not catch this.** They call the service
 > directly, on `/v1/orders/...` ([§12.4](12-test-strategy.md)), so they exercise everything after the
 > strip and nothing before it. Path composition is gateway configuration, and
-> `Gateway.Api.Tests` ([Appendix C](appendix-c-delivery-plan.md), PR-17) is
-> the only place it is checked. Three assertions carry it: every route strips
-> exactly the namespace it matches — one strip per namespace, so a route under
-> `/api` cannot remove `/api/v1` — every route's forwarded path is one the
-> service behind it serves, and, over a stub destination on loopback, the path
-> a service actually received is the path with the prefix gone. The last is
-> the only one made against a request rather than against configuration.
+> `Gateway.Api.Tests` is the only place it is checked. Three assertions carry
+> it: every route strips exactly the namespace it matches — one strip per
+> namespace, so a route under `/api` cannot remove `/api/v1` — every route's
+> forwarded path is one the service behind it serves, and, over a stub
+> destination on loopback, the path a service actually received is the path
+> with the prefix gone. The last is the only one made against a request rather
+> than against configuration.
 >
 > **The pair above is an example, and the shipped route file does not carry
 > it.** A `/api/v2/orders` route would forward to a service that maps `/v1`
@@ -493,103 +394,90 @@ evidence.
 
 ## 10.3 Rate limiting
 
+`src/Gateway/Gateway.Api/Program.cs` registers two policies, under the names
+`GatewayRateLimiterPolicies` holds. `anonymous` is a fixed window per address
+with no queue, for the routes that admit an anonymous caller; `authenticated`
+is a token bucket per subject:
+
 ```csharp
-builder.Services.AddRateLimiter(options =>
+options.AddPolicy(
+    GatewayRateLimiterPolicies.Authenticated,
+    context => RateLimitPartition.GetTokenBucketLimiter(
+        partitionKey: context.User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+            RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
+        factory: _ => new TokenBucketRateLimiterOptions
+        {
+            TokenLimit = 300,
+            TokensPerPeriod = 300,
+            ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+            QueueLimit = 10,
+            AutoReplenishment = true
+        }));
+```
+
+A rejection is answered by the same registration's handler:
+
+```csharp
+options.OnRejected = async (context, _) =>
 {
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    options.AddPolicy(
-        "anonymous",
-        context => RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 100,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
-            }));
-
-    options.AddPolicy(
-        "authenticated",
-        context => RateLimitPartition.GetTokenBucketLimiter(
-            partitionKey: context.User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-                RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
-            factory: _ => new TokenBucketRateLimiterOptions
-            {
-                TokenLimit = 300,
-                TokensPerPeriod = 300,
-                ReplenishmentPeriod = TimeSpan.FromMinutes(1),
-                QueueLimit = 10,
-                AutoReplenishment = true
-            }));
-
-    // Through IProblemDetailsService, not WriteAsJsonAsync — see below.
-    options.OnRejected = async (context, _) =>
+    if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
     {
-        // RetryAfterHeader.Seconds, not a cast and not an inline ceiling —
-        // see below.
-        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
+        context.HttpContext.Response.Headers.RetryAfter =
+            RetryAfterHeader.Seconds(retryAfter).ToString(CultureInfo.InvariantCulture);
+    }
+
+    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+
+    IProblemDetailsService problems = context.HttpContext.RequestServices
+        .GetRequiredService<IProblemDetailsService>();
+
+    await problems.WriteAsync(new ProblemDetailsContext
+    {
+        HttpContext = context.HttpContext,
+        ProblemDetails =
         {
-            context.HttpContext.Response.Headers.RetryAfter =
-                RetryAfterHeader.Seconds(retryAfter).ToString(CultureInfo.InvariantCulture);
+            Status = StatusCodes.Status429TooManyRequests,
+            Title = "Too many requests",
+            Type = "https://tools.ietf.org/html/rfc6585#section-4"
         }
-
-        // Before the write: the customisation reads the response status, and
-        // the service refuses to write once the response has started.
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-
-        IProblemDetailsService problems = context.HttpContext.RequestServices
-            .GetRequiredService<IProblemDetailsService>();
-
-        await problems.WriteAsync(new ProblemDetailsContext
-        {
-            HttpContext = context.HttpContext,
-            ProblemDetails =
-            {
-                Status = StatusCodes.Status429TooManyRequests,
-                Title = "Too many requests",
-                Type = "https://tools.ietf.org/html/rfc6585#section-4"
-            }
-        });
-    };
-});
+    });
+};
 ```
 
 > **The rejection goes through `IProblemDetailsService`, and writing the body
-> directly is a contract violation nothing would report.** This block used to
-> call `WriteAsJsonAsync`, which serialises a `ProblemDetails` as
-> `application/json` and runs none of §10.5's customisation — so the one
-> response a client is most likely to handle programmatically would be the one
-> carrying neither the right media type nor `correlationId`, on a platform
-> whose stated promise is a single error shape. The write above takes the same
-> path `Results.Problem` and `UseExceptionHandler` take, which is why a 429, a
-> returned 422 and an unhandled 500 all carry the same three members.
+> directly is a contract violation nothing would report.** `WriteAsJsonAsync`
+> serialises a `ProblemDetails` as `application/json` and runs none of §10.5's
+> customisation — so the one response a client is most likely to handle
+> programmatically would be the one carrying neither the right media type nor
+> `correlationId`, on a platform whose stated promise is a single error shape.
+> The write above takes the same path `Results.Problem` and
+> `UseExceptionHandler` take, which is why a 429, a returned 422 and an
+> unhandled 500 all carry the same three members. The status is set before
+> the write rather than after it, because a response that has started cannot
+> change its status.
 >
 > `ToString(CultureInfo.InvariantCulture)` on the `Retry-After` seconds for a
 > smaller reason with the same shape: a header value has one correct spelling
 > whatever the server's culture, and CA1305 makes the bare `ToString()` a
 > failed build under ADR-019.
 >
-> **`RetryAfterHeader.Seconds` rather than an expression, and the expression
-> alone was a defect this sample shipped.** `Retry-After` is whole seconds
-> (RFC 9110) and the window remaining is fractional far more often than not,
-> so `(int)0.8` emits `Retry-After: 0` — which does not merely lose precision,
-> it reads as permission and sends a well-behaved client straight back into a
-> limiter that is still refusing. Rounding up is the only direction that
-> cannot advertise a time at which the request still fails, and the helper
-> also clamps an already-expired lease to zero rather than emitting a negative
-> a client cannot parse.
+> **`RetryAfterHeader.Seconds` rather than an expression.** `Retry-After` is
+> whole seconds (RFC 9110) and the window remaining is fractional far more
+> often than not, so a truncating `(int)0.8` emits `Retry-After: 0` — which
+> does not merely lose precision, it reads as permission and sends a
+> well-behaved client straight back into a limiter that is still refusing.
+> Rounding up is the only direction that cannot advertise a time at which the
+> request still fails, and the helper also clamps an already-expired lease to
+> zero rather than emitting a negative a client cannot parse.
 >
 > **It is a type rather than a line because the rule is otherwise close to
 > untestable.** This window is a minute long, so a rejection carries tens of
-> seconds and the truncating form rounds identically — the suite's own 429
-> assertions passed with the bug in place, and a comment here claimed they
-> caught it until that was measured. Reaching the truncating case through HTTP
-> means holding a window open for fifty-nine seconds; against the helper it is
-> three rows of a theory. **Call it from the sample rather than restating the
-> arithmetic**: an inline ceiling here and a clamp there is the same one-form-
-> two-places drift the rule at the top of `CLAUDE.md` exists for, and it had
-> already reappeared once in this chapter.
+> seconds and the truncating form rounds identically — a 429 assertion over
+> HTTP passes against either. Reaching the truncating case through HTTP means
+> holding a window open for fifty-nine seconds; against the helper it is a row
+> of `RetryAfterHeaderTests`' theory. **Call the helper rather than restating
+> the arithmetic**: an inline ceiling here and a clamp there is the same
+> one-form-two-places drift the rule at the top of `CLAUDE.md` exists for.
 
 The `authenticated` policy is only correct if `UseAuthentication` has already
 run when the limiter middleware executes — see the pipeline in §4.2. The
@@ -637,9 +525,10 @@ different reason — and it propagates through every service, log line and
 trace. A message carries a correlation of its own instead
 ([§9.1](09-messaging.md), [§9.4](09-messaging.md)). This is what makes a production incident diagnosable.
 
-It ships in `Common.Web` as one extension, called by both the gateway and every
-service (§4.2), above everything that logs — a log line written before it has no
-correlation ID.
+It ships in `Common.Web` as one extension, `UseCorrelationId` in
+`src/BuildingBlocks/Common.Web/CorrelationIdExtensions.cs`, called by both the
+gateway and every service (§4.2), above everything that logs — a log line
+written before it has no correlation ID.
 
 **Two things sit above it, and only one of them is about correlation.**
 `UseSecurityHeaders` is outermost (§10.6), and its position is a claim about
@@ -655,105 +544,46 @@ which is exactly where `CustomizeProblemDetails` reads it from. The correlation
 ID reaches the client on the one response where the log scope cannot carry it:
 
 ```csharp
-namespace Common.Web;
+return app.Use(async (context, next) =>
+{
+    string? supplied = context.Request.Headers[Header].FirstOrDefault();
 
-// Public, and read in three places: here, by AddCommonProblemDetails when it
-// builds §10.5's body, and by CorrelationIdHandler on the way out. It was a
-// local const in this sample while two of those spelled the literal instead,
-// which is three copies of one contract.
-public const string Header = "X-Correlation-Id";
+    string correlationId = IsAdoptable(supplied)
+        ? supplied
+        : Activity.Current?.TraceId.ToString() ?? Guid.CreateVersion7().ToString();
 
-/// <summary>
-/// The longest supplied ID this middleware will adopt (§10.4).
-/// </summary>
-/// <remarks>
-/// Both values the fallback mints are far shorter — a 32-character trace ID
-/// or a 36-character GUID — so the bound is generous rather than tight, and
-/// exists to stop an unauthenticated caller choosing how much of every log
-/// record on the platform it writes. Kestrel's own header budget is tens of
-/// kilobytes, and this middleware runs above <c>UseAuthentication</c>
-/// (§4.2), so the input is unauthenticated on every request that reaches a
-/// host.
-/// </remarks>
+    context.Request.Headers[Header] = correlationId;
+
+    // From OnStarting, because UseExceptionHandler clears the response before writing its body (§10.4).
+    context.Response.OnStarting(
+        static state =>
+        {
+            (HttpResponse response, string id) = ((HttpResponse, string))state;
+            response.Headers[Header] = id;
+
+            return Task.CompletedTask;
+        },
+        (context.Response, correlationId));
+
+    // Not log forging: IsAdoptable has already replaced anything off its alphabet (§10.4).
+    using (logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
+        await next();
+});
+```
+
+`Header` is `CorrelationIdExtensions.Header`, public so that every reader —
+§10.5's problem body, `CorrelationIdHandler` below and the gateway's CORS
+policy — spells the name once. The scope is `BeginScope`, the
+Microsoft.Extensions.Logging primitive and not Serilog's `LogContext`:
+OpenTelemetry is the whole logging stack (Appendix B) and reads scopes, and
+§13.3's `LoggingBehavior` uses the same call. The callback is static, with the
+response and the ID passed as state, so it captures nothing per request.
+
+The guard is `IsAdoptable`, bounded by `MaxSuppliedLength`:
+
+```csharp
 public const int MaxSuppliedLength = 128;
 
-public static IApplicationBuilder UseCorrelationId(this IApplicationBuilder app)
-{
-    // Resolved once, outside the delegate: this runs on every request, and
-    // ILoggerFactory is a singleton whose per-request lookup buys nothing.
-    ILogger logger = app.ApplicationServices
-        .GetRequiredService<ILoggerFactory>()
-        .CreateLogger("Common.Web.CorrelationId");
-
-    return app.Use(async (context, next) =>
-    {
-        // FirstOrDefault on absent headers is null; an empty header value is
-        // not, and would otherwise become a correlation ID of "".
-        string? supplied = context.Request.Headers[Header].FirstOrDefault();
-
-        string correlationId = IsAdoptable(supplied)
-            ? supplied
-            : Activity.Current?.TraceId.ToString() ?? Guid.CreateVersion7().ToString();
-
-        context.Request.Headers[Header] = correlationId;
-
-        // The RESPONSE header is written from OnStarting rather than here, for
-        // §10.6's reason one middleware over: UseExceptionHandler CLEARS the
-        // response before writing §10.5's problem body, so a header assigned
-        // on the way in is gone from exactly the 500 an incident is triaged
-        // from. The request header stays an eager write — it is what
-        // CustomizeProblemDetails reads after the log scope has been disposed,
-        // and nothing clears it.
-        //
-        // A static callback with the value passed as state, so the closure
-        // captures nothing and this allocates once per request rather than
-        // twice.
-        context.Response.OnStarting(
-            static state =>
-            {
-                (HttpResponse response, string id) = ((HttpResponse, string))state;
-                response.Headers[Header] = id;
-
-                return Task.CompletedTask;
-            },
-            (context.Response, correlationId));
-
-        // BeginScope, the Microsoft.Extensions.Logging primitive — not
-        // Serilog's LogContext. OpenTelemetry is the whole logging stack here
-        // (Appendix B), and it reads scopes; §13.3's LoggingBehavior uses the
-        // same call for the same reason.
-        using (logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
-            await next();
-    });
-}
-
-/// <summary>
-/// Whether a supplied header value is a plausible identifier this host is
-/// willing to adopt, rather than merely a non-blank string.
-/// </summary>
-/// <remarks>
-/// <b>Anything refused is replaced, never echoed.</b> The adopted value
-/// reaches four places — the response header, the forwarded request, the
-/// log scope every record for this request inherits, and §10.5's problem
-/// body — so a value that fails here would otherwise be reflected to an
-/// unauthenticated caller and multiplied into collector ingest by the
-/// record count.
-/// <para>
-/// The alphabet is the one both fallback branches already mint from: a
-/// 32-character hex trace ID and a dashed GUID. Underscore is admitted
-/// beside the hyphen because an upstream edge that mints its own IDs
-/// commonly uses it, and neither character can break a log line or a query.
-/// Deliberately <em>not</em> narrowed to exactly a trace ID or a GUID:
-/// §10.4's promise is that an ID chosen by the caller's own tracing
-/// survives the hop, and this platform is not the only thing that mints
-/// one.
-/// </para>
-/// <para>
-/// Kestrel already rejects CR and LF inside a request header value, so log
-/// splitting is not reachable through it — this is the bound on length and
-/// alphabet, not a rescue from that.
-/// </para>
-/// </remarks>
 private static bool IsAdoptable([NotNullWhen(true)] string? supplied)
 {
     if (supplied is not { Length: > 0 and <= MaxSuppliedLength })
@@ -795,25 +625,25 @@ matters most. The *request* header stays an eager write: it is what
 nothing clears it. Two channels, two lifetimes, and only one of them survives
 the unwind by being written late.
 
-> **This was the shape of a defect rather than a symmetry noticed in
-> passing.** `nosniff` was moved onto `OnStarting` with the argument spelled
-> out and a test that drives the 500; the correlation ID was left assigning
-> eagerly, so after that change an error response carried
-> `X-Content-Type-Options` and not `X-Correlation-Id`. **A rule established
-> for one header is owed to every header on the same response**, and the test
-> that catches it has to compose `UseExceptionHandler` — no test of a request
-> that succeeds can see this.
+> **A rule established for one header is owed to every header on the same
+> response.** An error response that carries `X-Content-Type-Options` and not
+> `X-Correlation-Id` is what follows from moving one of them onto `OnStarting`
+> and not the other, and the test that catches it has to compose
+> `UseExceptionHandler` — no test of a request that succeeds can see this.
+> `The_id_is_on_the_response_that_UseExceptionHandler_writes` in
+> `Common.Web.Tests` is that test.
 
 **It is a bound on length and alphabet, and not a rescue from log splitting**,
-which was never reachable. Kestrel rejects CR and LF inside a request header
-value before any middleware sees it, so the injection this guard looks like a
-defence against was already closed one layer down. Saying so is the point: a
+which is not reachable. Kestrel rejects CR and LF inside a request header value
+before any middleware sees it, so the injection this guard looks like a
+defence against is closed one layer down. Saying so is the point: a
 guard credited with a property it does not supply is the one nobody re-checks
 when the layer below it changes.
 
 **The alphabet deliberately admits more than this platform's own two fallbacks
 mint.** Those are a 32-character hex trace ID and a dashed GUID; the guard
-accepts ASCII letters, digits, `-` and `_` up to `MaxSuppliedLength`. Underscore
+accepts ASCII letters, digits, `-` and `_` up to `MaxSuppliedLength`, a bound
+generous rather than tight because both fallbacks are far shorter. Underscore
 is in because an upstream edge that mints its own IDs commonly uses it, and
 neither it nor the hyphen can break a log line or a query. Narrowing to exactly
 a trace ID or a GUID would be tidier and would break this section's promise —
@@ -856,7 +686,10 @@ Without a header on it the callee mints an ID from its own trace, and one
 incident has two of them.
 
 `CorrelationIdHandler` is the outbound half — a `DelegatingHandler` on the
-outbound client, so no call site has to remember it:
+outbound client, so no call site has to remember it. It is
+`src/BuildingBlocks/Common.Web/CorrelationIdHandler.cs`, and it sets the header
+rather than adding it, because `Add` would accumulate one value per retried
+attempt into a header the callee reads with `FirstOrDefault`:
 
 ```csharp
 namespace Common.Web;
@@ -871,9 +704,7 @@ public sealed class CorrelationIdHandler(IHttpContextAccessor context) : Delegat
             .Headers[CorrelationIdExtensions.Header]
             .FirstOrDefault();
 
-        // Set rather than added: a retried attempt runs this handler again on
-        // the same HttpRequestMessage, and Add would accumulate one value per
-        // attempt into a header the callee reads with FirstOrDefault.
+        // Set rather than added, because a retried attempt runs this handler again on the same request.
         if (!string.IsNullOrWhiteSpace(correlationId))
         {
             request.Headers.Remove(CorrelationIdExtensions.Header);
@@ -899,12 +730,8 @@ public sealed class CorrelationIdHandler(IHttpContextAccessor context) : Delegat
 > callee's own middleware then mints one from the current trace — the right
 > answer for a call with no request behind it, such as a background job.
 > Sending an empty header instead would spend a header and buy nothing: the
-> callee refuses it and mints anyway. That used to be an appeal to the
-> blank-counts-as-missing guard, the rule this blueprint has already had to
-> write twice ([§11.3](11-identity-authorization.md)); the guard above is now
-> the wider one — every value it will not adopt is treated as missing, and
-> `""` is merely the shortest of them — which leaves this argument intact and
-> resting on less.
+> callee's guard treats every value it will not adopt as missing, `""` merely
+> the shortest of them, and mints anyway.
 
 **A notice's mail is the one message that leaves the platform, and it carries
 a correlation under this section's header name.** Notifications' send worker
@@ -922,32 +749,30 @@ formatted by code, so no text another process wrote reaches the header.
 Every service returns RFC 9457 `application/problem+json`, so clients handle one
 error shape regardless of which service produced it.
 
-It ships in `Common.Web` as one extension, which `AddCommonWebDefaults`
-composes ([§13.2](13-observability.md)) rather than each host calling it:
+It ships in `Common.Web` as one extension, `AddCommonProblemDetails` in
+`src/BuildingBlocks/Common.Web/ProblemDetailsExtensions.cs`, which
+`AddCommonWebDefaults` composes ([§13.2](13-observability.md)) rather than each
+host calling it:
 
 ```csharp
 namespace Common.Web;
 
 public static IServiceCollection AddCommonProblemDetails(this IServiceCollection services)
 {
-    // The validation row needs an executor, not just a producer — the
-    // handler that turns ValidationBehavior's thrown ValidationException
-    // into the field-keyed problem response. Registered here so no host can
-    // take the customisation without it (see below).
     services.AddExceptionHandler<ValidationExceptionHandler>();
-    // The 409 rows', on the same terms. None of these statuses is produced by
-    // returning an Error — each is thrown beside a handler rather than
-    // returned by one — so each needs its own executor, and all of them are
-    // registered here so that no host can take the customisation without them.
+
     services.AddExceptionHandler<ConcurrencyExceptionHandler>();
+
     services.AddExceptionHandler<ConcurrentRequestExceptionHandler>();
+
     services.AddExceptionHandler<CommandAlreadyCommittedExceptionHandler>();
+
     services.AddExceptionHandler<CommandIdReusedExceptionHandler>();
-    // The unreadable-request row's, for a refusal the framework raises before
-    // the endpoint's delegate is entered. Raised in every environment rather
-    // than under Development alone, which is the framework's default, so a
-    // malformed body has one answer wherever the host runs.
+
     services.AddExceptionHandler<BadHttpRequestExceptionHandler>();
+
+    // Every environment raises a binding refusal, so the answer cannot vary with IsDevelopment (§10.5);
+    // PostConfigure, since routing's own default is a Configure that may be registered after this call.
     services.PostConfigure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 
     return services.AddProblemDetails(options =>
@@ -956,9 +781,7 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
             context.ProblemDetails.Instance =
                 $"{context.HttpContext.Request.Method} {context.HttpContext.Request.Path}";
 
-            // Read from the request rather than the log scope: this is the one
-            // path §10.4's middleware keeps alive through an unwinding
-            // exception, and an error response is exactly when it matters.
+            // From the request, which survives an unwinding exception where the log scope does not (§10.4).
             context.ProblemDetails.Extensions["correlationId"] =
                 context.HttpContext.Request.Headers[CorrelationIdExtensions.Header].FirstOrDefault();
 
@@ -967,6 +790,9 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
         });
 }
 ```
+
+The exception handlers are registered here, beside the customisation, so that
+no host can take the one without the others.
 
 | Situation | Status | Notes |
 |---|---|---|
@@ -978,7 +804,7 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
 | Concurrency conflict, no precondition sent | 409 | From `DbUpdateConcurrencyException`, `code` `request.concurrency_conflict` |
 | A request under this key is still in flight | 409 | From `ConcurrentRequestException` ([§8.5](08-caching-redis.md)), `code` `request.in_progress`. Deliberately not a status of its own: 425 is about replayed TLS early data and 503 says the service is unavailable when it is serving everyone else. This one and the row above both say *retry*, and their `detail` is what separates them |
 | The command under this key has already been applied | 409 | From `CommandAlreadyCommittedException` ([§8.5](08-caching-redis.md), [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md), [ADR-059](adr/ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md)), `code` `command.already_committed`. A 409 that does **not** say retry, which is why the `detail` carries the whole difference: the work is durable and its result cannot be handed back — never recorded on the lost-acknowledgement path, recorded and expired on the commoner one, recorded with no fingerprint to show it is this request's on the third — so a retry meets this same refusal for as long as the entry or the marker lasts. Read the resource. 200 with an empty body is the tempting alternative and is worse — a success-shaped answer to a request whose result this service cannot produce |
-| The command identifier was already used for a different request | 409 | From `CommandIdReusedException` ([§8.5](08-caching-redis.md), [ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)), `code` `command.id_reused`. It does **not** say retry either: the key's entry holds another command's result, so this request, sent again under the same identifier, meets this refusal for as long as that entry lives. A changed request is a new request and takes a new identifier. 200 with the stored result is what this row replaced — a success-shaped answer to a request that was never applied |
+| The command identifier was already used for a different request | 409 | From `CommandIdReusedException` ([§8.5](08-caching-redis.md), [ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)), `code` `command.id_reused`. It does **not** say retry either: the key's entry holds another command's result, so this request, sent again under the same identifier, meets this refusal for as long as that entry lives. A changed request is a new request and takes a new identifier. 200 with the stored result would be a success-shaped answer to a request that was never applied |
 | `If-Match` / `If-Unmodified-Since` failed | **412** | The client *did* send a precondition and it did not hold. Distinguishing this from 409 tells the client whether retrying with a fresh ETag is the fix |
 | Request body past the edge's ceiling | **413** | The gateway only (§10.1). Kestrel's `BadHttpRequestException` is answered inside the forwarder, which sets this status and writes no body, so it never reaches `UseExceptionHandler` and `UseStatusCodePages` writes the shape. `ExceptionHandlerMiddleware` reads no status off an exception — one that escapes is the unreadable-request row's, at its own status |
 | Domain rule violated | 422 | The request was well-formed but not allowed |
@@ -991,15 +817,14 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
 
 The table maps *situations* to statuses. `Error` is what a handler returns to
 say which situation it is, and it is three fields rather than a string because
-two of them have consumers that are not the client:
+two of them have consumers that are not the client. It is
+`src/BuildingBlocks/Common.Application/Error.cs`:
 
 ```csharp
 namespace Common.Application;
 
-/// <summary>
-/// A failure a handler chose to return, as opposed to one it threw. Code is a
-/// stable identifier, Description is for a person, and Type selects the status.
-/// </summary>
+/// <summary>A failure a handler returns rather than throws; <see cref="Type"/> selects the status (§10.5).</summary>
+/// <remarks><see cref="Code"/> is a metric dimension, so its value set is closed (§10.5).</remarks>
 public sealed record Error(string Code, string Description, ErrorType Type)
 {
     public static Error NotFound(string code, string description) =>
@@ -1012,30 +837,24 @@ public sealed record Error(string Code, string Description, ErrorType Type)
         new(code, description, ErrorType.Unavailable);
 }
 
-/// <summary>
-/// Three cases, not four. There is deliberately no Validation member: a
-/// malformed request never reaches a handler, so no handler can return one.
-/// </summary>
+/// <summary>No Validation member: a malformed request never reaches a handler to return one (§10.5).</summary>
 public enum ErrorType { NotFound, Rule, Unavailable }
 ```
+
+A service's catalogue is one static class, Ordering's in
+`src/Services/Ordering/Ordering.Application/Orders/OrderErrors.cs`:
 
 ```csharp
 namespace Ordering.Application.Orders;
 
-/// <summary>
-/// The catalogue. Every Error the service can return is constructed here and
-/// nowhere else — which is what makes Code a bounded set rather than whatever
-/// string the nearest handler happened to type.
-/// </summary>
+/// <summary>Every <see cref="Error"/> the service returns is built here, so <c>Code</c> is a closed set.</summary>
+/// <remarks><c>Code</c> is a metric dimension, so no id or count goes in one (§10.5).</remarks>
 public static class OrderErrors
 {
     public static readonly Error NotFound =
         Error.NotFound("order.not_found", "No order with that id.");
 
-    // Returned for Delivered as well as Shipped, so the description names
-    // neither: the code is a §9.8 dimension value and cannot be split, and a
-    // sentence naming one of two statuses tells the other one's customer
-    // something untrue.
+    /// <summary>For <c>Delivered</c> as well as <c>Shipped</c>; one code, being a §9.8 dimension.</summary>
     public static readonly Error AlreadyShipped =
         Error.Rule(
             "order.already_shipped",
@@ -1060,19 +879,22 @@ set is enumerable by reflection and reviewable by reading one file.
 Note what is *not* in the code: no order id, no customer id, no count. Those
 belong in `Description`, which is written for a person and never tagged onto an
 instrument. `ProductsUnavailable` above is the shape to copy — one code, a
-description that varies.
+description that varies. The converse holds for `AlreadyShipped`: it answers a
+delivered order as well as a shipped one, and since its code cannot be split,
+its description is worded to be true of both.
 
 **`Type` selects the status**, in one place, so the mapping in the table above
-is executed rather than remembered:
+is executed rather than remembered. It is `ResultExtensions`, in
+`src/BuildingBlocks/Common.Web/ResultExtensions.cs`, and §11.4's endpoints call
+it rather than each deciding:
 
 ```csharp
 namespace Common.Web;
 
-// §11.4's endpoints call this, and it is the whole reason ErrorType exists
-// rather than each endpoint deciding.
 public static IResult ToHttpResult(this Result result) =>
     result.IsSuccess ? Results.NoContent() : Problem(result.Error);
 
+/// <remarks>A value result typed as <see cref="Result"/> binds the overload above and loses its payload.</remarks>
 public static IResult ToHttpResult<TValue>(this Result<TValue> result) =>
     result.IsSuccess ? Results.Ok(result.Value) : Problem(result.Error);
 
@@ -1131,7 +953,7 @@ Each belongs to a mechanism that runs before or beside a handler, and giving
 | Status | Produced by | Why not `Error` |
 |---|---|---|
 | 400 | `ValidationBehavior` throwing `ValidationException` ([§6.3](06-cqrs.md)) — or, in the one host with no handler pipeline to run one, an endpoint invoking its own validator and throwing the same exception ([ADR-045](adr/ADR-045-the-checkout-quote-takes-quantities.md)); and, while the endpoint binds its parameters, the binding refusal that the status table's unreadable-request row names | The validation refusal's `errors` extension is field-keyed, and `Error` has no field. A malformed request is refused without a result, so no handler can return one |
-| 401 / 403 | The authentication and authorization middleware (§11.4) | Decided before the endpoint's delegate is entered — and written with **no body at all** unless something converts them, which is what `app.UseStatusCodePages()` is for (§4.2). Registering `AddProblemDetails` is not enough: it supplies a writer that nothing on this path was calling, so the two statuses a client meets first were the two that broke the promise this section opens with. Measured on a gateway 401 in PR-17, true of every host since PR-16, fixed in all of them |
+| 401 / 403 | The authentication and authorization middleware (§11.4) | Decided before the endpoint's delegate is entered — and written with **no body at all** unless something converts them, which is what `app.UseStatusCodePages()` is for (§4.2). Registering `AddProblemDetails` is not enough: it supplies a writer that nothing on this path calls, so without the conversion the two statuses a client meets first would break the promise this section opens with |
 | 409 / 412 | `DbUpdateConcurrencyException` and the precondition filter | A different conversation with the client — retry with a fresh ETag, rather than the request was understood and refused |
 
 That asymmetry is why `Rule` maps to 422 rather than 409: 409 is already spoken
@@ -1141,8 +963,7 @@ The 400 row still needs an executor: an exception is not a response until
 something translates it, and `UseExceptionHandler`'s fallback answers 500 — the
 wrong statement about whose fault a malformed request is. Each refusal the row
 names has its own, an `IExceptionHandler` in `Common.Web` that
-`AddCommonProblemDetails` registers beside the customisation above, and the
-sample's comments name the status-table row each registration answers.
+`AddCommonProblemDetails` registers beside the customisation above.
 `ValidationExceptionHandler` is the validation refusal's. It groups the failures
 by field into the `errors` dictionary, writes through `IProblemDetailsService`
 so the 400 carries the same `instance`, `correlationId` and `traceId` members as
@@ -1150,28 +971,19 @@ every other problem response, and declines everything that is not a
 `ValidationException` — a 400 for a genuine fault would blame the client for the
 service's bug.
 
-**The 409 row needs one for the same reason, and did without it until PR-18.**
-`ConcurrencyExceptionHandler` sits beside the 400's, registered by the same
-call, and translates `DbUpdateConcurrencyException` alone. It matches the
-derived type rather than `DbUpdateException`: the base also covers a violated
-constraint, which is not a race, and telling that client to retry invites a
-second identical failure. Its `detail` names neither the entity nor the row
-version, both of which are storage details ([§7.3](07-persistence.md)) — the
-whole content of this status is *re-read and retry*.
+**The 409 row needs one for the same reason.** `ConcurrencyExceptionHandler`
+sits beside the 400's, registered by the same call, and translates
+`DbUpdateConcurrencyException` alone. It matches the derived type rather than
+`DbUpdateException`: the base also covers a violated constraint, which is not
+a race, and telling that client to retry invites a second identical failure.
+Its `detail` names neither the entity nor the row version, both of which are
+storage details ([§7.3](07-persistence.md)) — the whole content of this status
+is *re-read and retry*.
 
-> **The gap was unreachable for as long as it was, which is why nothing caught
-> it.** A conflict needs a mapped `rowversion` on an aggregate a request can
-> mutate, and Ordering's `Order` is the first in the solution; Catalog maps
-> none. So §7.3 promised a translation from the start, no code performed it,
-> and no test could have failed — the promise became false only when the
-> mechanism it described became reachable.
-
-**§8.5's contention is the third handler, and it arrived the same way the
-second did — with the mechanism that makes it reachable.** Until
-`IdempotencyBehavior` took its pipeline seat, `ConcurrentRequestException` was
-a type nothing threw on an HTTP path; from that PR a duplicate arriving while
-the first attempt is still running reaches `UseExceptionHandler`, which
-answers 500 unless something translates it. That is the worst available
+**§8.5's contention is the third handler.** `IdempotencyBehavior` throws
+`ConcurrentRequestException` for a duplicate arriving while the first attempt
+is still running, and it reaches `UseExceptionHandler`, which answers 500
+unless something translates it. That is the worst available
 outcome for this particular feature: the mechanism reports itself as a server
 fault, and a client treating 500 as fatal abandons an operation that was about
 to succeed. `ConcurrentRequestExceptionHandler` answers 409 and its `detail`
@@ -1183,43 +995,39 @@ it is half of a key whose other segment is the subject.
 `AddCommonProblemDetails` registers, which includes the 400's; the other counts
 what answers this row. The types say the second of those and this paragraph
 says the first, so a reader meeting both should check which is being counted
-rather than which is wrong. It arrived the same way the others did.
+rather than which is wrong.
 `CommandAlreadyCommittedException` is raised by [§6.3](06-cqrs.md)'s
 transaction when a command's key already carries a committed marker
 ([ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)),
-so it was a type nothing threw until the marker existed;
-[§8.5](08-caching-redis.md)'s `IdempotencyBehavior` raises it too, for a
+and [§8.5](08-caching-redis.md)'s `IdempotencyBehavior` raises it too, for a
 completed entry with no fingerprint
 ([ADR-059](adr/ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md)).
 `CommandAlreadyCommittedExceptionHandler` is registered by the same method as
-the others, and **unregistered it costs more than its neighbour's miss
-did**: a 500 here invites exactly the retry the exception exists to refuse, and
+the others, and **unregistered it would cost more than its neighbour**: a
+500 here invites exactly the retry the exception exists to refuse, and
 a client that keeps retrying meets that 500 until the marker's retention
 expires — at which point the command runs a second time. The missing
 registration would put the duplicate write back, one release later. It echoes
 no key for its neighbour's reason: the key carries the subject segment, and no
 response describes a principal.
 
-**Every 409 carries a `code`, and this section is where that stopped being
-optional.** `detail` is human-readable by RFC 9457's own definition, so a
-client switching on it is parsing English — fine while every producer of
-this status said *retry*, and not fine the moment one of them said the
-opposite. So each names itself in the extension member §10.5 already reserves
-for exactly this: `request.concurrency_conflict`, `request.in_progress` and
-`command.already_committed`, and the producer
+**Every 409 carries a `code`.** `detail` is human-readable by RFC 9457's own
+definition, so a client switching on it is parsing English, and the producers
+of this status do not all say the same thing: some say *retry* and some the
+opposite. So each names itself in the extension member §10.5 reserves for
+exactly this: `request.concurrency_conflict`, `request.in_progress`,
+`command.already_committed`, and `command.id_reused` for the producer
 [ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)
-added names itself `command.id_reused` on the same terms. The `Error` path has
-carried a `code` since PR-18; the exception path carried none until a
-contradiction made the absence cost something.
+added. The `Error` path carries a `code` on the same terms.
 
-**The 409s from §8.5 are still told apart by `detail` for a human, and that
+**The 409s from §8.5 are told apart by `detail` for a human, and that
 is the design rather than a shortage of statuses.** They share the statement —
 this request conflicts with work already in hand — and differ in what the
 client should do about it, which is prose a client reads and not a code it
 switches on. Inventing a status for one of them would be inventing one for a
 distinction HTTP does not draw.
 
-The 412 half of that row is still unimplemented, deliberately: it needs a
+The 412 half of that row is unimplemented, deliberately: it needs a
 precondition filter reading `If-Match`, and nothing here sends or reads an
 ETag. What separates the two is whether the client sent a precondition, so
 until it can, every conflict is the no-precondition case the 409s answer.
@@ -1250,8 +1058,7 @@ for as long as its `max-age` says. `X-Frame-Options` and
 `Content-Security-Policy` govern how a browser renders a *document*, and none
 of these four hosts serves one. Their API responses are `application/json` or
 `application/problem+json` and [§13.5](13-observability.md)'s probes are
-`text/plain` — measured, because an earlier draft of this paragraph said every
-response was JSON and `MapHealthChecks` uses the framework's default plain-text
+`text/plain`, because `MapHealthChecks` uses the framework's default plain-text
 writer. A framing or a script policy on a body no browser renders as a document
 protects nothing, and both become live questions for whoever serves the
 storefront [§4.1](04-solution-structure.md) plans rather than for anything here.
@@ -1267,6 +1074,11 @@ response the header is most worth having on. A callback registered here fires
 when the response actually starts, which is after that clear. Position and
 timing are two claims, and being outermost settles only the first.
 
+It is `UseSecurityHeaders`, in
+`src/BuildingBlocks/Common.Web/SecurityHeadersExtensions.cs`, and its callback
+is static with the response passed as state, so it captures nothing per
+request:
+
 ```csharp
 namespace Common.Web;
 
@@ -1277,21 +1089,16 @@ public static IApplicationBuilder UseSecurityHeaders(this IApplicationBuilder ap
 {
     ArgumentNullException.ThrowIfNull(app);
 
-    // The RequestDelegate overload, not the Func<Task> one: the parameterless
-    // spelling reads better and allocates a closure and a wrapper per request,
-    // on a middleware every request traverses.
+    // The RequestDelegate overload, which allocates nothing per request (ADR-031).
     return app.Use((HttpContext context, RequestDelegate next) =>
     {
-        // A static callback with the response passed as state: the closure
-        // would otherwise capture `context` and allocate once per request.
+        // From OnStarting, because UseExceptionHandler clears the response before writing its body (§10.6).
         context.Response.OnStarting(
             static state =>
             {
                 HttpResponse response = (HttpResponse)state;
 
-                // Indexer rather than Append: a host or a proxy that has
-                // already set it must not end up with the header twice,
-                // which some browsers treat as no header at all.
+                // Indexer rather than Append, so the header is never sent twice.
                 response.Headers[ContentTypeOptions] = NoSniff;
 
                 return Task.CompletedTask;
@@ -1382,7 +1189,7 @@ order is on its way.
 
 **Keyed on `Origin` first and `Reason` second**, because `Reason` alone is
 wrong. `Order.Cancel` records the origin and never checks it, and although the
-cancel endpoint now takes `customer_request` alone
+cancel endpoint takes `customer_request` alone
 ([ADR-087](adr/ADR-087-a-caller-cancels-an-order-only-as-a-customer-request.md)),
 an `OrderCancelled` recorded before that rule can pair a user origin with a
 workflow code, and an error queue or a replay can still deliver one — and a
@@ -1419,10 +1226,9 @@ what the buyer is owed is the outcome it works towards, and that arrives as
 `OrderCancelled`.
 
 > **`dispatched` and `delivered` are Shipping's.** §3.2 assigns
-> `ShipmentDispatched` and `ShipmentDelivered` to Shipping, which was
-> specified after this contract was agreed and publishes both through its
-> outbox. This is the timing the issue asked for — the contract settled
-> before the spec, so the spec is written against it.
+> `ShipmentDispatched` and `ShipmentDelivered` to Shipping, which publishes
+> both through its outbox, and Shipping's spec is written against this
+> contract.
 
 ### The fields both routes carry
 
