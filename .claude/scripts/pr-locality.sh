@@ -4,6 +4,7 @@
 # set; the grammar, the exit codes and why the verdict grants nothing are `docs/harness-boundaries.md`'s (*Pull
 # request reads and the locality verdict*), and `test_pr_helpers.py` pins them.
 set -euo pipefail
+. "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"
 pr="${1:?usage: pr-locality.sh <pr-number>}"
 [[ "$pr" =~ ^[0-9]+$ ]] || { echo "pr must be a number" >&2; exit 2; }
 refuse() { echo "$1" >&2; exit 3; }
@@ -11,7 +12,7 @@ refuse() { echo "$1" >&2; exit 3; }
 # authentication, no network, no such pull request — is fatal under `set -e`
 # rather than indistinguishable from a body with no rows. Only grep's own
 # no-match status, which is exactly 1, is masked.
-body=$(gh pr view "$pr" --json body --jq .body)
+body=$(gh_read pr view "$pr" --json body --jq .body)
 class_row=$(grep -E '^\| *Class *\|' <<<"$body" || [ $? -eq 1 ])
 touch_row=$(grep -E '^\| *Touch set *\|' <<<"$body" || [ $? -eq 1 ])
 # Exactly one of each, or none, checked before either grammar: with two rows a
@@ -79,7 +80,7 @@ done
 # script chooses for it. `filename` is the whole of what is read, and it is
 # read as a JSON string so that a newline inside a name cannot be a second
 # line: a name that needed an escape is refused rather than decoded.
-files=$(gh api "repos/{owner}/{repo}/pulls/$pr/files" --paginate --jq '.[].filename | @json')
+files=$(gh_read api "repos/{owner}/{repo}/pulls/$pr/files" --paginate --jq '.[].filename | @json')
 verdicts=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue

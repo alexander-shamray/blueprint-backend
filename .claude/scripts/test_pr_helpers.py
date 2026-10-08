@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -132,11 +133,12 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         code = [
             line for line in text.splitlines() if not line.lstrip().startswith("#")
         ]
-        gh_calls = [line.strip() for line in code if "gh " in line]
+        # `gh_read` is `gh` under gh-read-bound.sh's bound, so both spellings are calls (#603).
+        gh_calls = [line.strip() for line in code if "gh " in line or "gh_read " in line]
         self.assertEqual(
             [
-                'body=$(gh pr view "$pr" --json body --jq .body)',
-                'files=$(gh api "repos/{owner}/{repo}/pulls/$pr/files" '
+                'body=$(gh_read pr view "$pr" --json body --jq .body)',
+                'files=$(gh_read api "repos/{owner}/{repo}/pulls/$pr/files" '
                 "--paginate --jq '.[].filename | @json')",
             ],
             gh_calls,
@@ -156,6 +158,9 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
                 self.assertEqual(out.returncode, 2, out.stderr)
 
     def _run_locality_with_gh(self, script):
+        return self._run_helper_with_gh("pr-locality.sh", "187", script)
+
+    def _run_helper_with_gh(self, helper, arg, script, bound=None):
         # A `gh` shim on PATH, the shape every stubbed helper test here uses.
         d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d, ignore_errors=True)
@@ -164,10 +169,49 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         gh.chmod(0o755)
         env = dict(os.environ)
         env["PATH"] = d + os.pathsep + env["PATH"]
+        if bound is not None:
+            env["GH_READ_BOUND_SECONDS"] = bound
         return subprocess.run(
-            [BASH, str(SCRIPTS / "pr-locality.sh"), "187"],
-            capture_output=True, text=True, env=env,
+            [BASH, str(SCRIPTS / helper), arg],
+            capture_output=True, text=True, encoding="utf-8", env=env,
         )
+
+    def test_a_stalled_gh_read_fails_at_the_bound_in_every_helper(self):
+        # #603: an unbounded `gh pr view` held pr-locality.sh, and every step
+        # chained behind it, with nothing printed. The stub outlives the
+        # bound by far, so a return inside it is the bound firing rather
+        # than the stub finishing, and the message is what tells the two
+        # apart from an ordinary `gh` failure. The glob is the subject, so a
+        # helper added later is held to the bound without being named here.
+        helpers = sorted(p.name for p in SCRIPTS.glob("pr-*.sh"))
+        # Named, so a glob that stopped finding one fails rather than passing on fewer.
+        self.assertLessEqual(
+            {"pr-closure-input.sh", "pr-for-branch.sh", "pr-locality.sh", "pr-state.sh"},
+            set(helpers),
+        )
+        for helper in helpers:
+            arg = "some-branch" if helper == "pr-for-branch.sh" else "187"
+            with self.subTest(helper=helper):
+                start = time.monotonic()
+                r = self._run_helper_with_gh(helper, arg, "exec sleep 30\n", bound="1")
+                self.assertLess(time.monotonic() - start, 20, helper)
+                self.assertNotEqual(0, r.returncode, r.stderr)
+                self.assertIn("did not answer within 1 s", r.stderr)
+
+    def test_no_pr_helper_calls_gh_past_the_bound(self):
+        # The case above proves the first read of each helper is bounded; a
+        # second read spelt `gh` directly would pass it, so every call line
+        # is read too. Comments are skipped, since they name `gh pr view`.
+        bare = re.compile(r"(?<![\w-])gh (pr|api|repo|issue|run)\b")
+        for path in sorted(SCRIPTS.glob("pr-*.sh")):
+            code = [
+                line for line in path.read_text(encoding="utf-8").splitlines()
+                if not line.lstrip().startswith("#")
+            ]
+            with self.subTest(helper=path.name):
+                self.assertIn(
+                    '. "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"', code)
+                self.assertEqual([], [line for line in code if bare.search(line)])
 
     @staticmethod
     def _gh_printing(body, files="docs/x.md\n"):
