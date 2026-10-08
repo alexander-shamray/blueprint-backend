@@ -12,4 +12,5 @@ public sealed record TrackingWork(
     int PollAttempts,
     DateTimeOffset CreatedAt,
     string? TraceParent,
-    string? TraceState);
+    string? TraceState,
+    DateTimeOffset LockedUntil);

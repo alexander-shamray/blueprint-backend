@@ -30,7 +30,7 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {TrackingWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
         OUTPUT inserted.Id, inserted.OrderId, inserted.CarrierReference, inserted.PollAttempts, inserted.CreatedAt,
-            inserted.TraceParent, inserted.TraceState;
+            inserted.TraceParent, inserted.TraceState, inserted.LockedUntil;
         """;
 
     // The dispatcher's ladder on this worker's own count (ADR-054), floored at the poll interval so a 429 is
@@ -53,7 +53,7 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
                           THEN {OutboxDispatcher.BackoffAttemptCap}
                           ELSE shipment.PollAttempts END) * {OutboxDispatcher.BackoffBaseSeconds}
         )) AS ladder (Seconds)
-        WHERE shipment.Id = @Id;
+        WHERE shipment.Id = @Id AND shipment.LockedUntil = @Lease;
         """;
 
     public async Task<IReadOnlyList<TrackingWork>> ClaimAsync(CancellationToken ct)
@@ -64,11 +64,13 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         return [.. await connection.QueryAsync<TrackingWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
     }
 
-    // No count abandons a row: it leaves the poll when terminal or past TrackingWorker.GiveUpAge (ADR-054).
-    public async Task FailAsync(Guid id, CancellationToken ct)
+    // No count abandons a row: it leaves the poll when terminal or past TrackingWorker.GiveUpAge (ADR-054). Only
+    // while the lease is still this pass's, exactly: a lapsed pass would clear a reclaimer's and move its poll.
+    public async Task FailAsync(Guid id, DateTimeOffset lease, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
 
-        await connection.ExecuteAsync(new CommandDefinition(FailSql, new { Id = id }, cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(FailSql, new { Id = id, Lease = lease }, cancellationToken: ct));
     }
 }

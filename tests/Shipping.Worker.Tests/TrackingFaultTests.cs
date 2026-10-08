@@ -62,6 +62,24 @@ public sealed class TrackingFaultTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_backoff_the_database_refuses_is_logged_as_the_backoffs_and_the_pass_still_ends()
+    {
+        Shipment shipment = await _fixture.BookedAsync("SIM-TRANSIT");
+        await _fixture.SetCarrierReferenceAsync(shipment.Id, "crr_down");
+        using IDisposable down = ServiceFixture.CarrierAnswers(_carrier, "/v1/shipments/crr_down/events", 503);
+        await using IAsyncDisposable refused = await RefuseBackOffAsync("PollAttempts");
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+
+        string[] lines = [.. _host.CapturedLogs.Everything];
+        lines.ShouldContain(line => line.StartsWith("Backing off shipment", StringComparison.Ordinal));
+        lines.ShouldNotContain(
+            line => line.StartsWith("Tracking claim failed", StringComparison.Ordinal),
+            "the claim succeeded; it was the backoff that the database refused");
+        (await _fixture.PollAttemptsAsync(shipment.Id)).ShouldBe(0, "the refused write wrote nothing");
+    }
+
+    [Fact]
     public async Task A_slow_carrier_still_has_every_claimed_row_polled_in_one_pass()
     {
         // Four seconds over a batch of five: polled one after another, reserving a hop's total per row, the pass would
@@ -80,4 +98,19 @@ public sealed class TrackingFaultTests : IAsyncLifetime
     }
 
     private TrackingWorker Worker() => _host.Services.GetRequiredService<TrackingWorker>();
+
+    // A real SQL fault in the backoff write and nowhere else: the claim's UPDATE leaves the column alone, and the
+    // backoff's adds one to it. NOCHECK, so the rows already there are not judged.
+    private async Task<IAsyncDisposable> RefuseBackOffAsync(string column)
+    {
+        await _fixture.ExecuteAsync(
+            $"ALTER TABLE shipping.Shipments WITH NOCHECK ADD CONSTRAINT CK_Test_RefuseBackOff CHECK ({column} = 0);");
+        return new Restored(_fixture);
+    }
+
+    private sealed class Restored(ServiceFixture fixture) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync() =>
+            await fixture.ExecuteAsync("ALTER TABLE shipping.Shipments DROP CONSTRAINT CK_Test_RefuseBackOff;");
+    }
 }

@@ -50,6 +50,12 @@ public sealed class TrackingWorker(
             "Shipment {ShipmentId} of order {OrderId} was not delivered within its tracking age of {GiveUpAge}; " +
             "it is abandoned and no longer polled.");
 
+    private static readonly Action<ILogger, Guid, Guid, Exception?> BackOffFailed =
+        LoggerMessage.Define<Guid, Guid>(
+            LogLevel.Error,
+            new EventId(4, nameof(BackOffFailed)),
+            "Backing off shipment {ShipmentId} of order {OrderId} failed; it is polled again when its lease lapses.");
+
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -106,7 +112,15 @@ public sealed class TrackingWorker(
             // Logged before the backoff is written, so a database fault in FailAsync cannot hide the carrier's.
             PollFailed(log, work.Id, work.OrderId, work.PollAttempts + 1, ex);
 
-            await claims.FailAsync(work.Id, ct);
+            // Its own catch, so a database fault here is named as the backoff's rather than the claim's.
+            try
+            {
+                await claims.FailAsync(work.Id, work.LockedUntil, ct);
+            }
+            catch (Exception backOff) when (!ct.IsCancellationRequested)
+            {
+                BackOffFailed(log, work.Id, work.OrderId, backOff);
+            }
 
             return false;
         }

@@ -30,7 +30,7 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {FulfilmentWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
         OUTPUT inserted.Id, inserted.OrderId, inserted.Status, inserted.CarrierReference, inserted.CreatedAt,
-            inserted.CancellationRequestedAt, inserted.TraceParent, inserted.TraceState;
+            inserted.CancellationRequestedAt, inserted.TraceParent, inserted.TraceState, inserted.LockedUntil;
         """;
 
     // The dispatcher's ladder, read from its constants so the two cannot drift; the lease drops with it. No
@@ -47,7 +47,7 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
                               THEN {OutboxDispatcher.BackoffAttemptCap}
                               ELSE Attempts END) * {OutboxDispatcher.BackoffBaseSeconds},
                 SYSDATETIMEOFFSET())
-        WHERE Id = @Id;
+        WHERE Id = @Id AND LockedUntil = @Lease;
         """;
 
     public async Task<IReadOnlyList<FulfilmentWork>> ClaimAsync(CancellationToken ct)
@@ -58,10 +58,12 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
         return [.. await connection.QueryAsync<FulfilmentWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
     }
 
-    public async Task FailAsync(Guid id, CancellationToken ct)
+    // Only while the lease is still this pass's, exactly: a lapsed pass would clear a reclaimer's and move its try.
+    public async Task FailAsync(Guid id, DateTimeOffset lease, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
 
-        await connection.ExecuteAsync(new CommandDefinition(FailSql, new { Id = id }, cancellationToken: ct));
+        await connection.ExecuteAsync(
+            new CommandDefinition(FailSql, new { Id = id, Lease = lease }, cancellationToken: ct));
     }
 }
