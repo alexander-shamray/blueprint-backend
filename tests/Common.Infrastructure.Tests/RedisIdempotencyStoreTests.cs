@@ -279,24 +279,7 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
         ConfigurationOptions admin = ConfigurationOptions.Parse(fixture.CoordinationConnectionString);
         admin.AllowAdmin = true;
         await using ConnectionMultiplexer adminConnection = await ConnectionMultiplexer.ConnectAsync(admin);
-        object[] grant =
-        [
-            "SETUSER",
-            "aclidem-svc",
-            "reset",
-            "on",
-            ">s3cret",
-            "~aclidem:*",
-            "+@read",
-            "+@write",
-            "+@keyspace",
-            "+@connection",
-            "+eval",
-            "-@dangerous",
-            "+client|setname",
-            "+client|setinfo"
-        ];
-        await adminConnection.GetServer(adminConnection.GetEndPoints()[0]).ExecuteAsync("ACL", grant);
+        await DocumentedRedisGrant.ProvisionAsync(adminConnection, "aclidem-svc", "s3cret", "aclidem:*");
 
         ConfigurationOptions restricted = ConfigurationOptions.Parse(fixture.CoordinationConnectionString);
         restricted.User = "aclidem-svc";
