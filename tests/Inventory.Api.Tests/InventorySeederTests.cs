@@ -164,7 +164,9 @@ public class InventorySeederTests(ServiceFixture fixture)
     {
         string[] args =
         [
-            $"--ConnectionStrings:InventoryMigrator={database}", .. MigratorRun.PlaintextTestContainers("Inventory"), .. settings
+            $"--ConnectionStrings:InventoryMigrator={database}",
+            .. MigratorRun.PlaintextTestContainers("Inventory"),
+            .. settings,
         ];
 
         using IHost host = MigratorHost.Build(args);

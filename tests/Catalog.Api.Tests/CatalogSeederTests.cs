@@ -165,7 +165,11 @@ public class CatalogSeederTests(ServiceFixture fixture)
     private static async Task<int> RunAsync(string database, string[] settings)
     {
         string[] args =
-            [$"--ConnectionStrings:CatalogMigrator={database}", .. MigratorRun.PlaintextTestContainers("Catalog"), .. settings];
+            [
+                $"--ConnectionStrings:CatalogMigrator={database}",
+                .. MigratorRun.PlaintextTestContainers("Catalog"),
+                .. settings,
+            ];
 
         using IHost host = MigratorHost.Build(args);
         using IServiceScope scope = host.Services.CreateScope();
