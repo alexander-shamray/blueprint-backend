@@ -40,7 +40,11 @@ Compose, the CI service container, and any SQL Server without a directory behind
 it ([§14.1](14-local-development.md)):
 
 ```sql
--- Server-level login, then a database user mapped to it.
+-- Server-level login, then a database user mapped to it. sqlcmd pastes each
+-- variable in before T-SQL parses the line, so set both from the vault as
+-- environment variables of the same name, never with -v, which puts them on
+-- the command line, and generate them without a single quote, which would end
+-- the literal.
 CREATE LOGIN [ordering-runtime]  WITH PASSWORD = '$(OrderingRuntimePassword)';
 CREATE LOGIN [ordering-migrator] WITH PASSWORD = '$(OrderingMigratorPassword)';
 GO
