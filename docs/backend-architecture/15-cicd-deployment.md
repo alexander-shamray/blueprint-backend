@@ -672,9 +672,9 @@ chart's `networkPolicy` values name the edges it is allowed: the in-namespace
 peers by workload name and port name, and everything outside the namespace —
 the identity provider, the stores, a carrier, a relay, a payment provider — as
 peers the deployment states. A capability that is on with no peer stated
-refuses to render, and so does a peer as wide as every address: a range wider
-than a /8 or an empty selector
-([ADR-080](adr/ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-and-an-empty-selector-is-every-address.md)).
+refuses to render, and so does a peer that could be every address: a range
+wider than a /8, or a selector that names neither a namespace nor a pod
+([ADR-080](adr/ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-or-with-selectors-that-name-nothing.md)).
 DNS and the OTLP
 endpoint carry defaults that name one place each, for the reason ADR-065
 gives.

@@ -742,6 +742,13 @@ refuses_chart ordering 'ordering: an empty namespaceSelector fails the render' \
     'empty namespaceSelector' --set-json 'networkPolicy.broker.to=[{"namespaceSelector":{}}]'
 refuses_chart ordering 'ordering: a bare empty podSelector fails the render' \
     'empty podSelector' --set-json 'networkPolicy.broker.to=[{"podSelector":{}}]'
+refuses_chart ordering 'ordering: an empty namespaceSelector beside an empty podSelector fails the render' \
+    'empty namespaceSelector' --set-json 'networkPolicy.broker.to=[{"namespaceSelector":{},"podSelector":{}}]'
+# An empty namespaceSelector narrowed by named pods selects those pods alone.
+check 'ordering: an empty namespaceSelector beside named pods still renders' \
+    "$HELM" template ordering "$CHARTS_DIR/ordering" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+    $(overlay_for ordering) \
+    --set-json 'networkPolicy.broker.to=[{"namespaceSelector":{},"podSelector":{"matchLabels":{"app":"rabbitmq"}}}]'
 refuses_chart ordering 'ordering: a broker peer with no prefix length fails the render' \
     'is not a CIDR' --set 'networkPolicy.broker.to[0].ipBlock.cidr=10.0.0.1'
 check 'ordering: a /8 broker peer still renders' \

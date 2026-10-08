@@ -72,9 +72,10 @@ they are outside this fence and owed one.
 > a second policy, a hook rendered with the Job.
 
 **Amended by
-[ADR-080](ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-and-an-empty-selector-is-every-address.md)**,
+[ADR-080](ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-or-with-selectors-that-name-nothing.md)**,
 which holds "a peer of every address" by a /8 prefix floor and a refusal of
-empty selectors, rather than by the two literals the chart compared with.
+selectors that name nothing, rather than by the two literals the chart
+compared with.
 
 ---
 
