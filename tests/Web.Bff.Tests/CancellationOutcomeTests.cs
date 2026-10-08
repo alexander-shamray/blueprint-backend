@@ -45,5 +45,5 @@ public sealed class CancellationOutcomeTests
     public void A_buyer_who_typed_the_saga_s_reason_is_not_told_their_card_was_refused() =>
         CancellationOutcome.Of(CancelOrigins.User, CancelReasons.PaymentDeclined).ShouldBe(
             BuyerStatuses.Cancelled,
-            "the cancel endpoint accepts all five codes, so Reason alone answers the wrong question (§10.7)");
+            "Reason alone answers the wrong question (§10.7)");
 }
