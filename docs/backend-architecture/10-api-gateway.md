@@ -1381,9 +1381,11 @@ order is on its way.
 #### Which cancellation a buyer is told about
 
 **Keyed on `Origin` first and `Reason` second**, because `Reason` alone is
-wrong. `Order.Cancel` records the origin and never checks it, and the cancel
-endpoint accepts all five reason codes — so a buyer may cancel with the
-saga's own vocabulary, and a `Reason`-only map answers a buyer who typed
+wrong. `Order.Cancel` records the origin and never checks it, and although the
+cancel endpoint now takes `customer_request` alone
+([ADR-087](adr/ADR-087-a-caller-cancels-an-order-only-as-a-customer-request.md)),
+an order a buyer cancelled with a workflow code before that rule keeps the
+code — and a `Reason`-only map answers a buyer who cancelled with
 `payment_declined` by telling them their card was refused.
 
 | `Origin` | `Reason` | Status |
