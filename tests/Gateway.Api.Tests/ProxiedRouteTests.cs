@@ -147,13 +147,34 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
         using StubbedGatewayFactory factory = new(stub.Address);
         using HttpClient client = factory.CreateClient();
 
-        using HttpRequestMessage request = new(HttpMethod.Get, "/bff/dashboard");
+        using HttpRequestMessage request = new(HttpMethod.Get, "/bff/v1/orders");
         request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
 
         HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        stub.ReceivedPaths.Last().ShouldBe("/dashboard");
+        stub.ReceivedPaths.Last().ShouldBe("/v1/orders");
+    }
+
+    /// <summary>The BFF's health endpoints share its port, so only its API is routed (§10.2).</summary>
+    [Theory]
+    [InlineData("/bff/health/ready")]
+    [InlineData("/bff/health/live")]
+    [InlineData("/bff/health/startup")]
+    [InlineData("/bff/dashboard")]
+    public async Task A_signed_in_caller_reaches_nothing_of_the_bff_outside_its_api(string path)
+    {
+        using StubbedGatewayFactory factory = new(stub.Address);
+        using HttpClient client = factory.CreateClient();
+        int before = stub.ReceivedPaths.Count;
+
+        using HttpRequestMessage request = new(HttpMethod.Get, path);
+        request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
+
+        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        stub.ReceivedPaths.Count.ShouldBe(before);
     }
 
     /// <summary>The public route names the reserved <c>anonymous</c>, so §11.4's fallback never reaches it.</summary>
