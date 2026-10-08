@@ -166,8 +166,8 @@ The shared meters are not service-prefixed. Every service emits the same
 for all of them, and a new service appears on it without anyone editing a
 panel.
 
-Two pieces of §13.2's telemetry are not in this block, and neither absence is
-a mistake.
+One piece of §13.2's telemetry, and one block beside it, are not in
+`AddObservability`, and neither absence is a mistake.
 The rule is that an instrumentation lands with the package it instruments —
 unlike a meter name, which is a string, each costs a package reference, and a
 reference to a library nothing uses is a claim about the dependency graph that
