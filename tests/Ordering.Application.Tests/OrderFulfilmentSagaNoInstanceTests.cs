@@ -103,7 +103,7 @@ public class OrderFulfilmentSagaNoInstanceTests
     [Fact]
     public async Task A_cancellation_carrying_this_workflows_own_reason_still_faults_if_it_did_not_cause_it()
     {
-        // Reason is not the discriminator, since §11.4's endpoint accepts every CancelReasons code.
+        // Reason is not the discriminator (§9.6): it is what somebody asserted, and Origin is what the path stamped.
         (ServiceProvider provider, ITestHarness harness) = await StartHarnessAsync();
         await using (provider)
         {
