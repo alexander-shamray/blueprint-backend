@@ -1109,14 +1109,40 @@ limits_without_cpu() {
     ' "$1"
 }
 
+# Every resources block holds a memory key under its own limits, read block by
+# block: equal counts of the two keys passed `limits: {}` and a limits block
+# holding only ephemeral-storage, and "at least one" would pass three of four.
+memory_bounded() {
+    awk '
+        function depth(s) { match(s, /[^ ]/); return RSTART }
+        function close_block() {
+            if (in_res) { blocks++; if (!memory) { print "unbounded resources at line " start; bad = 1 } }
+            in_res = in_lim = memory = 0
+        }
+        /^[ ]*$/ { next }
+        {
+            d = depth($0)
+            if (in_lim && d <= lim) in_lim = 0
+            if (in_res && d <= res) close_block()
+        }
+        /^ *resources:/ { close_block(); in_res = 1; res = depth($0); start = NR; next }
+        in_res && /^ *limits:/ { in_lim = 1; lim = depth($0); next }
+        in_lim && /^ *memory:/ { memory = 1 }
+        END { close_block(); exit (bad || blocks == 0) ? 1 : 0 }
+    ' "$1"
+}
+
+printf '%s\n' '      resources:' '        limits: {}' '        requests:' '          memory: 1Gi' >"$OUT/limits-empty.yaml"
+printf '%s\n' '      resources:' '        limits:' '          ephemeral-storage: 1Gi' >"$OUT/limits-no-memory.yaml"
+printf '%s\n' '      resources:' '        limits:' '          memory: 1Gi' '      resources: {}' >"$OUT/limits-second.yaml"
+unbounded() { ! memory_bounded "$@"; }
+check 'an empty limits block is not a memory limit' unbounded "$OUT/limits-empty.yaml"
+check 'a limits block without memory is not a memory limit' unbounded "$OUT/limits-no-memory.yaml"
+check 'one bounded container does not cover the next' unbounded "$OUT/limits-second.yaml"
+
 for chart in $SERVICE_CHARTS platform; do
     check "$chart sets no CPU limit" limits_without_cpu "$OUT/$chart.yaml"
-    # Every resources block has a limits block — "at least one" would pass on a
-    # render where three containers of four were unbounded, which is the shape
-    # this assertion exists to refuse.
-    check "$chart bounds memory on every container that declares resources" \
-        test "$(count '^ *limits:' "$OUT/$chart.yaml")" \
-        -eq "$(count '^ *resources:' "$OUT/$chart.yaml")"
+    check "$chart bounds memory on every container that declares resources" memory_bounded "$OUT/$chart.yaml"
 done
 
 # --------------------------------------------------------------------------
@@ -1325,9 +1351,33 @@ check 'no ConfigMap carries a client secret' \
     test "$(count 'Identity__Client__ClientSecret' "$OUT/configmap-keys.txt")" -eq 0
 check 'no ConfigMap carries the relay password' \
     test "$(count 'Mail__Password' "$OUT/configmap-keys.txt")" -eq 0
+# Row by row: each mention is an env row whose next two lines are its own
+# valueFrom and secretKeyRef. A file-wide count paired a literal row with
+# whichever secret env came later, and passed it.
+connection_strings_from_secrets() {
+    awk '
+        pending == 2 { if ($0 !~ /^ *valueFrom:[ ]*$/) bad = 1; pending = 1; next }
+        pending == 1 { if ($0 !~ /^ *secretKeyRef:[ ]*$/) bad = 1; pending = 0; next }
+        /ConnectionStrings__/ {
+            if ($0 ~ /^ *- name: ConnectionStrings__[A-Za-z0-9_]+[ ]*$/) { rows++; pending = 2 } else bad = 1
+        }
+        END { exit (bad || pending || rows == 0) ? 1 : 0 }
+    ' "$1"
+}
+
+printf '%s\n' '        - name: ConnectionStrings__RabbitMq' '          value: amqp://broker' \
+    '        - name: Carrier__ApiKey' '          valueFrom:' '            secretKeyRef:' >"$OUT/literal-row.yaml"
+printf '%s\n' '        - name: ConnectionStrings__RabbitMq' '          valueFrom:' \
+    '            configMapKeyRef:' >"$OUT/configmap-row.yaml"
+literal_connection() { ! connection_strings_from_secrets "$@"; }
+check 'a literal connection row is refused though a later env reads a Secret' \
+    literal_connection "$OUT/literal-row.yaml"
+check 'a connection row read from a ConfigMap is refused' literal_connection "$OUT/configmap-row.yaml"
+printf '%s\n' '        - name: ConnectionStrings__Catalog' '          valueFrom:' '            secretKeyRef:' \
+    '        - name: Broker' '          value: ConnectionStrings__RabbitMq=amqp://broker' >"$OUT/named-elsewhere.yaml"
+check 'a connection string inside another value is refused' literal_connection "$OUT/named-elsewhere.yaml"
 check 'every ConnectionStrings__ value comes from a secretKeyRef' \
-    test "$(count 'ConnectionStrings__' "$OUT/platform.yaml")" \
-    -eq "$(awk '/- name: ConnectionStrings__/ { want = 1; next } want && /secretKeyRef/ { n++; want = 0 } END { print n + 0 }' "$OUT/platform.yaml")"
+    connection_strings_from_secrets "$OUT/platform.yaml"
 
 # --------------------------------------------------------------------------
 section 'Client credentials: the hosts that call out under a grant of their own (§11.5, §15.3, ADR-052)'
@@ -1835,9 +1885,37 @@ section 'No pod carries a cluster credential it never uses'
 # namespace's default service-account token anyway — so an application
 # compromise also hands over a cluster credential. It matters most on the
 # migration Job, which holds the one identity with DDL rights (§7.1).
-check 'every pod template disables the service-account token' \
-    test "$(count 'automountServiceAccountToken: false' "$OUT/platform.yaml")" \
-    -eq "$(( $(count '^kind: Deployment$' "$OUT/platform.yaml") + $(count '^kind: Job$' "$OUT/platform.yaml") ))"
+
+# Document by document, for every kind that runs a pod: counted file-wide, a
+# ServiceAccount carrying the field, or a pod kind the count did not name, made
+# up for a pod spec without it.
+every_pod_disables_token() {
+    awk '
+        function close_doc() {
+            if (pods && !off) { print kind " " name " mounts the token"; bad = 1 }
+            pods = off = 0; kind = name = ""
+        }
+        /^---$/ { close_doc(); next }
+        /^kind: (Deployment|Job|CronJob|StatefulSet|DaemonSet|ReplicaSet|Pod)$/ { pods = 1; kind = $2; seen++ }
+        /^  name: / && name == "" { name = $2 }
+        /^ +automountServiceAccountToken: false[ ]*$/ { off = 1 }
+        /automountServiceAccountToken: true/ { bad = 1 }
+        END { close_doc(); exit (bad || seen == 0) ? 1 : 0 }
+    ' "$1"
+}
+
+printf '%s\n' 'kind: ServiceAccount' 'automountServiceAccountToken: false' '---' 'kind: Deployment' \
+    'metadata:' '  name: a' >"$OUT/token-elsewhere.yaml"
+printf '%s\n' 'kind: Deployment' 'metadata:' '  name: a' '      automountServiceAccountToken: false' '---' \
+    'kind: Deployment' 'metadata:' '  name: b' >"$OUT/token-second.yaml"
+printf '%s\n' 'kind: Deployment' 'metadata:' '  name: a' '      automountServiceAccountToken: false' '---' \
+    'kind: CronJob' 'metadata:' '  name: c' >"$OUT/token-cronjob.yaml"
+mounts_token() { ! every_pod_disables_token "$@"; }
+check 'a ServiceAccount carrying the field does not cover a pod spec without it' \
+    mounts_token "$OUT/token-elsewhere.yaml"
+check 'one pod spec carrying the field does not cover the next' mounts_token "$OUT/token-second.yaml"
+check 'a CronJob is held to it too' mounts_token "$OUT/token-cronjob.yaml"
+check 'every pod template disables the service-account token' every_pod_disables_token "$OUT/platform.yaml"
 
 # --------------------------------------------------------------------------
 section 'The Service forwards to a port something is listening on'
