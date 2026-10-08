@@ -171,11 +171,13 @@ public sealed class TransportSecurityTests
         string[] buses =
         [
             .. Directory.GetFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories)
+                .Concat(Directory.GetFiles(Path.Combine(root, "tools"), "*.csproj", SearchOption.AllDirectories))
                 .Select(file => Path.GetDirectoryName(file)!)
                 .Where(project => Sources(project).Any(s => s.Contains("UsingRabbitMq(")))
         ];
 
         buses.Length.ShouldBeGreaterThan(1, "a scan that found no bus would pass every tree");
+        buses.ShouldContain(p => Path.GetFileName(p) == "bff-replay", "an operator's tool dials the broker too");
         buses.Where(p => !Sources(p).Any(s => s.Contains("TransportSecurity.IsTls(")))
             .Select(p => Path.GetRelativePath(root, p))
             .ShouldBeEmpty();
