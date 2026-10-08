@@ -588,9 +588,8 @@ def check_every_client(clients: list[dict], kind: str) -> list[str]:
     """What holds on every client, so a built-in or newly added one is judged too.
 
     A named client's own check owns its password grant; `check_web_origins`
-    owns web-app's and mobile-app's origins, and mobile-app's exact checks
-    own its redirect and PKCE.
-    """
+    owns web-app's and mobile-app's origins, and mobile-app's own checks its
+    redirect and PKCE exactly."""
     problems: list[str] = []
     for client in clients:
         if not isinstance(client, dict):
