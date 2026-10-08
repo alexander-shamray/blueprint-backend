@@ -317,10 +317,13 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
         await fixture.Plain.RefuseRecipientsAsync(451, ct);
         using OutboundCount counted = OutboundCounter.Unavailable(_host.Services);
 
-        while (counted.Value < MailHop.CircuitBreakerMinimumThroughput)
-        {
+        // Each send that reaches the relay is counted at least once, so this many suffice, and a lost count fails.
+        int needed = MailHop.CircuitBreakerMinimumThroughput;
+
+        for (int send = 0; send < needed && counted.Value < needed; send++)
             await Should.ThrowAsync<MailUnavailableException>(() => Channel().SendAsync(Mail(), ct));
-        }
+
+        counted.Value.ShouldBeGreaterThanOrEqualTo(needed, "every refused send was counted unavailable");
 
         // The relay is healthy again, so a send that left this process now would be delivered.
         await fixture.Plain.ResetAsync(ct);
