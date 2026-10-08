@@ -9,12 +9,12 @@ genuinely cross-cutting at the edge, and nothing else.
 CORS · request/response logging with correlation IDs · response compression ·
 request size limits.
 
-> **All seven are configured, and the last two each needed a decision before
-> its line.** Both are statements in `src/Gateway/Gateway.Api/Program.cs`. A
-> size limit needs a **number**, and Kestrel's 30 MB is a framework default
-> rather than anything this platform chose; compression needs the **HTTPS**
-> question answered, and [ADR-020](adr/ADR-020-the-edge-compresses-over-tls-and-says-so.md)
-> answers it.
+> **All seven are configured, and the last two each rest on a decision rather
+> than a default.** Both are statements in
+> `src/Gateway/Gateway.Api/Program.cs`. A size limit needs a **number**, and
+> Kestrel's 30 MB is a framework default rather than anything this platform
+> chose; compression needs the **HTTPS** question answered, and
+> [ADR-020](adr/ADR-020-the-edge-compresses-over-tls-and-says-so.md) answers it.
 >
 > **The number is one mebibyte**, in `GatewayLimits.MaxRequestBodyBytes`, and
 > it is a constant rather than configuration for §15.4's reason — it does not
@@ -1016,16 +1016,17 @@ definition, so a client switching on it is parsing English, and the producers
 of this status do not all say the same thing: some say *retry* and some the
 opposite. So each names itself in the extension member §10.5 reserves for
 exactly this: `request.concurrency_conflict`, `request.in_progress`,
-`command.already_committed`, and `command.id_reused` for the producer
-[ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)
-added. The `Error` path carries a `code` on the same terms.
+`command.already_committed`, and `command.id_reused` for
+`CommandIdReusedException`
+([ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)).
+The `Error` path carries a `code` on the same terms.
 
-**The 409s from §8.5 are told apart by `detail` for a human, and that
-is the design rather than a shortage of statuses.** They share the statement —
-this request conflicts with work already in hand — and differ in what the
-client should do about it, which is prose a client reads and not a code it
-switches on. Inventing a status for one of them would be inventing one for a
-distinction HTTP does not draw.
+**The 409s from §8.5 share one status, and that is the design rather than a
+shortage of statuses.** They share the statement — this request conflicts with
+work already in hand — and differ in what the client should do about it, which
+their `code` tells a client and their `detail` tells a person. Inventing a
+status for one of them would be inventing one for a distinction HTTP does not
+draw.
 
 The 412 half of that row is unimplemented, deliberately: it needs a
 precondition filter reading `If-Match`, and nothing here sends or reads an
