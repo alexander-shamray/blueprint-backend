@@ -41,13 +41,7 @@ builder.Services
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// The token client's transport carries no ClientCredentialsHandler, which would recurse.
-string authority = builder.Configuration[AuthenticationExtensions.AuthorityKey]!;
-
-builder.Services
-    .AddHttpClient(
-        CachingTokenClient.HttpClientName,
-        client => client.BaseAddress = new Uri(authority.TrimEnd('/') + "/"));
+builder.Services.AddTokenClient(builder.Configuration[AuthenticationExtensions.AuthorityKey]!);
 
 // The key's name, so a refused discovery document says which key to fix (§11.3, §11.5).
 builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.AuthorityKey));

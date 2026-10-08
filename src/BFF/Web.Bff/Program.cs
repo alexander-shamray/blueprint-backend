@@ -43,16 +43,10 @@ builder.Services
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// The authority §11.3 validates against. The token client's transport carries no ClientCredentialsHandler,
-// which would recurse, and its trailing slash keeps a relative discovery path inside the realm.
-string authority = builder.Configuration[AuthenticationExtensions.AuthorityKey]!;
-
 builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.AuthorityKey));
 
-builder.Services
-    .AddHttpClient(
-        CachingTokenClient.HttpClientName,
-        client => client.BaseAddress = new Uri(authority.TrimEnd('/') + "/"));
+// The authority §11.3 validates against; its trailing slash keeps a relative discovery path inside the realm.
+builder.Services.AddTokenClient(builder.Configuration[AuthenticationExtensions.AuthorityKey]!);
 
 // A local rather than one chain, because AddStandardResilienceHandler returns a different builder (§9.7).
 IHttpClientBuilder pricing = builder.Services

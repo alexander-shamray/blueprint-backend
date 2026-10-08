@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Common.Infrastructure.Identity;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,11 +22,13 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
+        _provider.Clock = _clock;
         await _provider.InitializeAsync();
 
+        // The hosts' own registration, so a redirect case below meets the handler production runs.
         ServiceCollection services = new();
         services.AddLogging();
-        services.AddHttpClient(CachingTokenClient.HttpClientName, c => c.BaseAddress = _provider.Authority);
+        services.AddTokenClient(_provider.Authority.ToString());
         services.AddSingleton<TimeProvider>(_clock);
         services.AddSingleton<IOptions<ServiceIdentityOptions>>(
             Options.Create(new ServiceIdentityOptions
@@ -178,6 +181,97 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
 
         await Should.ThrowAsync<InvalidOperationException>(
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task A_redirect_from_the_token_endpoint_is_refused_and_the_secret_goes_nowhere()
+    {
+        await using StubIdentityProvider elsewhere = new();
+        await elsewhere.InitializeAsync();
+        _provider.RedirectTokenTo = elsewhere.TokenEndpoint;
+
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
+            () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
+
+        thrown.Message.ShouldContain("307");
+        elsewhere.TokenRequests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_expires_in_past_the_tokens_own_exp_is_cut_to_it()
+    {
+        _provider.ExpiresIn = 2_000_000_000;
+        _provider.OwnExpirySeconds = 300;
+
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+        _clock.Advance(TimeSpan.FromSeconds(300));
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+
+        _provider.TokenRequests.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_token_carrying_no_exp_of_its_own_is_never_cached()
+    {
+        _provider.OpaqueToken = true;
+
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+        await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+
+        _provider.TokenRequests.Count.ShouldBe(2);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task An_answer_past_the_byte_ceiling_is_refused_as_a_deployment_fault(bool discovery)
+    {
+        string oversized = new('x', CachingTokenClient.MaxAnswerBytes + 1);
+
+        if (discovery)
+            _provider.DiscoveryBody = oversized;
+        else
+            _provider.TokenSuccessBody = oversized;
+
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
+            () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
+
+        thrown.Message.ShouldContain($"more than {CachingTokenClient.MaxAnswerBytes} bytes");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_success_that_is_not_json_is_a_refusal_the_grant_checks_count(bool discovery)
+    {
+        // InvalidOperationException is what both services' GrantCheckedTokenCache count as a refusal (ADR-052).
+        if (discovery)
+            _provider.DiscoveryBody = "<html>a proxy's page</html>";
+        else
+            _provider.TokenSuccessBody = "<html>a proxy's page</html>";
+
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
+            () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
+
+        thrown.Message.ShouldContain("is not JSON");
+        thrown.Message.ShouldNotContain("a proxy's page");
+    }
+
+    [Theory]
+    [InlineData("client_secret=local-dev-secret")]
+    [InlineData("unauthorized_client\nforged log line")]
+    [InlineData("Invalid client credentials")]
+    [InlineData("an_error_code_long_past_every_registered_one")]
+    public async Task An_error_member_not_shaped_like_a_code_is_left_out(string error)
+    {
+        _provider.TokenStatus = StatusCodes.Status401Unauthorized;
+        _provider.TokenFailureBody = JsonSerializer.Serialize(new { error });
+
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
+            () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
+
+        thrown.Message.ShouldContain("401");
+        thrown.Message.ShouldNotContain(error);
     }
 
     [Fact]

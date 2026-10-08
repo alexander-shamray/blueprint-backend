@@ -75,6 +75,43 @@ public sealed class TokenEndpointSchemeTests
         provider.TokenRequests.ShouldBeEmpty();
     }
 
+    [Theory]
+    [InlineData("foreign.example.test")]
+    [InlineData("127.0.0.2")]
+    public async Task A_token_endpoint_on_another_host_is_refused_before_anything_is_posted(string host)
+    {
+        await using StubIdentityProvider provider = new();
+        await provider.InitializeAsync();
+
+        provider.AdvertisedTokenEndpoint =
+            $"http://{host}:{provider.Authority.Port}/realms/test/protocol/openid-connect/token";
+
+        await using ServiceProvider services = Client(provider);
+
+        InvalidOperationException refusal = await Should.ThrowAsync<InvalidOperationException>(
+            () => services.GetRequiredService<ITokenCache>().GetAsync(Scope, TestContext.Current.CancellationToken));
+
+        refusal.Message.ShouldContain("is on another host or port than the authority");
+        provider.TokenRequests.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_token_endpoint_on_another_port_of_the_same_host_is_refused()
+    {
+        await using StubIdentityProvider provider = new();
+        await provider.InitializeAsync();
+
+        provider.AdvertisedTokenEndpoint =
+            $"http://{provider.Authority.Host}:{provider.Authority.Port + 1}/realms/test/protocol/openid-connect/token";
+
+        await using ServiceProvider services = Client(provider);
+
+        InvalidOperationException refusal = await Should.ThrowAsync<InvalidOperationException>(
+            () => services.GetRequiredService<ITokenCache>().GetAsync(Scope, TestContext.Current.CancellationToken));
+
+        refusal.Message.ShouldContain("is on another host or port than the authority");
+    }
+
     [Fact]
     public async Task An_https_authority_keeping_https_still_works()
     {
