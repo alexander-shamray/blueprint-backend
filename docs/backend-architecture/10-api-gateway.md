@@ -775,10 +775,11 @@ the value it *adopts* reaches four places: the response header, the forwarded
 request below, the log scope every record for that request inherits, and
 §10.5's problem body. [§13.1](13-observability.md) makes the correlation ID the
 field an incident is triaged by, which is what turns a free choice of that value
-into an attack rather than an untidiness: a caller that picks its own ID can
-stamp its traffic with one already in use, or with one that collides with
-nothing and matches everything the on-call greps for, and it poisons exactly the
-field this section exists to make trustworthy. The length half is cheaper to
+into an attack rather than an untidiness: a value built to match everything the
+on-call greps for poisons exactly the field this section exists to make
+trustworthy. The bound narrows what a caller can choose to an identifier's
+shape; it does not stop one reusing an ID already in use, which is accepted
+below rather than claimed here. The length half is cheaper to
 state — a kilobyte attached to a scope inherited by every record the request
 produces, EF Core's and MassTransit's included, is one request multiplied into
 collector ingest by the record count.
@@ -821,6 +822,15 @@ since this platform is not the only thing that mints one. In
 `An_id_at_the_bound_is_kept` for the reason §12 gives about negative cases:
 "too long is replaced" passes just as well against a middleware that replaces
 everything.
+
+**Reusing an ID already in use is an accepted residual.** A caller that has seen
+one, in its own earlier problem body or a leaked log line, can send it back
+inside the bound, and its records are then filed under that ID. Refusing it
+would need the edge to know which IDs are live, and minting one for every
+external caller would break the promise above. The cost is bounded by what the
+ID is for: triage, never trust. Nothing authorises, deduplicates or attributes
+a request by it, and the field that joins a request's spans across services is
+the trace, which a caller cannot choose.
 
 **The trace is the identifier a caller cannot choose.** The gateway reads no
 `traceparent`, `tracestate` or `baggage`, so every request starts a root trace
