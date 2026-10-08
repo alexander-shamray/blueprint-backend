@@ -15,7 +15,7 @@ than by spelling: two /1 blocks, or selectors naming nothing, are that too. */}}
 {{- fail (printf "networkPolicy.%s names %s, which is not a CIDR: an ipBlock is an address and its prefix length (ADR-080)." $key $cidr) }}
 {{- end }}
 {{- if and $cidr (lt (atoi (last (splitList "/" $cidr))) 8) }}
-{{- fail (printf "networkPolicy.%s names %s, which is wider than a /8 and so admits every address or most of it: state the peer's own range (ADR-080)." $key $cidr) }}
+{{- fail (printf "networkPolicy.%s names %s, which is wider than a /8, the widest peer ADR-080 keeps: state the peer's own range." $key $cidr) }}
 {{- end }}
 {{- $podsNamed := or (.podSelector).matchLabels (.podSelector).matchExpressions }}
 {{- if and (hasKey . "namespaceSelector") (not (or (.namespaceSelector).matchLabels (.namespaceSelector).matchExpressions)) (not $podsNamed) }}
