@@ -2043,6 +2043,17 @@ check "a container's own Unconfined profile is refused under the pod's RuntimeDe
     not_restricted "$OUT/restricted-container-unconfined.yaml"
 check 'a read-only pod with nowhere writable at /tmp is refused' not_restricted "$OUT/restricted-notmp.yaml"
 check 'a pod document with no container the check can read is refused' not_restricted "$OUT/restricted-noimage.yaml"
+# One per clause: the compliant pod less one line, or with one forbidden line
+# beside the compliant ones, so no clause is only ever met alongside another.
+for field in runAsNonRoot allowPrivilegeEscalation readOnlyRootFilesystem drop; do
+    sed "/$field/d" "$OUT/restricted-one.yaml" >"$OUT/restricted-no-$field.yaml"
+    check "a pod without $field is refused" not_restricted "$OUT/restricted-no-$field.yaml"
+done
+for line in 'privileged: true' 'allowPrivilegeEscalation: true' 'readOnlyRootFilesystem: false'; do
+    { cat "$OUT/restricted-one.yaml"; echo "            $line"; } >"$OUT/restricted-extra.yaml"
+    check "a container setting $line is refused beside the compliant fields" \
+        not_restricted "$OUT/restricted-extra.yaml"
+done
 check 'every pod template meets Pod Security "restricted"' every_pod_is_restricted "$OUT/platform.yaml"
 
 # --------------------------------------------------------------------------
