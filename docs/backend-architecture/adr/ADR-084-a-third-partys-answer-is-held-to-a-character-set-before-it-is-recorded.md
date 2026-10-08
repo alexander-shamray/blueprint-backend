@@ -21,8 +21,9 @@ party is contracted, so this is hardening rather than a hole; but a contract is
 not a character set, and the adapter is [§3.1](../03-bounded-contexts.md)'s one
 place that knows the wire format. The alphabet is not the contract's, since
 [§4.3](../04-solution-structure.md) keeps validation out of `Common.Contracts`;
-it is a building block's, which the adapter that mints the value and the two
-services that render it already reference, so none of them restates it.
+it is a text rule, mechanism rather than model in that section's terms, so it is
+a building block's, which the adapter that mints the value and the two services
+that render it already reference, so none of them restates it.
 **Consequences.** A carrier whose tracking numbers use another character, a
 slash, a dot or a plus sign, has every booking refused and backed off to its
 give-up age until the alphabet is widened here, for every reader at once. The
