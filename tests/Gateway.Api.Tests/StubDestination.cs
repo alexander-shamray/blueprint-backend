@@ -29,6 +29,7 @@ public sealed class StubDestination : IAsyncLifetime
     public const string StallQuery = "stall";
 
     private readonly ConcurrentQueue<string> _paths = new();
+    private readonly ConcurrentQueue<TraceHeaders> _traceHeaders = new();
     private WebApplication? _app;
 
     /// <summary>The base address to point a YARP cluster at.</summary>
@@ -36,6 +37,9 @@ public sealed class StubDestination : IAsyncLifetime
 
     /// <summary>Every path this server has been asked for, in arrival order.</summary>
     public IReadOnlyCollection<string> ReceivedPaths => _paths;
+
+    /// <summary>The W3C trace headers of every request, in arrival order, each <see langword="null"/> when absent.</summary>
+    public IReadOnlyCollection<TraceHeaders> ReceivedTraceHeaders => _traceHeaders;
 
     public async ValueTask InitializeAsync()
     {
@@ -50,6 +54,10 @@ public sealed class StubDestination : IAsyncLifetime
         app.Use(async (context, next) =>
         {
             _paths.Enqueue(context.Request.Path.Value ?? string.Empty);
+            _traceHeaders.Enqueue(new TraceHeaders(
+                context.Request.Headers["traceparent"].FirstOrDefault(),
+                context.Request.Headers["tracestate"].FirstOrDefault(),
+                context.Request.Headers["baggage"].FirstOrDefault()));
 
             await next();
         });
@@ -112,4 +120,7 @@ public sealed class StubDestination : IAsyncLifetime
         // Not a spread: a MemoryStream is not a sequence, and the spread fails to compile on it (CS9212).
         return buffer.ToArray();
     }
+
+    /// <summary>The three W3C trace headers one request arrived with.</summary>
+    public sealed record TraceHeaders(string? TraceParent, string? TraceState, string? Baggage);
 }

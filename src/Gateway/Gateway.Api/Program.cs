@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
@@ -7,6 +8,8 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OpenTelemetry;
+using OpenTelemetry.Context.Propagation;
 
 if (args is [HealthProbe.Argument]) Environment.Exit(await HealthProbe.RunAsync());   // §14.1's healthcheck
 
@@ -19,6 +22,11 @@ builder.Host.UseDefaultServiceProvider(o =>
 });
 
 builder.AddCommonWebDefaults(GatewayLimits.RequestTimeout);   // §13.2, §9.7
+
+// A root trace per request: the hosting layer reads its propagator from here, and the caller is the internet.
+// OpenTelemetry's instrumentation re-extracts the headers under any propagator but this one, so it is set too.
+builder.Services.AddSingleton<DistributedContextPropagator, EdgeTracePropagator>();
+Sdk.SetDefaultTextMapPropagator(new TraceContextPropagator());
 
 // §10.1's request size limit; GatewayLimits argues the number.
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = GatewayLimits.MaxRequestBodyBytes);
