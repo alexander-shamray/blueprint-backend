@@ -6,8 +6,9 @@ migration Job's, meets the Kubernetes Pod Security Standard "restricted":
 every capability dropped. Each container also runs with
 `readOnlyRootFilesystem`, and an `emptyDir` of at most 64Mi mounted at `/tmp`
 is the one writable path. `deploy/helm/smoke.sh` holds every pod document in a
-render to those settings, the container fields per container and the profile
-at the pod's own level, and refuses there the host namespaces, host ports,
+render to those settings, the container fields per container, the profile at
+the pod's own level and `/tmp` on a size-limited `emptyDir` (the limit's value
+is the template's, not the check's), and refuses there the host namespaces, host ports,
 `hostPath` volumes, added capabilities and root UID that "restricted" also
 forbids. The standard's remaining controls, which no template here sets, are
 the namespace label's to enforce.
