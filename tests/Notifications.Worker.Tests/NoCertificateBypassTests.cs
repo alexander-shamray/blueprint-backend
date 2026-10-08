@@ -30,11 +30,13 @@ public sealed partial class NoCertificateBypassTests
     [InlineData("chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;")]
     [InlineData("policy.VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority;")]
     [InlineData("client.CheckCertificateRevocation = false;")]
+    [InlineData("SslStream stream = new(inner, false, Accept);")]
+    [InlineData("options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;")]
     public void Each_spelling_of_a_bypass_is_caught(string source) => Bypass().IsMatch(source).ShouldBeTrue(source);
 
-    // A callback under any name, SslStream's by position, a replaced chain policy, or revocation switched off.
-    [GeneratedRegex(@"Certificate\w*ValidationCallback|DangerousAcceptAny\w*CertificateValidator" +
-        @"|new\s+SslStream\s*\([^;]*,[^;]*,|CertificateChainPolicy|X509ChainTrustMode|X509VerificationFlags" +
-        @"|CheckCertificateRevocation\s*=\s*false")]
+    // A callback under any name, any SslStream (the service builds none), a replaced chain policy, or no revocation.
+    [GeneratedRegex(@"Certificate\w*ValidationCallback|DangerousAcceptAny\w*CertificateValidator|\bSslStream\b" +
+        @"|CertificateChainPolicy|X509ChainTrustMode|X509VerificationFlags" +
+        @"|CheckCertificateRevocation\s*=\s*false|X509RevocationMode\.NoCheck")]
     private static partial Regex Bypass();
 }
