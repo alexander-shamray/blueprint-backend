@@ -54,7 +54,7 @@ public class CarrierPortTests
         // No URL is stored, checked on the shape: a data member is the one way a link could be kept, so every field
         // and property counts, public or not, bar the record's own EqualityContract and the compiler's backing fields.
         typeof(CarrierEvent)
-            .GetProperties(AnyVisibility | BindingFlags.Instance)
+            .GetProperties(AnyVisibility | BindingFlags.Instance | BindingFlags.Static)
             .Select(p => p.Name)
             .Where(name => name != "EqualityContract")
             .ShouldBe(["CarrierEventId", "Status", "OccurredAt"], ignoreOrder: true);
