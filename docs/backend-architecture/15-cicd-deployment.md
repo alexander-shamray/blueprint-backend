@@ -1233,7 +1233,8 @@ automatically; message consumers need `StopAsync` to be given time to finish the
 current message.
 
 **The longest in-flight operation is the framework's own ceiling, not a
-per-service estimate, and that is what fixes the number at 45.**
+per-service estimate, and that is what fixes each chart's
+`terminationGracePeriodSeconds` at 45.**
 `HostOptions.ShutdownTimeout` is what bounds the drain — the host waits up to
 that long for every hosted service to stop and then exits regardless — and its
 default is **30 seconds**, measured on the pinned SDK rather than read off a
@@ -1498,9 +1499,11 @@ public static class ServiceOptions
 
 ## 15.5 Release strategy
 
-Canary: route 5% of traffic to the new version, watch error rate and p99 for ten
-minutes, then progress to 25%, 50%, 100%. Roll back automatically if either
-metric regresses beyond threshold.
+Canary: route traffic to the new version up the ladder
+`deploy/canary/canary.json` holds as `steps` — a `weight` of 5%, 25% and 50%,
+each held for its `dwellMinutes` of ten while error rate and p99 are watched,
+then 100%. Roll back automatically if either metric regresses beyond that
+file's `thresholds`.
 
 **The mechanism is replica-weighted and it is
 [ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)**,
