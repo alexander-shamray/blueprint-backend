@@ -474,6 +474,13 @@ and a test that places an order seeds one first: the write path reads prices
 locally (§6.4), so an unseeded projection refuses the order as unavailable,
 which reads as a domain assertion failing rather than as missing fixture data.
 
+Two rules hold for every suite built this way. A helper one suite needs stays
+private to that suite, and the fixture carries only what more than one suite
+needs. And a test that reads a scoped service, `OrderingDbContext` among them,
+resolves it from `Factory.Services.CreateScope()`, never from `Factory.Services`
+itself, which throws under `ValidateScopes` and, where that is off, hands back
+an instance that lives as long as the host.
+
 Two assertions belong to the slice beyond its own cases; the split between the
 lanes, the contract type on the Broker lane (§9.3's allow-list) and the domain
 type on the Local lane (§7.5), is asserted below it, in
@@ -508,7 +515,7 @@ customer's order id, to a caller authentication and the endpoint policy have
 already admitted. Those two still run on a replay; what does not is the handler,
 and with it §11.4's binding of the subject from the principal. That is why the
 assertion is `ShouldNotBe` against the first caller's value and not
-`IsSuccess.ShouldBeTrue()`.
+`theirs.StatusCode.ShouldBe(HttpStatusCode.OK)`.
 
 **Three requests rather than two, and the third is the one that carries the
 claim.** `ShouldNotBe` establishes only that the key varies with *something*;
@@ -1347,8 +1354,8 @@ compiles differently when the realm is wrong.
 
 Saga logic is where cross-service bugs live, and MassTransit's in-memory test
 harness makes it testable without any infrastructure at all. The suite is the
-`OrderFulfilmentSaga*Tests` classes in `tests/Ordering.Application.Tests/`, one
-per state, over the registration they share in
+`OrderFulfilmentSaga*Tests` classes in `tests/Ordering.Application.Tests/`,
+mostly one per state, over the registration they share in
 `OrderFulfilmentSagaHarness.cs`:
 
 ```csharp
@@ -1613,11 +1620,10 @@ running bus into whatever runs next.
 
 > **Inherit either and a saturated runner fails the suite wearing the
 > assertion's own message** — a saga that did not send, rather than a runner
-> that did not schedule. That costume is the danger, and it is not
-> hypothetical: the same mechanism has failed CI on an in-memory harness test
-> asserting a consume, which then passed on a re-run of the same commit with no
-> changes. The saga suite would inherit the same wait, which is why both bounds
-> are stated in `OrderFulfilmentSagaHarness` rather than left to a default.
+> that did not schedule. That costume is the danger: a consume asserted under
+> the inherited bound fails on a slow runner and passes on a re-run of the same
+> commit, which is why both bounds are stated in `OrderFulfilmentSagaHarness`
+> rather than left to a default.
 > State both, and keep the ceiling clear of the bound meant to fire, so which
 > one reported a failure is never a detail of how long the publish took.
 
@@ -1650,12 +1656,11 @@ running bus into whatever runs next.
 > tool and fails open: a window is something a late-sending saga fits inside,
 > and the later positive would then accept the very command the negative was
 > there to forbid. A negative that is its test's last assertion *may* simply
-> wait — nothing after it is poisoned — but "may" is not "should": the second
-> sample above, left to wait, would wait for a publish its own subject
-> guarantees will never come, and pay the full inactivity bound every run for
-> an answer already known. One such wait cost the saga suite ten of its twelve
-> seconds. **Use the cancelled token for every negative and the question stops
-> arising.**
+> wait — nothing after it is poisoned — but "may" is not "should":
+> `Commands_are_sent_and_events_are_published`, left to wait, would wait for a
+> publish its own subject guarantees will never come, and pay the full
+> inactivity bound on every run for an answer already known. **Use the
+> cancelled token for every negative and the question stops arising.**
 
 > **`Consumed` says a message arrived and never what happened to it.** The
 > harness records the delivery whether the pipeline returned or threw, so
@@ -1679,13 +1684,14 @@ running bus into whatever runs next.
 > **A missing scheduler fails this suite in the costume the traps above
 > describe, which is why the registration is spelled out rather than trimmed.**
 > The two scheduler lines are easy to read as ceremony. They are not: with both
-> deleted, the saga tests that start a bus fail, **every one of them as a
-> timeout**, each reporting the command the saga did not send. The saga's
-> exception faults onto the error queue and no assertion ever sees it. The
-> survivors are the structural tests that construct the state machine without
-> starting a bus, which is worse than none — they leave a deleted registration
-> looking half-covered. Whatever the count, the failures arrive as timeouts
-> naming a command, and the structural tests pass throughout.
+> deleted, every test that places an order fails, **each one as a timeout**,
+> because `Initially` arms the stock timeout and the schedule throws; each
+> reports the command the saga did not send, while the saga's exception faults
+> onto the error queue where no assertion sees it. The tests that never schedule
+> pass throughout: the structural ones that construct the state machine without
+> a bus, and those whose subject schedules nothing, such as an event for an
+> order with no instance. Passing tests beside a deleted registration leave it
+> looking half-covered, which is worse than a suite that fails whole.
 
 > **Where the numbers live is the other half.** Both samples get them from
 > `StartHarnessAsync`, which builds `OrderFulfilmentSagaHarness`'s one
