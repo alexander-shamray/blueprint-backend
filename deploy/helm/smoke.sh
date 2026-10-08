@@ -741,6 +741,16 @@ check 'ordering: and nothing else carries it, the migration Job included' \
 refuses_chart ordering 'ordering: a plaintext entry that names no connection fails the render' \
     'names no connection string' --set 'transport.plaintext[0]=Rabbit Mq'
 
+# The list is the map's only key: a block placed mid-networkPolicy adopts the
+# peers indented after it, and those then render as nothing, which no
+# NETPOL_PEERS overlay would notice since it sets each peer afresh.
+for values in "$CHARTS_DIR"/*/values.yaml; do
+    grep -q '^transport:' "$values" || continue
+    check "$(basename "$(dirname "$values")"): transport holds plaintext and nothing else" \
+        test "$(awk '/^transport:/ { t = 1; next } t && /^[^ #]/ { t = 0 } t && /^  [A-Za-z]/' "$values" |
+            grep -vc '^  plaintext:')" -eq 0
+done
+
 # Every address has more spellings than its two literals, so a prefix floor and
 # the selectors are what is held (ADR-080), and a /8 is the widest peer kept.
 refuses_chart ordering 'ordering: a broker peer of ::/0 fails the render' \
