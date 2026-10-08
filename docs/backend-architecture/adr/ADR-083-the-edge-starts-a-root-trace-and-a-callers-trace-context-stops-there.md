@@ -3,12 +3,12 @@
 **Decision.** The gateway reads no W3C trace context from a request:
 `EdgeTracePropagator`, registered as the hosting layer's
 `DistributedContextPropagator`, extracts no `traceparent`, `tracestate` or
-`baggage`, and the gateway's OpenTelemetry propagator is `TraceContextPropagator`
-alone, under which the ASP.NET Core instrumentation leaves extraction to that
-hosting layer. Every request therefore starts a root trace at the edge, and
-what the gateway sends downstream is that trace, injected as the default
-propagator would. Services behind it keep honouring the context they receive,
-which is now always the edge's.
+`baggage`, and the gateway's OpenTelemetry propagator is
+`TraceContextPropagator` alone, under which the ASP.NET Core instrumentation
+leaves extraction to that hosting layer. Every request therefore starts a root
+trace at the edge, and what the gateway sends downstream is that trace,
+injected as the default propagator would. Services behind it keep honouring
+the context they receive, which is now always the edge's.
 **Why.** The edge's callers are the internet. A `traceparent` they chose became
 the parent of the gateway's span, travelled to every service, was stored on
 outbox rows ([§9.4](../09-messaging.md)) and was replayed as the parent of the
