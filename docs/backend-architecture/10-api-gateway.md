@@ -593,7 +593,7 @@ builder.Services.AddRateLimiter(options =>
 
 The `authenticated` policy is only correct if `UseAuthentication` has already
 run when the limiter middleware executes — see the pipeline in §4.2. The
-`?? RemoteIpAddress` fallback exists for the genuinely anonymous request that
+address fallback exists for the genuinely anonymous request that
 still matches an authenticated route, not as a safety net for pipeline order;
 if the order is wrong the fallback absorbs *every* request and the policy
 degrades to a second copy of `anonymous` with a larger budget.
