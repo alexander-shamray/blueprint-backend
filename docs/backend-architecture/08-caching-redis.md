@@ -336,8 +336,8 @@ request repeated leaves the state the first one left, or
 `RetrySafety.ReadOnly`, where the endpoint writes nothing. What a key buys is
 **at most one commit per key while the marker survives**.
 
-**Two mechanisms answer two different failures, and neither answers the
-other's.** A Redis claim is a write to a different system from the one the
+**The claim excludes a concurrent duplicate; the marker answers what no Redis
+write can.** A Redis claim is a write to a different system from the one the
 transaction commits to. Every entry expires, so a retry arriving after the
 retention claims a free key; and a commit whose acknowledgement is lost throws
 over durable work that the behaviour then releases the key for. The claim is
@@ -1066,8 +1066,7 @@ in its own transaction is worse here than a stray inbox row is there — that
 suppresses one redelivery, this refuses every later attempt at a command that
 never committed.
 
-The store is
-`src/BuildingBlocks/Common.Infrastructure/Idempotency/EfIdempotencyMarkerStore.cs`:
+The store is `EfIdempotencyMarkerStore.cs`, beside `IdempotencyMarker.cs`:
 
 ```csharp
 /// <summary>§8.5's marker store over the service's own <c>DbContext</c>, inside the command's transaction.</summary>
