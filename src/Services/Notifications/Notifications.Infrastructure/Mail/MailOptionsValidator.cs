@@ -18,6 +18,10 @@ internal sealed class MailOptionsValidator : IValidateOptions<MailOptions>
                 ? []
                 : [.. annotated.Select(a => a.ErrorMessage ?? "Invalid.")];
 
+        // The binder takes a number for an enum unchecked, and an undefined mode would start and fail every send.
+        if (options.Security is { } security && !Enum.IsDefined(security))
+            failures.Add($"{MailOptions.SecurityKey} is not a defined mode.");
+
         if (options.Host is { } host && Uri.CheckHostName(host) == UriHostNameType.Unknown)
             failures.Add($"{MailOptions.HostKey} is not a host name.");
 

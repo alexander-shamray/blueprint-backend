@@ -139,6 +139,19 @@ public sealed class MailOptionsTests
             .Message.ShouldContain("Port");
     }
 
+    /// <summary>The binder takes a number for an enum without asking whether the enum defines it.</summary>
+    [Theory]
+    [InlineData("2")]
+    [InlineData("-1")]
+    public void A_security_mode_the_enum_does_not_define_stops_the_host(string security)
+    {
+        using ServiceProvider provider = Bound(Environments.Production, Relay(security: security));
+
+        Should
+            .Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
+            .Message.ShouldContain($"{MailOptions.SecurityKey} is not a defined mode");
+    }
+
     [Fact]
     public void A_host_that_names_a_relay_starts()
     {
