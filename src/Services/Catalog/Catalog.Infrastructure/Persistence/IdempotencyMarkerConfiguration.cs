@@ -16,10 +16,7 @@ internal sealed class IdempotencyMarkerConfiguration : IEntityTypeConfiguration<
 
         builder
             .Property(marker => marker.Key)
-
-            // SQL Server's 900-byte clustered-key limit at two bytes a character; the two GUIDs and separators
-            // take 74, leaving the rest to the operation name.
-            .HasMaxLength(450)
+            .HasMaxLength(IdempotencyMarker.KeyMaxLength)
 
             // nvarchar, because narrowing a key column lets an encoding decide whether two commands are one.
             .UseCollation("Latin1_General_BIN2");
