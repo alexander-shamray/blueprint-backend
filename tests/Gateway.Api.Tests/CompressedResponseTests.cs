@@ -87,7 +87,7 @@ public sealed class CompressedResponseTests(StubDestination stub) : IClassFixtur
         HttpResponseMessage response = await client.SendAsync(request, ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
         response.Content.Headers.ContentEncoding.ShouldBeEmpty();
 
         (await response.Content.ReadAsStringAsync(ct)).ShouldContain("\"status\":401");

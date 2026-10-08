@@ -26,7 +26,7 @@ public class ProblemDetailsCompositionTests
 
         // Not application/json: a client recognises §10.5's one error shape by content type.
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
     }
 
     [Fact]

@@ -27,7 +27,7 @@ public class BadHttpRequestExceptionHandlerTests
         HttpResponseMessage response = await client.GetAsync(Route, TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
     }
 
     [Theory]

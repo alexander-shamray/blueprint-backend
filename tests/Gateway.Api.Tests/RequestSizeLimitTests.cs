@@ -35,7 +35,7 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
         HttpResponseMessage response = await Post(GatewayLimits.MaxRequestBodyBytes + 1, stub.Address, ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
 

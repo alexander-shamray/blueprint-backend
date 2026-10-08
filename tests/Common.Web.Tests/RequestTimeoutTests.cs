@@ -37,7 +37,7 @@ public partial class RequestTimeoutTests
 
         elapsed.Elapsed.ShouldBeLessThan(Deadline + Slack);
         response.StatusCode.ShouldBe(HttpStatusCode.GatewayTimeout);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         using JsonDocument body = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));

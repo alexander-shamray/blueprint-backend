@@ -27,7 +27,7 @@ public class CommandIdReusedExceptionHandlerTests
         HttpResponseMessage response = await client.GetAsync("/orders", TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
     }
 
     [Fact]
