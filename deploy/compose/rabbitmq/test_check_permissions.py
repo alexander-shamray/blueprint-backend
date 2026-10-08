@@ -420,7 +420,8 @@ class ConfigureAndReadAreBoundedToo(unittest.TestCase):
         # Saga state carrying a flag spelt like an event is not a subscription to that event's context.
         with tempfile.TemporaryDirectory() as directory:
             (Path(directory) / "State.cs").write_text(
-                "public bool PaymentDeclined { get; set; }\n", encoding="utf-8")
+                "public bool PaymentDeclined { get; set; }\n"
+                "CompositeEvent(() => Ready, x => x.Flags, PaymentDeclined, PaymentRefunded);\n", encoding="utf-8")
             self.assertEqual(set(), gate.referenced_contexts(Path(directory), self.names()))
 
     def test_a_type_two_contexts_declare_reaches_neither(self):
