@@ -57,16 +57,16 @@ pressure that makes it hardest to reproduce.
 | `{service}:denylist:` | **`noeviction`** | With the locks — **reserved, not built** ([ADR-033](adr/ADR-033-revocation-is-bounded-by-the-token-lifetime-and-no-denylist-exists.md)) |
 | `{service}:ratelimit:` | `volatile-ttl` acceptable | Either |
 
-**Two of those rows are reservations rather than descriptions of running
-code**, and both are listed for the same reason: a key that appears later
-should land where its own eviction policy already is, rather than on whichever
-instance its first caller happened to be holding. `{service}:ratelimit:` is
-the shared counter §10.3 does not build in v1. `{service}:denylist:` is a
-token denylist this platform has decided **not to have** — ADR-033 bounds
-revocation by the 300-second access-token lifetime and records that nothing
-consults a list — so its row claims a *placement* and not a mechanism: if a
-denylist is ever built, it must land somewhere a value cannot be evicted from
-under it.
+**Two of those rows are reservations rather than descriptions of running code**,
+and both are listed for the same reason: a key that appears later should land
+where its own eviction policy already is, rather than on whichever instance its
+first caller happened to be holding. `{service}:ratelimit:` is the shared
+counter §10.3 does not build in v1. `{service}:denylist:` is a token denylist
+this platform has decided **not to have** — ADR-033 bounds revocation by
+`AuthenticationExtensions.AccessTokenLifetime`, 300 seconds, and records that
+nothing consults a list — so its row claims a *placement* and not a mechanism:
+if a denylist is ever built, it must land somewhere a value cannot be evicted
+from under it.
 
 A separate DB index on the shared instance is **not** an isolation option,
 though it looks like one: `maxmemory-policy` is a server-level setting, every
@@ -184,10 +184,10 @@ public static class DependencyInjection
             {
                 options.DefaultEntryOptions = new HybridCacheEntryOptions
                 {
-                    Expiration = TimeSpan.FromMinutes(10),            // L2, Redis
-                    LocalCacheExpiration = TimeSpan.FromMinutes(1)    // L1, in-process
+                    Expiration = CacheDefaults.Expiration,
+                    LocalCacheExpiration = CacheDefaults.LocalCacheExpiration
                 };
-                options.MaximumPayloadBytes = 1024 * 1024;
+                options.MaximumPayloadBytes = CacheDefaults.MaximumPayloadBytes;
             });
 
             // §13.2's Redis tracing lands here too, with both keyed
@@ -202,10 +202,10 @@ public static class DependencyInjection
 }
 ```
 
-The short L1 expiry bounds how long one instance can serve data another instance
-has already invalidated. One minute of possible staleness across instances is
-usually an acceptable trade for eliminating most Redis round trips; adjust with
-the domain in mind.
+The short L1 expiry, `CacheDefaults.LocalCacheExpiration`, bounds how long one
+instance can serve data another instance has already invalidated. Its minute of
+possible staleness across instances is usually an acceptable trade for
+eliminating most Redis round trips; adjust with the domain in mind.
 
 ```csharp
 public sealed class GetProductDetailHandler(HybridCache cache, IDbConnectionFactory connections)
@@ -934,26 +934,28 @@ covers `next()` and nothing else, and the three store calls divide like this:
 | `next()` throws | **Release** — including for the one fault this code still cannot tell apart, and that is now a decision rather than a default. §6.3's `ExecuteAsync` disposes the transaction on the way out, which rolls it back, so for every *distinguishable* fault nothing survives and a retry is owed; for the lost acknowledgement the work is durable, the retry this admits meets the marker §6.3 wrote in that same transaction, and it is refused before a handler runs |
 | Handler returns a failed `Result` | **Release**, for the same reason and not for the one §6.3's comment suggests — see below. No marker survives either: §6.3 writes it after the failure guard |
 | `CompleteAsync` throws | **Hold**, which postpones the *replay* and no longer postpones the duplicate. The work is durable and the entry is stuck `InProgress`, so every retry meets `ConcurrentRequestException` until it expires — and the one arriving after that claims a free key, meets the marker, and is refused with `CommandAlreadyCommittedException`. What the caller loses is the recorded outcome, which this branch is the failure to write |
-| `TryClaimAsync` throws | **Nothing to decide, and it is still the case with the worst answer.** The `SET NX` may have succeeded on the server, so the key can be held for a day for work that never ran, and no retry gets past it. The marker does not help here and could not: nothing committed, so there is nothing for it to record |
+| `TryClaimAsync` throws | **Nothing to decide, and it is still the case with the worst answer.** The `SET NX` may have succeeded on the server, so the key can be held for `IdempotencyRetention.Window`, a day, for work that never ran, and no retry gets past it. The marker does not help here and could not: nothing committed, so there is nothing for it to record |
 
 The two `ReleaseAsync` calls and the `CompleteAsync` all pass
 `CancellationToken.None`, and for two different reasons rather than one. After
 `next()` returns, the caller's token stopped meaning anything the moment the
 transaction committed, and passing it would abandon the store write at exactly
-the moment it is owed. In the `catch` the commonest reason to be there at all
-is the caller's own cancellation, and honouring the token would abandon the
-release and leak the claim for a day — so `None` is right there too, whether or
-not the transaction committed, which the next callout is about.
+the moment it is owed. In the `catch` the commonest reason to be there at all is
+the caller's own cancellation, and honouring the token would abandon the release
+and leak the claim for the whole `IdempotencyRetention.Window` — so `None` is
+right there too, whether or not the transaction committed, which the next
+callout is about.
 
-> **Renaming a command would change its keys, and a rolling deployment is
-> where that costs a duplicate write — which is why the operation segment is
-> declared and not derived.** The segment was `typeof(TCommand).Name` when this
-> section was first written, so `PlaceOrderCommand` → `SubmitOrderCommand` was
-> a new key for the same `CommandId`. During a rollout both versions serve: the
-> old pods claim under the old name, the new pods under the new one, and a
-> client retrying one `CommandId` is protected by neither — it places two
-> orders. The window is not the rollout but the **retention**, because an entry
-> written before the rename stays claimable for 24 hours after it.
+> **Renaming a command would change its keys, and a rolling deployment is where
+> that costs a duplicate write — which is why the operation segment is declared
+> and not derived.** The segment was `typeof(TCommand).Name` when this section
+> was first written, so `PlaceOrderCommand` → `SubmitOrderCommand` was a new key
+> for the same `CommandId`. During a rollout both versions serve: the old pods
+> claim under the old name, the new pods under the new one, and a client
+> retrying one `CommandId` is protected by neither — it places two orders. The
+> window is not the rollout but the **retention**, because an entry written
+> before the rename stays claimable for `IdempotencyRetention.Window`, 24 hours,
+> after it.
 >
 > `IIdempotentCommand.OperationName` closes that, and the shape is the one this
 > callout used to merely recommend: a `static abstract` member, which C# 14
@@ -967,17 +969,17 @@ not the transaction committed, which the next callout is about.
 >
 > **The stored payload has the same problem one field over, and it is worse
 > because nothing throws.** `Capture` writes the success value with default
-> options, so the entry carries an implicit schema for as long as it lives —
-> up to the full 24 hours, since the window runs from the claim and a command
-> that ran for a minute has spent a minute of it. Change the shape of a result
-> DTO and a new pod reading an old
-> pod's entry either fails to deserialise it — a 500 on a retry of work that
-> committed — or, for an added or renamed member, **silently defaults it** and
-> replays a success that is quietly wrong. Neither is visible to a rolling
-> deployment's health checks. The same two routes apply: version what is
-> stored, or state a compatibility procedure for result-shape changes. Until
-> one is taken, **changing the shape of an idempotent command's result is a
-> migration too**, on exactly the terms the rename is.
+> options, so the entry carries an implicit schema for as long as it lives — up
+> to the full `IdempotencyRetention.Window`, since the window runs from the
+> claim and a command that ran for a minute has spent a minute of it. Change the
+> shape of a result DTO and a new pod reading an old pod's entry either fails to
+> deserialise it — a 500 on a retry of work that committed — or, for an added or
+> renamed member, **silently defaults it** and replays a success that is quietly
+> wrong. Neither is visible to a rolling deployment's health checks. The same
+> two routes apply: version what is stored, or state a compatibility procedure
+> for result-shape changes. Until one is taken, **changing the shape of an
+> idempotent command's result is a migration too**, on exactly the terms the
+> rename is.
 >
 > **The operation half is closed and the payload half is not**, and the
 > asymmetry is worth being explicit about: a discriminator was cheap to add
@@ -998,12 +1000,13 @@ not the transaction committed, which the next callout is about.
 > successor's claim while that successor is still running and admits one.
 >
 > **What the token closes is corruption, not the overrun itself.** Nothing here
-> bounds the retention against a handler's runtime — the behaviour passes 24
-> hours, so no shipped path reaches it, and nothing in the port's contract
-> stops a caller passing seconds. Past the claim's expiry a successor may claim
-> and both attempts run; the loser now fails to write rather than writing over
-> the winner. The store logs that refusal, because a write that silently did
-> nothing is the shape this whole section is about.
+> bounds the retention against a handler's runtime — the behaviour passes
+> `IdempotencyRetention.Window`, 24 hours, so no shipped path reaches it, and
+> nothing in the port's contract stops a caller passing seconds. Past the
+> claim's expiry a successor may claim and both attempts run; the loser now
+> fails to write rather than writing over the winner. The store logs that
+> refusal, because a write that silently did nothing is the shape this whole
+> section is about.
 
 > **The lost commit acknowledgement is the one fault the `catch` cannot
 > recognise, and the answer is that nothing here has to.** If `CommitAsync`
@@ -1056,11 +1059,12 @@ not the transaction committed, which the next callout is about.
 > marker, a retry after the claim expired ran the command again — which is
 > precisely why the guarantee was bounded by `Retention` and said so. It is now
 > refused for as long as the marker survives, which on the shipped windows is
-> **at least** six days longer — the claim runs 24 hours from the claim, the
-> marker seven days from a stamp that is later, so the stretch between the two
-> expiries is six days plus however long the command took to commit. That is a
-> loss against both a replay and a re-run, and it is strictly better than the
-> second order it replaces.
+> **at least** six days longer — the claim runs `IdempotencyRetention.Window`'s
+> 24 hours from the claim, the marker `RetentionPolicy.IdempotencyWindow`'s
+> seven days from a stamp that is later, so the stretch between the two expiries
+> is six days plus however long the command took to commit. That is a loss
+> against both a replay and a re-run, and it is strictly better than the second
+> order it replaces.
 >
 > **The residual it leaves is one this section already priced, and PR-14 is
 > why.** With the outbox in place a re-run republishes the same fact, which is
@@ -1151,6 +1155,9 @@ public sealed class IdempotencyMarker(string key, DateTimeOffset committedAt = d
     // statements agree without either restating the other (ADR-041).
     public const string RowVersionColumn = "RowVersion";
 
+    // SQL Server's 900-byte clustered-key limit at two bytes a character.
+    public const int KeyMaxLength = 450;
+
     public string Key { get; private set; } = key;
 
     public DateTimeOffset CommittedAt { get; private set; } = committedAt;
@@ -1182,9 +1189,9 @@ immutable for the life of a row nothing updates, and reading no clock at all
 nothing in C# reads the column through EF, because the one reader is that
 purge's own SQL, over Dapper, which never consults this model. A property here
 would be a mutable array on a public type that exists to be ignored. What sits
-on the entity instead is the const above: the mapping and the two statements
-that read the column all have to agree about its name, and that is the one
-place that says it.
+on the entity instead is `RowVersionColumn` above: the mapping and the two
+statements that read the column all have to agree about its name, and that is
+the one place that says it.
 
 **Each service declares the shadow property the way it declares the schema.**
 The same `IEntityTypeConfiguration` that names the table and its schema also
@@ -1213,17 +1220,17 @@ because one service may bind one message type on two endpoints; there is no
 second axis here, and a column that distinguishes nothing is what that entity's
 own comment warns against.
 
-**The column is `nvarchar(450)` with a binary collation, and both halves are
-the inbox's arguments one table over.** 450 is exactly SQL Server's 900-byte
-clustered-index limit at two bytes a character, so it is the widest this column
-can be while the primary key stays clustered; the key spends 74 of those
-characters on two GUIDs and two separators and leaves the declared operation
-name the rest. Binary because this column is a key rather than text: the
-default collation is case-insensitive, and two commands are the same command
-only if their keys are the same bytes. A per-service gate asserts the operation
-names a service declares fit, because a name too long fails neither the build
-nor startup — SQL Server refuses the insert on the first dispatch of that
-command, inside the transaction carrying the customer's order.
+**The column is `nvarchar` at `IdempotencyMarker.KeyMaxLength` with a binary
+collation, and both halves are the inbox's arguments one table over.** Its 450
+is exactly SQL Server's 900-byte clustered-index limit at two bytes a character,
+so it is the widest this column can be while the primary key stays clustered;
+the key spends 74 of those characters on two GUIDs and two separators and leaves
+the declared operation name the rest. Binary because this column is a key rather
+than text: the default collation is case-insensitive, and two commands are the
+same command only if their keys are the same bytes. A per-service gate asserts
+the operation names a service declares fit, because a name too long fails
+neither the build nor startup — SQL Server refuses the insert on the first
+dispatch of that command, inside the transaction carrying the customer's order.
 
 **The store writes through the service's own `DbContext`, and that is what puts
 it in the transaction rather than beside it.** §9.5's filter already requires
@@ -1243,10 +1250,10 @@ public sealed class EfIdempotencyMarkerStore(DbContext db) : IIdempotencyMarkerS
 
     // No TimeProvider, and this type took one until the column default replaced
     // it. The row's age was then the purging pod's clock minus a timestamp the
-    // writing pod stamped, across §15.3's three replicas — so the marker's
-    // retention floor had to bound the skew between them rather than remove it.
-    // Constructing the marker without a timestamp is what leaves the column to
-    // its SYSDATETIMEOFFSET() default (ADR-038).
+    // writing pod stamped, across §15.3's replicaCount of three — so the
+    // marker's retention floor had to bound the skew between them rather than
+    // remove it. Constructing the marker without a timestamp is what leaves the
+    // column to its SYSDATETIMEOFFSET() default (ADR-038).
     public async Task MarkAsync(string key, CancellationToken ct) =>
         await db.Set<IdempotencyMarker>().AddAsync(new IdempotencyMarker(key), ct);
 }
@@ -1313,7 +1320,8 @@ of those keys it has already let go of, and deletes only those:
 -- against the claim: it says which markers have served their window, and the
 -- store says which of those may go.
 -- Seconds and not days because the window is a caller-supplied TimeSpan;
--- DATEADD takes an int, which the policy's ten-year ceiling clears.
+-- DATEADD takes an int, which the policy's ten-year RetentionPolicy.MaxWindow
+-- clears.
 --
 -- Oldest first, so a batch the store will not let go of entirely leaves the
 -- rows likeliest to still hold a claim — the newest — at the tail where the
@@ -1331,15 +1339,14 @@ ORDER BY CommittedAt;
 -- for what it holds rather than around the parser.
 --
 -- THE VERSION BOUND IS WHAT MAKES THIS SAFE, and neither a key alone nor a
--- re-evaluated age is. A key names a command, not a row: past the guarantee
--- the key is claimable again, so a retry can commit a FRESH marker under a key
--- this pass already selected, and §15.3's three replicas can have a second
--- purger's delete arrive after that. A key-only delete removes the
--- replacement; repeating the age cutoff does not save it either, because that
--- predicate re-reads SYSDATETIMEOFFSET() and a forward clock step before the
--- stale delete makes the replacement look old enough to go. An age against a
--- moving clock is not an ABA guard, and this section exists because that clock
--- moves.
+-- re-evaluated age is. A key names a command, not a row: past the guarantee the
+-- key is claimable again, so a retry can commit a FRESH marker under a key this
+-- pass already selected, and §15.3's replicaCount of three can have a second
+-- purger's delete arrive after that. A key-only delete removes the replacement;
+-- repeating the age cutoff does not save it either, because that predicate
+-- re-reads SYSDATETIMEOFFSET() and a forward clock step before the stale delete
+-- makes the replacement look old enough to go. An age against a moving clock is
+-- not an ABA guard, and this section exists because that clock moves.
 --
 -- SO THE DELETE NAMES THE ROW IT SELECTED. Three predicates were tried first
 -- and each fell to a different clock movement: a key alone deletes the
@@ -1368,17 +1375,17 @@ ORDER BY CommittedAt;
 -- service's own IEntityTypeConfiguration the way the schema is and named from
 -- the entity, so this statement and that mapping cannot drift.
 --
--- Chunked at 900 rows by the caller, because each costs TWO parameters — its
--- key and its version — and SQL Server refuses more than 2,100 of them, where
--- the default BatchSize is 5,000. Chunking is what keeps BatchSize meaning
--- rows considered per batch instead of quietly capping it at a limit belonging
--- to a different layer. Two parameters a row before #173 and two after it, so
--- neither number moved.
+-- Chunked at RetentionPurgeService.RowsPerDelete, 900 rows, by the caller,
+-- because each costs TWO parameters — its key and its version — and SQL Server
+-- refuses more than 2,100 of them, where the default BatchSize is 5,000.
+-- Chunking is what keeps BatchSize meaning rows considered per batch instead of
+-- quietly capping it at a limit belonging to a different layer. Two parameters
+-- a row before #173 and two after it, so neither number moved.
 --
--- Each @v is bound as a SIZED binary of eight bytes, which is what a
--- rowversion always is. An unsized one travels as varbinary(max) and makes the
--- VALUES list below a derived table of max-length columns compared against a
--- binary(8).
+-- Each @v is bound as a SIZED binary of RetentionPurgeService.RowVersionBytes,
+-- eight, which is what a rowversion always is. An unsized one travels as
+-- varbinary(max) and makes the VALUES list below a derived table of max-length
+-- columns compared against a binary(8).
 DELETE marker
 FROM ordering.IdempotencyMarkers marker
 INNER JOIN (VALUES (@k0, @v0), (@k1, @v1), ...) AS selected([Key], RowVersion)
@@ -1395,20 +1402,19 @@ INNER JOIN (VALUES (@k0, @v0), (@k1, @v1), ...) AS selected([Key], RowVersion)
 >
 > **The other half was a genuine regression and is closed by a version bound
 > rather than by a predicate.** A key names a command and not a row, so the
-> retry can *commit* under that key — and with
-> [§15.3](15-cicd-deployment.md)'s three replicas, a second purger holding the
-> same selected key can delete the replacement: a row inside its window with a
-> live claim behind it, after which the next retry runs the command a third
-> time. **Repeating the age cutoff looked like the fix and is not one**, which
-> is worth stating because it was the first attempt: that predicate re-reads
-> `SYSDATETIMEOFFSET()`, so a forward step of the database's clock before the
-> stale delete makes the replacement satisfy it. An age against a moving clock
-> cannot guard against an ABA, in the one section whose whole subject is that
-> the clock moves. **Nor is a bound on the newest selected `CommittedAt`, nor
-> the two together** — a *backward* step puts the replacement below the bound,
-> and a forward correction after it puts the same row past a re-read cutoff.
-> Three predicates, three clock movements, and the fourth would have been a
-> guess.
+> retry can *commit* under that key — and with [§15.3](15-cicd-deployment.md)'s
+> `replicaCount` of three, a second purger holding the same selected key can
+> delete the replacement: a row inside its window with a live claim behind it,
+> after which the next retry runs the command a third time. **Repeating the age
+> cutoff looked like the fix and is not one**, which is worth stating because it
+> was the first attempt: that predicate re-reads `SYSDATETIMEOFFSET()`, so a
+> forward step of the database's clock before the stale delete makes the
+> replacement satisfy it. An age against a moving clock cannot guard against an
+> ABA, in the one section whose whole subject is that the clock moves. **Nor is
+> a bound on the newest selected `CommittedAt`, nor the two together** — a
+> *backward* step puts the replacement below the bound, and a forward correction
+> after it puts the same row past a re-read cutoff. Three predicates, three
+> clock movements, and the fourth would have been a guess.
 >
 > **So the `DELETE` above names the row instead of describing it.** `(Key,
 > RowVersion)` is its identity — the key names the command, the version names
@@ -1461,15 +1467,15 @@ INNER JOIN (VALUES (@k0, @v0), (@k1, @v1), ...) AS selected([Key], RowVersion)
 >
 > **And they were not counted by the same clock, which the column default
 > closed.** The marker's age was the purging pod's clock minus a timestamp the
-> writing pod stamped, and §15.3 runs three replicas of each service; a purger
-> leading the writer by δ deleted the marker δ early. `CommittedAt` now
+> writing pod stamped, and §15.3's `replicaCount` runs three of each service; a
+> purger leading the writer by δ deleted the marker δ early. `CommittedAt` now
 > defaults to `SYSDATETIMEOFFSET()` and the `SELECT` above computes its cutoff
-> in SQL, so both ends of that comparison are the database's own clock and
-> there is no skew term left to bound. **What that cost is the substitutable
-> clock**: this is the one retention window a test host cannot move by
-> registering a fake `TimeProvider`, and its tests stage rows at explicit ages
-> against the real clock instead — comfortably either side of the window, so
-> what they assert is the predicate rather than arithmetic near a boundary.
+> in SQL, so both ends of that comparison are the database's own clock and there
+> is no skew term left to bound. **What that cost is the substitutable clock**:
+> this is the one retention window a test host cannot move by registering a fake
+> `TimeProvider`, and its tests stage rows at explicit ages against the real
+> clock instead — comfortably either side of the window, so what they assert is
+> the predicate rather than arithmetic near a boundary.
 >
 > **What is left is a *start* ordering that holds by construction rather than
 > by a margin, and an *expiry* ordering that is no longer arithmetic at all.**
