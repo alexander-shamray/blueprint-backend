@@ -110,8 +110,10 @@ What forbids it is **ownership**: MassTransit maps those three entities itself
 and its own queries depend on the mapping, so a configuration of ours would be a
 second definition of a schema the library has to agree with — and the next
 version bump moves the library's half while ours sits there looking correct.
-The rule is unchanged for every type this repository defines; §7.4 lists the
-tables.
+The rule holds for every type this repository defines; §7.4 lists the tables.
+
+`OrderConfiguration.cs` in `Ordering.Infrastructure/Persistence` holds the
+whole mapping; this excerpt is part of it.
 
 ```csharp
 internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
@@ -121,55 +123,26 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.ToTable("Orders", "ordering");
         builder.HasKey(o => o.Id);
 
-        builder
-            .Property(o => o.Id)
-            .HasConversion(id => id.Value, value => new OrderId(value))
-            .ValueGeneratedNever();
+        // §11.4's ownership check and §6.5's history query both filter on it by equality (§7.2).
+        builder.HasIndex(o => o.CustomerId);
 
-        builder
-            .Property(o => o.CustomerId)
-            .HasConversion(id => id.Value, value => new CustomerId(value));
-
-        // By name, never by number: an enum stored as an int makes the member
-        // order a storage contract, so inserting a status in the middle
-        // silently reinterprets every existing row. 20 is the longest member
-        // plus room — AwaitingPayment is 15.
+        // By name, never by number, or inserting a member reinterprets every row (§7.2).
         builder
             .Property(o => o.Status)
             .HasConversion<string>()
             .HasMaxLength(20);
 
-        // The order's currency is a private field rather than a property, so
-        // EF has to be told it exists at all. Every line is validated against
-        // it and Total sums in it, so an order that persists without it
-        // materialises unable to compute its own total.
+        // A private field, so EF has to be told it exists; every line is validated against it (§7.2).
         builder
             .Property<string>("_currency")
             .HasColumnName("Currency")
             .HasMaxLength(3);
 
-        // Value object mapped as a complex type — columns on the same table,
-        // no identity, exactly matching the domain semantics.
-        builder.ComplexProperty(
-            o => o.ShippingAddress,
-            address =>
-            {
-                address.Property(a => a.Line1).HasColumnName("ShipToLine1").HasMaxLength(200);
-                address.Property(a => a.Line2).HasColumnName("ShipToLine2").HasMaxLength(200);
-                address.Property(a => a.City).HasColumnName("ShipToCity").HasMaxLength(100);
-                address.Property(a => a.PostalCode).HasColumnName("ShipToPostalCode").HasMaxLength(20);
-                address.Property(a => a.Country).HasColumnName("ShipToCountry").HasMaxLength(2);
-            });
+        // Optimistic concurrency — SQL Server maintains this automatically.
+        builder.Property(o => o.Version).IsRowVersion();
 
-        // A related entity rather than an owned collection, and the reason is
-        // ComplexProperty: an owned-collection builder does not offer it, so
-        // Money on a line would have to be mapped a second way — two spellings
-        // of one value object in one file, which is the drift this chapter's
-        // convention block exists to prevent. The aggregate boundary is kept by
-        // what is absent instead: no DbSet<OrderLine> on the context, and
-        // OrderLine's factory internal to the domain assembly, so a line cannot
-        // be reached or made except through Order. Reachability is the rule; the
-        // mapping construct is one implementation of it.
+        // A related entity, not an owned collection, so Money maps one way; the boundary is kept by reachability,
+        // and IsRequired keeps the schema from admitting an orphan line (§7.2).
         builder
             .HasMany(o => o.Lines)
             .WithOne()
@@ -177,32 +150,44 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
             .IsRequired()
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Backing field, not the public read-only property.
         builder
             .Navigation(o => o.Lines)
             .HasField("_lines")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
-
-        // Optimistic concurrency — SQL Server maintains this automatically.
-        builder.Property(o => o.Version).IsRowVersion();
-
-        // The column §11.4's ownership check reads on every cancellation, and
-        // the one §6.5's history query filters by — both equality on a single
-        // customer, so a plain index over it is the whole requirement. An
-        // index is added by the query that needs it and not in anticipation:
-        // this sample carried a (Status, PlacedAt) composite that no query in
-        // the blueprint seeks on, and the shipped configuration does not.
-        builder.HasIndex(o => o.CustomerId);
-
-        builder.Ignore(o => o.DomainEvents);
-        builder.Ignore(o => o.Total);       // Computed, not stored.
     }
 }
 ```
 
-The line's own mapping is a second `IEntityTypeConfiguration`, which is what
-the related-entity decision above costs — an owned collection would have been
-configured inline:
+The status is stored by name, never by number: an enum stored as an int makes
+the member order a storage contract, so inserting a status in the middle
+silently reinterprets every existing row. 20 is the longest member plus room —
+`AwaitingPayment` is 15. The order's currency is a private field rather than a
+property, so EF has to be told it exists at all; every line is validated
+against it and `Total` sums in it, so an order that persists without it
+materialises unable to compute its own total. `ShippingAddress` is a value
+object mapped as a complex type — columns on the same table, no identity,
+exactly matching the domain semantics — and `Total` is ignored, because it is
+computed rather than stored.
+
+The lines are a related entity rather than an owned collection, and the reason
+is `ComplexProperty`: an owned-collection builder does not offer it, so `Money`
+on a line would have to be mapped a second way — two spellings of one value
+object in one file, which is the drift the convention block below exists to
+prevent. The aggregate boundary is kept by what is absent instead: no
+`DbSet<OrderLine>` on the context, and `OrderLine`'s factory internal to the
+domain assembly, so a line cannot be reached or made except through `Order`.
+Reachability is the rule; the mapping construct is one implementation of it.
+The navigation maps the `_lines` backing field, not the public read-only
+property.
+
+`CustomerId` is the column §11.4's ownership check reads on every cancellation,
+and the one §6.5's history query filters by — both equality on a single
+customer, so a plain index over it is the whole requirement. An index is added
+by the query that needs it and not in anticipation.
+
+The line's own mapping is a second `IEntityTypeConfiguration`,
+`OrderLineConfiguration.cs` beside it, which is what the related-entity
+decision above costs — an owned collection would have been configured inline:
 
 ```csharp
 internal sealed class OrderLineConfiguration : IEntityTypeConfiguration<OrderLine>
@@ -212,40 +197,45 @@ internal sealed class OrderLineConfiguration : IEntityTypeConfiguration<OrderLin
         builder.ToTable("OrderLines", "ordering");
         builder.HasKey(l => l.Id);
 
-        builder
-            .Property(l => l.Id)
-            .HasConversion(id => id.Value, value => new OrderLineId(value))
-            .ValueGeneratedNever();
-
+        // Value object mapped as a complex type — columns on the same table,
+        // no identity, exactly matching the domain semantics (§7.2).
         builder.ComplexProperty(
             l => l.UnitPrice,
-            money =>
+            price =>
             {
-                money.Property(m => m.Amount).HasColumnName("UnitPriceAmount").HasPrecision(19, 4);
-                money.Property(m => m.Currency).HasColumnName("UnitPriceCurrency").HasMaxLength(3);
+                price
+                    .Property(m => m.Amount)
+                    .HasColumnName("UnitPriceAmount")
+                    .HasPrecision(OrderAmounts.Precision, OrderAmounts.Scale);
+                price.Property(m => m.Currency).HasColumnName("UnitPriceCurrency").HasMaxLength(3);
             });
 
-        builder.Ignore(l => l.LineTotal);   // UnitPrice * Quantity, derived on read.
+        // Derived on read, not stored.
+        builder.Ignore(l => l.LineTotal);
+
+        // The repository's Include seeks by the order, so the foreign key is the index that matters.
         builder.HasIndex("OrderId");
     }
 }
 ```
 
-Global conventions cover what would otherwise be repeated in every file:
+Global conventions cover what would otherwise be repeated in every file.
+`OrderingDbContext` declares them, and `OrderAmounts.Precision` and
+`OrderAmounts.Scale` are 19 and 4:
 
 ```csharp
-// The parameter name is the base declaration's, not a shorter one. CA1725
-// makes a rename an error under ADR-019's TreatWarningsAsErrors, which is a
-// good rule here and not a formality: a caller reading the framework's own
-// documentation for ConfigureConventions is reading about
-// `configurationBuilder`.
 protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
 {
-    configurationBuilder.Properties<decimal>().HavePrecision(19, 4);
+    configurationBuilder.Properties<decimal>().HavePrecision(OrderAmounts.Precision, OrderAmounts.Scale);
     configurationBuilder.Properties<string>().HaveMaxLength(400);
     configurationBuilder.Properties<DateTimeOffset>().HaveColumnType("datetimeoffset(7)");
 }
 ```
+
+The parameter name is the base declaration's, not a shorter one. CA1725 makes
+a rename an error under ADR-019's `TreatWarningsAsErrors`, which is a good rule
+here and not a formality: a caller reading the framework's own documentation
+for `ConfigureConventions` is reading about `configurationBuilder`.
 
 Unbounded `NVARCHAR(MAX)` columns are a common and avoidable source of both
 storage bloat and index limitations; defaulting `string` to a bounded length
@@ -267,7 +257,7 @@ degrade badly under that load. There, use a targeted pessimistic update:
 
 ```sql
 UPDATE inventory.StockItems
-SET Available = Available - @Quantity, Reserved = Reserved + @Quantity, UpdatedAt = <stamp>
+SET Available = Available - @Quantity, Reserved = Reserved + @Quantity, UpdatedAt = {Stamp}
 OUTPUT inserted.Available, inserted.UpdatedAt
 WHERE ProductId = @ProductId
     AND Available >= @Quantity;
@@ -278,10 +268,11 @@ atomic statement. If it affects zero rows, there was not enough stock — no rea
 no race, no retry loop.
 
 `SqlStockLedger` in `Inventory.Infrastructure/Persistence` owns the statement
-as it runs, and the stamp is the ledger's term rather than this section's. It
-is monotonic per row rather than a bare clock read, so two serialised writers
-leave strictly ordered instants whatever the server clock does between them,
-and it is returned beside the level because it is the `OccurredAt` of the
+as its `TakeSql`, and the `{Stamp}` it interpolates is the ledger's term
+rather than this section's. It is monotonic per row rather than a bare clock
+read, so two serialised writers leave strictly ordered instants whatever the
+server clock does between them, and it is returned beside the level because
+it is the `OccurredAt` of the
 `StockLevelChanged` that write publishes ([§3.2](03-bounded-contexts.md)). A
 bare reading in both places is the version that fails — the second writer can
 take an earlier one than the first, and Catalog's projection then keeps the
@@ -298,8 +289,8 @@ differently:
 | Kind | Examples | Authored by |
 |---|---|---|
 | **Write model** | `Orders`, `OrderLines` | The EF model. `IEntityTypeConfiguration<T>` (§7.2) is the source of truth; `dotnet ef migrations add` produces the DDL |
-| **Read models and technical tables** | `OrderSummaries`, `ordering.Products`, `ProductPrices`, `OutboxMessages`, `InboxMessages`, `IdempotencyMarkers`, `OrderReviews` | Hand-written DDL, because they are shaped for queries and index plans rather than for objects. **`ProductPrices` states the terms of the exception**: PR-18 maps it through an `IEntityTypeConfiguration` so `migrations add` emits it beside the aggregate's tables, and the configuration is then written to produce §6.6's printed types — `char(3)`, `DEFAULT 1` — rather than EF's defaults for the CLR ones. `OrderSummaries` is mapped on the same terms. `IdempotencyMarkers` ([§8.5](08-caching-redis.md)) is mapped the same way and for a reason of its own: [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)'s store both reads and writes it through the service's `DbContext`, because that is what puts the write inside §6.3's transaction, so the entity has to be in the model whether or not the DDL is emitted from it. The rule is that the shape is the chapter's; which tool writes it is negotiable, and a generated table that drifts from the DDL a later PR copies is not |
-| **A library's own technical tables** | `ordering.InboxState`, `ordering.OutboxState`, `ordering.OutboxMessage` | The EF model, from `modelBuilder.AddTransactionalOutboxEntities()` — **the one stated exception to §7.2's rule that mapping lives in `IEntityTypeConfiguration<T>` classes**, and the exception is about ownership rather than about reach ([ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)). The assembly scan would find a configuration for these entities perfectly well — it selects on the *configuration* type's assembly, not the entity's — but MassTransit maps them itself and queries them on that mapping, so writing one here would be a second definition of a schema the library has to agree with, drifting on its next bump. Their shape is not this blueprint's to specify either, which is the difference from the row above: the rule there is that the shape is the chapter's, and here it is the library's. **Singular, where §9.4's and §9.5's tables are plural** — `OutboxMessage` against `OutboxMessages`, so the two sets share the `ordering` schema without colliding, and a reader of the database sees more messaging tables than the chapters name. **No count on either side of that sentence**: it said five against two while §9 owned two, and §8.5's marker joined the cell above without settling whether a marker is a *messaging* table — which is the question a numeral here would have to answer and no chapter does. Ordering is the only service with any of them, because it holds the only saga |
+| **Read models and technical tables** | `OrderSummaries`, `ordering.Products`, `ProductPrices`, `OutboxMessages`, `InboxMessages`, `IdempotencyMarkers`, `OrderReviews` | Hand-written DDL, because they are shaped for queries and index plans rather than for objects. **`ProductPrices` states the terms of the exception**: `ProductPriceConfiguration` maps it so `migrations add` emits it beside the aggregate's tables, and is written to produce §6.6's printed types — `char(3)`, `DEFAULT 1` — rather than EF's defaults for the CLR ones. `OrderSummaries` is mapped on the same terms. `IdempotencyMarkers` ([§8.5](08-caching-redis.md)) is mapped the same way and for a reason of its own: [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)'s store both reads and writes it through the service's `DbContext`, because that is what puts the write inside §6.3's transaction, so the entity has to be in the model whether or not the DDL is emitted from it. The rule is that the shape is the chapter's; which tool writes it is negotiable, and a generated table that drifts from the chapter's DDL is not |
+| **A library's own technical tables** | `ordering.InboxState`, `ordering.OutboxState`, `ordering.OutboxMessage` | The EF model, from `modelBuilder.AddTransactionalOutboxEntities()` — **the one stated exception to §7.2's rule that mapping lives in `IEntityTypeConfiguration<T>` classes**, and the exception is about ownership rather than about reach ([ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)). The assembly scan would find a configuration for these entities perfectly well — it selects on the *configuration* type's assembly, not the entity's — but MassTransit maps them itself and queries them on that mapping, so writing one here would be a second definition of a schema the library has to agree with, drifting on its next bump. Their shape is not this blueprint's to specify either, which is the difference from the row above: the rule there is that the shape is the chapter's, and here it is the library's. **Singular, where §9.4's and §9.5's tables are plural** — `OutboxMessage` against `OutboxMessages`, so the two sets share the `ordering` schema without colliding, and a reader of the database sees more messaging tables than the chapters name. **No count on either side of that sentence**: whether §8.5's marker in the cell above is a *messaging* table is the question a numeral here would have to answer, and no chapter does. Ordering is the only service with any of them, because it holds the only saga |
 
 That is why [§6.6](06-cqrs.md) and [§9.4](09-messaging.md) show `CREATE TABLE` and §7.2 does not — the write
 model's schema is a projection of the aggregate, and duplicating it as SQL would
@@ -350,28 +341,17 @@ code run against a half-migrated schema; and the application's runtime identity
 needs DDL permissions it should not have.
 
 Instead migrations run as a distinct step that must complete before new pods
-receive traffic:
+receive traffic. `_migration-job.tpl` in `deploy/helm/common/templates` renders
+it for every chart that owns a database; these are the lines that make it one:
 
 ```yaml
 apiVersion: batch/v1
 kind: Job
 metadata:
-  # The workload's name (§15.3) plus the tag — one name per deployable rather
-  # than three, because that name is already a contract the route file and the
-  # pricing hop both spell.
-  #
-  # The chart VALIDATES this length rather than truncating it: Kubernetes
-  # stamps `job-name` onto the pods it creates and a label value may not
-  # exceed 63, and a cut can land mid-tag — on a dot, which trimming a trailing
-  # hyphen never touched — or make two tags collide on one Job. A tag that does
-  # not fit is a deploy that must fail, not a name to mangle.
-  name: ordering-api-migrate-{{ .Values.image.tag }}
+  name: {{ $jobName }}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-5"
-    # hook-succeeded as well, or these accumulate: before-hook-creation
-    # matches on NAME, and the name above embeds the tag. Failures are left
-    # behind on purpose — the runbook needs the failed Job.
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 2
@@ -380,16 +360,19 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: "{{ .Values.image.registry }}/{{ .Values.image.migrator }}:{{ .Values.image.tag }}"
           env:
-            # The MIGRATOR identity (DDL), not the runtime one — §7.1.
-            # This secret is mounted only here, never into an API pod.
-            - name: ConnectionStrings__OrderingMigrator
-              valueFrom:
-                secretKeyRef:
-                  name: ordering-migrator-secret
-                  key: connection-string
+            - name: ConnectionStrings__{{ .Values.database.connectionName }}Migrator
 ```
+
+The Job takes the workload's name (§15.3), then `-migrate-` and the image tag.
+The chart validates the name's length rather than truncating it: Kubernetes
+stamps `job-name` onto the pods it creates and a label value may not exceed 63,
+and a cut can end on a character the API server refuses or give two tags one
+Job. A tag that does not fit is a deploy that must fail, not a name to mangle. `hook-succeeded` is in the delete
+policy as well, or the Jobs accumulate: `before-hook-creation` matches on name,
+and the name embeds the tag. A failed Job is left behind on purpose, because
+the runbook needs it. The connection string is the migrator identity (DDL), not
+the runtime one (§7.1), and its secret is mounted into no API pod.
 
 Because migrations and application code deploy separately, **every migration
 must be backward compatible with the currently running version**. Renaming a
@@ -420,20 +403,23 @@ that only appears under load.
 ### The collector port
 
 The dispatcher needs to know which aggregates changed, which is EF Core's
-change tracker — an Infrastructure concern. Application sees only a port:
+change tracker — an Infrastructure concern. Application sees only a port,
+declared in `Common.Application`:
 
 ```csharp
 namespace Common.Application;
 
 public interface IDomainEventCollector
 {
-    /// <summary>
-    /// Returns the domain events raised by every tracked aggregate and clears
-    /// them, so a second call after re-entrant work returns only new events.
-    /// </summary>
+    /// <summary>Clears as it collects, so a second call returns only events raised since.</summary>
     IReadOnlyList<IDomainEvent> CollectAndClear();
 }
 ```
+
+Each service that raises domain events implements it over its own context.
+Ordering's is `EfDomainEventCollector` in `Ordering.Infrastructure/Persistence`,
+and it clears as it collects, so a second call returns only the events raised
+since the first:
 
 ```csharp
 namespace Ordering.Infrastructure.Persistence;
@@ -452,9 +438,7 @@ internal sealed class EfDomainEventCollector(OrderingDbContext db) : IDomainEven
 
         IDomainEvent[] events = [.. aggregates.SelectMany(a => a.DomainEvents)];
 
-        // Cleared as they are collected, so a nested dispatch (§6.3's
-        // HasActiveTransaction path) sees only events raised since the last
-        // call rather than staging these a second time.
+        // Cleared as collected, so a nested dispatch (§6.3) does not stage these a second time.
         foreach (IHasDomainEvents aggregate in aggregates)
             aggregate.ClearDomainEvents();
 
@@ -465,45 +449,14 @@ internal sealed class EfDomainEventCollector(OrderingDbContext db) : IDomainEven
 
 ### The dispatcher
 
+`IDomainEventDispatcher` is the port `TransactionBehavior` calls inside the
+transaction, before `SaveChanges`; `IProjectionRegistry` answers whether an
+event type has any registered projection handler, so the dispatcher stages no
+`Local` row nobody will consume. Both are declared in `Common.Application`, and
+`DomainEventDispatcher.cs` there implements the first:
+
 ```csharp
 namespace Common.Application;
-
-public interface IDomainEventDispatcher
-{
-    /// <summary>
-    /// Collects raised domain events and stages outbox rows for them — the
-    /// allow-listed ones on the Broker lane, those with projection handlers on
-    /// the Local lane. Runs no handlers. Called by TransactionBehavior inside
-    /// the transaction, before SaveChanges.
-    /// </summary>
-    Task DispatchAsync(CancellationToken ct);
-}
-
-/// <summary>
-/// Answers whether an event type has any registered projection handler, so the
-/// dispatcher does not stage Local rows nobody will consume.
-/// </summary>
-public interface IProjectionRegistry
-{
-    bool HasHandler(IDomainEvent domainEvent);
-}
-
-/// <summary>The memo, a singleton, so its lifetime is the container's.</summary>
-internal sealed class ProjectionRegistryCache
-{
-    public ConcurrentDictionary<Type, bool> HasHandler { get; } = new();
-}
-
-internal sealed class ProjectionRegistry(IServiceProvider services, ProjectionRegistryCache cache)
-    : IProjectionRegistry
-{
-    // Derived from the DI container rather than a hand-maintained list, so it
-    // cannot drift from what is actually registered (§6.2).
-    public bool HasHandler(IDomainEvent domainEvent) =>
-        cache.HasHandler.GetOrAdd(
-            domainEvent.GetType(),
-            type => services.GetServices(typeof(IProjectionHandler<>).MakeGenericType(type)).Any());
-}
 
 internal sealed class DomainEventDispatcher(
     IDomainEventCollector collector,
@@ -522,11 +475,26 @@ internal sealed class DomainEventDispatcher(
         foreach (object integrationEvent in mapper.Map(events))
             await publisher.StageAsync(integrationEvent, OutboxLane.Broker, ct);
 
-        // Local lane: events with a registered projection handler are staged
-        // too, so the projection survives a crash immediately after commit.
+        // Local lane: only events with a projection handler, since §9.4 throws on a Local row that finds none.
         foreach (IDomainEvent domainEvent in events.Where(projections.HasHandler))
             await publisher.StageAsync(domainEvent, OutboxLane.Local, ct);
     }
+}
+```
+
+A `Local` row is staged so the projection survives a crash immediately after
+commit. `ProjectionRegistry.cs` implements the registry, beside the
+`ProjectionRegistryCache` singleton that memoises it, and the registry asks the
+container rather than a hand-maintained list:
+
+```csharp
+internal sealed class ProjectionRegistry(IServiceProvider services, ProjectionRegistryCache cache)
+    : IProjectionRegistry
+{
+    public bool HasHandler(IDomainEvent domainEvent) =>
+        cache.HasHandler.GetOrAdd(
+            domainEvent.GetType(),
+            type => services.GetServices(typeof(IProjectionHandler<>).MakeGenericType(type)).Any());
 }
 ```
 
@@ -549,21 +517,17 @@ an invisible no-op.
 > suite proving that an event with no handler stages no `Local` row would then
 > poison the suite proving that one with a handler does, in whichever order
 > they happened to run. Keyed to the container, the memo still answers a
-> question about registrations — which is the property that made it safe.
+> question about registrations — which is the property that makes it safe.
 
 Both implementations are internal to `Common.Application`, so a service cannot
-write those two lines itself — the registration is an extension method, on the
-same terms as §6.2's `AddDispatcher()`:
+register them itself — the registration is an extension method in
+`Common.Application/DependencyInjection.cs`, on the same terms as §6.2's
+`AddDispatcher()`, and `AddOrderingApplication` (§4.2) calls it:
 
 ```csharp
-// Common.Application, called by AddOrderingApplication (§4.2).
 public IServiceCollection AddDomainEventDispatcher()
 {
-    // Singleton, and the one lifetime here that is not obvious: the memo is
-    // keyed to the container rather than to the scope that first asked. A
-    // static field would answer for the process, so a second host in the same
-    // test assembly would inherit the first one's answer about registrations
-    // it does not have.
+    // Singleton: the memo is keyed to the container, not to the scope that first asked.
     services.AddSingleton<ProjectionRegistryCache>();
     services.AddScoped<IProjectionRegistry, ProjectionRegistry>();
     services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
@@ -581,7 +545,7 @@ suite fails the day any type in it implements `IDomainEvent` or
 `IHasDomainEvents`, and that day the real dispatcher is owed.
 
 **The dispatcher performs no I/O beyond staging rows.** It does not invoke a
-single handler. That is the change that makes the rest of the design safe.
+single handler. That is what makes the rest of the design safe.
 
 ### Nothing reacts inside the transaction
 
