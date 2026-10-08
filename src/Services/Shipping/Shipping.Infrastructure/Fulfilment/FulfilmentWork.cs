@@ -10,4 +10,5 @@ public sealed record FulfilmentWork(
     DateTimeOffset CreatedAt,
     DateTimeOffset? CancellationRequestedAt,
     string? TraceParent,
-    string? TraceState);
+    string? TraceState,
+    DateTimeOffset LockedUntil);

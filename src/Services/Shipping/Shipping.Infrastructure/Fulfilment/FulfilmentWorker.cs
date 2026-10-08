@@ -77,6 +77,12 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             "The carrier did not answer the cancellation of shipment {ShipmentId} on order {OrderId} within its " +
             "give-up age of {GiveUpAge}; it is recorded as refused, and tracking goes on.");
 
+    private static readonly Action<ILogger, Guid, Guid, Exception?> BackOffFailed =
+        LoggerMessage.Define<Guid, Guid>(
+            LogLevel.Error,
+            new EventId(8, nameof(BackOffFailed)),
+            "Backing off shipment {ShipmentId} on order {OrderId} failed; it is tried again when its lease lapses.");
+
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -129,7 +135,16 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
                 // The token again: an outage, a refused credential and a defect all back the row off.
                 PassFailed(log, work.Id, work.OrderId, ex);
-                await claims.FailAsync(work.Id, ct);
+
+                // Its own catch, so a database fault here is named as the backoff's rather than the claim's.
+                try
+                {
+                    await claims.FailAsync(work.Id, work.LockedUntil, ct);
+                }
+                catch (Exception backOff) when (!ct.IsCancellationRequested)
+                {
+                    BackOffFailed(log, work.Id, work.OrderId, backOff);
+                }
             }
         }
 

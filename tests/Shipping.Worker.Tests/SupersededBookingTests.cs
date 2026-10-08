@@ -221,7 +221,8 @@ public sealed class SupersededBookingTests
             first.CreatedAt,
             null,
             null,
-            null);
+            null,
+            first.CreatedAt.AddSeconds(FulfilmentWorker.LeaseSeconds));
 
         return await worker.FulfilAsync(provider, work, TestContext.Current.CancellationToken);
     }
