@@ -281,8 +281,8 @@ ContactSource__Realm: {{ $realm | quote }}
 Delivery__GiveUpAge: {{ include "commerce.timeSpan" (list .Values.delivery.giveUpAge "delivery.giveUpAge" "delivery.giveUpAge is required when delivery.enabled: ADR-052's give-up age is a value the deployment is given, and DeliveryOptions refuses to boot without it." "DeliveryOptions binds it at start (ADR-052).") | quote }}
 {{- end }}
 {{- /* ADR-079's opt-out, by connection name: each one listed is a hop the
-deployer accepts in plaintext, and empty, as every chart ships it, the host
-refuses each one that is not encrypted and verified. */}}
+deployer accepts in plaintext. Empty or absent, as each chart ships it, the
+host refuses each one that is not encrypted and verified. */}}
 {{- range $i, $name := (.Values.transport).plaintext }}
 {{- if not (regexMatch "^[A-Za-z][A-Za-z0-9]*$" (toString $name)) }}
 {{- fail (printf "transport.plaintext[%d] is %q, which names no connection string: a key such as RabbitMq or RedisCache (ADR-079)." $i (toString $name)) }}
