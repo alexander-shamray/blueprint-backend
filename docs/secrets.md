@@ -123,12 +123,12 @@ anti-corruption layer, `Carrier__ApiKey`, for Shipping's carrier behind the
 same, and `Mail__Password`, for Notifications' relay
 ([§15.4](backend-architecture/15-cicd-deployment.md)).
 
-**The fourth subsection below is not a host's, and that is why the sentence
-above names the ones that reach one.** Since ADR-042 this repository also holds
-a Keycloak client secret that no pod ever reads — and a count of what the
-platform holds is falsified by the next thing that holds one, where a count of
-what reaches a host is a claim about a mechanism. `No_client_secret_is_committed`
-at the foot of this file is the premise either way.
+**The realm-check subsection below is not a host's, and that is why the
+sentence above names the ones that reach one.** Since ADR-042 this repository
+also holds a Keycloak client secret that no pod ever reads — and a count of
+what the platform holds is falsified by the next thing that holds one, where a
+count of what reaches a host is a claim about a mechanism. The client-secret
+test named at the foot of this file is the premise either way.
 
 ### A client secret
 
@@ -220,6 +220,40 @@ update the vault, reconcile and restart as for a client secret, then remove
 the old password. A rotation that reaches the vault and not the pod fails the
 host's Redis readiness check and, on the coordination instance, every command
 that claims an idempotency key (§8.5).
+
+### A provider, carrier or relay credential
+
+`PaymentProvider__ApiKey`, `Carrier__ApiKey` and `Mail__Password`, each in a
+Secret its own chart names: `paymentProvider.apiKeySecretRef` in Payments'
+(`payments-provider` by default), `carrier.apiKeySecretRef` in Shipping's
+(`shipping-carrier`) and `mail.passwordSecretRef` in Notifications'
+(`notifications-mail`). A third party issues each, so **whether two can be
+live at once is that party's answer, not this repository's**, and it decides
+the procedure:
+
+- **Where the provider can issue a second key beside the first**, rotate as
+  for a client secret: issue the new key, update the vault entry, wait for
+  External Secrets to reconcile, restart the host's pods, confirm, then revoke
+  the old key at the provider.
+- **Where it holds one at a time**, as a relay with a single SMTP password
+  commonly does, §15.4's order — restart before the old credential is
+  revoked — cannot be met, because changing the key at the provider is the
+  revocation. Change it there, update the vault, then reconcile and restart at
+  once. Every call between the change and the restart is refused, and each
+  host reads the refusal as the party being down: Shipping's and
+  Notifications' workers back the row off, and Payments' kill switch stops its
+  endpoint once enough messages have exhausted their retries. Keep that gap
+  short.
+
+Confirm the same way for both. For Payments, `payments.provider.unavailable`
+stays flat while authorisations succeed; for Shipping,
+`shipping.carrier.unavailable` stays flat while shipments are booked; for
+Notifications, `notifications.mail.unavailable` with `cause=credential` stays
+flat while notifications leave `Pending`. A flat count is also what a host that
+has called nothing since its restart shows, so the work moving is the positive
+signal. **After a leak, the overlap is the leak's window**: §15.4's order keeps
+the old key live until the restart, so run the two-key route's steps without
+pause, or take the one-key route's outage to close it sooner.
 
 ### A realm-check credential
 
@@ -477,10 +511,12 @@ test, or in source.
 > rather than its absence, and those are the half a reader relies on without
 > checking.
 
-`No_client_secret_is_committed` is an assertion in the test suite, and its
-premise is worth restating because it has already been falsified once: it was
-correct until a second caller existed. A rule about who holds a credential is
-falsified by the next host that holds one.
+`RealmImportTests.No_client_ships_a_secret_but_the_ones_whose_grants_need_one`
+is the assertion, and its premise is worth restating because it has already
+been falsified once: it was correct until a second caller existed, and its
+name changed as the clients whose grants need a secret grew. It reads the
+realm export's client secrets only, so a user's password is outside it. A rule
+about who holds a credential is falsified by the next host that holds one.
 
 If a secret is committed, rotate it first and rewrite history second. The commit
 is public the moment it is pushed, and a force-push does not un-fetch it.
