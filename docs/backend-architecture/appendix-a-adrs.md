@@ -86,6 +86,7 @@ decision looks wrong.
 | **ADR-077** | [A worker's token is capped by its client's scope, and the realm gate reads the cap](adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md) |
 | **ADR-078** | [The realm check requires view-realm](adr/ADR-078-the-realm-check-requires-view-realm.md) |
 | **ADR-080** | [A NetworkPolicy peer is refused wider than a /8, and an empty selector is every address](adr/ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-and-an-empty-selector-is-every-address.md) |
+| **ADR-081** | [A workload image may be pinned by digest, and the rollout pins it once a registry exists](adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md) |
 
 ---
 

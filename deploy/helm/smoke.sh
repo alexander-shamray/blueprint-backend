@@ -531,6 +531,21 @@ done
 pass 'platform renders'
 
 # --------------------------------------------------------------------------
+section 'An image is named by its tag, or pinned by its digest (ADR-081)'
+# --------------------------------------------------------------------------
+images=$(count '^ *image: ' "$OUT/platform.yaml")
+check 'the platform render names images at all' test "$images" -gt 0
+check 'with no digest given, every image is named by its tag alone' \
+    test "$(grep -cE '^ +image: "[^"@]+:'"$TAG"'"$' "$OUT/platform.yaml")" -eq "$images"
+DIGEST="sha256:$(printf 'a%.0s' $(seq 1 64))"
+"$HELM" template catalog "$CHARTS_DIR/catalog" $NETPOL_OVERLAY --set-string "image.tag=$TAG" $(overlay_for catalog) \
+    --set-string "image.digest=$DIGEST" --set-string "image.migratorDigest=$DIGEST" >"$OUT/digest.yaml"
+check 'a digest pins the workload image' grep -q "/catalog-api:$TAG@$DIGEST\"$" "$OUT/digest.yaml"
+check 'a migrator digest pins the hook image' grep -q "/catalog-migrator:$TAG@$DIGEST\"$" "$OUT/digest.yaml"
+refuses_chart catalog 'a digest that is not a sha256 digest fails the render' 'is not a sha256 digest' \
+    --set-string image.digest=latest
+
+# --------------------------------------------------------------------------
 section 'Every workload is fenced by a default-deny NetworkPolicy (ADR-065)'
 # --------------------------------------------------------------------------
 # The documents of one kind alone, Helm hooks or the rest, so a CIDR or a port

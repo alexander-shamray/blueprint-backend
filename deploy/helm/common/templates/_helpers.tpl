@@ -69,6 +69,18 @@ and a label value may not exceed 63 characters. */}}
 {{- $tag -}}
 {{- end -}}
 
+{{- /* `@<digest>` when one is given, so the node pulls those bytes whatever the tag
+names later; nothing when not, until a rollout can resolve one (ADR-081). */}}
+{{- define "commerce.digest" -}}
+{{- $digest := index . 0 | default "" | toString -}}
+{{- if $digest }}
+{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" $digest) }}
+{{- fail (printf "%s is %q, which is not a sha256 digest: it is sha256: and 64 lowercase hex characters, as a registry reports it (ADR-081)." (index . 1) $digest) }}
+{{- end }}
+{{- printf "@%s" $digest -}}
+{{- end }}
+{{- end -}}
+
 {{- /* The selector carries the workload name and nothing release-derived: the
 PodDisruptionBudget the stable release owns, and its Service where there is
 one, select with it, and the canary is a second release whose pods they must

@@ -75,7 +75,7 @@ spec:
       containers:
         - name: {{ include "commerce.name" . }}
           {{- /* Both halves required, like the tag. */}}
-          image: "{{ include "commerce.require" (list .Values.image.registry "image.registry is required: cleared, the image reference has no host and the Deployment never pulls (§15.3).") }}/{{ include "commerce.require" (list .Values.image.api "image.api is required: cleared, the image reference names no repository (§15.3).") }}:{{ include "commerce.tag" . }}"
+          image: "{{ include "commerce.require" (list .Values.image.registry "image.registry is required: cleared, the image reference has no host and the Deployment never pulls (§15.3).") }}/{{ include "commerce.require" (list .Values.image.api "image.api is required: cleared, the image reference names no repository (§15.3).") }}:{{ include "commerce.tag" . }}{{ include "commerce.digest" (list .Values.image.digest "image.digest") }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false

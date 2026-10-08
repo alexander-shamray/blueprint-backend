@@ -68,6 +68,12 @@ helm upgrade --install catalog-api deploy/helm/catalog \
     --namespace commerce --timeout 20m --set-string image.tag="$SHA"
 ```
 
+A tag can be overwritten in the registry, so a render can also pin the bytes:
+`--set-string image.digest=sha256:…` and `image.migratorDigest=sha256:…` turn
+each reference into `…:<tag>@sha256:…`, and anything but a sha256 digest is
+refused. Nothing passes them yet; the rollout will, once a registry exists
+([ADR-081](../../docs/backend-architecture/adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md)).
+
 **`--timeout` is not tuning, and leaving it off puts a §13.6 alert outside the
 window it watches.** Helm always blocks on a hook — `--wait` governs the
 release's own resources, never this — so the migration Job (§7.4) gets whatever

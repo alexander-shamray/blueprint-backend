@@ -28,6 +28,11 @@ build time and writes each signature to a public transparency log that names
 the repository and the workflow. A check in the rollout job guards the deploys
 made through it, and a `helm upgrade` run by hand is not refused.
 
+**Amended by
+[ADR-081](ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md)**,
+which has the rollout pin the digest this check verified, so a later pull of
+an overwritten tag cannot run other bytes.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
