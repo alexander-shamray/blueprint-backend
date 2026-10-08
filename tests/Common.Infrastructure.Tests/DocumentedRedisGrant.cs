@@ -2,19 +2,20 @@ using StackExchange.Redis;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>§8.1's grant as §14.1's users.conf ships it, provisioned live under a test's own user and key pattern.</summary>
+/// <summary>§8.1's grant as §14.1's users.conf ships it, provisioned under a test's own user and keys.</summary>
 internal static class DocumentedRedisGrant
 {
-    /// <summary>Read from the file both Compose instances load, so a test proves the grant that ships, not a copy.</summary>
+    /// <summary>From the file both Compose instances load, so a test proves the grant that ships.</summary>
     public static IReadOnlyList<string> Rules() =>
         RulesOf(UserLines().Single(l => l.StartsWith("user catalog-svc ", StringComparison.Ordinal)));
 
     /// <summary>Every service user: the default user's line is the health checks' and grants PING alone.</summary>
     public static IEnumerable<string> UserLines() =>
         File.ReadLines(Path.Combine(RepositoryRoot(), "deploy", "compose", "redis", "users.conf"))
-            .Where(l => l.StartsWith("user ", StringComparison.Ordinal) && !l.StartsWith("user default ", StringComparison.Ordinal));
+            .Where(l => l.StartsWith("user ", StringComparison.Ordinal) &&
+                        !l.StartsWith("user default ", StringComparison.Ordinal));
 
-    /// <summary>What follows the key pattern: the command rules, without the name, the switch or the password.</summary>
+    /// <summary>What follows the key pattern: the command rules, without the name, switch or password.</summary>
     public static IReadOnlyList<string> RulesOf(string line)
     {
         string[] tokens = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
