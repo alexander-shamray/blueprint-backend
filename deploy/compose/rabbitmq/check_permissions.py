@@ -109,6 +109,10 @@ INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 OPERATOR = "dead-letter-operator"
 OPERATOR_TAGS = ["management"]
 
+# The keys this gate judges, and the ones that only describe the export. The
+# broker imports every other key at boot, so each must stay empty or be judged.
+JUDGED = {"users", "vhosts", "permissions"}
+METADATA = {"rabbit_version", "rabbitmq_version", "product_name", "product_version"}
 VHOST = "/"
 
 NAMESPACE = re.compile(r"^namespace\s+([A-Za-z0-9_.]+);", re.M)
@@ -249,11 +253,16 @@ def contract_prefixes() -> set[str]:
 
 
 def check_definitions_shape(definitions: dict) -> None:
-    """One vhost, and one entry per account and per grant.
+    """The file holds nothing the broker imports and this gate does not judge.
 
     RabbitMQ keeps one grant per user and vhost, and the checks below key a
     grant by its user, so a second vhost or a second entry would be unread.
     """
+    for key, value in sorted(definitions.items()):
+        if key not in JUDGED | METADATA and value:
+            fail(f"definitions.json: `{key}` is not empty, and this gate judges nothing in it. "
+                 f"A binding, policy or shovel imported at boot can route one service's "
+                 f"writes into a peer's queue with every permission below unchanged")
     vhosts = [vhost.get("name") for vhost in definitions.get("vhosts") or []]
     if vhosts != [VHOST]:
         fail(f"definitions.json: vhosts are {vhosts}, not exactly `{VHOST}`. The Dockerfile "
