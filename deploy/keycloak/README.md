@@ -175,7 +175,10 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   **`view-realm` alone is not enough** and reads as though it should be:
   Keycloak defines it as a non-composite role granting nothing else, so it
   carries no client visibility. The suite asserts that against §14.1's export
-  rather than restating it here.
+  rather than restating it here. It is required beside `view-clients` all the
+  same, because without it the realm is answered with its token settings left
+  out
+  ([ADR-078](../../docs/backend-architecture/adr/ADR-078-the-realm-check-requires-view-realm.md)).
 - **A realm edited since the last scheduled run.** Between rollouts the realm
   is read on `realm.yml`'s schedule, so what bounds the window a drift is live
   in is that cadence and ADR-040's runtime guard together — nominally an hour

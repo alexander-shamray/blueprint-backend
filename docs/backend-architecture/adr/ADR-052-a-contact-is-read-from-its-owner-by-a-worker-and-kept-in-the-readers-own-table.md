@@ -264,6 +264,11 @@ still holds of the service account's roles, which stay unread; what moved is
 that no token can carry more than the grant, and that Keycloak's default roles
 are no longer in either worker's token.
 
+**Amended by [ADR-078](ADR-078-the-realm-check-requires-view-realm.md)**, which
+requires `view-realm` beside `view-clients` on the realm-check credential, so
+the "`view-clients`-only grant" that clause cites is now the read-only grant
+`docs/secrets.md` argues for, and reading users would still widen it.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

@@ -58,6 +58,10 @@ REALM_MANAGEMENT = "realm-management"
 COMPLETENESS_ROLES = ("view-clients",)
 PERMITTED_ROLES = ("view-clients", "query-clients", "view-realm")
 
+# Without view-realm Keycloak answers the realm with its token settings left
+# out, so every lifetime and rotation check would fail on a field nobody read (ADR-078).
+SETTINGS_ROLES = ("view-realm",)
+
 
 def environment() -> dict[str, str]:
     """The four required values, or a stop naming every one that is missing.
@@ -223,6 +227,15 @@ def clients(base: str, realm: str, access_token: str) -> list:
             f"{', '.join(PERMITTED_ROLES)}. Its secret is exercised from a CI "
             "runner, so a grant wider than a read is one a leak hands "
             "over whole; docs/secrets.md carries what the account holds.")
+
+    missing = [role for role in SETTINGS_ROLES if role not in held]
+    if missing:
+        raise SystemExit(
+            f"read_admin: this account lacks {', '.join(missing)} on "
+            f"{REALM_MANAGEMENT}, so Keycloak answers the realm without its "
+            "token lifetime and refresh-token settings and every check of them "
+            "would fail on a field nobody read; docs/secrets.md carries what "
+            "the account needs.")
 
     query = urllib.parse.urlencode({"max": CLIENT_LIMIT})
     answer = get(f"{base}/admin/realms/{realm}/clients?{query}", access_token)

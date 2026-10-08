@@ -114,7 +114,7 @@ class Stubbed(unittest.TestCase):
         # A JWT-SHAPED TOKEN CARRYING THE GRANT, because `clients` reads the
         # roles out of it before it asks for anything. A stub answering an
         # opaque string would make every case here exercise the refusal.
-        read_admin.token = lambda *args: self.jwt(["view-clients"])
+        read_admin.token = lambda *args: self.jwt(["view-clients", "view-realm"])
 
     def jwt(self, roles: list[str]) -> str:
         """A token of the shape Keycloak issues, carrying the roles given.
@@ -306,9 +306,17 @@ class TheGrant(Stubbed):
     is.
     """
 
-    def test_an_account_with_view_clients_is_accepted(self):
+    def test_an_account_with_view_clients_and_view_realm_is_accepted(self):
         self.answers({"realm": "commerce"}, [{"clientId": "web-app"}])
         self.assertEqual(len(read_admin.fetch(self.values)["clients"]), 1)
+
+    def test_view_clients_alone_is_refused_because_the_realm_answers_without_its_settings(self):
+        """Measured against the pinned Keycloak, where the lifespan is then absent (ADR-078)."""
+        read_admin.token = lambda *args: self.jwt(["view-clients", "query-clients"])
+        self.answers({"realm": "commerce"}, [{"clientId": "web-app"}])
+        with self.assertRaises(SystemExit) as stop:
+            read_admin.fetch(self.values)
+        self.assertIn("lacks view-realm", str(stop.exception))
 
     def test_every_permitted_read_role_together_is_accepted(self):
         read_admin.token = lambda *args: self.jwt(list(read_admin.PERMITTED_ROLES))
