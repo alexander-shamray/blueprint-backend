@@ -446,6 +446,17 @@ class TheFaultExchangesAreReadOnlyAsSources(unittest.TestCase):
         failures = self.failures_with("MassTransit:ReceiveFault$)")
         self.assertTrue(any("catalog-svc: read does not cover `MassTransit:Fault--" in f for f in failures), failures)
 
+    def test_a_private_timeout_s_fault_left_out(self):
+        # The saga consumes its own timeouts, so their faults bind from a namespace outside Common.Contracts.
+        definitions = real()
+        entry = permission(definitions, "ordering-svc")
+        self.assertTrue(entry["read"].endswith(self.NARROW), "the case, not the gate")
+        entry["read"] = entry["read"][: -len(self.NARROW)] + r"MassTransit:(ReceiveFault$|Fault--Common\.))"
+        failures = run_against(definitions)
+        self.assertTrue(
+            any("ordering-svc: read does not cover `MassTransit:Fault--Ordering.Infrastructure.Messaging:" in f
+                for f in failures), failures)
+
 
 class TheFileHoldsOnlyWhatIsJudged(unittest.TestCase):
     """What the broker imports at boot and the gate keys or reads."""
