@@ -519,18 +519,18 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
                 owed.NotificationId) == 1);
         await worker.StopAsync(Ct);
 
-        Notification sent = await fixture.NotificationAsync(owed.NotificationId);
-        sent.Status.ShouldBe(NotificationStatus.Sent, "a stop drains the pass under way rather than cancel it");
-        sent.Attempts.ShouldBe(0);
-        (await fixture.Relay.SingleAsync(Ct)).ShouldNotBeNull();
-
-        // A later pass, past any lease the stopped one held: a drain that left the row resendable would send it again.
+        // A later pass first, past any lease the stopped one held, so a row the drain left Pending is sent again here
+        // and caught by the claim count and the relay's second message, rather than by the status alone.
         await fixture.ExecuteAsync(
             "UPDATE notifications.NotificationLog SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
             "WHERE NotificationId = {0};",
             owed.NotificationId);
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(0, 0), "nothing is left for a later pass to send");
-        (await fixture.Relay.SingleAsync(Ct)).ShouldNotBeNull("the relay still holds the one message");
+        (await fixture.Relay.SingleAsync(Ct)).ShouldNotBeNull("the relay holds the one message, never a second");
+
+        Notification sent = await fixture.NotificationAsync(owed.NotificationId);
+        sent.Status.ShouldBe(NotificationStatus.Sent, "a stop drains the pass under way rather than cancel it");
+        sent.Attempts.ShouldBe(0);
     }
 
     private static (Guid Order, Guid Customer) Ids() => (Guid.CreateVersion7(), Guid.CreateVersion7());
