@@ -120,6 +120,9 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         CancellationRequestedAt = TerminalAt ?? now;
         TerminalAt = null;
         NextPollAt = now;
+
+        // Due from the keep, not the void, so the overdue gauge ages it from when the claim could first take it.
+        NextAttemptAt = now;
         return true;
     }
 
