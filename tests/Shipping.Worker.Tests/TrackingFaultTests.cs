@@ -96,6 +96,20 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         (await _fixture.ScalarAsync<int>(
             "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Status = 'Dispatched' AND LockedUntil IS NULL"))
             .ShouldBe(Batch, "each row's page was applied and its claim released by the commit that used it");
+
+        // The concurrency itself, read off the stub: polled one after another, each call would start only once the
+        // last had waited out its four seconds, and the lease's sizing assumes they do not.
+        DateTime[] starts =
+        [
+            .. _carrier.LogEntries
+                .Select(entry => entry.RequestMessage)
+                .Where(request => request?.Path?.EndsWith("/events", StringComparison.Ordinal) == true)
+                .Select(request => request!.DateTime)
+        ];
+        starts.Length.ShouldBe(Batch);
+        (starts.Max() - starts.Min()).ShouldBeLessThan(
+            TimeSpan.FromSeconds(4),
+            "a pass polls its rows together, so every call starts at the claim");
     }
 
     private TrackingWorker Worker() => _host.Services.GetRequiredService<TrackingWorker>();
