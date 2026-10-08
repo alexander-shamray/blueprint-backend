@@ -11,6 +11,9 @@ namespace Ordering.Api.Endpoints;
 /// <remarks>Nothing here is anonymous: §10.2's <c>ordering</c> route requires authentication.</remarks>
 public static class OrderEndpoints
 {
+    private static readonly string CustomerReason =
+        CancellationReasons.ToCode(CancellationReason.CustomerRequest);
+
     public static void MapOrderEndpoints(this IEndpointRouteBuilder app)
     {
         RouteGroupBuilder group = app
@@ -54,6 +57,20 @@ public static class OrderEndpoints
                             new Dictionary<string, string[]>
                             {
                                 [nameof(request.Reason)] = ["Not a known cancellation reason."]
+                            });
+                    }
+
+                    // The other four codes are facts only the workflow can state; from a caller they are a claim
+                    // nobody checks, recorded on the order and counted on orders.cancelled (ADR-087).
+                    if (reason != CancellationReason.CustomerRequest)
+                    {
+                        return Results.ValidationProblem(
+                            new Dictionary<string, string[]>
+                            {
+                                [nameof(request.Reason)] =
+                                [
+                                    $"A caller cancels with {CustomerReason}; the other reasons are the workflow's."
+                                ]
                             });
                     }
 
