@@ -187,6 +187,12 @@ read decorative, which is the shape ADR-033 was written to withdraw.
   takes the third bullet's window: the realm is now also read on a schedule,
   and #176 closes. The bullet stands as written because it was true when it
   was written, and the record that moved it is ADR-043.
+- **Amended by
+  [ADR-076](ADR-076-the-realm-check-refuses-a-credential-wider-than-a-read.md)**,
+  which takes the account-grant clause of the fail-closed bullet:
+  `realm-admin` no longer satisfies the completeness premise, because any
+  role outside the read roles now stops the run. The clause stands as
+  written; the record that moved it is ADR-076.
 
 ---
 
