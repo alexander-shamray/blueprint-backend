@@ -8,7 +8,7 @@ which are the categories Notifications' intake already refuses.
 `ThirdPartyText.Recordable` in `Common.Infrastructure` holds that rule for both
 adapters, and an answer that breaks it is a fault, counted and backed off, as an
 over-long one already is. A tracking number, which reaches the customer, is held
-further to `TrackingNumbers.IsWellFormed` in the Shipping contract: letters and
+further to `PlainReference.IsWellFormed` in `Common.Application`: letters and
 digits in any script, with hyphens, underscores and single spaces between them,
 and so no scheme, slash, dot or at sign a mail client could make a link of.
 Shipping's adapter refuses a booking whose tracking number breaks it, and
@@ -19,18 +19,19 @@ payments admin view or Ordering's record, and a URL into a tracking number that
 the despatch email carries from the shop's own sender to every customer. Each
 party is contracted, so this is hardening rather than a hole; but a contract is
 not a character set, and the adapter is [§3.1](../03-bounded-contexts.md)'s one
-place that knows the wire format. The tracking number is the contract's own
-field, so the contract owns its alphabet, and the services on either side read
-it there rather than restating it ([§4.3](../04-solution-structure.md)).
+place that knows the wire format. The alphabet is not the contract's, since
+[§4.3](../04-solution-structure.md) keeps validation out of `Common.Contracts`;
+it is a building block's, which the adapter that mints the value and the two
+services that render it already reference, so none of them restates it.
 **Consequences.** A carrier whose tracking numbers use another character, a
 slash, a dot or a plus sign, has every booking refused and backed off to its
-give-up age until the alphabet is widened here, and widening it is a contract
-change. The refusal names no value, so finding the character takes the carrier's
-own record. Ordering's `TrackingNumber` and `PaymentReference` keep their
-presence and length checks, since their values now arrive only through adapters
-held to this. Notifications' intake keeps its own printable check, the same rule
-on the Application side of [§4.2](../04-solution-structure.md), so the rule has
-two spellings that a change to one must carry to the other.
+give-up age until the alphabet is widened here, for every reader at once. The
+refusal names no value, so finding the character takes the carrier's own record.
+Ordering's `TrackingNumber` and `PaymentReference` keep their presence and
+length checks, since their values now arrive only through adapters held to this.
+Notifications' intake keeps its own printable check, the same rule on the
+Application side of [§4.2](../04-solution-structure.md), so the rule has two
+spellings that a change to one must carry to the other.
 
 ---
 

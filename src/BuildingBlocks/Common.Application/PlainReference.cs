@@ -1,13 +1,13 @@
 using System.Text;
 
-namespace Common.Contracts.Shipping.V1;
+namespace Common.Application;
 
-/// <summary>The tracking number's alphabet, held by the contract its minter and its readers share (ADR-084).</summary>
+/// <summary>A reference a third party mints and a customer reads, in an alphabet that links nowhere (ADR-084).</summary>
 /// <remarks>
 /// Letters and digits in any script, with hyphens, underscores and single spaces between them: no scheme, slash, dot
-/// or at sign a mail client could make a link of, since the despatch email carries the value word for word (ADR-084).
+/// or at sign a mail client could make a link of. Here, not in the contract, which §4.3 keeps free of validation.
 /// </remarks>
-public static class TrackingNumbers
+public static class PlainReference
 {
     public static bool IsWellFormed(string? value)
     {
