@@ -194,7 +194,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
 
             // Assigned before the image builds, so a failed build leaves a container for the teardown.
             _rabbit = broker.WithImage(image).Build();
-            await image.CreateAsync(TestContext.Current.CancellationToken);
+            await DaemonRetry.CreateAsync(image, TestContext.Current.CancellationToken);
         }
         else
         {
@@ -214,10 +214,10 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         CancellationToken ct = TestContext.Current.CancellationToken;
         Task[] starting =
         [
-            _sql.StartAsync(ct),
-            _rabbit.StartAsync(ct),
-            _redisCache?.StartAsync(ct) ?? Task.CompletedTask,
-            _redisCoordination?.StartAsync(ct) ?? Task.CompletedTask
+            DaemonRetry.StartAsync(_sql, ct),
+            DaemonRetry.StartAsync(_rabbit, ct),
+            _redisCache is null ? Task.CompletedTask : DaemonRetry.StartAsync(_redisCache, ct),
+            _redisCoordination is null ? Task.CompletedTask : DaemonRetry.StartAsync(_redisCoordination, ct)
         ];
         await Task.WhenAll(starting);
 

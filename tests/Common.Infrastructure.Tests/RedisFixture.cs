@@ -47,8 +47,8 @@ public sealed class RedisFixture : IAsyncLifetime
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
     public async ValueTask InitializeAsync() =>
         await Task.WhenAll(
-            _cache.StartAsync(TestContext.Current.CancellationToken),
-            _coordination.StartAsync(TestContext.Current.CancellationToken));
+            DaemonRetry.StartAsync(_cache, TestContext.Current.CancellationToken),
+            DaemonRetry.StartAsync(_coordination, TestContext.Current.CancellationToken));
 
     public async ValueTask DisposeAsync()
     {

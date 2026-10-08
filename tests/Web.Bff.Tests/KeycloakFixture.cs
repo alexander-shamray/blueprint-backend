@@ -132,7 +132,7 @@ public sealed class KeycloakFixture : IAsyncLifetime
 
     private async ValueTask Start()
     {
-        await _keycloak.StartAsync();
+        await DaemonRetry.StartAsync(_keycloak, TestContext.Current.CancellationToken);
         Http = new HttpClient();
 
         await WaitForRealmAsync();
