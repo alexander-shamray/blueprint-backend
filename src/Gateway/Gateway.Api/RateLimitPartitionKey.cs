@@ -6,7 +6,7 @@ namespace Gateway.Api;
 /// <summary>The partition an address falls in for §10.3's per-address limits.</summary>
 /// <remarks>
 /// An IPv6 client holds a /64 as one allocation, so keyed by its full address it could rotate through the prefix
-/// for a fresh window each time; the /64 is the client. An IPv4-mapped address is the IPv4 client it maps.
+/// for a fresh window each time; the /64 is the client. An IPv4-mapped address is the IPv4 client it maps (§10.3).
 /// </remarks>
 public static class RateLimitPartitionKey
 {
