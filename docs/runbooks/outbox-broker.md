@@ -44,8 +44,8 @@ kubectl -n <ns> logs deploy/ordering --since=10m | grep -i "Outbox claim failed\
 
 ## Check RabbitMQ, in this order
 
-Through the Management API, with the curl config
-[`error-queue.md`](error-queue.md) writes, from an operator credential carrying
+Through the Management API, with the port-forward and the curl config
+[`error-queue.md`](error-queue.md) sets up, from an operator credential carrying
 `monitoring`, which sees every node and connection, and `policymaker` for the
 policy list below. Not `rabbitmqctl` through `kubectl exec`: that needs
 `pods/exec` on the broker and authenticates with the node's Erlang cookie,

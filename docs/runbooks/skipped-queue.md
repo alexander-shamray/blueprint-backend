@@ -31,9 +31,14 @@ endpoints applies. Read them from `Endpoints`/`DependencyInjection.cs` rather
 than from memory. The tool's `list` gives every dead-letter queue and its
 depth, through the Management API and as `dead-letter-operator`:
 
+The tool and every `curl` below reach the Management API through one
+port-forward; start it first, whichever path you take:
+
 ```bash
 kubectl -n <ns> port-forward svc/rabbitmq 15672:15672 &
+```
 
+```bash
 # The tool's own account (ADR-072), read rather than typed so the password
 # reaches no history; DEAD_LETTERS_USER defaults to dead-letter-operator.
 read -rs -p 'dead-letter-operator password: ' DEAD_LETTERS_PASSWORD; echo
@@ -66,7 +71,7 @@ the image the repository ships is not a procedure, which that Dockerfile says
 about itself.
 
 ```bash
-# The port-forward above still runs. Read, never typed into a command:
+# Through the port-forward started above. Read, never typed into a command:
 # neither value reaches the shell's history, and printf is a builtin, so
 # neither reaches a process list either.
 umask 077
