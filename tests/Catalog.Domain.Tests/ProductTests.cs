@@ -210,7 +210,8 @@ public class ProductTests
     [Fact]
     public void ChangePrice_on_a_clock_behind_the_last_price_stamps_after_that_price()
     {
-        // Two prices at one stamp, or in the stamps' wrong order, leave delivery order to decide the amount (§6.6).
+        // Two prices at one stamp leave delivery order to decide the amount, and in the stamps' wrong order the older
+        // one wins (§6.6).
         var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
         product.ChangePrice(Money.Of(24.50m, "EUR"), Now);
         product.ClearDomainEvents();
