@@ -29,12 +29,11 @@ public static class TransportSecurity
             if (string.IsNullOrWhiteSpace(connection.Value) || plaintext.Contains(connection.Key))
                 continue;
 
-            string? why = connection.Key switch
-            {
-                BrokerConnection => Broker(connection.Value),
-                RedisConnections.Cache or RedisConnections.Coordination => Redis(connection.Value),
-                _ => SqlServer(connection.Value),
-            };
+            // Configuration keys match ignoring case, as GetConnectionString reads them, so the classes must too.
+            string? why = Is(connection.Key, BrokerConnection) ? Broker(connection.Value)
+                : Is(connection.Key, RedisConnections.Cache) || Is(connection.Key, RedisConnections.Coordination)
+                    ? Redis(connection.Value)
+                    : SqlServer(connection.Value);
             if (why is not null)
             {
                 return $"ConnectionStrings:{connection.Key} {why} in the {environment.EnvironmentName} environment " +
@@ -44,6 +43,8 @@ public static class TransportSecurity
 
         return null;
     }
+
+    private static bool Is(string key, string name) => string.Equals(key, name, StringComparison.OrdinalIgnoreCase);
 
     private static string? Broker(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) && uri.Scheme == "amqps"
