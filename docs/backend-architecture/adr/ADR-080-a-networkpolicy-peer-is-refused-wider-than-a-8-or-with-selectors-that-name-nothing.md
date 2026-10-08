@@ -16,9 +16,9 @@ alone selects every pod in the release's own. Each of those rendered, and each
 opened the egress fence ADR-065 draws on the port it named. An empty
 `namespaceSelector` beside named pods selects those pods wherever they run,
 which names a peer and is kept. A rule that enumerates spellings loses to a
-generator of them, so the bound is a prefix length. Eight is wide enough for every range a
-deployment states here, `10.0.0.0/8` and an IPv6 `fd00::/8` included, and
-narrow enough that a peer can no longer be most of the internet.
+generator of them, so the bound is a prefix length. Eight is wide enough for
+every range a deployment states here, `10.0.0.0/8` and an IPv6 `fd00::/8`
+included, and narrow enough that a peer can no longer be most of the internet.
 **Consequences.** A deployment that wants a range wider than a /8 cannot state
 it, and the refusal names the key to narrow. A selector-based peer has to name
 its namespace or its pods, which the shipped DNS and telemetry peers already
