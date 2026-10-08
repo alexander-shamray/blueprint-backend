@@ -38,9 +38,14 @@ The alert's `queue` label names the one that fired. Every dead-letter queue and
 its depth comes off the Management API through the tool, which runs as
 `dead-letter-operator`:
 
+The tool and every `curl` below reach the Management API through one
+port-forward; start it first, whichever path you take:
+
 ```bash
 kubectl -n <ns> port-forward svc/rabbitmq 15672:15672 &
+```
 
+```bash
 # The tool's own account (ADR-072), read rather than typed so the password
 # reaches no history; DEAD_LETTERS_USER defaults to dead-letter-operator.
 read -rs -p 'dead-letter-operator password: ' DEAD_LETTERS_PASSWORD; echo
@@ -92,7 +97,7 @@ value at the prompt. The two substitutions escape a backslash or a double quote
 in it, which curl's config syntax would otherwise read as its own:
 
 ```bash
-# The port-forward above still runs. Read, never typed into a command:
+# Through the port-forward started above. Read, never typed into a command:
 # neither value reaches the shell's history, and printf is a builtin, so
 # neither reaches a process list either.
 umask 077
