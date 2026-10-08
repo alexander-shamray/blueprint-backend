@@ -101,9 +101,11 @@ public static class CheckoutEndpoints
 
                     HashSet<Guid> priced = [.. lines.Select(line => line.ProductId)];
 
+                    // Upper case, as Catalog and Ordering return it, so a client comparing an order's currency
+                    // with the quote's sees one code; the validator admits three ASCII letters in either case.
                     return Results.Ok(
                         new QuoteResponse(
-                            request.Currency,
+                            request.Currency.ToUpperInvariant(),
                             lines,
                             lines.Sum(line => line.LineTotal),
                             [.. requested.Where(id => !priced.Contains(id))]));
