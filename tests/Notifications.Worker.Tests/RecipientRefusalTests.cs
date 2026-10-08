@@ -30,7 +30,7 @@ public sealed class RecipientRefusalTests
     [InlineData(550, "5.1.8 <noreply@example.test>: Sender address rejected: Domain not found")]
     [InlineData(550, "5.1.0 <noreply@example.test>: Sender address rejected: User unknown")]
     [InlineData(552, "5.2.3 Message size exceeds fixed maximum message size")]
-    [InlineData(550, "5.4.1 Recipient address rejected: Access denied")]
+    [InlineData(554, "5.4.4 Unable to route")]
     [InlineData(554, "Transaction failed")]
     public void A_refusal_of_this_deployment_is_not(int status, string reply) =>
         SmtpMailChannel.RefusesTheMailbox(Recipient(status, reply)).ShouldBeFalse(reply);
