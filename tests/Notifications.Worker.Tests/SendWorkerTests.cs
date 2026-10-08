@@ -389,7 +389,15 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             "UPDATE notifications.NotificationLog SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
             "WHERE NotificationId = {0};",
             owed.NotificationId);
+
+        // A real reclaim comes a lease later; two claims in one engine tick would set equal leases, indistinguishable.
+        DateTimeOffset firstClaim = lapsed.LockedUntil.AddSeconds(-SendWorker.LeaseSeconds);
+        await ServiceFixture.WaitUntilAsync(async () =>
+            await fixture.ScalarAsync<int>(
+                "SELECT Value = CASE WHEN SYSDATETIMEOFFSET() > {0} THEN 1 ELSE 0 END",
+                firstClaim) == 1);
         SendWork holder = (await claims.ClaimAsync(Ct)).ShouldHaveSingleItem();
+        holder.LockedUntil.ShouldNotBe(lapsed.LockedUntil, "the two claims hold distinct leases");
 
         (await claims.BackOffAsync(owed.NotificationId, lapsed.LockedUntil, Ct)).ShouldBeFalse();
 
