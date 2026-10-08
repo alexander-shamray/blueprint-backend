@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Common.TestSupport;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 
@@ -50,7 +51,7 @@ public sealed class Mailpit : IAsyncDisposable
 
     public async Task StartAsync(CancellationToken ct)
     {
-        await _container.StartAsync(ct);
+        await DaemonRetry.StartAsync(_container, ct);
 
         // A restarted container maps its API afresh, so the client is rebuilt on every start.
         _api?.Dispose();
