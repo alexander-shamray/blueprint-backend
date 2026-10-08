@@ -38,8 +38,8 @@ internal sealed partial class SmtpMailChannel(
 
     /// <summary>RFC 3463's statuses of the recipient's address or mailbox, as subject.detail: never the sender's.</summary>
     /// <remarks>
-    /// Bad mailbox, system or syntax, moved, no MX (X.1.1 to X.1.10); undefined, disabled or full (X.2.0 to X.2.2).
-    /// X.1.0 is left out, Postfix's answer for a sender it rejects, and X.4.x is routing, the relay's (RFC 3463).
+    /// Bad mailbox, system or syntax, moved, no MX; undefined, disabled or full. <see cref="RefusesTheMailbox"/>
+    /// leaves X.1.0, Postfix's sender refusal, and X.4.x routing to the relay (RFC 3463).
     /// </remarks>
     private static readonly FrozenSet<string> MailboxStatuses =
         new[] { "1.1", "1.2", "1.3", "1.6", "1.10", "2.0", "2.1", "2.2" }.ToFrozenSet(StringComparer.Ordinal);
