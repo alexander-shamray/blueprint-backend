@@ -683,12 +683,16 @@ class TheBffClient(Fixture):
     def test_a_duplicated_bff_client_is_caught(self):
         self.assertIn("2 time(s)", self.one(realm(browser(), bff(), bff())))
 
-    def test_a_public_bff_client_is_caught(self):
-        self.assertIn("publicClient", self.one(realm(browser(), bff(publicClient=True))))
+    def test_a_public_bff_client_is_caught_under_its_own_owner(self):
+        found = self.one(realm(browser(), bff(publicClient=True)))
+        self.assertIn("publicClient", found)
+        self.assertIn("§11.5", found)
+        self.assertNotIn("ADR-052", found)
 
-    def test_service_accounts_turned_off_is_caught(self):
-        self.assertIn("service accounts disabled",
-                      self.one(realm(browser(), bff(serviceAccountsEnabled=False))))
+    def test_service_accounts_turned_off_is_caught_under_its_own_owner(self):
+        found = self.one(realm(browser(), bff(serviceAccountsEnabled=False)))
+        self.assertIn("service accounts disabled", found)
+        self.assertIn("(§11.5)", found)
 
     def test_each_interactive_flow_is_caught_on_its_own(self):
         for flag in ("standardFlowEnabled", "directAccessGrantsEnabled", "implicitFlowEnabled"):
