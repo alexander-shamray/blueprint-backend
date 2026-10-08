@@ -269,6 +269,11 @@ requires `view-realm` beside `view-clients` on the realm-check credential, so
 the "`view-clients`-only grant" that clause cites is now the read-only grant
 `docs/secrets.md` argues for, and reading users would still widen it.
 
+**Amended by
+[ADR-086](ADR-086-an-unverified-email-is-no-contact.md)**, which makes an
+unverified email a fourth "does not exist": the flag does say something,
+because Keycloak clears it when a user changes their own address.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

@@ -92,6 +92,7 @@ decision looks wrong.
 | **ADR-083** | [The edge starts a root trace, and a caller's trace context stops there](adr/ADR-083-the-edge-starts-a-root-trace-and-a-callers-trace-context-stops-there.md) |
 | **ADR-084** | [A third party's answer is held to a character set before it is recorded](adr/ADR-084-a-third-partys-answer-is-held-to-a-character-set-before-it-is-recorded.md) |
 | **ADR-085** | [A published product's name is visible text, and its thumbnail is https from a host the seller chooses](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md) |
+| **ADR-086** | [An unverified email is no contact](adr/ADR-086-an-unverified-email-is-no-contact.md) |
 
 ---
 

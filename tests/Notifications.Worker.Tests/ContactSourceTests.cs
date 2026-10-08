@@ -108,7 +108,7 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
     private Task<ContactLookup> ReadAsync(Guid customer) => ReadAsync(_factory, customer);
 
     /// <summary>A user as Keycloak represents one, with a name and an attribute the adapter must never bind.</summary>
-    private static JsonObject User(string? email = Mailbox, bool enabled = true) =>
+    private static JsonObject User(string? email = Mailbox, bool enabled = true, bool verified = true) =>
         new()
         {
             ["id"] = Guid.CreateVersion7().ToString(),
@@ -117,6 +117,7 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
             ["lastName"] = "Сейітқызы",
             ["enabled"] = enabled,
             ["email"] = email,
+            ["emailVerified"] = verified,
             ["attributes"] = new JsonObject { ["phone"] = new JsonArray("+77010000000") }
         };
 
@@ -248,6 +249,13 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
         (await ReadAsync(Answer(User(email)))).ShouldBeOfType<ContactLookup.NoSuchCustomer>();
     }
 
+    /// <summary>An address nobody proved is anyone's to set, so the worker sends it nothing (ADR-086).</summary>
+    [Fact]
+    public async Task A_user_whose_email_is_unverified_is_no_such_customer()
+    {
+        (await ReadAsync(Answer(User(verified: false)))).ShouldBeOfType<ContactLookup.NoSuchCustomer>();
+    }
+
     [Fact]
     public async Task A_user_whose_email_member_is_absent_is_no_such_customer()
     {
@@ -305,6 +313,8 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
     [InlineData("""{"email":"aigerim@example.test"}""")]
     [InlineData("""{"enabled":"true","email":"aigerim@example.test"}""")]
     [InlineData("""{"enabled":true,"email":42}""")]
+    [InlineData("""{"enabled":true,"email":"aigerim@example.test"}""")]
+    [InlineData("""{"enabled":true,"email":"aigerim@example.test","emailVerified":"true"}""")]
     public async Task A_body_that_is_not_a_user_is_refused_by_shape_and_quotes_none_of_it(string body)
     {
         using OutboundCount counted = OutboundCounter.ContactRefused(_factory.Services);

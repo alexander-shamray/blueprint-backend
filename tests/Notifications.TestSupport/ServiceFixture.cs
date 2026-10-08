@@ -230,7 +230,8 @@ public sealed class ServiceFixture()
             ["username"] = $"customer-{customer:N}",
             ["firstName"] = "Айгерім",
             ["enabled"] = true,
-            ["email"] = email
+            ["email"] = email,
+            ["emailVerified"] = true
         };
 
         if (locale is not null)
