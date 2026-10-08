@@ -28,11 +28,11 @@ The queue name is the endpoint name plus `_skipped`, so it names the receive
 endpoint directly — the same mapping
 [`error-queue.md`](error-queue.md) uses, and the same list of Ordering
 endpoints applies. Read them from `Endpoints`/`DependencyInjection.cs` rather
-than from memory.
+than from memory. The tool's `list` gives every dead-letter queue and its
+depth, through the Management API and the credential below:
 
 ```bash
-kubectl -n <ns> exec deploy/rabbitmq -- \
-  rabbitmqctl list_queues name messages | grep _skipped
+py -3.12 tools/dead-letters/dead_letters.py list
 ```
 
 ## Read the message before deciding anything
@@ -48,7 +48,8 @@ py -3.12 tools/dead-letters/dead_letters.py inspect <endpoint>_skipped --limit 5
 
 By hand, it is that runbook's procedure with two words changed, and for its
 reasons: `rabbitmqctl` returns queue metadata rather than bodies, the
-credentials are not `guest/guest`, and they stay out of `argv`.
+credentials are not `guest/guest`, and they stay out of `argv` and out of the
+shell's history.
 
 **`rabbitmqadmin` is not on the image this repository ships.** The broker
 builds from `rabbitmq:4.1-management-alpine` with the delayed-exchange and
@@ -60,10 +61,14 @@ about itself.
 ```bash
 kubectl -n <ns> port-forward svc/rabbitmq 15672:15672 &
 
+# Read, never typed into a command: neither value reaches the shell's history,
+# and printf is a builtin, so neither reaches a process list either.
 umask 077
-cat > "$HOME/.rabbit.curl" <<'EOF'
-user = "OPERATOR:PASSWORD"
-EOF
+read -r -p 'operator: ' OPERATOR
+read -rs -p 'password: ' OPERATOR_PASSWORD; echo
+esc=${OPERATOR_PASSWORD//\\/\\\\}; esc=${esc//\"/\\\"}
+printf 'user = "%s:%s"\n' "$OPERATOR" "$esc" > "$HOME/.rabbit.curl"
+unset esc
 
 curl -sS --config "$HOME/.rabbit.curl" -X POST   -H 'content-type: application/json'   -d @- http://localhost:15672/api/queues/%2F/<endpoint>_skipped/get <<'EOF'
 {"count":5,"ackmode":"ack_requeue_true","encoding":"auto"}
@@ -72,7 +77,8 @@ EOF
 
 `ack_requeue_true` is load-bearing for the same reason it is one runbook over:
 **`ack_requeue_false` consumes the message and it is gone.** Delete the config
-when the incident closes.
+and the variable when the incident closes:
+`rm -f "$HOME/.rabbit.curl"; unset OPERATOR_PASSWORD`.
 
 **The type is in the payload, not in a transport header**, and this is worth
 saying because the obvious guess is wrong. This platform configures no

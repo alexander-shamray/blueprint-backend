@@ -30,13 +30,16 @@ each with an error queue of its own:
 
 **List them from `Endpoints`/`DependencyInjection.cs` rather than from memory.**
 An earlier version of this runbook named the first two and stopped, which is
-worse than naming none: the `_error` grep below still shows all four, but an
+worse than naming none: the tool's `list` below still shows all four, but an
 on-call who trusts a short inventory reads a poisoned `ConfirmStock` or a stuck
 saga as "no Ordering error queue" and looks in another service.
 
+The alert's `queue` label names the one that fired. Every dead-letter queue and
+its depth comes off the Management API, with the credential the next section
+sets up:
+
 ```bash
-kubectl -n <ns> exec deploy/rabbitmq -- \
-  rabbitmqctl list_queues name messages | grep _error
+py -3.12 tools/dead-letters/dead_letters.py list
 ```
 
 ## Read the message before deciding anything
@@ -75,13 +78,23 @@ shell is being shared and scrollback is being pasted into a channel. A
 mode-0600 curl config carries the credential, and the request body comes from
 stdin:
 
+**And out of the shell's history.** A password typed into a command, or into
+a here-document, is saved with it and written to `~/.bash_history` on exit, so
+the config is written from a variable that `read -s` fills: paste the vault's
+value at the prompt. The two substitutions escape a backslash or a double quote
+in it, which curl's config syntax would otherwise read as its own:
+
 ```bash
 kubectl -n <ns> port-forward svc/rabbitmq 15672:15672 &
 
+# Read, never typed into a command: neither value reaches the shell's history,
+# and printf is a builtin, so neither reaches a process list either.
 umask 077
-cat > "$HOME/.rabbit.curl" <<'EOF'
-user = "OPERATOR:PASSWORD"
-EOF
+read -r -p 'operator: ' OPERATOR
+read -rs -p 'password: ' OPERATOR_PASSWORD; echo
+esc=${OPERATOR_PASSWORD//\\/\\\\}; esc=${esc//\"/\\\"}
+printf 'user = "%s:%s"\n' "$OPERATOR" "$esc" > "$HOME/.rabbit.curl"
+unset esc
 
 curl -sS --config "$HOME/.rabbit.curl" -X POST \
   -H 'content-type: application/json' \
@@ -90,8 +103,10 @@ curl -sS --config "$HOME/.rabbit.curl" -X POST \
 EOF
 ```
 
-**Delete it when the incident closes** — `rm -f "$HOME/.rabbit.curl"` — and use
-a credential you can revoke rather than the service's own.
+`export DEAD_LETTERS_CREDENTIALS="$HOME/.rabbit.curl"` hands the same file to
+the tool. **Delete it and the variable when the incident closes** —
+`rm -f "$HOME/.rabbit.curl"; unset OPERATOR_PASSWORD` — and use a credential
+you can revoke rather than the service's own.
 
 `ackmode=ack_requeue_true` is the load-bearing part: **`ack_requeue_false`
 consumes the message and it is gone.** The Management UI's *Get messages* with
@@ -127,10 +142,21 @@ py -3.12 tools/dead-letters/dead_letters.py replay <endpoint>_error --all \
 message keeps its `MessageId`, its headers and its body's bytes, and each move
 is an audit line; its README says how, and what a run can lose and where.
 
-**Or move it back with the Management API's shovel**, declared as a one-shot
-parameter, which needs an operator credential carrying `policymaker` — more
-than `dead-letter-operator` holds. It moves every message on the error queue
-back to the endpoint and deletes itself when the queue is empty:
+**Prefer the tool**: it stores nothing in the broker. Where it cannot run,
+**move the messages back with the Management API's shovel**, declared as a
+one-shot parameter, which needs an operator credential carrying `policymaker` —
+more than `dead-letter-operator` holds. It moves every message on the error
+queue back to the endpoint and deletes itself when the queue is empty.
+
+**The shovel connects as a replay identity, never as you.** Its URIs, password
+included, are stored in the vhost's shovel parameter, which every `policymaker`
+and `administrator` user can read and which `GET /api/definitions` exports into
+every backup taken while it exists. So the password in them is one that is
+worth nothing once the replay is done: an identity whoever administers the
+broker creates for this replay, with read on `ENDPOINT_error`, write on
+`ENDPOINT`, and configure on both in case the shovel declares them, and deletes
+when the queue has drained. The `policymaker` credential stays in the curl
+config, for the call that declares the shovel:
 
 **Percent-encode the credential before it goes in the URI.** A generated
 password containing `@`, `:`, `/`, `#` or `%` — which a vault-issued one often
@@ -147,7 +173,10 @@ first request did, and never on the command line:
 # put it on the command line of its own child — visible in the process list for
 # as long as Python ran.
 enc() { python3 -c 'import sys,urllib.parse as u; print(u.quote(sys.stdin.read(), safe=""), end="")'; }
-uri="amqp://$(printf '%s' "$OPERATOR" | enc):$(printf '%s' "$OPERATOR_PASSWORD" | enc)@localhost:5672/%2F"
+read -r -p 'replay identity: ' REPLAY_USER
+read -rs -p 'replay password: ' REPLAY_PASSWORD; echo
+uri="amqp://$(printf '%s' "$REPLAY_USER" | enc):$(printf '%s' "$REPLAY_PASSWORD" | enc)@localhost:5672/%2F"
+unset REPLAY_PASSWORD
 
 # Unquoted heredoc, so $uri expands. Everything else here is literal.
 curl -sS --config "$HOME/.rabbit.curl" -X PUT \
@@ -170,9 +199,11 @@ parameter and the shovel then fails to connect at both ends, which is a worse
 outcome than a rejected request because it looks like it worked. Both failure
 modes present identically, and both are silent.
 
-**The shovel definition persists with the password in it** until it deletes
-itself or you remove it. `DELETE /api/parameters/shovel/%2F/replay-<endpoint>`
-if it is still there after the queue drains.
+**The shovel definition persists with the replay identity's password in it**
+until it deletes itself or you remove it.
+`DELETE /api/parameters/shovel/%2F/replay-<endpoint>` if it is still there
+after the queue drains, then have the identity deleted, which is what makes a
+copy of the parameter in a backup worth nothing.
 
 `src-delete-after: queue-length` is what makes this one-shot: the shovel stops
 after the messages present when it started, so a consumer that fails again does
@@ -184,25 +215,26 @@ it.
 §14.1's image now enables both — it was the delayed exchange alone until this
 procedure needed them, because a replay path the shipped image cannot run is
 not a replay path. A deployed broker is somebody else's image, so check anyway:
+the shovel management plugin serves this path, so a 404 here means it is
+absent.
 
 ```bash
-kubectl -n <ns> exec deploy/rabbitmq -- rabbitmq-plugins list | grep shovel
+curl -sS -o /dev/null -w '%{http_code}\n' --config "$HOME/.rabbit.curl" \
+  http://localhost:15672/api/shovels/%2F
 ```
 
-If they are absent, **stop and enable them** rather than improvising:
-
-```bash
-kubectl -n <ns> exec deploy/rabbitmq -- \
-  rabbitmq-plugins enable rabbitmq_shovel rabbitmq_shovel_management
-```
-
-Both ship inside the official image, so this needs no download and no restart —
-which is why it is a recovery here rather than a hand-rolled consume-and-
-republish loop. That loop is where messages get lost at 03:00: it has to
-reproduce the headers `MT-Fault-*` and `MessageId` exactly, and a mistake
-consumes the evidence. `tools/dead-letters` is that loop written once: it
-writes each message to the record file before it publishes it, and its suite
-pins the id, the headers and the bytes.
+If they are absent, **stop and ask whoever administers the broker to enable
+them**, or use the tool, which needs no plugin, rather than improvising.
+Enabling a plugin is `rabbitmq-plugins` on the node: `pods/exec` on the broker
+and its Erlang cookie, which is full control of the node with no broker account
+behind it, so it is break-glass for the broker's owner and not an on-call step.
+Both plugins ship inside the official image, so enabling them needs no download
+and no restart — which is why it is a recovery here rather than a hand-rolled
+consume-and-republish loop. That loop is where messages get lost at 03:00: it
+has to reproduce the headers `MT-Fault-*` and `MessageId` exactly, and a mistake
+consumes the evidence. `tools/dead-letters` is that loop written once: it writes
+each message to the record file before it publishes it, and its suite pins the
+id, the headers and the bytes.
 
 **Replay is safe by design and it is worth knowing why.** §9.5's inbox filter
 records `MessageId` and makes a second delivery of the same message a no-op
@@ -225,14 +257,20 @@ py -3.12 tools/dead-letters/dead_letters.py discard <endpoint>_error --message-i
     --execute --record incident.jsonl --audit-log audit.jsonl
 ```
 
-To empty the whole queue without it:
+To empty the whole queue without it, through the Management API as your own
+broker account, so the purge is tied to one:
 
 ```bash
-kubectl -n <ns> exec deploy/rabbitmq -- rabbitmqctl purge_queue <endpoint>_error
+curl -sS --config "$HOME/.rabbit.curl" -X DELETE \
+  http://localhost:15672/api/queues/%2F/<endpoint>_error/contents
 ```
 
-**`purge_queue` takes the whole queue, and the shovel above takes the whole
-queue too.** Neither filters, so on a **mixed** queue there is no order of the
+Not `rabbitmqctl purge_queue` through `kubectl exec`: that authenticates with
+the node's Erlang cookie, so it needs `pods/exec` on the broker, passes no
+permission check and is tied to no account.
+
+**A purge takes the whole queue, and the shovel above takes the whole queue
+too.** Neither filters, so on a **mixed** queue there is no order of the
 two that is safe: shovel first and the unreplayable messages go back to a
 consumer that will refuse them again; purge first and the replayable ones are
 gone.

@@ -44,10 +44,20 @@ kubectl -n <ns> logs deploy/ordering --since=10m | grep -i "Outbox claim failed\
 
 ## Check RabbitMQ, in this order
 
+Through the Management API, with the curl config
+[`error-queue.md`](error-queue.md) writes, from an operator credential carrying
+`monitoring`, which sees every node and connection, and `policymaker` for the
+policy list below. Not `rabbitmqctl` through `kubectl exec`: that needs
+`pods/exec` on the broker and authenticates with the node's Erlang cookie,
+which is full control of the node with no broker account behind it.
+
 ```bash
-kubectl -n <ns> exec deploy/rabbitmq -- rabbitmqctl status
-kubectl -n <ns> exec deploy/rabbitmq -- rabbitmqctl list_queues name messages consumers
-kubectl -n <ns> exec deploy/rabbitmq -- rabbitmqctl list_connections user state
+api() {
+  curl -sS --config "$HOME/.rabbit.curl" "http://localhost:15672/api/$1"
+}
+api 'nodes?columns=name,running,mem_alarm,disk_free_alarm'
+api 'queues?columns=name,messages,consumers'
+api 'connections?columns=user,state'
 ```
 
 1. **Reachable?** A DNS or NetworkPolicy change is the commonest cause and the
@@ -66,9 +76,8 @@ kubectl -n <ns> exec deploy/rabbitmq -- rabbitmqctl list_connections user state
    those can produce the stall this alert fired on.
 
    ```bash
-   kubectl -n <ns> exec deploy/rabbitmq -- \
-     rabbitmqctl list_queues name messages arguments policy
-   kubectl -n <ns> exec deploy/rabbitmq -- rabbitmqctl list_policies
+   api 'queues?columns=name,messages,arguments,policy'
+   api 'policies'
    ```
 
    The limit and the mode arrive either as queue `arguments`
@@ -79,7 +88,7 @@ kubectl -n <ns> exec deploy/rabbitmq -- rabbitmqctl list_connections user state
    If the mode is `drop-head`, **this alert is not your problem and the missing
    messages are**: go and find out what was dropped. If it rejects, drain the
    consumer rather than raising the limit.
-4. **Memory or disk alarm?** `rabbitmqctl status` reports both. An alarmed node
+4. **Memory or disk alarm?** The `nodes` call reports both. An alarmed node
    blocks publishers, which looks like a hang rather than an error.
 5. **The delayed-exchange plugin.** ADR-021 schedules saga timeouts on it, which
    is why §14.1's RabbitMQ image is built rather than pulled. A broker that came

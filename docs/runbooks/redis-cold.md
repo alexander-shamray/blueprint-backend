@@ -76,7 +76,9 @@ ns=<namespace>
 deploy=redis-cache          # the allkeys-lru instance, not coordination
 operator=<operator-acl-user>
 
-# $OPERATOR_PASSWORD from the vault (§15.4), never §14.1's Compose default.
+# From the vault (§15.4), never §14.1's Compose default. Read, not typed into a
+# command, so it reaches neither the shell's history nor a process list.
+read -rs -p 'operator password: ' OPERATOR_PASSWORD; echo
 redis() {
     printf '%s' "$OPERATOR_PASSWORD" |
         kubectl -n "$ns" exec -i deploy/"$deploy" -- sh -c '
