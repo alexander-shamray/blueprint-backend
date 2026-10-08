@@ -301,7 +301,39 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
 
 
 class TheFileHoldsOnlyWhatIsJudged(unittest.TestCase):
-    """One vhost, and one entry per account, so nothing keyed by name is dropped."""
+    """What the broker imports at boot and the gate keys or reads."""
+
+    TOPOLOGY = {
+        "bindings": {"source": "catalog-relay", "vhost": "/", "destination": "ordering-commands",
+                     "destination_type": "queue", "routing_key": "", "arguments": {}},
+        "exchanges": {"name": "catalog-relay", "vhost": "/", "type": "fanout", "durable": True,
+                      "auto_delete": False, "internal": False, "arguments": {}},
+        "queues": {"name": "catalog-extra", "vhost": "/", "durable": True, "auto_delete": False,
+                   "arguments": {}},
+        "policies": {"vhost": "/", "name": "relay", "pattern": "^catalog-", "apply-to": "queues",
+                     "definition": {"dead-letter-exchange": "",
+                                    "dead-letter-routing-key": "ordering-commands"}, "priority": 0},
+        "parameters": {"vhost": "/", "component": "shovel", "name": "relay",
+                       "value": {"src-queue": "catalog-commands", "dest-queue": "ordering-commands"}},
+        "global_parameters": {"name": "cluster_name", "value": "elsewhere"},
+        "topic_permissions": {"user": "catalog-svc", "vhost": "/", "exchange": "", "write": ".*",
+                              "read": ".*"},
+    }
+
+    def test_each_topology_key_is_refused_when_not_empty(self):
+        for key, item in self.TOPOLOGY.items():
+            with self.subTest(key=key):
+                definitions = real()
+                self.assertEqual([], definitions[key], "the case, not the gate")
+                definitions[key] = [item]
+                failures = run_against(definitions)
+                self.assertTrue(any(f"`{key}` is not empty" in f for f in failures), failures)
+
+    def test_a_key_the_gate_has_never_seen_is_refused(self):
+        definitions = real()
+        definitions["shovels"] = [{"name": "relay"}]
+        failures = run_against(definitions)
+        self.assertTrue(any("`shovels` is not empty" in f for f in failures), failures)
 
     def test_a_broad_grant_on_the_root_hidden_behind_a_second_vhost(self):
         definitions = real()
