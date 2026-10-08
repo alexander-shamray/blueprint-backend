@@ -38,7 +38,7 @@ public sealed class ContactFaultTests : IAsyncLifetime
 
     private string Path => $"/admin/realms/{NotificationsWorkerFactory.LocalRealm}/users/{_customer:D}";
 
-    private const string User = """{"enabled":true,"email":"aigerim@example.test"}""";
+    private const string User = """{"enabled":true,"email":"aigerim@example.test","emailVerified":true}""";
 
     private int Calls => _keycloak.LogEntries.Count(e => e.RequestMessage!.Path == Path);
 
