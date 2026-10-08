@@ -239,6 +239,18 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         thrown.Message.ShouldContain($"more than {CachingTokenClient.MaxAnswerBytes} bytes");
     }
 
+    [Fact]
+    public async Task An_oversized_answer_on_a_transient_status_stays_transient()
+    {
+        _provider.TokenStatus = StatusCodes.Status503ServiceUnavailable;
+        _provider.TokenFailureBody = new string('x', CachingTokenClient.MaxAnswerBytes + 1);
+
+        HttpRequestException thrown = await Should.ThrowAsync<HttpRequestException>(
+            () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
+
+        thrown.StatusCode.ShouldBe(System.Net.HttpStatusCode.ServiceUnavailable);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
