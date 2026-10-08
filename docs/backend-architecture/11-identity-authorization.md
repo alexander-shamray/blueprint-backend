@@ -67,23 +67,25 @@ where the cluster enforces one; it narrows the path and replaces no check at
 either end of it.
 
 > **No refresh token reaches the browser, and the diagram used to say it did.**
-> Everything `W` is issued is readable by any script on the origin, so a
-> refresh token there converts a single XSS — or one malicious transitive
-> dependency in the bundle — into persistent account takeover that outlives the
-> session and survives a password change. The realm made that concrete rather
-> than theoretical: `revokeRefreshToken` is off and `refreshTokenMaxReuse` is
-> zero against a ten-hour SSO session, so the token was reusable and never
-> rotated for as long as the session lived.
+> Everything `W` is issued is readable by any script on the origin, so a refresh
+> token there converts a single XSS — or one malicious transitive dependency in
+> the bundle — into persistent account takeover that outlives the session and
+> survives a password change. The realm made that concrete rather than
+> theoretical: `revokeRefreshToken` was off, which left
+> `refreshTokenMaxReuse`'s zero unenforced, against an `ssoSessionMaxLifespan`
+> of ten hours, so the token was reusable and never rotated for as long as the
+> session lived. The realm rotates now, for the native client's sake (ADR-044,
+> below).
 > [ADR-034](adr/ADR-034-the-browser-holds-an-access-token-and-no-refresh-token.md)
 > records the removal, and `web-app`'s `use.refresh.tokens: "false"` is what
 > enforces it — pinned by `RealmImportTests`, because a realm attribute is
 > exactly the kind of setting that gets changed back by someone debugging a
 > logout. **In the local realm, and since
-> [ADR-042](adr/ADR-042-the-deployed-realm-is-checked-at-deploy-time.md)
-> in a deployed one too**: the charts point at an externally provisioned
-> authority, which a deployed realm still owes the same attribute — and the
-> rollout now reads that realm and refuses to roll onto one that does not have
-> it. ADR-034 states the obligation; ADR-042 is where it is checked.
+> [ADR-042](adr/ADR-042-the-deployed-realm-is-checked-at-deploy-time.md) in a
+> deployed one too**: the charts point at an externally provisioned authority,
+> which a deployed realm still owes the same attribute — and the rollout now
+> reads that realm and refuses to roll onto one that does not have it. ADR-034
+> states the obligation; ADR-042 is where it is checked.
 >
 > **The access-token lifetime beside it is in the same position, and what
 > changed is only what an unchecked realm costs.** Since
