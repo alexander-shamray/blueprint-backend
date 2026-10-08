@@ -83,13 +83,13 @@ public sealed class BuyerDisconnectTests : IAsyncLifetime
                     line.Category == Hosting && line.Message.StartsWith("Request finished", StringComparison.Ordinal))
                 .Select(line => line.Message);
 
-        // ASP.NET Core's own categories, where a request answered as an unhandled 500 is logged. The host's other
-        // work, such as a gauge whose database is unreachable here, logs errors of its own while the test runs.
+        // Every category but the projection gauge's, which logs an error each time it is collected here, where the
+        // database is unreachable, and so whenever a collection falls inside the test.
         public IEnumerable<string> RequestErrors() =>
             _lines
                 .Where(line =>
                     line.Level >= LogLevel.Error &&
-                    line.Category.StartsWith("Microsoft.AspNetCore.", StringComparison.Ordinal))
+                    line.Category != typeof(Web.Bff.Observability.ProjectionMetrics).FullName)
                 .Select(line => $"{line.Category}: {line.Message}");
 
         public ILogger CreateLogger(string categoryName) => new Recorder(categoryName, _lines);
