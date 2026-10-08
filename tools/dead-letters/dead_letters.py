@@ -171,8 +171,29 @@ def describe(message: dict) -> dict:
     }
 
 
+# curl's escapes inside a quoted config value; the runbooks write a password's backslash and quote this way.
+CURL_ESCAPES = {"\\": "\\", '"': '"', "t": "\t", "n": "\n", "r": "\r", "v": "\v"}
+
+
+def curl_value(raw: str) -> str:
+    """A config value as curl reads it: a quoted one unescaped up to its closing quote, a bare one as written."""
+    if not raw.startswith('"'):
+        return raw
+    out: list[str] = []
+    chars = iter(raw[1:])
+    for char in chars:
+        if char == '"':
+            break
+        if char == "\\":
+            escaped = next(chars, "")
+            out.append(CURL_ESCAPES.get(escaped, escaped))
+        else:
+            out.append(char)
+    return "".join(out)
+
+
 def load_credential(path: str | None, environ: dict) -> tuple[str, str]:
-    """The operator's credential, from the runbooks' curl config or the environment, never from argv."""
+    """The operator's credential, from a curl config or the environment, never from argv."""
     path = path or environ.get("DEAD_LETTERS_CREDENTIALS")
     if path:
         try:
@@ -183,7 +204,7 @@ def load_credential(path: str | None, environ: dict) -> tuple[str, str]:
         for line in lines:
             key, _, value = line.strip().partition("=")
             if key.strip() == "user" and ":" in value:
-                user, _, password = value.strip().strip('"').partition(":")
+                user, _, password = curl_value(value.strip()).partition(":")
                 return user, password
         raise Refused(f"--credentials: {path} holds no `user = \"NAME:PASSWORD\"` line")
     password = environ.get("DEAD_LETTERS_PASSWORD")
