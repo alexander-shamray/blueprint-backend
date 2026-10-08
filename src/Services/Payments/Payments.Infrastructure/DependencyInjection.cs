@@ -1,3 +1,4 @@
+using Common.Infrastructure.Transport;
 using Payments.Application.Orders;
 using Payments.Domain.Intents;
 using Payments.Domain.Refunds;
@@ -24,6 +25,9 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // ADR-079, before any connection below is opened.
+        services.AddTransportSecurity();
+
         // §7.1's runtime identity, no DDL; EnableRetryOnFailure makes §6.3's CreateExecutionStrategy a real retry.
         services.AddDbContext<PaymentsDbContext>(o =>
             o.UseSqlServer(

@@ -13,6 +13,10 @@ public static class MigratorHost
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
+        // ADR-079, checked here: Program.cs never starts this host, so a start-up validator would never run.
+        if (MigratorTransport.Refusal(builder.Configuration, builder.Environment) is { } refusal)
+            throw new InvalidOperationException(refusal);
+
         // §7.1's migrator identity, the one with DDL; reading "Shipping" would merge the two principals.
         builder.Services.AddDbContext<ShippingDbContext>(o =>
             o.UseSqlServer(

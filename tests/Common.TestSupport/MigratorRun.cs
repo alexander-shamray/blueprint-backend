@@ -18,7 +18,8 @@ public static class MigratorRun
         string[] args =
         [
             .. Setting($"ConnectionStrings:{service}Migrator", migratorConnectionString),
-            .. Setting($"ConnectionStrings:{service}", runtimeConnectionString)
+            .. Setting($"ConnectionStrings:{service}", runtimeConnectionString),
+            .. PlaintextTestContainers(service)
         ];
 
         using IHost host = build(args);
@@ -29,4 +30,10 @@ public static class MigratorRun
         static string[] Setting(string key, string? value) =>
             value is null ? [] : [$"--{key}={value}"];
     }
+
+    /// <summary>
+    /// ADR-079's opt-out for the job host, which runs as Production: the SQL container's certificate is self-signed.
+    /// </summary>
+    public static string[] PlaintextTestContainers(string service) =>
+        [$"--Transport:Plaintext:0={service}Migrator", $"--Transport:Plaintext:1={service}"];
 }

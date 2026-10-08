@@ -2,6 +2,7 @@ using Common.Application;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
+using Common.Infrastructure.Transport;
 using Web.Bff.Persistence;
 
 namespace Web.Bff;
@@ -20,6 +21,9 @@ public static class BffPersistence
                 "ConnectionStrings:Bff is not configured. The buyer's order read is a projection " +
                 "this host owns (ADR-051), and it cannot be written or read without its database (§7.1).");
         }
+
+        // ADR-079, before any connection below is opened.
+        services.AddTransportSecurity();
 
         // EnableRetryOnFailure is what makes an execution strategy a real retry rather than a no-op (§6.3).
         services.AddDbContext<BffDbContext>(o =>

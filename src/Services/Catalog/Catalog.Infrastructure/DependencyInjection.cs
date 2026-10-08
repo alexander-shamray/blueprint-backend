@@ -10,6 +10,7 @@ using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
 using Common.Infrastructure.Redis;
+using Common.Infrastructure.Transport;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -24,6 +25,9 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // ADR-079, before any connection below is opened.
+        services.AddTransportSecurity();
+
         // §7.1's runtime key, data plane only. EnableRetryOnFailure is what makes §6.3's
         // CreateExecutionStrategy a real retry rather than a no-op.
         services.AddDbContext<CatalogDbContext>(o =>

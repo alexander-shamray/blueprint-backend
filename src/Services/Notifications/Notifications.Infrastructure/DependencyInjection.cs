@@ -1,3 +1,4 @@
+using Common.Infrastructure.Transport;
 using Notifications.Application.Contacts;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
@@ -26,6 +27,9 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // ADR-079, before any connection below is opened.
+        services.AddTransportSecurity();
+
         // §7.1's runtime key, data plane only. EnableRetryOnFailure is what makes §6.3's
         // CreateExecutionStrategy a real retry rather than a no-op.
         services.AddDbContext<NotificationsDbContext>(o =>

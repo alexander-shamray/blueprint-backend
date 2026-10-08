@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Common.TestSupport;
 using Inventory.TestSupport;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -25,7 +26,9 @@ public class UnreadableBodyTests(HostSmokeTests.AuthenticatedUnreachableFactory 
         string? body,
         string? expected)
     {
-        using WebApplicationFactory<Program> host = factory.WithWebHostBuilder(b => b.UseEnvironment(environment));
+        using WebApplicationFactory<Program> host = factory.WithWebHostBuilder(b => b
+            .UseEnvironment(environment)
+            .AcceptPlaintext("Inventory", "RabbitMq", "RedisCache", "RedisCoordination"));
         using HttpClient client = host.CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
         client.DefaultRequestHeaders.Add(TestAuthHandler.PermissionsHeader, InventoryPermissions.Admin);

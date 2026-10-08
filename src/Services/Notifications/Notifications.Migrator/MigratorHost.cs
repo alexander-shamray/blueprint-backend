@@ -13,6 +13,10 @@ public static class MigratorHost
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
+        // ADR-079, checked here: Program.cs never starts this host, so a start-up validator would never run.
+        if (MigratorTransport.Refusal(builder.Configuration, builder.Environment) is { } refusal)
+            throw new InvalidOperationException(refusal);
+
         // §7.1's migrator identity, the only one with DDL. Reading the runtime key here would reduce the two
         // principals to a naming convention.
         builder.Services.AddDbContext<NotificationsDbContext>(o =>

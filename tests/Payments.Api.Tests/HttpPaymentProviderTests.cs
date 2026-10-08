@@ -1,3 +1,4 @@
+using Common.TestSupport;
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Sockets;
@@ -556,7 +557,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     {
         using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, address);
         using WebApplicationFactory<Program> production =
-            factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+            factory.WithWebHostBuilder(b => b.UseEnvironment("Production").AcceptPlaintext(
+                "Payments", "RabbitMq"));
 
         if (starts)
         {

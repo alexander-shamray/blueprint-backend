@@ -162,7 +162,10 @@ public class InventorySeederTests(ServiceFixture fixture)
 
     private static async Task<int> RunAsync(string database, string[] settings)
     {
-        string[] args = [$"--ConnectionStrings:InventoryMigrator={database}", .. settings];
+        string[] args =
+        [
+            $"--ConnectionStrings:InventoryMigrator={database}", .. MigratorRun.PlaintextTestContainers("Inventory"), .. settings
+        ];
 
         using IHost host = MigratorHost.Build(args);
         using IServiceScope scope = host.Services.CreateScope();
