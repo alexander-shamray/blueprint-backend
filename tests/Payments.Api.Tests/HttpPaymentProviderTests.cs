@@ -695,6 +695,67 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             await Should.ThrowAsync<PaymentProviderUnavailableException>(call);
     }
 
+    [Theory]
+    [InlineData(201, "{\"status\":\"approved\",\"reference\":\"psp_\\r\\nforged\"}")]
+    [InlineData(201, "{\"status\":\"approved\",\"reference\":\"psp_\\u202Efer\"}")]
+    [InlineData(402, "{\"status\":\"declined\",\"code\":\"card\\u0000declined\"}")]
+    [InlineData(402, "{\"status\":\"declined\",\"code\":\"card\\u2028declined\"}")]
+    public async Task A_reference_or_code_holding_a_control_or_bidi_character_is_refused_before_it_is_recorded(
+        int status,
+        string body)
+    {
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
+        using UnavailableCount counted = CountUnavailable();
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(1, "a string that would forge a log line or a view is no verdict (ADR-084)");
+    }
+
+    [Fact]
+    public async Task An_authorisation_in_a_charset_nobody_can_decode_is_unavailable_and_counted()
+    {
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(201)
+                    .WithHeader("Content-Type", "application/json; charset=bogus")
+                    .WithBody("{\"status\":\"approved\",\"reference\":\"psp_x\"}"));
+        using UnavailableCount counted = CountUnavailable();
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(1, "one attempt, answered with a body this adapter cannot read");
+    }
+
+    [Fact]
+    public async Task A_void_in_a_charset_nobody_can_decode_is_unavailable_and_counted()
+    {
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
+            .AtPriority(0)
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(200)
+                    .WithHeader("Content-Type", "application/json; charset=bogus")
+                    .WithBody("{\"status\":\"voided\"}"));
+        using UnavailableCount counted = CountUnavailable();
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().VoidAsync(new VoidRequest(OrderId.New(), "psp_ref"), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(1, "one attempt, answered with a body this adapter cannot read");
+    }
+
     [Fact]
     public async Task The_callers_own_cancellation_is_not_counted_against_the_provider()
     {
