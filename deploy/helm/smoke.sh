@@ -729,7 +729,7 @@ refuses_chart notifications 'notifications: mail with no relay peer stated fails
 refuses_chart ordering 'ordering: a database with no peer stated fails the render' \
     'networkPolicy.database.to is required' --set networkPolicy.database.to=null
 refuses_chart ordering 'ordering: a broker peer of every address fails the render' \
-    'admits every address' --set 'networkPolicy.broker.to[0].ipBlock.cidr=0.0.0.0/0'
+    'wider than a /8' --set 'networkPolicy.broker.to[0].ipBlock.cidr=0.0.0.0/0'
 
 # Every address has more spellings than its two literals, so a prefix floor and
 # the selectors are what is held (ADR-080), and a /8 is the widest peer kept.
