@@ -205,6 +205,9 @@ services:
       # string on a clean checkout, which config -q accepts and the first
       # query does not.
       ConnectionStrings__OrderingMigrator: "${ORDERING_MIGRATOR_CONNECTION:-Server=sql;Database=Ordering;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+      # The job host reads DOTNET_ENVIRONMENT and defaults to Production, where
+      # ADR-079 refuses this string's TrustServerCertificate=True.
+      DOTNET_ENVIRONMENT: Development
     depends_on:
       sql: { condition: service_healthy }
     restart: "no"
@@ -317,6 +320,9 @@ services:
     tmpfs: [ /tmp ]
     environment:
       ConnectionStrings__BffMigrator: "${BFF_MIGRATOR_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+      # The job host reads DOTNET_ENVIRONMENT and defaults to Production, where
+      # ADR-079 refuses this string's TrustServerCertificate=True.
+      DOTNET_ENVIRONMENT: Development
     depends_on:
       sql: { condition: service_healthy }
     restart: "no"
