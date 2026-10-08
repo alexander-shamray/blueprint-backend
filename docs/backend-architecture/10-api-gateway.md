@@ -500,7 +500,7 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy(
         "anonymous",
         context => RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            partitionKey: RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 100,
@@ -512,8 +512,7 @@ builder.Services.AddRateLimiter(options =>
         "authenticated",
         context => RateLimitPartition.GetTokenBucketLimiter(
             partitionKey: context.User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-                context.Connection.RemoteIpAddress?.ToString() ??
-                "unknown",
+                RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
             factory: _ => new TokenBucketRateLimiterOptions
             {
                 TokenLimit = 300,
@@ -597,6 +596,14 @@ run when the limiter middleware executes — see the pipeline in §4.2. The
 still matches an authenticated route, not as a safety net for pipeline order;
 if the order is wrong the fallback absorbs *every* request and the policy
 degrades to a second copy of `anonymous` with a larger budget.
+
+**An address is partitioned as the client it belongs to**, by
+`RateLimitPartitionKey`: an IPv4 address by itself, an IPv4-mapped IPv6 address
+as that IPv4 one, and any other IPv6 address by its /64. A /64 is one
+allocation, so keyed by the whole address an IPv6 client could rotate through
+its prefix for a fresh window per address. A request with no peer address
+shares one `unknown` bucket; a TCP connection always has a peer, so only an
+in-process host reaches it.
 
 **The v1 decision is per-replica, best-effort, and the numbers above are written
 knowing it.** `System.Threading.RateLimiting` partitions in process, so with N
