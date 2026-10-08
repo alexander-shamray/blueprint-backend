@@ -1323,7 +1323,6 @@ def update_broker_definitions(repo_root: Path, names: Names) -> str:
                 f"{relative}: {template_user}'s {verb} grant does not hold its subscription `{cut}` once")
         return granted.replace(cut, "")
 
-    grant = {verb: names.rename(unsubscribed(verb)) for verb in ("configure", "write", "read")}
     if names.pure_consumer:
         # A consumer's shape, not the template's publisher's: it subscribes to
         # nothing yet, so it binds no contract exchange, and writes only its own
@@ -1331,6 +1330,8 @@ def update_broker_definitions(repo_root: Path, names: Names) -> str:
         bound = f"^({names.lower}-|MassTransit:)"
         faults = f"^({names.lower}-|MassTransit:(ReceiveFault$|Fault--))"
         grant = {"configure": bound, "write": bound, "read": faults}
+    else:
+        grant = {verb: names.rename(unsubscribed(verb)) for verb in ("configure", "write", "read")}
 
     definitions["permissions"].append({
         "user": user,

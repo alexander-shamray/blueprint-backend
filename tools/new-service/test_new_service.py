@@ -2049,6 +2049,8 @@ class RefusesToRun(unittest.TestCase):
             with self.assertRaises(ScaffoldError) as raised:
                 render(repo_root=root)
             self.assertIn("does not hold its subscription", str(raised.exception))
+            # A pure consumer renders a grant of its own and never reads the template's.
+            pure_consumer(repo_root=root)
 
     def test_the_template_cannot_be_its_own_copy(self):
         with self.assertRaises(ScaffoldError):
