@@ -1896,7 +1896,9 @@ every_pod_disables_token() {
             pods = off = 0; kind = name = ""
         }
         /^---$/ { close_doc(); next }
-        /^kind: (Deployment|Job|CronJob|StatefulSet|DaemonSet|ReplicaSet|Pod)$/ { pods = 1; kind = $2; seen++ }
+        /^kind: (Deployment|Job|CronJob|StatefulSet|DaemonSet|ReplicaSet|ReplicationController|Pod)$/ {
+            pods = 1; kind = $2; seen++
+        }
         /^  name: / && name == "" { name = $2 }
         /^ +automountServiceAccountToken: false[ ]*$/ { off = 1 }
         /automountServiceAccountToken: true/ { bad = 1 }
