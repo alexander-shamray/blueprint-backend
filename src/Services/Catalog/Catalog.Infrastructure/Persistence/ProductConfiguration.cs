@@ -39,6 +39,12 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasColumnName("SellerId")
             .HasConversion(id => id!.Value.Value, value => new SellerId(value));
 
+        // A default for the release still running beside this one, whose insert does not name the column (§7.4);
+        // Product.Publish always sets it, so this release never relies on it (ADR-075).
+        builder
+            .Property(p => p.LastEventAt)
+            .HasDefaultValueSql("SYSDATETIMEOFFSET()");
+
         // Optimistic concurrency — SQL Server maintains this automatically.
         builder.Property(p => p.Version).IsRowVersion();
 

@@ -30,7 +30,9 @@ namespace Catalog.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTimeOffset>("LastEventAt")
-                        .HasColumnType("datetimeoffset(7)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset(7)")
+                        .HasDefaultValueSql("SYSDATETIMEOFFSET()");
 
                     b.Property<string>("Name")
                         .IsRequired()
