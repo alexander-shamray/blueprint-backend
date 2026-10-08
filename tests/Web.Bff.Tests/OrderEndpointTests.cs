@@ -65,7 +65,7 @@ public sealed class OrderEndpointTests(BffServiceFixture fixture) : IAsyncLifeti
         HttpResponseMessage unknown = await stranger.GetAsync($"/v1/orders/{Guid.CreateVersion7()}", Ct);
 
         theirs.StatusCode.ShouldBe(HttpStatusCode.NotFound, "403 would confirm the order exists (§10.7)");
-        theirs.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        theirs.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
         (await Problem(theirs)).ShouldBe(await Problem(unknown));
         (await stranger.GetFromJsonAsync<CursorPage<OrderSummary>>("/v1/orders", Ct))!.Items.ShouldBeEmpty();
     }
@@ -177,7 +177,7 @@ public sealed class OrderEndpointTests(BffServiceFixture fixture) : IAsyncLifeti
 
         // The {id:guid} constraint leaves no route to match, so the status-code pages answer, not the handler.
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
     }
 
     private static async Task<(int Status, string? Code, string? Detail)> Problem(HttpResponseMessage response)
