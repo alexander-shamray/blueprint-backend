@@ -35,10 +35,17 @@ on-call who trusts a short inventory reads a poisoned `ConfirmStock` or a stuck
 saga as "no Ordering error queue" and looks in another service.
 
 The alert's `queue` label names the one that fired. Every dead-letter queue and
-its depth comes off the Management API, with the credential the next section
-sets up:
+its depth comes off the Management API through the tool, which runs as
+`dead-letter-operator`:
 
 ```bash
+kubectl -n <ns> port-forward svc/rabbitmq 15672:15672 &
+
+# The tool's own account (ADR-072), read rather than typed so the password
+# reaches no history; DEAD_LETTERS_USER defaults to dead-letter-operator.
+read -rs -p 'dead-letter-operator password: ' DEAD_LETTERS_PASSWORD; echo
+export DEAD_LETTERS_PASSWORD
+
 py -3.12 tools/dead-letters/dead_letters.py list
 ```
 
@@ -52,9 +59,9 @@ py -3.12 tools/dead-letters/dead_letters.py inspect <endpoint>_error --limit 5
 ```
 
 It prints the three fields this section asks for, through the same requeueing
-`get` the `curl` below makes, and runs as `dead-letter-operator`, whose grant
-its README argues. The rest of this section is what it does underneath, and
-the way in when the tool is not to hand.
+`get` the `curl` below makes, and runs as `dead-letter-operator` from the
+variable above, whose grant its README argues. The rest of this section is what
+it does underneath, and the way in when the tool is not to hand.
 
 **`rabbitmqctl` will not do this.** `list_queues` and `info_all` return queue
 metadata and counts — they do not return a message body or a header, which is
@@ -103,10 +110,12 @@ curl -sS --config "$HOME/.rabbit.curl" -X POST \
 EOF
 ```
 
-`export DEAD_LETTERS_CREDENTIALS="$HOME/.rabbit.curl"` hands the same file to
-the tool. **Delete it and the variable when the incident closes** —
-`rm -f "$HOME/.rabbit.curl"; unset OPERATOR_PASSWORD` — and use a credential
-you can revoke rather than the service's own.
+**This file is the operator's and not the tool's**: never point
+`DEAD_LETTERS_CREDENTIALS` at it, or the tool runs as the operator rather than
+as `dead-letter-operator`. **Delete it and both variables when the incident
+closes** — `rm -f "$HOME/.rabbit.curl"; unset OPERATOR_PASSWORD
+DEAD_LETTERS_PASSWORD` — and use a credential you can revoke rather than the
+service's own.
 
 `ackmode=ack_requeue_true` is the load-bearing part: **`ack_requeue_false`
 consumes the message and it is gone.** The Management UI's *Get messages* with
@@ -153,9 +162,12 @@ included, are stored in the vhost's shovel parameter, which every `policymaker`
 and `administrator` user can read and which `GET /api/definitions` exports into
 every backup taken while it exists. So the password in them is one that is
 worth nothing once the replay is done: an identity whoever administers the
-broker creates for this replay, with read on `ENDPOINT_error`, write on
-`ENDPOINT`, and configure on both in case the shovel declares them, and deletes
-when the queue has drained. The `policymaker` credential stays in the curl
+broker creates for this replay, with read on `ENDPOINT_error`, write on the
+`ENDPOINT` exchange, and configure on both in case the shovel declares them,
+and deletes when the queue has drained. The shovel publishes to that exchange,
+as the tool's replay does, rather than to the queue: a `dest-queue` publishes
+through the default exchange, a write on every queue by name that the identity
+is not given. The `policymaker` credential stays in the curl
 config, for the call that declares the shovel:
 
 **Percent-encode the credential before it goes in the URI.** A generated
@@ -184,7 +196,7 @@ curl -sS --config "$HOME/.rabbit.curl" -X PUT \
   -d @- http://localhost:15672/api/parameters/shovel/%2F/replay-ENDPOINT <<EOF
 {"value":{
   "src-protocol":"amqp091","src-uri":"$uri","src-queue":"ENDPOINT_error",
-  "dest-protocol":"amqp091","dest-uri":"$uri","dest-queue":"ENDPOINT",
+  "dest-protocol":"amqp091","dest-uri":"$uri","dest-exchange":"ENDPOINT",
   "src-delete-after":"queue-length","ack-mode":"on-confirm"}}
 EOF
 

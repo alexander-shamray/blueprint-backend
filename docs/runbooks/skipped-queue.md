@@ -29,9 +29,16 @@ endpoint directly — the same mapping
 [`error-queue.md`](error-queue.md) uses, and the same list of Ordering
 endpoints applies. Read them from `Endpoints`/`DependencyInjection.cs` rather
 than from memory. The tool's `list` gives every dead-letter queue and its
-depth, through the Management API and the credential below:
+depth, through the Management API and as `dead-letter-operator`:
 
 ```bash
+kubectl -n <ns> port-forward svc/rabbitmq 15672:15672 &
+
+# The tool's own account (ADR-072), read rather than typed so the password
+# reaches no history; DEAD_LETTERS_USER defaults to dead-letter-operator.
+read -rs -p 'dead-letter-operator password: ' DEAD_LETTERS_PASSWORD; echo
+export DEAD_LETTERS_PASSWORD
+
 py -3.12 tools/dead-letters/dead_letters.py list
 ```
 
@@ -77,8 +84,8 @@ EOF
 
 `ack_requeue_true` is load-bearing for the same reason it is one runbook over:
 **`ack_requeue_false` consumes the message and it is gone.** Delete the config
-and the variable when the incident closes:
-`rm -f "$HOME/.rabbit.curl"; unset OPERATOR_PASSWORD`.
+and both variables when the incident closes:
+`rm -f "$HOME/.rabbit.curl"; unset OPERATOR_PASSWORD DEAD_LETTERS_PASSWORD`.
 
 **The type is in the payload, not in a transport header**, and this is worth
 saying because the obvious guess is wrong. This platform configures no
