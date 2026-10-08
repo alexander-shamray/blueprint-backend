@@ -22,10 +22,11 @@ in `/tmp` is its diagnostic socket and debugger pipes, which is why the mount
 exists: without it `dotnet-counters` and `dotnet-trace` cannot attach.
 **Consequences.** A namespace can now enforce "restricted" through its
 `pod-security.kubernetes.io/enforce` label, and should, but the label is the
-installer's, as the namespace is, and no chart sets it. A host that starts
-writing outside `/tmp` fails at that write in Kubernetes and not in a test,
-because nothing here runs the images read-only but a by-hand Compose override.
-A full process dump does not fit in 64Mi, so taking one needs the limit raised
+installer's, as the namespace is, and no chart sets it. Every application
+container in the Compose model runs the same way, so the Compose workflow's
+`up --wait` is what fails first when a host starts writing outside `/tmp`; it
+starts the hosts and migrators and walks no order, so a write made only on a
+request path is still found in a cluster. A full process dump does not fit in 64Mi, so taking one needs the limit raised
 for that pod or a debug container with its own volume.
 
 ---

@@ -4,6 +4,9 @@ services:
     build:
       context: ../../..
       dockerfile: src/Services/Ordering/Ordering.Migrator/Dockerfile
+    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
+    read_only: true
+    tmpfs: [ /tmp ]
     environment:
       # Migrator identity (DDL) — §7.1. Locally both keys resolve to the one
       # sa login (§14.2's stated simplification); the KEY still differs, so
@@ -19,6 +22,9 @@ services:
     build:
       context: ../../..
       dockerfile: src/Services/Ordering/Ordering.Api/Dockerfile
+    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
+    read_only: true
+    tmpfs: [ /tmp ]
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       # Runtime identity (DML only) — never the migrator connection.

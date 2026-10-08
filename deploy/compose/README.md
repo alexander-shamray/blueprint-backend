@@ -102,6 +102,13 @@ grep -E '^# |^  [a-z-]+:|ports:' deploy/compose/services/*.yml
 A container with no `ports:` line publishes nothing, and a simulator's
 scripted responses are in the README beside its mappings.
 
+**Every application container runs read-only**, with a tmpfs at `/tmp` for the
+runtime's diagnostic socket, as the chart's pods do
+([ADR-082](../../docs/backend-architecture/adr/ADR-082-every-pod-meets-pod-security-restricted-with-a-read-only-root-filesystem.md)).
+That makes the Compose workflow's `up --wait` the test that the images still
+run that way: a host that starts writing anywhere else fails here before it
+fails in a cluster.
+
 **Every OpenAPI document needs a token**, and that is a decision rather than
 an oversight. `MapOpenApi()` carries no authorization metadata, so the
 deny-by-default fallback
