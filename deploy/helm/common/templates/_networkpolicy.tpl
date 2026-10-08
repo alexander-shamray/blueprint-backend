@@ -1,7 +1,7 @@
 {{- /* A list of NetworkPolicy peers the deployment states, required: a rule with no
-peer admits every address on its port, the opposite of a fence. A peer as wide
-as every address is refused for the same reason, by ADR-080's floor rather than
-by spelling: two /1 blocks or an empty selector are every address too. */}}
+peer admits every address on its port, the opposite of a fence. A peer that
+could be every address is refused for the same reason, by ADR-080's floor rather
+than by spelling: two /1 blocks, or selectors naming nothing, are that too. */}}
 {{- define "commerce.networkPolicyPeers" -}}
 {{- $peers := index . 0 -}}
 {{- $key := index . 1 -}}
@@ -17,10 +17,11 @@ by spelling: two /1 blocks or an empty selector are every address too. */}}
 {{- if and $cidr (lt (atoi (last (splitList "/" $cidr))) 8) }}
 {{- fail (printf "networkPolicy.%s names %s, which is wider than a /8 and so admits every address or most of it: state the peer's own range (ADR-080)." $key $cidr) }}
 {{- end }}
-{{- if and (hasKey . "namespaceSelector") (not (or (.namespaceSelector).matchLabels (.namespaceSelector).matchExpressions)) }}
-{{- fail (printf "networkPolicy.%s has an empty namespaceSelector, which selects every pod in every namespace: name the namespace (ADR-080)." $key) }}
+{{- $podsNamed := or (.podSelector).matchLabels (.podSelector).matchExpressions }}
+{{- if and (hasKey . "namespaceSelector") (not (or (.namespaceSelector).matchLabels (.namespaceSelector).matchExpressions)) (not $podsNamed) }}
+{{- fail (printf "networkPolicy.%s has an empty namespaceSelector and no podSelector naming pods, which selects every pod in every namespace: name the namespace or the pods (ADR-080)." $key) }}
 {{- end }}
-{{- if and (hasKey . "podSelector") (not (hasKey . "namespaceSelector")) (not (or (.podSelector).matchLabels (.podSelector).matchExpressions)) }}
+{{- if and (hasKey . "podSelector") (not (hasKey . "namespaceSelector")) (not $podsNamed) }}
 {{- fail (printf "networkPolicy.%s has an empty podSelector and no namespaceSelector, which selects every pod in this namespace: name the pods (ADR-080)." $key) }}
 {{- end }}
 {{- end }}
