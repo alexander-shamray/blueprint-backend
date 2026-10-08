@@ -61,9 +61,11 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   no device-authorization, CIBA or token-exchange attribute is on
   (`GRANT_ATTRIBUTES`); a standard-flow client's redirect URIs each land on
   Keycloak's own host or on a named host with no wildcard, a relative one
-  judged as its `rootUrl` resolves it, and `https` in a deployed realm; a
+  judged as its `rootUrl` resolves it, a custom-scheme one needing a host
+  only to end in a wildcard, and a web one `https` in a deployed realm; a
   public standard-flow client sets PKCE to `S256`; and no client declares `*`
-  as a web origin.
+  as a web origin. A client leaving `standardFlowEnabled` unset is judged as
+  one with it on, because Keycloak turns it on.
   `check_every_client` is the list. Keycloak's built-in `account` client
   ships without PKCE, so a deployed realm sets `S256` on it or turns its
   standard flow off.
