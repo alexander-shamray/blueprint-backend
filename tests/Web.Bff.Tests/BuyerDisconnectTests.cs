@@ -11,7 +11,8 @@ namespace Web.Bff.Tests;
 /// <summary>A buyer who leaves while Catalog prices the basket, which is no upstream failure (§9.7, §13.2).</summary>
 public sealed class BuyerDisconnectTests : IAsyncLifetime
 {
-    private const string ExceptionHandler = "Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware";
+    /// <summary>The hosting layer's category, whose "Request finished" line closes every request it served.</summary>
+    private const string Hosting = "Microsoft.AspNetCore.Hosting.Diagnostics";
 
     private static readonly Guid Chair = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
@@ -37,16 +38,14 @@ public sealed class BuyerDisconnectTests : IAsyncLifetime
     [Fact]
     public async Task A_buyer_who_leaves_mid_pricing_is_an_aborted_request_rather_than_a_logged_500()
     {
-        // Longer than the test waits, so the only thing that ends the call is the buyer leaving.
+        // Longer than PricingHop's timeouts, so only the buyer, leaving well inside AttemptTimeout, ends the call.
         _catalog.HangFor = TimeSpan.FromSeconds(30);
 
         await using WebApplicationFactory<Program> host = _factory.WithWebHostBuilder(builder =>
             builder.ConfigureLogging(logging =>
             {
                 logging.AddProvider(_logs);
-
-                // Debug for this provider alone, so the middleware's aborted-request line is seen too.
-                logging.AddFilter<LogRecorder>(ExceptionHandler, LogLevel.Debug);
+                logging.AddFilter<LogRecorder>(Hosting, LogLevel.Information);
             }));
         using HttpClient client = host.CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, "customer-1");
@@ -58,12 +57,11 @@ public sealed class BuyerDisconnectTests : IAsyncLifetime
         await buyer.CancelAsync();
         await Should.ThrowAsync<OperationCanceledException>(() => quote);
 
-        // The middleware answers every exception it sees with one line, so waiting on it orders the read.
-        await Until(() => _logs.From(ExceptionHandler).Any());
+        // The request's own closing line, so every line the host logs for it is in before the reads below.
+        await Until(() => _logs.Finished().Any());
 
-        _logs.From(ExceptionHandler).ShouldAllBe(
-            level => level < LogLevel.Error,
-            "a buyer leaving is the host's aborted request, not an upstream fault counted as a 500");
+        _logs.Finished().ShouldHaveSingleItem().ShouldContain(" - 499 ", Case.Sensitive, "the host's aborted request");
+        _logs.Errors().ShouldBeEmpty("a buyer leaving is no upstream fault, so nothing is logged as one");
     }
 
     private static async Task Until(Func<bool> condition)
@@ -74,13 +72,19 @@ public sealed class BuyerDisconnectTests : IAsyncLifetime
         condition().ShouldBeTrue("the awaited condition never held");
     }
 
-    /// <summary>The level of every line the host logs, by category.</summary>
+    /// <summary>Every line the host logs, by category, level and message.</summary>
     private sealed class LogRecorder : ILoggerProvider
     {
-        private readonly ConcurrentQueue<(string Category, LogLevel Level)> _lines = new();
+        private readonly ConcurrentQueue<(string Category, LogLevel Level, string Message)> _lines = new();
 
-        public IEnumerable<LogLevel> From(string category) =>
-            _lines.Where(line => line.Category == category).Select(line => line.Level);
+        public IEnumerable<string> Finished() =>
+            _lines
+                .Where(line =>
+                    line.Category == Hosting && line.Message.StartsWith("Request finished", StringComparison.Ordinal))
+                .Select(line => line.Message);
+
+        public IEnumerable<string> Errors() =>
+            _lines.Where(line => line.Level >= LogLevel.Error).Select(line => $"{line.Category}: {line.Message}");
 
         public ILogger CreateLogger(string categoryName) => new Recorder(categoryName, _lines);
 
@@ -88,7 +92,7 @@ public sealed class BuyerDisconnectTests : IAsyncLifetime
         {
         }
 
-        private sealed class Recorder(string category, ConcurrentQueue<(string, LogLevel)> lines) : ILogger
+        private sealed class Recorder(string category, ConcurrentQueue<(string, LogLevel, string)> lines) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state)
                 where TState : notnull =>
@@ -102,7 +106,7 @@ public sealed class BuyerDisconnectTests : IAsyncLifetime
                 TState state,
                 Exception? exception,
                 Func<TState, Exception?, string> formatter) =>
-                lines.Enqueue((category, logLevel));
+                lines.Enqueue((category, logLevel, formatter(state, exception)));
         }
     }
 }

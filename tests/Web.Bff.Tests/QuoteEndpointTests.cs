@@ -357,6 +357,19 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_upstream_deadline_is_503_rather_than_500()
+    {
+        // Catalog's own DeadlineExceeded, with the buyer still waiting: an outage, not a cancellation (§9.7).
+        _catalog.FailNextWith.Enqueue(StatusCode.DeadlineExceeded);
+
+        using HttpClient client = Caller();
+
+        HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+    }
+
+    [Fact]
     public async Task An_upstream_outage_is_503()
     {
         _catalog.FailNextWith.Enqueue(StatusCode.Unavailable);

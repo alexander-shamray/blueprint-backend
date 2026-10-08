@@ -50,9 +50,7 @@ builder.Services.AddTokenClient(builder.Configuration[AuthenticationExtensions.A
 
 // A local rather than one chain, because AddStandardResilienceHandler returns a different builder (§9.7).
 IHttpClientBuilder pricing = builder.Services
-    .AddGrpcClient<Pricing.PricingClient>(PricingHop.ClientName, o => o.Address = PricingHop.Address)
-    // A buyer leaving cancels the call: thrown as cancellation, it is the host's aborted request, not a 500 (§13.2).
-    .ConfigureChannel(channel => channel.ThrowOperationCanceledOnCancellation = true);
+    .AddGrpcClient<Pricing.PricingClient>(PricingHop.ClientName, o => o.Address = PricingHop.Address);
 
 // Resilience first, so it sits outermost and the credential handler inside runs once per attempt (§9.7).
 pricing

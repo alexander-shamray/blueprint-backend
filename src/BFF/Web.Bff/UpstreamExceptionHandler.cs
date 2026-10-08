@@ -17,6 +17,14 @@ internal sealed class UpstreamExceptionHandler(IProblemDetailsService problemDet
         if (exception is not RpcException rpc)
             return false;
 
+        // A buyer who left cancels the call: the host's aborted request, a 499 and no error (§13.2). Only then, so a
+        // status Catalog itself sent while the buyer still waits is left to the switch below.
+        if (rpc.StatusCode == StatusCode.Cancelled && httpContext.RequestAborted.IsCancellationRequested)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
+            return true;
+        }
+
         (int status, string title) = rpc.StatusCode switch
         {
             // The BFF built the request from the caller's own basket, so the caller has to change something.
