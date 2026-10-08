@@ -146,7 +146,10 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         if (_trackingEvents.Any(e => SameEventId(e.CarrierEventId, carrierEventId)))
             return false;
 
-        _trackingEvents.Add(new TrackingEvent(Id, carrierEventId, status, occurredAt, now));
+        // Every poll loads them all, so past the bound a new one is not kept; its status still applies, as a
+        // delivery must land however many scans came before it.
+        if (_trackingEvents.Count < ShipmentLimits.MaxTrackingEvents)
+            _trackingEvents.Add(new TrackingEvent(Id, carrierEventId, status, occurredAt, now));
 
         // The events carry the recording instant, not the carrier's: §13.3's lag is measured from the raise.
         return status switch

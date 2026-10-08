@@ -140,6 +140,33 @@ public class ShipmentTests
     }
 
     [Fact]
+    public void A_shipment_keeps_no_more_events_than_its_bound_however_many_fresh_ids_arrive()
+    {
+        Shipment shipment = Booked();
+        for (int i = 0; i < ShipmentLimits.MaxTrackingEvents; i++)
+            shipment.Record($"e{i}", TrackingStatus.Unrecognised, Now, Now);
+
+        shipment.Record("one-too-many", TrackingStatus.Unrecognised, Now, Now).ShouldBeFalse();
+
+        shipment.TrackingEvents.Count.ShouldBe(
+            ShipmentLimits.MaxTrackingEvents,
+            "every poll loads them all, so a carrier rotating ids must not grow the row without end");
+    }
+
+    [Fact]
+    public void A_delivery_past_the_bound_still_delivers()
+    {
+        Shipment shipment = Booked();
+        for (int i = 0; i < ShipmentLimits.MaxTrackingEvents; i++)
+            shipment.Record($"e{i}", TrackingStatus.Unrecognised, Now, Now);
+
+        shipment.Record("delivered", TrackingStatus.Delivered, Now.AddHours(1), Now.AddHours(2)).ShouldBeTrue();
+
+        shipment.Status.ShouldBe(ShipmentStatus.Delivered, "the bound limits what is kept, never what happened");
+        shipment.TrackingEvents.Count.ShouldBe(ShipmentLimits.MaxTrackingEvents);
+    }
+
+    [Fact]
     public void A_collected_event_despatches_a_booked_shipment()
     {
         Shipment shipment = Booked();
