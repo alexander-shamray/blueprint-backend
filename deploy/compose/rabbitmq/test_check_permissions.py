@@ -416,6 +416,10 @@ class ConfigureAndReadAreBoundedToo(unittest.TestCase):
                 "x.AddConsumer<IntegrationEventConsumer<PaymentDeclined>>();\n", encoding="utf-8")
             self.assertEqual({"Common.Contracts.Payments.V1:"}, gate.referenced_contexts(Path(directory), self.names()))
 
+    def test_a_type_argument_beside_a_nested_generic_is_read(self):
+        self.assertEqual({"PaymentDeclined", "List", "int", "TState"},
+                         gate.type_arguments("Consume<PaymentDeclined, List<int>>(); Saga<TState> s; if (a < b) { }"))
+
     def test_a_name_outside_a_type_argument_is_not_a_consumer(self):
         # Saga state carrying a flag spelt like an event is not a subscription to that event's context.
         with tempfile.TemporaryDirectory() as directory:

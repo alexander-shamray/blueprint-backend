@@ -211,6 +211,17 @@ def private_namespaces(directory: Path) -> set[str]:
     return {f"{namespace}:" for path in sorted(directory.rglob("*.cs")) for namespace in NAMESPACE.findall(read(path))}
 
 
+def type_arguments(code: str) -> set[str]:
+    """Every bare identifier in a `<...>` list, read innermost first so a nested list leaves its neighbours whole."""
+    found: set[str] = set()
+    innermost = re.compile(r"<([^<>()]*)>")
+    while listed := innermost.findall(code):
+        found |= {part.strip() for group in listed for part in group.split(",")
+                  if re.fullmatch(r"\s*[A-Za-z_]\w*\s*", part)}
+        code = innermost.sub("", code)
+    return found
+
+
 def referenced_contexts(directory: Path, names: dict[str, set[str]]) -> set[str]:
     """Every `Common.Contracts.<Context>.V<n>:` prefix a service's Messaging code names, or consumes a type of.
 
@@ -226,8 +237,7 @@ def referenced_contexts(directory: Path, names: dict[str, set[str]]) -> set[str]
     for path in sorted(directory.rglob("*.cs")):
         code = code_only(read(path), keep_strings=False)
         found |= {f"{match}:" for match in re.findall(r"\bCommon\.Contracts\.[A-Za-z0-9_]+\.V\d+\b", code)}
-        arguments = (part.strip() for listed in re.findall(r"<([^<>()]*)>", code) for part in listed.split(","))
-        for identifier in {part for part in arguments if re.fullmatch(r"[A-Za-z_]\w*", part)}:
+        for identifier in type_arguments(code):
             if len(owners.get(identifier, ())) == 1:
                 found |= owners[identifier]
     return found
