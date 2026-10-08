@@ -298,9 +298,10 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
                 "    internal new readonly ref struct Shadowed { }\n"
                 "}\n\n"
                 "[Serializable] public sealed record Tagged;\n"
+                "[JsonDerivedType(typeof(Tagged[]))] public sealed record Bracketed;\n"
                 "public sealed record After(string Value)\n{\n    public int Size { get; init; }\n}\n")
         self.assertEqual({"Outer", "Outer-Inner", "Outer-Middle", "Outer-Middle-Deepest", "Outer-Hidden",
-                          "Outer-Shadowed", "Tagged", "After"},
+                          "Outer-Shadowed", "Tagged", "Bracketed", "After"},
                          gate.type_names(text))
 
     def test_a_pattern_that_reads_no_type_is_refused(self):
