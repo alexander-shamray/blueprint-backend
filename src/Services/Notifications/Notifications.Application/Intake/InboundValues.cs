@@ -1,4 +1,3 @@
-using System.Globalization;
 using Common.Application;
 using Notifications.Application.Records;
 
@@ -18,23 +17,8 @@ public static class InboundValues
     public const int MaxCodeLength = OrderRecordLimits.MaxCodeLength;
 
     /// <summary>Bounded free text with no control, format, line-separator or broken character, or null.</summary>
-    public static string? Text(string? value, int maxLength)
-    {
-        if (string.IsNullOrWhiteSpace(value) || value.Length > maxLength)
-            return null;
-
-        for (int i = 0; i < value.Length; i++)
-        {
-            // Read per code point, so a pair is one character and a lone half reads as Surrogate.
-            if (IsInvisibleOrBroken(CharUnicodeInfo.GetUnicodeCategory(value, i)))
-                return null;
-
-            if (char.IsHighSurrogate(value[i]))
-                i++;
-        }
-
-        return value;
-    }
+    public static string? Text(string? value, int maxLength) =>
+        ThirdPartyText.Recordable(value, maxLength) ? value : null;
 
     /// <summary>A tracking number at Shipping's width, in an alphabet that links nowhere, or null (ADR-084).</summary>
     public static string? TrackingNumber(string? value) =>
@@ -58,10 +42,4 @@ public static class InboundValues
     /// <summary>An ISO 4217 code's shape: three capital ASCII letters, and no table of which exist (ADR-053).</summary>
     public static string? Currency(string? value) =>
         value is { Length: 3 } && value.All(char.IsAsciiLetterUpper) ? value : null;
-
-    // Format holds the bidirectional marks, overrides and isolates as well as the zero-width characters: each changes
-    // what a customer reads, or what they copy, without being seen.
-    private static bool IsInvisibleOrBroken(UnicodeCategory category) =>
-        category is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or
-            UnicodeCategory.ParagraphSeparator or UnicodeCategory.Surrogate;
 }

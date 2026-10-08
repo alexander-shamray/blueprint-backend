@@ -1,7 +1,7 @@
 using Shouldly;
 using Xunit;
 
-namespace Common.Infrastructure.Tests;
+namespace Common.Application.Tests;
 
 /// <summary>ADR-084's first rule: a string a third party supplies is recorded only when printable.</summary>
 public sealed class ThirdPartyTextTests
