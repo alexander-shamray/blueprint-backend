@@ -150,6 +150,9 @@ public sealed class ContactFaultTests : IAsyncLifetime
     {
         using NotificationsWorkerFactory dead = new(Unreachable.Sql, Unreachable.Rabbit);
 
+        // Started outside the asserted lambda, so a host that fails to start fails here rather than passing below.
+        _ = dead.Services;
+
         // A slow NXDOMAIN can meet the timeout first, so the kind of fault is not asserted, only that it is one.
         Exception thrown = await Should.ThrowAsync<Exception>(() => ReadAsync(dead));
 
