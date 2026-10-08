@@ -249,7 +249,8 @@ deploy loudly instead of passing a realm nobody saw the end of. **It stops as
 well on one provisioned too widely**: any `realm-management` role beyond
 `read_admin.py`'s `PERMITTED_ROLES`, the read roles, refuses the run, so
 `realm-admin` is refused although it composes `view-clients`, and "nothing
-else" above is checked rather than only provisioned.
+else" above is checked rather than only provisioned
+([ADR-076](backend-architecture/adr/ADR-076-the-realm-check-refuses-a-credential-wider-than-a-read.md)).
 
 **`view-realm` alone is not enough, and it reads as though it should be.** It
 is a *non-composite* role in Keycloak's own model — §14.1's export shows it
