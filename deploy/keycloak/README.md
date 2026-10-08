@@ -135,13 +135,14 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   see, so a filtered list and a complete one look the same and no ceiling or
   page boundary can tell them apart. What is checked instead is the premise:
   `read_admin.py` reads the roles out of its own token and stops before asking
-  unless the account holds `view-clients` or `realm-admin`. The
+  unless the account holds `view-clients`, and on any role beyond the read
+  roles `PERMITTED_ROLES` names, so `realm-admin` is refused as too wide. The
   token is decoded and **not verified**, which is safe because nothing is
   authorised on it — the server issued it and the server enforces the roles;
   it is read to find out whether this account could see the whole realm.
-  **`view-realm` is not accepted** and reads as though it should be: Keycloak
-  defines it as a non-composite role granting nothing else, so it carries no
-  client visibility. The suite asserts that against §14.1's export rather than
+  **`view-realm` alone is not enough** and reads as though it should be:
+  Keycloak defines it as a non-composite role granting nothing else, so it
+  carries no client visibility. The suite asserts that against §14.1's export rather than
   restating it here.
 - **A realm edited since the last scheduled run.** Between rollouts the realm
   is read on `realm.yml`'s schedule, so what bounds the window a drift is live
