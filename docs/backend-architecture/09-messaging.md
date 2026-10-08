@@ -2302,8 +2302,7 @@ decline and timeout branches keep their literals because those transitions
 > answer.** §11.4's endpoint takes `customer_request` alone
 > ([ADR-087](adr/ADR-087-a-caller-cancels-an-order-only-as-a-customer-request.md)),
 > but an event recorded before that rule can pair a caller with a workflow
-> code, and a payload with no origin can still arrive from an error queue. The
-> reason is what somebody asserted.
+> code. The reason is what somebody asserted.
 > `OrderCancelled.Origin` is a `CancelOrigins` code written as a literal from
 > `CommandOrigin` at the handler — never bound from a request, which is what
 > keeps it from being a value a caller can claim — and §9.2 makes a new

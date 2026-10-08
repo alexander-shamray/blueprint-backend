@@ -1384,9 +1384,10 @@ order is on its way.
 wrong. `Order.Cancel` records the origin and never checks it, and although the
 cancel endpoint now takes `customer_request` alone
 ([ADR-087](adr/ADR-087-a-caller-cancels-an-order-only-as-a-customer-request.md)),
-an order a buyer cancelled with a workflow code before that rule keeps the
-code — and a `Reason`-only map answers a buyer who cancelled with
-`payment_declined` by telling them their card was refused.
+an `OrderCancelled` recorded before that rule can pair a user origin with a
+workflow code, and an error queue or a replay can still deliver one — and a
+`Reason`-only map answers a buyer who cancelled with `payment_declined` by
+telling them their card was refused.
 
 | `Origin` | `Reason` | Status |
 |---|---|---|
