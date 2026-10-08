@@ -251,8 +251,8 @@ well on one provisioned too widely**: any `realm-management` role beyond
 `realm-admin` is refused although it composes `view-clients`, and "nothing
 else" above is checked rather than only provisioned.
 
-**`view-realm` is not one of them, and it reads as though it should be.** It is
-a *non-composite* role in Keycloak's own model — §14.1's export shows it
+**`view-realm` alone is not enough, and it reads as though it should be.** It
+is a *non-composite* role in Keycloak's own model — §14.1's export shows it
 granting nothing else, where `view-clients` composes `query-clients` and
 `realm-admin` composes both — so an account holding it has no client visibility
 at all. Provisioning this credential with `view-realm` and expecting it to work
