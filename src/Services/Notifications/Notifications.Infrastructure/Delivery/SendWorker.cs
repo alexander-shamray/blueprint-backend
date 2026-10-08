@@ -224,7 +224,9 @@ public sealed class SendWorker(
 
             try
             {
-                await claims.BackOffAsync(work.NotificationId, work.LockedUntil, ct);
+                // False when another pass took the row once this one's lease lapsed: the line above is then not true.
+                if (!await claims.BackOffAsync(work.NotificationId, work.LockedUntil, ct))
+                    Outgrown(log, work.NotificationId, work.OrderId, null);
             }
             catch (Exception backOff) when (!ct.IsCancellationRequested)
             {
@@ -267,7 +269,9 @@ public sealed class SendWorker(
         // §9.4 orders nothing between the events: the row waits on its backoff for Ordering's record (ADR-017).
         if (SendRules.AwaitsOrderRecord(work.TemplateKey, order))
         {
-            await claims.BackOffAsync(work.NotificationId, work.LockedUntil, ct);
+            if (!await claims.BackOffAsync(work.NotificationId, work.LockedUntil, ct))
+                Outgrown(log, work.NotificationId, work.OrderId, null);
+
             return false;
         }
 
