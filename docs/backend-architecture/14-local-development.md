@@ -193,6 +193,9 @@ services:
     build:
       context: ../../..
       dockerfile: src/Services/Ordering/Ordering.Migrator/Dockerfile
+    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
+    read_only: true
+    tmpfs: [ /tmp ]
     environment:
       # Migrator identity (DDL) — §7.1. Locally both keys resolve to the one
       # sa login (§14.2's stated simplification); in production they are
@@ -210,6 +213,9 @@ services:
     build:
       context: ../../..
       dockerfile: src/Services/Ordering/Ordering.Api/Dockerfile
+    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
+    read_only: true
+    tmpfs: [ /tmp ]
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       # Runtime identity (DML only) — never the migrator connection.
@@ -269,6 +275,9 @@ services:
     build:
       context: ../../..
       dockerfile: src/Gateway/Gateway.Api/Dockerfile
+    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
+    read_only: true
+    tmpfs: [ /tmp ]
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       # The authority, because the gateway validates JWTs like every other host
@@ -303,6 +312,9 @@ services:
     build:
       context: ../../..
       dockerfile: src/BFF/Web.Bff.Migrator/Dockerfile
+    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
+    read_only: true
+    tmpfs: [ /tmp ]
     environment:
       ConnectionStrings__BffMigrator: "${BFF_MIGRATOR_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
     depends_on:
@@ -318,6 +330,9 @@ services:
     build:
       context: ../../..
       dockerfile: src/BFF/Web.Bff/Dockerfile
+    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
+    read_only: true
+    tmpfs: [ /tmp ]
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Bff: "${BFF_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
