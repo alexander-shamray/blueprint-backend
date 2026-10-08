@@ -420,6 +420,12 @@ class ConfigureAndReadAreBoundedToo(unittest.TestCase):
         self.assertEqual({"PaymentDeclined", "List", "int", "TState"},
                          gate.type_arguments("Consume<PaymentDeclined, List<int>>(); Saga<TState> s; if (a < b) { }"))
 
+    def test_a_comparison_does_not_pair_with_a_later_generic_s_close(self):
+        # Once `Event<Started>` is removed, nothing may join the `<` before it to the `>` after it.
+        code = ("bool Late => Attempts < Max;\nEvent<Started> S { get; private set; }\n"
+                "enum Reason { Late, PaymentDeclined, Other }\nbool Due => D > 0;\n")
+        self.assertEqual({"Started"}, gate.type_arguments(code))
+
     def test_a_name_outside_a_type_argument_is_not_a_consumer(self):
         # Saga state carrying a flag spelt like an event is not a subscription to that event's context.
         with tempfile.TemporaryDirectory() as directory:
