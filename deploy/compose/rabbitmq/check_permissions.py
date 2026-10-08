@@ -117,7 +117,8 @@ VHOST = "/"
 
 NAMESPACE = re.compile(r"^namespace\s+([A-Za-z0-9_.]+);", re.M)
 TYPE_DECLARATION = re.compile(
-    r"^\s*(?:(?:public|internal|sealed|static|partial|abstract|readonly|file)\s+)*"
+    r"^\s*(?:\[[^\]\n]*\]\s*)*"
+    r"(?:(?:public|internal|private|protected|sealed|static|partial|abstract|readonly|file|new|unsafe|ref)\s+)*"
     r"(?:record\s+(?:struct|class)|record|class|interface|struct|enum)\s+([A-Za-z_]\w*)", re.M)
 
 failures: list[str] = []
