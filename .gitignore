@@ -7,15 +7,14 @@
 # Claude Code — shared config is committed, per-developer overrides are not.
 .claude/settings.local.json
 
-# Index SQLite is machine-local. The skill is shared. The two root files
-# below stay ignored so a local init cannot sneak them into this PR:
-# locality-gate judges the base `classes.yml`, which cannot see those
-# paths yet. A follow-up after the map is on main drops these two lines
-# and adds the files.
+# Index SQLite is machine-local. The skill is shared, and so is
+# .codeindexignore, so a /branch worktree indexes what the main checkout does.
+# .mcp.json stays ignored: a tracked one could define servers a branch gets
+# approved without a prompt (docs/harness-boundaries.md, *Index refresh and
+# worktree seeding*).
 .claude/cache/codebase-index/
 .claude/skills/codebase-index/.skill_version
 .mcp.json
-.codeindexignore
 
 # /branch's worktrees. They sit inside the checkout because EnterWorktree
 # moves a session there without a confirmation; ignored here so git status,
