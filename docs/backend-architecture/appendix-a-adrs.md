@@ -85,6 +85,7 @@ decision looks wrong.
 | **ADR-076** | [The realm check refuses a credential wider than a read](adr/ADR-076-the-realm-check-refuses-a-credential-wider-than-a-read.md) |
 | **ADR-077** | [A worker's token is capped by its client's scope, and the realm gate reads the cap](adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md) |
 | **ADR-078** | [The realm check requires view-realm](adr/ADR-078-the-realm-check-requires-view-realm.md) |
+| **ADR-079** | [Outside Development, an infrastructure connection is encrypted unless the deployer names it plaintext](adr/ADR-079-outside-development-an-infrastructure-connection-is-encrypted-unless-the-deployer-names-it-plaintext.md) |
 | **ADR-080** | [A NetworkPolicy peer is refused wider than a /8, or with selectors that name nothing](adr/ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-or-with-selectors-that-name-nothing.md) |
 | **ADR-081** | [A workload image may be pinned by digest, and the rollout pins it once a registry exists](adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md) |
 | **ADR-082** | [Every pod meets Pod Security "restricted", with a read-only root filesystem](adr/ADR-082-every-pod-meets-pod-security-restricted-with-a-read-only-root-filesystem.md) |
