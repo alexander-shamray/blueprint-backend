@@ -1339,11 +1339,11 @@ presented.ShouldBe(["Bearer token-1", "Bearer token-2"]);
 > read `token-1`.
 >
 > **The fault has to be a transport one**, and that is not a detail of the
-> stub. A gRPC outcome travels as `grpc-status` on an HTTP **200**, so the
-> resilience pipeline reads it as success and retries nothing — a stubbed
-> `Unavailable` produces one attempt and measures neither ordering. Only an
-> aborted connection reaches the retry. §9.7's callout carries the same point
-> from the other side.
+> stub. A status the service raises travels as `grpc-status` on an HTTP
+> **200**, so the resilience pipeline reads it as success and retries
+> nothing — a stubbed `Unavailable` produces one attempt and measures neither
+> ordering. Only an aborted connection reaches the retry. §9.7's callout
+> carries the same point from the other side.
 
 The realm is the third, and only a suite that holds it starts a real Keycloak
 (§11.5). Everything else points at an unreachable authority on
