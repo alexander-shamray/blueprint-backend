@@ -1400,7 +1400,7 @@ defines the seams and the rules that apply *if* the extension is enabled.
 | Extension | Seam | Baseline rule |
 |---|---|---|
 | **Multi-tenancy** | `TenantId` on the integration event metadata envelope; a logging enrichment hook; an ambient `ITenantContext` resolved from token claims | No tenant is required. **If** tenancy is enabled, `TenantId` must appear in every Redis key — `{service}:cache:{tenant}:...`, after the keyspace segment rather than before it, so [§8.1](08-caching-redis.md)'s eviction split still reads off position two (§8.3) — plus every query predicate and every log scope |
-| **Personal data erasure** | `PersonalDataDeleteRequestedV1` in `Common.Contracts` | Not published in the baseline. The consumer shape is defined below so services are built ready for it |
+| **Personal data erasure** | `PersonalDataDeleteRequested` in `Common.Contracts.Privacy.V1` | Defined, and published by no host in the baseline. The consumer shape is defined below so services are built ready for it |
 | **PCI / HIPAA / SOC 2** | — | Decide before handling regulated data, not after. Record the constraints as an ADR |
 
 > **Decision — a jurisdiction is a value the deployment is given.** See
@@ -1426,19 +1426,32 @@ sequenceDiagram
     participant O as Ordering
     participant N as Notifications
     participant S as Shipping
+    participant Y as Payments
+    participant F as BFF
 
-    P->>B: PersonalDataDeleteRequestedV1 {SubjectId, RequestId}
+    P->>B: PersonalDataDeleteRequested {SubjectId, RequestId}
     B->>O: consume (inbox)
     B->>N: consume (inbox)
     B->>S: consume (inbox)
+    B->>Y: consume (inbox)
+    B->>F: consume (inbox)
     O->>O: anonymise Orders.CustomerId, purge address
     N->>N: anonymise NotificationLog rows
     S->>S: delete DeliveryAddresses rows (ADR-052)
-    O->>B: PersonalDataDeleteCompletedV1 {RequestId, "ordering"}
-    N->>B: PersonalDataDeleteCompletedV1 {RequestId, "notifications"}
-    S->>B: PersonalDataDeleteCompletedV1 {RequestId, "shipping"}
+    Y->>Y: anonymise PaymentOrders.CustomerId
+    F->>F: delete the subject's bff.Orders rows
+    O->>B: PersonalDataDeleteCompleted {RequestId, "ordering"}
+    N->>B: PersonalDataDeleteCompleted {RequestId, "notifications"}
+    S->>B: PersonalDataDeleteCompleted {RequestId, "shipping"}
+    Y->>B: PersonalDataDeleteCompleted {RequestId, "payments"}
+    F->>B: PersonalDataDeleteCompleted {RequestId, "bff"}
     P->>P: all services reported → close request
 ```
+
+> **Both messages are in `Common.Contracts.Privacy.V1`, which is where the
+> version lives** ([§9.2](09-messaging.md)); the names above carry none.
+> `PersonalDataDeleteCompleted` has five publishers and sits with Privacy,
+> which consumes it.
 
 Rules for each service's consumer:
 
@@ -1476,6 +1489,12 @@ reaches it, and the ids it holds leave it when
 > designed to close the request. A service missing from the responder list is
 > the failure mode to design against, because it fails as *silence*, and
 > silence is the one outcome choreography cannot distinguish from success.
+>
+> **Decision — Privacy is a seventh service, and its responder set is fixed
+> when a request is raised.** See
+> [ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md).
+> The request carries the subject's id and no other fact about the subject,
+> so the identifiers-only rule below holds for it as for every other event.
 
 The one thing that must be designed for from the start: **integration events
 carry identifiers, not personal data**. An `OrderConfirmed` carrying a customer's
