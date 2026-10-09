@@ -155,6 +155,9 @@ public sealed class ServiceFixture()
     /// <summary>Fails the host's next commit that marks a notice sent, once; disposing the fault disarms it.</summary>
     public CommitFault FailNextSentCommit() => Factory.CommitFaults.Arm();
 
+    /// <summary>Commits the host's next sent mark, then fails its acknowledgement, so the unit runs again.</summary>
+    public CommitFault LoseNextSentAcknowledgement() => Factory.CommitFaults.Arm(afterCommit: true);
+
     /// <summary>A second host over the same database, broker and stubs, with a breaker of its own.</summary>
     public NotificationsWorkerFactory NewWorkerHost(string? relayHost = null, int? relayPort = null) =>
         new(

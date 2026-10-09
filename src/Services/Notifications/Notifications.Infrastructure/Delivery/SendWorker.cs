@@ -426,8 +426,13 @@ public sealed class SendWorker(
     {
         try
         {
-            // Never cancelled: the relay holds the message, and an abandoned commit would send it twice.
-            return await CommitAsync(sp, work, (n, now) => n.MarkSent(now), CancellationToken.None);
+            // Never cancelled: the relay holds the message, and an abandoned commit would send it twice. A row already
+            // Sent is a retry after a lost acknowledgement (§6.3): the first attempt committed, so it is done.
+            return await CommitAsync(
+                sp,
+                work,
+                (n, now) => n.MarkSent(now) || n.Status == NotificationStatus.Sent,
+                CancellationToken.None);
         }
         catch (Exception ex)
         {
