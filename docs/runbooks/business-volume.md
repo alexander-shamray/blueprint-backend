@@ -96,12 +96,11 @@ migrates nothing and stages the catalogue on the Broker lane, so it is safe to
 run against a live Catalog, and Ordering's guards make a row it already holds a
 no-op. **It takes the runtime connection string, not the migrator's**: the
 migrator login has no read role, and the run needs no DDL. Locally, from
-`deploy/compose`, with the string `catalog-api` uses:
+`deploy/compose`, export `ConnectionStrings__Catalog` as `catalog-api`'s block in
+`services/catalog.yml` sets it, then pass it through:
 
 ```bash
-docker compose run --rm -e Republish__Enabled=true \
-    -e 'ConnectionStrings__Catalog=Server=sql;Database=Catalog;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True' \
-    catalog-migrator
+docker compose run --rm -e Republish__Enabled=true -e ConnectionStrings__Catalog catalog-migrator
 ```
 
 In a cluster nothing runs it for you: the pre-upgrade hook stays a migration.
