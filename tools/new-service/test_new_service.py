@@ -1113,8 +1113,8 @@ class EditsTheSharedFiles(unittest.TestCase):
 class RendersOnEitherCheckout(unittest.TestCase):
     """The template's line endings depend on the platform, and the script must not.
 
-    `.gitattributes` forces CRLF on `*.cs` alone; everything else follows the
-    checkout. These tests render both line endings from one tree.
+    `.gitattributes` forces CRLF on `*.cs`; the `.csproj`, `.slnx`, Markdown
+    and top-level Compose files follow the checkout. These tests render both.
     """
 
     @staticmethod
