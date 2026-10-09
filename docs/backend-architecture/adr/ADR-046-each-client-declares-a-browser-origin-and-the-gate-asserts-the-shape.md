@@ -119,6 +119,10 @@ will be handed.
   this record for it; the literal origins live in the Compose export and are
   restated nowhere.
 
+**Amended by [ADR-089](ADR-089-the-browser-origin-obligation-binds-the-clients-that-exchange-a-code-from-a-page.md)**,
+which binds the origin obligation to `web-app` and `mobile-app`, the clients
+that exchange a code from a page, and not to every client the gate names.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
