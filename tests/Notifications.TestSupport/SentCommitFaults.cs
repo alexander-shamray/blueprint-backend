@@ -1,5 +1,5 @@
-using Microsoft.EntityFrameworkCore;
 using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Notifications.Application.Records;
 
