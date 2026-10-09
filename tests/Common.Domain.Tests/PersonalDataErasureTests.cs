@@ -75,9 +75,28 @@ public class PersonalDataErasureTests
 
         erasure.Repeat(0, Now.AddHours(1));
 
-        erasure.Count.ShouldBe(0);
         erasure.ErasedAt.ShouldBe(Now.AddHours(1));
         erasure.DomainEvents.ShouldHaveSingleItem()
             .ShouldBe(new PersonalDataErasedDomainEvent(Request, 0, Now.AddHours(1)));
+    }
+
+    [Fact]
+    public void A_repeat_that_finds_nothing_keeps_what_the_first_pass_removed()
+    {
+        PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 3, Now);
+
+        erasure.Repeat(0, Now.AddHours(1));
+
+        erasure.Count.ShouldBe(3);
+    }
+
+    [Fact]
+    public void A_repeat_that_finds_more_raises_the_count()
+    {
+        PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 3, Now);
+
+        erasure.Repeat(5, Now.AddHours(1));
+
+        erasure.Count.ShouldBe(5);
     }
 }

@@ -39,13 +39,14 @@ public sealed class PersonalDataErasure : AggregateRoot<Guid>
         return erasure;
     }
 
-    /// <summary>A reissued request erases again; the row keeps the latest count, and the holder reports again.</summary>
+    /// <summary>A reissue erases again; the row keeps the most it ever removed, and the holder reports again.</summary>
     public void Repeat(int count, DateTimeOffset now)
     {
         if (count < 0)
             throw new DomainException("An erasure cannot have removed a negative number of records.");
 
-        Count = count;
+        // A reissue that finds nothing left must not overwrite the record of what the first pass removed.
+        Count = Math.Max(Count, count);
         ErasedAt = now;
         Raise(new PersonalDataErasedDomainEvent(Id, count, now));
     }
