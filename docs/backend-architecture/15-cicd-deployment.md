@@ -20,21 +20,20 @@ graph LR
     APP --> PRD[Deploy: production<br/>canary]
 ```
 
-**Scanning runs before the fork, not after the build.** It sat downstream of
-the image build, which put `deploy/**` — the directory most likely to receive a
+**Scanning runs before the fork, not after the build.** Downstream of the
+image build, it would put `deploy/**` — the directory most likely to receive a
 pasted credential — on the only path that skipped it. Neither half needs a
 build to run: the secret scan reads the working tree, and the licence gate
 reads `Directory.Packages.props` and every `.csproj`, `.props` and `.targets`
 against [Appendix B](appendix-b-licences.md) as text. Cheapest and least
 dependent goes first.
 
-**That reach is also why this seat is not an argument for central pinning**,
-which is what this paragraph used to claim. The project files joined the
-gate's subject precisely because central pinning is a convention a project can
-opt out of ([§4.4](04-solution-structure.md), #50) — so citing the read as
-evidence for the convention inverts it. The gate is early because everything
-it reads is text, and it would still be early if central pinning were
-abandoned tomorrow.
+**That reach is also why this seat is not an argument for central pinning.**
+The project files are in the gate's subject precisely because central pinning
+is a convention a project can opt out of ([§4.4](04-solution-structure.md)) —
+so citing the read as evidence for the convention inverts it. The gate is
+early because everything it reads is text, and it would be just as early if
+central pinning were abandoned tomorrow.
 
 **The scan reads the tree and not the diff**, and the difference is one this
 node's own position argues for. A diff scan is cheaper and answers a narrower
@@ -45,107 +44,94 @@ downstream of it and visible to this one on the next pull request that touches
 anything.
 
 > **The diagram is the target pipeline, and this repository runs the left half
-> of it.** Everything up to and including the image build is live: the fork,
-> the build, the three test stages and one `docker build` per changed service
-> — two, where the service has a migrator (§15.2) — since PR-25, and both
-> halves of the first node since #61 closed the secret scan. **That sentence
-> named the scan among the live stages while no scanner existed** (#119): the
-> word was doing the work of *the licence gate*, in the one callout written
-> specifically to stop a reader inferring capability from a green pipeline.
-> It is true now, which is a worse reason to leave it unexamined than a
-> better one.
-> **Each image gets an SBOM and no signature**
+> of it.** Everything up to and including the image build is live: both
+> halves of the first node, the fork, the build, the three test stages and one
+> `docker build` per changed service — two, where the service has a migrator
+> (§15.2). **Each image gets an SBOM and no signature**
 > ([ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md)):
 > signing waits on a registry this repository does not have, so what runs is
-> the half that can run rather than a step that would have to be faked. Nor is any `Deploy:` node: there is no
-> dev, staging or production environment, which is why §15.5's canary is
-> `workflow_dispatch` only and why the k6 SLO run has a target that does not
-> exist yet. Naming the split here is cheaper than letting a reader infer from
-> a green pipeline that a deploy happened.
+> the half that can run rather than a step that would have to be faked. No
+> `Deploy:` node is live: there is no dev, staging or production environment,
+> which is why §15.5's canary is `workflow_dispatch` only and why the k6 SLO
+> run has a target that does not exist yet. Naming the split here is cheaper
+> than letting a reader infer from a green pipeline that a deploy happened.
 
 Only services whose files changed are built and deployed. Path filters are what
-make a monorepo practical at this size:
+make a monorepo practical at this size. They are the `changes` job's, in
+`.github/workflows/ci.yml`, which holds every service's entry; Ordering's
+stands for the others here, each of which repeats its three lines, and
+Shipping adds the fourth argued below:
 
 ```yaml
 - name: Detect changed services
   id: changes
-  # A third-party action is pinned to a commit, never a tag: `pipeline-gate
-  # actions` refuses a tag, which can be moved to other code.
-  uses: dorny/paths-filter@<commit-sha> # vX.Y.Z
   with:
     # Without this, negated patterns are silently ignored: the default
     # quantifier ('some') never evaluates the exclusion below.
     predicate-quantifier: 'some-with-excludes'
     filters: |
       # Inputs shared by every service, including the three repo-root files.
-      # A version bump in Directory.Packages.props changes every binary the
-      # pipeline produces (§4.4) and matches no service path — without these
-      # lines, the one change the pin file exists to control is the one change
-      # CI never rebuilds or retests.
       shared: &shared
         - 'Directory.Build.props'
         - 'Directory.Packages.props'
         - 'global.json'
-        # An input to every `docker build .` and to nothing the solution build
-        # can check: excluding a copied project here is a broken image, and
-        # un-excluding a local secret is one with credentials in it. Neither is
-        # visible to `dotnet build`.
         - '.dockerignore'
-        # Copied into the publish stage by every application Dockerfile, and
-        # ADR-019 makes it a build input rather than an editor hint.
         - '.editorconfig'
         - 'src/BuildingBlocks/**'
-        # The contract suite (§12.6) guards compatibility BETWEEN services, so
-        # it belongs to all of them. Owned by none, it would run for none.
         - 'tests/Platform.*/**'
       ordering:
         - *shared
         - 'src/Services/Ordering/**'
         - 'tests/Ordering.*/**'
-      catalog:
-        - *shared
-        - 'src/Services/Catalog/**'
-        - 'tests/Catalog.*/**'
-      # inventory, payments, shipping and notifications repeat those three
-      # lines. Every service has an entry — the list is exhaustive by
-      # construction, which is the whole point of the check below, so an
-      # elision here is a formatting choice and never a missing filter.
-      # The gateway is a deployable like any other — its own image (§15.2),
-      # its own chart (§15.3), its own Program.cs and route file. Left out of
-      # this list, a change to that route file is never rebuilt — and the route
-      # file is the one place in the platform where a policy name is resolved
-      # at startup rather than at a call site (§10.2), so a bad one is a host
-      # that refuses to boot on the first deploy that does build it.
+      # The gateway is a deployable like any other — its own image
+      # (§15.2), its own chart (§15.3), its own Program.cs and route
+      # file. Left out of this list, a change to that route file is never
+      # rebuilt — and the route file is the one place in the platform
+      # where a policy name is resolved at startup rather than at a call
+      # site (§10.2), so a bad one is a host that refuses to boot on the
+      # first deploy that does build it.
       gateway:
         - *shared
         - 'src/Gateway/**'
-      # The BFF is a deployable too, with its own image, chart and the
-      # platform's only client secret.
-      #
-      # AND CATALOG'S PROTO — the one entry here that reaches into another
-      # service's tree. Web.Bff compiles `pricing.proto` as a LINKED source
-      # file (§9.7) and its Dockerfile copies that path, so a proto-only
-      # change alters what the BFF ships while matching only `catalog`. That
-      # is the rule below applied to the one host that compiles another
-      # service's file, and it is easy to omit precisely because the filter
-      # otherwise reads as "this service's own tree".
       bff:
         - *shared
         - 'src/BFF/**'
         - 'src/Services/Catalog/Catalog.Api/Protos/**'
-      # A chart or values change produces no new image and must still reach
-      # the cluster. See below — this path needs a tag it did not build.
-      #
-      # deploy/compose/** is excluded because it reaches NO cluster, and that
-      # is the whole of the reason. It used to read "and its own workflow
-      # exercises it", which stopped discriminating the moment PR-23 gave
-      # deploy/helm/** a workflow of its own and did NOT exclude it: a chart
-      # change has to roll, so it belongs here as well as there. Having a
-      # dedicated workflow was never the test.
+      # A chart or values change produces no new image and must still
+      # reach the cluster (§15.1's "a config-only deploy needs a tag it
+      # did not build"). deploy/compose/** is excluded because it reaches
+      # no cluster; deploy/helm/** has a workflow of its own and is not
+      # excluded, because a chart change has to roll.
       deploy:
         - 'deploy/**'
         - '!deploy/compose/**'
 ```
+
+The step's action, `dorny/paths-filter`, is a third party's, so it is pinned to
+a commit and never a tag: a tag can be moved to other code, and
+`pipeline-gate actions` refuses one.
+
+**Every input shared by every service is in `shared`.** The three repo-root
+files are there because a version bump in `Directory.Packages.props` changes
+every binary the pipeline produces (§4.4) and matches no service path —
+without them, the one change the pin file exists to control is the one change
+CI never rebuilds or retests. `.dockerignore` is an input to every
+`docker build .` and to nothing the solution build can check: excluding a
+copied project there is a broken image, and un-excluding a local secret is one
+with credentials in it. `.editorconfig` is copied into the publish stage by
+every application Dockerfile, and ADR-019 makes it a build input rather than
+an editor hint. The contract suite (§12.6) guards compatibility between
+services, so it belongs to all of them; owned by none, it would run for none.
+
+**Two filters reach into another service's tree, and each names a file its
+deployable compiles.** Web.Bff compiles Catalog's `pricing.proto` as a linked
+source file (§9.7) and its Dockerfile copies that path, so a proto-only change
+alters what the BFF ships while matching only `catalog`; Shipping's images
+copy Ordering's `Protos/` on the same terms, and its filter names that path
+too. That is the filter rule stated below — a file that can change what a
+service ships belongs in its filter — applied to the hosts that compile
+another service's file, and it is easy to omit precisely because a
+filter otherwise reads as "this service's own tree".
 
 **A filter list is a deployable inventory, and it drifts the way inventories
 do.** Every path under `src/` must be matched by **some** filter — the
@@ -163,11 +149,11 @@ The check is one line of CI and worth more than the convention it replaces:
 assert that every immediate child of `src/`, and every immediate child of
 `src/Services/`, appears in at least one filter — and fail on the one that does
 not. Both halves are needed, because the two failures look nothing alike. A
-missing top-level entry is what left `src/Gateway/**` and `src/BFF/**`
-unfiltered, both deployables that CI never rebuilt. A missing entry *under*
-`Services/` is quieter still: the parent directory is spoken for by its
-siblings' filters, so the inventory looks complete right up until that one
-service stops being deployed.
+missing top-level entry leaves a whole deployable such as `src/Gateway/**`
+unfiltered, and CI never rebuilds it. A missing entry *under* `Services/` is
+quieter still: the parent directory is spoken for by its siblings' filters, so
+the inventory looks complete right up until that one service stops being
+deployed.
 
 `tests/Ordering.*/**` covers `Ordering.TestSupport` as well as the three test
 projects, so a service's test helpers belong to that service and not to
@@ -176,50 +162,45 @@ putting them in `shared` would redeploy every service whenever anyone touched
 Catalog's test data builders.
 
 **There is no smoke stage after the dev deploy**, for the reason E2E is absent
-from [§12.1](12-test-strategy.md): a gate nobody has defined is a gate that gets configured to pass.
-The readiness probes ([§13.5](13-observability.md)) already gate the rollout — a pod that fails
-`/health/ready` never takes traffic — so a separate "smoke test" step would
-re-assert what Kubernetes has already enforced, or assert something nobody has
-written down. **That argument leant on a probe that could not fail, and no
-longer does**: an empty predicate set is a passing predicate set, so a host
-whose readiness checks were never wired up — or that lost them in a refactor —
-answered `/health/ready` with 200 while it could reach nothing, and this
-paragraph is what spent the reassurance. `MapCommonHealthEndpoints` now refuses
-to start such a host unless it declares that it owns no *readiness*
-dependency (§13.5),
-which is what makes the probe a gate rather than a formality. The first real
-gate after dev is the k6 SLO run against staging, which names its tool, its
-target and its assertions (§13.7): it is
-`deploy/observability/slo/slo.js` since PR-24, and it fails on an **absent**
-series as well as on a breached one — a target with no data is the same silence
-§13.6 spends a callout on, and reading it as "nothing wrong" would turn this
-stage into the gate configured to pass that the paragraph above rules out.
+from [§12.1](12-test-strategy.md): a gate nobody has defined is a gate that
+gets configured to pass. The readiness probes ([§13.5](13-observability.md))
+already gate the rollout — a pod that fails `/health/ready` never takes
+traffic — so a separate "smoke test" step would re-assert what Kubernetes has
+already enforced, or assert something nobody has written down. **That argument
+rests on a probe that can fail**: an empty predicate set is a passing
+predicate set, so a host whose readiness checks were never wired up — or that
+lost them in a refactor — would answer `/health/ready` with 200 while it could
+reach nothing. `MapCommonHealthEndpoints` refuses to start such a host unless
+it declares that it owns no *readiness* dependency (§13.5), which is what
+makes the probe a gate rather than a formality. The first real gate after dev
+is the k6 SLO run against staging, which names its tool, its target and its
+assertions (§13.7): it is `deploy/observability/slo/slo.js`, and it fails on
+an **absent** series as well as on a breached one — a target with no data is
+the same silence §13.6 spends a callout on, and reading it as "nothing wrong"
+would turn this stage into the gate configured to pass that this paragraph
+opens by ruling out.
 
 **Five** `deploy/**` artefacts are exercised by CI directly rather than
 deployed, one per subtree, each in its own path-filtered workflow. **None is the
 smoke stage ruled out above**: all five deploy nothing and assert only what a
 chapter already defines.
 
-> **A count in prose is a claim to reconcile, and this one has now been wrong
-> twice.** It read *three* until PR-25 added a fourth subtree, and *four* until
-> ADR-042 added a fifth — the failure `deploy/helm/smoke.sh` spent three
-> findings learning about its own inventory, arriving here a second time. It
-> stays a number rather than becoming a list because the paragraphs below are
-> the list — each names one subtree and what its gate asserts — so a sixth
-> subtree that reached this section without a paragraph would be visible here in
-> a way a missing row in a table is not.
+> **A count in prose is a claim to reconcile.** This one is a number rather
+> than a list because the paragraphs below are the list — each names one
+> subtree and what its gate asserts — so a sixth subtree that reached this
+> section without a paragraph would be visible here in a way a missing row in
+> a table is not.
 
 The first is the Compose file. A workflow path-filtered to the model, the
 observability files it mounts and itself (`.github/workflows/compose.yml`
 owns the list) runs `docker compose config -q`, then `up --wait` — which
 fails if any healthcheck never passes, or a container exits before the wait
 completes — then holds the local Grafana's loaded rules and dashboards to
-`deploy/observability/`, then `down -v` (PR-06 in
-[Appendix C](appendix-c-delivery-plan.md)). It is what makes
+`deploy/observability/`, then `down -v`. It is what makes
 [§14.2](14-local-development.md)'s "Compose runs in CI" true.
 
-The second is the Helm tree (PR-23). A workflow path-filtered to
-`deploy/helm/**` runs `deploy/helm/smoke.sh`, which resolves the charts'
+The second is the Helm tree. `.github/workflows/helm.yml`, path-filtered to
+`deploy/helm/**`, runs `deploy/helm/smoke.sh`, which resolves the charts'
 `file://` dependencies, lints each one, and then renders every one and asserts
 what comes out: three probes per workload, a memory limit and no CPU limit, the
 hook annotations of [§7.4](07-persistence.md), the ConfigMap/Secret split of
@@ -229,8 +210,9 @@ a grant of its own and on none of the others (§11.5,
 Rendering only — no cluster is reached, so schema validation against a live API
 server stays a deploy-time gate and is named in the script as not covered.
 
-The third is the observability tree (PR-24). A workflow path-filtered to
-`deploy/observability/**` runs `deploy/observability/check.py`, which pairs
+The third is the observability tree. `.github/workflows/observability.yml`,
+path-filtered to `deploy/observability/**`, runs
+`deploy/observability/check.py`, which pairs
 [§13.9](13-observability.md)'s runbooks with §13.6's alerts in **both**
 directions, asserts that every metric a loaded rule or a dashboard panel reads
 is one this platform actually publishes, asserts that every metric in the
@@ -238,19 +220,20 @@ is one this platform actually publishes, asserts that every metric in the
 self-clearing — and asserts that every service hosting §9.4's dispatcher either
 publishes the outbox gauges or carries a stated exemption, which is the one
 gap the metric-name checks structurally cannot see. Stdlib Python over text, so
-it needs no restore and runs on the licence gate's terms. It reaches no Prometheus and no Grafana, and it does not
-validate rule syntax: `promtool` would be the tool for that, and adding it is a
-decision no chapter has taken.
+it needs no restore and runs on the licence gate's terms. It reaches no
+Prometheus and no Grafana, and it does not validate rule syntax: `promtool`
+would be the tool for that, and adding it is a decision no chapter has taken.
 
-The fourth is the canary (PR-25). A workflow path-filtered to
-`deploy/canary/**` and to the inputs its plan reads, named below with the other
-filters, runs that tree's own suite and `canary.py check`, which
-asserts §15.5's ladder climbs and ends at 100, that the rollout's absolute
-thresholds are [§13.6](13-observability.md)'s alert thresholds **read out of
-the rules file rather than restated**, that each workload's `serviceName` is an
-entry assembly this solution actually builds — §13.2 takes `service.name` from
-`ApplicationName`, so a query spelled from the deployment's vocabulary matches
-no series — and that every metric its queries read is vouched for as
+The fourth is the canary tree. `.github/workflows/deploy.yml`'s `check` job,
+path-filtered to `deploy/canary/**` and to the inputs its plan reads, named
+below with the other filters, runs that tree's own suite and
+`canary.py check`, which asserts §15.5's ladder climbs and ends at 100, that
+the rollout's absolute thresholds are [§13.6](13-observability.md)'s alert
+thresholds **read out of the rules file rather than restated**, that each
+workload's `serviceName` is an entry assembly this solution actually builds —
+§13.2 takes `service.name` from `ApplicationName`, so a query spelled from the
+deployment's vocabulary matches no series — and that every metric its queries
+read is vouched for as
 [`deploy/canary/README.md`](../../deploy/canary/README.md) states: by a loaded
 alert the observability gate has proved published, or, for MassTransit's
 series, on
@@ -261,8 +244,9 @@ cannot be trusted with.
 
 The fifth is the Keycloak realm gate
 ([ADR-042](adr/ADR-042-the-deployed-realm-is-checked-at-deploy-time.md)).
-A workflow path-filtered to `deploy/keycloak/**` runs that tree's own suite,
-`realm_check.py inputs` and `realm_check.py check --kind local`, which asserts
+`.github/workflows/realm.yml`, path-filtered to `deploy/keycloak/**`, runs that
+tree's own suite, `realm_check.py inputs` and
+`realm_check.py check --kind local`, which asserts
 [§11](11-identity-authorization.md)'s token obligations against
 `deploy/compose/keycloak/realm-export.json`: `accessTokenLifespan` equal to the
 `AccessTokenLifetime` `Common.Web` declares — **read out of that declaration
@@ -331,10 +315,8 @@ over the plan's workloads to find every release it judges
 `smoke.sh`, `check.py`, `canary.py` and `realm_check.py` each declare
 `SOURCE_INPUTS` beside the reads, and each asserts that both of its workflow's
 triggers cover every entry — a copy of a list drifts exactly as a copy of a
-number does, which the Helm tree established at a cost of three findings and
-the observability tree adopted before paying it once. `realm_check.py` arrives
-carrying the reads direction as well as the trigger one, which is the shape the
-callout below argues for.
+number does. All four also assert the reads direction — every file the gate
+opens is in the list — which is the shape the second callout below argues for.
 
 > **A fifth copy of that pattern exists and is not one of the four above, which
 > is why ADR-042 calls `realm_check.py` the fifth.**
@@ -345,16 +327,14 @@ callout below argues for.
 > which is which here is cheaper than a reader reconciling them from two
 > documents.
 
-> **The canary tree paid for it anyway, and the shape of the failure is worth
-> more than the fix.** Its list shipped naming `src` and `deploy/helm` and
-> omitting `deploy/observability`, which two of its own checks open — so
-> retuning an alert threshold was a green pull request on the gate that exists
-> to keep the canary from being tuned looser than the alert it would then page
-> about. **The assertion stayed green throughout**, because a list can only be
-> compared against a workflow for the entries it already contains: a gate
-> cannot see a read it was never told about. What closes it is a test whose
-> subject is the reads rather than the list — the same shape as asserting a
-> parser found anything at all.
+> **A list checked against a workflow cannot see the read it omits.** The
+> trigger assertion compares the workflow with the entries `SOURCE_INPUTS`
+> already holds, so a gate cannot see a read it was never told about: a canary
+> list that left out `deploy/observability`, which two of its checks open,
+> would make retuning an alert threshold a green pull request on the gate that
+> exists to keep the canary from being tuned looser than the alert it would
+> then page about. What closes it is a test whose subject is the reads rather
+> than the list — the same shape as asserting a parser found anything at all.
 
 Each of the Helm filter's outside paths is an input `smoke.sh` actually reads:
 
@@ -379,10 +359,7 @@ Each of the Helm filter's outside paths is an input `smoke.sh` actually reads:
   renders a canary track, and the two halves of that agreement fail from
   either side rather than at deploy time.
 
-**This passage is an argument, not an inventory, and the difference is what
-finally stopped it drifting.** It said "two files", and was made wrong by the
-change that added a third; then it omitted the fourth; then the fifth. A copy
-of a list drifts exactly as a copy of a number does. The list now lives once —
+**This passage is an argument, not an inventory.** The list lives once —
 `SOURCE_INPUTS` in `smoke.sh`, beside the reads it describes — and the gate
 asserts that **both** of the workflow's triggers cover every entry, because a
 merged change that skips the gate on `main` is the same defect one branch
@@ -410,15 +387,12 @@ a version nobody chose in a job nobody thought was a release. Reading the
 running tag back out of the cluster is what that refusal obliges this job to
 do.
 
-**The release is named for the workload, not for the service**, and the two
-had drifted: this sample read `helm get values ordering` while
-`deploy/helm/README.md` installs `catalog-api` and `platform/values.yaml`
-argues its ownership case with `catalog-api`. PR-25's canary made the
-disagreement load-bearing rather than cosmetic — that rollout drives
-`helm get values`, `helm upgrade --install` **and**
+**The release is named for the workload, not for the service**, as
+`deploy/helm/README.md` names it when it installs `catalog-api`. The canary's
+rollout drives `helm get values`, `helm upgrade --install` **and**
 `kubectl scale deployment` from one string, and the last of those must be the
-Kubernetes object name (`workload.name`). A release called `ordering` would
-make `helm get values ordering-api` empty, and the canary would install
+Kubernetes object name (`workload.name`). A release called `ordering`
+would make `helm get values ordering-api` empty, and the canary would install
 against chart defaults: a pod pointing at the wrong authority and the wrong
 database, which is precisely the failure driving the canary from the stable
 release's values exists to prevent. So the release name *is* `workload.name`,
@@ -449,53 +423,32 @@ is exactly why the hook has to be idempotent rather than merely correct once.
 
 ## 15.2 Container images
 
+Each deployable's image is built from the Dockerfile beside its project, and
+`src/Services/Ordering/Ordering.Api/Dockerfile` is the one this section reads.
+Its build stage starts from the SDK tag naming the exact patch `global.json`
+pins (§4.4), so a bump there is a bump here, in the same change.
+
+**Project files are copied before the source, so the restore layer survives
+source-only changes** — a `COPY` of the whole trees before restore re-keys
+that layer on every `.cs` edit. `global.json` is first among them: with it
+copied in, a tag that has drifted off the pin is a restore error rather than a
+silently different set of analysers in the one build whose output ships.
+
+**Every project in the transitive closure gets a line, and a missing one fails
+four steps later.** `dotnet restore` writes each project's own
+`project.assets.json`; a `.csproj` absent when it runs is not restored, and
+the `--no-restore` publish then fails with `NETSDK1004` naming a project the
+Dockerfile never mentions. So a new `ProjectReference` anywhere in the chain is
+a line there too, and §15.1's `images` job is what says so — it builds every
+image a changed service ships, api and migrator alike, so a missing line fails
+on the pull request that added the reference. `.editorconfig` rides with the
+source rather than the restore inputs: it is a build input under ADR-019
+(`EnforceCodeStyleInBuild` reads it), and without it the publish would enforce
+a weaker style policy than every other build.
+
+The final stage is the runtime image:
+
 ```dockerfile
-# syntax=docker/dockerfile:1
-
-# The tag names the exact patch global.json pins (§4.4), so a bump there is a
-# bump here, in the same change.
-FROM mcr.microsoft.com/dotnet/sdk:10.0.302-noble AS build
-ARG BUILD_CONFIGURATION=Release
-WORKDIR /src
-
-# Project files first, so the restore layer really does survive source-only
-# changes — a COPY of the whole trees before restore re-keys its layer on
-# every .cs edit and the cache claim becomes fiction. global.json first among
-# equals: with it copied in, a tag that has drifted off the pin is a restore
-# error here rather than a silently different set of analysers in the one
-# build whose output ships.
-#
-# **Every project in the transitive closure gets a line, and a missing one
-# fails four steps later rather than here.** dotnet restore writes each
-# project's own project.assets.json; a csproj absent when it runs is
-# simply not restored, and the --no-restore publish below then fails with
-# NETSDK1004 naming a project this file never mentions. So a new
-# ProjectReference anywhere in the chain is a line here too, and §15.1's
-# `images` job is what says so — it builds every image a changed service
-# ships, api and migrator alike, so
-# a missing line fails on the pull request that added the reference rather
-# than on the next compose one.
-COPY global.json Directory.Build.props Directory.Packages.props ./
-COPY src/BuildingBlocks/Common.Domain/Common.Domain.csproj src/BuildingBlocks/Common.Domain/
-COPY src/BuildingBlocks/Common.Application/Common.Application.csproj src/BuildingBlocks/Common.Application/
-COPY src/BuildingBlocks/Common.Contracts/Common.Contracts.csproj src/BuildingBlocks/Common.Contracts/
-COPY src/BuildingBlocks/Common.Infrastructure/Common.Infrastructure.csproj src/BuildingBlocks/Common.Infrastructure/
-COPY src/BuildingBlocks/Common.Web/Common.Web.csproj src/BuildingBlocks/Common.Web/
-COPY src/Services/Ordering/Ordering.Domain/Ordering.Domain.csproj src/Services/Ordering/Ordering.Domain/
-COPY src/Services/Ordering/Ordering.Application/Ordering.Application.csproj src/Services/Ordering/Ordering.Application/
-COPY src/Services/Ordering/Ordering.Infrastructure/Ordering.Infrastructure.csproj src/Services/Ordering/Ordering.Infrastructure/
-COPY src/Services/Ordering/Ordering.Api/Ordering.Api.csproj src/Services/Ordering/Ordering.Api/
-RUN dotnet restore src/Services/Ordering/Ordering.Api/Ordering.Api.csproj
-
-# .editorconfig rides with the source, not the restore inputs: it is a build
-# input under ADR-019 (EnforceCodeStyleInBuild reads it), and without it this
-# publish would enforce a weaker style policy than every other build.
-COPY .editorconfig ./
-COPY src/BuildingBlocks/ src/BuildingBlocks/
-COPY src/Services/Ordering/ src/Services/Ordering/
-RUN dotnet publish src/Services/Ordering/Ordering.Api/Ordering.Api.csproj \
-    -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false
-
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS final
 WORKDIR /app
 COPY --from=build /app/publish .
@@ -554,38 +507,15 @@ deploy log: no hook ran, so no hook failed.
 > sets `--timeout 20m` on both documented commands, and **20m > 16m is the
 > constraint**; move either number and the other follows.
 
+The migrator's image is `src/Services/Ordering/Ordering.Migrator/Dockerfile`.
+It restores and publishes on the API image's terms, with no `Common.Web` line
+— the migrator's reference chain stops at Infrastructure — and differs in its
+final stage:
+
 ```dockerfile
-# src/Services/Ordering/Ordering.Migrator/Dockerfile
-
-# Pinned to the patch global.json names (§4.4), same as the API image.
-FROM mcr.microsoft.com/dotnet/sdk:10.0.302-noble AS build
-WORKDIR /src
-# Project files first, same as the API image and for the same reason: restore
-# in a layer that survives source-only changes, which is most changes. No
-# Common.Web — the migrator's reference chain stops at Infrastructure. Every
-# other project in that chain takes a line, for the reason the API image
-# states above.
-COPY global.json Directory.Build.props Directory.Packages.props ./
-COPY src/BuildingBlocks/Common.Domain/Common.Domain.csproj src/BuildingBlocks/Common.Domain/
-COPY src/BuildingBlocks/Common.Application/Common.Application.csproj src/BuildingBlocks/Common.Application/
-COPY src/BuildingBlocks/Common.Contracts/Common.Contracts.csproj src/BuildingBlocks/Common.Contracts/
-COPY src/BuildingBlocks/Common.Infrastructure/Common.Infrastructure.csproj src/BuildingBlocks/Common.Infrastructure/
-COPY src/Services/Ordering/Ordering.Domain/Ordering.Domain.csproj src/Services/Ordering/Ordering.Domain/
-COPY src/Services/Ordering/Ordering.Application/Ordering.Application.csproj src/Services/Ordering/Ordering.Application/
-COPY src/Services/Ordering/Ordering.Infrastructure/Ordering.Infrastructure.csproj src/Services/Ordering/Ordering.Infrastructure/
-COPY src/Services/Ordering/Ordering.Migrator/Ordering.Migrator.csproj src/Services/Ordering/Ordering.Migrator/
-RUN dotnet restore src/Services/Ordering/Ordering.Migrator/Ordering.Migrator.csproj
-
-# .editorconfig is a build input under ADR-019 — without it this publish
-# enforces a weaker style policy than every other build.
-COPY .editorconfig ./
-COPY src/BuildingBlocks/ src/BuildingBlocks/
-COPY src/Services/Ordering/ src/Services/Ordering/
-RUN dotnet publish src/Services/Ordering/Ordering.Migrator/Ordering.Migrator.csproj \
-    -c Release -o /app/publish --no-restore /p:UseAppHost=false
-
-# Runtime, not aspnet — the migrator has no listener. -extra for the same
-# reason as the API image: SqlClient needs ICU.
+# Runtime, not aspnet — the migrator has no listener. -extra, because plain
+# chiseled runs globalization-invariant and Microsoft.Data.SqlClient refuses
+# it; ICU and tzdata are the whole difference.
 FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled-extra AS final
 WORKDIR /app
 COPY --from=build /app/publish .
@@ -593,16 +523,27 @@ USER $APP_UID
 ENTRYPOINT ["dotnet", "Ordering.Migrator.dll"]
 ```
 
+§15.1's `images` job, in `.github/workflows/ci.yml`, builds both from one
+matrix and under one tag:
+
 ```yaml
-# Both images build from the same commit and share the tag Helm resolves.
-- name: Build and push
-  run: |
-    for target in api migrator; do
-      docker buildx build \
-        --file "src/Services/Ordering/Ordering.${target^}/Dockerfile" \
-        --tag "${REGISTRY}/ordering-${target}:${GIT_SHA}" \
-        --push .
-    done
+strategy:
+  matrix:
+    include:
+      - filter: ordering
+        image: ordering-api
+        dockerfile: src/Services/Ordering/Ordering.Api/Dockerfile
+      - filter: ordering
+        image: ordering-migrator
+        dockerfile: src/Services/Ordering/Ordering.Migrator/Dockerfile
+steps:
+  - name: Build ${{ matrix.image }}
+    if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+    run: >
+      docker build
+      --file ${{ matrix.dockerfile }}
+      --tag ${{ matrix.image }}:${{ github.sha }}
+      .
 ```
 
 Both images carry the **same tag**, which is what lets `values.yaml` hold one
@@ -722,20 +663,17 @@ its own copy of the probe block, and fixing a probe means finding all of them.
 What differs per deployable is its values file, and that is what the fences
 below show.
 
-**No count in that sentence, deliberately**, and the sentence it replaces had
-two that the tree falsified: "every other chart" included the umbrella, which
-takes no library dependency, and "five charts" counted a sixth directory that
-holds no templates at all. A number describing this tree is wrong on the PR
-that adds Inventory; the rule is not.
+**No count in that sentence, deliberately**: a number describing this tree is
+wrong on the change that adds a deployable chart, and the rule is not.
 
-**They are excerpts, and the comment at the top of each says so.** A fence
-labelled with a path and then disagreeing with the file at that path is the
+**The fences below are excerpts of the file the sentence before each names.**
+A fence that names a path and then disagrees with the file at that path is the
 drift the one rule exists to close — a later edit to either side has nothing to
-grep against. So each carries the keys the surrounding argument turns on and
-names what it leaves out; the files themselves are the one `values.yaml` per
-deployable chart, and `deploy/helm/smoke.sh` is what holds them to the claims
-made here. `platform/values.yaml` is the one file in that tree that is
-deliberately not one of them — it holds `{}`, and says at length why a value
+grep against. So each is the file's own lines, those the surrounding argument
+turns on, and the file holds the rest; the files themselves are the one
+`values.yaml` per deployable chart, and `deploy/helm/smoke.sh` is what holds
+them to the claims made here. `platform/values.yaml` is the one file in that
+tree that is deliberately not one of them — it holds `{}`, and says why a value
 there would silently win over the subchart that owns it.
 
 The cost is one command: `file://` dependencies resolve from disk, but they
@@ -756,40 +694,24 @@ must be resolved before `helm lint` or `helm template` will run. `charts/` and
 > identity** rather than release bookkeeping. These pods are found by the same
 > name their callers dial, and a Deployment never lets that field change
 > afterwards.
->
-> **That last clause replaces a dead one, and the replacement is the point.**
-> It read "a release-derived selector breaks on exactly the migration an
-> umbrella chart exists to perform" — which the ownership rule above falsifies,
-> since Helm rejects that adoption before the API server's immutable-selector
-> check is ever reached. The conclusion outlived its argument. Keeping a reason
-> a later paragraph has disproved is how a chapter starts contradicting itself
-> from the inside.
+
+Ordering's chart is `deploy/helm/ordering/values.yaml`:
 
 ```yaml
-# deploy/helm/ordering/values.yaml — an excerpt of what this section argues;
-# the file holds the rest.
 workload:
-  # The Service's name, and therefore the string its callers already spell.
   name: ordering-api
 
 replicaCount: 3
 
 image:
-  # Registry namespace only. Each workload appends its own name, so the chart
-  # can reference both the API and the migrator (§7.4) from one tag.
   registry: registry.example.com/commerce
   api: ordering-api
   migrator: ordering-migrator
-  # Supplied by CI, never "latest"; both images share it. Deliberately empty
-  # rather than a default: a deploy that cannot name its tag must fail, not
-  # roll something. A config-only deploy reads the running value back
-  # (§15.1) instead of falling through to this.
   tag: ""
-  pullPolicy: IfNotPresent
 
 resources:
   requests: { cpu: 100m, memory: 256Mi }
-  limits:   { memory: 512Mi }          # No CPU limit — see note below.
+  limits:   { memory: 512Mi }          # No CPU limit — §15.3.
 
 autoscaling:
   enabled: true
@@ -808,49 +730,52 @@ topologySpread:
     node: DoNotSchedule
     zone: ScheduleAnyway
 
-# Must exceed the host's own shutdown timeout — see the note below, where the
-# number is measured rather than chosen.
 terminationGracePeriodSeconds: 45
 
 probes:
-  # The container port every probe addresses. Named rather than numbered, and
-  # `http` rather than `grpc`: Catalog's second endpoint is HTTP/2-only and
-  # answers an HTTP/1.1 probe with a 400, which reads as a dead pod.
   probePort: http
   liveness:  { path: /health/live,  initialDelaySeconds: 10, periodSeconds: 10 }
   readiness: { path: /health/ready, initialDelaySeconds: 5,  periodSeconds: 5 }
   startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
 
+service:
+  # True: the gateway dials this workload by name. False is the worker case
+  # (§15.3): of the two routing keys, the one Shipping's chart sets
+  # differently.
+  enabled: true
+
+ingress:
+  # False, and written down rather than omitted (§15.3). Ordering is reached
+  # through the gateway (§10.2); an Ingress here would be a second door past
+  # the edge's rate limiting, CORS policy and forwarded-header handling.
+  enabled: false
+
 identity:
-  # The authority, to validate incoming JWTs (§11.2) — and nothing else.
-  # Identity:Client is what a host presents when it CALLS a peer (§11.5), and
-  # Ordering calls none: prices come from a local projection (§6.4) and the
-  # rest goes over the broker. The `false` below is what declares that — no
-  # Keycloak client, no secret in the vault and nothing to rotate — and it is
-  # written rather than left out, because a capability is a claim a chart
-  # makes rather than one to infer from a missing key.
   authority: https://id.example.com/realms/commerce
+  # False, and written down rather than absent: §15.4's
+  # required-for-some-hosts category is a claim a chart has to make, not one to
+  # infer from a missing key.
   clientCredentials: false
 
 database:
-  # The .NET configuration key, not the database name: Infrastructure calls
-  # GetConnectionString("Ordering") and the Migrator calls
-  # GetConnectionString("OrderingMigrator") — one key plus §7.1's suffix.
-  # Two identities, two Secrets: the runtime login has DML only, and the
-  # migrator login is mounted into the hook Job and nowhere else.
   enabled: true
+  # GetConnectionString("Ordering") at runtime, "OrderingMigrator" in the hook.
   connectionName: Ordering
-  runtimeSecretRef:  { name: ordering-database,        key: connection-string }
-  migratorSecretRef: { name: ordering-migrator-secret, key: connection-string }
+  runtimeSecretRef:
+    name: ordering-database
+    key: connection-string
+  migratorSecretRef:
+    name: ordering-migrator-secret
+    key: connection-string
 
 broker:
   enabled: true
-  secretRef: { name: ordering-rabbitmq, key: connection-string }
+  secretRef:
+    name: ordering-rabbitmq
+    key: connection-string
 
 redis:
   enabled: true
-  # This service's own Secret, never another's: each connection string carries
-  # the service's own ACL user (§8.1). Two keys, one per instance.
   secretRef:
     name: ordering-redis
     cacheKey: cache-connection-string
@@ -858,18 +783,31 @@ redis:
 
 observability:
   otlpEndpoint: http://otel-collector.observability:4317
-
-service:
-  # True: something dials this workload by name. False is the worker case
-  # below: of the two routing keys, the one Shipping's chart sets differently.
-  enabled: true
-
-ingress:
-  # False, and written down rather than omitted. Ordering is reached through
-  # the gateway (§10.2); an Ingress here would be a second door past the edge's
-  # rate limiting, CORS policy and forwarded-header handling.
-  enabled: false
 ```
+
+`image.registry` is the registry namespace only: each workload appends its
+own name, so the chart can reference both the API and the migrator (§7.4) from
+one tag. That tag is supplied by CI and never `latest`, and it is empty rather
+than defaulted, because a deploy that cannot name its tag must fail rather than
+roll something; a config-only deploy reads the running value back (§15.1).
+Every probe addresses the container port named `http`, and not the `grpc` one:
+the health endpoints are mapped on the REST surface, and an HTTP/2-only
+endpoint answers an HTTP/1.1 probe with a 400, which reads as a dead pod.
+`terminationGracePeriodSeconds` must exceed the host's own shutdown timeout,
+and the number is measured at the end of this section rather than chosen.
+
+`identity` holds the authority, to validate incoming JWTs (§11.2), and nothing
+else. `Identity:Client` is what a host presents when it *calls* a peer (§11.5),
+and Ordering calls none: prices come from a local projection (§6.4) and the
+rest goes over the broker. `clientCredentials: false` is what declares that —
+no Keycloak client, no secret in the vault and nothing to rotate.
+`database.connectionName` is the .NET configuration key and not the database
+name, and the migrator's key is that one plus §7.1's suffix. Two identities
+are two Secrets: the runtime login has DML only, and the migrator login is
+mounted into the hook Job and nowhere else. Each `redis` and `broker` Secret
+is this service's own, never another's, because each connection string
+carries the service's own account (§8.1,
+[ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md)).
 
 **The Kind column of §15.4 is the template, read down.** Everything it marks
 Config is rendered into a ConfigMap the pod mounts with `envFrom`; everything
@@ -907,7 +845,8 @@ and that is the safe direction.
 > credential is revoked. Closing it properly is a platform decision this
 > chapter has not taken — a reload controller watching the Secret, versioned
 > Secret names that change the pod spec, or projected-token-style remounting —
-> and it belongs with PR-24's secrets work rather than being chosen here by a
+> and it belongs with the operational secrets work
+> [`docs/secrets.md`](../secrets.md) owns rather than being chosen here by a
 > chart.
 
 **`replicas` is omitted from the Deployment whenever the HPA is enabled**,
@@ -938,11 +877,10 @@ upgrade had begun.
 
 **A key joins a chart when a host's code reads it, and not before.** That is
 §14.1's rule for Compose blocks — an environment variable nothing reads is the
-container form of an unused registration — and it is why no chart carried the
-two Redis connection strings for as long as nothing called
-`AddRedisConnections`.
+container form of an unused registration — and it is why a chart carries the
+two Redis connection strings only when its host calls `AddRedisConnections`.
 
-**The charts whose host calls it now do**, because §8.5's
+**The charts whose host calls it carry them**, because §8.5's
 `IdempotencyBehavior` claims a `{service}:idem:` key before any protected
 command runs, so each of those charts carries a `redis:` block on `broker`'s
 shape — one Secret, but two distinct keys where the broker needs one — and
@@ -956,8 +894,8 @@ deployable's source, named by its descriptor, for a call to
 `AddRedisConnections` and asserts that chart declares `redis` — in **both**
 directions, so a chart that stops calling it and keeps the block fails too.
 
-**Both keys are required together even though only the coordination one is read
-today**, and the reason is the code's rather than the chart's:
+**Both keys are required together even though only the coordination one is
+read**, and the reason is the code's rather than the chart's:
 `AddRedisConnections` is one call by design (§8.2) and reads both eagerly, so a
 chart supplying one renders cleanly and produces a pod that will not start.
 `deploy/helm/smoke.sh` asserts the two `secretKeyRef` keys **differ** as well as
@@ -984,24 +922,28 @@ listener is the health endpoint §13.5 requires — which is a reason to keep
 Kestrel bound and no reason at all to route to it. The probes address the pod
 directly, because kubelet reaches a container port without a Service in front
 of it, and telemetry is pushed to the collector rather than scraped (§13.2), so
-nothing else needs a stable name for these pods either:
+nothing else needs a stable name for these pods either.
+`deploy/helm/shipping/values.yaml` writes both routing keys down, and of the
+two only the first differs from Ordering's:
 
 ```yaml
-# deploy/helm/shipping/values.yaml — both written down, and of the two only
-# the first differs from Ordering's
 service:
+  # False, and the key §15.3's callout is about: a worker's safety comes from
+  # having no route, so the absence of a route is the thing to assert.
   enabled: false
+
 ingress:
+  # False, and refused with the Service off anyway (_ingress.tpl): an Ingress
+  # whose backend does not exist installs cleanly and answers 503.
   enabled: false
 ```
 
 **Of these two routing keys, a worker's chart differs from Ordering's in
-one**, which PR-23 settled by shipping the charts rather than by arguing. Only
-the gateway has `ingress.enabled: true`: Catalog, Ordering and the BFF are all
-reached *through* the edge (§10.1, §10.2), so an Ingress on any of them would
-publish a second door past the rate limiting, the CORS policy and the
-forwarded-header handling that live there. Against Ordering, a worker differs
-by `service.enabled` alone **among these two keys**, which is what this
+one.** Only the gateway has `ingress.enabled: true`: Catalog, Ordering and the
+BFF are all reached *through* the edge (§10.1, §10.2), so an Ingress on any of
+them would publish a second door past the rate limiting, the CORS policy and
+the forwarded-header handling that live there. Against Ordering, a worker
+differs by `service.enabled` alone **among these two keys**, which is what this
 paragraph is about; Shipping's chart differs in more than them, and the next
 paragraph says how.
 
@@ -1033,9 +975,8 @@ raises an HPA floor only where there is one.
 > `queue-backlog.md` carries the step, and the ceiling is the carrier's or the
 > relay's rate limit rather than the queue's depth.
 
-Both keys are still written down rather than left absent, and that half was
-never about the diff. A key that is missing looks the same whether it was
-considered or forgotten.
+Both keys are written down rather than left absent, because a key that is
+missing looks the same whether it was considered or forgotten.
 
 > The failure to design against is not an attacker finding a worker's `/health`.
 > It is a well-meaning `helm` values copy that keeps `ingress.enabled: true`
@@ -1045,28 +986,23 @@ considered or forgotten.
 > front of it, because a service with no public API never needed any. **A
 > worker's safety comes from having no route, so the absence of a route is the
 > thing to assert.**
->
-> **This callout named Ordering until the charts existed, and the charts are
-> what falsified it.** Copying a `true` out of a file that has `false` is not a
-> mistake anybody can make; copying it out of the gateway's is the one they
-> can. A safety argument aimed at a copy nobody would perform protects nothing,
-> and reads as though it does.
 
 The charts whose host calls out under a grant of its own carry client
 credentials and no other chart does, and which charts those are is the design
 rather than an oversight
-([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)):
+([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
+`deploy/helm/web-bff/values.yaml` is one of them:
 
 ```yaml
-# deploy/helm/web-bff/values.yaml — one of the charts with an Identity:Client
 identity:
   authority: https://id.example.com/realms/commerce
   # Required by ValidateOnStart (§15.4): this host does call a peer (§9.7).
   # The secret is a reference, never a value.
   #
-  # The switch is its own key rather than clientId's presence: with the
-  # boolean set, all three values below are required and a blank one fails
-  # the render — and a clientId WITHOUT the boolean fails it too.
+  # The switch is its own key rather than clientId's presence. Web.Bff binds
+  # ServiceIdentityOptions unconditionally, so clearing clientId would render a
+  # release whose pod then refuses to start — an opt-out that is not one. With
+  # the boolean, all three values below are required and blank fails the render.
   clientCredentials: true
   clientId: web-bff
   scope: commerce-api
@@ -1074,6 +1010,10 @@ identity:
     name: web-bff-identity
     key: client-secret
 ```
+
+The converse fails the render too: a `clientId` without the boolean is
+refused, because without the boolean none of the three values reaches the pod,
+and a host that binds `ServiceIdentityOptions` refuses to boot without them.
 
 > **A further chart setting `identity.clientCredentials: true` is a design
 > change, not a configuration change.** It means another host started calling
@@ -1093,26 +1033,21 @@ that has none of the three.
 The gateway's chart is not a service chart with the database parts deleted. It
 has no migrator, no client credentials, and two keys no service has — and every
 one of those differences is something it will not start without, or will start
-wrongly without:
+wrongly without. `deploy/helm/gateway/values.yaml`, where it differs from
+Ordering's:
 
 ```yaml
-# deploy/helm/gateway/values.yaml — an excerpt on Ordering's terms, of what
-# differs; the file holds the rest, including `database.enabled` and
-# `broker.enabled`, both `false` because this host owns neither.
-replicaCount: 3
-
 image:
   registry: registry.example.com/commerce
   api: gateway
+  # No migrator key: the gateway owns no database (§10.1), so §7.4's
+  # migration hook has nothing to run for it. This chart also carries no
+  # templates/migrate-job.yaml — §15.3's point that the gateway's chart is not
+  # a service chart with the database parts deleted — so the absence is
+  # structural and the missing key is the values half of the same statement.
+  # smoke.sh asserts the two halves agree, because either one alone is a claim
+  # nothing checks.
   tag: ""
-  # No migrator key: the gateway owns no database (§10.1), so §7.4's migration
-  # hook has nothing to run for it. The hook belongs to each service
-  # chart rather than to the umbrella — a subchart's hooks run in the parent's
-  # release, so one deployable can be rolled on its own and still migrate.
-  #
-  # This chart also carries no migration template, so the absence is structural
-  # and the missing key is the values half of the same statement. Either half
-  # alone is a claim nothing checks, which is why smoke.sh asserts they agree.
 
 resources:
   requests: { cpu: 200m, memory: 128Mi }
@@ -1124,75 +1059,33 @@ autoscaling:
   maxReplicas: 30          # every external request passes through here
   targetCPUUtilizationPercentage: 70
 
-podDisruptionBudget:
-  enabled: true
-  minAvailable: 2
-
-probes:
-  # The same three §13.5 defines, and the gateway needs them stated as much as
-  # any service: MapCommonHealthEndpoints exposes the endpoints, and a chart
-  # that never references them means nothing asks. Readiness is honest here
-  # even though the set is empty (§4.2) — "the process is up" is exactly the
-  # question, because no dependency of the gateway's gates its readiness. It
-  # proxies four services and depends on all of them; what it does not do is
-  # report unready when one is down, which would take the edge out of rotation
-  # for a fault it is meant to pass through. The host declares that at the call
-  # site rather than leaving the empty set to pass on its own:
-  # MapCommonHealthEndpoints(ownsNoReadinessDependencies: true), which is what
-  # stops "declared empty" and "was never wired up" reading identically from
-  # out here.
-  liveness:  { path: /health/live,  initialDelaySeconds: 10, periodSeconds: 10 }
-  readiness: { path: /health/ready, initialDelaySeconds: 5,  periodSeconds: 5 }
-  startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
-
-service:
-  # True, and in the fence rather than in the omission list above, because this
-  # is the chart a new deployable gets copied from — it is the one with an
-  # Ingress — and `service.enabled` is the key a worker has to turn off.
-  enabled: true
-
 identity:
   # Authority only. The gateway validates JWTs (§11.2) but calls nobody —
   # YARP forwards the caller's token — so there is no clientSecretRef here
-  # and no gateway entry in External Secrets (§11.5, §15.4). The `false`
-  # is what says so, on the same terms as Ordering's above.
+  # and no gateway entry in External Secrets (§11.5, §15.4).
   authority: https://id.example.com/realms/commerce
   clientCredentials: false
+
+database:
+  enabled: false
+broker:
+  enabled: false
+
+redis:
+  enabled: false
 
 ingress:
   # True in every Kubernetes environment: TLS terminates at the load balancer
   # or Ingress (§10.1), so RemoteIpAddress is the ingress on every request
-  # until UseForwardedHeaders runs.
-  #
-  # The key carries two meanings at once, deliberately: an Ingress object
-  # exists, AND the host behind it is behind a proxy — which is what
-  # Ingress__Enabled tells the forwarded-headers block. They are the same fact
-  # about topology, which is why §14.1's Compose sets it false while the
-  # gateway there IS the edge.
+  # until UseForwardedHeaders runs. The same key is false in §14.1's Compose,
+  # where the gateway IS the edge — not an inconsistency to reconcile, but one
+  # setting correctly describing two topologies.
   enabled: true
-  # An Ingress with no class is picked up by whichever controller claims the
-  # default, which is not a deployment decision to leave to a cluster.
   className: nginx
   host: api.example.com
-  # REQUIRED, not optional, and the chart refuses to render without it. TLS
-  # terminates here (§10.1) and three separate arguments rest on that: the
-  # gateway rewrites Request.Scheme from this hop's header, ADR-020's
-  # compression decision reads that scheme, and §9.7's pricing hop uses plain
-  # `http://` *because* the encrypted hop ended at this object. An overlay
-  # clearing this key renders a valid plaintext Ingress and falsifies all
-  # three silently, which is the one failure mode a template can refuse.
   tls:
     secretName: gateway-tls
-  # Mandatory once enabled, and shipped EMPTY so the chart refuses to render
-  # until an overlay supplies it. These are the ingress controller's pod
-  # CIDRs, not the cluster's: anything trusted here can set X-Forwarded-For.
-  #
-  # A plausible default is worse than none. Too narrow and the real ingress is
-  # untrusted, its forwarded header ignored, and §10.3's per-client limit
-  # collapses into one global bucket; too broad and any pod in the range picks
-  # its own rate-limit partition and its own client IP in the logs. Neither
-  # shows up in a render or a rollout.
-  trustedNetworks: []          # e.g. [ "10.42.0.0/16" ] — per environment
+  trustedNetworks: []
 
 cors:
   # Off. Browsers reach the platform through the CDN on the same origin
@@ -1204,17 +1097,49 @@ cors:
   # rather than serving a policy that rejects every browser.
   origins: []
 
-# The gateway's own ConfigMap, rendered by a template only this chart has. The
-# two keys above are read by Gateway.Api and by nothing else in the platform,
-# so a shared template carrying them would put a conditional in every chart to
-# describe one — which is this section's opening sentence, in YAML.
-#
-# A SUFFIX rather than a name: the mount and the ConfigMap's own metadata both
-# derive from workload.name, so a renamed workload cannot mount one ConfigMap
-# while rendering another.
 extraConfigMaps:
   - edge
 ```
+
+**The migration hook belongs to each service chart rather than to the
+umbrella**, because a subchart's hooks run in the parent's release: so placed,
+one deployable can be rolled on its own and still migrate. **The gateway's
+probes are Ordering's three, and its readiness set is empty on purpose.** It
+proxies four services and depends on all of them; what it does not do is
+report unready when one is down, which would take the edge out of rotation for
+a fault it is meant to pass through. The host declares that at the call site,
+with `MapCommonHealthEndpoints(ownsNoReadinessDependencies: true)`, rather
+than leaving the empty set to pass on its own (§13.5).
+
+**`ingress.enabled` carries two meanings at once, deliberately**: an Ingress
+object exists, *and* the host behind it is behind a proxy — which is what
+`Ingress__Enabled` tells the forwarded-headers block. `className` is required,
+because an Ingress with no class is picked up by whichever controller claims
+the default, which is not a deployment decision to leave to a cluster. `tls`
+is required too, and the chart refuses to render without it: TLS terminates
+here (§10.1), and three arguments rest on that — the gateway rewrites
+`Request.Scheme` from this hop's header, ADR-020's compression decision reads
+that scheme, and §9.7's pricing hop uses plain `http://` *because* the
+encrypted hop ended at this object. An overlay clearing it would render a valid
+plaintext Ingress and falsify all three silently.
+
+**`trustedNetworks` is mandatory once the Ingress is enabled, and ships empty**
+so the chart refuses to render until an overlay supplies it. These are the
+ingress controller's pod CIDRs, not the cluster's: anything trusted here can
+set `X-Forwarded-For`. A plausible default is worse than none. Too narrow, and
+the real ingress is untrusted, its forwarded header ignored, and §10.3's
+per-client limit collapses into one global bucket; too broad, and any pod in
+the range picks its own rate-limit partition and its own client IP in the
+logs. Neither shows up in a render or a rollout.
+
+**The gateway's own ConfigMap is rendered by a template only this chart
+has**, `templates/edge-config.yaml`. Its two keys are read by `Gateway.Api` and
+by nothing else in the platform, so a shared template carrying them would put
+a conditional in every chart to describe one — which is this section's
+opening sentence, in YAML. `extraConfigMaps` names a *suffix* rather than a
+name: the mount and the ConfigMap's own metadata both derive from
+`workload.name`, so a renamed workload cannot mount one ConfigMap while
+rendering another.
 
 **Both flags fail the render rather than the pod.** `Ingress__TrustedNetworks`
 and `Cors__Origins` are §15.4's *conditionally required* category, and the
@@ -1226,16 +1151,15 @@ value is missing. `helm upgrade` never runs; nothing rolls.
 **And blank counts as missing here too**, which an emptiness check does not
 see: a list holding `" "` is truthy in a template, so it renders a blank value
 and the host throws at startup — after the rollout has begun, which is exactly
-what the render-time guard exists to prevent. That lesson was already recorded
-against `Identity__Authority` and again against `Cors__Origins`, and it still
-had to be applied a third time here. Each entry is checked, not just the list.
+what the render-time guard exists to prevent. Each entry is checked, not just
+the list.
 
 **Two more pairs cannot be set independently, and the chart says so.** An
 Ingress needs `service.enabled`, because its backend *is* this workload's
 Service — without one the release installs cleanly and the controller answers
-503 for every request. And an Ingress needs `tls`, for the reason its fence
-gives above. Both are the shape of a values file copied from a chart that meant
-something different, which is the failure §15.3 opens by naming.
+503 for every request. And an Ingress needs `tls`, for the reason given above.
+Both are the shape of a values file copied from a chart that meant something
+different, which is the failure §15.3 opens by naming.
 
 `ingress.enabled: true` in Kubernetes and `Ingress__Enabled: "false"` in Compose
 ([§14.1](14-local-development.md)) are not an inconsistency to reconcile — they are the same setting
@@ -1288,8 +1212,9 @@ second thing to reconcile. Where the two disagree, this section wins.
 optional.** `Cors__Origins` is not needed when `Cors__Enabled` is false and is
 mandatory when it is true — enabling a feature without configuring it is a
 silent defect, while leaving it off is a valid topology. Writing such a key as
-"optional with a fallback" collapses those two states into one, which is how
-`WithOrigins([])` came to reject every browser request while starting cleanly.
+"optional with a fallback" collapses those two states into one:
+`WithOrigins([])` rejects every browser request from a host that starts
+cleanly.
 
 **Required-for-some-hosts is a third category, and the mistake it invites runs
 the other way.** `Identity__Client__*` is mandatory for a host that makes a
@@ -1307,37 +1232,33 @@ secret in the vault and a mount, all of which must be rotated and audited, for
 credentials no code path ever sends. Over-supply has no failing test to catch
 it, which is why it survives longer than under-supply does.
 
-**`OTEL_EXPORTER_OTLP_ENDPOINT` read `— defaults` and the chart refuses to
-render without it**, and only one of those can describe a deployment
-obligation. The SDK's default is the reason, not the exemption: unset,
-`UseOtlpExporter` exports to `localhost:4317`, where nothing listens in a pod —
-so the failure is a host that starts clean, reports healthy and emits its
-telemetry into the loopback interface for as long as nobody looks at a
-dashboard. That is the same shape as `WithOrigins([])` two paragraphs up, and
-the same shape the Ingress and CORS flags were given a render-time failure for
-in the PR that shipped the charts. A default that turns a missing value into
-silence is worse than one that turns it into a refusal, which is why the column
-now says required and the default is recorded here instead.
+**`OTEL_EXPORTER_OTLP_ENDPOINT` is required, and the SDK's default is the
+reason, not the exemption**: unset, `UseOtlpExporter` exports to
+`localhost:4317`, where nothing listens in a pod — so the failure is a host
+that starts clean, reports healthy and emits its telemetry into the loopback
+interface for as long as nobody looks at a dashboard. That is the same shape
+as `WithOrigins([])` two paragraphs up, and the same shape the Ingress and CORS
+flags fail the render for. A default that turns a missing value into silence
+is worse than one that turns it into a refusal, which is why the column says
+required, the chart refuses to render without it, and the default is recorded
+here instead.
 
-**The two Redis rows were a fourth category, and §8.5's PR is the one that
-added the consumer.** They had been marked required outright while no host in
-the solution called `AddRedisConnections` — so a chart honouring the table
-would have mounted two Secrets nobody had created, and a `secretKeyRef` to a
-missing Secret is a pod that never starts. That is worse than the over-supply
-two paragraphs up, which merely provisions credentials nothing sends: this one
-stops the service. The rule that resolved it is §14.1's, applied one deployment
+**The two Redis rows are a fourth category: required exactly when the host
+calls `AddRedisConnections`.** Marked required outright, they would have a
+chart mount two Secrets for a host that never reads them, and a `secretKeyRef`
+to a Secret nobody created is a pod that never starts. That is worse than the
+over-supply two paragraphs up, which merely provisions credentials nothing
+sends: this one stops the service. The rule is §14.1's, applied one deployment
 target over — **a key joins when a host's code reads it**.
 
 `IdempotencyBehavior` reads one, so a chart whose service calls
 `AddRedisConnections` carries both rows unconditionally and every other chart
-carries neither; §15.3 names which are which today, and this table does not
-repeat it. **Both, not just the
-coordination one that is actually read**: `AddRedisConnections` is a single
-call by design (§8.2) and reads both eagerly, so a host given one key throws
-naming the other. The condition that remains is per chart rather than per
-platform, and `deploy/helm/smoke.sh` derives it from `src/` rather than from
-this table — a chart whose service calls `AddRedisConnections` must declare
-`redis`.
+carries neither; this table does not repeat which are which. **Both, not just
+the coordination one that is actually read**: `AddRedisConnections` is a
+single call by design (§8.2) and reads both eagerly, so a host given one key
+throws naming the other. The condition is per chart rather than per platform,
+and `deploy/helm/smoke.sh` derives it from `src/` rather than from this table —
+a chart whose service calls `AddRedisConnections` must declare `redis`.
 
 The rule for the Kind column is mechanical: **if the value contains a
 credential, it is a Secret.** Every connection string here does — SQL Server
@@ -1362,7 +1283,7 @@ namespace read access.
 |---|---|---|---|
 | `ConnectionStrings__Ordering` | Secret | External Secrets → runtime identity (§7.1) | ✓ |
 | `ConnectionStrings__OrderingMigrator` | Secret | External Secrets → migrator Job only | ✓ (Job) |
-| `ConnectionStrings__RedisCache` | **Secret** | External Secrets — carries the service's own §8.1 ACL user and password, from a Secret named per service (`catalog-redis`, `ordering-redis`) and never shared | ✓ **when the host calls `AddRedisConnections`** — see below |
+| `ConnectionStrings__RedisCache` | **Secret** | External Secrets — carries the service's own §8.1 ACL user and password, from a Secret named per service (`catalog-redis`, `ordering-redis`) and never shared | ✓ **when the host calls `AddRedisConnections`** — see above |
 | `ConnectionStrings__RedisCoordination` | **Secret** | External Secrets — separate ACL user, `noeviction` instance | ✓ **when the host calls `AddRedisConnections`** — both or neither |
 | `ConnectionStrings__RabbitMq` | Secret | External Secrets — carries the per-service broker account of [ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md) | ✓ — the Secret is named per account (`catalog-rabbitmq`, `ordering-rabbitmq`, `web-bff-rabbitmq`) and never shared |
 | `Transport__Plaintext__0…n` | Config | Helm `transport.plaintext` → ConfigMap, empty or absent in every chart — a deployer's deliberate setting; the migration Job takes none | ✗ — names each connection [ADR-079](adr/ADR-079-outside-development-an-infrastructure-connection-is-encrypted-unless-the-deployer-names-it-plaintext.md) lets run in plaintext outside Development; for a connection not named, the host refuses to start on a broker string that is not `amqps://`, a Redis string without `ssl=true` or a SQL string that downgrades `Encrypt` or trusts any certificate |
@@ -1374,7 +1295,7 @@ namespace read access.
 | `Cors__Origins__0…n` | Config | Helm `cors.origins` → ConfigMap — **gateway only** | ✓ **when `Cors__Enabled`** |
 | `Ingress__Enabled` | Config | Helm `ingress.enabled` → ConfigMap — **gateway only** | ✓ — true in Kubernetes, false only where the gateway is the edge (Compose) |
 | `Ingress__TrustedNetworks__0…n` | Config | Helm `ingress.trustedNetworks` → ConfigMap — **gateway only** | ✓ **when `Ingress__Enabled`**; CIDRs of the LB/Ingress, without which the rate limiter partitions everyone together |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Config | Helm `observability.otlpEndpoint` → ConfigMap | ✓ — **every host**. The SDK does default, which is the argument for requiring it rather than against — see below |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Config | Helm `observability.otlpEndpoint` → ConfigMap | ✓ — **every host**. The SDK does default, which is the argument for requiring it rather than against — see above |
 | `OTEL_RESOURCE_ATTRIBUTES` | Config | Helm — derived from `canary.enabled`, never set by hand | ✓ — **every host**, as `deployment.track=stable` or `=canary`. §15.5's rollout compares the two tracks and this is the only thing that tells them apart ([ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)) |
 | `PaymentProvider__BaseUrl` | Config | ConfigMap | ✓ — **Payments only**; the provider's address, and the host refuses to start without it |
 | `PaymentProvider__ApiKey` | Secret | External Secrets | ✓ — **Payments only**; the provider's credential, and the host refuses to start without it |
@@ -1416,21 +1337,24 @@ registration of its consumer: for `Identity:Client`, the calling host's own
 `Program.cs` (§9.7).** `IOptions<T>` always resolves: unbound, it
 hands back a default-constructed instance. So a forgotten binding is invisible
 to `ValidateOnBuild` (§4.2), the service starts clean, and the failure surfaces
-as behaviour rather than as an error:
+as behaviour rather than as an error. `src/BFF/Web.Bff/Program.cs` binds it:
 
 ```csharp
-// Web.Bff/Program.cs (§9.7) — the same place that registers CachingTokenClient
-// and ClientCredentialsHandler; every host that calls a peer registers all
-// three in its own Program.cs (§9.7). Unbound, the BFF requests a token with an
-// empty scope and gets 401s it will read as Catalog's fault.
-services
+// Validated at start: IOptions<T> always resolves, so ValidateOnBuild cannot see a forgotten binding (§15.4).
+builder.Services
     .AddOptions<ServiceIdentityOptions>()
-    .BindConfiguration("Identity:Client")
+    .BindConfiguration(ServiceIdentityOptions.SectionName)
     .ValidateDataAnnotations()
     .ValidateOnStart();
 ```
 
-**Every options type in the solution had to earn it.**
+That is the same file that registers `CachingTokenClient` and
+`ClientCredentialsHandler`; `Shipping.Worker`'s and `Notifications.Worker`'s
+`Program.cs` each register the three in their own host.
+Unbound, the BFF would request a token with an empty scope and get 401s it
+would read as Catalog's fault.
+
+**Every options type in the solution earns it.**
 `Identity:Client` holds a secret that differs per environment, `Mail` holds
 Notifications' relay and its credential on the same terms, `Jurisdiction`
 holds what
@@ -1444,7 +1368,7 @@ notifications, survive a long outage, which is an operator's call and not a
 build's. The tempting next one is
 a `ServiceOptions`-shaped bag — batch sizes, poll intervals, retry caps — bound
 to an `Ordering` section that no environment ever sets. It costs nothing to
-write and it is not free: `ValidateOnStart` now gates boot on a section nobody
+write and it is not free: `ValidateOnStart` then gates boot on a section nobody
 supplies, `[Required]` on any member stops every host, and `[Required]` on none
 makes `ValidateDataAnnotations` decorative. There is no third outcome, because
 a key that never varies has nothing to validate.
@@ -1474,13 +1398,19 @@ binding hoisted into `Common.Web` for tidiness would re-impose the requirement
 on every host and put us back where §15.3 started.
 
 `[Required]` is what makes `ValidateDataAnnotations` do anything — a bound
-options class with no annotations validates successfully while empty:
+options class with no annotations validates successfully while empty. The
+class is
+`src/BuildingBlocks/Common.Infrastructure/Identity/ServiceIdentityOptions.cs`:
 
 ```csharp
 public sealed class ServiceIdentityOptions
 {
+    public const string SectionName = "Identity:Client";
+
     [Required] public string ClientId { get; init; } = "";
+
     [Required] public string ClientSecret { get; init; } = "";
+
     [Required] public string Scope { get; init; } = "";
 }
 ```
@@ -1489,7 +1419,7 @@ public sealed class ServiceIdentityOptions
 > missing value into a refusal to boot, which is the right trade — but only if
 > every environment supplies it. Adding a `[Required]` field means editing
 > **four** places in the same change: Compose (§14.1), the Aspire host (§14.2),
-> the Helm values (§15.3) and the secrets inventory (below). A gate with nothing
+> the Helm values (§15.3) and the secrets inventory (above). A gate with nothing
 > behind it does not harden the service; it stops it.
 >
 > **The integration-test fixture (§12.4) is the fifth, and it fails first.**
@@ -1507,15 +1437,15 @@ public sealed class ServiceIdentityOptions
 > binding, cannot drift from the name §13.2 puts on traces, and therefore
 > cannot fail to start.
 
-The service-wide constants that are genuinely not configuration stay static:
+The service-wide constants that are genuinely not configuration stay static —
+not bound, not validated and not deployable, a compile-time invariant — as
+`src/BuildingBlocks/Common.Web/ServiceOptions.cs` holds them:
 
 ```csharp
 public static class ServiceOptions
 {
-    // The deadline a service's request meets (§9.7). Not bound, not
-    // validated, not deployable — it is a compile-time invariant, held below
-    // GatewayLimits.RequestTimeout and inside HostOptions.ShutdownTimeout
-    // (ADR-066).
+    /// <summary>The deadline a service's request meets, above every outbound total a request waits on (§9.7).</summary>
+    /// <remarks>Below the gateway's own deadline and inside <c>HostOptions.ShutdownTimeout</c> (ADR-066).</remarks>
     public static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(20);
 }
 ```
@@ -1529,16 +1459,15 @@ then 100%. Roll back automatically if either metric regresses beyond that
 file's `thresholds`.
 
 **The mechanism is replica-weighted and it is
-[ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)**,
-taken by PR-25 because building the rollout was what forced the choice. The
-canary is a second Helm release of the same chart whose pods answer to the same
-Service, so the share it serves is `canary / (stable + canary)`. No mesh and no
-rollout controller — and no ingress-controller weight either, which is
+[ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md).**
+The canary is a second Helm release of the same chart whose pods answer to the
+same Service, so the share it serves is `canary / (stable + canary)`. No mesh
+and no rollout controller — and no ingress-controller weight either, which is
 disqualified by topology rather than taste: this platform has one Ingress, the
 gateway's ([§10.1](10-api-gateway.md)), and everything behind it is reached by
 Service name, so an edge weight cannot canary Catalog or Ordering at all.
 
-**Two things the ladder above does not say, both found by building it.**
+**Two things the ladder above does not say.**
 
 **The weights are ceilings, not targets, because a replica ratio is
 quantised.** `deploy/canary/canary.py` takes the largest canary that stays
@@ -1651,9 +1580,8 @@ choosing wrong is meant to be loud rather than silent** — subject to the
 deployment prerequisite
 [ADR-026](adr/ADR-026-consumer-capability-is-a-release-ahead-of-the-producer-that-uses-it.md)
 states, since per-queue broker metrics are not something this repository
-configures. That alert is what makes this
-section's rule enforceable; before it, a rollout that lost messages looked
-exactly like one that did not.
+configures. That alert is what makes this section's rule enforceable; without
+it, a rollout that loses messages looks exactly like one that does not.
 
 Feature flags decouple deployment from release. Deploy the code dark, enable it
 for internal users, then progressively for customers. This also gives you a
