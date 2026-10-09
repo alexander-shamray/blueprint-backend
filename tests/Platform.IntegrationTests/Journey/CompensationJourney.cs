@@ -56,7 +56,10 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
         JourneyOrder order = await PlaceAsync(DeclinedPrice, 1, Stocked);
         await using OrderTrace trace = OrderTrace.Start(world, order, Stocked);
 
-        await trace.UntilAsync(Cancelled, Deadlines.Compensated, "the order cancelled and its saga finished");
+        await trace.UntilAsync(
+            s => Cancelled(s) && s.Reserved == 0,
+            Deadlines.Compensated,
+            "the order cancelled, its saga finished and the reservation released");
 
         OrderSnapshot done = trace.Latest!;
         done.PaymentStatus.ShouldBe("Declined");
@@ -166,10 +169,8 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
 
         await trace.UntilAsync(Cancelled, Deadlines.Compensated, "the late verdict taken and the saga finished");
 
-        (await world.ReviewsAsync(order)).ShouldBe(
-            [ReviewReasons.PaymentAuthorisedDuringCompensation],
-            "money moved after the cancellation, which is a row and not a pager (§9.6)");
-        (await world.RefundsAsync(order)).ShouldBe(1, "Payments voids the authorisation off OrderCancelled itself");
+        await ReviewsRaisedAsync(order, ReviewReasons.PaymentAuthorisedDuringCompensation);
+        await RefundedAsync(order);
         await NoticesAsync(
             order,
             Sent(TemplateKeys.OrderPlaced),
@@ -229,17 +230,21 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
 
         (await world.CancelAsync(order)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
         await trace.UntilAsync(
-            s => s is { OrderStatus: "Cancelled", SagaState: OrderSnapshot.None, ShipmentStatus: "Voided" },
+            s => s is
+            {
+                OrderStatus: "Cancelled",
+                SagaState: OrderSnapshot.None,
+                ShipmentStatus: "Voided",
+                Reserved: 0
+            },
             Deadlines.Compensated,
-            "the order cancelled, the booking voided and the saga finished");
+            "the order cancelled, the booking voided, the stock released and the saga finished");
 
         OrderSnapshot done = trace.Latest!;
         done.Available.ShouldBe(Stocked, "Inventory releases off OrderCancelled itself, which the saga does not send");
         done.Reserved.ShouldBe(0);
-        (await world.ReviewsAsync(order)).ShouldBe(
-            [ReviewReasons.CancelledAfterConfirmation],
-            "a despatch may have been moving, so a person looks (§9.6, ADR-029)");
-        (await world.RefundsAsync(order)).ShouldBe(1);
+        await ReviewsRaisedAsync(order, ReviewReasons.CancelledAfterConfirmation);
+        await RefundedAsync(order);
         await NoticesAsync(
             order,
             Sent(TemplateKeys.OrderPlaced),
@@ -320,8 +325,8 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
 
         await trace.UntilAsync(Cancelled, Deadlines.Compensated, "the late verdict taken and the saga finished");
 
-        (await world.ReviewsAsync(order)).ShouldBe([ReviewReasons.PaymentAuthorisedDuringCompensation]);
-        (await world.RefundsAsync(order)).ShouldBe(1);
+        await ReviewsRaisedAsync(order, ReviewReasons.PaymentAuthorisedDuringCompensation);
+        await RefundedAsync(order);
         await NoticesAsync(
             order,
             Sent(TemplateKeys.OrderPlaced),
@@ -351,9 +356,7 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
         await world.ExpireAsync(new ConfirmationExpired(order.Id));
         await trace.UntilAsync(s => s.SagaState == OrderSnapshot.None, Deadlines.Compensated, "the saga finished");
 
-        (await world.ReviewsAsync(order)).ShouldBe(
-            [ReviewReasons.NotConfirmed],
-            "the card is charged and the order unacknowledged, which wants a person (§9.6)");
+        await ReviewsRaisedAsync(order, ReviewReasons.NotConfirmed);
         trace.Latest!.OrderStatus.ShouldBe("Confirmed", "§3.2 gives Ordering no refund command, so it is not unwound");
         trace.Latest.PaymentStatus.ShouldBe("Authorised");
         (await world.RefundsAsync(order)).ShouldBe(0);
@@ -376,7 +379,7 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
         await world.ExpireAsync(new DespatchExpired(order.Id));
         await trace.UntilAsync(s => s.SagaState == OrderSnapshot.None, Deadlines.Compensated, "the saga finished");
 
-        (await world.ReviewsAsync(order)).ShouldBe([ReviewReasons.NotDespatched]);
+        await ReviewsRaisedAsync(order, ReviewReasons.NotDespatched);
         trace.Latest!.OrderStatus.ShouldBe("Confirmed", "a human now owns the order; nothing compensates it (§9.6)");
         trace.Latest.Reserved.ShouldBe(Quantity, "a despatch may be moving, so the stock is not released");
         (await world.RefundsAsync(order)).ShouldBe(0);
@@ -408,9 +411,7 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
         await world.ExpireAsync(new StockReleaseExpired(order.Id));
         await trace.UntilAsync(Cancelled, Deadlines.Compensated, "the order cancelled and its saga finished");
 
-        (await world.ReviewsAsync(order)).ShouldBe(
-            [ReviewReasons.StockNotReleased],
-            "the order is cancelled either way, and a reservation nobody confirmed released is Inventory's to settle");
+        await ReviewsRaisedAsync(order, ReviewReasons.StockNotReleased);
         await NoticesAsync(
             order,
             Sent(TemplateKeys.OrderPlaced),
@@ -434,6 +435,24 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
 
         return await world.PlaceAsync(product, quantity, price);
     }
+
+    /// <summary>The reviews raised for the order, exactly these: the saga sends each as a command as it finishes.</summary>
+    private Task ReviewsRaisedAsync(JourneyOrder order, params string[] reasons)
+    {
+        string[] wanted = [.. reasons.Order(StringComparer.Ordinal)];
+
+        return Convergence.UntilAsync(
+            async () => (await world.ReviewsAsync(order)).Order(StringComparer.Ordinal).SequenceEqual(wanted),
+            Deadlines.Legs(2),
+            $"the reviews {string.Join(", ", wanted)} raised, and no others");
+    }
+
+    /// <summary>Payments voids the authorisation off OrderCancelled itself, after the saga may have finished.</summary>
+    private Task RefundedAsync(JourneyOrder order) =>
+        Convergence.UntilAsync(
+            async () => await world.RefundsAsync(order) == 1,
+            Deadlines.Legs(2),
+            "the authorisation voided once");
 
     private static string Sent(string key) => $"{key}:Sent";
 
