@@ -1,5 +1,4 @@
-# Inventory, and the chart §15.3 prints. HTTP only: nothing calls this
-# service synchronously (§9.7).
+# Inventory. HTTP only: nothing calls this service synchronously (§9.7).
 
 workload:
   # §10.2's route configuration dials this workload by this literal name —

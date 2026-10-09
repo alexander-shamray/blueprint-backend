@@ -58,13 +58,13 @@ is validated rather than sanitised, so the `app.kubernetes.io/version`
 label names the image that runs. */}}
 {{- range $segment := splitList "." $tag }}
 {{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" $segment) }}
-{{- fail (printf "image.tag %q has the segment %q, which is not a DNS-1123 label. Every chart holds the tag to the shape the migration Job's name needs where there is one, so each dot-separated segment must be lowercase alphanumerics and dashes, starting and ending alphanumeric — which every commit SHA and ordinary semver already is (§15.3)." $tag $segment) }}
+{{- fail (printf "image.tag %q has the segment %q, which is not a DNS-1123 label. Every chart holds the tag to the shape the migration Job's name needs where there is one (§7.4), so each dot-separated segment must be lowercase alphanumerics and dashes, starting and ending alphanumeric — which every commit SHA and ordinary semver already is." $tag $segment) }}
 {{- end }}
 {{- end }}
 {{- /* And the length: `app.kubernetes.io/version` carries the tag on every chart,
 and a label value may not exceed 63 characters. */}}
 {{- if gt (len $tag) 63 }}
-{{- fail (printf "image.tag is %d characters. It becomes app.kubernetes.io/version, and a label value may not exceed 63 (§15.3)." (len $tag)) }}
+{{- fail (printf "image.tag is %d characters. It becomes app.kubernetes.io/version, and a label value may not exceed 63." (len $tag)) }}
 {{- end }}
 {{- $tag -}}
 {{- end -}}
