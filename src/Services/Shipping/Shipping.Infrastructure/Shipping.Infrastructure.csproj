@@ -51,6 +51,7 @@
   <ItemGroup>
     <!-- Named here rather than widening a type or member no production caller uses. -->
     <InternalsVisibleTo Include="Shipping.Worker.Tests" />
+    <InternalsVisibleTo Include="Platform.IntegrationTests" />
   </ItemGroup>
 
 </Project>

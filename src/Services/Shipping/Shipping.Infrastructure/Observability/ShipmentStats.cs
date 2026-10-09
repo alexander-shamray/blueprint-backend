@@ -13,8 +13,8 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
 {
     /// <summary>How long a booking may go unscanned: <c>OrderFulfilmentSaga.DespatchTimeoutDelay</c>.</summary>
     /// <remarks>
-    /// From <c>CreatedAt</c>, as both waits start at the order's confirmation (§9.6). A shorter age is a collection
-    /// time only the carrier could promise, and its contract names none.
+    /// From <c>CreatedAt</c>, as both waits start at the order's confirmation (§9.6), and held equal to it by
+    /// <c>DespatchBoundTests</c>. A shorter age is a collection time only the carrier could promise.
     /// </remarks>
     public static readonly TimeSpan FirstScanAge = TimeSpan.FromDays(3);
 
