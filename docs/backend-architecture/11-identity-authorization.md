@@ -212,11 +212,15 @@ either end of it.
 > client declaring no origin does not fail anywhere a log would show it: the
 > token is minted, the browser discards it unread, and the authorization code
 > is spent. `mobile-app` therefore declares the packaged app's browser origins,
-> and `realm_check.py` holds every client it names to declaring one — the
-> obligation and not the values, because what those origins are is settled by
-> the sibling repository's Capacitor configuration rather than here.
+> and `realm_check.py` holds the two clients that exchange a code from a page,
+> `web-app` and `mobile-app`, to declaring one — the obligation and not the
+> values, because what those origins are is settled by the sibling
+> repository's Capacitor configuration rather than here. The service-account
+> clients the gate also names run no such exchange and declare none.
 > [ADR-046](adr/ADR-046-each-client-declares-a-browser-origin-and-the-gate-asserts-the-shape.md)
-> is the decision; the Compose export is where the literal values live.
+> is the decision, as
+> [ADR-089](adr/ADR-089-the-browser-origin-obligation-binds-the-clients-that-exchange-a-code-from-a-page.md)
+> scopes it; the Compose export is where the literal values live.
 >
 > This client serves the Angular/Ionic reference client's native build,
 > specified in the sibling
