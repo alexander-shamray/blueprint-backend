@@ -4,7 +4,7 @@
 
 ```
       ╱╲            Cross-service — a few
-     ╱  ╲           A whole saga, all services in containers. Seconds.
+     ╱  ╲           One order across all services, in containers. Seconds to a minute.
     ╱────╲
    ╱      ╲         Integration — tens per service
   ╱        ╲        Real SQL Server, Redis, RabbitMQ via Testcontainers.
@@ -26,16 +26,27 @@
 | Pipeline behaviour | One §6.3 behaviour against recording fakes — the branches its handler-level tests cannot reach | None | < 10 ms | One suite per behaviour | `Common.Application.Tests` |
 | Saga | One whole saga, coordination only | MassTransit in-memory harness — no infrastructure | < 100 ms per positive assertion (§12.5) | A few | `*.Application.Tests` |
 | Contract shape | Every published contract against the rules it must obey and the shape it was recorded with | Both assemblies by reflection, and the recorded shape | < 1 s | One suite | `Platform.IntegrationTests` |
+| Journey | One order across Catalog, Ordering, Inventory, Payments, Shipping and Notifications, and each transition of the order saga that a service can cause (ADR-093) | Every host as itself under its own broker account, over one SQL Server, one broker and one Redis pair (containers), with §14.1's simulators at the edges | Seconds to a minute per scenario, and a minute to start | A few | `Platform.IntegrationTests` |
 
-**Neither is there an "all services in containers" level, nor an E2E one.** Both
-are rows that get written into a strategy and never built — the second needs a
-client the backend does not own and data that survives between runs; the first
-needs every service's image, database and broker started together, which is a
-local Compose environment wearing a test-runner costume and fails in ways nobody
-can attribute.
+**There is no E2E level, and the level of all the services is narrow.** The
+first is a row that gets written into a strategy and never built: it needs a
+client the backend does not own and data that survives between runs. The second
+is built, for one thing only. The journey of
+[ADR-093](adr/ADR-093-the-journey-test-walks-one-order-across-the-services-and-asserts-that-they-converge.md)
+walks one order across Catalog, Ordering, Inventory, Payments, Shipping and
+Notifications, each the real host under its own broker account. The objection
+to it was that a Compose environment in a test-runner's costume fails in ways
+nobody can attribute, and the journey answers that by what it asserts: a
+predicate with a deadline derived from §13.7, never a sleep, and the states the
+order passed through and not only the last, so a failure names what it waited
+for and what it saw. What it proves is that the services agree — that the
+grant each holds lets the neighbour's message through, that an address reaches
+the carrier whole, that the amount one writes is the amount another renders.
+Scale, crash durability and a dependency's outage it does not prove, they stay
+with the suites that stage them, and a green journey is cited for none of them.
 
-What they would actually catch splits cleanly in two, and both halves are
-cheaper elsewhere. **Saga coordination** — did the right command go out, in the
+What those two levels would otherwise carry splits cleanly in two, and both
+halves are cheaper elsewhere. **Saga coordination** — did the right command go out, in the
 right order, after the right event — is exercised by the in-memory harness in
 §12.5, in milliseconds. The exception is an assertion that something did *not*
 happen, which cannot resolve until the harness gives up waiting and so costs
@@ -46,12 +57,13 @@ than hundreds. **Contract compatibility** —
 does the message one service publishes still have the shape its consumers were
 built against — is a reflection test over the contract assembly and a record of
 its shape, and it is why
-`Platform.IntegrationTests` exists; what else that suite holds is §12.6's.
+`Platform.IntegrationTests` exists; what else that suite holds is §12.6's, and
+the journey's.
 Contract compatibility is **not the only thing genuinely between services** —
 §9.7's synchronous calls are another, and §12.6 tests the two in almost
 opposite ways. The calls are deliberately not in this suite: a contract over
 one needs the provider running, so it lives in the provider's own suite rather
-than buying a sixth project a container set.
+than beside the journey's container set, for six tests.
 
 What no level above covers is whether the *deployed* system responds under load
 and against real infrastructure. That is the **k6 run against staging**
