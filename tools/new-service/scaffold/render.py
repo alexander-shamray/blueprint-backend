@@ -1,8 +1,7 @@
 """What a run writes: the service's projects and its Compose unit, and the
 edits to the shared files that have to name it.
 
-Every function here returns text and none of them touches disk; `apply` in
-`new_service.py` is the one writer.
+Every function here returns text; `apply` in `new_service.py` is the writer.
 """
 
 from __future__ import annotations
@@ -27,13 +26,11 @@ COPY_ROOTS = (
 
 MIGRATIONS = "src/Services/Catalog/Catalog.Infrastructure/Persistence/Migrations"
 
-# Every file under COPY_ROOTS is classified here or the run fails. That is
-# deliberate friction, and it is the same argument the domain allow-list gate
-# makes in Catalog.Domain.Tests: extending the list is the decision the check
-# exists to force. Without it, the next aggregate someone adds to Catalog ships
-# silently into every service scaffolded afterwards, and no straggler check
-# would notice — a Categories folder carries none of the tokens the scaffold
-# searches for.
+# Every file under COPY_ROOTS is classified here or the run fails, the same
+# allow-list argument as the gate in Catalog.Domain.Tests: extending the list
+# is the decision the check exists to force. Otherwise the next aggregate
+# added to Catalog ships into every later service, and no straggler check
+# sees it, as a Categories folder carries none of the scaffold's tokens.
 COPIED = frozenset(
     {
         "src/Services/Catalog/Catalog.Api/Catalog.Api.csproj",
@@ -126,14 +123,11 @@ COPIED = frozenset(
 OMITTED = frozenset(
     {
         "src/Services/Catalog/Catalog.Api/Endpoints/ProductEndpoints.cs",
-        # The pricing hop, whole. Catalog serves it for the BFF's quote
-        # (§9.7), so a service scaffolded from Catalog inherits a gRPC server
-        # nobody calls, a contract nobody consumes and a second Kestrel
-        # endpoint serving neither. appsettings.json goes with it because it
-        # exists only for that hop: it declares the Http2 endpoint gRPC needs,
-        # and a cleartext port cannot serve HTTP/1.1 and h2c at once. It also
-        # overrides ASPNETCORE_HTTP_PORTS, so a service inheriting it would
-        # silently stop listening on whatever its deployment set.
+        # The pricing hop, whole (§9.7): a service scaffolded from Catalog
+        # would inherit a gRPC server nobody calls and a second Kestrel
+        # endpoint. appsettings.json goes with it: it declares the Http2
+        # endpoint gRPC needs, and overrides ASPNETCORE_HTTP_PORTS, which
+        # would silence whatever port the service's deployment set.
         "src/Services/Catalog/Catalog.Api/appsettings.json",
         "src/Services/Catalog/Catalog.Api/Protos/pricing.proto",
         "src/Services/Catalog/Catalog.Api/Grpc/PricingService.cs",
@@ -142,13 +136,11 @@ OMITTED = frozenset(
         # AddGrpc, which leaves with the hop, so a service keeping it would
         # carry an interceptor nothing installs.
         "src/Services/Catalog/Catalog.Api/Grpc/ValidationInterceptor.cs",
-        # The permission vocabulary (§11.4) is the slice's, not the service's.
-        # A host with no endpoint requires no permission, and carrying
-        # `ordering:write` into a service that grants it to nothing would put a
-        # name in the realm nobody can act on — the same objection as a policy
-        # registered and never referenced. The first slice brings the first
-        # permission, and the Program.cs patch in PATCHES drops the policy that
-        # names this one.
+        # The permission vocabulary (§11.4) is the slice's, not the service's:
+        # `ordering:write` carried into a service that grants it to nothing
+        # is a name in the realm nobody can act on. The first slice brings
+        # the first permission, and the Program.cs patch in PATCHES drops the
+        # policy that names this one.
         "src/Services/Catalog/Catalog.Api/CatalogPermissions.cs",
         "src/Services/Catalog/Catalog.Application/Products/GetPrices/GetPricesHandler.cs",
         "src/Services/Catalog/Catalog.Application/Products/GetPrices/GetPricesQuery.cs",
@@ -226,21 +218,16 @@ OMITTED = frozenset(
         # once: there is no PricingService to drive, and the channel it
         # builds needs the generated client the csproj patch in PATCHES drops.
         "tests/Catalog.Api.Tests/PricingServiceTests.cs",
-        # The provider verification leaves for a third reason on top of that
-        # pair: it is one named consumer's expectations of one named provider.
-        # Web.Bff asks Catalog for prices (§9.7), so a scaffolded service
-        # inherits neither the RPC nor anyone consuming it — and a contract
-        # copied to a service no consumer calls is an expectation nobody
-        # holds, which is the one thing a consumer-driven contract must never
-        # become. The csproj patch in PATCHES drops the linked
-        # PricingContract.cs with it, for the same reason.
+        # The provider verification leaves for a third reason as well: it is
+        # one named consumer's expectations of one named provider. Web.Bff
+        # asks Catalog for prices (§9.7), so a contract copied to a service
+        # no consumer calls is an expectation nobody holds. The csproj patch
+        # in PATCHES drops the linked PricingContract.cs with it.
         "tests/Catalog.Api.Tests/PricingContractVerificationTests.cs",
         # Both name /v1/catalog/products, so both are slice by requirement:
-        # they read the host as a deployment rather than a fixture, and a
-        # service with no endpoint has nothing to read. They return with the
-        # first slice, beside the endpoint tests below. HostSmokeTests keeps
-        # the factory they share — which is why those two tests live in a file
-        # of their own rather than in it.
+        # they read the host as a deployment, and a service with no endpoint
+        # has nothing to read. They return with the first slice, beside the
+        # endpoint tests below; HostSmokeTests keeps the factory they share.
         "tests/Catalog.Api.Tests/EndpointSecurityTests.cs",
         # §11.4's callout, executed: every policy an endpoint names must
         # resolve. With no endpoint there is no policy to enumerate, and the
@@ -389,20 +376,16 @@ OUTBOX_MIGRATION = re.compile(r"^\d{14}_AddOutbox(\.Designer)?\.cs$")
 # failed delete every pass. A service that consumes nothing today still owns
 # the table its first consumer needs.
 INBOX_MIGRATION = re.compile(r"^\d{14}_AddInbox(\.Designer)?\.cs$")
-# The purge's index, and it travels for the same reason the tables do: the
-# claim's index is filtered `WHERE ProcessedAt IS NULL` and so excludes every
-# row the purge deletes. A service scaffolded without this one scans its whole
-# outbox table hourly from its first boot — the same class of silent cost as a
-# dispatcher with no table, and invisible for exactly as long as the table is
-# small.
+# The purge's index travels for the same reason the tables do: the claim's
+# index is filtered `WHERE ProcessedAt IS NULL` and so excludes every row
+# the purge deletes. A service without it scans its whole outbox table
+# hourly from first boot, a cost invisible while the table is small.
 RETENTION_INDEX_MIGRATION = re.compile(r"^\d{14}_AddOutboxRetentionIndex(\.Designer)?\.cs$")
-# §8.5's durable marker, and it travels on a stronger version of the inbox's
-# argument. A service that protects no command yet writes no row here — but
-# `RetentionPurgeService` deletes from this table from first boot, and
-# `EfIdempotencyMarkerStore` reads it on the first command that does opt in. A
-# service scaffolded without it fails a purge every hour and then fails the
-# first idempotent command it is ever given, both against a table that is
-# simply not there.
+# §8.5's durable marker. A service that protects no command writes no row
+# here, but `RetentionPurgeService` deletes from this table from first boot
+# and `EfIdempotencyMarkerStore` reads it on the first command that opts
+# in. Without it the purge fails hourly and so does that first command,
+# both against a table that is not there.
 IDEMPOTENCY_MIGRATION = re.compile(r"^\d{14}_AddIdempotencyMarkers(\.Designer)?\.cs$")
 
 # The marker's `CommittedAt` default. The column default and the SQL cutoff that
@@ -429,14 +412,10 @@ LATER_MIGRATION = re.compile(r"^\d{14}_\w+(\.Designer)?\.cs$")
 PURE_CONSUMER_MIGRATIONS = (OUTBOX_MIGRATION, RETENTION_INDEX_MIGRATION, TRACE_CONTEXT_MIGRATION)
 
 # The migrations a scaffolded service starts with, in the order they are
-# applied — which is the order their ids have to be generated in. A tuple
-# rather than one named constant each, because every place below that cares
-# needs the position rather than the name: the id is the base plus the index in
-# minutes, and the snapshot is derived from the last one's designer.
-#
-# No count anywhere in this comment, and that is deliberate. It has said two,
-# then three, then four inside one pull request, and each stale sentence
-# survived alongside its replacement. The tuple is the count.
+# applied, which is the order their ids are generated in. A tuple because
+# each user needs the position: the id is the base plus the index in
+# minutes, and the snapshot is derived from the last one's designer. The
+# tuple is the count.
 TEMPLATE_MIGRATIONS = (
     INITIAL_CREATE,
     OUTBOX_MIGRATION,
@@ -448,13 +427,11 @@ TEMPLATE_MIGRATIONS = (
     TRACE_CONTEXT_MIGRATION,
 )
 
-# The name each shape above is known by in a diagnostic, in the same order and
-# beside it rather than spelt out where `classify` pairs the two. There the
-# pairing was `zip(..., strict=True)`, which is a real guard raising the wrong
-# exception: a tuple grown without its label gave a bare `ValueError`, past
-# `main`'s `except ScaffoldError` and out as a traceback, from a script whose
-# stated contract is one line on stderr and exit 1. Declared here the two are
-# read in one place, and `classify` says which of them is short.
+# The name each shape above is known by in a diagnostic, in the same order.
+# Declared beside the shapes so `classify` can say which of the two is short
+# as a `ScaffoldError`; a bare `zip(..., strict=True)` raises `ValueError`,
+# which `main` does not catch, so the contract of one stderr line and exit 1
+# would break.
 MIGRATION_LABELS = (
     "InitialCreate",
     "AddOutbox",
@@ -473,38 +450,29 @@ SERVICE_KEY = re.compile(r"^  ([A-Za-z0-9][A-Za-z0-9_-]*):$")
 ENV_MARKER = re.compile(r"^# ([A-Za-z0-9]+)'s two §7\.1 keys")
 
 # §14.1's Compose model is an index and one file per deployable unit, so a
-# service's environment is a file this script CREATES rather than a block it
-# splices into a file every other service also owns. That is the whole of what
-# changed here: the index gains one line, the unit file is written whole, and
-# two services being scaffolded at once no longer meet in one file.
-#
-# The index's `include:` list is the anchor, and it is read rather than
-# assumed: an entry is two spaces, a dash, a space and a path relative to the
-# compose directory. A list this script cannot find is a template that has
-# moved, which is a refusal and never a guess.
+# service's environment is a file this script creates, and the index gains
+# one line. The index's `include:` list is the anchor, read rather than
+# assumed: two spaces, a dash, a space and a path under the compose
+# directory. A list this script cannot find is a template that moved.
 COMPOSE_DIR = "deploy/compose"
 COMPOSE_INDEX = f"{COMPOSE_DIR}/docker-compose.yml"
 COMPOSE_UNITS = "services"
 COMPOSE_TEMPLATE_UNIT = f"{COMPOSE_UNITS}/{TEMPLATE.lower()}.yml"
 INCLUDE_ENTRY = re.compile(r"^  - (\S+)$")
 
-# One service's `environment:` mapping in that same file, and the keys inside
-# it — read back off the block this script has just rendered rather than off
-# the template it was lifted from, because the collision below is something the
-# rename creates. Indent is the whole selector: a mapping opens at the
-# service's own level and its keys sit one level inside it, so `build:`'s
-# nested pair, `depends_on:`'s entries and every comment are excluded by
-# position rather than by a list of names to skip past.
+# One service's `environment:` mapping in that file, and the keys inside it,
+# read off the block just rendered rather than the template, because the
+# collision below is something the rename creates. Indent is the selector:
+# keys sit one level inside the service's own, so `build:`'s nested pair,
+# `depends_on:`'s entries and every comment are excluded by position.
 ENVIRONMENT_BLOCK = re.compile(r"^    environment:$")
 ENVIRONMENT_KEY = re.compile(r"^      ([A-Za-z0-9_]+):(?:\s|$)")
 
-# §14.1 publishes every mapping on loopback: the credentials in that file are
-# deliberate development defaults, so the interface is the control standing in
-# front of them, and a scaffolded service that bound 0.0.0.0 would reopen the
-# hole one service at a time. LOOPBACK is what the render emits and what the
-# template is required to carry; HOST_IP is deliberately wider, because the
-# collision check asks whether a port is taken and a port taken on some other
-# interface is taken all the same.
+# §14.1 publishes every mapping on loopback: the file's credentials are
+# development defaults, so the interface is the control in front of them.
+# LOOPBACK is what the render emits and the template must carry; HOST_IP is
+# wider on purpose, because a port taken on some other interface is taken
+# all the same for the collision check.
 LOOPBACK = "127.0.0.1"
 HOST_IP = r"\d+\.\d+\.\d+\.\d+"
 
@@ -536,16 +504,11 @@ def classify(repo_root: Path, labels: tuple[str, ...]) -> list[str]:
     copied: list[str] = []
     for relative in discovered:
         if relative.startswith(MIGRATIONS + "/"):
-            # Migration file names carry a timestamp, so they are classified by
-            # shape rather than by name: a scaffolded service starts at
-            # InitialCreate — the hand-written EnsureSchema of §7.4 — and every
-            # later migration, and the snapshot, belongs to Catalog's model.
-            #
-            # Three shapes and no others. An unconditional `continue` here
-            # treated *anything* in this directory as classified, so a helper
-            # or a README added beside the migrations would be dropped without
-            # the guard below ever seeing it — the one directory where the
-            # scaffold's "it will not guess" promise silently did not hold.
+            # Migration file names carry a timestamp, so they are classified
+            # by shape: InitialCreate (the hand-written EnsureSchema of §7.4),
+            # and the later migrations and the snapshot, which belong to
+            # Catalog's model. Three shapes and no others: a helper or README
+            # beside the migrations reaches the guard below and is refused.
             name = PurePosixPath(relative).name
             if any(shape.fullmatch(name) for shape in TEMPLATE_MIGRATIONS):
                 copied.append(relative)
@@ -566,15 +529,11 @@ def classify(repo_root: Path, labels: tuple[str, ...]) -> list[str]:
                 f"the scaffold will not guess."
             )
 
-    # Each pair counted separately, one shape at a time. A single total over
-    # the whole directory would be satisfied by duplicates of one migration and
-    # none of another — which is precisely the state that ships a dispatcher
-    # with no table behind it, or a purge with no index.
-    #
-    # The pairing is checked before it is used, and `strict=True` is what this
-    # replaces: it caught the same mistake and raised `ValueError`, which
-    # `main` does not catch, so growing TEMPLATE_MIGRATIONS without its label
-    # ended the run in a traceback naming neither constant.
+    # Each pair is counted separately, one shape at a time: a single total
+    # would be satisfied by duplicates of one migration and none of another,
+    # which ships a dispatcher with no table or a purge with no index.
+    # The pairing is checked first so a TEMPLATE_MIGRATIONS grown without
+    # its label ends in a ScaffoldError rather than a `ValueError`.
     if len(TEMPLATE_MIGRATIONS) != len(labels):
         raise ScaffoldError(
             f"TEMPLATE_MIGRATIONS has {len(TEMPLATE_MIGRATIONS)} shape(s) and "
@@ -647,12 +606,10 @@ def pure_consumer_omits(relative: str) -> bool:
 
 
 SLICE_ENTITY = f'            modelBuilder.Entity("{TEMPLATE}.Domain.Products.Product", b =>\n'
-# The leading newline matters: without it this matches inside a nested block's
-# deeper closer, because sixteen spaces then `});` is a substring of
-# twenty-four spaces then `});`. The ComplexProperty block inside Catalog's
-# aggregate is exactly that shape, so the removal stopped halfway and left the
-# entity's own tail behind — caught by the check at the end of the function,
-# which is the reason that check is there rather than trusted away.
+# The leading newline matters: without it this matches inside a nested
+# block's deeper closer, since sixteen spaces then `});` is a substring of
+# twenty-four spaces then `});`, as in the ComplexProperty block inside
+# Catalog's aggregate. The check at the end of the function guards it.
 ENTITY_END = "\n                });\n\n"
 PROJECTION_ENTITY = f'            modelBuilder.Entity("{TEMPLATE}.Infrastructure.Persistence.StockLevel", b =>\n'
 
@@ -687,16 +644,11 @@ def without_slice_entity(designer: str) -> str:
             )
         stripped = stripped[:start] + stripped[end + len(ENTITY_END):]
 
-    # The aggregate took a using with it. EF emits
-    # `using System.Collections.Generic;` for a ComplexProperty mapped as a
-    # Dictionary<string, object>, which is how §5.3's Money reaches the model —
-    # so with the entity gone the using is unreferenced, and EF would not have
-    # written it. Guarded rather than assumed: if any Dictionary< survives the
-    # removal the using is still earning its place and stays.
-    #
-    # Found by diffing against the tool, which is the only way it could be:
-    # the scaffolded service built and its migration produced an empty Up, and
-    # the sole difference from EF's own rewritten snapshot was this line.
+    # The aggregate took a using with it. EF emits `using
+    # System.Collections.Generic;` for a ComplexProperty mapped as a
+    # Dictionary<string, object>, which is how §5.3's Money reaches the
+    # model; with the entity gone the using is unreferenced and EF would not
+    # write it. If any Dictionary< survives the removal the using stays.
     dictionary_using = "using System.Collections.Generic;\n"
     if "Dictionary<" not in stripped and dictionary_using in stripped:
         stripped = stripped.replace(dictionary_using, "", 1)
@@ -757,12 +709,8 @@ def snapshot_from_designer(designer: str, migration_id: str, migration: str) -> 
 def sort_usings(text: str) -> str:
     """Re-sort the leading `using` block, which the rename can reorder.
 
-    EF writes the block sorted, and where the template's namespace sorts is not
-    where the new service's does — `Catalog` comes before `Microsoft` and
-    `Ordering` comes after it. Sorting after the rename is what keeps the file
-    byte-identical to what the next `dotnet ef migrations add` in that service
-    would write, so the first real migration produces no spurious diff. Checked
-    against the tool rather than assumed: the difference is how it was found.
+    EF writes it sorted; sorting after the rename keeps the file identical to
+    the next `dotnet ef migrations add` output in the service.
     """
     lines = text.splitlines(keepends=True)
     first = next((i for i, line in enumerate(lines) if line.startswith("using ")), None)
@@ -773,18 +721,11 @@ def sort_usings(text: str) -> str:
     while last < len(lines) and lines[last].startswith("using "):
         last += 1
 
-    # Keyed on the namespace, not on the whole line: `;` sorts after `.`, so a
-    # plain line sort puts Microsoft.EntityFrameworkCore.Infrastructure ahead
-    # of Microsoft.EntityFrameworkCore and disagrees with the tool. Also found
-    # by diffing against it.
-    #
-    # System first, which is the other half of the tool's order and did not
-    # show until the outbox designer arrived: until then the only usings were
-    # Microsoft.* and the service's own, and a plain sort happened to agree.
-    # EF writes `using System;` and `using System.Collections.Generic;` above
-    # everything else, so a service whose name sorts before `System` — every
-    # one of them, since these are the only two — would otherwise get a block
-    # the next `migrations add` immediately rewrites.
+    # Keyed on the namespace, not the whole line: `;` sorts after `.`, so a
+    # plain line sort puts Microsoft.EntityFrameworkCore.Infrastructure
+    # ahead of Microsoft.EntityFrameworkCore, against the tool. System goes
+    # first, as EF writes `using System;` above everything else; a service
+    # name sorting before it would get a block `migrations add` rewrites.
     def namespace(line: str) -> tuple[int, str]:
         name = line[len("using "):].strip().rstrip(";")
         return (0 if name == "System" or name.startswith("System.") else 1, name)
@@ -796,16 +737,8 @@ def sort_usings(text: str) -> str:
 def next_migration_id(migration_id: str, minutes: int = 1) -> str:
     """The id `minutes` after the given one, keeping EF's 14-digit shape.
 
-    A plain `int(...) + 1` is wrong on every boundary the format has: second 59
-    rolls into 60, and so do minute, hour and month. Parsed and re-formatted
-    instead, which is the only arithmetic that is right for all of them.
-
-    MIGRATION_ID accepts any fourteen digits, which is the right shape check
-    and not a calendar one — `20261301000000` passes it and is month thirteen.
-    `strptime` is what notices, and its ValueError is not a ScaffoldError, so
-    without this the CLI printed a traceback where every other refusal prints
-    one line. OverflowError joins it for the year-9999 end of the range, where
-    adding a minute leaves what `datetime` can represent.
+    Parsed and re-formatted, as `int(...) + 1` breaks at every boundary.
+    `strptime` and year 9999 raise errors that become a ScaffoldError.
     """
     try:
         stamp = datetime.strptime(migration_id, "%Y%m%d%H%M%S") + timedelta(minutes=minutes)
@@ -849,15 +782,10 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
                 text = text.replace(needle, replacement)
 
         # The outbox designer describes Catalog's whole model, aggregate
-        # included. Stripped here rather than further down, because the slice
-        # check immediately below is exactly the check that should see the
-        # result — a Product block surviving the removal must stop the run, not
-        # reach the file the service ships.
-        # Every designer, not only the last one. Each describes the model as of
-        # its own migration and each therefore carries Catalog's aggregate, so
-        # leaving the earlier one alone would ship a service a designer that
-        # claims a table it never creates — and would trip the slice check
-        # below, which is the guard that made this obvious.
+        # included, stripped here so the slice check below sees the result.
+        # Every designer, not only the last: each describes the model as of
+        # its own migration, so an earlier one left alone would claim a
+        # table it never creates.
         if PurePosixPath(relative).name.endswith(
             (
                 "_AddOutbox.Designer.cs",
@@ -891,17 +819,11 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
             name = PurePosixPath(relative).name
             template_id = name.split("_", 1)[0]
 
-            # One id per template migration, and the order between them is the
-            # order they are applied in — EF sorts by this prefix, so a service
-            # whose outbox table were ordered before its schema would fail on
-            # the first run. A minute apart, spaced by position in
-            # TEMPLATE_MIGRATIONS rather than by name, so the next one added is
-            # an entry in that tuple and no arithmetic here.
-            #
-            # No count in this comment on purpose. It has said two, then three,
-            # then four inside one pull request, and the stale sentences stacked
-            # rather than being replaced — three contradictory claims about the
-            # same tuple, which is what a review caught. The tuple is the count.
+            # One id per template migration, in the order they are applied,
+            # since EF sorts by this prefix: an outbox table ordered before
+            # its schema would fail the first run. A minute apart, spaced by
+            # position in TEMPLATE_MIGRATIONS rather than by name, so a new
+            # migration is one entry in that tuple. The tuple is the count.
             offset = next(
                 index for index, shape in enumerate(TEMPLATE_MIGRATIONS) if shape.fullmatch(name)
             )
@@ -1030,11 +952,8 @@ def compose_unit(names: Names) -> str:
 def compose_included(repo_root: Path) -> list[tuple[int, str]]:
     """The index's include list: each entry's line number and its path.
 
-    Read out of the index rather than globbed off the directory, because the
-    index is what Compose obeys. A unit file sitting in `services/` that no
-    line includes is not part of the model, and a port published in it is not
-    a port that is taken — so globbing would refuse a free port on the strength
-    of a file nothing reads.
+    Read from the index, not globbed: Compose obeys the index, so a unit
+    file no line includes is not part of the model.
     """
     text, _ = read(repo_root, COMPOSE_INDEX)
     entries = [
@@ -1097,13 +1016,8 @@ def update_compose(repo_root: Path, names: Names, port: int | None) -> str:
 def render_service_compose(repo_root: Path, names: Names, port: int | None) -> str:
     """Catalog's own unit file, renamed, re-ported and re-headed.
 
-    An extraction rather than a template: the pair's comments argue the
-    inline-default rule and §7.1's two keys, and they travel with the copy.
-    What does NOT travel is the header above `services:` — it is prose about
-    the template, and a rename would turn true sentences about Catalog into
-    false ones about the service being rendered. It is replaced rather than
-    renamed, and the replacement names no template token, because the
-    straggler check in `plan` reads what this returns.
+    The pair's comments travel with the copy (§7.1); the header above
+    `services:` is replaced and names no template token, as `plan` checks.
     """
     text, newline = read(repo_root, f"{COMPOSE_DIR}/{COMPOSE_TEMPLATE_UNIT}")
 
@@ -1133,12 +1047,10 @@ def render_service_compose(repo_root: Path, names: Names, port: int | None) -> s
     require_once(block, TEMPLATE_START_ORDER, f"{COMPOSE_DIR}/{COMPOSE_TEMPLATE_UNIT}")
     block = block.replace(TEMPLATE_START_ORDER, "")
 
-    # The loopback prefix is REQUIRED of the template rather than copied from
-    # it. Reading the prefix off Catalog would make the scaffold agree with
-    # whatever Catalog does, so removing the bind there would silently publish
-    # every service scaffolded afterwards on every interface — a gate that
-    # follows its subject cannot catch its subject regressing. Anchored, the
-    # same removal is a scaffold that refuses to run and says why.
+    # The loopback prefix is required of the template rather than copied
+    # from it: a prefix read off Catalog would follow whatever Catalog does,
+    # so removing the bind there would publish every later service on every
+    # interface. Anchored, the same removal is a scaffold that refuses to run.
     published = re.search(rf'ports: \[ "{re.escape(LOOPBACK)}:(\d+):8080" \]', block)
     if published is None:
         raise ScaffoldError(
@@ -1155,34 +1067,11 @@ def render_service_compose(repo_root: Path, names: Names, port: int | None) -> s
     else:
         block = block.replace(published.group(0), f'ports: [ "{LOOPBACK}:{port}:8080" ]')
 
-    # §7.1's runtime key is `ConnectionStrings__<Service>` and the rename is
-    # what writes it, so a service named after one of §14.1's infrastructure
-    # connections renders a key the api block already declares. Nothing above
-    # can see it: the rename worked exactly as specified, the straggler check
-    # finds no template token left, and duplicate keys leave the YAML well
-    # formed — so the run reports success and the file quietly means one of the
-    # two values.
-    #
-    # A predicate over the rendered block, never the three names it happens to
-    # catch today. A list of names goes stale the moment §14.1 gives this block
-    # a sixth `ConnectionStrings__*` key, and a gate that silently stops
-    # covering the newest surface is this repository's most-repeated failure.
-    #
-    # **Compared casefolded, because the loader on the other side of this file
-    # is.** §14.2 states it in the one line where it costs an Aspire resource
-    # name: configuration is case-insensitive but not punctuation-insensitive.
-    # So `ConnectionStrings__Rabbitmq` and `ConnectionStrings__RabbitMq` are
-    # two YAML keys and one configuration key, and the first version of this
-    # check — a case-sensitive `in seen` — saw two distinct strings and passed.
-    # That handed the exact defect it was written for back to every spelling of
-    # an infrastructure connection with different capitals, `RabbitMQ` (the
-    # product's own) among them. The same predicate again, one level less
-    # literal: a list of names would have gone stale, and so does an equality
-    # that is stricter than the thing it is standing in for.
-    #
-    # `casefold` rather than `lower`, which is the spelling Python defines for
-    # case-insensitive comparison — it folds what `lower` leaves alone, and the
-    # cost of choosing the weaker one is a refusal that does not fire.
+    # §7.1's runtime key is `ConnectionStrings__<Service>` and the rename
+    # writes it, so a service named after one of §14.1's infrastructure
+    # connections renders a key the api block already declares. A predicate
+    # over the rendered block, not a list of names, compared casefolded
+    # because §14.2 makes configuration keys case-insensitive.
     for mapping in environment_keys(block):
         seen: dict[str, str] = {}
         for key in mapping:
@@ -1234,10 +1123,7 @@ def update_infra_only(repo_root: Path, names: Names) -> str:
 def update_env_example(repo_root: Path, names: Names) -> str:
     """Catalog's commented pair, extracted so its argument comes with it.
 
-    Bounded by the next service's own marker rather than by the end of the
-    file — the same defect as `update_compose`, and found the same way: to EOF
-    is the template's block only until one service has been added, after which
-    it drags that service's variables along and writes them twice.
+    Bounded by the next service's marker, not EOF, as in `update_compose`.
     """
     text, newline = read(repo_root, "deploy/compose/.env.example")
     lines = text.split("\n")
