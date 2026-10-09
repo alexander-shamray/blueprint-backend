@@ -428,31 +428,32 @@ it enforces:
 
 **The cross-service rule is one test over all five assemblies**, and it is
 stated as an allow-list rather than a deny-list of service names, which is
-what makes it cover a service before it exists: this service by *prefix*,
-and the building blocks *by name*, because `Common.TestSupport` (§4.1) is
-named like one and is not one.
+what makes it cover a service before it exists: this service's own
+assemblies and the building blocks, both *by name*, because a test library
+shares each one's prefix and is neither — `Common.TestSupport` (§4.1) is named
+like a building block, and `Ordering.TestSupport` like an Ordering project.
 
 Ordering's, in `tests/Ordering.Api.Tests/ArchitectureTests.cs`, is the list of
-building blocks and the helper its test calls once for each of the five
-assemblies; the excerpt leaves out the lines between the two:
+building blocks, the service's own projects read off the five assemblies, and
+the helper its test calls once for each of them; the excerpt leaves out the
+lines between the first two:
 
 ```csharp
     /// <summary>§4.1's building blocks by name, because Common.TestSupport is named like one and is not.</summary>
     private static readonly string[] BuildingBlocks =
         ["Common.Application", "Common.Contracts", "Common.Domain", "Common.Infrastructure", "Common.Web"];
 
+    /// <summary>The service's own projects by name, never its prefix, which Ordering.TestSupport shares.</summary>
+    private static readonly string[] OwnProjects = [.. ServiceAssemblies.Select(assembly => assembly.GetName().Name!)];
+
     private static void ShouldStayInsideThisService(string subject, AssemblyName[] references)
     {
-        string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
-
         string[] foreign =
         [
             .. references
                 .Where(IsFirstParty)
                 .Select(reference => reference.Name!)
-                .Where(name =>
-                    !BuildingBlocks.Contains(name) &&
-                    !name.StartsWith($"{self}.", StringComparison.Ordinal))
+                .Where(name => !BuildingBlocks.Contains(name) && !OwnProjects.Contains(name))
                 .Order()
         ];
 
@@ -502,14 +503,15 @@ resolves a `DbContext` and calls `Database.Migrate()`, and none of the building
 blocks is on that path.
 
 **Nothing references the migrator, and saying so is a third gate rather than a
-wider prefix.** No row in the table names the `*.Migrator` as something a
-project *may* reference: it is a leaf, a job host that resolves a `DbContext`
-and calls `Database.Migrate()` ([§7.4](07-persistence.md)), so it references
-and is not referenced. The cross-service gate cannot see that edge, because it
-subtracts every assembly under this service's own name — which is precisely
-what makes an `Api → Migrator` reference invisible to it. That edge is inside
-one service and still forbidden, so it gets a rule of its own over the other
-four assemblies. **The two gates ask different questions** — *whose is it* and
+shorter list of this service's own projects.** No row in the table names the
+`*.Migrator` as something a project *may* reference: it is a leaf, a job host
+that resolves a `DbContext` and calls `Database.Migrate()`
+([§7.4](07-persistence.md)), so it references and is not referenced. The
+cross-service gate cannot see that edge, because it admits every one of this
+service's own assemblies, the migrator among them — which is precisely what
+makes an `Api → Migrator` reference invisible to it. That edge is inside one
+service and still forbidden, so it gets a rule of its own over the other four
+assemblies. **The two gates ask different questions** — *whose is it* and
 *which layer is it* — and one predicate answering both would answer neither
 legibly. The migrator is skipped as a subject rather than exempted in the
 predicate: an assembly does not reference itself, so including it would pass
