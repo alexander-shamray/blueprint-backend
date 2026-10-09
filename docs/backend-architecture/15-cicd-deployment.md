@@ -315,8 +315,9 @@ over the plan's workloads to find every release it judges
 `smoke.sh`, `check.py`, `canary.py` and `realm_check.py` each declare
 `SOURCE_INPUTS` beside the reads, and each asserts that both of its workflow's
 triggers cover every entry — a copy of a list drifts exactly as a copy of a
-number does. All four also assert the reads direction — every file the gate
-opens is in the list — which is the shape the second callout below argues for.
+number does. All four gates also assert the reads direction — every file the
+gate opens is in the list, the canary's in its suite, `test_canary.py` — which
+is the shape the second callout below argues for.
 
 > **A fifth copy of that pattern exists and is not one of the four above, which
 > is why ADR-042 calls `realm_check.py` the fifth.**
@@ -1124,7 +1125,8 @@ encrypted hop ended at this object. An overlay clearing it would render a valid
 plaintext Ingress and falsify all three silently.
 
 **`trustedNetworks` is mandatory once the Ingress is enabled, and ships empty**
-so the chart refuses to render until an overlay supplies it. These are the
+so the chart refuses to render until an overlay supplies it, as a list of
+CIDRs such as `[ "10.42.0.0/16" ]`, set per environment. These are the
 ingress controller's pod CIDRs, not the cluster's: anything trusted here can
 set `X-Forwarded-For`. A plausible default is worse than none. Too narrow, and
 the real ingress is untrusted, its forwarded header ignored, and §10.3's
