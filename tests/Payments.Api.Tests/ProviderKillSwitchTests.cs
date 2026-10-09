@@ -148,6 +148,11 @@ public sealed class ProviderKillSwitchTests
             attempts.Count.ShouldBe(Burst * (Retries + 1), "every message ran its first delivery and every retry");
             consumed.Faults.ShouldBe(Burst, "each message faulted once, after its retries, not once per attempt");
 
+            // Completed reaches this observer before the bus's own health observer records the stop (§9.7).
+            using CancellationTokenSource deadline = new(Budget);
+            while (bus.CheckHealth().Status != BusHealthStatus.Degraded && !deadline.IsCancellationRequested)
+                await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+
             bus.CheckHealth().Status.ShouldBe(
                 BusHealthStatus.Degraded,
                 "a stopped endpoint must leave readiness answering 200, or a provider outage unreadies the host");
