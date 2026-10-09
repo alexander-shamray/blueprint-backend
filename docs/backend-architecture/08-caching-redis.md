@@ -861,8 +861,9 @@ the lost commit acknowledgement below is about.
 > of what the marker already gives, not a protection of its own. It would also
 > cost every ordinary fault its retry for whatever the claim had left, which on
 > a fault raised early is very nearly the full retention and is a large
-> availability price for a postponement. A row has no TTL; what deletes it is §9.5's purge on a window
-> `RetentionPolicy` refuses to set below this store's own.
+> availability price for a postponement. A row has no TTL; what deletes it is
+> §9.5's purge on a window `RetentionPolicy` refuses to set below this store's
+> own.
 >
 > **What the caller gets is a refusal and not a replay, and there are two ways
 > to arrive at it — only one of which is the lost acknowledgement.** On that
