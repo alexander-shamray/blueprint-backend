@@ -291,11 +291,13 @@ between the two — §11.2's password grant is on in the local realm and off in 
 deployed one — and a check that guessed would pass a production realm on the
 local realm's terms.
 
-**Four of the five filters name files outside their own tree**, and none is an
-oversight — each names an input its gate actually reads. Compose is the one
-that stays inside, because its smoke starts the file and nothing else. The Helm
-one is below; the observability one names `src/**`, because deciding whether an
-alert's signal exists means reading every instrument declaration in C#, and
+**All five filters name files outside their own tree**, and none is an
+oversight — each names an input its gate actually reads. Compose's names the
+files it mounts from `deploy/observability/` and what a host's healthcheck
+reads: the probe, the endpoints it asks and the files that bind each host's
+port. The Helm one is below; the observability one names `src/**`, because
+deciding whether an alert's signal exists means reading every instrument
+declaration in C#, and
 `docs/runbooks/**`, because a renamed runbook is an alert with no procedure
 behind it; the canary one names `deploy/helm/**`, because its plan asserts each
 workload's chart exists and can render a canary track, `src/**`, because it
@@ -1378,9 +1380,10 @@ a key that never varies has nothing to validate.
 > **An options type needs at least one member that differs between
 > environments.** If every value in it would be the same in Compose, in the test
 > fixture and in production, it is not configuration — it is a constant that has
-> been given a deployment obligation and four places to be forgotten. `MaxAttempts`
-> (§9.4), the dispatcher's tick, the saga's schedule delays (§9.6) and
-> `ServiceOptions.OperationTimeout` are all constants for exactly this reason.
+> been given a deployment obligation and every place it can be forgotten.
+> `MaxAttempts` (§9.4), the dispatcher's tick, the saga's schedule delays
+> (§9.6) and `ServiceOptions.OperationTimeout` are all constants for exactly
+> this reason.
 > `Identity:Client` earns its options type by holding a secret that must differ
 > per environment, and `Jurisdiction` earns one because a statutory window, the
 > languages a customer is owed and the zone their dates are read in are facts
@@ -1420,11 +1423,11 @@ public sealed class ServiceIdentityOptions
 > **A required setting is a deployment obligation.** `ValidateOnStart` turns a
 > missing value into a refusal to boot, which is the right trade — but only if
 > every environment supplies it. Adding a `[Required]` field means editing
-> **four** places in the same change: Compose (§14.1), the Aspire host (§14.2),
-> the Helm values (§15.3) and the secrets inventory (above). A gate with nothing
-> behind it does not harden the service; it stops it.
+> **three** places in the same change: Compose (§14.1), the Helm values (§15.3)
+> and the secrets inventory (above). A gate with nothing behind it does not
+> harden the service; it stops it.
 >
-> **The integration-test fixture (§12.4) is the fifth, and it fails first.**
+> **The integration-test fixture (§12.4) is the fourth, and it fails first.**
 > `WebApplicationFactory` builds the real host, so `ValidateOnStart` runs there
 > too — a missing key throws `OptionsValidationException` out of
 > `InitializeAsync` and takes down the whole suite before one assertion runs.

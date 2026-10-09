@@ -75,16 +75,15 @@ bound values — this is a repository-wide lesson, not a secrets-specific one.
 
 **A required setting is a deployment obligation**, and `ValidateOnStart` turns a
 missing value into a refusal to boot. That is the right trade only if every
-environment supplies it, so adding one means editing **five** places in the same
+environment supplies it, so adding one means editing **four** places in the same
 change:
 
 | | |
 |---|---|
 | 1. Compose | the host's own unit under `deploy/compose/services/` (§14.1), with a working inline default |
-| 2. The Aspire host | §14.2 — **not adopted**, so this is a line to write only if it ever is |
-| 3. Helm values | `deploy/helm/<chart>/values.yaml`, inside the capability block that makes the key conditional where the chart has one; the umbrella holds no values of its own, so its caller passes the same value under the subchart's name (§15.3) |
-| 4. The inventory | §15.4's table — the row is what makes the obligation reviewable |
-| 5. The integration-test fixture | §12.4 — and this one fails first |
+| 2. Helm values | `deploy/helm/<chart>/values.yaml`, inside the capability block that makes the key conditional where the chart has one; the umbrella holds no values of its own, so its caller passes the same value under the subchart's name (§15.3) |
+| 3. The inventory | §15.4's table — the row is what makes the obligation reviewable |
+| 4. The integration-test fixture | §12.4 — and this one fails first |
 
 **The fixture is the one people forget and the one that fails loudest.**
 `WebApplicationFactory` builds the real host, so `ValidateOnStart` runs there
@@ -105,7 +104,7 @@ to rotate is the one that does not exist.
 **An options type needs at least one member that differs between
 environments.** If every value would be the same in Compose, in the test fixture
 and in production, it is not configuration — it is a constant that has been
-given a deployment obligation and four places to be forgotten.
+given a deployment obligation and every place it can be forgotten.
 `Identity:Client` earns its options type by holding a secret that must differ
 per environment; §15.4 names the types that have earned one.
 
