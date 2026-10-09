@@ -371,8 +371,8 @@ file and a reviewer are the only things that do.
   back up when the call fits and splits when it does not. One element alone
   below its `(` is the outermost-bracket break further down, not this.
   The 120 is *review-carried*: no analyser or gate measures it, and
-  `max_line_length` only draws the editor's ruler, so a line past it is a
-  finding.
+  `max_line_length` only draws the editor's ruler, so a hand-written line
+  past it is a finding. Generated migrations and designers are exempt.
 - **`[` and `{` each take a line of their own**, at the column of the construct
   they open, and their closers do too. **`(` is the single exception**: it ends
   the line it opens, and `)` trails the last element — `);`, not a line of its
