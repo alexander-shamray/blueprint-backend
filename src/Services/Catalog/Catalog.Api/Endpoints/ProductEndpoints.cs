@@ -10,8 +10,7 @@ using Common.Web;
 namespace Catalog.Api.Endpoints;
 
 /// <summary>
-/// One static class per aggregate (ADR-015), in the namespace §4.2's gate selects on; the gateway strips
-/// <c>/api</c> (§10.2), so these routes start at the version.
+/// One static class per aggregate (ADR-015); the gateway strips <c>/api</c> (§10.2), so routes start at the version.
 /// </summary>
 public static class ProductEndpoints
 {
