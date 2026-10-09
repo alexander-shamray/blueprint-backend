@@ -83,8 +83,8 @@ accessor by default, so omitting that line fails `ValidateOnBuild` rather than
 the first ownership check.
 
 Note what is **not** here. `AddCommonWebDefaults` covers what every host needs
-identically. Anything needing a connection string — the SQL, Redis, broker and
-outbox checks in §13.5 — belongs in `AddOrderingInfrastructure`, because
+identically. Anything needing a connection string — the SQL, Redis and broker
+checks in §13.5 — belongs in `AddOrderingInfrastructure`, because
 `Common.Web` cannot know them.
 
 `AddObservability` itself, from
@@ -1839,9 +1839,10 @@ Two rows are left out rather than left unmeasurable. **Gateway added latency**
 would need the gateway's own duration minus the backend's, correlated per
 request — no single instrument produces it, so any number published for it
 could only be guessed at. **Query p95 split by cache hit and miss** needs a
-tag no query handler sets; the cache's own hit ratio (§13.6, from the
-`Microsoft.Extensions.Caching.Hybrid` meter) answers the question the split
-asks, which is whether the cache is working.
+tag no query handler sets. The question the split asks, whether the cache is
+working, would be answered by the cache's own hit ratio, which has no signal
+until the cache publishes a meter (§13.6's callout on
+`Microsoft.Extensions.Caching.Hybrid`).
 
 Cutting a row is the honest move when the alternative is a target nobody can
 compute. An SLO that cannot be evaluated is not a weak SLO — it is a claim that
