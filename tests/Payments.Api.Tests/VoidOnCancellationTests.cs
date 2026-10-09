@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Common.Contracts;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
+using Common.Infrastructure.Outbox;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Payments.TestSupport;
@@ -38,6 +40,26 @@ public sealed class VoidOnCancellationTests(ServiceFixture fixture) : IAsyncLife
         (await RefundCount(order)).ShouldBe(1);
         VoidCalls().ShouldBe(1);
         (await StagedAsync("PaymentRefunded")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_refund_states_its_amount_at_the_currencys_exponent_not_the_columns_scale()
+    {
+        // ADR-067: Notifications renders the wire's decimal at its own scale, so this producer owns the exponent. The
+        // authorisation is read back from decimal(19,4), which is where a four-place scale would come from.
+        Guid order = Guid.CreateVersion7();
+        await PublishAsync(Placed(order, 42.10m));
+        await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"));
+
+        await PublishAsync(Cancelled(order));
+
+        OutboxMessage refunded = (await fixture.OutboxAsync())
+            .Single(r => r.MessageType.Contains(nameof(PaymentRefunded), StringComparison.Ordinal));
+
+        using JsonDocument payload = JsonDocument.Parse(refunded.Payload);
+        payload.RootElement.GetProperty(nameof(PaymentRefunded.Amount)).GetRawText().ShouldBe(
+            "42.10",
+            "euros have two places; the column's four are not the refund's");
     }
 
     [Fact]
