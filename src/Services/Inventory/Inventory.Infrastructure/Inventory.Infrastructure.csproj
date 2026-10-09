@@ -28,6 +28,7 @@
   <ItemGroup>
     <!-- RetryPolicy is internal, and its intervals are cited rather than copied. -->
     <InternalsVisibleTo Include="Inventory.Api.Tests" />
+    <InternalsVisibleTo Include="Platform.IntegrationTests" />
   </ItemGroup>
 
 </Project>
