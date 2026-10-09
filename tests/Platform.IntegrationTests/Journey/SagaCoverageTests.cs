@@ -83,6 +83,7 @@ public sealed class SagaCoverageTests
         {
             string path = Path.Combine(root, Harness + file);
             File.Exists(path).ShouldBeTrue($"{state} / {name} names {file}, which is not under {Harness}");
+            file.ShouldContain(state, Case.Sensitive, $"{file} is the suite for another state than {state}");
 
             // The event's property, not its wire type: a schedule's is named for the wait, e.g. PaymentTimeout.
             string mention = name.Split('.')[0];
