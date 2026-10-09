@@ -596,8 +596,8 @@ provider has never heard of, and the realm test compares against a literal
 because `Common.Web.Tests` is a building block's suite and cannot reference a
 host to read its constants. The check belongs to whichever suite owns the
 constant, which is where `GrantablePermissionTests` sits in
-`Gateway.Api.Tests`, `Ordering.Api.Tests`, `Inventory.Api.Tests` and
-`Payments.Api.Tests`.
+`Gateway.Api.Tests`, `Catalog.Api.Tests`, `Ordering.Api.Tests`,
+`Inventory.Api.Tests` and `Payments.Api.Tests`.
 
 > **A policy name is a reference, and nothing checks it.**
 > `RequireAuthorization("orders:cancel")` takes a string. Misspell it, or
