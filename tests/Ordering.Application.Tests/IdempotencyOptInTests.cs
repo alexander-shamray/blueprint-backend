@@ -90,6 +90,22 @@ public class IdempotencyOptInTests
     }
 
     [Fact]
+    public void Every_operation_name_fits_the_marker_key_column()
+    {
+        // A name too long fails neither the build nor startup, only the marker's insert on its first dispatch (§8.5).
+        string[] tooLong =
+        [
+            .. Idempotent()
+                .Select(OperationNameOf)
+                .Where(name => name.Length > IdempotencyKeyRule.LongestOperationName)
+        ];
+
+        tooLong.ShouldBeEmpty(
+            $"an OperationName longer than {IdempotencyKeyRule.LongestOperationName} characters overflows " +
+            "IdempotencyMarker.KeyMaxLength beside its subject and CommandId");
+    }
+
+    [Fact]
     public void Operation_names_are_distinct_within_this_service()
     {
         // OperationName is the key's middle segment, so two commands sharing one share a keyspace (§8.5).
