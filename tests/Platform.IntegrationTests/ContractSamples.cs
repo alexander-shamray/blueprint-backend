@@ -2,6 +2,7 @@ using Common.Contracts.Catalog.V1;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Contracts.Shipping.V1;
 
 namespace Platform.IntegrationTests;
@@ -15,6 +16,7 @@ internal static class ContractSamples
     private static readonly Guid Order = new("33333333-3333-3333-3333-333333333333");
     private static readonly Guid Customer = new("44444444-4444-4444-4444-444444444444");
     private static readonly Guid Product = new("55555555-5555-5555-5555-555555555555");
+    private static readonly Guid Request = new("66666666-6666-6666-6666-666666666666");
 
     // A non-zero offset, so an options change that normalises the offset away is caught.
     private static readonly DateTimeOffset Occurred =
@@ -165,6 +167,23 @@ internal static class ContractSamples
             OccurredAt = Occurred,
             OrderId = Order,
             TrackingNumber = "TRK-99182"
+        },
+        [typeof(PersonalDataDeleteRequested)] = () => new PersonalDataDeleteRequested
+        {
+            MessageId = Message,
+            CorrelationId = Correlation,
+            OccurredAt = Occurred,
+            RequestId = Request,
+            SubjectId = Customer
+        },
+        [typeof(PersonalDataDeleteCompleted)] = () => new PersonalDataDeleteCompleted
+        {
+            MessageId = Message,
+            CorrelationId = Correlation,
+            OccurredAt = Occurred,
+            RequestId = Request,
+            Responder = "shipping",
+            Count = 3
         }
     };
 
