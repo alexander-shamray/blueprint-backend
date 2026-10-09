@@ -35,6 +35,8 @@
   <ItemGroup>
     <!-- The worker suite drives the production validator over a binding of its own (§15.4). -->
     <InternalsVisibleTo Include="Notifications.Worker.Tests" />
+    <!-- The journey reads the retry ladder's first rung and the send tick, cited rather than copied (§12.1). -->
+    <InternalsVisibleTo Include="Platform.IntegrationTests" />
   </ItemGroup>
 
 </Project>

@@ -27,4 +27,9 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The journey reads the retry ladder's first rung and delivers the saga's expiries (§12.1). -->
+    <InternalsVisibleTo Include="Platform.IntegrationTests" />
+  </ItemGroup>
+
 </Project>
