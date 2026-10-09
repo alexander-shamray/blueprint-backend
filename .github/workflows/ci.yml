@@ -511,8 +511,8 @@ jobs:
     needs: [licence-gate, pipeline-gate]
     runs-on: ubuntu-latest
     # Forty green runs before 2026-10-09 took at most 5.4 minutes here and 6.2
-    # in the slowest integration shard. 30 is five times that, so a hanging
-    # test fails in half an hour rather than at GitHub's default of 360.
+    # in the slowest integration shard. 30 is about five times that, so a
+    # hanging test fails in half an hour rather than at GitHub's default of 360.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
