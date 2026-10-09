@@ -1207,7 +1207,7 @@ is a service that will not boot.
 
 **`docs/secrets.md` is the operational half of this section**, on the terms
 `docs/testing.md` holds for [§12](12-test-strategy.md): how a secret travels
-from a vault into a pod, how each kind is rotated, and what the five places are
+from a vault into a pod, how each kind is rotated, and what the places are
 that a new required key has to reach. It carries the procedure and **not** the
 inventory — the table below is the inventory, and a second copy would be a
 second thing to reconcile. Where the two disagree, this section wins.
