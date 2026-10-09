@@ -27,12 +27,11 @@ parcel left.
 shorter. A booking legitimately waits for collection, and how long it waits
 is the warehouse's and the carrier's schedule, which the carrier contract does
 not state. The despatch wait is the one bound the platform has decided: past
-it the saga has raised an uncancelled order for review as `not_despatched`,
-or is about to, once its queue delivers the expiry; an order whose
-cancellation the carrier refused is already in review as
-`cancelled_after_confirmation`. A shorter age would be a guess at a
-collection time; a longer one would leave orders in review with nothing
-saying why.
+it every counted order is in review, or about to be once the saga's queue
+delivers the expiry: as `not_despatched`, unless it was cancelled within the
+wait, which put it there as `cancelled_after_confirmation` instead. A shorter
+age would be a guess at a collection time; a longer one would leave orders in
+review with nothing saying why.
 
 No `for`: the predicate is already an age, so a wait would add to it rather
 than ride anything out, as the outbox lanes' rule argues. A ticket, not a
@@ -48,10 +47,9 @@ reads the shipment's whole page.
 - **A shipment whose cancellation awaits the carrier's answer.** Its parcel
   is held back, so the gauge leaves it out. One whose cancellation the
   carrier refused is moving, stays `Booked` and polled, and is counted.
-- **Money and stock.** Payment and the reservation are settled; an
-  uncancelled order is waiting on a despatch, which `order-review.md`'s
-  `not_despatched` works, and one whose cancellation was refused is its
-  `cancelled_after_confirmation`.
+- **Money and stock.** Payment and the reservation are settled, and the
+  order's review row, under one of the two codes above, is where
+  `order-review.md` works it.
 
 **A shipment already despatched is affected and not counted**: if the route
 has gone, its delivery 404s too and reads as nothing yet. It is still polled,
@@ -117,7 +115,7 @@ gone, every events read is a 404, despatched shipments' included.
   warehouse and the carrier. Shipping does nothing until a scan arrives.
 
 Either way the count falls as scans land, and the alert resolves. **Work the
-orders already in review** from `order-review.md`: `not_despatched` for an
-uncancelled order, whose row a despatch published after the saga gave up
-does not clear, and `cancelled_after_confirmation` for one whose cancellation
-the carrier refused.
+orders already in review** from `order-review.md`, by order id: under
+`not_despatched`, whose row a despatch published after the saga gave up does
+not clear, or under `cancelled_after_confirmation` for an order cancelled
+within the despatch wait.
