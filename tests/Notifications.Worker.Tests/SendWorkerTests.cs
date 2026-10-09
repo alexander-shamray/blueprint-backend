@@ -479,6 +479,27 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_lost_acknowledgement_of_the_sent_commit_is_one_send_and_a_finished_row()
+    {
+        (Guid order, Guid customer) = Ids();
+        fixture.ContactAnswers(customer, Mailbox, "en");
+        Notification owed = await OwedAsync(order, customer);
+        using OutboundCount resent = ResentCounter.Resent(fixture.Factory.Services);
+
+        using (CommitFault fault = fixture.LoseNextSentAcknowledgement())
+        {
+            // The commit is durable and the strategy runs the unit again, which finds the row sent.
+            (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1));
+            fault.Fired.ShouldBeTrue();
+        }
+
+        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Sent);
+        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(0, 0), "a sent row is not claimed again");
+        (await fixture.Relay.SingleAsync(Ct)).ShouldNotBeNull();
+        resent.Value.ShouldBe(0, "nothing was sent twice");
+    }
+
+    [Fact]
     public async Task A_pass_that_throws_leaves_the_host_running()
     {
         // The claim failing, not a row, as the pass catches per row; an unreachable database makes the pass throw.
