@@ -3066,9 +3066,9 @@ IHttpClientBuilder pricing = builder.Services
 // Resilience is registered FIRST so it sits outermost, and the credential
 // handler runs inside it. The handler then runs once per ATTEMPT rather than
 // once per request, so a retried attempt asks the token cache again instead
-// of replaying the first attempt's token. Narrower than it sounds, and §11.5
-// spells out why: the retries that fire are transport faults, because a gRPC
-// status rides an HTTP 200 that this pipeline reads as success.
+// of replaying the first attempt's token. Narrower than it sounds: the retries
+// that fire are transport faults, because a status the service raises rides an
+// HTTP 200 this pipeline reads as success, and a refused token is a 401 (§11.5).
 pricing
     .AddStandardResilienceHandler(options =>
     {
@@ -3119,9 +3119,9 @@ the **built options** rather than from the constants, which is what keeps the
 test a check on the registration and not a restatement of it.
 
 > **An HTTP resilience pipeline cannot retry a gRPC status, and the
-> configuration above does not say so on its face.** gRPC carries its outcome
-> in `grpc-status` — a trailer on an HTTP **200**, or a header on a
-> trailers-only response, still a 200 — so `AddStandardResilienceHandler`,
+> configuration above does not say so on its face.** A status the service
+> raises travels in `grpc-status` — a trailer on an HTTP **200**, or a header
+> on a trailers-only response, still a 200 — so `AddStandardResilienceHandler`,
 > which decides on the HTTP status line and on `HttpRequestException`, sees a
 > successful response and hands it straight back. A Catalog that answers
 > `Unavailable` is asked **once**, whatever `MaxRetryAttempts` says. What the
