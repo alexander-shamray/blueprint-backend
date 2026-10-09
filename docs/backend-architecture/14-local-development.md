@@ -272,10 +272,10 @@ describes, and the command that lists what each application unit publishes.
 The gateway's own unit takes no `depends_on` on a service it routes to except
 the ones that exist — Compose rejects a dependency it cannot see, and one
 undefined name fails the whole `up` rather than one service. Its *routes* are
-under no such constraint and [§10.2](10-api-gateway.md) ships all four, so
-a path answers 502 while its service is not running. A route is configuration
-the gateway reads; a `depends_on` is a name Compose has to resolve. Which
-destinations Compose can see is the `include` list in
+under no such constraint and [§10.2](10-api-gateway.md)'s route file ships
+every one, so a path answers 502 while its service is not running. A route is
+configuration the gateway reads; a `depends_on` is a name Compose has to
+resolve. Which destinations Compose can see is the `include` list in
 `deploy/compose/docker-compose.yml`, the owner of that fact, and the
 `depends_on` list in `deploy/compose/services/gateway.yml` owns which of them
 the gateway waits on: a destination joins it with the change that builds its
@@ -304,9 +304,11 @@ image's tag is the unit file's, and the suite starts the same one, so the
 sink a person watches is the sink the tests read.
 
 The collector's mounted configuration, `deploy/compose/otel/config.yaml`, is
-the smallest correct pipeline — OTLP in on both protocols, a batch processor,
-OTLP out to the LGTM container, which ingests OTLP directly. Every unit points
-its API or worker host at it with
+OTLP in on both protocols, a batch processor — and on metrics the
+`transform/canary-track` processor
+[ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)
+asks for — and OTLP out to the LGTM container, which ingests OTLP directly.
+Every unit points its API or worker host at it with
 `OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"`. Its receivers and
 its exporter, with the processors between them and the pipelines after them in
 the file:
@@ -389,11 +391,10 @@ one of which may issue DDL.
 
 **The environment is the first line and is not decoration.** No project ships a
 `launchSettings.json`, so `dotnet run` is Production unless told otherwise, and
-`RequireHttpsMetadata` is on in Production
-([§11.3](11-identity-authorization.md)) — against a plain-HTTP local authority
-the host will not fetch the discovery document at all, and every bearer request
-fails before validation starts. The containers set the same variable, which is
-why only the host path shows this.
+outside Development `AddJwtAuthentication` refuses a plain-HTTP authority
+([§11.3](11-identity-authorization.md)) — against the local one the host throws
+at start-up and never serves a request. The containers set the same variable,
+which is why only the host path shows this.
 
 The override excludes each service's **migrator** beside its API, so the schema
 is the host's job too — under §7.4's separate key
@@ -440,14 +441,14 @@ processes while containerising only the infrastructure, so a single F5 gives
 breakpoints across every service simultaneously.
 
 ```csharp
-// src/AppHost/Program.cs
+// Illustrative: Aspire is not adopted (ADR-011), so no AppHost project exists.
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Resource names ARE connection-string names: WithReference(x) injects
 // ConnectionStrings__{x.Name}. They must match the keys the code reads
 // (§4.2, §8.2) exactly — configuration is case-insensitive but not
 // punctuation-insensitive, so "redis-cache" would not satisfy
-// GetConnectionString("RedisCache") and both Redis connections would be null.
+// RedisConnections.Cache and AddRedisConnections would refuse to start the host.
 var sql = builder.AddSqlServer("sql").WithDataVolume();
 
 // Two Redis resources, mirroring §8.1 — the eviction policies are
