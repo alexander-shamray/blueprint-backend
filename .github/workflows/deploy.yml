@@ -88,13 +88,11 @@ jobs:
     needs: check
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    # Arithmetic rather than a round number. §15.5's ladder dwells ten minutes
-    # on each of three rungs (30), and each of the three canary upgrades plus
-    # the promotion may take the 20 minutes §15.1's callout requires for a
-    # migration hook (80) — 110 in total, before the cleanup step. A cap below
-    # that cancels a valid slow migration mid-rollout with no per-command
-    # timeout hit, which is the one way to leave a canary serving with no step
-    # left to remove it.
+    # §15.5's ladder dwells ten minutes on each of three rungs (30), and each of
+    # the three canary upgrades and the promotion may take the 20 minutes
+    # §15.2's callout requires for a migration hook (80): 110 before cleanup. A
+    # lower cap can cancel a slow migration mid-rollout with no per-command
+    # timeout hit, leaving a canary serving with no step left to remove it.
     timeout-minutes: 150
     environment: production
     env:

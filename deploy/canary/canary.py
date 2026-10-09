@@ -187,15 +187,15 @@ def validate_tag(tag: str, job_prefix: str | None = None) -> None:
     if len(tag) > 63:
         raise PlanError(
             f"image tag is {len(tag)} characters. It becomes "
-            "app.kubernetes.io/version, and a label value may not exceed 63 (§15.3)"
+            "app.kubernetes.io/version, and a label value may not exceed 63"
         )
     for segment in tag.split("."):
         if not re.fullmatch(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?", segment):
             raise PlanError(
                 f"image tag {tag!r} is not usable: the segment {segment!r} is not a "
                 "DNS-1123 label. Each dot-separated segment must be lowercase "
-                "alphanumerics and dashes, starting and ending alphanumeric "
-                "(§15.3) — which also excludes the comma and equals that Helm's "
+                "alphanumerics and dashes, starting and ending alphanumeric — "
+                "which also excludes the comma and equals that Helm's "
                 "--set-string would read as a second assignment"
             )
 
