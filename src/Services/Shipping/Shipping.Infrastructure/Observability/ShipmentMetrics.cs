@@ -5,7 +5,7 @@ using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Observability;
 
-/// <summary>The workers' gauges, waiting by state and overdue by pass (§15.3), on the carrier's meter.</summary>
+/// <summary>The workers' gauges, waiting, overdue (§15.3) and unscanned, on the carrier's meter.</summary>
 /// <remarks>On <see cref="CarrierMetrics.MeterName"/>, so §13.2's one <c>AddMeter</c> line covers them.</remarks>
 public sealed class ShipmentMetrics
 {
@@ -25,6 +25,13 @@ public sealed class ShipmentMetrics
             "Overdue-shipment gauge read failed. This collection omits both passes rather than " +
             "reporting one, see ShipmentMetrics.");
 
+    private static readonly Action<ILogger, Exception?> UnscannedReadFailed =
+        LoggerMessage.Define(
+            LogLevel.Error,
+            new EventId(3, nameof(UnscannedReadFailed)),
+            "Unscanned-shipment gauge read failed. This collection omits it rather than reporting none, " +
+            "see ShipmentMetrics.");
+
     public ShipmentMetrics(IMeterFactory factory, IShipmentStats stats, ILogger<ShipmentMetrics> logger)
     {
         Meter meter = factory.Create(CarrierMetrics.MeterName);
@@ -42,6 +49,14 @@ public sealed class ShipmentMetrics
             () => PerPass(stats, logger),
             unit: "s",
             description: "How long the longest-due shipment each pass would claim has waited for one, by pass.");
+
+        // A 404 on the events route reads as not yet scanned and is only counted, which no threshold can read alone:
+        // a route that is gone shows here, as bookings pass ShipmentStats.FirstScanAge with no scan.
+        meter.CreateObservableGauge(
+            "shipping.shipments.unscanned",
+            () => Unscanned(stats, logger),
+            unit: "{shipment}",
+            description: "Booked shipments past their first-scan age that the carrier has never scanned.");
     }
 
     /// <summary>States from the enum, so a new state cannot be left without a gauge.</summary>
@@ -85,6 +100,20 @@ public sealed class ShipmentMetrics
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             OverdueReadFailed(logger, exception);
+            return [];
+        }
+    }
+
+    /// <summary>Absent on a failed read, since a zero would read as every booking scanned.</summary>
+    private static List<Measurement<double>> Unscanned(IShipmentStats stats, ILogger logger)
+    {
+        try
+        {
+            return [new(stats.UnscannedCount())];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            UnscannedReadFailed(logger, exception);
             return [];
         }
     }

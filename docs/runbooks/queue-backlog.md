@@ -133,13 +133,19 @@ shallow however far behind those workers fall.
 Their signals are `shipping.shipments.waiting`, the gauge of shipments past
 their first failed pass by state, `shipping.carrier.unavailable` beside it,
 and `shipping.shipments.overdue`, how long the longest-due row each pass would
-claim has waited for one, by `pass`. Before concluding from a quiet queue that
-Shipping is healthy, read all three.
+claim has waited for one, by `pass`. Two more have alerts of their own:
+`shipping.address.refused`, which [`address-refused.md`](address-refused.md)
+works, and `shipping.shipments.unscanned`, the bookings the carrier has never
+scanned, which [`unscanned-shipment.md`](unscanned-shipment.md) works and which
+alone sees an events route that has gone, because a poll reads its 404 as
+nothing yet and the other four stay flat. Before concluding from a quiet queue
+that Shipping is healthy, read all five.
 
 **The overdue gauge is the one that sees a row no pass has reached yet**, which
-the other two cannot. Healthy, each claim takes a due row within a tick of its
-worker's loop, so the age stays near zero. One that climbs and keeps climbing
-is a pass that cannot keep up with its population. On `tracking`, a carrier
+the waiting gauge and the unavailable counter cannot. Healthy, each claim takes
+a due row within a tick of its worker's loop, so the age stays near zero. One
+that climbs and keeps climbing is a pass that cannot keep up with its
+population. On `tracking`, a carrier
 slow enough to hold every pass to its request timeout does the same, so read
 `shipping.carrier.unavailable` and the carrier's latency before scaling. With
 the carrier healthy, the answer is `replicaCount`, as the paragraph on a
