@@ -43,8 +43,9 @@ no DDL rights.
 
 **Consequences.** The replay is the current state of each product with the
 stamps it was given, not its history: a price held between the first and the
-last change is not kept anywhere, and a withdrawn product's last price is not
-re-sent. Ordering ends in the state a product that had never lost a row would
+last change is not kept anywhere, and a withdrawn product gets no
+`PriceChanged`, only the publication carrying the price it held at withdrawal.
+Ordering ends in the state a product that had never lost a row would
 be in, which is all a rebuild needs. This is the one run of a migrator image
 that reads the runtime key, which [§7.1](../07-persistence.md)'s name boundary
 otherwise reserves for hosts, so its Job is given the runtime Secret and never
