@@ -258,7 +258,7 @@ interface is covered the moment it is added there. From
 `tests/Ordering.Api.Tests/RegistrationTests.cs`:
 
 ```csharp
-/// <summary>The host and every Ordering assembly it reaches, so a new layer is covered and a test library is not.</summary>
+/// <summary>The host and every Ordering assembly it reaches.</summary>
 private static List<Assembly> ServiceAssemblies()
 {
     List<Assembly> found = [typeof(Program).Assembly];
@@ -309,7 +309,8 @@ public void Every_handler_implementation_is_registered()
 
 A companion test, `The_scan_reaches_both_layers_that_hold_handlers`, asserts
 that the derived set holds `Ordering.Application` and `Ordering.Infrastructure`,
-because a set that lost a layer would pass the test above over nothing.
+because a set that lost a layer would pass the test above without checking
+that layer's handlers.
 
 > **Decision — no mediator library.** See [ADR-004](adr/ADR-004-no-mediator-library.md).
 
@@ -429,8 +430,6 @@ public void Queries_run_without_the_transaction_and_idempotency_behaviours()
 {
     using IServiceScope scope = fixture.Factory.Services.CreateScope();
 
-    // The query's own result type: a closed behaviour asked for with the wrong TResult resolves to an empty
-    // sequence, and an empty sequence passes any assertion about what is absent.
     Type[] actual =
     [
         .. scope.ServiceProvider
