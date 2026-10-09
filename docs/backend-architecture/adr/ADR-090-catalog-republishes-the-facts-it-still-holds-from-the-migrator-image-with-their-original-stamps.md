@@ -6,7 +6,7 @@ product a `ProductPublished`, stamped `PublishedAt` and carrying the name,
 thumbnail and price the product has now; a `PriceChanged` stamped
 `LastEventAt` where a product not withdrawn has been repriced since it was
 published; and a `ProductDiscontinued` stamped `WithdrawnAt` where it is
-withdrawn. `Republish:ProductId` limits the run to one product, and an id that
+withdrawn. `Republish:Id` limits the run to one product, and an id that
 does not parse refuses the host rather than widening the run. Every row gets a
 new `MessageId` and, as its own `OccurredAt`, the time of the run; the
 payload's stamp is the event's own. The run reads and writes through the
