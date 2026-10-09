@@ -938,7 +938,7 @@ identifier that was sitting one field away:
 come from the customisation above, which runs on this response because
 `Results.Problem` writes through `IProblemDetailsService` — the same path
 `UseExceptionHandler` takes, which is why an unhandled 500 and a returned 422
-carry the same three fields. `instance` is the path the service received,
+carry the same three fields. `instance` carries the path the service received,
 `/v1/orders/...` rather than the client's `/api/v1/orders/...` (§10.2).
 
 > **`Result<T>` derives from `Result`, so both overloads apply to it.** Only the
