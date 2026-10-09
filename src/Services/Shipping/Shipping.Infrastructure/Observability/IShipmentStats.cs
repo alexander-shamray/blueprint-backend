@@ -11,6 +11,6 @@ public interface IShipmentStats
     /// <summary>Zero when the tracking claim would take nothing now.</summary>
     double TrackingOverdueSeconds();
 
-    /// <summary>Booked rows past <c>ShipmentStats.FirstScanAge</c> that the carrier has never scanned.</summary>
+    /// <summary>Booked, unscanned rows past <c>ShipmentStats.FirstScanAge</c>, with no cancellation pending.</summary>
     int UnscannedCount();
 }

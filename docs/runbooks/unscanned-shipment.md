@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Alert | `UnscannedShipments`, in `deploy/observability/alerts/platform-alerts.yaml` |
-| Condition | Any `Booked` shipment past `ShipmentStats.FirstScanAge` with no scan |
+| Condition | Any `Booked` shipment past `ShipmentStats.FirstScanAge` with no scan and no cancellation awaiting the carrier's answer |
 | Signal | `shipping.shipments.unscanned`, `ShipmentMetrics` in `src/Services/Shipping/Shipping.Infrastructure/Observability` ([§13.6](../backend-architecture/13-observability.md)) |
 | Owner | The team that owns Shipping ([§13.8](../backend-architecture/13-observability.md)) |
 
