@@ -19,7 +19,6 @@ internal sealed class EfDomainEventCollector(OrderingDbContext db) : IDomainEven
 
         IDomainEvent[] events = [.. aggregates.SelectMany(a => a.DomainEvents)];
 
-        // Cleared as collected, so a nested dispatch (§6.3) does not stage these a second time.
         foreach (IHasDomainEvents aggregate in aggregates)
             aggregate.ClearDomainEvents();
 
