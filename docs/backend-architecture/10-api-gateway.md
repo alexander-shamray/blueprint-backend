@@ -1037,15 +1037,15 @@ until it can, every conflict is the no-precondition case the 409s answer.
 
 ## 10.6 Response security headers
 
-`Common.Web` adds `X-Content-Type-Options: nosniff` to every response in all
-four hosts, through one extension each pipeline calls outermost
+`Common.Web` adds `X-Content-Type-Options: nosniff` to every response in every
+host, through one extension each pipeline calls outermost
 ([§4.2](04-solution-structure.md)). The header set and the ones deliberately
 absent are recorded in
 [ADR-031](adr/ADR-031-the-service-owns-nosniff-the-ingress-owns-hsts.md).
 
 **The service owns this, not the edge**, and that is the whole reason it lives
-in a building block rather than in `Gateway.Api`. The gateway is one of four
-hosts and is not in front of the other three from inside the cluster —
+in a building block rather than in `Gateway.Api`. The gateway is one host
+among several and is in front of none of the others from inside the cluster —
 [§11.2](11-identity-authorization.md) assumes the network is hostile and makes
 every service re-validate its own token for exactly that reason — so a header
 set only at the edge is absent on every path that does not traverse it. Setting
@@ -1058,8 +1058,8 @@ component in this platform that terminates TLS (§10.1,
 [§15.3](15-cicd-deployment.md)): a host behind it sees plain HTTP, so it would
 be asserting something it cannot observe, and a browser caches that assertion
 for as long as its `max-age` says. `X-Frame-Options` and
-`Content-Security-Policy` govern how a browser renders a *document*, and none
-of these four hosts serves one. Their API responses are `application/json` or
+`Content-Security-Policy` govern how a browser renders a *document*, and no
+host here serves one. Their API responses are `application/json` or
 `application/problem+json` and [§13.5](13-observability.md)'s probes are
 `text/plain`, because `MapHealthChecks` uses the framework's default plain-text
 writer. A framing or a script policy on a body no browser renders as a document
