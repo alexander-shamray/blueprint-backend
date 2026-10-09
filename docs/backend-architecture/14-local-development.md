@@ -87,9 +87,9 @@ the pattern the command echoes in its own banner, and passes on a stock broker.
 derives the issuer from each request's `Host` header, so a token minted through
 `localhost:8080` and a discovery document read through `keycloak:8080`
 disagree — and `ValidateIssuer` ([§11.3](11-identity-authorization.md)) rejects
-every token obtained the way this chapter documents. The second variable puts
-the backchannel back on the container route, which is the half the services
-need:
+every token obtained the way this chapter documents.
+`KC_HOSTNAME_BACKCHANNEL_DYNAMIC` puts the backchannel back on the container
+route, which is the half the services need:
 
 ```yaml
 keycloak:
@@ -156,8 +156,8 @@ ordering-api:
     redis-coordination: { condition: service_healthy }
 ```
 
-Every application container runs read-only, with a tmpfs at `/tmp`, as the
-chart's pods do
+Every container a unit builds from `src/` — each migrator and each host — runs
+read-only, with a tmpfs at `/tmp`, as the chart's pods do
 ([ADR-082](adr/ADR-082-every-pod-meets-pod-security-restricted-with-a-read-only-root-filesystem.md)),
 so the Compose workflow's `up --wait` proves the images run that way.
 
@@ -184,12 +184,14 @@ because `AddRedisConnections` is a single call by design (§8.2) and reads both
 eagerly, so a host given one key throws naming the other.
 
 The API waits on both Redis instances with `service_healthy`, not
-`service_started`. `AbortOnConnectFail` is false, so that a Redis outage
-degrades to the database (§8.1); the host would therefore start against a Redis
-still booting, and the first protected command would fail on a claim instead —
-a symptom nothing connects to a container that was not ready. It waits on
-Keycloak with `service_healthy` because Keycloak declares a healthcheck; the
-API does not need it, since JwtBearer fetches the discovery document lazily.
+`service_started`. `AbortOnConnectFail` is false, so the host starts with Redis
+down (§8.1's degrade, don't die): the cache falls back to the database and
+coordination callers fail closed. The host would therefore start against a
+Redis still booting, and the first protected command would fail on a claim
+instead — a symptom nothing connects to a container that was not ready. It
+waits on Keycloak with `service_healthy` because Keycloak declares a
+healthcheck; the API does not need it, since JwtBearer fetches the discovery
+document lazily.
 
 `deploy/compose/services/gateway.yml` has no migrator, because the gateway owns
 no database. It carries the authority, because the gateway validates JWTs like
@@ -304,7 +306,7 @@ sink a person watches is the sink the tests read.
 The collector's mounted configuration, `deploy/compose/otel/config.yaml`, is
 the smallest correct pipeline — OTLP in on both protocols, a batch processor,
 OTLP out to the LGTM container, which ingests OTLP directly. Every unit points
-its hosts at it with
+its API or worker host at it with
 `OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"`. Its receivers and
 its exporter, with the processors between them and the pipelines after them in
 the file:
