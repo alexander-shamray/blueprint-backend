@@ -1,4 +1,4 @@
-# Payments, and the fourth chart cut from this shape. One port and no gRPC,
+# Payments, cut from the shape the other charts share. One port and no gRPC,
 # like the chart beside it; what is its own is §3.2's provider, the one call
 # this platform makes outside itself.
 

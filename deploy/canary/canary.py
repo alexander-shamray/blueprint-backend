@@ -66,23 +66,11 @@ def _argument(flag: str, variable: str) -> str:
     """
     return f'{flag} "${variable}"'
 
-# The two verdicts, and there are deliberately only two.
-#
-# A third — "hold", "inconclusive", "needs a human" — reads as caution and is
-# the opposite: an unattended rollout that cannot decide leaves a canary
-# serving traffic on nobody's authority. The reason this is affordable is the
-# shape of the mechanism rather than optimism about the readings. The canary is
-# a SECOND Deployment and the stable one is never touched (ADR-022), so
-# rollback costs the canary's own pods and nothing else — no `helm rollback`
-# and no image change on the pods serving the other 95%.
-#
-# NOT "and no schema to undo", which this comment said and ADR-022 denies: the
-# canary release runs §7.4's migration hook, because it is the first thing
-# carrying the new image, and a rollback removes the pods and LEAVES THE SCHEMA
-# MIGRATED. What makes that survivable is §15.5's backward-compatibility
-# requirement, which ADR-022 sharpens rather than relaxes — a cheap rollback is
-# worth nothing against an incompatible migration. The pods are the cheap half;
-# the schema is not a half this mechanism buys at all.
+# The two verdicts, and there are only two: a third reads as caution, but an
+# unattended rollout that cannot decide leaves a canary serving on nobody's
+# authority. Rollback is cheap because the canary is a second Deployment and
+# the stable one is never touched (ADR-022); the schema stays migrated, which
+# §15.5's backward-compatibility requirement is what makes survivable.
 #
 # When rollback is cheap, every doubt resolves to it.
 PROMOTE = "promote"
@@ -162,25 +150,9 @@ def migration_prefix(workload: str, plan_document: dict, root: Path = ROOT) -> s
 def validate_tag(tag: str, job_prefix: str | None = None) -> None:
     """Refuse a tag Helm's `--set-string` would read as more than a tag.
 
-    **`--set-string image.tag="$TAG"` is not a single assignment**, and that is
-    the finding this exists for. Helm parses the right-hand side with `strvals`,
-    where a COMMA separates assignments — so
-    `deadbeef,image.registry=attacker.example` sets a perfectly valid
-    `image.tag` AND overrides the registry, for the canary and the promotion
-    alike. `commerce.tag`'s render-time validation passes, because by then the
-    tag really is `deadbeef`; the injected key rode in beside it.
-
-    This is docs/lessons.md's own lesson about a value crossing between two
-    systems' alphabets, one release later: the tag is validated against Kubernetes'
-    alphabet at render time and reaches Helm's parser before that.
-    **Validate against the intersection, at the boundary the value enters.**
-
-    The rule is `commerce.tag`'s, deliberately — dot-separated DNS-1123 labels,
-    63 characters at most — because a second, looser alphabet here would let
-    something through that the chart then rejects mid-`helm upgrade`. It admits
-    no comma, no equals and no whitespace, which is what closes the injection;
-    that is a consequence of matching the chart rather than a rule of its own,
-    and it is the reason this cannot be relaxed independently.
+    Helm's `strvals` splits assignments on a comma, so `deadbeef,image.registry=x`
+    also overrides the registry. The rule is `commerce.tag`'s (DNS-1123 labels,
+    63 characters at most), which admits no comma, equals or whitespace.
     """
     if not tag:
         raise PlanError("image tag is empty: §15.3 refuses a deploy that cannot name its image")
@@ -291,32 +263,9 @@ def required_stable(weight_percent: int, overshoot_points: int) -> int:
 def plan(weight_percent: int, stable_replicas: int, overshoot_points: int) -> dict:
     """How many canary pods a requested weight costs, and what it really buys.
 
-    **A replica-weighted canary cannot hit an arbitrary weight**, and this is
-    the function that refuses to pretend otherwise. Traffic reaches these pods
-    through a ClusterIP Service, which spreads connections across its endpoints
-    — so the share the new version serves is `canary / (stable + canary)` and
-    the achievable weights are the fractions that arithmetic can make. With
-    §15.3's `replicaCount: 3`, the smallest canary is one pod and the smallest
-    weight is 25%, which is five times the 5% §15.5 asks for.
-
-    **The requested weight is a ceiling, not a target to land on.** The canary
-    is the LARGEST one whose share stays within it, which is the only direction
-    that is safe to be wrong in: undershooting means a smaller blast radius
-    than was asked for, and overshooting means more traffic on the new version
-    than anybody authorised. A step labelled 5% that serves 25% is the failure
-    this whole function exists to prevent, and rounding to the nearest
-    expressible weight is how it would have happened.
-
-    One pod is the floor, so where even a single canary exceeds the ceiling
-    there is nothing to round down to and this raises. The message names the
-    stable replica count that WOULD satisfy the request, because that is the
-    decision the operator actually has — scale up and pay for it, or accept a
-    coarser step and say so in `tolerance`.
-
-    This rule and `required_stable` are one design read from two ends: that
-    function answers "how many stable pods make ONE canary fit", which is
-    precisely the boundary at which this stops raising. They disagreed once,
-    and the test that pairs them is what said so.
+    The share served is `canary / (stable + canary)` (§15.5), and the requested
+    weight is a ceiling: the largest canary within it, never the nearest. Where
+    one pod exceeds it this raises, naming the stable count that fits.
     """
     if not 0 < weight_percent <= 100:
         raise PlanError(f"weight must be in (0, 100]; got {weight_percent}")
@@ -501,20 +450,8 @@ def _regression(
 ) -> list[str]:
     """One metric's relative check.
 
-    **Both readings are present by the time this runs**, because `analyse`
-    rejects an absent one on either track before applying any threshold. That
-    is a change: a missing baseline used to skip this check, on the argument
-    that the canary's absence means the new version is unobserved while the
-    baseline's only means there is nothing to compare against.
-
-    It did not survive. The stable track serves the MAJORITY of traffic at
-    every rung of §15.5's ladder, so its series going missing is the monitoring
-    failing on the larger half — and since the error-rate numerator is
-    coalesced, a query returns nothing only when the DENOMINATOR is empty, no
-    requests at all. Skipping removed regression detection at exactly that
-    moment. The rule is now uniform and therefore statable: **any absent
-    reading is a rollback**, with no exception to remember and none to check
-    for here.
+    Both readings are present here, because `analyse` rejects an absent one
+    on either track first: any absent reading is a rollback.
     """
     if canary_value <= floor:
         return []

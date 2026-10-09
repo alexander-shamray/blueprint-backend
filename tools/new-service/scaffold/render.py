@@ -14,11 +14,9 @@ from pathlib import Path, PurePosixPath
 from scaffold import API_HOST, TEMPLATE, Names, ScaffoldError, read, require_once, restore
 from scaffold.patch import PATCHES, PURE_CONSUMER_PATCHES, PURE_CONSUMER_SPANS, WORKER_PATCHES
 
-# The five service projects §4.1 gives a service, its three test projects, and
-# Catalog.TestSupport — which §4.1 is explicit is NOT a test project, and which
-# is copied all the same: the fixture is the template's, and its second consumer
-# arrives with the new service's first handler test, exactly as it did for
-# Catalog in PR-10. Nine projects, not "five and four".
+# The service projects §4.1 gives a service, its test projects, and
+# Catalog.TestSupport, which §4.1 says is not a test project and which is copied
+# all the same: the fixture is the template's.
 COPY_ROOTS = (
     "src/Services/Catalog",
     "tests/Catalog.Domain.Tests",
@@ -119,10 +117,9 @@ COPIED = frozenset(
     }
 )
 
-# PR-10's slice, and nothing else. A scaffolded service is PR-07's state with
-# the wiring accumulated through PR-14 on it — not PR-10's state with the
-# nouns changed. Renaming Product to Order would hand the next service a
-# deletion job and a vocabulary it did not choose.
+# Catalog's product slice. A scaffolded service carries the wiring, not the
+# slice with the nouns changed: renaming Product to Order would hand the next
+# service a deletion job and a vocabulary it did not choose.
 OMITTED = frozenset(
     {
         "src/Services/Catalog/Catalog.Api/Endpoints/ProductEndpoints.cs",
@@ -339,21 +336,12 @@ STAND_INS = {
     "src/Services/Catalog/Catalog.Migrator/CatalogSeeder.cs": EMPTY_SEEDER,
 }
 
-# Anything left in the rendered tree fails the run. `production` and EF's own
-# `ProductVersion` annotation are the two benign substrings, and they are
-# removed before the search rather than excused after it.
-#
-# **Two searches, at two different moments, and the split is load-bearing.**
-# The template token is looked for *after* the rename, with the requested name
-# masked out, because a service may legitimately contain it — `CatalogSearch`.
-# The slice token is looked for *before* the rename, because masking cannot
-# help there: a service called `Product` would mask away every real leftover
-# along with its own name and the render would call itself domain-neutral.
-# Before the rename a `Product` is unambiguous, since the rename maps the
-# template's casings and never the slice's.
-# Both case-insensitive, because the two halves have to hold to the same
-# standard: `SLICE_TOKEN` was not, so `PRODUCT_ENDPOINT` in a copied file
-# passed a guard that rejects `ProductEndpoint`.
+# Anything left in the rendered tree fails the run, once `production` and EF's
+# `ProductVersion` are removed. The template token is searched after the rename
+# with the requested name masked, since a service may contain it; the slice
+# token before, since masking would hide every leftover in a service called
+# `Product`. Both are case-insensitive, so `PRODUCT_ENDPOINT` fails as
+# `ProductEndpoint` does.
 BENIGN = re.compile(r"production|productversion", re.IGNORECASE)
 TEMPLATE_TOKEN = re.compile(re.escape(TEMPLATE), re.IGNORECASE)
 SLICE_TOKEN = re.compile(r"roduct", re.IGNORECASE)
@@ -388,23 +376,16 @@ RETENTION_INDEX_MIGRATION = re.compile(r"^\d{14}_AddOutboxRetentionIndex(\.Desig
 # simply not there.
 IDEMPOTENCY_MIGRATION = re.compile(r"^\d{14}_AddIdempotencyMarkers(\.Designer)?\.cs$")
 
-# The marker's `CommittedAt` default (#167). It travels for the reason the
-# table itself does: the column default and the SQL cutoff that reads it are
-# two halves of one guarantee, so a service scaffolded with the table and
-# without the default ages its markers on the writing pod's clock while the
-# purge ages them on the server's — which is the skew this migration exists to
-# remove, shipped to every new service by omission.
+# The marker's `CommittedAt` default. The column default and the SQL cutoff that
+# reads it are one guarantee, so a service scaffolded without the default ages
+# its markers on the pod's clock while the purge ages them on the server's.
 COMMITTED_AT_DEFAULT_MIGRATION = re.compile(
     r"^\d{14}_IdempotencyMarkerCommittedAtDefault(\.Designer)?\.cs$"
 )
 
-# The marker's `rowversion` (#173). It travels for the same reason the default
-# above does, and the failure it prevents is louder: `RetentionPurgeService`
-# names this column in both of its marker statements, so a service scaffolded
-# without the migration does not merely age its markers wrongly — its purge
-# raises `Invalid column name 'RowVersion'` on the first pass and the table
-# grows for ever. The column and the statements that read it are one mechanism,
-# and half of it is not shippable.
+# The marker's `rowversion`. `RetentionPurgeService` names the column in both of
+# its marker statements, so a service scaffolded without the migration has a
+# purge that raises `Invalid column name 'RowVersion'` on its first pass.
 ROW_VERSION_MIGRATION = re.compile(
     r"^\d{14}_AddIdempotencyMarkerRowVersion(\.Designer)?\.cs$"
 )
@@ -992,19 +973,9 @@ def update_solution(repo_root: Path, names: Names) -> str:
 def environment_keys(block: str) -> list[list[str]]:
     """The mapping keys of every `environment:` block, one list per mapping.
 
-    **Per mapping and never one flat set**, because §14.1's pair rule renders
-    two services and each declares its own: a key appearing in both is two
-    containers agreeing about a variable, which is ordinary, while the same key
-    twice in one mapping is a service saying one thing twice, which is the
-    defect. Flattening the two would report the first as a collision and lose
-    the second in the noise.
-
-    **Returned rather than judged, so that what this reads is testable.** A
-    duplicate check is only as good as the keys handed to it, and a pattern
-    that stops matching the template's shape hands it nothing — over which
-    every name there is passes. That is this repository's most-repeated
-    failure, so the extraction is a value a test can assert about instead of a
-    step buried inside the caller.
+    Per mapping, because §14.1's pair rule renders two services: a key in both
+    is ordinary, the same key twice in one mapping is the defect. Returned
+    rather than judged, so a test can assert what was read.
     """
     mappings: list[list[str]] = []
     keys: list[str] | None = None
@@ -1055,19 +1026,10 @@ def compose_included(repo_root: Path) -> list[tuple[int, str]]:
 def update_compose(repo_root: Path, names: Names, port: int | None) -> str:
     """The index gains one line, and nothing else in it moves.
 
-    **The port collision check reads every included file, not this one.** The
-    index publishes nothing at all now, so a check that kept reading it would
-    have found no mapping anywhere and called every port free — a silent
-    fail-open on the one guard that stops two services publishing the same
-    port. It reads what the index includes instead, which is the same set of
-    mappings the check has always been about.
-
-    **Both port regexes carry the host-IP prefix, and the collision check is
-    the one that fails quietly without it.** Every mapping in the model is
-    published on `127.0.0.1` (§14.1), so `"5102:` no longer follows a quote
-    and a pattern anchored on one matches nothing — which reads exactly like
-    a free port, and would have published a second service on one already
-    taken.
+    The port collision check reads every included file, since the index itself
+    publishes nothing and a check reading it would call every port free. Its
+    pattern carries the host-IP prefix §14.1 gives every mapping, because one
+    anchored on a quote matches nothing, which reads as a free port.
     """
     entries = compose_included(repo_root)
 
@@ -1232,10 +1194,7 @@ def update_infra_only(repo_root: Path, names: Names) -> str:
     text, newline = read(repo_root, "deploy/compose/docker-compose.infra-only.yml")
 
     # The anchor is the contiguous pair, and the pair is also what gets
-    # written — one string, so the two cannot drift apart. Anchoring the API
-    # half alone let a change to the migrator's entry through unnoticed while
-    # this went on emitting the shape it used to have, which is the drift the
-    # anchors exist to stop.
+    # written, so the two cannot drift apart.
     pair = (
         f'  {TEMPLATE.lower()}-migrator:\n'
         f'    profiles: [ "excluded" ]\n'

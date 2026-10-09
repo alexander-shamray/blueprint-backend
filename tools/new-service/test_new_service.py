@@ -225,9 +225,9 @@ class RendersTheTemplate(unittest.TestCase):
             self.assertIn(project, self.rendered.created)
 
     def test_it_writes_both_dockerfiles(self):
-        # §15.2 builds two images per service, and PR-10 found that both need
-        # the -extra tag: SqlClient refuses to open a connection under the
-        # globalization-invariant mode plain chiselled runs in.
+        # §15.2 builds two images per service, and both need the -extra tag:
+        # SqlClient refuses to open a connection under the globalization-
+        # invariant mode plain chiselled runs in.
         for image in ("Zulu.Api", "Zulu.Migrator"):
             path = f"src/Services/Zulu/{image}/Dockerfile"
             self.assertIn(path, self.rendered.created)
@@ -267,7 +267,7 @@ class RendersTheTemplate(unittest.TestCase):
         )
 
     def test_the_messaging_registration_and_its_smoke_travel_with_the_template(self):
-        # PR-13's wiring is template, not slice: a new service owns a bus
+        # The bus wiring is template, not slice: a new service owns a bus
         # connection from its first commit, and the harness smoke proves the
         # pipeline with no broker running.
         messaging = self.rendered.created[
@@ -342,9 +342,8 @@ class OmitsTheSlice(unittest.TestCase):
         self.rendered = render()
 
     def test_it_writes_nothing_from_the_catalog_slice(self):
-        # Every omitted path, renamed, must be absent. A scaffolded service is
-        # PR-07's state with the later wiring on it, not PR-10's state with
-        # the nouns changed.
+        # Every omitted path, renamed, must be absent: a scaffolded service
+        # carries the wiring, not the slice with the nouns changed.
         for omitted in OMITTED:
             if omitted in scaffold.render.STAND_INS:
                 continue
@@ -462,19 +461,8 @@ class OmitsTheSlice(unittest.TestCase):
 class GeneratedGuidanceIsTrue(unittest.TestCase):
     """A generated comment must be true of the service it lands in.
 
-    The rename is what makes this a real hazard rather than a theoretical one:
-    a patch that names the template as an *example* — "as Catalog does",
-    "Catalog.Application.Tests carries both" — comes out naming the new
-    service, and the sentence is then about the wrong one. Every case below
-    told a developer to copy tests from a suite that does not have them, or
-    claimed a history the new service has not got. A Grok review found five;
-    two more were beside them in copied files.
-
-    The straggler check cannot catch this class, because the rename *is* the
-    defect. These assertions are the guard, and they render under the second
-    probe rather than the first: a sentence that is false of *any* service is
-    false under either name, so using the same one everywhere would have let a
-    default-name assumption hide inside an assertion about names.
+    The rename turns "as Catalog does" into a sentence about the wrong service,
+    which the straggler check cannot catch, so these render under a second probe.
     """
 
     def setUp(self):
@@ -491,20 +479,15 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         program = self.claim("src/Services/Yankee/Yankee.Api/Program.cs")
         self.assertNotIn("as Yankee does", program)
 
-        # PR-16 replaced the "unauthenticated until PR-16" note this used to
-        # pin — the gap it named is closed, and a generated comment scheduling
-        # a PR that has landed is exactly the false claim this class exists to
-        # catch. What replaced it has to keep saying where the first endpoint
-        # goes, and now also what shape it takes.
+        # What replaced the unauthenticated note has to keep saying where the
+        # first endpoint goes and what shape it takes.
         self.assertIn("This service maps no endpoint of its own yet", program)
         self.assertIn("behind RequireAuthorization at the group (§11.4)", program)
         self.assertIn("This service registers no permission policy", program)
 
     def test_the_host_keeps_the_middleware_but_not_the_policies(self):
-        # The split PR-16 forced: a policy belongs to the endpoint that names
-        # it and leaves with the slice, while token validation belongs to every
-        # host (§11.2) and stays. A scaffolded service that dropped both would
-        # serve its probes as the only thing anybody had ever checked.
+        # A policy belongs to the endpoint that names it and leaves with the
+        # slice, while token validation belongs to every host (§11.2) and stays.
         program = self.claim("src/Services/Yankee/Yankee.Api/Program.cs")
 
         self.assertIn("app.UseAuthentication();", program)
@@ -792,18 +775,11 @@ class TheMigrationAndItsSnapshot(unittest.TestCase):
         self.assertFalse([path for path in migrations if "AddProducts" in path])
 
     def test_the_snapshot_describes_the_technical_tables_and_nothing_else(self):
-        # Catalog's snapshot cannot be copied — it describes Product, and the
-        # next `migrations add` here would generate a drop for a table that
-        # never existed. This one is EF's own description of the model a
-        # scaffolded service actually has: the outbox, the inbox and §8.5's
-        # marker, no aggregate.
-        #
-        # Both halves matter, and the inbox is the half that was easy to miss.
-        # Deriving the snapshot from the outbox migration's designer — the last
-        # one until PR-15 — would omit an entity the DbContext maps, so the
-        # first `migrations add` would emit a second CreateTable for a table
-        # the scaffolded migrations had already created. With Product in it, a
-        # drop.
+        # Catalog's snapshot cannot be copied: it describes Product, and the next
+        # `migrations add` here would generate a drop for a table that never
+        # existed. This one describes the model a scaffolded service has: the
+        # outbox, the inbox and §8.5's marker, no aggregate. The inbox is the
+        # half easy to miss; omitting it emits a second CreateTable.
         snapshot = self.rendered.created[f"{self.prefix}/ZuluDbContextModelSnapshot.cs"]
         self.assertIn("partial class ZuluDbContextModelSnapshot : ModelSnapshot", snapshot)
         self.assertIn("protected override void BuildModel(ModelBuilder modelBuilder)", snapshot)
@@ -918,10 +894,8 @@ class EditsTheSharedFiles(unittest.TestCase):
         self.assertIn(f'ports: [ "127.0.0.1:{PORT}:8080" ]', unit)
 
     def test_the_template_s_own_unit_is_not_touched(self):
-        # The half of the split worth asserting. Catalog's environment used to
-        # share a file with every other service's, so a render that damaged one
-        # line of it damaged everybody's; now the only Compose file a render
-        # writes to is the index, and the only one it creates is its own.
+        # The only Compose file a render writes to is the index, and the only
+        # one it creates is its own, so the template's unit is untouched.
         self.assertNotIn(TEMPLATE_UNIT, self.rendered.updated)
         self.assertNotIn(TEMPLATE_UNIT, self.rendered.created)
         compose_written = [
@@ -989,10 +963,9 @@ class EditsTheSharedFiles(unittest.TestCase):
         # problem a spliced block had.
         unit = self.rendered.created[UNIT].replace("\r\n", "\n")
         api = unit[unit.index("  zulu-api:"):]
-        # The service's OWN broker account, not `guest` (#44). The rename
-        # carries both halves — the login and the password — so a scaffolded
-        # service arrives with an identity rather than the shared administrator
-        # every service used to hold.
+        # The service's own broker account, not `guest`. The rename carries both
+        # halves, the login and the password, so a scaffolded service arrives
+        # with an identity of its own.
         self.assertIn('ConnectionStrings__RabbitMq: "amqp://zulu-svc:local-dev-zulu@rabbitmq:5672"', api)
         self.assertNotIn("guest:guest", api)
         self.assertIn("rabbitmq: { condition: service_healthy }", api)
@@ -1001,11 +974,10 @@ class EditsTheSharedFiles(unittest.TestCase):
         self.assertNotIn("RabbitMq", migrator)
 
     def test_the_service_gets_a_broker_account_it_can_actually_authenticate_with(self):
-        # Since #44 the broker has no shared account, so a service the scaffold
-        # renders and nobody grants cannot connect AT ALL — it starts, fails
-        # authentication and reports nothing a reader would connect to a
-        # missing definitions entry. The compose block above names
-        # `zulu-svc`; this is the other half of that name existing.
+        # The broker has no shared account, so a service the scaffold renders
+        # and nobody grants fails authentication and reports nothing a reader
+        # would connect to a missing definitions entry. The compose block above
+        # names `zulu-svc`; this is the other half of that name existing.
         import base64
         import hashlib
         import json
@@ -1035,8 +1007,8 @@ class EditsTheSharedFiles(unittest.TestCase):
         self.assertIsNotNone(permission, "no zulu-svc permissions in definitions.json")
 
         # Its own contracts, and nobody else's. The template is a publisher, so
-        # what it inherits is a publisher's grant — the negative half is what
-        # #44 is about and what check_permissions.py holds every service to.
+        # it inherits a publisher's grant; the negative half is what
+        # check_permissions.py holds every service to.
         self.assertIn("Zulu", permission["write"])
         self.assertNotIn("Catalog", permission["write"])
         self.assertNotIn("ordering-", permission["write"])
@@ -1109,11 +1081,9 @@ class EditsTheSharedFiles(unittest.TestCase):
 
     def test_the_allow_list_gains_an_entry_for_every_finding_the_render_adds(self):
         # §15.1's secret scan reads the working tree, so it reads the tree this
-        # leaves behind. Every credential-shaped literal Catalog carries is an
-        # entry in that file, written by hand the day Catalog landed; a
-        # rendered service carries the same literals under its own name and
-        # therefore under its own fingerprints, and until #161 nobody wrote
-        # those — so a scaffolded service could not be committed at all.
+        # leaves behind. A rendered service carries Catalog's credential-shaped
+        # literals under its own fingerprints, which the render must write, or
+        # the scaffolded service cannot be committed.
         gate = load_scan_gate(REPO_ROOT)
         self.assertIsNotNone(gate, f"{SCAN_GATE} is this repository's own gate")
 
@@ -1265,13 +1235,8 @@ class RendersOnEitherCheckout(unittest.TestCase):
 class RendersASecondServiceBesideTheFirst(unittest.TestCase):
     """Two scaffolds into one checkout, which is the whole point of the tool.
 
-    Every test above renders once, and once is the case where "to the end of
-    the file" and "to the next service" are the same span. They are not the
-    same span afterwards: the second run's extraction swallowed the first
-    service's Compose pair and its `.env.example` variables and wrote them
-    again — duplicate keys, an invalid Compose file, and no check anywhere
-    that noticed. A Copilot review asked what a second run does; this is the
-    coverage that was missing when it did.
+    A second run's extraction must not copy the first service's Compose pair
+    and `.env.example` variables again.
     """
 
     def setUp(self):
@@ -1279,10 +1244,8 @@ class RendersASecondServiceBesideTheFirst(unittest.TestCase):
         root = template_copy(Path(self.directory.name))
         apply(root, plan(root, PROBE, PORT, MIGRATION_ID))
         self.root = root
-        # A second free port, for the second render. Spelt relative to the
-        # first so the pair moves together the next time a real service takes
-        # one of them — which is how the literal 5101 here survived until
-        # PR-18 allocated it.
+        # A second free port, spelt relative to the first so the pair moves
+        # together when a real service takes one of them.
         self.second = plan(root, SECOND_PROBE, SECOND_PORT, "20260810120000")
 
     def tearDown(self):
@@ -1345,12 +1308,9 @@ class RendersASecondServiceBesideTheFirst(unittest.TestCase):
         solution = self.second.updated["Platform.slnx"]
         services = re.findall(r'<Folder Name="/src/Services/([^/]+)/">', solution)
 
-        # Sortedness is the property, and the two probes being present is what
-        # keeps the assertion from being vacuous. This listed the whole set
-        # literally — `["Catalog", "Yankee", "Zulu"]` — which encoded "Catalog
-        # is the only real service" into a test about ordering, and went red
-        # the day PR-18 added Ordering. Every later service would have broken
-        # it again for the same non-reason.
+        # Sortedness is the property, and the two probes being present keeps
+        # the assertion from being vacuous. The set is not listed literally, so
+        # a later service does not break it.
         self.assertEqual(sorted(services), services)
         self.assertIn("Yankee", services)
         self.assertIn("Zulu", services)
@@ -1414,17 +1374,10 @@ class TheAllowListStep(unittest.TestCase):
         self.assertGreater(len(entries), len(existing))
 
     def test_a_rendered_service_passes_the_secret_scan(self):
-        # The property that actually matters, and the one nothing asserted
-        # before #161: §4.5 claims this script produces a service that builds
-        # and its tests pass, and a service a mandatory CI job refuses is
-        # neither.
-        #
-        # Over the APPLIED tree, with the gate's own walk. The first version of
-        # this test scanned `{**created, **updated}` with `gate.RULES` — which
-        # is what `update_allowed_secrets` does, from the same dict with the
-        # same rules, appending a line per key it does not find. Two runs of
-        # one loop cannot disagree, so the assertion could not fail. `scan_tree`
-        # reads what is on disk, which is the thing CI reads.
+        # §4.5 claims the script produces a service that builds and passes its
+        # tests, and a service a mandatory CI job refuses is neither. The scan
+        # runs over the applied tree with the gate's own walk, because
+        # `scan_tree` reads what is on disk, which is what CI reads.
         apply(self.root, plan(self.root, PROBE, PORT, MIGRATION_ID))
 
         entries, problems = self.parse_all(self.allow_list())
@@ -1472,19 +1425,10 @@ class TheAllowListStep(unittest.TestCase):
         self.assertEqual(len(set(keys)), len(keys), "the second render duplicated an entry")
 
     def test_an_entry_goes_to_the_child_file_when_a_tree_is_split_further(self):
-        # The scaffold's own longest-prefix routing, which the gate's tests
-        # cannot reach: they exercise the gate's copy of the rule, and this is
-        # the code that decides which file a RENDER writes to. Every allow-list
-        # file in this repository declares a disjoint top-level tree, so
-        # nothing else here makes the `max` branch choose between two matches —
-        # it could regress to "first match wins" with this suite still green
-        # and produce a tree the gate then rejects.
-        #
-        # **The child file is named so that it sorts AFTER the parent**, which
-        # is what makes that regression fail here. `allow_list_trees` reads
-        # `sorted(glob(...))`, so a `deploy-compose.txt` would be read first and
-        # a first-match implementation would pick it by accident — green, and
-        # about nothing. Measured both ways before this name was chosen.
+        # The scaffold's own longest-prefix routing decides which allow-list file
+        # a render writes to; the gate's tests exercise the gate's copy of the
+        # rule. The child file sorts after the parent, so a first-match
+        # implementation would pick it by accident and this suite goes red.
         allowed = self.root / SCAN_ALLOW_LIST
         deploy = allowed / "deploy.txt"
         body = deploy.read_text(encoding="utf-8").split("\n")
@@ -1523,16 +1467,10 @@ class TheAllowListStep(unittest.TestCase):
             "the parent file kept entries the child tree owns")
 
     def test_a_render_never_explains_a_finding_it_did_not_introduce(self):
-        # The defect #161's own fix shipped with. Ownership was decided by
-        # `path == finding.path and rule == finding.rule.id and marker in
-        # line`, and not one of those three names the service being rendered:
-        # the `definitions.json` row's marker is empty, `"" in line` is true of
-        # every line, and the line the scanner reports there carries the hash
-        # with the account name above it. So a render whose allow-list had lost
-        # an earlier service's entry matched that service's finding, wrote a
-        # sentence naming ITSELF, and cleared it — a suppression arriving for a
-        # credential the run is not writing, which is the outcome the
-        # allow-list's own header exists to refuse.
+        # Ownership of an allow-list entry is decided by path, rule and marker,
+        # and none of the three names the service being rendered: an empty marker
+        # matches every line. A render whose allow-list lost an earlier service's
+        # entry must not clear that finding with a sentence naming itself.
         apply(self.root, plan(self.root, PROBE, PORT, MIGRATION_ID))
 
         # A bad merge, a hand edit, a partial checkout — the entry is gone and
@@ -2399,10 +2337,8 @@ class RefusesToRun(unittest.TestCase):
                 render(repo_root=Path(directory))
 
     def test_a_file_in_the_migrations_directory_nobody_classified(self):
-        # The migrations branch used to `continue` unconditionally, so this
-        # directory was the one place the "will not guess" promise did not
-        # hold: a helper or a README beside the migrations was dropped in
-        # silence rather than stopping the run.
+        # A helper or a README beside the migrations stops the run, rather than
+        # being dropped in silence: the scaffold does not guess.
         with tempfile.TemporaryDirectory() as directory:
             root = template_copy(Path(directory))
             stray = root / MIGRATIONS_DIR / "README.md"
@@ -2442,9 +2378,8 @@ class RefusesToRun(unittest.TestCase):
             self.assertIn("not classified", str(raised.exception))
 
     def test_either_half_of_the_infra_only_pair_going_missing(self):
-        # The anchor used to be the API entry alone, so a change to the
-        # migrator's half passed unnoticed while the scaffold went on emitting
-        # the shape it used to have. Both halves, either direction.
+        # The anchor is the contiguous pair, so a change to either half is
+        # caught. Both directions.
         halves = (
             '  catalog-migrator:\n    profiles: [ "excluded" ]\n',
             '  catalog-api:\n    profiles: [ "excluded" ]\n',
@@ -2477,12 +2412,9 @@ class RefusesToRun(unittest.TestCase):
             self.assertIn("Program.cs", str(raised.exception))
 
     def test_a_migration_shape_added_without_the_name_it_is_reported_by(self):
-        # `TEMPLATE_MIGRATIONS` and `MIGRATION_LABELS` are paired positionally,
-        # and the pairing used to be `zip(..., strict=True)` — a real guard
-        # raising the wrong exception. `main` catches `ScaffoldError` and
-        # nothing else, so a tuple grown without its label ended the run in a
-        # `ValueError` traceback naming neither constant, from a script whose
-        # stated contract is one line on stderr and exit 1.
+        # `TEMPLATE_MIGRATIONS` and `MIGRATION_LABELS` are paired positionally.
+        # `main` catches `ScaffoldError` and nothing else, so a tuple grown
+        # without its label must raise that, not a `ValueError` traceback.
         original = new_service.MIGRATION_LABELS
         new_service.MIGRATION_LABELS = original[:-1]
         self.addCleanup(setattr, new_service, "MIGRATION_LABELS", original)
