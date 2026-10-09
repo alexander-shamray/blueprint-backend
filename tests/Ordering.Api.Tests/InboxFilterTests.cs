@@ -165,6 +165,9 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
 
+        DeliveryRecorder recorder = new();
+        harness.Bus.ConnectReceiveObserver(recorder);
+
         var id = Guid.CreateVersion7();
         var messageId = Guid.CreateVersion7();
 
@@ -183,10 +186,16 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
             c => c.MessageId = messageId,
             TestContext.Current.CancellationToken);
 
-        // Both deliveries, since the filter runs ahead of the consumer and a dropped one is still consumed.
+        // Both deliveries finished, read off the receive pipeline: the harness's Consumed list never sees the drop.
         await Eventually(
-            () => Task.FromResult<IReadOnlyList<object>>(
-                [.. harness.Consumed.Select<ProbeMessage>()]),
+            () =>
+            {
+                lock (recorder.Deliveries)
+                {
+                    return Task.FromResult<IReadOnlyList<Guid?>>(
+                        [.. recorder.Deliveries.Select(d => d.MessageId).Where(m => m == messageId)]);
+                }
+            },
             expected: 2);
 
         FirstConsumer.Consumed.ShouldBe([id], "the filter must drop the second delivery");
@@ -204,6 +213,9 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         await using ServiceProvider provider = BuildHost<FirstConsumer>();
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
+
+        DeliveryRecorder recorder = new();
+        harness.Bus.ConnectReceiveObserver(recorder);
 
         List<string> observed = [];
         using MeterListener listener = new();
@@ -246,9 +258,16 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
             c => c.MessageId = messageId,
             TestContext.Current.CancellationToken);
 
+        // Both deliveries finished, read off the receive pipeline: the harness's Consumed list never sees the drop.
         await Eventually(
-            () => Task.FromResult<IReadOnlyList<object>>(
-                [.. harness.Consumed.Select<ProbeMessage>()]),
+            () =>
+            {
+                lock (recorder.Deliveries)
+                {
+                    return Task.FromResult<IReadOnlyList<Guid?>>(
+                        [.. recorder.Deliveries.Select(d => d.MessageId).Where(m => m == messageId)]);
+                }
+            },
             expected: 2);
 
         lock (observed)
@@ -435,6 +454,9 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
 
             await Task.Delay(50, TestContext.Current.CancellationToken);
         }
+
+        // A read that never reached the count fails here, or the "only one" assertions after it pass on any filter.
+        rows.Count.ShouldBeGreaterThanOrEqualTo(expected, "the count never appeared within the polling window");
 
         return rows;
     }
