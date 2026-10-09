@@ -148,9 +148,10 @@ public sealed class ProviderKillSwitchTests
             attempts.Count.ShouldBe(Burst * (Retries + 1), "every message ran its first delivery and every retry");
             consumed.Faults.ShouldBe(Burst, "each message faulted once, after its retries, not once per attempt");
 
-            // Completed reaches this observer before the bus's own health observer records the stop (§9.7).
+            // Completed can reach this observer before the bus's health records the stop, so the read waits out a
+            // Healthy lag only; any other first reading is asserted (ProviderKillSwitch owns the Degraded rule).
             using CancellationTokenSource deadline = new(Budget);
-            while (bus.CheckHealth().Status != BusHealthStatus.Degraded && !deadline.IsCancellationRequested)
+            while (bus.CheckHealth().Status == BusHealthStatus.Healthy && !deadline.IsCancellationRequested)
                 await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
 
             bus.CheckHealth().Status.ShouldBe(
