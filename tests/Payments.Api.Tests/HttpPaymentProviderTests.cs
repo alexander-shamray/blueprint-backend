@@ -338,15 +338,19 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task An_open_circuit_makes_no_call_at_all()
     {
-        // The breaker sits inside the retry, so one call is MaxRetryAttempts + 1 attempts toward the throughput.
+        // The breaker sits inside the retry, so one call is MaxRetryAttempts + 1 attempts toward the throughput. Each
+        // call that reaches the stub logs a request, so this many suffice, and a call that logs none fails the count.
         using ProviderHost own = OwnHost();
         CancellationToken ct = TestContext.Current.CancellationToken;
-        while (Calls(own.Server, "/v1/authorisations") < ProviderHop.CircuitBreakerMinimumThroughput)
+        int needed = ProviderHop.CircuitBreakerMinimumThroughput;
+
+        for (int call = 0; call < needed && Calls(own.Server, "/v1/authorisations") < needed; call++)
         {
             await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
                 Provider(own.Factory).AuthoriseAsync(Authorisation(10.05m), ct));
         }
 
+        Calls(own.Server, "/v1/authorisations").ShouldBeGreaterThanOrEqualTo(needed, "every call reached the provider");
         int before = Calls(own.Server, "/v1/authorisations");
 
         PaymentProviderUnavailableException refused = await Should.ThrowAsync<PaymentProviderUnavailableException>(
