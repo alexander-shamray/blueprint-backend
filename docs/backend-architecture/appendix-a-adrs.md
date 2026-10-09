@@ -97,6 +97,7 @@ decision looks wrong.
 | **ADR-088** | [The realm gate judges a worker's cap expanded, and the audience scope's mappers exactly](adr/ADR-088-the-realm-gate-judges-a-workers-cap-expanded-and-the-audience-scopes-mappers-exactly.md) |
 | **ADR-089** | [The browser-origin obligation binds the clients that exchange a code from a page](adr/ADR-089-the-browser-origin-obligation-binds-the-clients-that-exchange-a-code-from-a-page.md) |
 | **ADR-090** | [Catalog republishes the facts it still holds, from the migrator image, with their original stamps](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md) |
+| **ADR-091** | [A host holding client credentials makes a call under a grant of its own, and not always to a peer](adr/ADR-091-a-host-holding-client-credentials-makes-a-call-under-a-grant-of-its-own-and-not-always-to-a-peer.md) |
 
 ---
 
