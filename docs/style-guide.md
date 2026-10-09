@@ -205,10 +205,8 @@ file and a reviewer are the only things that do.
   consecutive usings (IDE0065, enforced). This binds source only — a sample is
   an excerpt rather than a compilable unit, so **do not "complete" one by
   adding the block it would need to build.** A sample may carry a
-  `using static` — §9.6's saga imports `Endpoints`, §12.4's subject suite
-  imports `Principals` — because an unqualified `Authenticated(caller)` reads
-  as a member of the type being shown unless something says otherwise; a
-  plain `using` it may not.
+  `using static`, because an unqualified member reads as a member of the type
+  being shown unless something says otherwise; a plain `using` it may not.
 - **No unused `using` directives** — *review-carried*. A file that stops needing
   one drops it in the change that stopped needing it: a stale using is a claim
   that the file depends on something it does not, and the reader who trusts it
