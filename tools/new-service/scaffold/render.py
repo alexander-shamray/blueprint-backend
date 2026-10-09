@@ -72,6 +72,8 @@ COPIED = frozenset(
         "src/Services/Catalog/Catalog.Migrator/MigrationRunner.cs",
         "src/Services/Catalog/Catalog.Migrator/MigratorHost.cs",
         "src/Services/Catalog/Catalog.Migrator/Program.cs",
+        # ADR-090's gate travels with the host that reads it; the republisher itself is the slice's.
+        "src/Services/Catalog/Catalog.Migrator/RepublishRequest.cs",
         "tests/Catalog.Domain.Tests/ArchitectureTests.cs",
         "tests/Catalog.Domain.Tests/Catalog.Domain.Tests.csproj",
         "tests/Catalog.Application.Tests/ArchitectureTests.cs",
@@ -104,6 +106,7 @@ COPIED = frozenset(
         "tests/Catalog.Api.Tests/RetentionMapTests.cs",
         # §14.3's gate travels with the hook it guards, which every migrator holds.
         "tests/Catalog.Api.Tests/SeedGateTests.cs",
+        "tests/Catalog.Api.Tests/RepublishGateTests.cs",
         "tests/Catalog.TestSupport/Catalog.TestSupport.csproj",
         "tests/Catalog.TestSupport/CatalogApiFactory.cs",
         # §12.4's test scheme. Copied rather than omitted even though a
@@ -194,6 +197,9 @@ OMITTED = frozenset(
         # and MigrationRunner travel, and STAND_INS renders this file empty.
         "src/Services/Catalog/Catalog.Migrator/CatalogSeeder.cs",
         "tests/Catalog.Api.Tests/CatalogSeederTests.cs",
+        # ADR-090's republish is SQL over the template's products; the host that registers it travels.
+        "src/Services/Catalog/Catalog.Migrator/CatalogRepublisher.cs",
+        "tests/Catalog.Api.Tests/CatalogRepublisherTests.cs",
         "tests/Catalog.Domain.Tests/MoneyTests.cs",
         "tests/Catalog.Domain.Tests/ProductTests.cs",
         "tests/Catalog.Application.Tests/CatalogIntegrationEventMapperTests.cs",
@@ -330,10 +336,34 @@ public sealed class CatalogSeeder(ILogger<CatalogSeeder> logger)
 }
 """
 
+# ADR-090's republish with nothing to republish, the type the copied MigratorHost registers and Program.cs
+# runs. It exits non-zero, since a run that read success from a service holding no facts would fail open.
+EMPTY_REPUBLISHER = """using Microsoft.Extensions.Logging;
+
+namespace Catalog.Migrator;
+
+/// <summary>ADR-090's republish, which this service cannot run until it has an aggregate to announce.</summary>
+public sealed class CatalogRepublisher(ILogger<CatalogRepublisher> logger)
+{
+    private static readonly Action<ILogger, Exception?> NothingToRepublish =
+        LoggerMessage.Define(
+            LogLevel.Error,
+            new EventId(1, nameof(NothingToRepublish)),
+            "Catalog has nothing to republish yet. The job exits non-zero.");
+
+    public Task<int> RunAsync(CancellationToken ct)
+    {
+        NothingToRepublish(logger, null);
+        return Task.FromResult(1);
+    }
+}
+"""
+
 # An OMITTED file whose type the copied wiring still names, rendered from text
 # of its own in the template's place: the hook travels and the slice does not.
 STAND_INS = {
     "src/Services/Catalog/Catalog.Migrator/CatalogSeeder.cs": EMPTY_SEEDER,
+    "src/Services/Catalog/Catalog.Migrator/CatalogRepublisher.cs": EMPTY_REPUBLISHER,
 }
 
 # Anything left in the rendered tree fails the run, once `production` and EF's
