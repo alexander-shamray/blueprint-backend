@@ -54,8 +54,8 @@ table holds personal data until a request closes, so it is a row in
 closes keeps the id. A holder missing from the responder set fails as
 silence; the journey test, not the service, is what notices. The contracts
 are in `Common.Contracts.Privacy.V1`, and `PersonalDataDeleteCompleted` has
-five publishers and one owner: it sits with Privacy, which consumes it and
-whose responder set is its vocabulary ([§9.1](../09-messaging.md)). The
+five publishers and one owner: this ADR puts it with Privacy, which consumes
+it and whose responder set is its vocabulary. The
 consumers ship a release before the producer, as
 [§9.2](../09-messaging.md) requires, which is why the service is the fifth
 of six pull requests.
