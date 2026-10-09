@@ -140,6 +140,17 @@ public class GrantCheckedTokenCacheTests
         counted.Value.ShouldBe(1);
     }
 
+    [Fact]
+    public void An_eviction_reaches_the_cache_holding_the_token()
+    {
+        using ServiceProvider services = Metrics();
+        FixedTokenCache inner = new("a-refused-token");
+
+        Cache(services, inner).Evict("roles", "a-refused-token");
+
+        inner.Evicted.ShouldHaveSingleItem().ShouldBe(("roles", "a-refused-token"));
+    }
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     /// <summary>The meter factory and the one metrics type, from a container that outlives the assertions.</summary>
@@ -173,7 +184,11 @@ public class GrantCheckedTokenCacheTests
 
         public FixedTokenCache(Exception fault) => _fault = fault;
 
+        public List<(string Scope, string Token)> Evicted { get; } = [];
+
         public Task<string> GetAsync(string scope, CancellationToken ct) =>
             _fault is null ? Task.FromResult(_token!) : Task.FromException<string>(_fault);
+
+        public void Evict(string scope, string token) => Evicted.Add((scope, token));
     }
 }

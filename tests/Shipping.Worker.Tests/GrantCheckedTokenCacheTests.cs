@@ -103,6 +103,17 @@ public class GrantCheckedTokenCacheTests
         counted.Value.ShouldBe(1, "a realm that issues no JWT is the deployment's to fix, and no retry will");
     }
 
+    [Fact]
+    public void An_eviction_reaches_the_cache_holding_the_token()
+    {
+        using ServiceProvider services = Metrics();
+        FixedTokenCache inner = new("a-refused-token");
+
+        Cache(services, inner).Evict("commerce-api", "a-refused-token");
+
+        inner.Evicted.ShouldHaveSingleItem().ShouldBe(("commerce-api", "a-refused-token"));
+    }
+
     /// <summary>The meter factory and the one metrics type, from a container that outlives the assertions.</summary>
     private static ServiceProvider Metrics() =>
         new ServiceCollection().AddMetrics().AddSingleton<AddressMetrics>().BuildServiceProvider();
@@ -127,7 +138,11 @@ public class GrantCheckedTokenCacheTests
 
         public FixedTokenCache(Exception fault) => _fault = fault;
 
+        public List<(string Scope, string Token)> Evicted { get; } = [];
+
         public Task<string> GetAsync(string scope, CancellationToken ct) =>
             _fault is null ? Task.FromResult(_token!) : Task.FromException<string>(_fault);
+
+        public void Evict(string scope, string token) => Evicted.Add((scope, token));
     }
 }

@@ -64,6 +64,8 @@ public sealed partial class GrantCheckedTokenCache(
         return token;
     }
 
+    public void Evict(string scope, string token) => inner.Evict(scope, token);
+
     /// <summary>The roles on <c>realm-management</c>, read and never validated: a signature sizes no grant.</summary>
     /// <remarks>Decoded by hand: the handler flattens a nested claim to text, and ADR-052's claim is nested.</remarks>
     private string[] Roles(string token)

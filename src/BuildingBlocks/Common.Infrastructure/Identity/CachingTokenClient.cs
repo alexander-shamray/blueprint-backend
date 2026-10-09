@@ -56,6 +56,13 @@ public sealed partial class CachingTokenClient(
         }
     }
 
+    public void Evict(string scope, string token)
+    {
+        // Outside the gate: removing by entry compares it, so a fetch that replaced the token keeps its own.
+        if (_tokens.TryGetValue(scope, out CachedToken? cached) && cached.AccessToken == token)
+            _tokens.TryRemove(KeyValuePair.Create(scope, cached));
+    }
+
     private bool TryRead(string scope, out string accessToken)
     {
         if (_tokens.TryGetValue(scope, out CachedToken? token) &&

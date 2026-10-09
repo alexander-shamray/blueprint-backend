@@ -5,4 +5,8 @@ public interface ITokenCache
 {
     /// <summary>A valid token for <paramref name="scope"/>, fetched when none is cached or it nears expiry.</summary>
     Task<string> GetAsync(string scope, CancellationToken ct);
+
+    /// <summary>Drops <paramref name="token"/> if it is still the one cached for <paramref name="scope"/>.</summary>
+    /// <remarks>Never a newer token, so a refusal that raced a refresh costs nothing (§11.5).</remarks>
+    void Evict(string scope, string token);
 }

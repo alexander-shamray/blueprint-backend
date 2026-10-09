@@ -111,6 +111,53 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_evicted_token_is_replaced_on_the_next_call()
+    {
+        string first = await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+        Tokens.Evict(Scope, first);
+
+        string second = await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+
+        second.ShouldNotBe(first);
+        _provider.TokenRequests.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task An_eviction_naming_a_token_already_replaced_keeps_the_newer_one()
+    {
+        _provider.ExpiresIn = 60;
+        string first = await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+        _clock.Advance(TimeSpan.FromSeconds(35));
+        string second = await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
+
+        // The refusal of a call that presented the first token, arriving after the refresh.
+        Tokens.Evict(Scope, first);
+
+        (await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken)).ShouldBe(second);
+        _provider.TokenRequests.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_token_a_callee_refuses_through_the_handler_is_replaced_on_the_next_call()
+    {
+        Refusing callee = new();
+        using HttpMessageInvoker invoker = new(
+            new ClientCredentialsHandler(Tokens, _services.GetRequiredService<IOptions<ServiceIdentityOptions>>())
+            {
+                InnerHandler = callee
+            });
+
+        for (int call = 0; call < 2; call++)
+        {
+            using HttpRequestMessage request = new(HttpMethod.Get, "http://catalog.invalid/");
+            using HttpResponseMessage response = await invoker.SendAsync(request, TestContext.Current.CancellationToken);
+        }
+
+        callee.Sent.Distinct().Count().ShouldBe(2, "the second call carries a token fetched after the refusal");
+        _provider.TokenRequests.Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task A_response_with_no_expires_in_is_never_cached()
     {
         _provider.ExpiresIn = null;
@@ -296,5 +343,20 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
 
         thrown.Message.ShouldContain(AuthorityKey);
+    }
+
+    /// <summary>A callee that answers every call 401 and keeps each bearer token it was sent.</summary>
+    private sealed class Refusing : HttpMessageHandler
+    {
+        public List<string?> Sent { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Sent.Add(request.Headers.Authorization?.Parameter);
+
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized));
+        }
     }
 }
