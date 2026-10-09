@@ -29,9 +29,9 @@ is the warehouse's and the carrier's schedule, which the carrier contract does
 not state. The despatch wait is the one bound the platform has decided: past
 it a counted order is ordinarily in review, or about to be once the saga's
 queue delivers the expiry: as `not_despatched`, unless it was cancelled within
-the wait, which put it there as `cancelled_after_confirmation` instead. A shorter
-age would be a guess at a collection time; a longer one would leave orders in
-review with nothing saying why.
+the wait, which put it there as `cancelled_after_confirmation` instead. A
+shorter age would be a guess at a collection time; a longer one would leave
+orders in review with nothing saying why.
 
 No `for`: the predicate is already an age, so a wait would add to it rather
 than ride anything out, as the outbox lanes' rule argues. A ticket, not a
@@ -48,8 +48,8 @@ reads the shipment's whole page.
   is held back, so the gauge leaves it out. One whose cancellation the
   carrier refused is moving, stays `Booked` and polled, and is counted.
 - **Money and stock.** Payment and the reservation are settled, and the
-  order's review row, whatever its reason, is where `order-review.md` works
-  it.
+  order's review row, whatever its reason and if it has one, is where
+  `order-review.md` works it.
 
 **A shipment already despatched is affected and not counted**: if the route
 has gone, its delivery 404s too and reads as nothing yet. It is still polled,
