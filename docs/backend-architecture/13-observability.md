@@ -1841,7 +1841,7 @@ request — no single instrument produces it, so any number published for it
 could only be guessed at. **Query p95 split by cache hit and miss** needs a
 tag no query handler sets. The question the split asks, whether the cache is
 working, would be answered by the cache's own hit ratio, which has no signal
-until the cache publishes a meter (§13.6's callout on
+until it has an instrument (§13.6's callout on
 `Microsoft.Extensions.Caching.Hybrid`).
 
 Cutting a row is the honest move when the alternative is a target nobody can
