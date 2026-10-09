@@ -27,9 +27,9 @@ parcel left.
 shorter. A booking legitimately waits for collection, and how long it waits
 is the warehouse's and the carrier's schedule, which the carrier contract does
 not state. The despatch wait is the one bound the platform has decided: past
-it every counted order is in review, or about to be once the saga's queue
-delivers the expiry: as `not_despatched`, unless it was cancelled within the
-wait, which put it there as `cancelled_after_confirmation` instead. A shorter
+it a counted order is ordinarily in review, or about to be once the saga's
+queue delivers the expiry: as `not_despatched`, unless it was cancelled within
+the wait, which put it there as `cancelled_after_confirmation` instead. A shorter
 age would be a guess at a collection time; a longer one would leave orders in
 review with nothing saying why.
 
@@ -48,8 +48,8 @@ reads the shipment's whole page.
   is held back, so the gauge leaves it out. One whose cancellation the
   carrier refused is moving, stays `Booked` and polled, and is counted.
 - **Money and stock.** Payment and the reservation are settled, and the
-  order's review row, under one of the two codes above, is where
-  `order-review.md` works it.
+  order's review row, whatever its reason, is where `order-review.md` works
+  it.
 
 **A shipment already despatched is affected and not counted**: if the route
 has gone, its delivery 404s too and reads as nothing yet. It is still polled,
@@ -115,7 +115,9 @@ gone, every events read is a 404, despatched shipments' included.
   warehouse and the carrier. Shipping does nothing until a scan arrives.
 
 Either way the count falls as scans land, and the alert resolves. **Work the
-orders already in review** from `order-review.md`, by order id: under
-`not_despatched`, whose row a despatch published after the saga gave up does
-not clear, or under `cancelled_after_confirmation` for an order cancelled
-within the despatch wait.
+orders already in review** from `order-review.md`: look each counted order up
+in `OrderReviews` by order id and work the reason found there. Ordinarily that
+is `not_despatched`, whose row a despatch published after the saga gave up
+does not clear, or `cancelled_after_confirmation` for an order cancelled
+within the despatch wait; a saga that missed the confirmation leaves
+`not_confirmed`, and an order with no row at all is a case to work too.
