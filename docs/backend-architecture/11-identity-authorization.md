@@ -895,9 +895,8 @@ here because compensation cancels an order in exactly the sense the customer
 does; §9.6's saga wants the same transition, not a parallel one.
 
 **The two paths are symmetric on the way in and not on the way out.** The
-saga that sends its own `CancelOrder` finalises once its stock is released, at
-once when no payment verdict is outstanding and otherwise when the verdict or
-the second payment expiry arrives ([§9.6](09-messaging.md)). The endpoint
+saga that sends its own `CancelOrder` finalises once both its stock and its
+payment have come to rest, which [§9.6](09-messaging.md) says when. The endpoint
 above cancels the aggregate and ends nothing — it is the saga's
 *subscription* to `OrderCancelled` (§3.2, §9.6) that stops the
 workflow; without it a customer who cancelled here would keep stock reserved
