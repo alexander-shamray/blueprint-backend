@@ -1600,9 +1600,9 @@ references no service. `RecordingIdempotencyStore`, in
 log each member appends to, the `Tokens` map, and a `CompleteFault` that throws
 from `CompleteAsync` for the hold case; `StubCurrentUser.Authenticated(id)` and
 `StubCurrentUser.Anonymous()` are the callers the subject segment
-distinguishes. §12.4's `Principals` and `SeedData` are Ordering's and cannot be
-reached from here — §4.3 permits one assembly across a service boundary and a
-test helper is not it.
+distinguishes. Ordering's callers, stated through its `TestAuthHandler`, cannot
+be reached from here — §4.3 permits one assembly across a service boundary and
+a test helper is not it.
 
 **Asserting on the sequence rather than on a count** is what §6.3's suite does
 with its `PipelineLog`, and it is what makes the hold test's `claim`,

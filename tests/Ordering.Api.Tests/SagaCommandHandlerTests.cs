@@ -146,6 +146,20 @@ public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLife
             "the saga's own CancelOrder must echo back as this workflow's doing");
     }
 
+    [Fact]
+    public async Task A_user_command_with_no_caller_is_refused()
+    {
+        // The pair of the test above, and the one state HTTP cannot produce: RequireAuthorization answers a
+        // caller-less request 401 before the handler, so only a bare scope reaches §11.4's guard without one.
+        Guid orderId = await fixture.SeedOrderAsync(Customer);
+
+        Result cancelled = await DispatchAsync(
+            new CancelOrderCommand(orderId, CancellationReason.CustomerRequest, CommandOrigin.User));
+
+        cancelled.Error.ShouldBe(OrderErrors.NotFound);
+        (await StatusAsync(orderId)).ShouldBe("AwaitingStock", "a refusal mutates nothing");
+    }
+
     private async Task<Result> DispatchAsync(ICommand<Result> command)
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();

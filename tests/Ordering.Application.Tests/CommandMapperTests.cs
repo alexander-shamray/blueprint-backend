@@ -1,7 +1,9 @@
 using System.Reflection;
 using Common.Application;
 using Common.Contracts.Ordering.V1;
+using Ordering.Application.Orders.CancelOrder;
 using Ordering.Application.Orders.FlagOrderForReview;
+using Ordering.Domain.Orders;
 using Ordering.Infrastructure.Messaging;
 using Shouldly;
 using Xunit;
@@ -66,5 +68,26 @@ public class CommandMapperTests
 
         Should.Throw<ContractMappingException>(
             () => mapper.Map(new FlagOrderForReview(Order, "cancelled_after_payent")));
+    }
+
+    [Fact]
+    public void The_mapper_is_what_makes_a_message_system_initiated()
+    {
+        CancelOrderCommand command = new CancelOrderMapper().Map(new CancelOrder(Order, CancelReasons.OutOfStock));
+
+        // Both halves of what the mapper does: every recognised code could map to the wrong domain reason and this
+        // test would still pass on the origin alone.
+        command.InitiatedBy.ShouldBe(CommandOrigin.System);
+        command.Reason.ShouldBe(CancellationReason.OutOfStock);
+    }
+
+    [Fact]
+    public void An_unknown_reason_code_never_becomes_a_command()
+    {
+        // §9.4's retry policy ignores ContractMappingException, so this sends a malformed message to the error queue
+        // on the first attempt rather than after a minute of backoff.
+        CancelOrder message = new(Order, "invented_last_release");
+
+        Should.Throw<ContractMappingException>(() => new CancelOrderMapper().Map(message));
     }
 }
