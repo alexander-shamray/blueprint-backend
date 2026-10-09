@@ -361,8 +361,8 @@ services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>))
 > **Unregistered, this fails silently and completely.** `GetServices<IPipelineBehavior<…>>()`
 > returning empty is indistinguishable from "no behaviours configured", so the
 > dispatcher invokes the handler alone. No handler calls `SaveChangesAsync`: on
-> a command's path its one call site is inside `TransactionBehavior`, so a
-> missing registration means
+> an HTTP command's path its one call site is inside `TransactionBehavior`, so
+> a missing registration means
 > `PlaceOrderHandler` calls `orders.Add(order)`, returns `Result.Success`, and
 > **nothing is ever written**: no order, no outbox row, no saga. The request
 > returns 200.
