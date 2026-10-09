@@ -1,4 +1,4 @@
-# Ordering, and the chart §15.3 prints. Two ports since ADR-052: §10.2's REST
+# Ordering, and the chart §15.3 prints. Two ports (ADR-052): §10.2's REST
 # surface, and the HTTP/2-only endpoint that serves DeliveryAddresses.Get to a
 # Shipping worker. A cleartext Kestrel endpoint cannot serve HTTP/1.1 and h2c
 # at once — measured, and argued in Ordering.Api/appsettings.json.
@@ -119,23 +119,15 @@ database:
     name: ordering-migrator-secret
     key: connection-string
 
-# The bus (§9). ONE SECRET PER SERVICE since #44, where both charts named
-# `commerce-rabbitmq` and therefore one broker account. That account was
-# `guest` locally — tagged administrator and reachable from any container —
-# and a single shared principal is what made queue arrival a boundary in name
-# only (§9.4): anything able to reach the broker could publish onto
-# `ordering-commands` and be mapped as system-initiated.
+# The bus (§9). One Secret per service, never a shared one: a single broker
+# principal is what makes queue arrival a boundary in name only (§9.4), since
+# anything able to reach the broker could publish onto another service's queue
+# and be mapped as system-initiated.
 #
 # The Secret this names must carry a connection string for the `ordering-svc`
 # account, whose permissions deploy/compose/rabbitmq/definitions.json declares
-# and `check_permissions.py` holds to the code. **Provisioning those accounts
-# on a deployed broker is an obligation this repository states and does not
-# check** — the same division §15.4 draws for every Secret, and the same one
-# ADR-033 and ADR-034 draw for the realm. ADR-040 narrows what an unchecked
-# realm can cost without discharging the obligation: no host accepts a token
-# with more than the revocation bound left to live, so a long-lived one is
-# contained rather than detected, and the realm still owes the setting.
-# Nothing here does even that much for a broker account.
+# and `check_permissions.py` holds to the code. Provisioning it on a deployed
+# broker is an obligation stated and not checked — §15.4's division.
 broker:
   enabled: true
   secretRef:

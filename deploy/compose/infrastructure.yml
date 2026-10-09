@@ -54,7 +54,7 @@ services:
       interval: 10s
       retries: 5
 
-  # Built rather than pulled, and the ONE infrastructure service that is
+  # Built rather than pulled, and the only infrastructure service that is
   # (§14.1). rabbitmq/Dockerfile adds the delayed message exchange plugin
   # §9.6's saga timeouts are scheduled through (ADR-021); the base image
   # is still an official tag, one line inside it.
