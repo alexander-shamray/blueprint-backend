@@ -39,16 +39,22 @@ public sealed class OrderTrace : IAsyncDisposable
         ["Cancelled"] = []
     };
 
-    /// <summary>§9.6's saga states: an instance that finalises is deleted, which reads as none.</summary>
+    /// <summary>The saga before its instance exists and after it is deleted, both of which read as none.</summary>
+    private const string Started = "start";
+
+    private const string Finished = "finished";
+
+    /// <summary>§9.6's saga states, an instance that finalises being deleted.</summary>
     private static readonly Dictionary<string, string[]> SagaStates = new()
     {
-        [OrderSnapshot.None] = ["AwaitingStock"],
-        ["AwaitingStock"] = ["AwaitingPayment", "Compensating", OrderSnapshot.None],
+        [Started] = ["AwaitingStock"],
+        ["AwaitingStock"] = ["AwaitingPayment", "Compensating", Finished],
         ["AwaitingPayment"] = ["AwaitingConfirmation", "Compensating"],
-        ["AwaitingConfirmation"] = ["Confirmed", "Compensating", OrderSnapshot.None],
-        ["Confirmed"] = [OrderSnapshot.None],
-        ["Compensating"] = [OrderSnapshot.None],
-        ["Final"] = [OrderSnapshot.None]
+        ["AwaitingConfirmation"] = ["Confirmed", "Compensating", Finished],
+        ["Confirmed"] = [Finished],
+        ["Compensating"] = [Finished],
+        ["Final"] = [Finished],
+        [Finished] = []
     };
 
     private readonly JourneyWorld _world;
@@ -128,8 +134,8 @@ public sealed class OrderTrace : IAsyncDisposable
         IReadOnlyList<OrderSnapshot> seen = [.. Seen.Select(s => s.Snapshot)];
         seen.ShouldNotBeEmpty("the sampler saw nothing, so legality was not asserted");
 
-        AssertSequence("order", seen.Select(s => s.OrderStatus), OrderStates);
-        AssertSequence("saga", seen.Select(s => s.SagaState), SagaStates);
+        AssertSequence("order", seen.Select(s => s.OrderStatus), OrderStates, OrderSnapshot.None);
+        AssertSequence("saga", Bracketed(seen.Select(s => s.SagaState)), SagaStates, Started);
 
         foreach (OrderSnapshot snapshot in seen)
         {
@@ -141,12 +147,27 @@ public sealed class OrderTrace : IAsyncDisposable
         }
     }
 
+    /// <summary>None before the first state seen is the start; none after it is the end, and nothing follows.</summary>
+    private static IEnumerable<string> Bracketed(IEnumerable<string> states)
+    {
+        bool begun = false;
+
+        foreach (string state in states)
+        {
+            if (state != OrderSnapshot.None)
+                begun = true;
+
+            yield return state == OrderSnapshot.None ? (begun ? Finished : Started) : state;
+        }
+    }
+
     private static void AssertSequence(
         string what,
         IEnumerable<string> states,
-        IReadOnlyDictionary<string, string[]> after)
+        IReadOnlyDictionary<string, string[]> after,
+        string start)
     {
-        string previous = OrderSnapshot.None;
+        string previous = start;
 
         foreach (string state in states)
         {
