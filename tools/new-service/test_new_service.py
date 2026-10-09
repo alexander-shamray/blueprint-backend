@@ -1,13 +1,7 @@
 """The scaffold's own tests, run against the real repository.
 
-A fixture tree would test the script against a template that cannot drift.
-The whole risk this design accepts is that Catalog moves under the anchors
-(see the module docstring next door), and only rendering the tree that
-actually exists catches that. So `plan()` reads the checkout — and writes
-nothing, which is why it can: the render is a value, and `apply()` is the only
-thing that touches disk.
-
-    cd tools/new-service && python -m unittest
+A fixture tree cannot drift from the template, so these render the real one;
+`plan()` writes nothing. Run: cd tools/new-service && python -m unittest
 """
 
 import contextlib
@@ -109,11 +103,8 @@ def render(name: str = PROBE, port: int = PORT, repo_root: Path = REPO_ROOT) -> 
 def template_copy(destination: Path) -> Path:
     """The template and the shared files a render edits, minus §15.1's gate.
 
-    Only the tests that need to *break* the template copy it; everything else
-    reads the checkout directly. The secret scan is deliberately absent rather
-    than forgotten — `template_copy_with_gate` below adds it, and the pair is
-    what makes the degraded path testable from both sides. The files are
-    listed and not counted, because the list has already grown twice.
+    Only tests that break the template copy it; the secret scan is added by
+    `template_copy_with_gate`, so the degraded path is tested both ways.
     """
     for root in COPY_ROOTS:
         shutil.copytree(
@@ -133,13 +124,11 @@ def template_copy(destination: Path) -> Path:
         (destination / shared).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / shared, destination / shared)
 
-    # Every file the index includes, READ OUT OF THE INDEX rather than listed
-    # above. The port collision check reads them — the index publishes nothing
-    # itself, so a copy holding only the index would have no mapping to collide
-    # with and would call every port free — and a list here would go stale the
-    # first time a scaffolded service's unit is committed: the index would name
-    # a file this fixture did not copy, and every synthetic `plan()` would fail
-    # on the missing include, from an unrelated change.
+    # Every file the index includes, read out of the index rather than listed
+    # above. The port collision check reads them, and the index publishes
+    # nothing itself, so a copy holding only the index would call every port
+    # free. A fixed list would also name a file this fixture did not copy
+    # once a scaffolded service's unit is committed.
     for _, entry in new_service.compose_included(REPO_ROOT):
         included = f"{new_service.COMPOSE_DIR}/{entry}"
         (destination / included).parent.mkdir(parents=True, exist_ok=True)
@@ -151,11 +140,8 @@ def template_copy(destination: Path) -> Path:
 def template_copy_with_gate(destination: Path) -> Path:
     """The same tree, and §15.1's secret scan beside it.
 
-    The tree above has no `.github/`, so "the scaffold degraded because the
-    gate is not there" and "the step was never wired in at all" write the same
-    nothing and pass the same assertion. This root is the positive control
-    that makes the absence mean something: the same render, one directory
-    different, and an allow-list entry has to appear.
+    The tree above has no `.github/`; this root is the positive control that
+    makes the degraded step's absence of entries mean something.
     """
     root = template_copy(destination)
     shutil.copytree(
@@ -169,10 +155,8 @@ def template_copy_with_gate(destination: Path) -> Path:
 def allow_list_entries(gate, text: str) -> tuple[list, list[str]]:
     """An allow-list body, parsed by the gate's own reader.
 
-    Never a second parser written here. What the entries mean is the gate's
-    question and this suite is asking whether the scaffold's answers satisfy
-    it, so re-implementing the four-field split would be a double agreeing
-    with itself about a format neither of them owns.
+    What the entries mean is the gate's question; a second parser here would
+    be a double agreeing with itself about a format neither owns.
     """
     with tempfile.TemporaryDirectory() as directory:
         # A `.txt`, because the gate reads one file or a directory of them and
@@ -195,9 +179,8 @@ def allow_list_files(root: Path) -> dict[str, str]:
 def allow_list_appended(rendered) -> dict[str, str]:
     """The allow-list files this render wrote, keyed the same way.
 
-    A render appends to the file covering each entry's tree, so this is a map
-    and not a file — a service's Compose unit and its test fixtures are two
-    trees, and a suite that read one of them would be blind to the other.
+    A map and not a file: a service's Compose unit and its test fixtures are
+    two trees, and a suite that read one would be blind to the other.
     """
     return {
         path: body
@@ -282,16 +265,11 @@ class RendersTheTemplate(unittest.TestCase):
         ]
         self.assertIn("services.AddMassTransitMessaging(configuration);", infrastructure)
 
-        # Guarded here because nowhere else can guard it.
         # ConfigureEndpoints(context) gives a registered consumer with no
         # explicit binding a queue named after its type, carrying neither the
         # inbox filter nor the retry policy §9.8 requires of every endpoint.
-        # This file renders Catalog, and Catalog binds its own consumer
-        # explicitly, so a rendered service is the only place the absence is
-        # observable at all.
-        #
-        # The call, not the identifier: the template's comment explains why the
-        # line is gone and names it doing so.
+        # Catalog binds its consumer explicitly, so only a rendered service
+        # shows the absence. The call, not the identifier, is asserted.
         self.assertNotIn("cfg.ConfigureEndpoints(", messaging)
 
         # A rendered service subscribes to nothing.
@@ -433,14 +411,11 @@ class OmitsTheSlice(unittest.TestCase):
         self.assertIn('PackageReference Include="MassTransit"', csproj)
 
     def test_the_registration_suite_keeps_the_tests_about_the_template(self):
-        # The exact set, not a subset. Written as `assertIn`s it both
-        # miscounted — the dispatcher test is copied too — and could not fail
-        # if that test were dropped, which is the one registration whose
-        # absence makes the first resolved TransactionBehavior throw.
-        #
-        # In declaration order, which is also the order the registrations run
-        # in: a set comparison would pass on a suite that had lost the pipeline
-        # ordering test and gained a duplicate of another.
+        # The exact set, in declaration order, which is the order the
+        # registrations run in. `assertIn`s could not fail if the dispatcher
+        # test were dropped, the one registration whose absence makes the
+        # first resolved TransactionBehavior throw, and a set comparison would
+        # pass a suite that lost the pipeline ordering test.
         tests = self.rendered.created["tests/Zulu.Application.Tests/DependencyInjectionTests.cs"]
 
         self.assertEqual(
@@ -526,13 +501,8 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
     def test_no_generated_file_carries_a_history_this_service_has_not_got(self):
         """A service rendered today has no past, so nothing in it may narrate one.
 
-        The template is Catalog itself, so a word the comment gate calls
-        history reaches every service that follows. The patterns are that
-        gate's own, imported rather than restated: every one of them but
-        emphasis, which the churn plan's sweep owns, so a pattern added
-        there extends this without an edit. Whole files rather
-        than comment tokens, so a match in a string literal fails too:
-        the alternative is a second lexer to keep in step with the gate's.
+        The template is Catalog itself, so history reaches every later service.
+        The gate's patterns are imported, bar emphasis; whole files are read.
         """
         gate = comment_gate_module()
         exempt = "emphasis"
@@ -730,12 +700,10 @@ class TheMigrationAndItsSnapshot(unittest.TestCase):
         self.assertLess(OUTBOX_MIGRATION_ID, INBOX_MIGRATION_ID)
 
     def test_it_copies_the_retention_index_under_the_id_after_that(self):
-        # The purge's index travels for the same reason the tables do, and
-        # its absence is the quietest of the three: the claim's index is
-        # filtered `WHERE ProcessedAt IS NULL`, so it excludes every row the
-        # purge deletes and the hourly pass scans the whole outbox table. A
-        # service scaffolded without it pays that from its first boot, and the
-        # cost grows exactly as the processed rows do.
+        # The purge's index travels for the same reason the tables do, and its
+        # absence is the quietest of the three: the claim's index is filtered
+        # `WHERE ProcessedAt IS NULL`, so it excludes every row the purge
+        # deletes and the hourly pass scans the whole outbox table.
         migration = f"{self.prefix}/{RETENTION_MIGRATION_ID}_AddOutboxRetentionIndex.cs"
         self.assertIn(migration, self.rendered.created)
         self.assertIn('name: "IX_Outbox_Processed"', self.rendered.created[migration])
@@ -744,11 +712,9 @@ class TheMigrationAndItsSnapshot(unittest.TestCase):
 
     def test_the_snapshot_comes_from_the_last_migrations_designer(self):
         # The snapshot describes the model the service ends up with, so it is
-        # derived from whichever template migration applies last — and that
-        # moved twice in one PR, from AddOutbox to AddInbox to this one. Taking
-        # an earlier designer is a defect with no symptom until the service's
-        # first `migrations add`, where EF would emit a CreateTable for a table
-        # its own migrations had already created.
+        # derived from whichever template migration applies last. An earlier
+        # designer has no symptom until the service's first `migrations add`,
+        # where EF would emit a CreateTable for a table already created.
         snapshot = self.rendered.created[f"{self.prefix}/ZuluDbContextModelSnapshot.cs"]
         self.assertNotIn("[Migration(", snapshot)
         self.assertNotIn("partial class AddOutboxRetentionIndex", snapshot)
@@ -793,24 +759,11 @@ class TheMigrationAndItsSnapshot(unittest.TestCase):
         self.assertNotIn("Product", snapshot.replace("ProductVersion", ""))
 
     def test_the_machine_owned_files_keep_the_sorted_using_block_ef_writes(self):
-        # The rename moves the service's own namespace past Microsoft's in the
-        # sort order, and EF writes that block sorted. Left alone, the first
-        # real `migrations add` in the new service would reorder it and produce
-        # a diff nobody made.
-        # Spelt out rather than re-derived, so the assertion is independent of
-        # the sort the script applies: this is the order `dotnet ef migrations
-        # add` produced against a scaffolded service.
-        # System first, which is EF's order and not a plain alphabetical one —
-        # the outbox designer is the first machine-owned file here to carry a
-        # System using at all, and it is what made the difference visible.
-        #
-        # System.Collections.Generic appears in neither, though Catalog's own
-        # outbox designer carries it: EF emits it for the
-        # Dictionary<string, object> a ComplexProperty is mapped as, which is
-        # how §5.3's Money reaches the model. The aggregate is removed from
-        # both files here, so the using goes with it — verified against a real
-        # `migrations add` in a scaffolded service, whose Up came out empty and
-        # whose rewritten snapshot was byte-identical to the emitted one.
+        # The rename moves the service's namespace past Microsoft's in the sort
+        # order, and EF writes that block sorted. The order is spelt out, not
+        # re-derived, so the assertion is independent of the script's sort: it
+        # is what `dotnet ef migrations add` produced, System first.
+        # System.Collections.Generic is absent: the aggregate is removed (§5.3).
         system = ["using System;"]
         efcore = [
             "using Microsoft.EntityFrameworkCore;",
@@ -910,15 +863,10 @@ class EditsTheSharedFiles(unittest.TestCase):
 
     def test_every_mapping_in_the_rendered_file_is_bound_to_loopback(self):
         # §14.1 publishes on 127.0.0.1 because the credentials in that file are
-        # deliberate development defaults, which makes the interface the only
-        # control in front of them. A scaffolded service that dropped the
-        # prefix would reopen that one service at a time, and every other
-        # assertion in this class is satisfied just as happily by a 0.0.0.0
-        # bind — so the subject here is the mapping's *shape*, and it is every
-        # mapping in the rendered unit rather than the new mapping alone —
-        # which still reaches the template, because the unit IS the template
-        # renamed. `RefusesToRun` covers the same rule from the other side, by
-        # unbinding the template and asserting the run stops.
+        # development defaults, so the interface is the control in front of
+        # them. Every other assertion here passes on a 0.0.0.0 bind, so the
+        # subject is the mapping's shape, in every mapping of the rendered
+        # unit. `RefusesToRun` covers the rule from the template's side.
         unit = self.rendered.created[UNIT]
         mappings = [
             mapping
@@ -955,12 +903,10 @@ class EditsTheSharedFiles(unittest.TestCase):
 
     def test_the_api_block_carries_the_bus_key_and_waits_for_the_broker(self):
         # The bus wiring is template, not slice: AddMassTransitMessaging
-        # throws without the key, so a scaffolded api block missing it is a
-        # container that cannot start. The migrator half must NOT gain either
-        # line — a job host has no bus.
-        # The api block runs to the end of the file now: the unit holds the
-        # pair and nothing after it, which is what removed the bounding
-        # problem a spliced block had.
+        # throws without the key, so an api block missing it cannot start.
+        # The migrator half must not gain either line, as a job host has no
+        # bus. The api block runs to the end of the file, as the unit holds
+        # the pair and nothing after it.
         unit = self.rendered.created[UNIT].replace("\r\n", "\n")
         api = unit[unit.index("  zulu-api:"):]
         # The service's own broker account, not `guest`. The rename carries both
@@ -1114,17 +1060,11 @@ class EditsTheSharedFiles(unittest.TestCase):
         keys = [entry.key() for entry in entries]
         self.assertEqual(len(set(keys)), len(keys), "a generated entry duplicates another")
 
-        # And every one of them is for a finding this render INTRODUCED. The
-        # assertion this replaces asked whether the entry's path or sentence
-        # named the probe, which the mislabelling bug satisfies trivially:
-        # the reason is renamed on the way out, so an entry written over
-        # another service's credential says `Zulu` as readily as a correct one.
-        # What cannot be faked is the file as it stands in the checkout — a key
-        # already in it is somebody else's finding, whatever the sentence
-        # claims. Green here against the old code too, because this
-        # repository's allow-list is complete and the defect needs a missing
-        # entry to surface; `TheAllowListStepDegrades` is where it is driven
-        # red, and that gap is exactly why the weak assertion looked adequate.
+        # Every entry is for a finding this render introduced. The test asks
+        # about the file as it stands in the checkout, which cannot be faked:
+        # a key already in it is somebody else's finding, whatever the sentence
+        # says, since the reason is renamed on the way out. This repository's
+        # allow-list is complete, so `TheAllowListStepDegrades` drives it red.
         for entry in added:
             if entry.path not in self.rendered.updated:
                 continue                      # a created file has no "before"
@@ -1173,13 +1113,8 @@ class EditsTheSharedFiles(unittest.TestCase):
 class RendersOnEitherCheckout(unittest.TestCase):
     """The template's line endings depend on the platform, and the script must not.
 
-    `.gitattributes` forces `*.cs text eol=crlf`, so C# is CRLF on every
-    machine. Nothing else here carries an attribute, so `.csproj`, `.slnx`, the
-    Compose YAML, the Markdown and the Dockerfiles are CRLF on a Windows
-    checkout and LF on the Ubuntu runner. The first version of this script
-    spelt its anchors with CRLF, passed on the machine that wrote it, and
-    matched nothing in CI — which the anchor check caught, loudly, as it was
-    built to. These tests render both checkouts from one.
+    `.gitattributes` forces CRLF on `*.cs` alone; everything else follows the
+    checkout. These tests render both line endings from one tree.
     """
 
     @staticmethod
@@ -1295,11 +1230,8 @@ class RendersASecondServiceBesideTheFirst(unittest.TestCase):
         # Rejecting `CATALOG` closed the template alias and not the general
         # case: after Zulu exists, `ZULU` is a distinct directory on a
         # case-sensitive filesystem and renders the same lower-cased Compose
-        # keys and connection variables.
-        # PORT + 2 rather than 5105: the raise this asserts is about the name,
-        # and a service-range literal would let the test keep passing for the
-        # port instead — green for the wrong reason, which is the failure mode
-        # a red check that goes red wrongly already taught this file.
+        # keys. PORT + 2, not a service-range literal, because the raise is
+        # about the name and a literal would let the port pass the test.
         for alias in ("ZULU", "zulu", "ZuLu"):
             with self.assertRaises(ScaffoldError):
                 plan(self.root, alias, PORT + 2, "20260810120000")
@@ -1319,13 +1251,8 @@ class RendersASecondServiceBesideTheFirst(unittest.TestCase):
 class TheAllowListStep(unittest.TestCase):
     """§15.1's gate over a tree the render can actually be applied to.
 
-    Everything here needs a root of its own, for two different reasons. The
-    degradation pair needs one root with `.github/` and one without, because
-    the step degrading and the step never having been wired in write the same
-    nothing — the absence test is worth exactly nothing on its own, and is
-    stated after the control that gives it meaning. The rest need a render
-    that has been *written*, because what they are about is the second run and
-    what the first one left behind.
+    Each test needs a root of its own: the degradation pair needs one with
+    `.github/` and one without, and the rest need a render written to disk.
     """
 
     def setUp(self):
@@ -1398,11 +1325,9 @@ class TheAllowListStep(unittest.TestCase):
 
     def test_a_second_service_appends_beside_the_first(self):
         # Two renders into one checkout, which is what the tool is for. The
-        # allow-list accumulates a block per service exactly as the Compose
-        # index accumulates a line per service, and a second run that rewrote
-        # it would take the first service's entries away — the gate then
-        # reports the first service's own literals as unexplained, and the
-        # branch that added the second service is what goes red.
+        # allow-list accumulates a block per service as the Compose index
+        # accumulates a line per service; a second run that rewrote it would
+        # take the first service's entries away and turn the gate red.
         apply(self.root, plan(self.root, PROBE, PORT, MIGRATION_ID))
         first = self.allow_list()
 
@@ -1473,12 +1398,10 @@ class TheAllowListStep(unittest.TestCase):
         # entry must not clear that finding with a sentence naming itself.
         apply(self.root, plan(self.root, PROBE, PORT, MIGRATION_ID))
 
-        # A bad merge, a hand edit, a partial checkout — the entry is gone and
-        # the first service's hash is unexplained again.
-        # The broker account's entry is under `deploy/`, so that is the file
-        # the fixture damages — found by searching, because which file covers
-        # which tree is the allow-list's own declaration and not this suite's
-        # to restate.
+        # A bad merge, a hand edit or a partial checkout loses the entry and
+        # the first service's hash is unexplained again. The broker account's
+        # entry is under `deploy/`, found by searching, since which file
+        # covers which tree is the allow-list's own declaration.
         damaged = next(
             relative for relative, body in self.allow_list().items()
             if any(
@@ -1501,10 +1424,9 @@ class TheAllowListStep(unittest.TestCase):
 
         # By key difference, never by a tail slice. Entries are read file by
         # file in sorted order, so a render that appends to `deploy` and to
-        # `tests` inserts INSIDE the combined list rather than at the end of
-        # it — and `entries[len(before):]` would then hand this test unrelated
-        # entries from the last file while omitting the stolen fingerprint it
-        # exists to catch. Silently, and green.
+        # `tests` inserts inside the combined list, and `entries[len(before):]`
+        # would hand this test unrelated entries and omit the stolen
+        # fingerprint it exists to catch.
         before, _ = self.parse_all(self.allow_list())
         written = allow_list_appended(second)
         entries, problems = self.parse_all({**self.allow_list(), **written})
@@ -2200,12 +2122,11 @@ class RefusesToRun(unittest.TestCase):
                 "services:\n  hand-written:\n", unit.read_text(encoding="utf-8"))
 
     def test_a_template_whose_api_block_is_not_bound_to_loopback(self):
-        # The other half of the loopback rule, and the half a render-and-read
-        # assertion cannot reach: the prefix is REQUIRED of the template rather
-        # than copied off it, so removing §14.1's bind from Catalog stops the
-        # scaffold rather than propagating into every service scaffolded after.
-        # Bytes rather than text, because the copy's line endings are the
-        # platform's and this substitution has no business changing them.
+        # The other half of the loopback rule, which a render-and-read
+        # assertion cannot reach: the prefix is required of the template, so
+        # removing §14.1's bind from Catalog stops the scaffold. Bytes rather
+        # than text, because the copy's line endings are the platform's and
+        # this substitution must not change them.
         with tempfile.TemporaryDirectory() as directory:
             root = template_copy(Path(directory))
             compose = root / TEMPLATE_UNIT
@@ -2219,40 +2140,22 @@ class RefusesToRun(unittest.TestCase):
                 render(repo_root=root)
 
     def test_a_name_that_collides_with_an_infrastructure_connection_key(self):
-        # §7.1's runtime key is ConnectionStrings__<Service> and the rename is
-        # what writes it, while §14.1's api block already declares
-        # ConnectionStrings__RabbitMq, ConnectionStrings__RedisCache and
-        # ConnectionStrings__RedisCoordination beside it. A service named after
-        # one of those renders the same mapping key twice — and this was the
-        # sixth bad name and the only one whose failure was silent: the rename
-        # worked, the straggler check saw no template token, the YAML stayed
-        # valid, and one of the two connection strings was discarded by
-        # whatever read the file.
+        # §7.1's runtime key is ConnectionStrings__<Service> and the rename
+        # writes it, while §14.1's api block already declares
+        # ConnectionStrings__RabbitMq, __RedisCache and __RedisCoordination.
+        # A service named after one renders the same mapping key twice, with
+        # the rename and the straggler check passing and the YAML valid.
         for name in ("RabbitMq", "RedisCache", "RedisCoordination"):
             with self.assertRaises(ScaffoldError) as raised:
                 render(name=name)
             self.assertIn(f"ConnectionStrings__{name}", str(raised.exception), name)
 
     def test_a_name_that_collides_with_an_infrastructure_connection_key_in_another_casing(self):
-        # The same defect through a spelling the first fix did not cover, and a
-        # test of its own rather than more names in the loop above, because the
-        # two halves of the collision differ: those three render one key twice,
-        # while these render two YAML keys that .NET's configuration reads as
-        # one. §14.2 states the rule in the one line where it costs an Aspire
-        # resource name — configuration is case-insensitive but not
-        # punctuation-insensitive — so the refusal has to compare casefolded or
-        # it is watching the spelling rather than the key.
-        #
-        # `NAME` admits all of these: `^[A-Z][A-Za-z0-9]*$` says nothing about
-        # the capitals after the first. `RabbitMQ` is the product's own
-        # spelling and the likeliest of the seven to be typed by somebody who
-        # is not thinking about this file at all.
-        #
-        # Every pair below was verified by rendering before it was asserted
-        # about — the render was read back and BOTH keys were found in the api
-        # block's mapping — because "`RABBITMQ` presumably behaves like
-        # `Rabbitmq`" is an assumption, and the rename is exactly the step that
-        # could have made it false.
+        # The same defect through a spelling the first check did not cover:
+        # these render two YAML keys that .NET's configuration reads as one,
+        # and §14.2 makes it case-insensitive, so the refusal compares
+        # casefolded. `NAME` admits them all, as `^[A-Z][A-Za-z0-9]*$` says
+        # nothing of later capitals; `RabbitMQ` is the product's own spelling.
         for name, declared in (
             ("Rabbitmq", "ConnectionStrings__RabbitMq"),
             ("RABBITMQ", "ConnectionStrings__RabbitMq"),
@@ -2275,18 +2178,11 @@ class RefusesToRun(unittest.TestCase):
             self.assertIn("case-insensitive", message, name)
 
     def test_the_duplicate_key_check_is_looking_at_the_environment_mappings(self):
-        # The subject test for the refusal above, and the reason it is a
-        # predicate rather than those three names: the check is only as good as
-        # the keys handed to it, and a pattern that stops matching the
-        # template's shape hands it nothing — over which every name there is
-        # passes. So this asserts what environment_keys extracted, not what the
-        # caller concluded from it.
-        # The whole unit is the block now — §14.1's pair rule renders a
-        # migrator and an api into a file that holds those two and nothing
-        # else, so there is no slice to get wrong. That the file really does
-        # hold exactly the pair is asserted first, because a unit that had
-        # gained a third service would make the count below mean something
-        # different.
+        # The subject test for the refusal above: it asserts what
+        # environment_keys extracted, not what the caller concluded from it,
+        # because a pattern that stops matching the template's shape hands the
+        # check nothing and every name passes. The whole unit is the block, as
+        # §14.1's pair rule leaves a migrator and an api; the count is first.
         block = render().created[UNIT].replace("\r\n", "\n")
         starts = [
             line for line in block.split("\n") if new_service.SERVICE_KEY.fullmatch(line)
@@ -2425,27 +2321,18 @@ class RefusesToRun(unittest.TestCase):
 
     def test_a_credential_shaped_literal_in_the_template_nobody_explained(self):
         # The same refusal as an unclassified file, one gate along, and the
-        # one this file's README sells as the safety property while nothing
-        # exercised it. `SCAN_REASONS` gives one sentence per finding §15.1's
-        # scanner reports over a render; a finding no row explains has to stop
-        # the run, because the alternative is this script inventing a reason —
-        # a suppression nobody wrote, which is the one thing the allow-list's
-        # own header says it must never hold.
+        # safety property the README sells. `SCAN_REASONS` gives one sentence
+        # per finding §15.1's scanner reports over a render; a finding no row
+        # explains has to stop the run, since the alternative is this script
+        # inventing a suppression nobody wrote.
         with tempfile.TemporaryDirectory() as directory:
             root = template_copy_with_gate(Path(directory))
             smoke = root / "tests/Catalog.Api.Tests/HostSmokeTests.cs"
-            # A shape the scanner already recognises, in a file the render
-            # copies, under a rule no row in SCAN_REASONS pairs with that path.
-            # The value is invented and belongs to nobody.
-            #
-            # ASSEMBLED FROM TWO PIECES, because this file is walked by the
-            # scanner like every other: written as one source line the fixture
-            # would itself be a finding in the suite that tests the refusal,
-            # and would want an allow-list entry for a credential that never
-            # leaves a temporary directory. The rules are line-based, so the
-            # join happens at run time and the file this writes carries the
-            # shape whole. Measured, not reasoned about — the one-line form
-            # failed the scan.
+            # A shape the scanner recognises, in a file the render copies, under
+            # a rule no row in SCAN_REASONS pairs with that path; the value is
+            # invented. Assembled from two pieces, because the scanner walks
+            # this file too: one source line would be a finding here. The rules
+            # are line-based, so the join at run time carries the shape whole.
             shape = b'// const string ApiKey = "' + b'not-a-real-value-either";'
             smoke.write_bytes(smoke.read_bytes() + b"\r\n" + shape + b"\r\n")
 
@@ -2454,18 +2341,11 @@ class RefusesToRun(unittest.TestCase):
             self.assertIn("SCAN_REASONS", str(raised.exception))
 
     def test_a_second_credential_under_a_rule_the_same_file_already_carries(self):
-        # The case the test above does NOT reach, and the distinction is the
-        # whole of the defect: that one adds a literal under a rule no row
-        # pairs with this path, so no row matches and the refusal fires. Here
-        # the rule and the path both already have a row — only the credential
-        # is new — and while the marker was `""` that row matched the new line
-        # too, handing it a sentence written about the fixture next to it. A
-        # suppression for a credential nobody explained, produced by the guard
-        # that exists to refuse exactly that.
-        #
-        # Assembled from two pieces for the reason the neighbour states: a
-        # whole password literal on one source line would make this file a
-        # finding in the scan of the repository that contains it.
+        # The case the test above does not reach: the rule and the path both
+        # already have a row and only the credential is new. With a marker of
+        # `""` that row matched the new line too, handing it a sentence about
+        # the fixture next to it, a suppression for a credential nobody
+        # explained. Assembled from two pieces for the neighbour's reason.
         with tempfile.TemporaryDirectory() as directory:
             root = template_copy_with_gate(Path(directory))
             smoke = root / "tests/Catalog.Api.Tests/HostSmokeTests.cs"
@@ -2493,12 +2373,10 @@ class RefusesToRun(unittest.TestCase):
         self.assertIn("empty marker", str(raised.exception))
 
     def test_a_row_whose_marker_is_loose_without_being_empty(self):
-        # The other half, and the one a non-empty marker does not buy. `"` is
-        # in both password lines of the smoke fixture's file, so this row would
-        # explain two findings with two fingerprints under one sentence —
-        # narrower than `""` and wrong in exactly the same way. The check reads
-        # what the table SELECTED rather than how it was spelled, which is the
-        # only form that survives a marker nobody thought was loose.
+        # The other half, which a non-empty marker does not buy. `"` is in both
+        # password lines of the smoke fixture's file, so this row would explain
+        # two findings under one sentence, as wrong as `""`. The check reads
+        # what the table selected rather than how it was spelled.
         with tempfile.TemporaryDirectory() as directory:
             root = template_copy_with_gate(Path(directory))
             smoke = root / "tests/Catalog.Api.Tests/HostSmokeTests.cs"
@@ -2516,18 +2394,11 @@ class RefusesToRun(unittest.TestCase):
             self.assertIn("different fingerprints", str(raised.exception))
 
     def test_a_gate_in_the_target_that_is_not_the_one_this_script_shipped_with(self):
-        # `load_scan_gate` EXECUTES this file, and `--repo-root` chooses which
-        # tree it comes out of — so rendering into an unreviewed checkout used
-        # to run that checkout's Python with the developer's privileges.
-        # Reading a repository's source is not a reason to execute it, and the
-        # docstring that admitted the exposure argued it away as "not new".
-        #
-        # Loading TOOL_ROOT's copy instead would be the wrong repair: the
-        # entries carry the scanner's own fingerprints and the scanner that
-        # verifies them is the target's, so the two have to be one file rather
-        # than a choice. A target whose gate differs is therefore refused, and
-        # the refusal is what this pins — the marker below is inert Python, so
-        # a run that reaches execution succeeds and proves nothing.
+        # `load_scan_gate` executes this file, and `--repo-root` chooses the
+        # tree it comes out of, so rendering into an unreviewed checkout would
+        # run that checkout's Python. A target whose gate differs from the
+        # shipped copy is refused, as its scanner verifies the fingerprints.
+        # The marker below is inert, so reaching execution proves nothing.
         with tempfile.TemporaryDirectory() as directory:
             root = template_copy_with_gate(Path(directory))
             gate = root / SCAN_GATE
@@ -2554,11 +2425,10 @@ class RefusesToRun(unittest.TestCase):
 
     def test_a_github_directory_carrying_neither_the_gate_nor_the_list(self):
         # `.github/` absent is the degradation and is tested next door. A
-        # checkout that HAS the directory and is missing a piece of the gate is
-        # a real tree, and returning None there rendered a service the scanner
-        # refuses without saying so — #161 back, quietly, out of the code that
-        # closed it. It is also the only shared file whose absence was
-        # tolerated; the other six raise inside `read`.
+        # checkout that has the directory and is missing a piece of the gate is
+        # a real tree, and rendering a service the scanner refuses, without
+        # saying so, is not tolerated; the other six shared files raise inside
+        # `read`.
         for missing in (SCAN_GATE, SCAN_ALLOW_LIST):
             with tempfile.TemporaryDirectory() as directory:
                 root = template_copy_with_gate(Path(directory))
@@ -2573,16 +2443,11 @@ class RefusesToRun(unittest.TestCase):
                 self.assertIn(missing, str(raised.exception), missing)
 
     def test_a_gate_that_is_not_a_python_module(self):
-        # `exec_module` runs whatever is at that path, so a malformed one used
-        # to leave the run as an uncaught SyntaxError — past `main`'s
-        # `except ScaffoldError` and out as a traceback, from a script whose
-        # stated contract is one line on stderr and exit 1.
-        #
-        # TOOL_ROOT IS POINTED AT THE SAME ROOT, so the trust check next door
-        # passes and this one is what answers. Without that the two refusals
-        # race and the earlier wins, leaving this test green about a message it
-        # never reaches — the gate here is malformed AND differs from the
-        # shipped copy, and only one of those can be the subject.
+        # `exec_module` runs whatever is at that path, so a malformed one must
+        # leave as a ScaffoldError, past which `main` prints one stderr line.
+        # TOOL_ROOT is pointed at the same root, so the trust check next door
+        # passes and this one answers; otherwise the two refusals race, and
+        # the gate here is malformed and differs from the shipped copy.
         with tempfile.TemporaryDirectory() as directory:
             root = template_copy_with_gate(Path(directory))
             (root / SCAN_GATE).write_bytes(b"def (\n")
@@ -2596,11 +2461,9 @@ class RefusesToRun(unittest.TestCase):
     def test_a_gate_that_loads_and_is_not_the_secret_scan(self):
         # A module that imports is not a module that is the gate. Without this
         # the failure is an AttributeError three frames later, naming a symbol
-        # rather than the file the caller pointed at.
-        #
-        # TOOL_ROOT is pointed at the same root for the reason above: this
-        # asserts the MEMBER check, which only runs on a gate the trust check
-        # has already admitted.
+        # rather than the file the caller pointed at. TOOL_ROOT is pointed at
+        # the same root as above: this asserts the member check, which only
+        # runs on a gate the trust check has admitted.
         with tempfile.TemporaryDirectory() as directory:
             root = template_copy_with_gate(Path(directory))
             (root / SCAN_GATE).write_bytes(b"RULES = []\n")
@@ -2612,15 +2475,11 @@ class RefusesToRun(unittest.TestCase):
             self.assertIn("read_allowed", str(raised.exception))
 
     def test_a_name_that_is_a_prefix_of_the_broker_connection_key(self):
-        # NOT a refusal, and it used to be one. The Compose rows were keyed on
+        # Not a refusal. The Compose rows are keyed on the value, not on
         # `ConnectionStrings__Catalog`, which renames to
-        # `ConnectionStrings__<Name>` — a substring of the broker line's
+        # `ConnectionStrings__<Name>`, a substring of the broker line's
         # `ConnectionStrings__RabbitMq` for every name that is a prefix of
-        # `RabbitMq`. Both rows then matched one finding and the run stopped
-        # with "the template has gained a credential-shaped literal", which is
-        # actionable for nobody. Eight legal PascalCase names cleared every
-        # other precondition and hit it; the markers now come from the value,
-        # where no service name reaches them.
+        # `RabbitMq`; no service name reaches a marker taken from the value.
         with tempfile.TemporaryDirectory() as directory:
             root = template_copy_with_gate(Path(directory))
 
@@ -2681,12 +2540,10 @@ class Applies(unittest.TestCase):
 
 
 class TheCommandLine(unittest.TestCase):
-    """`main` itself, which every test above went around.
+    """`main` itself, which the tests above go around.
 
-    `plan` and `apply` were covered from the first commit and the entry point
-    a developer actually types was not — so argument parsing, the default
-    migration id, the exit codes and what reaches stdout and stderr were all
-    uncovered. The licence gate tests its own `main`; this is the same bar.
+    Argument parsing, the default migration id, the exit codes and the
+    stdout and stderr; the licence gate tests its own `main` the same way.
     """
 
     def run_main(self, *argv: str) -> tuple[int, str, str]:
