@@ -1466,7 +1466,10 @@ Rules for each service's consumer:
   reader keeps for its owner's value
   ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
 - **Write an audit record** of what was erased and when. That record itself
-  contains no personal data — a subject ID hash, a timestamp, a count.
+  contains no personal data — a subject ID hash, a timestamp, a count. It is
+  `Common.Domain`'s `PersonalDataErasure`, which each holder maps to a table in
+  its own schema, and its domain event is what the holder's mapper turns into
+  the completion ([§9.3](09-messaging.md)).
 - **Idempotent.** The message is delivered at least once, and a second erasure
   of already-erased data must succeed silently.
 - **Report completion.** The privacy service tracks which services have
