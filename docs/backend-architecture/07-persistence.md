@@ -282,22 +282,22 @@ what the ledger runs.
 
 ### What EF generates, and what you write by hand
 
-Two kinds of table live in a service database, and they differ in whose their
-shape is:
+Three kinds of table live in a service database, and they differ in whose
+shape each is:
 
 | Kind | Examples | Authored by |
 |---|---|---|
 | **Write model** | `Orders`, `OrderLines` | The EF model. `IEntityTypeConfiguration<T>` (§7.2) is the source of truth; `dotnet ef migrations add` produces the DDL |
-| **Read models and technical tables** | `OrderSummaries`, `ProductPrices`, `OutboxMessages`, `InboxMessages`, `IdempotencyMarkers`, `OrderReviews` | The EF model, though their shape is the chapters' rather than the aggregate's, because they are shaped for queries and index plans rather than for objects. **`ProductPrices` states the terms**: `ProductPriceConfiguration` maps it so `migrations add` emits it beside the aggregate's tables, and is written to produce §6.6's printed types — `char(3)`, `DEFAULT 1` — rather than EF's defaults for the CLR ones. Every table in this row is mapped on the same terms, each by its own configuration. `ordering.Products` (§6.6) belongs in this row and is not built: no configuration or migration creates it. `IdempotencyMarkers` ([§8.5](08-caching-redis.md)) is mapped the same way and for a reason of its own: [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)'s store both reads and writes it through the service's `DbContext`, because that is what puts the write inside §6.3's transaction, so the entity has to be in the model whether or not the DDL is emitted from it. The rule is that the shape is the chapter's; which tool writes it is negotiable, and a generated table that drifts from the chapter's DDL is not |
+| **Read models and technical tables** | `OrderSummaries`, `ProductPrices`, `OutboxMessages`, `InboxMessages`, `IdempotencyMarkers`, `OrderReviews` | The EF model, though their shape is the chapters' rather than the aggregate's, because they are shaped for queries and index plans rather than for objects. **`ProductPrices` states the terms**: `ProductPriceConfiguration` maps it so `migrations add` emits it beside the aggregate's tables, and is written to produce §6.6's printed types — `char(3)`, `DEFAULT 1` — rather than EF's defaults for the CLR ones. Every table in this row is mapped on the same terms, each by its own configuration. `ordering.Products` (§6.6) is not built: no configuration or migration creates it, and the sample below is the hand-written route it could take. `IdempotencyMarkers` ([§8.5](08-caching-redis.md)) is mapped the same way and for a reason of its own: [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)'s store both reads and writes it through the service's `DbContext`, because that is what puts the write inside §6.3's transaction, so the entity has to be in the model whether or not the DDL is emitted from it. The rule is that the shape is the chapter's; which tool writes it is negotiable, and a generated table that drifts from the chapter's DDL is not |
 | **A library's own technical tables** | `ordering.InboxState`, `ordering.OutboxState`, `ordering.OutboxMessage` | The EF model, from `modelBuilder.AddTransactionalOutboxEntities()` — **the one stated exception to §7.2's rule that mapping lives in `IEntityTypeConfiguration<T>` classes**, and the exception is about ownership rather than about reach ([ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)). The assembly scan would find a configuration for these entities perfectly well — it selects on the *configuration* type's assembly, not the entity's — but MassTransit maps them itself and queries them on that mapping, so writing one here would be a second definition of a schema the library has to agree with, drifting on its next bump. Their shape is not this blueprint's to specify either, which is the difference from the row above: the rule there is that the shape is the chapter's, and here it is the library's. **Singular, where §9.4's and §9.5's tables are plural** — `OutboxMessage` against `OutboxMessages`, so the two sets share the `ordering` schema without colliding, and a reader of the database sees more messaging tables than the chapters name. **No count on either side of that sentence**: whether §8.5's marker in the cell above is a *messaging* table is the question a numeral here would have to answer, and no chapter does. Ordering is the only service with any of them, because it holds the only saga |
 
 That is why [§6.6](06-cqrs.md) and [§9.4](09-messaging.md) show `CREATE TABLE` and §7.2 does not — the write
 model's schema is a projection of the aggregate, and duplicating it as SQL would
 create two definitions that drift.
 
-**Both kinds ship in the same EF migration.** There is no second mechanism: the
-migrator job runs `Database.Migrate()` and nothing else, so hand-written DDL
-that is not inside a migration never executes.
+**Generated and hand-written DDL ship in the same EF migration.** There is no
+second mechanism: the migrator job runs `Database.Migrate()` and nothing else,
+so hand-written DDL that is not inside a migration never executes.
 
 **`Database.Migrate()` and nothing else is also a security boundary, and
 [§14.3](14-local-development.md) is what keeps it one.** Development seeding
@@ -329,8 +329,9 @@ public partial class AddOrderingProducts : Migration
 }
 ```
 
-`OrderFulfilmentStates` (§9.6) is mapped by MassTransit's EF saga repository,
-so EF generates it, and its DDL is shown explicitly because the alert in
+`OrderFulfilmentStates` (§9.6) is mapped by `OrderFulfilmentStateConfiguration`,
+which MassTransit's EF saga repository persists through, so EF generates it,
+and its DDL is shown explicitly because the alert in
 [§13.6](13-observability.md) and the stuck-saga runbook both query it directly,
 and an index nobody declared is an index nobody has.
 
