@@ -260,7 +260,8 @@ def scope_documents(base: str, realm: str, access_token: str, every_client: list
     """Client scopes, every scope mapping and each client's own roles, keyed as an export keys them.
 
     The admin API answers a mapping per subject and an export lists them per
-    role owner, so each answer is regrouped and nothing is dropped (ADR-077)."""
+    role owner, so each answer is regrouped and nothing is dropped (ADR-077);
+    each capped worker's expanded scope is no export's, so it has a key of its own."""
     admin = f"{base}/admin/realms/{realm}"
     scopes = get(f"{admin}/client-scopes", access_token)
     if not isinstance(scopes, list):
@@ -296,7 +297,34 @@ def scope_documents(base: str, realm: str, access_token: str, every_client: list
                 get(f"{path}/roles", access_token), f"client {name!r}'s own roles")]
 
     return {"clientScopes": scopes, "scopeMappings": realm_side,
-            "clientScopeMappings": client_side, "roles": {"client": own_roles}}
+            "clientScopeMappings": client_side, "roles": {"client": own_roles},
+            "effectiveScope": effective_scopes(admin, access_token, every_client)}
+
+
+def effective_scopes(admin: str, access_token: str, every_client: list) -> dict:
+    """Each capped worker's scope as Keycloak expands it, over the realm and every other client's roles.
+
+    Every other client, not only the ones it maps from, because a composite can
+    reach any client's role; its own roles are the gate's separate finding (ADR-088)."""
+    named = {item["clientId"]: item["id"] for item in every_client if isinstance(item, dict)
+             and isinstance(item.get("clientId"), str) and isinstance(item.get("id"), str)}
+    effective: dict[str, dict] = {}
+    for name in realm_check.SCOPE_CAPS:
+        if name not in named:
+            continue
+        path = f"{admin}/clients/{urllib.parse.quote(named[name], safe='')}/scope-mappings"
+        roles = role_names(get(f"{path}/realm/composite", access_token),
+                           f"the realm roles in client {name!r}'s effective scope")
+        by_owner: dict[str, list] = {}
+        for owner, ident in named.items():
+            if owner == name:
+                continue
+            answer = get(f"{path}/clients/{urllib.parse.quote(ident, safe='')}/composite", access_token)
+            listed = role_names(answer, f"the {owner} roles in client {name!r}'s effective scope")
+            if listed:
+                by_owner[owner] = listed
+        effective[name] = {"realm": roles, "client": by_owner}
+    return effective
 
 
 def fetch(values: dict[str, str]) -> dict:

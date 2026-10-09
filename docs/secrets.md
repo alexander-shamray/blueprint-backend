@@ -274,7 +274,9 @@ which is the moment the rollout cannot be
 nothing else.** Explicitly *not* a cross-realm admin account: one of those would
 hold rights over realms this check has no business reading, and what the check
 needs is the realm representation, its client list, and the client scopes,
-scope mappings and client roles behind them, all within the reads below.
+scope mappings, each worker's scope as Keycloak expands it
+([ADR-088](backend-architecture/adr/ADR-088-the-realm-gate-judges-a-workers-cap-expanded-and-the-audience-scopes-mappers-exactly.md))
+and client roles behind them, all within the reads below.
 
 **`view-clients` on `realm-management` is not optional, and the gate checks it
 rather than assuming it.** Keycloak applies a list request's `max` to the

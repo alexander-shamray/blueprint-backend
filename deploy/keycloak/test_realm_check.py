@@ -119,27 +119,41 @@ def bff(**overrides) -> dict:
     return client
 
 
-def mapper(name: str, kind: str, claim: str | None = None) -> dict:
-    """A protocol mapper as an export holds one, narrowed to what the gate reads."""
+def mapper(name: str, kind: str, claim: str | None = None, **named: str) -> dict:
+    """A protocol mapper as an export holds one, narrowed to what the gate reads.
+
+    `audience` and `role_client` are the two config keys that name a client."""
     found = {"name": name, "protocolMapper": kind}
-    if claim is not None:
-        found["config"] = {"claim.name": claim}
+    keys = {"claim.name": claim, "included.client.audience": named.get("audience"),
+            "usermodel.clientRoleMapping.clientId": named.get("role_client")}
+    config = {key: value for key, value in keys.items() if value is not None}
+    if config:
+        found["config"] = config
     return found
 
+
+# The audience the fixture realm names, standing in for what the gate reads
+# out of AuthenticationExtensions.Audience.
+AUDIENCE = "commerce-api"
 
 # The scopes the fixture clients hold, each with nothing mapped into it, and
 # the audience scope with the two mappers that are its whole purpose.
 HELD_SCOPES = ("web-origins", "acr", "profile", "roles", "basic", "email",
                "address", "phone", "organization")
-AUDIENCE_MAPPERS = [mapper("commerce-api-audience", "oidc-audience-mapper"),
-                    mapper("permission", "oidc-usermodel-client-role-mapper", "permission")]
+AUDIENCE_MAPPERS = [mapper("commerce-api-audience", "oidc-audience-mapper", audience="commerce-api"),
+                    mapper("permission", "oidc-usermodel-client-role-mapper", "permission",
+                           role_client="commerce-api")]
 
 
 def scope_documents() -> dict:
-    """The four documents the token cap is read from, holding exactly ADR-052's grants."""
+    """The documents the token cap is read from, holding exactly ADR-052's grants.
+
+    `view-users` composes the two query roles, as Keycloak's own model and
+    §14.1's export do; `effectiveScope` is what `read_admin.py` writes for that."""
     return {
         "clientScopes": [{"name": name, "protocolMappers": []} for name in HELD_SCOPES]
-        + [{"name": "commerce-api", "protocolMappers": list(AUDIENCE_MAPPERS)}],
+        + [{"name": "commerce-api", "protocolMappers": [
+            {**found, "config": dict(found["config"])} for found in AUDIENCE_MAPPERS]}],
         "scopeMappings": [],
         "clientScopeMappings": {
             "commerce-api": [{"client": realm_check.WORKER_CLIENT,
@@ -147,7 +161,15 @@ def scope_documents() -> dict:
             "realm-management": [{"client": realm_check.CONTACT_CLIENT,
                                   "roles": ["view-users"]}],
         },
-        "roles": {"client": {}},
+        "roles": {"client": {"realm-management": [
+            {"name": "view-users",
+             "composites": {"client": {"realm-management": ["query-users", "query-groups"]}}},
+            {"name": "query-users"}, {"name": "query-groups"}, {"name": "manage-users"}]}},
+        "effectiveScope": {
+            realm_check.WORKER_CLIENT: {"realm": [], "client": {"commerce-api": ["orders:delivery-address"]}},
+            realm_check.CONTACT_CLIENT: {"realm": [], "client": {
+                "realm-management": ["view-users", "query-users", "query-groups"]}},
+        },
     }
 
 
@@ -183,9 +205,10 @@ class Fixture(unittest.TestCase):
     """The lifetime is passed in rather than read, so no case here touches src/."""
 
     lifetime = 300
+    audience = AUDIENCE
 
     def problems(self, document: dict, kind: str = realm_check.DEPLOYED) -> list[str]:
-        return realm_check.check_realm(document, kind, self.lifetime)
+        return realm_check.check_realm(document, kind, self.lifetime, self.audience)
 
     def one(self, document: dict, kind: str = realm_check.DEPLOYED) -> str:
         found = self.problems(document, kind)
@@ -210,7 +233,7 @@ class TheFixture(Fixture):
         difference is that one field and not a second one nobody noticed.
         """
         local = realm(browser(directAccessGrantsEnabled=True))
-        self.assertEqual(realm_check.check_realm(local, realm_check.LOCAL, self.lifetime), [])
+        self.assertEqual(realm_check.check_realm(local, realm_check.LOCAL, self.lifetime, self.audience), [])
         self.assertEqual(len(self.problems(local)), 1)
 
 
@@ -380,7 +403,7 @@ class ThePasswordGrant(Fixture):
         would let the local realm drift into a shape the README's curl cannot
         use, and the README is what tells a developer the platform works.
         """
-        found = realm_check.check_realm(realm(), realm_check.LOCAL, self.lifetime)
+        found = realm_check.check_realm(realm(), realm_check.LOCAL, self.lifetime, self.audience)
         self.assertEqual(len(found), 1, found)
         self.assertIn("directAccessGrantsEnabled", found[0])
 
@@ -388,7 +411,7 @@ class ThePasswordGrant(Fixture):
         """Keycloak's default is false, so absence fails the local realm honestly."""
         client = browser()
         del client["directAccessGrantsEnabled"]
-        found = realm_check.check_realm(realm(client), realm_check.LOCAL, self.lifetime)
+        found = realm_check.check_realm(realm(client), realm_check.LOCAL, self.lifetime, self.audience)
         self.assertEqual(len(found), 1, found)
 
 
@@ -688,12 +711,13 @@ class TheTokenWriters(Fixture):
         self.assertIn("the client itself's mapper 'aud'", found)
 
     def test_an_audience_mapper_on_a_scope_the_contact_reader_holds_is_caught(self):
-        """Every holder of the scope gains it, so each service-account client is named."""
+        """Every holder of the scope gains it, so each named client holding it is named."""
         document = realm(browser())
         scopes = {scope["name"]: scope for scope in document["clientScopes"]}
         scopes["profile"]["protocolMappers"].append(mapper("aud", "oidc-audience-mapper"))
         found = self.problems(document)
-        self.assertEqual(len(found), 3, found)
+        self.assertEqual(len(found), 4, found)
+        self.assertTrue(any(realm_check.MOBILE_CLIENT in problem for problem in found), found)
         self.assertTrue(any(realm_check.CONTACT_CLIENT in problem for problem in found), found)
 
     def test_a_hardcoded_permission_claim_on_the_address_reader_is_caught(self):
@@ -725,6 +749,168 @@ class TheTokenWriters(Fixture):
     def test_mappers_that_are_not_an_array_are_refused(self):
         found = self.one(realm(browser(), contact(protocolMappers={"name": "aud"})))
         self.assertIn("not an array", found)
+
+    def browser_clients(self, **overrides) -> list:
+        """Each browser client, changed as given, in a realm where the other is compliant."""
+        return [(realm_check.BROWSER_CLIENT, realm(browser(**overrides))),
+                (realm_check.MOBILE_CLIENT, realm(browser(), mobile(**overrides)))]
+
+    def test_a_permission_mapper_on_each_browser_client_itself_is_caught(self):
+        grant = [mapper("grant", "oidc-hardcoded-claim-mapper", "permission")]
+        for name, document in self.browser_clients(protocolMappers=grant):
+            with self.subTest(client=name):
+                found = self.one(document)
+                self.assertIn(f"client {name!r} has the audience or the permission claim written by "
+                              "the client itself's mapper 'grant'", found)
+
+    def test_a_permission_mapper_on_a_scope_only_each_browser_client_holds_is_caught(self):
+        for name, document in self.browser_clients(optionalClientScopes=["extra"]):
+            with self.subTest(client=name):
+                document["clientScopes"].append({"name": "extra", "protocolMappers": [
+                    mapper("grant", "oidc-hardcoded-claim-mapper", "permission")]})
+                found = self.one(document)
+                self.assertIn(f"client {name!r} has the audience or the permission claim written by "
+                              "the client scope 'extra''s mapper 'grant'", found)
+
+
+class TheExpandedCap(Fixture):
+    """The cap is judged as Keycloak expands it: the grant plus what it composes (ADR-088)."""
+
+    def local(self) -> dict:
+        return realm(browser(directAccessGrantsEnabled=True))
+
+    def view_users(self, document: dict) -> dict:
+        return next(role for role in document["roles"]["client"]["realm-management"]
+                    if role["name"] == "view-users")
+
+    def test_the_exact_expanded_cap_passes_in_both_kinds(self):
+        """The control: view-users with its two query roles, and the address grant alone."""
+        self.assertEqual(self.problems(realm(browser())), [])
+        self.assertEqual(self.problems(self.local(), realm_check.LOCAL), [])
+
+    def test_a_composite_widened_in_a_deployed_realm_is_caught(self):
+        document = realm(browser())
+        document["effectiveScope"][realm_check.CONTACT_CLIENT]["client"]["realm-management"].append("manage-users")
+        found = self.one(document)
+        self.assertIn(f"client {realm_check.CONTACT_CLIENT!r} carries realm-management ['manage-users']", found)
+        self.assertIn("beyond ADR-052's grant", found)
+
+    def test_a_composite_widened_in_the_local_export_is_caught(self):
+        document = self.local()
+        self.view_users(document)["composites"]["client"]["realm-management"].append("manage-users")
+        found = self.one(document, realm_check.LOCAL)
+        self.assertIn(f"client {realm_check.CONTACT_CLIENT!r} carries realm-management ['manage-users']", found)
+
+    def test_a_composite_reaching_another_client_s_role_is_caught(self):
+        document = self.local()
+        self.view_users(document)["composites"]["client"]["commerce-api"] = ["catalog:write"]
+        self.assertIn("carries commerce-api ['catalog:write']", self.one(document, realm_check.LOCAL))
+
+    def test_a_composite_reaching_a_realm_role_is_caught_and_followed(self):
+        document = self.local()
+        self.view_users(document)["composites"]["realm"] = ["auditor"]
+        document["roles"]["realm"] = [{"name": "auditor", "composites": {"realm": ["admin"]}}]
+        self.assertIn("carries realm ['admin', 'auditor']", self.one(document, realm_check.LOCAL))
+
+    def test_a_composite_on_the_address_grant_is_caught(self):
+        document = realm(browser())
+        document["effectiveScope"][realm_check.WORKER_CLIENT]["client"]["commerce-api"].append("orders:admin")
+        found = self.one(document)
+        self.assertIn(f"client {realm_check.WORKER_CLIENT!r} carries commerce-api ['orders:admin']", found)
+
+    def test_an_effective_scope_short_of_what_the_grant_composes_is_caught(self):
+        document = realm(browser())
+        document["effectiveScope"][realm_check.CONTACT_CLIENT]["client"]["realm-management"] = ["view-users"]
+        found = self.one(document)
+        self.assertIn(f"client {realm_check.CONTACT_CLIENT!r} lacks realm-management "
+                      "['query-groups', 'query-users']", found)
+
+    def test_a_deployed_realm_without_the_effective_scope_is_refused_for_each_worker(self):
+        document = realm(browser())
+        del document["effectiveScope"]
+        found = self.problems(document)
+        self.assertEqual(len(found), 2, found)
+        for name in (realm_check.WORKER_CLIENT, realm_check.CONTACT_CLIENT):
+            self.assertTrue(any(f"client {name!r} has no effective scope" in problem for problem in found), found)
+
+    def test_a_malformed_effective_scope_is_refused(self):
+        document = realm(browser())
+        document["effectiveScope"][realm_check.CONTACT_CLIENT]["client"]["realm-management"] = "view-users"
+        self.assertIn(f"client {realm_check.CONTACT_CLIENT!r} has no effective scope", self.one(document))
+
+    def test_the_local_realm_reads_the_export_s_composites_and_not_the_effective_scope(self):
+        document = self.local()
+        del document["effectiveScope"]
+        self.assertEqual(self.problems(document, realm_check.LOCAL), [])
+
+    def test_a_mapping_already_wrong_is_one_finding_and_not_two(self):
+        document = realm(browser())
+        document["clientScopeMappings"]["realm-management"][0]["roles"].append("manage-users")
+        document["effectiveScope"][realm_check.CONTACT_CLIENT]["client"]["realm-management"].append("manage-users")
+        self.assertIn("not exactly", self.one(document))
+
+    def test_the_shipped_export_composes_exactly_the_expanded_cap(self):
+        """The subject is §14.1's own file, read the way `check --kind local` reads it."""
+        document = realm_check.load_realm(realm_check.ROOT / realm_check.COMPOSE_REALM)
+        for name in realm_check.SCOPE_CAPS:
+            with self.subTest(client=name):
+                self.assertEqual(realm_check.check_scope_cap(document, next(
+                    c for c in document["clients"] if c.get("clientId") == name), name, realm_check.LOCAL), [])
+
+
+class TheAudienceScope(Fixture):
+    """The commerce-api scope writes exactly the audience and the permission claim (ADR-088)."""
+
+    def with_mappers(self, *extra: dict, keep=lambda found: True) -> dict:
+        document = realm(browser())
+        scope = next(s for s in document["clientScopes"] if s["name"] == realm_check.AUDIENCE_SCOPE)
+        scope["protocolMappers"] = [found for found in scope["protocolMappers"] if keep(found)] + list(extra)
+        return document
+
+    def test_a_hardcoded_permission_mapper_added_to_the_scope_is_caught(self):
+        found = self.one(self.with_mappers(mapper("grant", "oidc-hardcoded-claim-mapper", "permission")))
+        self.assertIn("the client scope 'commerce-api' carries the mapper 'grant'", found)
+
+    def test_any_third_mapper_is_caught(self):
+        found = self.one(self.with_mappers(mapper("mail", "oidc-usermodel-property-mapper", "email")))
+        self.assertIn("the client scope 'commerce-api' carries the mapper 'mail'", found)
+
+    def test_a_missing_audience_mapper_is_caught(self):
+        found = self.one(self.with_mappers(keep=lambda m: m["protocolMapper"] != "oidc-audience-mapper"))
+        self.assertIn("the client scope 'commerce-api' carries 0 oidc-audience-mapper", found)
+
+    def test_a_missing_permission_mapper_is_caught(self):
+        found = self.one(self.with_mappers(keep=lambda m: m["name"] != "permission"))
+        self.assertIn("the client scope 'commerce-api' carries 0 oidc-usermodel-client-role-mapper", found)
+
+    def test_a_second_audience_mapper_is_caught(self):
+        found = self.one(self.with_mappers(mapper("again", "oidc-audience-mapper", audience="commerce-api")))
+        self.assertIn("carries 2 oidc-audience-mapper", found)
+
+    def test_an_audience_mapper_naming_the_wrong_client_is_caught(self):
+        document = realm(browser())
+        scope = next(s for s in document["clientScopes"] if s["name"] == realm_check.AUDIENCE_SCOPE)
+        scope["protocolMappers"][0]["config"]["included.client.audience"] = "realm-management"
+        found = self.one(document)
+        self.assertIn("mapper 'commerce-api-audience' names 'realm-management', not 'commerce-api'", found)
+
+    def test_a_permission_mapper_reading_the_wrong_client_s_roles_is_caught(self):
+        document = realm(browser())
+        scope = next(s for s in document["clientScopes"] if s["name"] == realm_check.AUDIENCE_SCOPE)
+        scope["protocolMappers"][1]["config"]["usermodel.clientRoleMapping.clientId"] = "realm-management"
+        found = self.one(document)
+        self.assertIn("mapper 'permission' names 'realm-management', not 'commerce-api'", found)
+
+    def test_a_role_mapper_writing_another_claim_is_a_third_mapper(self):
+        found = self.problems(self.with_mappers(
+            mapper("roles", "oidc-usermodel-client-role-mapper", "roles", role_client="commerce-api"),
+            keep=lambda m: m["name"] != "permission"))
+        self.assertEqual(len(found), 2, found)
+        self.assertTrue(any("carries the mapper 'roles'" in problem for problem in found), found)
+
+    def test_the_shipped_export_s_scope_survives_the_projection_and_passes(self):
+        document = realm_check.load_realm(realm_check.ROOT / realm_check.COMPOSE_REALM)
+        self.assertEqual(realm_check.check_audience_scope(document, AUDIENCE), [])
 
 
 class TheBrowserClientsCode(Fixture):
@@ -1283,7 +1469,7 @@ class WhatTheGateIsLookingAt(Fixture):
 
     def test_an_unknown_realm_kind_judges_nothing(self):
         """The kind has no default, and a typo must not silently pick one."""
-        found = realm_check.check_realm(realm(), "production", self.lifetime)
+        found = realm_check.check_realm(realm(), "production", self.lifetime, self.audience)
         self.assertEqual(len(found), 1, found)
         self.assertIn("not one of", found[0])
 
@@ -1363,6 +1549,75 @@ class TheLifetimeIsRead(unittest.TestCase):
         regex.
         """
         self.assertGreater(realm_check.read_access_token_lifetime(), 0)
+
+
+class TheAudienceIsRead(unittest.TestCase):
+    """The audience the commerce-api scope must name comes out of `AuthenticationExtensions.Audience`."""
+
+    DECLARATION = '    public const string Audience = "{0}";\n'
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        (self.root / realm_check.LIFETIME_SOURCE).parent.mkdir(parents=True, exist_ok=True)
+
+    def write(self, text: str) -> None:
+        (self.root / realm_check.LIFETIME_SOURCE).write_text(text, encoding="utf-8")
+
+    def refused(self) -> str:
+        with self.assertRaises(SystemExit) as stop:
+            realm_check.read_audience(self.root)
+        return str(stop.exception)
+
+    def test_the_declaration_is_read(self):
+        self.write(self.DECLARATION.format("commerce-api"))
+        self.assertEqual(realm_check.read_audience(self.root), "commerce-api")
+
+    def test_a_missing_declaration_stops_rather_than_defaulting(self):
+        self.write('    public const string AuthorityKey = "Identity:Authority";\n')
+        self.assertIn("declares Audience 0 time(s), expected exactly one", self.refused())
+
+    def test_two_declarations_stop_rather_than_picking_one(self):
+        self.write(self.DECLARATION.format("commerce-api") + self.DECLARATION.format("orders-api"))
+        self.assertIn("declares Audience 2 time(s)", self.refused())
+
+    def test_a_comment_quoting_the_declaration_is_not_the_declaration(self):
+        self.write('    // public const string Audience = "commerce-api";\n'
+                   "    public static string Audience => Configured;\n")
+        self.assertIn("0 time(s)", self.refused())
+
+    def test_a_longer_identifier_beginning_with_audience_is_not_the_declaration(self):
+        self.write('    public const string AudienceClaim = "aud";\n'
+                   + self.DECLARATION.format("commerce-api"))
+        self.assertEqual(realm_check.read_audience(self.root), "commerce-api")
+
+    def test_an_assignment_that_is_not_a_constant_is_not_the_declaration(self):
+        self.write('        options.Audience = "elsewhere";\n')
+        self.assertIn("0 time(s)", self.refused())
+
+    def test_an_unreadable_source_stops(self):
+        self.assertIn("not readable", self.refused())
+
+    def test_the_shipped_declaration_is_the_audience_the_export_names(self):
+        """The subject test: the shipped file still declares it, and §14.1's export agrees."""
+        document = realm_check.load_realm(realm_check.ROOT / realm_check.COMPOSE_REALM)
+        self.assertEqual(realm_check.check_audience_scope(document, realm_check.read_audience()), [])
+
+    def test_a_wrong_audience_in_the_source_fails_the_shipped_export(self):
+        """The mutation: one edit to the declaration, and the unchanged export is refused by name."""
+        shipped = (realm_check.ROOT / realm_check.LIFETIME_SOURCE).read_text(encoding="utf-8")
+        mutated = re.sub(r'(const\s+string\s+Audience\s*=\s*)"[^"]*"', r'\1"orders-api"', shipped)
+        self.assertNotEqual(mutated, shipped)
+        self.write(mutated)
+        audience = realm_check.read_audience(self.root)
+        document = realm_check.load_realm(realm_check.ROOT / realm_check.COMPOSE_REALM)
+        found = realm_check.check_realm(document, realm_check.LOCAL, realm_check.read_access_token_lifetime(),
+                                        audience)
+        self.assertEqual(len(found), 2, found)
+        for name in ("commerce-api-audience", "permission"):
+            self.assertTrue(any(f"mapper {name!r} names 'commerce-api', not 'orders-api'" in problem
+                                for problem in found), found)
 
 
 class TheDeclaredInputs(unittest.TestCase):
@@ -1854,7 +2109,7 @@ class WhatTheGateHolds(unittest.TestCase):
         self.assertEqual(client["attributes"]["use.refresh.tokens"], "false")
         self.assertEqual(client["webOrigins"], ["https://spa.example"])
         self.assertEqual(
-            realm_check.check_realm(held, realm_check.DEPLOYED, 300), [])
+            realm_check.check_realm(held, realm_check.DEPLOYED, 300, AUDIENCE), [])
 
     def test_the_root_url_survives_to_resolve_a_relative_redirect(self):
         held = realm_check.judged({"clients": [{"clientId": "x", "rootUrl": "https://a.example"}]})
@@ -1872,30 +2127,41 @@ class WhatTheGateHolds(unittest.TestCase):
         held = realm_check.judged({"clients": ["not-a-client"]})
         self.assertEqual(held["clients"], ["not-a-client"])
         self.assertTrue(any("where a client object belongs" in p
-                            for p in realm_check.check_realm(held, realm_check.LOCAL, 300)))
+                            for p in realm_check.check_realm(held, realm_check.LOCAL, 300, AUDIENCE)))
 
     def test_an_unknown_attribute_does_not_survive(self):
         """The attribute allow-list is shorter than what the realm ships."""
         held = realm_check.judged(self.realm_with_secrets())
         self.assertNotIn("realm_client", held["clients"][0]["attributes"])
 
-    def test_a_mapper_keeps_its_name_type_and_claim_and_nothing_else(self):
+    def test_a_mapper_keeps_its_name_type_claim_and_named_client_and_nothing_else(self):
         found = {"name": "n", "protocolMapper": "t", "id": "i",
-                 "config": {"claim.name": "c", "included.client.audience": "a", "user.attribute": "u"}}
+                 "config": {"claim.name": "c", "included.client.audience": "a",
+                            "usermodel.clientRoleMapping.clientId": "r", "user.attribute": "u"}}
         held = realm_check.judged({"clients": [{"clientId": "x", "protocolMappers": [found]}],
                                    "clientScopes": [{"name": "s", "id": "i", "protocolMappers": [found]}]})
-        narrowed = {"name": "n", "protocolMapper": "t", "config": {"claim.name": "c"}}
+        narrowed = {"name": "n", "protocolMapper": "t", "config": {
+            "claim.name": "c", "included.client.audience": "a", "usermodel.clientRoleMapping.clientId": "r"}}
         self.assertEqual(held["clients"][0]["protocolMappers"], [narrowed])
         self.assertEqual(held["clientScopes"], [{"name": "s", "protocolMappers": [narrowed]}])
 
-    def test_scope_mappings_and_client_roles_keep_their_names_and_realm_roles_go(self):
+    def test_scope_mappings_and_roles_keep_their_names_and_composites_and_nothing_else(self):
         held = realm_check.judged({
             "scopeMappings": [{"clientScope": "s", "roles": ["r"], "extra": 1}],
             "clientScopeMappings": {"c": [{"client": "w", "roles": ["r"], "extra": 1}]},
-            "roles": {"realm": [{"name": "r"}], "client": {"w": [{"name": "o", "composite": True}]}}})
+            "roles": {"realm": [{"name": "r", "id": "i", "composites": {"realm": ["q"], "extra": 1}}],
+                      "client": {"w": [{"name": "o", "composite": True,
+                                        "composites": {"client": {"c": ["r"]}}}]}}})
         self.assertEqual(held["scopeMappings"], [{"clientScope": "s", "roles": ["r"]}])
         self.assertEqual(held["clientScopeMappings"], {"c": [{"client": "w", "roles": ["r"]}]})
-        self.assertEqual(held["roles"], {"client": {"w": [{"name": "o"}]}})
+        self.assertEqual(held["roles"], {
+            "client": {"w": [{"name": "o", "composites": {"client": {"c": ["r"]}}}]},
+            "realm": [{"name": "r", "composites": {"realm": ["q"]}}]})
+
+    def test_each_worker_s_effective_scope_survives_as_role_names(self):
+        effective = {"w": {"realm": ["r"], "client": {"c": ["o"]}, "extra": 1}}
+        held = realm_check.judged({"effectiveScope": effective})
+        self.assertEqual(held["effectiveScope"], {"w": {"realm": ["r"], "client": {"c": ["o"]}}})
 
     def test_absent_scope_documents_stay_absent_to_be_refused(self):
         held = realm_check.judged({"clients": [], "roles": {"realm": []}})

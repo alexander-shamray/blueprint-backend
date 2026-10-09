@@ -24,6 +24,10 @@ representation serialised, and the client list a full export carries under
 scopes, every client's and scope's scope mappings and each client's own roles
 are fetched too, and regrouped under the keys an export files them by
 (`clientScopes`, `scopeMappings`, `clientScopeMappings`, `roles.client`).
+Each worker's effective scope, which is what its mapped roles compose as
+Keycloak answers it, goes under `effectiveScope`, a key no export carries;
+in the local realm the export's own role composites stand in for it
+([ADR-088](../../docs/backend-architecture/adr/ADR-088-the-realm-gate-judges-a-workers-cap-expanded-and-the-audience-scopes-mappers-exactly.md)).
 `read_admin.py` never interprets: a missing key stays missing and an unknown
 client is written out unchanged, because only the file with a suite decides.
 **And one
@@ -104,15 +108,24 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   [ADR-077](../../docs/backend-architecture/adr/ADR-077-a-workers-token-is-capped-by-its-clients-scope-and-the-realm-gate-reads-the-cap.md)
   argues it and `check_scope_cap` is the list. An over-grant on the account
   then reaches no token, which is why the account itself can stay unread.
+  The cap is judged as Keycloak expands it: the mapped role and what it
+  composes equal ADR-052's role and what §14.1's export composes it into, so
+  a deployed realm that widens what `view-users` composes fails (ADR-088).
+- **The `commerce-api` scope writes exactly the audience and the claim**:
+  one audience mapper and one `permission` role mapper, each naming the
+  client `AuthenticationExtensions.Audience` declares, and no other mapper
+  (`check_audience_scope`, ADR-088). That audience is **read out of the
+  declaration**, as the lifetime is. Every client holding the scope gains
+  what it writes, which is why the bullet below can leave the scope out.
 - **Only the `commerce-api` scope names the audience or writes the
-  `permission` claim** on `shipping-worker`, `notifications-worker` and
-  `web-bff`: no audience mapper, and no mapper whose claim is `aud` or
-  `permission`, on the client itself or on any other scope it holds
-  (`check_token_writers`, ADR-077). The `roles` scope's audience-resolve
-  mapper still adds each client whose roles the token carries. On the two
-  workers the cap bounds it: for `notifications-worker` that is
-  `realm-management`, an audience no service validates. `web-bff` has no cap
-  and already carries the audience every service validates.
+  `permission` claim** on `web-app`, `mobile-app`, `shipping-worker`,
+  `notifications-worker` and `web-bff`: no audience mapper, and no mapper
+  whose claim is `aud` or `permission`, on the client itself or on any other
+  scope it holds (`check_token_writers`, ADR-077, ADR-088). The `roles`
+  scope's audience-resolve mapper still adds each client whose roles the token
+  carries. On the two workers the cap bounds it: for `notifications-worker`
+  that is `realm-management`, an audience no service validates. The other
+  three have no cap and already carry the audience every service validates.
 - **`notifications-worker`'s own shape**, as far as a client object reaches:
   one such client, confidential, service accounts on, no interactive flow,
   `commerce-api` in neither scope list and `roles` in one — cited rather than
@@ -144,22 +157,21 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
 - **Everything else in the realm — and it does not merely decline to check
   it, it does not hold it.** What the gate judges is a projection of the keys
   `REALM_FIELDS`, `CLIENT_FIELDS` and `CLIENT_ATTRIBUTES` name, plus each
-  mapper's name, type and claim (`MAPPER_FIELDS`, `MAPPER_CONFIG`), each
-  scope's name, the scope mappings' subjects and role names, and the names of
-  each client's own roles. So the audience a mapper names, the rest of its
-  configuration, the realm's roles, every role's composites,
-  the users and their role mappings, the two development logins and every
-  client secret are not in the object at all. Those belong
+  mapper's name, type, claim and the client it names (`MAPPER_FIELDS`,
+  `MAPPER_CONFIG`), each scope's name, the scope mappings' subjects and role
+  names, each role's name and the role names it composes, and each worker's
+  effective scope. So the rest of a mapper's configuration, the users and
+  their role mappings, the two development logins and every client secret
+  are not in the object at all. Those belong
   to `tests/Common.Web.Tests/RealmImportTests.cs`, which is not superseded.
   The projection is also why no message here can leak a credential: there is
   none to leak.
-- **A worker's service account, or what a mapped role composes, in a deployed
-  realm.** Reading users would hand this credential every profile in the
-  realm, so the account is left unread and its token capped instead
-  (ADR-077). The cap is judged as mapped: a deployed realm that redefined
-  what `view-users` composes widens it unseen. §14.1's export pins that
-  composition in `RealmImportTests`, and the contact worker refuses a token
-  whose `realm-management` roles are not exactly the three.
+- **A worker's service account in a deployed realm.** Reading users would
+  hand this credential every profile in the realm, so the account is left
+  unread and its token capped instead (ADR-077). What a mapped role composes
+  is read, as the cap bullet says; what the account itself holds is not, and
+  the contact worker refuses a token whose `realm-management` roles are not
+  exactly the three.
 - **A realm with more clients than the ceiling.** The client list is read in
   one request asking for far more than any realm this platform will have, and a
   response *at* that ceiling stops the run rather than being truncated.

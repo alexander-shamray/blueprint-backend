@@ -127,18 +127,22 @@ class Stubbed(unittest.TestCase):
             json.dumps(claims).encode("utf-8")).decode("ascii").rstrip("=")
         return f"header.{payload}.signature"
 
-    def answers(self, representation, clients, scopes=(), mappings=None, own_roles=None):
+    def answers(self, representation, clients, scopes=(), mappings=None, own_roles=None, effective=None):
         """One realm, its clients and their scopes, served the way Keycloak does.
 
         The `max` ceiling is honoured, or it would be untested while looking
-        covered; a client given no `id` gets one, as Keycloak always answers it,
-        and `mappings` and `own_roles` are keyed by the subject's id."""
+        covered; a client given no `id` gets one, as Keycloak always answers it.
+        `mappings` and `own_roles` are keyed by subject id, `effective` by that and the target's id or `realm`."""
         listed = [dict(client, id=client.get("id", f"client-id-{n}")) if isinstance(client, dict)
                   else client for n, client in enumerate(clients)]
 
         def get(url: str, _access: str):
             path = urllib.parse.urlsplit(url).path
             subject = urllib.parse.unquote(path.split("/")[-2])
+            if path.endswith("/composite"):
+                parts = [urllib.parse.unquote(part) for part in path.split("/")]
+                at = parts.index("scope-mappings")
+                return (effective or {}).get((parts[at - 1], parts[-2]), [])
             if path.endswith("/scope-mappings"):
                 return (mappings or {}).get(subject, {})
             if path.endswith("/roles"):
@@ -248,12 +252,59 @@ class TheScopeJoin(Stubbed):
         self.assertIn("list of named roles", str(stop.exception))
 
     def test_a_representation_already_carrying_a_joined_key_stops(self):
-        for key in ("clientScopes", "scopeMappings", "clientScopeMappings", "roles"):
+        for key in ("clientScopes", "scopeMappings", "clientScopeMappings", "roles", "effectiveScope"):
             with self.subTest(key=key):
                 self.answers({"realm": "commerce", key: []}, self.CLIENTS, self.SCOPES)
                 with self.assertRaises(SystemExit) as stop:
                     read_admin.fetch(self.values)
                 self.assertIn(f"already carries a {key} key", str(stop.exception))
+
+
+class TheEffectiveScope(Stubbed):
+    """Each capped worker's scope is read as Keycloak expands it, beside its mappings (ADR-088)."""
+
+    CLIENTS = [{"clientId": read_admin.realm_check.CONTACT_CLIENT, "id": "contact-id"},
+               {"clientId": read_admin.realm_check.WORKER_CLIENT, "id": "worker-id"},
+               {"clientId": "realm-management", "id": "rm-id"},
+               {"clientId": "web-app", "id": "web-id"}]
+
+    def fetched(self, effective: dict) -> dict:
+        self.answers({"realm": "commerce"}, self.CLIENTS, [], effective=effective)
+        return read_admin.fetch(self.values)
+
+    def test_what_the_mapped_roles_compose_is_written_under_its_own_key(self):
+        composed = [{"name": name} for name in ("view-users", "query-users", "query-groups", "manage-users")]
+        realm = self.fetched({("contact-id", "rm-id"): composed, ("contact-id", "realm"): [{"name": "r"}]})
+        self.assertEqual(realm["effectiveScope"][read_admin.realm_check.CONTACT_CLIENT], {
+            "realm": ["r"],
+            "client": {"realm-management": ["view-users", "query-users", "query-groups", "manage-users"]}})
+        self.assertEqual(realm["effectiveScope"][read_admin.realm_check.WORKER_CLIENT],
+                         {"realm": [], "client": {}})
+        self.assertNotIn("effectiveScope", realm["roles"])
+
+    def test_the_view_is_asked_of_every_other_client_and_the_realm_for_each_worker_only(self):
+        self.answers({"realm": "commerce"}, self.CLIENTS, [])
+        seen = self.recording()
+        read_admin.fetch(self.values)
+        asked = [url.split("/admin/realms/commerce/clients/")[1] for url in seen if url.endswith("/composite")]
+        expected = [f"{worker}/scope-mappings/{target}/composite"
+                    for worker, other in (("contact-id", "worker-id"), ("worker-id", "contact-id"))
+                    for target in (f"clients/{other}", "clients/rm-id", "clients/web-id", "realm")]
+        self.assertEqual(sorted(asked), sorted(expected))
+
+    def test_a_worker_absent_from_the_realm_asks_nothing(self):
+        self.answers({"realm": "commerce"}, self.CLIENTS[2:], [])
+        seen = self.recording()
+        realm = read_admin.fetch(self.values)
+        self.assertFalse([url for url in seen if url.endswith("/composite")])
+        self.assertEqual(realm["effectiveScope"], {})
+
+    def test_an_effective_answer_that_is_not_a_list_of_named_roles_stops(self):
+        with self.assertRaises(SystemExit) as stop:
+            self.fetched({("contact-id", "rm-id"): {"name": "view-users"}})
+        self.assertIn(f"the realm-management roles in client "
+                      f"{read_admin.realm_check.CONTACT_CLIENT!r}'s effective scope", str(stop.exception))
+        self.assertIn("did not answer a list of named roles", str(stop.exception))
 
 
 class TheCeiling(Stubbed):
@@ -584,20 +635,32 @@ class WhatItWrites(Stubbed):
                  "publicClient": False,
                  "defaultClientScopes": ["basic", "commerce-api"],
                  "optionalClientScopes": ["address"],
-                 "webOrigins": []}]
+                 "webOrigins": []}] + [
+                {"clientId": owner, "id": ident, "enabled": True, "standardFlowEnabled": False,
+                 "implicitFlowEnabled": False, "directAccessGrantsEnabled": False,
+                 "serviceAccountsEnabled": False, "publicClient": False}
+                for owner, ident in (("commerce-api", "api-id"), ("realm-management", "rm-id"))]
 
-    def serve(self, representation: dict, mappings: dict | None = None) -> None:
+    # What Keycloak answers for each worker's effective scope over the role owners, as §14.1's export composes it.
+    EXPANDED = {("worker-id", "api-id"): ["orders:delivery-address"],
+                ("contact-id", "rm-id"): ["view-users", "query-users", "query-groups"]}
+
+    def serve(self, representation: dict, mappings: dict | None = None, effective: dict | None = None) -> None:
         """The compliant clients, their scopes, and each worker's grant as its only scope mapping."""
         scopes = [{"id": f"{name}-id", "name": name, "protocolMappers": []}
-                  for name in ("basic", "roles", "address")]
+                  for name in ("web-origins", "acr", "profile", "basic", "roles", "email", "address")]
         scopes.append({"id": "commerce-api-id", "name": "commerce-api", "protocolMappers": [
             {"name": "commerce-api-audience", "protocolMapper": "oidc-audience-mapper",
-             "config": {"included.client.audience": "commerce-api"}}]})
+             "config": {"included.client.audience": "commerce-api"}},
+            {"name": "permission", "protocolMapper": "oidc-usermodel-client-role-mapper",
+             "config": {"claim.name": "permission", "usermodel.clientRoleMapping.clientId": "commerce-api"}}]})
         granted = {"worker-id": {"clientMappings": {"commerce-api": {
                        "client": "commerce-api", "mappings": [{"name": "orders:delivery-address"}]}}},
                    "contact-id": {"clientMappings": {"realm-management": {
                        "client": "realm-management", "mappings": [{"name": "view-users"}]}}}}
-        self.answers(representation, self.clients(), scopes, {**granted, **(mappings or {})})
+        expanded = {key: [{"name": name} for name in names] for key, names in self.EXPANDED.items()}
+        self.answers(representation, self.clients(), scopes, {**granted, **(mappings or {})},
+                     effective={**expanded, **(effective or {})})
 
     def test_what_read_admin_writes_is_what_realm_check_accepts(self):
         import realm_check
@@ -609,7 +672,7 @@ class WhatItWrites(Stubbed):
         # Read back through the deploy path's own two calls, not through json.
         document = realm_check.load_realm(self.out)
         self.assertEqual(
-            realm_check.check_realm(document, realm_check.DEPLOYED, 300), [])
+            realm_check.check_realm(document, realm_check.DEPLOYED, 300, realm_check.read_audience()), [])
 
     def test_a_realm_the_fetch_returns_is_judged_and_can_fail(self):
         """The positive above proves the seam carries a compliant realm.
@@ -623,9 +686,23 @@ class WhatItWrites(Stubbed):
                     "revokeRefreshToken": True, "refreshTokenMaxReuse": 0})
         self.run_main()
         found = realm_check.check_realm(
-            realm_check.load_realm(self.out), realm_check.DEPLOYED, 300)
+            realm_check.load_realm(self.out), realm_check.DEPLOYED, 300, realm_check.read_audience())
         self.assertEqual(len(found), 1, found)
         self.assertIn("accessTokenLifespan", found[0])
+
+    def test_a_composite_widened_in_the_deployed_realm_reaches_the_judgement(self):
+        """The mapping is unchanged and only the expanded view grew, so only that read can catch it."""
+        import realm_check
+
+        widened = [{"name": name} for name in ("view-users", "query-users", "query-groups", "manage-users")]
+        self.serve({"realm": "commerce", "accessTokenLifespan": 300,
+                    "revokeRefreshToken": True, "refreshTokenMaxReuse": 0},
+                   effective={("contact-id", "rm-id"): widened})
+        self.run_main()
+        found = realm_check.check_realm(
+            realm_check.load_realm(self.out), realm_check.DEPLOYED, 300, realm_check.read_audience())
+        self.assertEqual(len(found), 1, found)
+        self.assertIn(f"client {realm_check.CONTACT_CLIENT!r} carries realm-management ['manage-users']", found[0])
 
 
 class TheRealmSegmentIsEscaped(Stubbed):
