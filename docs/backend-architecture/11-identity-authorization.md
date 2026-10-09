@@ -1435,8 +1435,8 @@ sequenceDiagram
     B->>S: consume (inbox)
     B->>Y: consume (inbox)
     B->>F: consume (inbox)
-    O->>O: anonymise Orders.CustomerId, purge address
-    N->>N: anonymise NotificationLog rows
+    O->>O: anonymise Orders.CustomerId, purge address, delete OrderSummaries
+    N->>N: anonymise ended NotificationLog rows, delete contacts, waiting notices, OrderRecords
     S->>S: delete DeliveryAddresses rows (ADR-052)
     Y->>Y: anonymise PaymentOrders.CustomerId
     F->>F: delete the subject's bff.Orders rows
