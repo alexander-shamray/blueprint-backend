@@ -672,7 +672,8 @@ class WhatItWrites(Stubbed):
         # Read back through the deploy path's own two calls, not through json.
         document = realm_check.load_realm(self.out)
         self.assertEqual(
-            realm_check.check_realm(document, realm_check.DEPLOYED, 300, realm_check.read_audience()), [])
+            realm_check.check_realm(document, realm_check.DEPLOYED, 300, realm_check.read_audience(),
+                                    realm_check.read_contact_grant()), [])
 
     def test_a_realm_the_fetch_returns_is_judged_and_can_fail(self):
         """The positive above proves the seam carries a compliant realm.
@@ -686,7 +687,8 @@ class WhatItWrites(Stubbed):
                     "revokeRefreshToken": True, "refreshTokenMaxReuse": 0})
         self.run_main()
         found = realm_check.check_realm(
-            realm_check.load_realm(self.out), realm_check.DEPLOYED, 300, realm_check.read_audience())
+            realm_check.load_realm(self.out), realm_check.DEPLOYED, 300, realm_check.read_audience(),
+            realm_check.read_contact_grant())
         self.assertEqual(len(found), 1, found)
         self.assertIn("accessTokenLifespan", found[0])
 
@@ -700,7 +702,8 @@ class WhatItWrites(Stubbed):
                    effective={("contact-id", "rm-id"): widened})
         self.run_main()
         found = realm_check.check_realm(
-            realm_check.load_realm(self.out), realm_check.DEPLOYED, 300, realm_check.read_audience())
+            realm_check.load_realm(self.out), realm_check.DEPLOYED, 300, realm_check.read_audience(),
+            realm_check.read_contact_grant())
         self.assertEqual(len(found), 1, found)
         self.assertIn(f"client {realm_check.CONTACT_CLIENT!r} carries realm-management ['manage-users']", found[0])
 

@@ -136,6 +136,10 @@ def mapper(name: str, kind: str, claim: str | None = None, **named: str) -> dict
 # out of AuthenticationExtensions.Audience.
 AUDIENCE = "commerce-api"
 
+# The contact worker's grant the fixture realm expands to, standing in for
+# what the gate reads out of GrantCheckedTokenCache.Grant.
+CONTACT_GRANT = ("query-groups", "query-users", "view-users")
+
 # The scopes the fixture clients hold, each with nothing mapped into it, and
 # the audience scope with the two mappers that are its whole purpose.
 HELD_SCOPES = ("web-origins", "acr", "profile", "roles", "basic", "email",
@@ -206,9 +210,10 @@ class Fixture(unittest.TestCase):
 
     lifetime = 300
     audience = AUDIENCE
+    contact_grant = CONTACT_GRANT
 
     def problems(self, document: dict, kind: str = realm_check.DEPLOYED) -> list[str]:
-        return realm_check.check_realm(document, kind, self.lifetime, self.audience)
+        return realm_check.check_realm(document, kind, self.lifetime, self.audience, self.contact_grant)
 
     def one(self, document: dict, kind: str = realm_check.DEPLOYED) -> str:
         found = self.problems(document, kind)
@@ -233,7 +238,7 @@ class TheFixture(Fixture):
         difference is that one field and not a second one nobody noticed.
         """
         local = realm(browser(directAccessGrantsEnabled=True))
-        self.assertEqual(realm_check.check_realm(local, realm_check.LOCAL, self.lifetime, self.audience), [])
+        self.assertEqual(self.problems(local, realm_check.LOCAL), [])
         self.assertEqual(len(self.problems(local)), 1)
 
 
@@ -403,7 +408,7 @@ class ThePasswordGrant(Fixture):
         would let the local realm drift into a shape the README's curl cannot
         use, and the README is what tells a developer the platform works.
         """
-        found = realm_check.check_realm(realm(), realm_check.LOCAL, self.lifetime, self.audience)
+        found = realm_check.check_realm(realm(), realm_check.LOCAL, self.lifetime, self.audience, self.contact_grant)
         self.assertEqual(len(found), 1, found)
         self.assertIn("directAccessGrantsEnabled", found[0])
 
@@ -411,7 +416,7 @@ class ThePasswordGrant(Fixture):
         """Keycloak's default is false, so absence fails the local realm honestly."""
         client = browser()
         del client["directAccessGrantsEnabled"]
-        found = realm_check.check_realm(realm(client), realm_check.LOCAL, self.lifetime, self.audience)
+        found = self.problems(realm(client), realm_check.LOCAL)
         self.assertEqual(len(found), 1, found)
 
 
@@ -793,7 +798,7 @@ class TheExpandedCap(Fixture):
         document["effectiveScope"][realm_check.CONTACT_CLIENT]["client"]["realm-management"].append("manage-users")
         found = self.one(document)
         self.assertIn(f"client {realm_check.CONTACT_CLIENT!r} carries realm-management ['manage-users']", found)
-        self.assertIn("beyond ADR-052's grant", found)
+        self.assertIn("beyond the grant its own check expects", found)
 
     def test_a_composite_widened_in_the_local_export_is_caught(self):
         document = self.local()
@@ -852,10 +857,12 @@ class TheExpandedCap(Fixture):
     def test_the_shipped_export_composes_exactly_the_expanded_cap(self):
         """The subject is §14.1's own file, read the way `check --kind local` reads it."""
         document = realm_check.load_realm(realm_check.ROOT / realm_check.COMPOSE_REALM)
+        expanded = realm_check.expanded_caps(realm_check.read_contact_grant())
         for name in realm_check.SCOPE_CAPS:
             with self.subTest(client=name):
-                self.assertEqual(realm_check.check_scope_cap(document, next(
-                    c for c in document["clients"] if c.get("clientId") == name), name, realm_check.LOCAL), [])
+                client = next(c for c in document["clients"] if c.get("clientId") == name)
+                self.assertEqual(
+                    realm_check.check_scope_cap(document, client, name, realm_check.LOCAL, expanded[name]), [])
 
 
 class TheAudienceScope(Fixture):
@@ -1469,7 +1476,7 @@ class WhatTheGateIsLookingAt(Fixture):
 
     def test_an_unknown_realm_kind_judges_nothing(self):
         """The kind has no default, and a typo must not silently pick one."""
-        found = realm_check.check_realm(realm(), "production", self.lifetime, self.audience)
+        found = realm_check.check_realm(realm(), "production", self.lifetime, self.audience, self.contact_grant)
         self.assertEqual(len(found), 1, found)
         self.assertIn("not one of", found[0])
 
@@ -1596,6 +1603,10 @@ class TheAudienceIsRead(unittest.TestCase):
         self.write('        options.Audience = "elsewhere";\n')
         self.assertIn("0 time(s)", self.refused())
 
+    def test_a_trailing_comment_quoting_the_declaration_is_not_the_declaration(self):
+        self.write('    private const string Other = "x"; // public const string Audience = "elsewhere";\n')
+        self.assertIn("0 time(s)", self.refused())
+
     def test_an_unreadable_source_stops(self):
         self.assertIn("not readable", self.refused())
 
@@ -1613,11 +1624,85 @@ class TheAudienceIsRead(unittest.TestCase):
         audience = realm_check.read_audience(self.root)
         document = realm_check.load_realm(realm_check.ROOT / realm_check.COMPOSE_REALM)
         found = realm_check.check_realm(document, realm_check.LOCAL, realm_check.read_access_token_lifetime(),
-                                        audience)
+                                        audience, realm_check.read_contact_grant())
         self.assertEqual(len(found), 2, found)
         for name in ("commerce-api-audience", "permission"):
             self.assertTrue(any(f"mapper {name!r} names 'commerce-api', not 'orders-api'" in problem
                                 for problem in found), found)
+
+
+class TheContactGrantIsRead(unittest.TestCase):
+    """The contact worker's expanded cap comes out of `GrantCheckedTokenCache.Grant`, the set its own check expects."""
+
+    DECLARATION = "    private static readonly string[] Grant = [{0}];\n"
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        (self.root / realm_check.GRANT_SOURCE).parent.mkdir(parents=True, exist_ok=True)
+
+    def write(self, text: str) -> None:
+        (self.root / realm_check.GRANT_SOURCE).write_text(text, encoding="utf-8")
+
+    def refused(self) -> str:
+        with self.assertRaises(SystemExit) as stop:
+            realm_check.read_contact_grant(self.root)
+        return str(stop.exception)
+
+    def test_the_declaration_is_read(self):
+        self.write(self.DECLARATION.format('"query-groups", "query-users", "view-users"'))
+        self.assertEqual(realm_check.read_contact_grant(self.root), ("query-groups", "query-users", "view-users"))
+
+    def test_a_missing_declaration_stops_rather_than_defaulting(self):
+        self.write('    private const string RealmManagement = "realm-management";\n')
+        self.assertIn("declares Grant 0 time(s), expected exactly one", self.refused())
+
+    def test_two_declarations_stop_rather_than_picking_one(self):
+        self.write(self.DECLARATION.format('"view-users"') * 2)
+        self.assertIn("declares Grant 2 time(s)", self.refused())
+
+    def test_a_comment_line_quoting_the_declaration_is_not_the_declaration(self):
+        self.write('    // private static readonly string[] Grant = ["view-users"];\n')
+        self.assertIn("0 time(s)", self.refused())
+
+    def test_a_trailing_comment_quoting_the_declaration_is_not_the_declaration(self):
+        self.write('    private const int Other = 1; // private static readonly string[] Grant = ["view-users"];\n')
+        self.assertIn("0 time(s)", self.refused())
+
+    def test_another_field_named_grant_is_not_the_declaration(self):
+        self.write('    private const string Grant = "view-users";\n'
+                   '    private static readonly string[] GrantedScopes = ["roles"];\n'
+                   + self.DECLARATION.format('"view-users"'))
+        self.assertEqual(realm_check.read_contact_grant(self.root), ("view-users",))
+
+    def test_an_element_that_is_not_a_string_literal_stops(self):
+        self.write(self.DECLARATION.format('"view-users", Extra'))
+        self.assertIn("not a list of string literals", self.refused())
+
+    def test_an_unreadable_source_stops(self):
+        self.assertIn("not readable", self.refused())
+
+    def test_the_shipped_grant_is_the_cap_the_export_expands_to(self):
+        """The subject test: the shipped worker still declares it, and §14.1's export agrees."""
+        document = realm_check.load_realm(realm_check.ROOT / realm_check.COMPOSE_REALM)
+        client = next(c for c in document["clients"] if c.get("clientId") == realm_check.CONTACT_CLIENT)
+        expanded = realm_check.expanded_caps(realm_check.read_contact_grant())
+        self.assertEqual(realm_check.check_scope_cap(document, client, realm_check.CONTACT_CLIENT,
+                                                     realm_check.LOCAL, expanded[realm_check.CONTACT_CLIENT]), [])
+
+    def test_a_fourth_role_in_the_worker_s_grant_fails_the_shipped_export(self):
+        """The mutation: one role added to the worker's Grant, and the unchanged export is refused naming it."""
+        shipped = (realm_check.ROOT / realm_check.GRANT_SOURCE).read_text(encoding="utf-8")
+        mutated = shipped.replace('"view-users"];', '"view-users", "manage-users"];')
+        self.assertNotEqual(mutated, shipped)
+        self.write(mutated)
+        grant = realm_check.read_contact_grant(self.root)
+        document = realm_check.load_realm(realm_check.ROOT / realm_check.COMPOSE_REALM)
+        found = realm_check.check_realm(document, realm_check.LOCAL, realm_check.read_access_token_lifetime(),
+                                        realm_check.read_audience(), grant)
+        self.assertEqual(len(found), 1, found)
+        self.assertIn(f"client {realm_check.CONTACT_CLIENT!r} lacks realm-management ['manage-users']", found[0])
 
 
 class TheDeclaredInputs(unittest.TestCase):
@@ -2109,7 +2194,7 @@ class WhatTheGateHolds(unittest.TestCase):
         self.assertEqual(client["attributes"]["use.refresh.tokens"], "false")
         self.assertEqual(client["webOrigins"], ["https://spa.example"])
         self.assertEqual(
-            realm_check.check_realm(held, realm_check.DEPLOYED, 300, AUDIENCE), [])
+            realm_check.check_realm(held, realm_check.DEPLOYED, 300, AUDIENCE, CONTACT_GRANT), [])
 
     def test_the_root_url_survives_to_resolve_a_relative_redirect(self):
         held = realm_check.judged({"clients": [{"clientId": "x", "rootUrl": "https://a.example"}]})
@@ -2127,7 +2212,7 @@ class WhatTheGateHolds(unittest.TestCase):
         held = realm_check.judged({"clients": ["not-a-client"]})
         self.assertEqual(held["clients"], ["not-a-client"])
         self.assertTrue(any("where a client object belongs" in p
-                            for p in realm_check.check_realm(held, realm_check.LOCAL, 300, AUDIENCE)))
+                            for p in realm_check.check_realm(held, realm_check.LOCAL, 300, AUDIENCE, CONTACT_GRANT)))
 
     def test_an_unknown_attribute_does_not_survive(self):
         """The attribute allow-list is shorter than what the realm ships."""
