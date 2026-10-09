@@ -119,9 +119,9 @@ public static class DependencyInjection
 
 A C# 14 **extension block**, not a `this`-parameter extension method. The
 receiver is named once on the block and every member inside it reads
-`services` directly, which is what makes the two registrations below worth
-grouping — they extend the same type for the same reason, and the classic form
-repeats `this IServiceCollection services` on each. Call sites are identical
+`services` directly, which is what makes its members worth grouping — they
+extend the same type for the same reason, and the classic form repeats
+`this IServiceCollection services` on each. Call sites are identical
 either way: `services.AddDispatcher()` binds the same.
 
 Scoped, because handlers are. A singleton dispatcher would capture the root
@@ -170,7 +170,7 @@ public interface ICommandMessageMapper<in TMessage, out TCommand>
 ```
 
 ```csharp
-// The second member of the same extension block as AddDispatcher above.
+// A member of the same extension block as AddDispatcher above.
 public IServiceCollection AddPluggableFrom(Assembly assembly) =>
     services.Scan(scan =>
     {
@@ -195,10 +195,10 @@ with a wider blast radius — so both registration methods call it:
 
 ```csharp
 // Ordering.Application/DependencyInjection.cs
-services.AddPluggableFrom(typeof(PlaceOrderCommand).Assembly);
+services.AddPluggableFrom(typeof(DependencyInjection).Assembly);   // §6.2
 
 // Ordering.Infrastructure/DependencyInjection.cs
-services.AddPluggableFrom(typeof(OrderRepository).Assembly);
+services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
 ```
 
 > **Trap — the handler that was never registered.** Nothing in C# requires an
@@ -245,38 +245,60 @@ fires, which is what the row is about. A guard's value is what it catches
 before deployment; how loudly the gap announces itself afterwards is a
 separate axis.
 
-The test builds its container with `BuildProvider()`, the real registration
-path rather than a test-only container, and the same helper §6.3 uses. It runs
-both `AddOrderingApplication` and `AddOrderingInfrastructure`,
-which is the property the test depends on: a version that ran only the
-Application half would report every Infrastructure handler as unregistered.
-Building the provider forces both assemblies to load, and the test derives
-the set rather than listing it, so a new layer is covered without editing the
-test; it reads the same `PluggableInterfaces.All` the scan does, so a new
-interface is covered the moment it is added there:
+The test resolves from the real host the integration fixture starts
+([§12.4](12-test-strategy.md)), the registration path rather than a test-only
+container, and §6.3's two tests do the same. The host runs both
+`AddOrderingApplication` and `AddOrderingInfrastructure`, which is the property
+the test depends on: a version that ran only the Application half would report
+every Infrastructure handler as unregistered. The test derives the assemblies
+from the host's own references rather than listing them, so a new layer is
+covered without editing the test and a test library named like the service is
+not; it reads the same `PluggableInterfaces.All` the scan does, so a new
+interface is covered the moment it is added there. From
+`tests/Ordering.Api.Tests/RegistrationTests.cs`:
 
 ```csharp
+/// <summary>The host and every Ordering assembly it reaches, so a new layer is covered and a test library is not.</summary>
+private static List<Assembly> ServiceAssemblies()
+{
+    List<Assembly> found = [typeof(Program).Assembly];
+
+    for (int next = 0; next < found.Count; next++)
+    {
+        foreach (AssemblyName reference in found[next].GetReferencedAssemblies())
+        {
+            if (reference.Name?.StartsWith("Ordering.", StringComparison.Ordinal) == true &&
+                found.All(a => a.GetName().Name != reference.Name))
+            {
+                found.Add(Assembly.Load(reference));
+            }
+        }
+    }
+
+    return found;
+}
+
 [Fact]
 public void Every_handler_implementation_is_registered()
 {
     // Handlers are scoped; resolving them from the root provider throws.
-    using IServiceScope scope = BuildProvider().CreateScope();
+    using IServiceScope scope = fixture.Factory.Services.CreateScope();
 
-    IEnumerable<Assembly> assemblies = AppDomain.CurrentDomain
-        .GetAssemblies()
-        .Where(a => a.GetName().Name?.StartsWith("Ordering.") == true);
-
-    IEnumerable<(Type Implementation, Type Service)> implementations =
-        assemblies
+    (Type Implementation, Type Service)[] implementations =
+    [
+        .. ServiceAssemblies()
             .SelectMany(a => a.GetTypes())
-            .Where(t => t is { IsAbstract: false, IsInterface: false })
+            .Where(t => t is { IsAbstract: false, IsInterface: false, ContainsGenericParameters: false })
             .SelectMany(t => t
                 .GetInterfaces()
                 .Where(i => i.IsGenericType &&
                     PluggableInterfaces.All.Contains(i.GetGenericTypeDefinition()))
-                .Select(i => (Implementation: t, Service: i)));
+                .Select(i => (Implementation: t, Service: i)))
+    ];
 
-    foreach (var (implementation, service) in implementations)
+    implementations.ShouldNotBeEmpty("the scan found no handler, so the loop below would assert nothing");
+
+    foreach ((Type implementation, Type service) in implementations)
     {
         scope.ServiceProvider.GetServices(service).ShouldContain(
             s => s!.GetType() == implementation,
@@ -284,6 +306,10 @@ public void Every_handler_implementation_is_registered()
     }
 }
 ```
+
+A companion test, `The_scan_reaches_both_layers_that_hold_handlers`, asserts
+that the derived set holds `Ordering.Application` and `Ordering.Infrastructure`,
+because a set that lost a layer would pass the test above over nothing.
 
 > **Decision — no mediator library.** See [ADR-004](adr/ADR-004-no-mediator-library.md).
 
@@ -334,8 +360,9 @@ services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>))
 
 > **Unregistered, this fails silently and completely.** `GetServices<IPipelineBehavior<…>>()`
 > returning empty is indistinguishable from "no behaviours configured", so the
-> dispatcher invokes the handler alone. `SaveChangesAsync` has exactly one call
-> site — inside `TransactionBehavior` — so a missing registration means
+> dispatcher invokes the handler alone. No handler calls `SaveChangesAsync`: on
+> a command's path its one call site is inside `TransactionBehavior`, so a
+> missing registration means
 > `PlaceOrderHandler` calls `orders.Add(order)`, returns `Result.Success`, and
 > **nothing is ever written**: no order, no outbox row, no saga. The request
 > returns 200.
@@ -347,7 +374,7 @@ services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>))
 [Fact]
 public void Command_behaviours_are_registered_in_the_documented_order()
 {
-    using IServiceScope scope = BuildProvider().CreateScope();
+    using IServiceScope scope = fixture.Factory.Services.CreateScope();
 
     Type[] actual =
     [
@@ -363,7 +390,7 @@ public void Command_behaviours_are_registered_in_the_documented_order()
             typeof(IdempotencyBehavior<,>),
             typeof(TransactionBehavior<,>)
         ],
-        "outermost first — see the pipeline diagram above");
+        "outermost first, as §6.3's pipeline diagram draws it");
 }
 ```
 
@@ -371,9 +398,10 @@ The generic constraints do the rest of the work, and they do not do the same
 work: `IdempotencyBehavior` requires `IIdempotentCommand` **and**
 `TResult : Result` ([§8.5](08-caching-redis.md)), where `TransactionBehavior`
 requires `ICommand<TResult>` and nothing else. A **query** is dropped by all
-three — §6.5's fails both of `IdempotencyBehavior`'s independently, declaring
-no `IIdempotentCommand` and returning a `CursorPage<T>` that derives from
-nothing — so it runs through neither behaviour. A **command that has not opted
+three — `GetDeliveryAddressQuery` fails both of `IdempotencyBehavior`'s
+independently, declaring no `IIdempotentCommand` and returning a
+`DeliveryAddressView?` that derives from nothing — so it runs through neither
+behaviour. A **command that has not opted
 in** is dropped by `IdempotencyBehavior` alone: `CancelOrderCommand` and
 `ConfirmStockCommand` are `ICommand<Result>`, and `TransactionBehavior` still
 wraps them, which is the whole reason its constraint is `ICommand` rather than
@@ -399,27 +427,23 @@ the assertion above has a mirror:
 [Fact]
 public void Queries_run_without_the_transaction_and_idempotency_behaviours()
 {
-    using IServiceScope scope = BuildProvider().CreateScope();
+    using IServiceScope scope = fixture.Factory.Services.CreateScope();
 
+    // The query's own result type: a closed behaviour asked for with the wrong TResult resolves to an empty
+    // sequence, and an empty sequence passes any assertion about what is absent.
     Type[] actual =
     [
         .. scope.ServiceProvider
-            // The query's own result type (§6.5) — CursorPage, not Result. A
-            // closed IPipelineBehavior<,> asked for with the wrong TResult resolves
-            // to an empty sequence, and an empty sequence passes any assertion
-            // about what is absent.
-            .GetServices<IPipelineBehavior<GetOrderSummariesQuery, CursorPage<OrderSummaryDto>>>()
+            .GetServices<IPipelineBehavior<GetDeliveryAddressQuery, DeliveryAddressView?>>()
             .Select(b => b.GetType().GetGenericTypeDefinition())
     ];
 
-    // A query opening a transaction is the defect this catches: harmless in
-    // a test, and a held connection per read under load.
     actual.ShouldBe(
         [
             typeof(LoggingBehavior<,>),
             typeof(ValidationBehavior<,>)
         ],
-        "queries get logging and validation only — §6.3");
+        "queries get logging and validation only (§6.3)");
 }
 ```
 
