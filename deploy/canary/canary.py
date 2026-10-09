@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-"""§15.5's weight arithmetic and verdict, and a gate over canary.json.
+"""§15.5's weight arithmetic and verdict, and a gate over canary.json (README).
 
-Stdlib only. The arithmetic and verdict are pure; the gate and templates read
-the repository, and the README says what is asserted and what is not.
-
-    py -3.12 deploy/canary/canary.py check
-    py -3.12 deploy/canary/canary.py plan --workload catalog-api --stable 19 --step 0
-    py -3.12 deploy/canary/canary.py analyse --workload catalog-api --readings readings.json
+Usage: py -3.12 deploy/canary/canary.py check | plan | analyse
 """
 
 from __future__ import annotations
@@ -25,21 +20,16 @@ PLAN_PATH = CANARY / "canary.json"
 # One descriptor per deployable, named for its release (README owns the schema).
 DEPLOYABLES = CANARY / "deployables"
 
-# EVERY PATH OUTSIDE deploy/canary THAT THIS SCRIPT READS, declared once.
-#
-# `deploy/helm/smoke.sh` lost count of its own inventory three times and ended
-# it by declaring the list beside the reads and asserting the other copy
-# matches; `deploy/observability/check.py` adopted that before paying for it
-# once. This is the third tree to do it, and check 6 is the assertion.
+# Every path outside deploy/canary that this script reads, declared once;
+# check 6 asserts the reads and this list agree, as deploy/helm/smoke.sh and
+# deploy/observability/check.py do for their own inventories.
 SOURCE_INPUTS = [
     "src",
     "deploy/helm",
-    # Checks 3 and 5 both read platform-alerts.yaml — one to take §13.6's
-    # thresholds out of it rather than restate them, the other to establish
-    # that a series the query templates read is one a loaded alert reads.
-    # Retuning ErrorRateService without this entry is a green pull request:
-    # observability.yml runs check.py, which does not compare canary
-    # thresholds, and the canary gate never runs.
+    # Checks 3 and 5 both read platform-alerts.yaml: one to take §13.6's
+    # thresholds from it, the other to match the series the queries read.
+    # Without this entry a retuned ErrorRateService is a green pull request,
+    # because observability.yml's check.py does not compare canary thresholds.
     "deploy/observability",
     # Check 5 holds the MassTransit pin to the version its series were read from.
     "Directory.Packages.props",
@@ -60,9 +50,8 @@ INSTALLED_FLAG = "--installed-source"
 def _argument(flag: str, variable: str) -> str:
     """The whole argument check 12 looks for, spelled once.
 
-    Whole, because a flag and a name found anywhere on the line are also
-    found in `--source "$OLD_IMAGE_SOURCE"`, which passes a different tree
-    and would leave the check green while the binding was gone.
+    Whole, because a flag and a name found anywhere on the line also match
+    `--source "$OLD_IMAGE_SOURCE"`, which passes a different tree.
     """
     return f'{flag} "${variable}"'
 
@@ -87,11 +76,8 @@ class PlanError(Exception):
 def entries(mapping: dict) -> dict:
     """A JSON object's real keys, with the `$comment` ones dropped.
 
-    JSON has no comments and this plan needs them: every number in it is a
-    decision somebody has to be able to re-take. `$comment` is the convention
-    the tooling around JSON Schema already uses, and it is filtered HERE rather
-    than at each call site because forgetting it once turns a comment into a
-    workload with no service name.
+    JSON has no comments, so the plan carries `$comment` keys; filtering them
+    here keeps a call site from reading one as a workload.
     """
     return {key: value for key, value in mapping.items() if not key.startswith("$")}
 
@@ -193,10 +179,8 @@ IMAGE_REVISION = re.compile(r"^[0-9a-f]{40}$")
 def image_revision(tag: str) -> str:
     """The commit an image tag names, or a refusal.
 
-    Full length and lower case, because the answer is resolved against this
-    repository's history and then printed. An abbreviation resolves too, and
-    the rollout would report a revision spelled differently from the tag it
-    deployed -- which is the confusion ADR-050 exists to remove.
+    Full length and lower case, because an abbreviation resolves too and the
+    rollout would report a revision spelled unlike the tag (ADR-050).
     """
     if not IMAGE_REVISION.fullmatch(tag):
         raise PlanError(
@@ -212,11 +196,8 @@ def image_revision(tag: str) -> str:
 def installed_tag(values: dict) -> str:
     """The image tag the running release was installed with.
 
-    `helm get values --all` is the only place the revision behind the stable
-    track's probe routes can be read, because that track serves whatever it
-    was installed with and no input names it. Every chart requires the tag
-    (§15.3), so a release without one is one this rollout cannot reason
-    about rather than a default to fall back on.
+    `helm get values --all` is the only place to read the revision behind the
+    stable track's probe routes; every chart requires the tag (§15.3).
     """
     tag = values.get("image", {}).get("tag")
     if not isinstance(tag, str) or not tag.strip():
@@ -230,9 +211,8 @@ def installed_tag(values: dict) -> str:
 def _ceil_div(numerator: int, denominator: int) -> int:
     """Integer ceiling division, because `math.ceil` on a float lies here.
 
-    Every quantity in the weight arithmetic is a count of pods or a whole
-    percentage, so the exact answer is available and the float route is not
-    merely imprecise — it is wrong at the input the ladder starts from.
+    The weight arithmetic counts pods and whole percentages, and the float
+    route is wrong at the ladder's first input.
     """
     return -(-numerator // denominator)
 
@@ -240,16 +220,8 @@ def _ceil_div(numerator: int, denominator: int) -> int:
 def required_stable(weight_percent: int, overshoot_points: int) -> int:
     """The smallest stable replica count at which a weight is expressible.
 
-    One canary pod is the smallest canary there is, so it serves
-    `1 / (stable + 1)` of the traffic and that fraction is the finest weight
-    the mechanism has. Inverting it gives the stable count a requested weight
-    needs — 19 for §15.5's 5%, which is why the ladder's first rung is a
-    scale-up and not a no-op.
-
-    Separate from `plan` and used by it, so the number in the refusal and the
-    number the workflow scales to are the same number. Two derivations of one
-    figure is how a message ends up naming a count that does not satisfy the
-    check that printed it.
+    One canary pod serves `1 / (stable + 1)` of the traffic; inverting that
+    gives 19 for §15.5's 5%. Shared with `plan` so both name one number.
     """
     if weight_percent >= 100:
         return 1
@@ -280,20 +252,11 @@ def plan(weight_percent: int, stable_replicas: int, overshoot_points: int) -> di
             "final": True,
         }
 
-    # INTEGER ARITHMETIC THROUGHOUT, and that is a correction rather than a
-    # preference. Written with floats this read
-    # `ceil(stable * f / (1 - f))`, and at the one input the whole ladder
-    # starts from — 5% against 19 replicas — `19 * 0.05 / 0.95` evaluates to
-    # 1.0000000000000002, so `ceil` returned two pods and the step served 9.5%
-    # instead of 5%. `required_stable` and `plan` then disagreed about the same
-    # number: one named 19 as the count that works and the other refused it.
-    # Found by the test asserting those two agree.
-    #
+    # Integer arithmetic, because floats give `19 * 0.05 / 0.95` as
+    # 1.0000000000000002 and `ceil` then returns two pods for 5%.
     #   canary / (stable + canary) <= weight / 100
     #     <=> canary * (100 - weight) <= weight * stable
-    #
-    # Floor, then a minimum of one pod: the largest canary that stays within
-    # the ceiling, or the smallest canary there is when none does.
+    # Floor, then at least one pod: the largest canary within the ceiling.
     canary = max(1, (weight_percent * stable_replicas) // (100 - weight_percent))
     achieved = 100 * canary / (stable_replicas + canary)
 
@@ -548,32 +511,18 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     #    side.
     failures += _thresholds_match_alerts(thresholds, root)
 
-    # 4. Each workload's service_name is a real host assembly.
-    #
-    #    §13.2 sets the resource's service.name from
-    #    `builder.Environment.ApplicationName`, which defaults to the ENTRY
-    #    ASSEMBLY name — so the edge emits `Gateway.Api` and the chart's
-    #    `workload.name` (`gateway`) never reaches the label.
-    #    platform-alerts.yaml carries a nine-line comment about getting this
-    #    exact substitution wrong, where the misspelling matched no series and
-    #    the alert was silent. The same misspelling here promotes every canary,
-    #    because a query that matches nothing returns nothing and an absent
-    #    series is the rollback above — so it fails safe and never promotes,
-    #    which is a rollout that can only ever roll back.
+    # 4. Each workload's service_name is a real host assembly: §13.2 takes
+    #    service.name from the entry assembly (`Gateway.Api`, not the chart's
+    #    workload.name), and a misspelling matches no series, which rolls back.
     hosts = _host_assemblies(root)
     if not workloads:
         failures.append("workloads is empty: the rollout has nothing to deploy")
     for name, entry in sorted(workloads.items()):
         # 4a. The key is a Helm release name, and two shells read it as one.
-        #     `deploy.yml` passes it to `helm upgrade` and `realm.yml`'s
-        #     scheduled job reads it off `workloads` one line at a time, then
-        #     uses it as a file name under RUNNER_TEMP. A key with a space, a
-        #     glob character or a slash would be two releases, an expansion
-        #     against the checkout, or a path — so the key is held to the
-        #     alphabet Helm holds a release to, here, before either job sees it.
-        #     `fullmatch`, as `validate_tag` already uses: `match` with a `$`
-        #     anchor accepts a key ending in a newline, which the line-oriented
-        #     `workloads` output would emit as an extra, empty release.
+        #     `deploy.yml` passes it to `helm upgrade` and `realm.yml` uses it
+        #     as a file name, so a space, glob character or slash is held out
+        #     here. `fullmatch`, as `validate_tag` does: `$` accepts a key
+        #     ending in a newline, an extra empty release in `workloads`.
         if not RELEASE_NAME.fullmatch(name):
             failures.append(
                 f"workloads.{name!r} is not a Helm release name: lower-case "
@@ -609,10 +558,8 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
 
     #    The installed release answers for the baseline half of every
     #    comparison, and §13.2 takes service.name from each image's entry
-    #    assembly. An image from before a rename emits the old label, so
-    #    the baseline query matches no series and a healthy release rolls
-    #    back. Refused here, before the HPA floor moves, rather than
-    #    measured as an absence for a whole dwell.
+    #    assembly. An image from before a rename emits the old label, so the
+    #    baseline matches no series; refused here, before the HPA floor moves.
     if installed is not None and workload in trees:
         name = workloads[workload].get("serviceName")
         if name not in _host_assemblies(installed):
@@ -700,11 +647,8 @@ WORKLOAD_AND_TRACK = 'service_name="$SERVICE", deployment_track="$TRACK"'
 def queries(signal: str, source: Path = ROOT) -> dict[str, str]:
     """The three PromQL templates for `signal`, one per role analyse reads.
 
-    Each carries $SERVICE, $TRACK and $WINDOW for read_prometheus to fill.
-    The error rate coalesces its numerator, because a canary with no failures
-    matches no numerator series and PromQL carries the empty vector through
-    the division; the denominator is not, because no traffic is a silence
-    that requests and minimumRequests judge.
+    The error rate's numerator is coalesced, since no failures match no
+    series; its denominator is not, since no traffic is judged elsewhere.
     """
     series = _series_of(signal)
     selector = WORKLOAD_AND_TRACK
@@ -776,8 +720,7 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict,
     """Every workload declares a known signal, and each registration its signal.
 
     A consumer owes consume and a saga owes saga, unless an exemption argues
-    otherwise. An exemption has to be needed: on a workload with nothing to
-    exempt, or beside the signal it exempts, it is a claim nothing rechecks.
+    otherwise; an exemption nothing needs is a claim nothing rechecks.
     """
     failures = []
     for name, workload in sorted(workloads.items()):
@@ -844,11 +787,9 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict,
 
 
 # The MassTransit registration methods a scan can find, singly and in bulk,
-# as MassTransit's own assembly names them at the verified version. A service
-# is a consumer by registering one, and the common consumers live in
-# Common.Infrastructure, so the call is the subject rather than an IConsumer<T>
-# implementation. Sagas and futures, which are state machines, are apart
-# because MassTransit measures them on the saga instruments.
+# as its assembly names them at the verified version. A service is a consumer
+# by registering one, so the call is the subject. Sagas and futures are apart:
+# MassTransit measures them on the saga instruments.
 CONSUMER_METHODS = (
     "AddConsumer", "AddConsumers", "AddConsumersFromNamespaceContaining",
     "AddFutureRequestConsumer",
@@ -917,9 +858,8 @@ CSHARP_TOKEN = re.compile(
 def _code_only(code: str) -> str:
     """C# with its comments and the contents of its literals blanked.
 
-    Every character keeps its offset and every line break stays, so a match
-    in the result gives its line, and a literal argument is read back from
-    the original text at the same offset. Cached, as the scans repeat.
+    Every character keeps its offset and line break, so a match gives its
+    line and a literal is read back from the original at the same offset.
     """
     return CSHARP_TOKEN.sub(lambda token: re.sub(r"[^\n]", " ", token.group(0)), code)
 
@@ -986,9 +926,8 @@ def _health_calls(root: Path) -> tuple[tuple[str | None, str], ...]:
 def probe_exclusion(source: Path = ROOT) -> str:
     """The http_route regex that excludes every probe route the code maps.
 
-    Derived from the routes rather than written, so a new probe route is
-    excluded the day it is mapped. Refused where the scan found none or
-    cannot read one, because a partial exclusion counts probes as traffic.
+    Derived from the routes; refused where none is found or readable, as a
+    partial exclusion counts probes as traffic.
     """
     failures = _probe_routes_are_readable(source)
     if failures:
@@ -1017,10 +956,8 @@ def _probe_routes_are_readable(source: Path) -> list[str]:
 def _thresholds_match_alerts(thresholds: dict, root: Path) -> list[str]:
     """The canary's absolute thresholds against §13.6's loaded rules.
 
-    Read out of the rules file rather than restated, so the two cannot part.
-    The alert expressions end in `> 0.01` and `> 1`; those are the numbers, and
-    if somebody retunes an alert this goes red naming the canary that no longer
-    agrees with it.
+    Read out of the rules file, not restated, so a retuned alert turns this
+    red naming the canary that no longer agrees with it.
     """
     rules = root / "deploy" / "observability" / "alerts" / "platform-alerts.yaml"
     try:
@@ -1051,11 +988,8 @@ def _thresholds_match_alerts(thresholds: dict, root: Path) -> list[str]:
 def _alert_threshold(text: str, alert: str) -> float | None:
     """The comparison at the end of one alert's expression.
 
-    The rules are YAML and this is a regex, for the reason check.py one tree
-    over gives: there is no stdlib YAML parser, and the alternative to matching
-    text is a dependency this gate must not have. The pattern is anchored on
-    the alert's own name and stops at the next `- alert:` or `for:`, so it
-    cannot drift onto a neighbour's number.
+    A regex, not a YAML parser, as in check.py one tree over; anchored on the
+    alert's name and stopping at the next `- alert:` or `for:`.
     """
     block = re.search(
         rf"- alert:\s*{re.escape(alert)}\s*\n(.*?)(?=\n\s*(?:- alert:|for:))",
@@ -1073,10 +1007,8 @@ def _alert_threshold(text: str, alert: str) -> float | None:
 def _host_assemblies(source: Path) -> set[str]:
     """Every project that produces a host, by assembly name.
 
-    A host is a project with a `Program.cs` beside its csproj — which is what
-    `Assembly.GetEntryAssembly()` resolves to at run time and therefore what
-    `ApplicationName` defaults to. Derived rather than listed, so a sixth
-    service's API is a host here the day it exists.
+    A host has a `Program.cs` beside its csproj, which is what
+    `ApplicationName` defaults to at run time; derived, never listed.
     """
     hosts = set()
     for csproj in (source / "src").rglob("*.csproj"):
@@ -1147,10 +1079,8 @@ def exported_series(instrument: str, kind: str, unit: str) -> set[str]:
 def _metrics_are_vouched_for(metrics: list[str], root: Path, source: Path) -> list[str]:
     """Every series in `metrics`, against what vouches for it.
 
-    A metric a loaded alert reads is matched on its instrument, because an
-    alert may read `_count` where a query reads `_bucket` off one histogram.
-    Any other must be an exact entry in EXPORTED_SERIES, of a meter Common.Web
-    registers.
+    A series a loaded alert reads is matched on its instrument; any other
+    must be an exact EXPORTED_SERIES entry, of a meter Common.Web registers.
     """
     rules = root / "deploy" / "observability" / "alerts" / "platform-alerts.yaml"
     registration = source / "src" / "BuildingBlocks" / "Common.Web" / "ObservabilityExtensions.cs"
@@ -1239,17 +1169,10 @@ def _workflow_covers_inputs() -> list[str]:
     failures = []
     for index, block in enumerate(blocks):
         patterns = re.findall(r"-\s*'([^']+)'", block)
-        # THE WORKFLOW'S OWN PATH AND THIS GATE'S OWN TREE ARE BOTH REQUIRED,
-        # and each was missing in turn. Without the workflow, removing it from
-        # both trigger lists means a change to those very lists no longer runs
-        # the gate validating them. Without `deploy/canary`, removing THAT
-        # means an edit to `canary.py`, `canary.json` or the suite does not run
-        # the gate either — the tree that holds the thing being checked, gone
-        # from the triggers, with the check still green.
-        #
-        # `check.py` has required both since it was written
-        # (`SOURCE_INPUTS + ["deploy/observability", WORKFLOW_PATH]`); this
-        # copy inherited the pattern one piece at a time.
+        # The workflow's own path and this gate's own tree are both required:
+        # without the first, a change to the trigger lists runs no gate that
+        # validates them; without `deploy/canary`, an edit to canary.py,
+        # canary.json or the suite runs none either.
         for entry in SOURCE_INPUTS + ["deploy/canary", WORKFLOW_PATH]:
             if not any(p == entry or p == f"{entry}/**" for p in patterns):
                 failures.append(
@@ -1562,9 +1485,8 @@ RESOLVES_TAG = re.compile(
 def _resolved_above(live: list[str], index: int) -> bool:
     """Whether the nearest REVISION= above `index` came from the tag.
 
-    The nearest one, because each archive runs in its own step and takes
-    the value that step set: an archive of the right variable, assigned
-    from the wrong thing, is the same tree by a longer route.
+    The nearest, because each archive runs in its own step and takes the
+    value that step set.
     """
     for line in reversed(live[:index]):
         if ASSIGNS_REVISION.search(line):
@@ -1597,10 +1519,8 @@ def _exported(live: list[str], variable: str) -> str | None:
 def _invocations(lines: list[str], command: str) -> list[str]:
     """Each run of `command` in `lines`, with its continuations joined.
 
-    A workflow spells a long command over several lines ending in a
-    backslash, so the arguments that matter are not on the line the command
-    is named on. Joining is what lets the check below ask about a whole
-    invocation rather than about a line.
+    A workflow spells a long command over backslash-continued lines, so the
+    check below can ask about a whole invocation rather than a line.
     """
     found = []
     for index, line in enumerate(lines):
@@ -1618,12 +1538,8 @@ def _invocations(lines: list[str], command: str) -> list[str]:
 def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
     """The rollout hands each image's tree to everything that reads `src/`.
 
-    ADR-050's binding is a path exported per image and an argument carrying
-    it to each reader. Drop any one and the defect returns in silence: the
-    commands still run, this gate still passes, and the facts that piece
-    covered are the checkout's again. So the subject here is the workflow
-    text rather than a verdict, because an argument that went missing is
-    not observable from one.
+    ADR-050 binds a path exported per image to an argument carrying it to
+    each reader; a dropped one changes no exit code, so the text is checked.
     """
     try:
         text = workflow.read_text(encoding="utf-8")
