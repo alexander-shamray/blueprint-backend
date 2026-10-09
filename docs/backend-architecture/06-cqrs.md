@@ -1044,6 +1044,9 @@ Queries bypass the domain model entirely. There is no benefit to loading an
 aggregate, enforcing its invariants, and mapping it to a DTO in order to display
 a list.
 
+The query below is specified and not built, as §6.6's callout says of its
+escalation: Ordering's one query in `src/` is `GetDeliveryAddressQuery`.
+
 ```csharp
 namespace Ordering.Application.Orders.GetOrderSummaries;
 
@@ -1241,7 +1244,8 @@ is an N+1 over the network.
 > `OrderSummaryProjection` keeps `ordering.OrderSummaries` from the five
 > lifecycle events, is §13.3's `OrderMetrics`' only call site, and gives
 > Ordering's `projection.lag` its first writer. `ordering.Products`, its
-> `ProductPublished` handler and the escalated history query are not built:
+> `ProductPublished` handler and the history query at either level, §6.5's
+> and the escalated one below, are not built:
 > the screen they serve is the BFF's. ADR-051 takes one screen, not the
 > progression this section exists to demonstrate.
 
@@ -1252,7 +1256,7 @@ the upsert below consults and nothing reads:
 
 | Table | Fed by | Read by |
 |---|---|---|
-| `ordering.OrderSummaries` | Ordering's five lifecycle events on the local lane — `OrderPlacedDomainEvent`, `OrderStockConfirmedDomainEvent`, `OrderConfirmedDomainEvent`, `OrderShippedDomainEvent`, `OrderCancelledDomainEvent` | The escalated history query, below — **not** §6.5's, which stays at level 1 |
+| `ordering.OrderSummaries` | Ordering's five lifecycle events on the local lane — `OrderPlacedDomainEvent`, `OrderStockConfirmedDomainEvent`, `OrderConfirmedDomainEvent`, `OrderShippedDomainEvent`, `OrderCancelledDomainEvent` | The escalated history query, below, which replaces §6.5's |
 | `ordering.Products` | Catalog's `ProductPublished` from the broker | The same query, to resolve the ids a summary stores |
 | `ordering.ProductPrices` | Catalog's `PriceChanged`, `ProductPublished`, `ProductDiscontinued` | `IProductPriceReader`, on the **write** path (§6.4) |
 
@@ -1280,7 +1284,7 @@ graph LR
 
 Note the direction of that last edge: `ProductPrices` feeds the **command**
 side. It is the only read model in this design that a write path depends on,
-which is why the next section treats its staleness as a business question
+which is why §6.4 treats its staleness as a business question
 rather than a display one.
 
 The summary table carries the order's own facts, and an id per line for the
@@ -1540,10 +1544,11 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > silently, with a 422 `order.products_unavailable` and no error in any log. Silently is the
 > word that matters: a rule rejection is a *correct* answer from a service with
 > no prices, so nothing about it looks like a fault. Two mitigations, both
-> worth having: Catalog republishes its full catalogue on demand (an
-> operational task, not a code path), and the
-> [§13.6](13-observability.md) alert on business volume catches the case where
-> orders stop for a reason no technical metric shows.
+> worth having: Catalog republishing its full catalogue on demand (an
+> operational task, not a code path), which does not exist yet, as the next
+> callout says, and the [§13.6](13-observability.md) alert on business volume,
+> which catches the case where orders stop for a reason no technical metric
+> shows.
 
 > **This projection's rebuild procedure is Catalog's republish, and it does not
 > exist yet — for `ordering.Products` exactly as for `ordering.ProductPrices`.**
@@ -1929,9 +1934,9 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
     // One statement for the whole page rather than one per row. The ids
     // arrive as ONE parameter holding a JSON array, not as an expanded IN
     // list, and the difference is a hard limit rather than a preference: a
-    // page is clamped to 100 orders (§6.5) and PlaceOrder admits 100 items
-    // (§10.5's validator), so an IN list is 10000 parameters at the top of
-    // its range against SQL Server's ceiling of 2100. The clamp bounds the
+    // page is clamped (§6.5) and PlaceOrder admits OrderLimits.MaxLines items
+    // (§6.4's validator), so an IN list is their product in parameters at the
+    // top of its range against SQL Server's ceiling of 2100. The clamp bounds the
     // number of ROWS and multiplies the number of IDS, which is the step that
     // makes "bounded by the same clamp" the wrong reassurance.
     //
@@ -2046,17 +2051,18 @@ row, and it seeks a primary key — so what it adds is a key lookup per distinct
 product.
 
 **What it is not is bounded by the page clamp.** The clamp bounds rows; each
-row carries up to §10.5's hundred items, so the ids multiply to ten thousand at
-the top of the range. That is why they travel as one JSON parameter read
-through `OPENJSON` rather than as an expanded `IN` list, which at that size
-exceeds SQL Server's 2100-parameter limit and fails the request outright.
+row carries up to `OrderLimits.MaxLines` items, the cap §6.4's validator
+enforces, so the ids multiply to the clamp times that cap at the top of the
+range. That is why they travel as one JSON parameter read through `OPENJSON`
+rather than as an expanded `IN` list, which at that size exceeds SQL Server's
+2100-parameter limit and fails the request outright.
 
 The benefit being bought is visible in the shape of both: no `GROUP BY` and no
 cross-service call. What bounds them is **not** the same quantity — the page
-clamp bounds the first, and the first multiplied by §10.5's item limit bounds
-the second, which is the whole reason the ids travel as one parameter. Level 1
-aggregates `OrderLines` on every read and still cannot return a product name at
-any price.
+clamp bounds the first, and the first multiplied by `OrderLimits.MaxLines`
+bounds the second, which is the whole reason the ids travel as one parameter.
+Level 1 aggregates `OrderLines` on every read and still cannot return a product
+name at any price.
 
 The API must now expose the staleness rather than hide it — for example, by
 returning the write-model status on the order detail endpoint (strongly
