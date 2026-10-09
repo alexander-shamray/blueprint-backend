@@ -8,10 +8,11 @@ only Docker and works identically on every operating system and in CI.
 The Compose file is an index and one file per deployable unit, so a service's
 environment is a file that service's PR owns rather than a block in a file
 every service PR edits — [`docs/change-locality.md`](../change-locality.md)'s
-rule applied to the one deployment artefact every service has to touch:
+rule applied to the one deployment artefact every service has to touch. The
+index is `deploy/compose/docker-compose.yml`, and it declares no service of
+its own:
 
 ```yaml
-# deploy/compose/docker-compose.yml
 name: commerce
 
 include:
@@ -42,345 +43,187 @@ Both were measured with `docker compose config` rather than assumed, because a
 bind mount resolving to the wrong directory is a container that starts and
 reads nothing.
 
-What the rest of this section specifies is the model those files make between
-them, which is what Compose reads. It is written here as one document, in
-reading order and with the elisions this chapter has always made, rather than
-as any one file's contents:
+What Compose reads is the model those files make between them, and the rest
+of this section specifies it. Each excerpt below is from the file it names,
+which holds the rest.
+
+`deploy/compose/infrastructure.yml` is the shared baseline: SQL Server, the two
+Redis instances [§8.1](08-caching-redis.md) keeps apart because eviction policy
+cannot be shared, the broker, Keycloak, the OpenTelemetry collector and
+Grafana, with the volumes that outlive a `down`. It pins every image's tag.
+Both Redis instances read `deploy/compose/redis/users.conf`, §8.1's
+per-service ACL users: each service's user reaches its own prefix only, and the
+default user may `PING` and nothing else. The cache evicts `allkeys-lru`; the
+coordination instance runs `noeviction`, because locks and idempotency keys
+must never be evicted, and `appendonly`, so a restart does not silently release
+held locks.
+
+**The broker is built rather than pulled, and it is the one infrastructure
+service that is.** `deploy/compose/rabbitmq/Dockerfile` adds the delayed
+message exchange plugin §9.6's saga timeouts are scheduled through
+([ADR-021](adr/ADR-021-saga-timeouts-are-scheduled-by-the-broker.md)), pinned
+by digest; the base image is an official tag, one line inside it. A broker
+missing the plugin is running and healthy while every saga schedule hangs on a
+declare it refuses, so the healthcheck asks for the plugin as well as the
+broker:
 
 ```yaml
-# the model: deploy/compose/docker-compose.yml, infrastructure.yml
-# and services/*.yml, as one document; each image's tag is elided,
-# because infrastructure.yml pins it and a copy here would go stale
-name: commerce
-
-services:
-  sql:
-    image: mcr.microsoft.com/mssql/server:…
-    environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${SQL_PASSWORD:-Local_Dev_Pa55w0rd!}"
-      MSSQL_PID: Developer
-    # Every mapping in the model publishes on 127.0.0.1 rather than on every
-    # interface — infrastructure.yml's and every unit's alike — argued once
-    # here rather than per service or per file: the credentials
-    # are development defaults, so the interface is what stands in front of
-    # them. The callout below the endpoint table carries the argument.
-    ports: [ "127.0.0.1:1433:1433" ]
-    volumes: [ sql-data:/var/opt/mssql ]
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1'"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  # Two Redis instances, because eviction policy cannot be shared — §8.1.
-  redis-cache:
-    image: redis:…
-    # §8.1's per-service ACL users, as the configuration file both instances
-    # read: each service's user reaches its own prefix only, and the default
-    # user may PING and nothing else.
-    command: redis-server /usr/local/etc/redis/users.conf --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports: [ "127.0.0.1:6379:6379" ]
-    volumes: [ ./redis/users.conf:/usr/local/etc/redis/users.conf:ro ]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-
-  redis-coordination:
-    image: redis:…
-    # noeviction: locks and idempotency keys must never be evicted. The
-    # {service}:denylist: namespace §8.1 reserves beside them has no writer
-    # (ADR-033). Appendonly so a restart does not silently release held locks.
-    command: redis-server /usr/local/etc/redis/users.conf --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
-    ports: [ "127.0.0.1:6380:6379" ]
-    volumes: [ "redis-coordination-data:/data", "./redis/users.conf:/usr/local/etc/redis/users.conf:ro" ]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      retries: 5
-
-  # Built rather than pulled, and the ONE infrastructure service that is.
-  # rabbitmq/Dockerfile adds the delayed message exchange plugin §9.6's saga
-  # timeouts are scheduled through (ADR-021), pinned by digest; the base
-  # image is still an official tag, one line inside it.
-  rabbitmq:
-    build:
-      context: rabbitmq
-    ports: [ "127.0.0.1:5672:5672", "127.0.0.1:15672:15672" ]
-    volumes: [ rabbit-data:/var/lib/rabbitmq ]
-    healthcheck:
-      # check_running answers "is the broker up", which was the whole question
-      # while the image was stock. It is not any more: a broker missing the
-      # plugin is running and healthy while every saga schedule hangs on a
-      # declare it refuses (ADR-021).
-      #
-      # is_enabled, NOT `list -e … | grep`: that spelling matches the pattern
-      # echoed in the command's own banner and passes on a stock broker —
-      # measured. The exit status is the only part that reports the answer.
-      test: ["CMD-SHELL", "rabbitmq-diagnostics check_running && rabbitmq-plugins is_enabled rabbitmq_delayed_message_exchange"]
-      interval: 10s
-      retries: 5
-
-  keycloak:
-    image: quay.io/keycloak/keycloak:…
-    command: start-dev --import-realm
-    environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      # One issuer, whichever host asks. Without it Keycloak derives the issuer
-      # from each request's Host header, so a token minted through
-      # localhost:8080 and a discovery document read through keycloak:8080
-      # disagree — and ValidateIssuer (§11.3) rejects every token obtained the
-      # way this chapter documents. The second variable puts the backchannel
-      # back on the container route, which is the half the services need.
-      KC_HOSTNAME: http://localhost:8080
-      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
-      KC_HEALTH_ENABLED: "true"
-    ports: [ "127.0.0.1:8080:8080" ]
-    volumes: [ ./keycloak/realm-export.json:/opt/keycloak/data/import/realm.json:ro ]
-    # The image has a shell but no HTTP client, so this is a bash TCP
-    # redirection against the management port — the form Keycloak's own
-    # documentation gives. Without a healthcheck `up --wait` returns when the
-    # process launches rather than when the realm is importable, and the first
-    # token request races the import.
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "exec 3<>/dev/tcp/localhost/9000; echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3; cat <&3 | grep -q '\"status\": \"UP\"'"
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 20s
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:…
-    command: [ "--config=/etc/otel/config.yaml" ]
-    volumes: [ ./otel/config.yaml:/etc/otel/config.yaml:ro ]
-    ports: [ "127.0.0.1:4317:4317", "127.0.0.1:4318:4318" ]
-
-  grafana:
-    image: grafana/otel-lgtm:…
-    # The bundled Prometheus takes no rule-file flag or variable, so its own
-    # config gains the rule_files key at start instead of being copied here;
-    # the guard keeps a restart from appending it twice. Only the loaded file
-    # is named, because awaiting-signal.yaml's rules cannot fire (§13.6).
-    command:
-      - bash
-      - -c
-      - >-
-        rm -f /tmp/ready;
-        grep -q '^rule_files:' prometheus.yaml
-        || echo 'rule_files: [ /etc/prometheus/rules/platform-alerts.yaml ]' >> prometheus.yaml;
-        exec ./run-all.sh
-    # run-all.sh touches /tmp/ready once every component is up; the command
-    # removes it first, so a restart is not read healthy from the last run.
-    healthcheck:
-      test: ["CMD-SHELL", "test -f /tmp/ready"]
-      interval: 5s
-      retries: 30
-      start_period: 30s
-    ports: [ "127.0.0.1:3000:3000" ]
-    volumes:
-      - ../observability/alerts/platform-alerts.yaml:/etc/prometheus/rules/platform-alerts.yaml:ro
-      - ../observability/dashboards:/etc/platform/dashboards:ro
-      - ./grafana/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/platform.yaml:ro
-
-  # ---- Application services ----
-
-  ordering-migrator:
-    build:
-      context: ../../..
-      dockerfile: src/Services/Ordering/Ordering.Migrator/Dockerfile
-    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
-    read_only: true
-    tmpfs: [ /tmp ]
-    environment:
-      # Migrator identity (DDL) — §7.1. Locally both keys resolve to the one
-      # sa login (§14.2's stated simplification); in production they are
-      # separate secrets on separate workloads. The default is inline, nesting
-      # the password's own default, because .env.example promises every
-      # variable a working default — bare ${…} interpolates to an empty
-      # string on a clean checkout, which config -q accepts and the first
-      # query does not.
-      ConnectionStrings__OrderingMigrator: "${ORDERING_MIGRATOR_CONNECTION:-Server=sql;Database=Ordering;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
-      # The job host reads DOTNET_ENVIRONMENT and defaults to Production, where
-      # ADR-079 refuses this string's TrustServerCertificate=True.
-      DOTNET_ENVIRONMENT: Development
-    depends_on:
-      sql: { condition: service_healthy }
-    restart: "no"
-
-  ordering-api:
-    build:
-      context: ../../..
-      dockerfile: src/Services/Ordering/Ordering.Api/Dockerfile
-    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
-    read_only: true
-    tmpfs: [ /tmp ]
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      # Runtime identity (DML only) — never the migrator connection.
-      ConnectionStrings__Ordering: "${ORDERING_CONNECTION:-Server=sql;Database=Ordering;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
-      ConnectionStrings__RabbitMq: "amqp://ordering-svc:local-dev-ordering@rabbitmq:5672"
-      # The authority, to validate inbound tokens (§11.2). No Identity__Client__*:
-      # Ordering calls no peer synchronously — prices come from a local
-      # projection (§6.4) and the rest goes over the broker. §15.4 says which
-      # hosts hold client credentials (§11.5, ADR-052).
-      Identity__Authority: "http://keycloak:8080/realms/commerce"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-      # §8.1's two connections, joined on the rule that brought every line
-      # above: an environment variable nothing reads is the container form of
-      # an unused registration, so each waits for the PR whose code first reads
-      # it. §8.5's IdempotencyBehavior is that PR — it claims a
-      # {service}:idem: key before any protected command runs. §8.4's cache
-      # invalidation was the expected trigger and was not the one that came.
-      #
-      # BOTH, though only the coordination one is read: AddRedisConnections is
-      # a single call by design (§8.2) and reads both eagerly, so a host given
-      # one key throws naming the other.
-      #
-      # 6379 on both — the host-side ports differ (6379/6380), the
-      # container-side ports do not.
-      ConnectionStrings__RedisCache: "redis-cache:6379,user=ordering-svc,password=local-dev-ordering"
-      ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=ordering-svc,password=local-dev-ordering"
-    ports: [ "127.0.0.1:5101:8080" ]
-    # §13.5's readiness, asked by the host itself through HealthProbe, because
-    # the image has no shell or HTTP client. Every application unit has one.
-    healthcheck:
-      test: [ "CMD", "dotnet", "Ordering.Api.dll", "--probe" ]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 30s
-    depends_on:
-      ordering-migrator: { condition: service_completed_successfully }
-      rabbitmq:          { condition: service_healthy }
-      # service_healthy, not service_started: AbortOnConnectFail is false
-      # (§8.1's "degrade, don't die"), so the host would start against a Redis
-      # still booting and the first protected command would fail on a claim
-      # instead — a symptom nothing connects to a container that was not ready.
-      redis-cache:        { condition: service_healthy }
-      redis-coordination: { condition: service_healthy }
-      # service_healthy since keycloak declares a healthcheck. The API does
-      # not need it: JwtBearer fetches the discovery document lazily.
-      keycloak:          { condition: service_healthy }
-
-  # catalog-api, inventory-api, payments-api, shipping-worker and
-  # notifications-worker follow the same shape — and "the same shape" is a
-  # PAIR: a {service}-migrator one-shot plus the service itself gated on
-  # `condition: service_completed_successfully`. Every service owns a database
-  # and none may migrate at startup (§4.1, ADR-007), so a service added here
-  # without its migrator starts against an empty schema.
-
-  gateway:
-    build:
-      context: ../../..
-      dockerfile: src/Gateway/Gateway.Api/Dockerfile
-    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
-    read_only: true
-    tmpfs: [ /tmp ]
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      # The authority, because the gateway validates JWTs like every other host
-      # (§11.2). NOT Identity__Client__* — those are for calling other services
-      # (§11.5), and the gateway calls nobody: YARP forwards the caller's token.
-      Identity__Authority: "http://keycloak:8080/realms/commerce"
-      # Locally the gateway IS the edge: nothing forwards, RemoteIpAddress is
-      # already the client, and trusting X-Forwarded-For would let any caller
-      # pick its own rate-limit bucket. In Kubernetes this is true (§15.3).
-      Ingress__Enabled: "false"
-      # Browsers hit the gateway directly in dev. The SPA's dev origin is
-      # 5173 (Vite's default): 3000 belongs to Grafana, in infrastructure.yml.
-      Cors__Enabled: "true"
-      Cors__Origins__0: "http://localhost:5173"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-    ports: [ "127.0.0.1:5000:8080" ]
-    depends_on:
-      keycloak: { condition: service_healthy }
-      # Every destination that exists, and only those — a Compose dependency
-      # on a service Compose cannot see fails the whole `up`, where a route to
-      # one costs nothing at startup. So a name joins this list with the PR
-      # that builds its service.
-      catalog-api: { condition: service_started }
-      inventory-api: { condition: service_started }
-      ordering-api: { condition: service_started }
-      payments-api: { condition: service_started }
-      web-bff: { condition: service_started }
-
-  # §14.1's pair rule for ADR-051's projection: the migrator one-shot the
-  # host gates on.
-  bff-migrator:
-    build:
-      context: ../../..
-      dockerfile: src/BFF/Web.Bff.Migrator/Dockerfile
-    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
-    read_only: true
-    tmpfs: [ /tmp ]
-    environment:
-      ConnectionStrings__BffMigrator: "${BFF_MIGRATOR_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
-      # The job host reads DOTNET_ENVIRONMENT and defaults to Production, where
-      # ADR-079 refuses this string's TrustServerCertificate=True.
-      DOTNET_ENVIRONMENT: Development
-    depends_on:
-      sql: { condition: service_healthy }
-    restart: "no"
-
-  # Client credentials, because this host calls a peer synchronously (§9.7);
-  # §15.4 says which other hosts do (ADR-052). Named web-bff, matching the
-  # Aspire resource (§14.2) and the YARP destination (§10.2) — the gateway
-  # resolves the destination by hostname, so the container name is the routing
-  # configuration.
-  web-bff:
-    build:
-      context: ../../..
-      dockerfile: src/BFF/Web.Bff/Dockerfile
-    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
-    read_only: true
-    tmpfs: [ /tmp ]
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__Bff: "${BFF_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
-      ConnectionStrings__RabbitMq: "amqp://bff-svc:local-dev-bff@rabbitmq:5672"
-      Identity__Authority: "http://keycloak:8080/realms/commerce"
-      # Required by ValidateOnStart (§15.4) — this host refuses to boot
-      # without them. Local values only; production mounts a secret.
-      Identity__Client__ClientId: "web-bff"
-      Identity__Client__ClientSecret: "${BFF_CLIENT_SECRET:-local-dev-secret}"
-      Identity__Client__Scope: "commerce-api"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-    ports: [ "127.0.0.1:5200:8080" ]
-    depends_on:
-      bff-migrator: { condition: service_completed_successfully }
-      rabbitmq: { condition: service_healthy }
-      keycloak: { condition: service_healthy }
-      # No catalog-api: the pricing hop is made per request and kept out of
-      # readiness (§13.5), and Catalog's seed waits on this host instead (§14.3).
-
-volumes:
-  sql-data:
-  redis-coordination-data:
-  rabbit-data:
+rabbitmq:
+  build:
+    context: rabbitmq
+  ports: [ "127.0.0.1:5672:5672", "127.0.0.1:15672:15672" ]
+  volumes: [ rabbit-data:/var/lib/rabbitmq ]
+  healthcheck:
+    test: ["CMD-SHELL", "rabbitmq-diagnostics check_running && rabbitmq-plugins is_enabled rabbitmq_delayed_message_exchange"]
+    interval: 10s
+    retries: 5
 ```
 
-The model is delivered in [Appendix C](appendix-c-delivery-plan.md)'s order
-rather than at once. PR-06 ships the seven infrastructure services above;
-each application block lands with the PR that builds its image — the
-scaffold of [§4.5](04-solution-structure.md) writes the service's own unit
-file and the one line that includes it, along with both `infra-only`
-exclusions below and its `.env.example` variables. The
-`docker-compose.infra-only.yml` override below arrives with the first
-containerised service, there being nothing to exclude before it.
+`is_enabled` reports its answer in its exit status, and that is the only part
+of the command that does. `rabbitmq-plugins list -e` piped to `grep` matches
+the pattern the command echoes in its own banner, and passes on a stock broker.
 
-The realm file shipped as a placeholder — realm name and `enabled` only —
-from PR-06 until PR-16 replaced it with a full Keycloak export: the
-`commerce-api` client scope with its audience and permission mappers, the
-`commerce-api` client holding the permission vocabulary as client roles, a
-browser client, and two development logins. **A full export rather than a
-readable summary, and [§11.5](11-identity-authorization.md) argues why** —
-Keycloak treats a `clientScopes` array as the complete set, so a trimmed file
-silently drops the built-in scopes and with them `sub`.
+**Keycloak has one issuer, whichever host asks.** Without `KC_HOSTNAME` it
+derives the issuer from each request's `Host` header, so a token minted through
+`localhost:8080` and a discovery document read through `keycloak:8080`
+disagree — and `ValidateIssuer` ([§11.3](11-identity-authorization.md)) rejects
+every token obtained the way this chapter documents. The second variable puts
+the backchannel back on the container route, which is the half the services
+need:
+
+```yaml
+keycloak:
+  command: start-dev --import-realm
+  environment:
+    KC_BOOTSTRAP_ADMIN_USERNAME: admin
+    KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    KC_HOSTNAME: http://localhost:8080
+    KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    KC_HEALTH_ENABLED: "true"
+```
+
+`KC_HEALTH_ENABLED` turns on `/health/ready`, on the management port, and the
+healthcheck reads it through a bash TCP redirection: the image has a shell but
+no HTTP client, and that is the form Keycloak's own documentation gives.
+Without a healthcheck `up --wait` returns when the process launches rather
+than when the realm is importable, and the first token request races the
+import.
+
+**The pair rule: every service's unit is a pair**, a `{service}-migrator`
+one-shot and the service itself, gated on
+`condition: service_completed_successfully`. Every service owns a database and
+none may migrate at startup ([§4.1](04-solution-structure.md),
+[ADR-007](adr/ADR-007-migrations-as-a-pre-deploy-job.md)), so a service added
+without its migrator starts against an empty schema.
+`deploy/compose/services/ordering.yml` shows the pair; every other service's
+unit keeps it, beside whatever else that service needs:
+
+```yaml
+ordering-migrator:
+  build:
+    context: ../../..
+    dockerfile: src/Services/Ordering/Ordering.Migrator/Dockerfile
+  read_only: true
+  tmpfs: [ /tmp ]
+  environment:
+    ConnectionStrings__OrderingMigrator: "${ORDERING_MIGRATOR_CONNECTION:-Server=sql;Database=Ordering;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+    DOTNET_ENVIRONMENT: Development
+  depends_on:
+    sql: { condition: service_healthy }
+  restart: "no"
+
+ordering-api:
+  build:
+    context: ../../..
+    dockerfile: src/Services/Ordering/Ordering.Api/Dockerfile
+  read_only: true
+  tmpfs: [ /tmp ]
+  environment:
+    ASPNETCORE_ENVIRONMENT: Development
+    ConnectionStrings__Ordering: "${ORDERING_CONNECTION:-Server=sql;Database=Ordering;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+    ConnectionStrings__RabbitMq: "amqp://ordering-svc:local-dev-ordering@rabbitmq:5672"
+    Identity__Authority: "http://keycloak:8080/realms/commerce"
+    ConnectionStrings__RedisCache: "redis-cache:6379,user=ordering-svc,password=local-dev-ordering"
+    ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=ordering-svc,password=local-dev-ordering"
+  ports: [ "127.0.0.1:5101:8080" ]
+  healthcheck:
+    test: [ "CMD", "dotnet", "Ordering.Api.dll", "--probe" ]
+  depends_on:
+    ordering-migrator: { condition: service_completed_successfully }
+    rabbitmq: { condition: service_healthy }
+    keycloak: { condition: service_healthy }
+    redis-cache: { condition: service_healthy }
+    redis-coordination: { condition: service_healthy }
+```
+
+Every application container runs read-only, with a tmpfs at `/tmp`, as the
+chart's pods do
+([ADR-082](adr/ADR-082-every-pod-meets-pod-security-restricted-with-a-read-only-root-filesystem.md)),
+so the Compose workflow's `up --wait` proves the images run that way.
+
+The migrator reads §7.1's migrator key, which may issue DDL, and the API reads
+the runtime key and never the migrator's. Locally both resolve to the one `sa`
+login (§14.2's stated simplification); in production they are separate secrets
+on separate workloads. Each default is inline, nesting the password's own
+default, because `.env.example` promises every variable a working default: a
+bare `${…}` interpolates to an empty string on a clean checkout, which
+`config -q` accepts and the first query does not. The migrator sets
+`DOTNET_ENVIRONMENT` because the job host reads it and defaults to
+`Production`, where
+[ADR-079](adr/ADR-079-outside-development-an-infrastructure-connection-is-encrypted-unless-the-deployer-names-it-plaintext.md)
+refuses the string's `TrustServerCertificate=True`.
+
+The API carries the authority, to validate inbound tokens
+([§11.2](11-identity-authorization.md)), and no `Identity__Client__*`: Ordering
+calls no peer synchronously — prices come from a local projection (§6.4) and
+the rest goes over the broker. [§15.4](15-cicd-deployment.md) says which hosts
+hold client credentials (§11.5, ADR-052). An environment variable nothing reads
+is the container form of an unused registration, so each joins a unit with the
+change whose code first reads it. The unit carries both Redis connections
+because `AddRedisConnections` is a single call by design (§8.2) and reads both
+eagerly, so a host given one key throws naming the other.
+
+The API waits on both Redis instances with `service_healthy`, not
+`service_started`. `AbortOnConnectFail` is false, so that a Redis outage
+degrades to the database (§8.1); the host would therefore start against a Redis
+still booting, and the first protected command would fail on a claim instead —
+a symptom nothing connects to a container that was not ready. It waits on
+Keycloak with `service_healthy` because Keycloak declares a healthcheck; the
+API does not need it, since JwtBearer fetches the discovery document lazily.
+
+`deploy/compose/services/gateway.yml` has no migrator, because the gateway owns
+no database. It carries the authority, because the gateway validates JWTs like
+every other host (§11.2), and no `Identity__Client__*`, because those are for
+calling other services (§11.5) and the gateway calls nobody: YARP forwards the
+caller's token. `Ingress__Enabled` is `"false"`: locally the gateway is the
+edge, nothing forwards, `RemoteIpAddress` is already the client, and trusting
+`X-Forwarded-For` would let any caller pick its own rate-limit bucket. In
+Kubernetes it is true ([§15.3](15-cicd-deployment.md)). CORS is enabled because
+browsers reach the gateway directly here, and the SPA's development origin is
+5173, Vite's default: 3000 belongs to Grafana, in `infrastructure.yml`.
+
+`deploy/compose/services/web-bff.yml` pairs the BFF with `bff-migrator`, for
+[ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)'s
+projection. The BFF carries client credentials, because it calls a peer
+synchronously ([§9.7](09-messaging.md)); §15.4 says which other hosts do
+(ADR-052). `ValidateOnStart` requires them (§15.4), so the host refuses to boot
+without them; the unit's values are local ones, and production mounts a
+secret. The unit is named `web-bff`, matching the Aspire resource (§14.2) and
+the YARP destination ([§10.2](10-api-gateway.md)): the gateway resolves the
+destination by hostname, so the container name is the routing configuration.
+
+Each application unit lands with the change that builds its image: the
+scaffold of [§4.5](04-solution-structure.md) writes the service's own unit file
+and the one line that includes it, along with both of its `infra-only`
+exclusions below and its `.env.example` variables.
+
+The realm file, `deploy/compose/keycloak/realm-export.json`, is a full Keycloak
+export: it holds the `commerce-api` client scope with its audience and
+permission mappers, the `commerce-api` client holding the permission vocabulary
+as client roles, a browser client, and two development logins. **A full export
+rather than a readable summary, and [§11.5](11-identity-authorization.md)
+argues why** — Keycloak treats a `clientScopes` array as the complete set, so a
+trimmed file silently drops the built-in scopes and with them `sub`.
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d --wait
@@ -411,38 +254,32 @@ that waits on a peer with `service_healthy` waits on that same answer.
 
 The realm's own logins are `demo/demo`, which holds every permission a shipped
 endpoint requires — `deploy/compose/README.md` carries the current list rather
-than this sentence, because a subset named here goes stale with each service
-and did exactly that when Ordering landed — and `browser/browser`, which holds
-nothing and is the account a refusal is proved against. `orders:admin` is
-grantable and held by neither, deliberately: it overrides §11.4's ownership
-check, which stays demonstrable only while no shipped login can bypass it. Both are development defaults on the same terms as the three above —
-the deliberate local-development exception to §11.6, which every deployed
-environment replaces with real users out of a directory.
+than this sentence, because a subset named here goes stale with each service —
+and `browser/browser`, which holds nothing and is the account a refusal is
+proved against. `orders:admin` is grantable and held by neither, deliberately:
+it overrides §11.4's ownership check, which stays demonstrable only while no
+shipped login can bypass it. Both are development defaults on the same terms as
+the credentials the callout above names — the deliberate local-development
+exception to §11.6, which every deployed environment replaces with real users
+out of a directory.
 
-`deploy/compose/README.md` is the keyboard inventory of what runs today —
-every port and credential of the seven infrastructure services, beside the
-file it describes. The table above is the finished platform's surface, and its
-Gateway row arrived with the gateway's image
-([Appendix C](appendix-c-delivery-plan.md), PR-17); the Keycloak, RabbitMQ and
-Grafana rows have been true since PR-06. The two mail rows arrived with
-Notifications' relay.
+`deploy/compose/README.md` is the keyboard inventory of what runs — every port
+and credential of the seven infrastructure services, beside the file it
+describes, and the command that lists what each application unit publishes.
 
-The gateway's own block takes no `depends_on` on a service it routes to except
+The gateway's own unit takes no `depends_on` on a service it routes to except
 the ones that exist — Compose rejects a dependency it cannot see, and one
 undefined name fails the whole `up` rather than one service. Its *routes* are
 under no such constraint and [§10.2](10-api-gateway.md) ships all four, so
-a path answers 502 until its service lands. A route is configuration the
-gateway reads; a `depends_on` is a name Compose has to resolve. Which
+a path answers 502 while its service is not running. A route is configuration
+the gateway reads; a `depends_on` is a name Compose has to resolve. Which
 destinations Compose can see is the `include` list in
-`deploy/compose/docker-compose.yml`, the owner of that fact.
+`deploy/compose/docker-compose.yml`, the owner of that fact, and the
+`depends_on` list in `deploy/compose/services/gateway.yml` owns which of them
+the gateway waits on: a destination joins it with the change that builds its
+service.
 
-**The fence above and the shipped file gate on the same services**: the
-`depends_on` list in `deploy/compose/services/gateway.yml` is the owner of
-which, and the fence is its sample. Read the fence for the shape of a block;
-a destination still joins the dependency list with the change that builds
-it, so the two would diverge again at the next service.
-
-**The BFF's block takes no `depends_on` on `catalog-api`, though it calls it.**
+**The BFF's unit takes no `depends_on` on `catalog-api`, though it calls it.**
 Its pricing hop is made per request and is outside its readiness set (§13.5),
 and §14.3's start order runs the dependency the other way. The hop is over
 `catalog-api:8081` — a second, HTTP/2-only Kestrel endpoint, because a
@@ -464,12 +301,15 @@ the host refuses either anywhere else ([§15.4](15-cicd-deployment.md)). The
 image's tag is the unit file's, and the suite starts the same one, so the
 sink a person watches is the sink the tests read.
 
-The collector's mounted configuration is the smallest correct pipeline —
-OTLP in on both protocols, a batch processor, OTLP out to the LGTM
-container, which ingests OTLP directly:
+The collector's mounted configuration, `deploy/compose/otel/config.yaml`, is
+the smallest correct pipeline — OTLP in on both protocols, a batch processor,
+OTLP out to the LGTM container, which ingests OTLP directly. Every unit points
+its hosts at it with
+`OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"`. Its receivers and
+its exporter, with the processors between them and the pipelines after them in
+the file:
 
 ```yaml
-# deploy/compose/otel/config.yaml
 receivers:
   otlp:
     protocols:
@@ -478,33 +318,21 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
-processors:
-  batch:
-
 exporters:
   otlphttp:
     endpoint: http://grafana:4318
-
-service:
-  pipelines:
-    traces:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [otlphttp]
-    metrics:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [otlphttp]
-    logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [otlphttp]
 ```
 
 The LGTM container loads §13.6's loaded rule file into the Prometheus it
 bundles and §13.8's dashboards into Grafana at start, so a rule can be seen
 to fire on this stack; `deploy/observability/README.md` owns which file is
-left out and `deploy/compose/README.md` the read that lists what loaded.
+left out and `deploy/compose/README.md` the read that lists what loaded. The
+bundled Prometheus takes no rule-file flag or variable, so the `grafana`
+service's command in `infrastructure.yml` adds the `rule_files` key to that
+Prometheus's own configuration at start, guarded so a restart does not add it
+twice. Its healthcheck reads the `/tmp/ready` file `run-all.sh` touches once
+every component is up, and the command removes that file first, so a restart
+is not read healthy from the last run.
 
 An override file runs infrastructure in containers while services run on the
 host with a debugger attached — the usual inner-loop compromise:
@@ -517,12 +345,11 @@ dotnet run --project src/Services/Ordering/Ordering.Api
 ```
 
 **A host process reads none of the container `environment:` blocks, so every
-key a service throws without has to be supplied to it.** **Five** do that
-today, each named by the registration that reads it —
-`ConnectionStrings__<Service>` (§7.1's runtime key, `AddSqlServer`),
-`ConnectionStrings__RabbitMq` (§9's bus), `Identity__Authority`
-([§11.3](11-identity-authorization.md), read eagerly by
-`AddJwtAuthentication`), and the two Redis connections
+key a service throws without has to be supplied to it.** **Five** do that, each
+named by the registration that reads it — `ConnectionStrings__<Service>`
+(§7.1's runtime key, `AddSqlServer`), `ConnectionStrings__RabbitMq` (§9's
+bus), `Identity__Authority` ([§11.3](11-identity-authorization.md), read
+eagerly by `AddJwtAuthentication`), and the two Redis connections
 ([§8.1](08-caching-redis.md), read eagerly by `AddRedisConnections`). The
 values differ from the container ones only in the host name and, for the
 second Redis instance, the port — because the compose file publishes each one:
@@ -549,20 +376,14 @@ export Kestrel__Endpoints__Grpc__Url='http://localhost:8082'
 > compose file would point both connections at the cache — the same defect the
 > chart's key guard refuses at render time (§15.3), arriving where nothing
 > checks it.
->
-> **This block said three keys until §8.5's PR gave `AddRedisConnections` its
-> first callers.** It reads both connection strings eagerly and throws naming
-> the missing one, so the `dotnet run` above exited before startup for anyone
-> following the instructions — the failure §14.1's own rule predicts, in the
-> half of the chapter that rule does not cover.
 
 **The key is the service's own**, and the block above is `Ordering.Api`'s
 because that is the host the fence names. `AddOrderingInfrastructure` reads
 `ConnectionStrings:Ordering` and `AddSqlServer` throws without it, so
-exporting Catalog's key here — which this sample did until PR-18 — is a set of
-instructions that cannot start the process it precedes. Running the migrator
-instead takes `ConnectionStrings__OrderingMigrator`, which is §7.1's whole
-point: two keys, one of which may issue DDL.
+exporting Catalog's key here is a set of instructions that cannot start the
+process it precedes. Running the migrator instead takes
+`ConnectionStrings__OrderingMigrator`, which is §7.1's whole point: two keys,
+one of which may issue DDL.
 
 **The environment is the first line and is not decoration.** No project ships a
 `launchSettings.json`, so `dotnet run` is Production unless told otherwise, and
@@ -583,25 +404,26 @@ connection string is a credential in the repository, and a default authority
 baked into configuration is one a deployed host inherits when its own key is
 missing — the failure the eager throw exists to make loud.
 
-The override's whole content is a profile per application service. An override
-cannot delete a service, but profiles gate activation and nothing activates
-this one, so the default `up` skips every service it names — declaratively,
-with no duplicated configuration to drift:
+The override's whole content, in `deploy/compose/docker-compose.infra-only.yml`,
+is a profile per application service. An override cannot delete a service, but
+profiles gate activation and nothing activates this one, so the default `up`
+skips every service it names — declaratively, with no duplicated configuration
+to drift. Ordering's two entries:
 
 ```yaml
-# deploy/compose/docker-compose.infra-only.yml
 services:
   ordering-migrator:
     profiles: [ "excluded" ]
   ordering-api:
     profiles: [ "excluded" ]
-  # ... every unit the index includes joins this list in the same PR that
-  # adds it; an omitted one silently keeps starting. This is the one Compose
-  # file the per-unit split leaves shared, because an override merges over a
-  # resolved model and cannot be divided the way the model is. The §4.5
-  # scaffold writes both halves, which is the reliable way to keep a rule
-  # whose only symptom is a container nobody asked for.
 ```
+
+Every unit the index includes joins this list in the same change that adds it,
+and an omitted one silently keeps starting. This is the one Compose file the
+per-unit split leaves shared, because an override merges over a resolved model
+and cannot be divided the way the model is. The §4.5 scaffold writes both
+halves, which is the reliable way to keep a rule whose only symptom is a
+container nobody asked for.
 
 ## 14.2 Aspire — optional accelerator
 
@@ -636,11 +458,11 @@ var coordination = builder
     .WithDataVolume()       // locks must survive a restart
     .WithPersistence();
 
-// The stock image, and since ADR-021 that is a STATED GAP rather than a
-// parity with §14.1. Ordering's saga schedules through the delayed message
-// exchange, which is a community plugin no official image carries — so this
-// line brings up a broker that takes UseDelayedMessageScheduler, connects,
-// reports healthy, and then hangs on the first saga schedule. §14.1 builds
+// The stock image, which is a STATED GAP rather than a parity with §14.1
+// (ADR-021). Ordering's saga schedules through the delayed message exchange,
+// which is a community plugin no official image carries — so this line brings
+// up a broker that takes UseDelayedMessageScheduler, connects, reports
+// healthy, and then hangs on the first saga schedule. §14.1 builds
 // deploy/compose/rabbitmq for exactly that reason.
 //
 // It is left as the stock call because Aspire is not adopted (ADR-011) and a
@@ -669,9 +491,8 @@ var keycloak = builder
 var authority = ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}/realms/commerce");
 
 // Every host validates JWTs (§11.2), so every host needs the authority.
-// Applied by one helper rather than repeated per resource — the previous
-// version configured ordering-api and left catalog and the gateway with a null
-// authority, which fails only at first request.
+// Applied by one helper rather than repeated per resource, so none is left
+// without it.
 //
 // Client credentials are a SEPARATE concern with a narrower audience: only a
 // host that makes a synchronous call under a grant of its own (§11.5) presents
@@ -773,9 +594,9 @@ var catalog = WithPlatformIdentity(
         .WithHttpHealthCheck("/health/ready"));
 
 // The gateway validates JWTs too (§11.2) — it is the component most visible
-// when the authority is missing, and was the one previously left without it.
-// No callerClientId: YARP forwards the caller's token rather than minting one
-// of its own, so there is no "gateway" Keycloak client and no gateway secret.
+// when the authority is missing. No callerClientId: YARP forwards the caller's
+// token rather than minting one of its own, so there is no "gateway" Keycloak
+// client and no gateway secret.
 WithPlatformIdentity(
     builder
         .AddProject<Projects.Gateway_Api>("gateway")
@@ -923,37 +744,39 @@ the effect rather than a branch inside the runner — a migrator that must not
 seed has no seeder in its container to resolve, so there is exactly one place
 configuration is read.
 
+In `src/Services/Catalog/Catalog.Migrator/MigratorHost.cs`, beside the
+`DbContext` registration:
+
 ```csharp
-// src/Services/Catalog/Catalog.Migrator/MigratorHost.cs, beside the
-// DbContext registration.
-//
-// Read as a string and parsed, never Configuration.GetValue<bool>. A variable
-// set to the empty string arrives as "" rather than null, and GetValue<bool>
-// throws InvalidOperationException on it — which turns a stray key into a
-// failed pre-upgrade hook and a blocked release. TryParse answers the same way
-// for "", for null, for "1" and for "yes": do not seed.
 bool requested = bool.TryParse(builder.Configuration["Seed:Enabled"], out bool enabled) && enabled;
 
 if (requested && builder.Environment.IsDevelopment())
     builder.Services.AddScoped<CatalogSeeder>();
+```
 
-// src/Services/Catalog/Catalog.Migrator/MigrationRunner.cs. The seeder joins
-// the primary constructor with a DEFAULT VALUE, and the `= null` is the whole
-// of what makes it optional — see the trap below. The runner is otherwise §7.4's:
-// MigrateAsync, a log line and an exit code.
+The flag is read as a string and parsed, never with
+`Configuration.GetValue<bool>`. A variable set to the empty string arrives as
+`""` rather than null, and `GetValue<bool>` throws `InvalidOperationException`
+on it, which turns a stray key into a failed pre-upgrade hook and a blocked
+release. `TryParse` answers the same way for `""`, for null, for `"1"` and for
+`"yes"`: do not seed.
+
+`MigrationRunner`, beside it in `MigrationRunner.cs`, takes the seeder as a
+primary-constructor parameter with a **default value**, and the `= null` is
+the whole of what makes it optional — the trap below says why:
+
+```csharp
 public sealed class MigrationRunner(
     CatalogDbContext db,
     ILogger<MigrationRunner> logger,
     CatalogSeeder? seeder = null)
-
-// RunAsync, after MigrateAsync returns. The log line is not decoration: a gate
-// that fails closed in silence is indistinguishable from a seeder that is
-// broken, and it is the seeder a developer debugs.
-if (seeder is null)
-    NotSeeding(logger, null);
-else
-    await seeder.SeedAsync(ct);
 ```
+
+The runner is otherwise §7.4's: `MigrateAsync`, a log line and an exit code.
+After `MigrateAsync` returns, it seeds when it has a seeder and logs
+`NotSeeding` when it has none. The log line is not decoration: a gate that
+fails closed in silence is indistinguishable from a seeder that is broken, and
+it is the seeder a developer debugs.
 
 > **Trap — a nullable reference type is not an optional dependency.**
 > `CatalogSeeder?` is an annotation the compiler reads and
@@ -996,7 +819,7 @@ mistake produces.
 > connection strings: the local half of the same switch, carried by the unit
 > that runs the seeder.
 
-**Turning seeding on has to be a diff, and today there is no diff that would do
+**Turning seeding on has to be a diff, and a values file alone cannot make
 it.** The shared migration-Job template renders exactly one `env` entry — the
 migrator connection string of §7.1 — so `Seed__Enabled` has no route into that
 container. Enabling it in a cluster would mean editing the library chart's
@@ -1007,10 +830,10 @@ half of that rule.
 **A seeder creates rows and not principals.** §14.1's realm is imported by
 Keycloak itself, from `deploy/compose/keycloak/realm-export.json` under
 `start-dev --import-realm` — a container and a mode that exist in Compose and
-nowhere else. Nothing in a migrator has ever created a subject, and a demo
-principal in a production identity store is an account with a published
-password. Seed the databases the gate above protects, and leave identity to an
-import no deployed artefact reaches.
+nowhere else. Nothing in a migrator creates a subject, and a demo principal in
+a production identity store is an account with a published password. Seed the
+databases the gate above protects, and leave identity to an import no deployed
+artefact reaches.
 
 ---
 
