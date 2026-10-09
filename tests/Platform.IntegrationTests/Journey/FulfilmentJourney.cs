@@ -8,13 +8,10 @@ using Xunit;
 
 namespace Platform.IntegrationTests.Journey;
 
-/// <summary>
-/// An order placed, reserved, authorised, confirmed, despatched and delivered across six services, and every notice
-/// it owes sent (§12.1).
-/// </summary>
+/// <summary>An order fulfilled across six services and every notice it owes sent (§12.1).</summary>
 /// <remarks>
-/// Run under two deployments' answers, which agree on nothing a host reads: what differs between the two runs is the
-/// proof that no service holds a country, a language, a zone or a currency it was not given.
+/// Run under two deployments' answers that share no value (ADR-053): what differs between the runs is the proof
+/// that no service holds a country, language, zone or currency it was not given.
 /// </remarks>
 public abstract class FulfilmentJourney(JourneyWorld world)
 {

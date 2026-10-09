@@ -18,13 +18,10 @@ public sealed record OrderSnapshot(
     public const string None = "none";
 }
 
-/// <summary>
-/// Samples one order across every service while a scenario runs, so the states it passed through are asserted legal
-/// and not only the one it ended in (§12.1).
-/// </summary>
+/// <summary>Samples one order across every service, so the states it passed through are asserted legal (§12.1).</summary>
 /// <remarks>
-/// A sample can miss a state that lasted less than its interval, so legality is reachability: a state may follow any
-/// state the diagram can reach it from, and nothing may go backwards or arrive from where it cannot.
+/// A sample can miss a short state, so legality is reachability: a state may follow any state the diagram reaches
+/// it from (§9.6).
 /// </remarks>
 public sealed class OrderTrace : IAsyncDisposable
 {

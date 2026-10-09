@@ -5,9 +5,8 @@ namespace Platform.IntegrationTests.Journey;
 
 /// <summary>A hold on one service's outbox, which parks a saga in the state a scenario needs (§12.1).</summary>
 /// <remarks>
-/// A held outbox stages and commits as it always does and publishes nothing, which is §9.6's "an outbox stuck" as an
-/// operator meets it. The hold stops a pass starting and waits for one already running, so a row claimed before the
-/// hold is published and every row staged after it is not.
+/// A held outbox commits as ever and publishes nothing, as §9.6's stuck outbox does; a row claimed before the
+/// hold is published and every later one waits.
 /// </remarks>
 public sealed class OutboxGate : IDisposable
 {
