@@ -1421,9 +1421,8 @@ deleted while its claim is alive, and §9.5 keeps every marker when this throws.
 > `{claim}:` prefix still inside their retention. Reporting that whole class as
 > in progress — the tidier-looking branch — answers `ConcurrentRequestException`
 > to a retry of work that **already committed**, for the rest of the retention,
-> and once the key expires the retry meets §6.3's marker and is refused as
-> already committed: the recorded outcome is never replayed, in the one window
-> an encoding change creates.
+> in the one window an encoding change creates: a caller told to retry what is
+> already done.
 >
 > Read an untokened value by the marker test alone: the marker means in
 > progress, anything else is a recorded outcome. That test is sound because the
