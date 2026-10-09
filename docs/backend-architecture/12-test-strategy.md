@@ -91,7 +91,10 @@ about the pyramid. Where they disagree, this chapter wins.
 ## 12.2 The TDD cycle applied
 
 Red, green, refactor — with a worked example, because the discipline is easier
-to describe than to follow.
+to describe than to follow. The example and §12.3's samples are illustrative:
+`OrderBuilder` is not in the tree, and
+`tests/Ordering.Domain.Tests/OrderTests.cs` builds its orders with its own
+`AnOrder` helper under other test names.
 
 **Requirement:** an order cannot be cancelled once it has shipped.
 
@@ -486,10 +489,11 @@ lanes, the contract type on the Broker lane (§9.3's allow-list) and the domain
 type on the Local lane (§7.5), is asserted below it, in
 `tests/Common.Application.Tests/DomainEventDispatcherTests.cs`. A repeated
 `CommandId` is served entirely by §8.5's replay branch, so the handler runs
-once, and both the row count and the replayed value are asserted because they
-detect different things: a second persisted order, and a replay that returned
-something other than what was stored. And a command id reused by another
-customer:
+once, and both the row count and the replayed value are asserted, in
+`One_command_id_carrying_a_second_basket_is_refused_and_one_order_exists`,
+because they detect different things: a second persisted order, and a replay
+that returned something other than what was stored. And a command id reused by
+another customer:
 
 ```csharp
 HttpResponseMessage mine = await PlaceAsync(product, commandId: commandId);
@@ -759,10 +763,12 @@ Respawn between tests keeps them isolated at a fraction of the cost.
 > `ICurrentUser` is `HttpContextCurrentUser` and a handler resolved in a bare
 > scope has no principal to bind a subject from — so
 > `Ordering.Application.Tests` references no `Ordering.TestSupport`, declares no
-> collection, and holds §12.5's saga suite instead, which needs no
-> infrastructure at all. The library is still right for the reason above; it
-> simply has one consumer there rather than two. `docs/testing.md` says the
-> same thing from the other side.
+> fixture collection, and holds §12.5's saga suite instead, which needs no
+> infrastructure at all; its one collection, `OrderFulfilmentSagaCollection`,
+> carries no fixture and keeps that suite's buses from running side by side.
+> The library is still right for the reason above; it simply has one consumer
+> there rather than two. `docs/testing.md` says the same thing from the other
+> side.
 >
 > The `[CollectionDefinition]` does **not** move there. xUnit resolves
 > collections within an assembly, so each test project declares its own, naming
@@ -1382,8 +1388,7 @@ running bus into whatever runs next.
 > waits are the obvious fix and they fail open: the test that forgets one is
 > the test that flakes, and it flakes on a loaded runner and nowhere else. A
 > helper that publishes and then waits for **that message** to be consumed
-> leaves nothing to forget, which is the argument the assembly-wide
-> parallelisation attribute won over a shared collection. **On its own id, not
+> leaves nothing to forget. **On its own id, not
 > its type**: a suite that delivers one type twice — a redelivery, a duplicate
 > — would otherwise match the first delivery and fence nothing, silently. It
 > costs nothing on a green run, because the consume it waits for is the one
