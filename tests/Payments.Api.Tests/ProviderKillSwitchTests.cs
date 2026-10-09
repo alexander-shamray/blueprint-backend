@@ -151,10 +151,11 @@ public sealed class ProviderKillSwitchTests
             // Completed can reach this observer before the bus's health records the stop, so the read waits out a
             // Healthy lag only; any other first reading is asserted (ProviderKillSwitch owns the Degraded rule).
             using CancellationTokenSource deadline = new(Budget);
-            while (bus.CheckHealth().Status == BusHealthStatus.Healthy && !deadline.IsCancellationRequested)
+            BusHealthStatus status;
+            while ((status = bus.CheckHealth().Status) == BusHealthStatus.Healthy && !deadline.IsCancellationRequested)
                 await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
 
-            bus.CheckHealth().Status.ShouldBe(
+            status.ShouldBe(
                 BusHealthStatus.Degraded,
                 "a stopped endpoint must leave readiness answering 200, or a provider outage unreadies the host");
         }
