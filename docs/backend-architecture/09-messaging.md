@@ -2154,9 +2154,10 @@ Initially(
 **An obligation is recorded where it is incurred, and every exit asks about
 the other half.** `PaymentVerdictOutstanding` is set in the activity that
 sends `AuthorisePayment` and cleared by the first `PaymentAuthorised` or
-`PaymentDeclined` to arrive in any state — never by a timeout, which ends the
-wait rather than the obligation. `Compensating`'s stock exits then finalise
-conditionally:
+`PaymentDeclined` to arrive in any state, and by a timeout only in
+`Compensating`, where an authorisation abandoned on a cancelled order is the
+ordinary end; elsewhere a timeout ends the wait rather than the obligation.
+`Compensating`'s stock exits then finalise conditionally:
 
 ```csharp
 // The first of Compensating's two stock exits; ReleaseTimeout.Received is
