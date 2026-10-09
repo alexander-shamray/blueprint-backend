@@ -927,17 +927,19 @@ identifier that was sitting one field away:
   "title": "Unprocessable Entity",
   "status": 422,
   "detail": "An order that has already shipped cannot be cancelled; raise a return instead.",
-  "instance": "POST /orders/018f.../cancel",
+  "instance": "POST /v1/orders/018f.../cancel",
   "code": "order.already_shipped",
   "correlationId": "018f4c2e-...",
   "traceId": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 }
 ```
 
-The last three come from the customisation above, which runs on this response
-because `Results.Problem` writes through `IProblemDetailsService` — the same
-path `UseExceptionHandler` takes, which is why an unhandled 500 and a returned
-422 carry the same three fields.
+`code` comes from `Problem` above. `instance`, `correlationId` and `traceId`
+come from the customisation above, which runs on this response because
+`Results.Problem` writes through `IProblemDetailsService` — the same path
+`UseExceptionHandler` takes, which is why an unhandled 500 and a returned 422
+carry the same three fields. `instance` is the path the service received,
+`/v1/orders/...` rather than the client's `/api/v1/orders/...` (§10.2).
 
 > **`Result<T>` derives from `Result`, so both overloads apply to it.** Only the
 > identity conversion makes the generic one win, and that is enough — until a
