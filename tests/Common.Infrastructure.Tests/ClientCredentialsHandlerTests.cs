@@ -70,7 +70,6 @@ public sealed class ClientCredentialsHandlerTests
         ServiceIdentityOptions identity = new()
         {
             ClientId = "web-bff",
-            ClientSecret = "local-dev-secret",
             Scope = Scope
         };
         using HttpMessageInvoker invoker = new(
