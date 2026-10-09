@@ -891,8 +891,9 @@ here because compensation cancels an order in exactly the sense the customer
 does; §9.6's saga wants the same transition, not a parallel one.
 
 **The two paths are symmetric on the way in and not on the way out.** The
-saga's own cancellation is always paired with `Finalize()`, so the workflow
-ends with it. The endpoint above cancels the aggregate and ends nothing — it
+saga's own cancellation is its own transition, and the saga finalises on it
+once no payment verdict is outstanding ([§9.6](09-messaging.md)). The endpoint
+above cancels the aggregate and ends nothing — it
 is the saga's *subscription* to `OrderCancelled` (§3.2, §9.6) that stops the
 workflow; without it a customer who cancelled here would keep stock reserved
 and a card authorised. Nothing on this page depends on that subscription,
