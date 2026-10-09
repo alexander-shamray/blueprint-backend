@@ -27,8 +27,10 @@ parcel left.
 shorter. A booking legitimately waits for collection, and how long it waits
 is the warehouse's and the carrier's schedule, which the carrier contract does
 not state. The despatch wait is the one bound the platform has decided: past
-it the saga has raised the order for review as `not_despatched`, or is about
-to, once its queue delivers the expiry. A shorter age would be a guess at a
+it the saga has raised an uncancelled order for review as `not_despatched`,
+or is about to, once its queue delivers the expiry; an order whose
+cancellation the carrier refused is already in review as
+`cancelled_after_confirmation`. A shorter age would be a guess at a
 collection time; a longer one would leave orders in review with nothing
 saying why.
 
@@ -46,8 +48,10 @@ reads the shipment's whole page.
 - **A shipment whose cancellation awaits the carrier's answer.** Its parcel
   is held back, so the gauge leaves it out. One whose cancellation the
   carrier refused is moving, stays `Booked` and polled, and is counted.
-- **Money and stock.** Payment and the reservation are settled; the order is
-  waiting on a despatch, which `order-review.md`'s `not_despatched` works.
+- **Money and stock.** Payment and the reservation are settled; an
+  uncancelled order is waiting on a despatch, which `order-review.md`'s
+  `not_despatched` works, and one whose cancellation was refused is its
+  `cancelled_after_confirmation`.
 
 **A shipment already despatched is affected and not counted**: if the route
 has gone, its delivery 404s too and reads as nothing yet. It is still polled,
@@ -113,5 +117,7 @@ gone, every events read is a 404, despatched shipments' included.
   warehouse and the carrier. Shipping does nothing until a scan arrives.
 
 Either way the count falls as scans land, and the alert resolves. **Work the
-orders already in review** from `order-review.md`'s `not_despatched`: a
-despatch published after the saga gave up does not clear their rows.
+orders already in review** from `order-review.md`: `not_despatched` for an
+uncancelled order, whose row a despatch published after the saga gave up
+does not clear, and `cancelled_after_confirmation` for one whose cancellation
+the carrier refused.
