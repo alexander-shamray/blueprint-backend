@@ -84,9 +84,61 @@ have told you.
 
 An empty table is worse and means the projection never ran. §6.6 records that
 this projection has no rebuild path of its own: Ordering holds no source of
-truth for prices, so recovery is Catalog republishing — carrying each product's
-**original** `OccurredAt`, because a fresh one re-lists everything ever
-discontinued.
+truth for prices, so recovery is Catalog republishing
+([ADR-090](../backend-architecture/adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)),
+which carries each product's **original** `OccurredAt`, because a fresh one
+re-lists everything ever discontinued.
+
+### Republishing the catalogue
+
+The run is Catalog's migrator image with `Republish__Enabled=true`. It
+migrates nothing and stages the catalogue on the Broker lane, so it is safe to
+run against a live Catalog, and Ordering's guards make a row it already holds a
+no-op. **It takes the runtime connection string, not the migrator's**: the
+migrator login has no read role, and the run needs no DDL. Locally, from
+`deploy/compose`, with the string `catalog-api` uses:
+
+```bash
+docker compose run --rm -e Republish__Enabled=true \
+    -e 'ConnectionStrings__Catalog=Server=sql;Database=Catalog;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True' \
+    catalog-migrator
+```
+
+In a cluster nothing runs it for you: the pre-upgrade hook stays a migration.
+Start a one-off Job from the migrator image the chart's migration Job uses,
+with the flag set, the **runtime** Secret (`database.runtimeSecretRef`) and the
+pod labels of `commerce.migrationPodLabels`, which are what the migrator's
+network policy selects. The Compose command above has been run; this Job has
+not been run against a cluster.
+
+```yaml
+containers:
+  - name: republish
+    image: <registry>/catalog-migrator:<tag>
+    env:
+      - { name: Republish__Enabled, value: "true" }
+      # - { name: Republish__Id, value: "<guid>" }   # one product only
+      - name: ConnectionStrings__Catalog
+        valueFrom: { secretKeyRef: { name: <database.runtimeSecretRef.name>, key: <its key> } }
+```
+
+The run logs how many products and rows it staged and exits 0. It exits 1,
+staging nothing, when `Republish__Id` names no product, and the host
+refuses a value that is not a GUID rather than republishing everything. Then:
+
+- **Wait for the lane to drain** before anything else:
+  `SELECT COUNT(*) FROM catalog.OutboxMessages WHERE ProcessedAt IS NULL`
+  falls to zero, and [`outbox-broker.md`](outbox-broker.md) is the page if it
+  does not. A second run stages everything again.
+- **Expect `DeliveryLagHigh` on Ordering while it drains.** The lag is measured
+  from each event's own stamp, so a republished catalogue records lags as old
+  as its products. That is the republish and not a fault.
+- **Check the repair:** `SELECT COUNT(*) FROM ordering.ProductPrices` equals
+  `SELECT COUNT(*) FROM catalog.Products`, one price row per product, since a
+  product's currency is fixed at publication (§6.6).
+
+What it cannot do: it replays each product's current state, not the prices it
+held on the way, and it announces nothing for a product Catalog has lost.
 
 ## 4. Is the outbox moving?
 
