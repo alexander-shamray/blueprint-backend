@@ -282,8 +282,8 @@ what the ledger runs.
 
 ### What EF generates, and what you write by hand
 
-Two kinds of table live in a service database, and they are authored
-differently:
+Two kinds of table live in a service database, and they differ in whose their
+shape is:
 
 | Kind | Examples | Authored by |
 |---|---|---|
@@ -306,8 +306,8 @@ runs from this same container, behind a gate that fails closed — an explicit
 job host's composition root — because the hook below runs on every production
 release holding §7.1's DDL identity.
 
-DDL written by hand rides in a migration beside the EF operations. This one is
-the shape `ordering.Products` would arrive in, and is not a file in the tree:
+DDL written by hand, the route the row above leaves open, rides in a migration
+beside the EF operations. This one is not a file in the tree:
 
 ```csharp
 public partial class AddOrderingProducts : Migration
@@ -329,10 +329,10 @@ public partial class AddOrderingProducts : Migration
 }
 ```
 
-`OrderFulfilmentStates` (§9.6) is the one table in both categories: MassTransit's
-EF saga repository maps it, so EF can generate it — but the DDL is shown
-explicitly because the alert in [§13.6](13-observability.md) and the stuck-saga runbook both query it
-directly, and an index nobody declared is an index nobody has.
+`OrderFulfilmentStates` (§9.6) is mapped by MassTransit's EF saga repository,
+so EF generates it, and its DDL is shown explicitly because the alert in
+[§13.6](13-observability.md) and the stuck-saga runbook both query it directly,
+and an index nobody declared is an index nobody has.
 
 > **Decision — migrations never run at application startup.** See [ADR-007](adr/ADR-007-migrations-as-a-pre-deploy-job.md).
 
