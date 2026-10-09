@@ -34,6 +34,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 LIFETIME_SOURCE = "src/BuildingBlocks/Common.Web/AuthenticationExtensions.cs"
 
+# The contact worker's own grant check, whose Grant is the set its token must
+# carry on realm-management: view-users as Keycloak expands it (ADR-052, ADR-088).
+GRANT_SOURCE = "src/Services/Notifications/Notifications.Infrastructure/Contacts/GrantCheckedTokenCache.cs"
+
 # The default subject, §14.1's Compose realm. A constant rather than CI's
 # argv, so that the reads-direction self-check below can see
 # it; the deploy path always passes `--realm`, because the realm it checks is
@@ -62,7 +66,7 @@ DEPLOY_WORKFLOW = ".github/workflows/deploy.yml"
 # and a subtree the triggers do not name reaches `main` with the gate skipped.
 CANARY_PLAN = "deploy/canary"
 
-SOURCE_INPUTS = [LIFETIME_SOURCE, COMPOSE_REALM, CHART_VALUES, DEPLOY_WORKFLOW, CANARY_PLAN]
+SOURCE_INPUTS = [LIFETIME_SOURCE, GRANT_SOURCE, COMPOSE_REALM, CHART_VALUES, DEPLOY_WORKFLOW, CANARY_PLAN]
 
 WORKFLOW_PATH = ".github/workflows/realm.yml"
 
@@ -121,13 +125,6 @@ NAMED_CLIENTS = (BROWSER_CLIENT, MOBILE_CLIENT, WORKER_CLIENT, CONTACT_CLIENT, B
 SCOPE_CAPS = {
     WORKER_CLIENT: {"commerce-api": ("orders:delivery-address",)},
     CONTACT_CLIENT: {"realm-management": ("view-users",)},
-}
-
-# What each grant composes in §14.1's export, which RealmImportTests pins;
-# Keycloak expands it into the cap, so the effective scope equals both (ADR-088).
-CAP_COMPOSITES = {
-    WORKER_CLIENT: {},
-    CONTACT_CLIENT: {"realm-management": ("query-users", "query-groups")},
 }
 
 # The scope whose mappers name the audience every service validates and write
@@ -305,11 +302,15 @@ def read_access_token_lifetime(root: Path = ROOT) -> int:
     return int(matches[0])
 
 
+# A C# declaration's opening: start of line, then whitespace and modifiers only.
+DECLARATION_START = r'^[ \t]*(?:(?:public|private|protected|internal|static|readonly|new)\s+)*?'
+
+
 def read_audience(root: Path = ROOT) -> str:
     """The audience every service validates, taken out of `AuthenticationExtensions.Audience` rather than written here.
 
-    Anchored on `const string Audience =` in code with comments stripped, so a
-    mention, an `options.Audience` assignment or a longer name cannot match."""
+    Whole-line `//` comments are skipped, and the declaration must open its line after whitespace and
+    modifiers only, so a trailing comment, a `*` line, `options.Audience` or a longer name cannot match."""
     source = root / LIFETIME_SOURCE
     try:
         text = source.read_text(encoding="utf-8")
@@ -317,13 +318,48 @@ def read_audience(root: Path = ROOT) -> str:
         raise SystemExit(f"realm-gate: {LIFETIME_SOURCE} is not readable: {error}") from error
 
     code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//"))
-    matches = re.findall(r"\bconst\s+string\s+Audience\s*=\s*\"([^\"\\]*)\"\s*;", code)
+    matches = re.findall(DECLARATION_START + r'const\s+string\s+Audience\s*=\s*"([^"\\]*)"\s*;', code, re.MULTILINE)
     if len(matches) != 1:
         raise SystemExit(
             f"realm-gate: {LIFETIME_SOURCE} declares Audience {len(matches)} time(s), expected "
             "exactly one. The commerce-api scope's mappers are judged against that declaration, so "
             "this gate cannot say which client they must name and must not report a pass.")
     return matches[0]
+
+
+def read_contact_grant(root: Path = ROOT) -> tuple[str, ...]:
+    """The roles the contact worker refuses a token without, taken out of `GrantCheckedTokenCache.Grant`.
+
+    Whole-line `//` comments are skipped, and the declaration must open its line after whitespace and
+    modifiers only, so a trailing comment, a `*` line or a field with a longer name cannot match."""
+    source = root / GRANT_SOURCE
+    try:
+        text = source.read_text(encoding="utf-8")
+    except OSError as error:
+        raise SystemExit(f"realm-gate: {GRANT_SOURCE} is not readable: {error}") from error
+
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//"))
+    matches = re.findall(DECLARATION_START + r'string\[\]\s+Grant\s*=\s*\[([^\]]*)\]\s*;', code, re.MULTILINE)
+    if len(matches) != 1:
+        raise SystemExit(
+            f"realm-gate: {GRANT_SOURCE} declares Grant {len(matches)} time(s), expected exactly one. "
+            "The contact worker's expanded cap is judged against that declaration, so this gate cannot "
+            "say what its token may carry and must not report a pass.")
+    elements = [element.strip() for element in matches[0].split(",") if element.strip()]
+    if not elements or not all(re.fullmatch(r'"[^"\\]*"', element) for element in elements):
+        raise SystemExit(
+            f"realm-gate: {GRANT_SOURCE} declares Grant as {matches[0].strip()!r}, not a list of string "
+            "literals, so the roles it names cannot be read.")
+    return tuple(element[1:-1] for element in elements)
+
+
+def expanded_caps(contact_grant: tuple[str, ...]) -> dict[str, dict[str, set[str]]]:
+    """Each worker's cap as Keycloak expands it: the contact worker's own Grant, and the address grant as mapped.
+
+    `orders:delivery-address` composes nothing, so its mapping is already its expansion (ADR-088)."""
+    caps = {name: {owner: set(roles) for owner, roles in owners.items()} for name, owners in SCOPE_CAPS.items()}
+    caps[CONTACT_CLIENT] = {owner: set(contact_grant) for owner in SCOPE_CAPS[CONTACT_CLIENT]}
+    return caps
 
 
 def redact(node: object) -> object:
@@ -543,7 +579,7 @@ def clients_of(realm: dict) -> list[dict]:
     return clients if isinstance(clients, list) else []
 
 
-def check_realm(realm: dict, kind: str, lifetime: int, audience: str) -> list[str]:
+def check_realm(realm: dict, kind: str, lifetime: int, audience: str, contact_grant: tuple[str, ...]) -> list[str]:
     """The obligations of §11.3, ADR-033 and ADR-034, against one realm document.
 
     Every check that follows names a client or a realm key, so the first thing
@@ -629,7 +665,7 @@ def check_realm(realm: dict, kind: str, lifetime: int, audience: str) -> list[st
             problems += check_token_writers(realm, found[0], name)
     for found, name in ((worker, WORKER_CLIENT), (contact, CONTACT_CLIENT)):
         if found:
-            problems += check_scope_cap(realm, found[0], name, kind)
+            problems += check_scope_cap(realm, found[0], name, kind, expanded_caps(contact_grant)[name])
     return problems
 
 
@@ -1327,7 +1363,7 @@ def effective_scope(realm: dict, name: str, kind: str) -> tuple[set[str], dict[s
     return set(realm_side), {owner: set(roles) for owner, roles in client_side.items() if roles}
 
 
-def check_scope_cap(realm: dict, client: dict, name: str, kind: str) -> list[str]:
+def check_scope_cap(realm: dict, client: dict, name: str, kind: str, expanded: dict[str, set[str]]) -> list[str]:
     """The issuer caps the worker's token at ADR-052's grant (ADR-077), as Keycloak expands it (ADR-088).
 
     With fullScopeAllowed off, Keycloak keeps a role in the token only where the
@@ -1350,7 +1386,7 @@ def check_scope_cap(realm: dict, client: dict, name: str, kind: str) -> list[str
             "is the ceiling on its token, so anything wider is a grant ADR-052 did not "
             "size and anything narrower a read refused")
     else:
-        problems += check_expanded_cap(realm, name, kind, expected)
+        problems += check_expanded_cap(realm, name, kind, expanded)
 
     scopes = defined_scopes(realm)
     for scope in held_scopes(client):
@@ -1374,8 +1410,8 @@ def check_scope_cap(realm: dict, client: dict, name: str, kind: str) -> list[str
     return problems
 
 
-def check_expanded_cap(realm: dict, name: str, kind: str, granted: dict[str, set[str]]) -> list[str]:
-    """The mapped grant as Keycloak expands it equals that grant and what §14.1's export composes it into."""
+def check_expanded_cap(realm: dict, name: str, kind: str, expanded: dict[str, set[str]]) -> list[str]:
+    """The mapped grant as Keycloak expands it equals the expanded grant the worker's own check expects."""
     found = effective_scope(realm, name, kind)
     if found is None:
         return [f"client {name!r} has no effective scope in the realm document, in the shape "
@@ -1383,9 +1419,7 @@ def check_expanded_cap(realm: dict, name: str, kind: str, granted: dict[str, set
     realm_roles, client_roles = found
     # A role of the worker's own is check_scope_cap's finding, however it is reached.
     client_roles.pop(name, None)
-    expected = {owner: set(roles) for owner, roles in granted.items()}
-    for owner, roles in CAP_COMPOSITES[name].items():
-        expected.setdefault(owner, set()).update(roles)
+    expected = {owner: set(roles) for owner, roles in expanded.items()}
 
     owners = set(client_roles) | set(expected)
     extra = {owner: client_roles.get(owner, set()) - expected.get(owner, set()) for owner in owners}
@@ -1396,14 +1430,13 @@ def check_expanded_cap(realm: dict, name: str, kind: str, granted: dict[str, set
     if realm_roles or extra:
         problems.append(
             f"client {name!r} carries {described(realm_roles, extra)} in its token's scope through "
-            f"what the roles it maps compose, beyond ADR-052's grant as §14.1's export composes it "
+            f"what the roles it maps compose, beyond the grant its own check expects "
             f"({described(set(), expected)}). Keycloak expands a mapped composite into the cap, so "
             "whatever is added to one is issued (ADR-088)")
     if missing:
         problems.append(
-            f"client {name!r} lacks {described(set(), missing)} in its token's scope, which ADR-052's "
-            "grant composes in §14.1's export, so its token is narrower than the grant its own "
-            "check expects (ADR-088)")
+            f"client {name!r} lacks {described(set(), missing)} in its token's scope, which the grant "
+            "its own check expects holds, so that check refuses every token it is issued (ADR-088)")
     return problems
 
 
@@ -1874,8 +1907,9 @@ def main(argv: list[str]) -> int:
 
     lifetime = read_access_token_lifetime()
     audience = read_audience()
+    contact_grant = read_contact_grant()
     realm = load_realm(args.realm)
-    problems = check_realm(realm, args.kind, lifetime, audience)
+    problems = check_realm(realm, args.kind, lifetime, audience, contact_grant)
     if code := fail(problems, f"the {args.kind} realm in {args.realm}"):
         return code
     print(f"realm-gate: the {args.kind} realm in {args.realm} holds all "
