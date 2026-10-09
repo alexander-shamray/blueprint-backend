@@ -39,15 +39,10 @@ public sealed record JourneyOrder(Guid Id, Guid Customer, Guid Product, int Quan
     public static string MailboxOf(Guid customer) => $"customer-{customer:N}@example.test";
 }
 
-/// <summary>
-/// Six services over one SQL Server, one broker and one Redis pair, each as its own host, each under the account the
-/// broker's definitions give it (§12.1's journey level).
-/// </summary>
+/// <summary>Six services over one SQL Server, one broker and one Redis pair, each under its own account (§12.1).</summary>
 /// <remarks>
-/// Nothing is widened for the harness: a service that publishes or binds what its shipped grant refuses fails here,
-/// which is the cross-service proof a per-service suite cannot give. The edges are the simulators Compose mounts and
-/// Ordering's address read is Ordering's own service, not a stand-in for it. Every order, product and customer is new
-/// to its scenario, so one scenario's rows are no part of another's assertions and nothing is reset between them.
+/// Nothing is widened for the harness, so a publish or bind the shipped grant refuses fails here (ADR-036).
+/// Ordering's address read is Ordering's own service. Every order is new to its scenario, so nothing is reset.
 /// </remarks>
 public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
 {
@@ -374,13 +369,10 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
         }
     }
 
-    /// <summary>
-    /// A wait expiring, delivered as the delayed exchange would deliver it, from Ordering's own bus under Ordering's
-    /// own grant (ADR-021).
-    /// </summary>
+    /// <summary>A wait expiring, delivered as the delayed exchange would, from Ordering's own bus (ADR-021).</summary>
     /// <remarks>
-    /// The waits are minutes and days (§9.6), so a scenario that is about what follows one cannot let it lapse. The
-    /// message is the one the saga schedules, to the queue that binds it, so the saga cannot tell it from the clock.
+    /// The waits are minutes and days (§9.6), so a scenario about what follows one cannot let it lapse; the saga
+    /// cannot tell the message from the clock.
     /// </remarks>
     public async Task ExpireAsync<T>(T expiry)
         where T : class

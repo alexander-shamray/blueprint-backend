@@ -7,14 +7,10 @@ using Xunit;
 
 namespace Platform.IntegrationTests.Journey;
 
-/// <summary>
-/// Every transition the order saga declares is driven by a journey or named with the in-memory suite that holds it
-/// (§12.1).
-/// </summary>
+/// <summary>Every transition the order saga declares is driven by a journey or held by a named suite (§12.1).</summary>
 /// <remarks>
-/// The transitions are read off the machine and not remembered, so adding a <c>During</c> block fails this until
-/// the transition is classified. The ones a journey cannot drive are arrivals whose order the broker decides, and
-/// the in-memory harness delivers them in any order it likes (§12.5).
+/// Read off the machine, so a new <c>During</c> block fails until classified. The undrivable ones are arrivals
+/// the broker orders (§12.5).
 /// </remarks>
 public sealed class SagaCoverageTests
 {

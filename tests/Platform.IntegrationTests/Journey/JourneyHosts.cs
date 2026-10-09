@@ -18,12 +18,10 @@ using Shipping.TestSupport;
 
 namespace Platform.IntegrationTests.Journey;
 
-/// <summary>
-/// Each service's own factory, with the background services its suite removes put back (§12.1).
-/// </summary>
+/// <summary>Each service's factory with the background services its suite removes put back (§12.1).</summary>
 /// <remarks>
-/// A service suite drives one pass by hand, since it asserts over the rows a timer would drain. The journey asserts
-/// over no row a timer touches, so the timers run: that they run is part of what it proves.
+/// A service suite drives one pass by hand; the journey asserts over no row a timer touches, so the timers run
+/// and that they do is part of the proof (§12.4).
 /// </remarks>
 internal static class JourneyHosts
 {

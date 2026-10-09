@@ -3,13 +3,10 @@ using Shipping.Infrastructure.Carrier;
 
 namespace Platform.IntegrationTests.Journey;
 
-/// <summary>
-/// How long each convergence predicate may take, and the sum that says so (§12.1): a deadline is derived from the
-/// platform's own numbers, never guessed, and a test that needs longer shows what it added.
-/// </summary>
+/// <summary>How long each convergence predicate may take, and the sum that says so (§12.1).</summary>
 /// <remarks>
-/// A leg is one message crossing one hop: it waits for a poll of the outbox to publish it, travels, and may be
-/// retried once at the ladder's first rung. The legs of a scenario are counted from the saga's diagram (§9.6).
+/// A leg is one message crossing one hop: the outbox's poll, the broker, and one retry at the ladder's first rung.
+/// A scenario's legs are counted from the saga's diagram (§9.6).
 /// </remarks>
 internal static class Deadlines
 {

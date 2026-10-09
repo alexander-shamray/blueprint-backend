@@ -9,14 +9,10 @@ using Xunit;
 
 namespace Platform.IntegrationTests.Journey;
 
-/// <summary>
-/// The saga's compensations, each caused by the service whose answer causes it, with what every service is left
-/// holding asserted (§9.6, §12.1).
-/// </summary>
+/// <summary>The saga's compensations, each caused by the service whose answer causes it (§9.6, §12.1).</summary>
 /// <remarks>
-/// A wait that is minutes or days long is delivered as its expiry, from Ordering's own bus. A state that lasts
-/// milliseconds is held by stopping the outbox of the service whose answer would end it, which is an outbox stuck
-/// as §13.6 describes one.
+/// A wait of minutes is delivered as its expiry; a state of one message is held by stopping the outbox of the
+/// service whose answer ends it, as §13.6's stuck outbox is.
 /// </remarks>
 [Collection(nameof(JourneyCollection))]
 public sealed class CompensationJourney(FirstJurisdictionWorld world)

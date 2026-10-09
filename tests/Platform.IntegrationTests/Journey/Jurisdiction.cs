@@ -1,12 +1,8 @@
 namespace Platform.IntegrationTests.Journey;
 
-/// <summary>
-/// One deployment's answers to ADR-053's questions and the address its customer lives at, so the same journey can be
-/// run under a second set and the difference between the two is the proof (§12.1).
-/// </summary>
+/// <summary>One deployment's answers (ADR-053) and its customer's address, so a journey can run twice.</summary>
 /// <remarks>
-/// Both are made up, in values no real deployment would choose, so a journey passing under either read its
-/// configuration rather than a constant. They differ in every member, the country among them.
+/// Both sets are made up and differ in every member, so a run passing under either read its configuration (§12.1).
 /// </remarks>
 public sealed record Jurisdiction(
     string Name,
