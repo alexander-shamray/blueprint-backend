@@ -185,7 +185,7 @@ eagerly, so a host given one key throws naming the other.
 
 The API waits on both Redis instances with `service_healthy`, not
 `service_started`. `AbortOnConnectFail` is false, so the host starts with Redis
-down (§8.1's degrade, don't die): the cache falls back to the database and
+down ([§8.1](08-caching-redis.md)): the cache falls back to the database and
 coordination callers fail closed. The host would therefore start against a
 Redis still booting, and the first protected command would fail on a claim
 instead — a symptom nothing connects to a container that was not ready. It
