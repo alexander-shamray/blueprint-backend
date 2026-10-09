@@ -64,20 +64,10 @@ services:
     ports: [ "127.0.0.1:5672:5672", "127.0.0.1:15672:15672" ]
     volumes: [ rabbit-data:/var/lib/rabbitmq ]
     healthcheck:
-      # check_running answers "is the broker up", which was the whole question
-      # while the image was stock. It is not any more: a broker missing the
-      # plugin is running and healthy while every saga schedule hangs on a
-      # declare it refuses (ADR-021), so the check asserts the plugin is
-      # enabled as well. Both, not just the second — the plugin list is
-      # readable from a broker that has not finished starting.
-      #
-      # is_enabled, NOT `list -e … | grep`. That was the first spelling and it
-      # FAILED OPEN: `rabbitmq-plugins list` echoes the pattern in its own
-      # banner — "Listing plugins with pattern "…"" — so grep matches whether
-      # or not a plugin row follows. Measured against a stock broker: exit 0,
-      # healthy, no plugin. A check written to catch the stock image passed on
-      # the stock image. is_enabled reports it in its exit status instead —
-      # measured 0 enabled, 69 not.
+      # Both checks: a broker without the plugin runs healthy while every saga
+      # schedule hangs on a declare it refuses (ADR-021), and the plugin list is
+      # readable before the broker has finished starting. is_enabled answers in
+      # its exit status, where `list -e … | grep` matches its own banner.
       test: ["CMD-SHELL", "rabbitmq-diagnostics check_running && rabbitmq-plugins is_enabled rabbitmq_delayed_message_exchange"]
       interval: 10s
       retries: 5

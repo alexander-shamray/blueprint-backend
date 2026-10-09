@@ -72,39 +72,22 @@ OUTBOX_MIGRATION_ID = "20260809120100"
 INBOX_MIGRATION_ID = "20260809120200"
 # And the retention index's, one minute on again.
 RETENTION_MIGRATION_ID = "20260809120300"
-# A port no service publishes, and it has to stay that way — the scaffold
-# refuses a port already in `deploy/compose/docker-compose.yml`, and these
-# tests render against the real repository. It was 5101 until PR-18 allocated
-# that to Ordering, at which point every render in this file raised
-# ScaffoldError and 50 tests went red at once. 5199 is chosen to sit outside
-# the 51xx block §14.1 hands out sequentially, so the next real service does
-# not collide with it the way Ordering did.
-#
-# The second probe below takes PORT - 1 rather than PORT + 1, and PR-19 is
-# why. 5200 was the BFF's the whole time — §14.1's fence has shown it beside
-# `web-bff` since PR-06 — so the paragraph above reasoned carefully about the
-# 51xx block while the adjacent port it silently also consumed was already
-# spoken for, and every render here started refusing the day that block
-# landed. **A port chosen for one constant is not a port reserved for two.**
+# A port no Compose unit publishes: these tests render against the real
+# repository, and the scaffold refuses a port that a file
+# `deploy/compose/docker-compose.yml` includes already publishes.
 PORT = 5199
 
-# The second probe's port. Named rather than spelt as arithmetic at the two
-# call sites, because the arithmetic is what hid the collision: `PORT + 1`
-# reads as "one more than a port we checked" and is in fact a second
-# allocation nobody checked.
+# The second probe's port, below PORT because 5200 is published by
+# deploy/compose/services/web-bff.yml. Named rather than written as arithmetic
+# where it is used, where `PORT + 1` would read as a checked port and is a
+# second allocation.
 SECOND_PORT = PORT - 1
 
 
-# Zulu and Yankee, and neither will ever be a service. The probes used to be
-# Ordering and Inventory — both on Appendix C's plan — and every
-# repository-backed render would have started refusing the day PR-18 created
-# `src/Services/Ordering`, which is the day this suite matters most. A probe
-# name has to be one the platform can never take.
-#
-# Zulu rather than Alfa because it must also sort *after* `Microsoft`: the
-# using-block test below exists for the case where the service's own namespace
-# moves past EF's in the sort order, and a probe sorting before it would have
-# quietly stopped covering that.
+# Zulu and Yankee, names the platform will never take: a probe named after a
+# real service makes every repository-backed render a refusal. Zulu also sorts
+# after `Microsoft`, which the using-block test below needs to cover a service
+# namespace sorting past EF's.
 PROBE = "Zulu"
 SECOND_PROBE = "Yankee"
 
@@ -495,12 +478,7 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
     """
 
     def setUp(self):
-        # SECOND_PORT, not a service-range literal: §14.1 hands out 51xx
-        # sequentially, so a successful render pinned to 5103 fails the day
-        # Inventory takes it — the exact collision moving PORT off 5101 was
-        # meant to remove, left behind in the same change. It was PORT + 1
-        # until PR-19, which is when 5200 stopped being free; see the
-        # constant's own note.
+        # SECOND_PORT rather than a literal a later service could publish.
         self.rendered = render(name=SECOND_PROBE, port=SECOND_PORT)
 
     def claim(self, path: str) -> str:

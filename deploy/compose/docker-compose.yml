@@ -1,25 +1,7 @@
-# The baseline environment of §14.1, delivered in Appendix C's order:
-# infrastructure at PR-06, each application block with the PR that builds
-# its image. docs/backend-architecture/14-local-development.md is the
-# specification; this file must stay reconciled with it.
-#
-# This file is an index and declares no service of its own. A unit's
-# environment lives in the file below that names it, so two agents adding or
-# changing two services never meet in one file — docs/change-locality.md's rule
-# applied to the one deployment artefact every service PR has to edit.
-#
-# `include` resolves a relative path against the directory of the file that
-# declares it rather than against this one, which is why a `build.context`
-# under `services/` is written one level deeper than the same path would be
-# here, and why `infrastructure.yml`, which sits beside this file, spells its
-# paths relative to the compose directory. Measured with `docker compose config`,
-# because a bind mount that resolves to the wrong directory is a container that
-# starts and reads nothing.
-#
-# Interpolation does NOT follow that rule and it would be a poor thing to
-# assume either way: `.env` beside this file reaches every included file, so
-# §14.1's `${…}` defaults mean the same thing wherever they live. Measured the
-# same way.
+# §14.1's baseline index, which declares no service of its own: a unit's
+# environment lives in the file below that names it, for the reason §14.1
+# gives. §14.1 also owns how `include` resolves a unit's relative paths and
+# how the `.env` beside this file reaches every included one.
 name: commerce
 
 include:
