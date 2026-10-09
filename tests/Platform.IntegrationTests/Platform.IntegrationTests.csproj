@@ -30,8 +30,10 @@
   <ItemGroup>
     <!-- Read from the output directory, as a path-mapped CI build has no source path to read it from. -->
     <None Update="contract-shapes.json" CopyToOutputDirectory="PreserveNewest" />
-    <!-- Shipping's chart default for the give-up age, read as the chart has it rather than restated. -->
+    <!-- Shipping's chart and Compose values for the give-up age, read as they ship rather than restated. -->
     <None Include="..\..\deploy\helm\shipping\values.yaml" Link="shipping-values.yaml"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\deploy\compose\services\shipping.yml" Link="shipping-compose.yml"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
