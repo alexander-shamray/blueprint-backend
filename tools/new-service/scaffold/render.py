@@ -243,6 +243,9 @@ OMITTED = frozenset(
         # resolve. With no endpoint there is no policy to enumerate, and the
         # suite's own guard against passing vacuously is what fails first.
         "tests/Catalog.Api.Tests/AuthorizationPolicyTests.cs",
+        # §11.4's grantable check reads CatalogPermissions, which is omitted
+        # above as the slice's vocabulary, so it returns with that vocabulary.
+        "tests/Catalog.Api.Tests/GrantablePermissionTests.cs",
         # Not slice by subject — it is about EfUnitOfWork's rollback — but slice
         # by requirement: the claim is that a rejected command leaves nothing
         # tracked, and making it needs a tracked aggregate. A service with no
