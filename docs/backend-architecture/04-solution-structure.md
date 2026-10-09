@@ -392,12 +392,12 @@ robust option; the single-project namespace rule is the lighter one.
 **"Namespace rule" here is the rule, not the selectors that "The gate has no
 selector" rules out**, and the two are easy to read as one thing this close
 together. What the gate does not do is *select* candidates by namespace; what it
-does do is tell the composition root from everything else by exactly that —
-`IsCompositionRoot` tests `!fullName.Contains('.')`, because top-level
-statements put `Program` in the global namespace while an endpoint keeps
-`Catalog.Api.Endpoints`. The alternative above replaces that discrimination with
-a project boundary, which is why it is the heavier option and the one a compiler
-enforces.
+does do is exempt the composition root by name — `IsCompositionRoot` passes
+`Program` and the helpers top-level statements generate beside it in the global
+namespace, names opening with `<`, so an endpoint is judged wherever it lives,
+`Catalog.Api.Endpoints` included. The alternative above replaces that
+discrimination with a project boundary, which is why it is the heavier option
+and the one a compiler enforces.
 
 **These tests are a CI gate from the first template commit**, not a later
 addition. An architecture rule introduced after the violations exist is a
