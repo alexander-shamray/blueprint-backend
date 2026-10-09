@@ -1,7 +1,7 @@
 # Secrets
 
 **How a secret gets from a vault into a running pod, how it is rotated, and
-what the five places are that a new required key has to reach.**
+what the places are that a new required key has to reach.**
 
 This file is the operational half of
 [§15.4](backend-architecture/15-cicd-deployment.md), exactly as
@@ -330,8 +330,8 @@ has one consumer; once it is set, nothing in that job is optional.
 
 **A credential no pod reads is a new category here, and it is why this one
 reaches no row of §15.4's table.** That table is the inventory `ValidateOnStart`
-enforces, and a key joins it when a *host's* code reads it — the five places
-above are five places a service looks. Nothing binds this value, nothing
+enforces, and a key joins it when a *host's* code reads it — every place
+above is one a service looks. Nothing binds this value, nothing
 validates it at startup, and a row for it would put a key no host reads into the
 inventory of keys every host must have, where the one mechanism that could
 enforce it never runs. The obligation it does carry is real and sits on the
