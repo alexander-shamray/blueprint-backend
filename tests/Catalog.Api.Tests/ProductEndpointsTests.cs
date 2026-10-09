@@ -329,7 +329,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         body.ShouldContain("\"code\":\"product.not_found\"");
     }
 
-    /// <summary>A price change as a caller holding <paramref name="permissions"/>, or as no principal when null.</summary>
+    /// <summary>A price change as a caller holding <paramref name="permissions"/>, or none when null.</summary>
     private Task<HttpResponseMessage> ChangePriceAsync(Guid id, object body, string? permissions, Guid? caller = null)
     {
         HttpRequestMessage request = new(HttpMethod.Put, $"/v1/catalog/products/{id}/price")
@@ -393,7 +393,10 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
         Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
 
-        HttpResponseMessage response = await ChangePriceAsync(id, new { CommandId = Guid.CreateVersion7(), Amount = 1m, Currency = "EUR" }, permissions);
+        HttpResponseMessage response = await ChangePriceAsync(
+            id,
+            new { CommandId = Guid.CreateVersion7(), Amount = 1m, Currency = "EUR" },
+            permissions);
 
         response.StatusCode.ShouldBe(expected);
         (await fixture.ScalarAsync<decimal>("SELECT Value = PriceAmount FROM catalog.Products WHERE Id = {0}", id))

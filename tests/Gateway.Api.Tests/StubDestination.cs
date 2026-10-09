@@ -38,7 +38,7 @@ public sealed class StubDestination : IAsyncLifetime
     /// <summary>Every path this server has been asked for, in arrival order.</summary>
     public IReadOnlyCollection<string> ReceivedPaths => _paths;
 
-    /// <summary>The W3C trace headers of every request, in arrival order, each <see langword="null"/> when absent.</summary>
+    /// <summary>The W3C trace headers of every request in arrival order, <see langword="null"/> where absent.</summary>
     public IReadOnlyCollection<TraceHeaders> ReceivedTraceHeaders => _traceHeaders;
 
     public async ValueTask InitializeAsync()

@@ -6,7 +6,7 @@ namespace Common.Infrastructure.Tracing;
 /// The W3C context a row was written under, kept on the row so the pass that claims it later runs as that trace's
 /// child (§9.4). The outbox stages it on its own columns; a worker's row takes <see cref="StagedTraceColumns"/>.
 /// </summary>
-/// <remarks>Both halves are null on a row written with no W3C activity, which runs in a trace of its own (§7.4).</remarks>
+/// <remarks>Both are null on a row written outside a W3C activity; its pass starts its own trace (§7.4).</remarks>
 public readonly record struct StagedTrace(string? Parent, string? State)
 {
     /// <summary>A W3C <c>traceparent</c> at version 00, the only version an activity writes.</summary>
@@ -15,7 +15,7 @@ public readonly record struct StagedTrace(string? Parent, string? State)
     /// <summary>The <c>tracestate</c> W3C asks a vendor to carry at least; a longer one is not staged.</summary>
     public const int StateMaxLength = 512;
 
-    /// <summary>The source a claimed row's pass starts on; <c>AddObservability</c> names it, or no span starts.</summary>
+    /// <summary>The source a claimed pass starts on; <c>AddObservability</c> names it, or no span starts.</summary>
     public const string ClaimSourceName = "Commerce.Claims";
 
     private static readonly ActivitySource Claims = new(ClaimSourceName);
@@ -42,7 +42,7 @@ public readonly record struct StagedTrace(string? Parent, string? State)
     public Activity? StartClaimed(string name) => Claims.StartActivity(name, ActivityKind.Internal, ToParent());
 
     /// <summary>Starts a claimed row's pass in a trace of its own, linked to the one that wrote the row.</summary>
-    /// <remarks>For a pass that repeats over a row's whole life, whose children would stretch that trace (§9.4).</remarks>
+    /// <remarks>For a pass repeating over a row's whole life, whose children would stretch its trace (§9.4).</remarks>
     public Activity? StartLinked(string name)
     {
         ActivityContext writer = ToParent();

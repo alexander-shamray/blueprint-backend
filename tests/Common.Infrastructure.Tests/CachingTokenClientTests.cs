@@ -150,7 +150,8 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         for (int call = 0; call < 2; call++)
         {
             using HttpRequestMessage request = new(HttpMethod.Get, "http://catalog.invalid/");
-            using HttpResponseMessage response = await invoker.SendAsync(request, TestContext.Current.CancellationToken);
+            using HttpResponseMessage response =
+                await invoker.SendAsync(request, TestContext.Current.CancellationToken);
         }
 
         callee.Sent.Distinct().Count().ShouldBe(2, "the second call carries a token fetched after the refusal");

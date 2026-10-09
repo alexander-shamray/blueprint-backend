@@ -93,7 +93,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
 
     private static string StallMapping() => Path.Combine(SimulatorMappings.Directory(), "authorise-stalled.json");
 
-    /// <summary>The simulator's stall cut to just past one attempt, since a stopping server waits out every delay.</summary>
+    /// <summary>The simulator's stall cut to just past one attempt, so a stop does not wait it out.</summary>
     private static void ShortenTheStall(WireMockServer server)
     {
         JsonNode stall = JsonNode.Parse(File.ReadAllText(StallMapping()))!;

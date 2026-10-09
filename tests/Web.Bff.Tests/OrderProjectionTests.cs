@@ -388,8 +388,8 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
     /// <summary>SQL Server's deadlock-victim error, which the endpoint's retry absorbs.</summary>
     private const int DeadlockVictim = 1205;
 
-    /// <summary>The endpoint's retry count, spaced as its ladder is spaced, so contenders stop colliding in step.</summary>
-    /// <remarks>Jittered milliseconds, not §9.8's ladder of seconds, since sixty writers here would wait minutes.</remarks>
+    /// <summary>The endpoint's retry count, spaced as its ladder is, so contenders stop colliding in step.</summary>
+    /// <remarks>Jittered milliseconds, not §9.8's seconds, since sixty writers here would wait minutes.</remarks>
     private static async Task RetriedOnDeadlockAsync(Func<Task> apply)
     {
         for (int retry = 0; ; retry++)

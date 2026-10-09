@@ -374,7 +374,7 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1), "a lease in the past is no lease");
     }
 
-    /// <summary>A pass that outlived its lease backs off nothing another pass now holds, nor counts it an attempt.</summary>
+    /// <summary>A pass that outlived its lease backs off nothing another pass holds, nor counts an attempt.</summary>
     [Fact]
     public async Task A_backoff_under_a_lapsed_lease_leaves_the_new_holders_lease_alone()
     {
