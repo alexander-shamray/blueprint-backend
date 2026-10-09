@@ -1,7 +1,9 @@
 using Common.Application;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
+using System.Text.Json;
 using Common.Infrastructure.Inbox;
+using Common.Infrastructure.Outbox;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Ordering.Application.Orders.FlagOrderForReview;
@@ -127,6 +129,34 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
                 r.MessageType.Contains("OrderConfirmed", StringComparison.Ordinal))
             .ShouldBe(1, "confirming stages §9.3's allow-listed contract on the Broker lane");
 
+    }
+
+    [Fact]
+    public async Task A_confirmation_states_its_amounts_at_the_currencys_exponent_not_the_columns_scale()
+    {
+        // ADR-067: Notifications renders the wire's decimal at its own scale, so this producer owns the exponent. The
+        // order is read back from decimal(19,4) columns, which is where a four-place scale would come from.
+        Guid orderId = await fixture.SeedOrderAsync(Customer);
+
+        await PublishStockReservedAsync(orderId, Guid.CreateVersion7());
+        await EventuallyStatus(orderId, "AwaitingPayment", because: "ConfirmOrder needs a paid-for order");
+
+        await SendAsync(new ConfirmOrder(orderId, "psp-endpoint-scale"));
+        await EventuallyStatus(orderId, "Confirmed", because: "the arrange half");
+
+        OutboxMessage confirmed = (await fixture.OutboxAsync())
+            .Single(r => r.Lane == OutboxLane.Broker &&
+                r.MessageType.Contains("OrderConfirmed", StringComparison.Ordinal));
+
+        using JsonDocument payload = JsonDocument.Parse(confirmed.Payload);
+        payload.RootElement.GetProperty(nameof(OrderConfirmed.TotalAmount)).GetRawText().ShouldBe(
+            "19.99",
+            "the seeded order is in euros, which have two places; a column's four are not the order's");
+        payload.RootElement
+            .GetProperty(nameof(OrderConfirmed.Lines))[0]
+            .GetProperty(nameof(ConfirmedLine.UnitPrice))
+            .GetRawText()
+            .ShouldBe("19.99");
     }
 
     [Fact]
