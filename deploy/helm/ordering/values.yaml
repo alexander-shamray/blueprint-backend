@@ -119,15 +119,11 @@ database:
     name: ordering-migrator-secret
     key: connection-string
 
-# The bus (§9). One Secret per service, never a shared one: a single broker
-# principal is what makes queue arrival a boundary in name only (§9.4), since
-# anything able to reach the broker could publish onto another service's queue
-# and be mapped as system-initiated.
-#
-# The Secret this names must carry a connection string for the `ordering-svc`
-# account, whose permissions deploy/compose/rabbitmq/definitions.json declares
-# and `check_permissions.py` holds to the code. Provisioning it on a deployed
-# broker is an obligation stated and not checked — §15.4's division.
+# The bus (§9). One Secret per service, never a shared one (§9.4): it carries a
+# connection string for the `ordering-svc` account, whose permissions
+# deploy/compose/rabbitmq/definitions.json declares and `check_permissions.py`
+# holds to the code. Provisioning it on a deployed broker is an obligation
+# stated and not checked — §15.4's division.
 broker:
   enabled: true
   secretRef:

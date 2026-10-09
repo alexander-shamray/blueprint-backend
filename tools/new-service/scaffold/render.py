@@ -340,8 +340,7 @@ STAND_INS = {
 # `ProductVersion` are removed. The template token is searched after the rename
 # with the requested name masked, since a service may contain it; the slice
 # token before, since masking would hide every leftover in a service called
-# `Product`. Both are case-insensitive, so `PRODUCT_ENDPOINT` fails as
-# `ProductEndpoint` does.
+# `Product`. Both are case-insensitive.
 BENIGN = re.compile(r"production|productversion", re.IGNORECASE)
 TEMPLATE_TOKEN = re.compile(re.escape(TEMPLATE), re.IGNORECASE)
 SLICE_TOKEN = re.compile(r"roduct", re.IGNORECASE)
@@ -974,8 +973,7 @@ def environment_keys(block: str) -> list[list[str]]:
     """The mapping keys of every `environment:` block, one list per mapping.
 
     Per mapping, because §14.1's pair rule renders two services: a key in both
-    is ordinary, the same key twice in one mapping is the defect. Returned
-    rather than judged, so a test can assert what was read.
+    is ordinary, the same key twice in one mapping is the defect.
     """
     mappings: list[list[str]] = []
     keys: list[str] | None = None
@@ -1026,10 +1024,8 @@ def compose_included(repo_root: Path) -> list[tuple[int, str]]:
 def update_compose(repo_root: Path, names: Names, port: int | None) -> str:
     """The index gains one line, and nothing else in it moves.
 
-    The port collision check reads every included file, since the index itself
-    publishes nothing and a check reading it would call every port free. Its
-    pattern carries the host-IP prefix §14.1 gives every mapping, because one
-    anchored on a quote matches nothing, which reads as a free port.
+    The port check reads every included file, since the index itself publishes
+    nothing; its pattern carries the host-IP prefix §14.1 gives every mapping.
     """
     entries = compose_included(repo_root)
 
