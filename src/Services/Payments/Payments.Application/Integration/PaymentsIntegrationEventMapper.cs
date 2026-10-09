@@ -40,7 +40,7 @@ internal sealed class PaymentsIntegrationEventMapper : IIntegrationEventMapper
         OccurredAt = e.OccurredAt,
         OrderId = e.OrderId.Value,
         Reference = e.Reference,
-        Amount = e.Amount,
+        Amount = PaymentAmounts.AtExponent(e.Amount, e.Currency),
         Currency = e.Currency
     };
 
@@ -60,7 +60,7 @@ internal sealed class PaymentsIntegrationEventMapper : IIntegrationEventMapper
         OccurredAt = e.OccurredAt,
         OrderId = e.OrderId.Value,
         Reference = e.Reference,
-        Amount = e.Amount,
+        Amount = PaymentAmounts.AtExponent(e.Amount, e.Currency),
         Currency = e.Currency
     };
 }

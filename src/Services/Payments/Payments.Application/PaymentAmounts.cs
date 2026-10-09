@@ -11,6 +11,11 @@ public static class PaymentAmounts
     /// <summary>The first amount a decimal(19,4) column cannot hold.</summary>
     public const decimal Ceiling = 1_000_000_000_000_000m;
 
+    /// <summary>The amount at its currency's exponent, which is the scale it travels at (ADR-067).</summary>
+    /// <remarks>A decimal(19,4) column hands back four places, and Notifications renders the scale it is given.</remarks>
+    public static decimal AtExponent(decimal amount, string currency) =>
+        decimal.Round(amount, CurrencyMinorUnits.Of(currency), MidpointRounding.ToEven);
+
     /// <summary>The amount in its currency's minor units (ADR-067), or null where no whole <c>long</c> is it.</summary>
     public static long? ToMinorUnits(decimal amount, string currency)
     {
