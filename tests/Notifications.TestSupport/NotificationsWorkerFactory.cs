@@ -154,7 +154,8 @@ public class NotificationsWorkerFactory(
                 services.AddSingleton<NotificationsRetentionService>();
             })
             .ConfigureTestServices(services =>
-                services.ConfigureDbContext<NotificationsDbContext>(o => o.AddInterceptors(CommitFaults, CommitFaults.Acknowledgements)));
+                services.ConfigureDbContext<NotificationsDbContext>(o =>
+                    o.AddInterceptors(CommitFaults, CommitFaults.Acknowledgements)));
 
     /// <summary>Swaps the JWT scheme for <see cref="TestAuthHandler"/> (§12.4); a host may override it.</summary>
     protected virtual void ConfigureAuthentication(IServiceCollection services)
