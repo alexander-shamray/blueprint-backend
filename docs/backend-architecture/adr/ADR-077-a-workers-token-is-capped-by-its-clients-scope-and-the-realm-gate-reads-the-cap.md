@@ -38,6 +38,11 @@ gains one request for the scope list, two per client and one per scope.
 Keycloak's default roles, which ADR-052 says every token carries, are no
 longer in either worker's.
 
+**Amended by [ADR-088](ADR-088-the-realm-gate-judges-a-workers-cap-expanded-and-the-audience-scopes-mappers-exactly.md)**,
+which judges the cap as Keycloak expands it, reads what a mapped role
+composes in a deployed realm, judges the `commerce-api` scope's own mappers,
+and judges token writers on `web-app` and `mobile-app` as well.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
