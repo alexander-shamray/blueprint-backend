@@ -17,9 +17,9 @@ as a call made under a grant, which is true of all three hosts.
 **Consequences.** Nothing in the code moves. A reader who reasons from ADR-055
 that every host holding credentials depends on a peer service will miss that
 Notifications' worker depends on Keycloak instead; the count of hosts holding
-a client secret is the count of synchronous couplings, and this record is
-where the callee's kind is stated. ADR-055 itself still carries the old
-sentence, as a superseded record does.
+a client secret is the count of synchronous couplings, and §9.7 owns which
+callee each one has. ADR-055 itself still carries the old sentence, as an
+amended record does.
 
 ---
 
