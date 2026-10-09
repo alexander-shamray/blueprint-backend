@@ -62,6 +62,12 @@ public class PersonalDataErasureTests
     }
 
     [Fact]
+    public void An_erasure_with_no_subject_is_refused()
+    {
+        Should.Throw<DomainException>(() => PersonalDataErasure.Record(Request, Guid.Empty, 1, Now));
+    }
+
+    [Fact]
     public void A_negative_count_is_refused()
     {
         Should.Throw<DomainException>(() => PersonalDataErasure.Record(Request, Subject, -1, Now));
