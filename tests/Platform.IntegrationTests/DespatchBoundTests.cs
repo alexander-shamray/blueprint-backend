@@ -9,7 +9,8 @@ namespace Platform.IntegrationTests;
 
 /// <summary>
 /// §9.6's despatch wait is the one collection bound the platform has decided, and Shipping sizes its own values
-/// against it without reading it (§4.2). Each is held equal here, in the suite that holds both services.
+/// against it without reading it (§4.2). Each is held equal here, in the suite that holds both services:
+/// the stats window, the chart's default and the Compose unit's value.
 /// </summary>
 public sealed partial class DespatchBoundTests
 {
@@ -31,7 +32,21 @@ public sealed partial class DespatchBoundTests
             .ShouldBe(OrderFulfilmentSaga.DespatchTimeoutDelay);
     }
 
+    [Fact]
+    public void The_compose_unit_sets_the_fulfilment_give_up_age_to_the_sagas_despatch_wait()
+    {
+        var unit = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "shipping-compose.yml"));
+        var match = ComposeGiveUpAge().Match(unit);
+
+        match.Success.ShouldBeTrue("the unit's Fulfilment__GiveUpAge was not found");
+        TimeSpan.Parse(match.Groups["age"].Value, CultureInfo.InvariantCulture)
+            .ShouldBe(OrderFulfilmentSaga.DespatchTimeoutDelay);
+    }
+
     // A quoted TimeSpan under the top-level fulfilment: key, which no other block in the file shares.
     [GeneratedRegex("""^fulfilment:\r?\n(?:[ ]+.*\r?\n)*?[ ]+giveUpAge:\s*"(?<age>[^"]+)"\s*$""", RegexOptions.Multiline)]
     private static partial Regex GiveUpAge();
+
+    [GeneratedRegex("""^[ ]+Fulfilment__GiveUpAge:\s*"(?<age>[^"]+)"\s*$""", RegexOptions.Multiline)]
+    private static partial Regex ComposeGiveUpAge();
 }
