@@ -993,25 +993,25 @@ another customer — and a rule that holds by omission is one a later refactor
 reinstates without noticing. The tests below are what make it fail loudly
 instead.
 
-They are split by what can produce the state each one needs. Three are about a
+They are split by what can produce the state each one needs. Two are about a
 caller a request carries, and run over HTTP, where the principal comes from
 `TestAuthHandler`'s headers through `HttpContextCurrentUser` exactly as
-production resolves it:
+production resolves it; a third has no Ordering test yet:
 
 - **An order is attributed to the caller** —
   `The_order_is_attributed_to_the_caller_and_not_to_anything_in_the_request`
   in `PlaceOrderTests`. The row's owner is read back from the table and must be
   the principal the request's headers named.
 - **An owner cancels their own order** — `The_owner_can_cancel_their_own_order`
-  in `OrderOwnershipTests`. The positive user-origin case, and the suite is
-  unsound without it: every other `CommandOrigin.User` assertion is a refusal,
-  so a handler that rejected the user path outright would pass them all while
-  disabling customer cancellation completely.
-- **A customer reads only their own orders** has no test, because it has no
-  subject yet: the history query it would read through is §6.5's, which is
-  specified and not built. It arrives with that query.
+  in `OrderOwnershipTests`. The control for the 404-not-403 refusal beside it,
+  which would otherwise pass on a handler that answers 404 to everybody.
+- **A customer reads only their own orders** has no Ordering test, because
+  Ordering's own history query, §6.5's as §6.6 escalates it, is not built. The
+  buyer's history the BFF serves is under the same rule
+  ([§10.7](10-api-gateway.md)), and `Web.Bff.Tests`' `OrderEndpointTests`
+  asserts a stranger's page is empty.
 
-The last two are a pair, and run below HTTP in `SagaCommandHandlerTests`, which
+Two more are a pair, and run below HTTP in `SagaCommandHandlerTests`, which
 dispatches in a bare scope — no request, so no principal:
 
 ```csharp
