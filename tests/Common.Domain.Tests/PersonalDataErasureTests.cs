@@ -97,6 +97,26 @@ public class PersonalDataErasureTests
     }
 
     [Fact]
+    public void A_repeat_keeps_the_request_and_the_hash()
+    {
+        PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 3, Now);
+        string hash = erasure.SubjectHash;
+
+        erasure.Repeat(1, Now.AddHours(1));
+
+        erasure.Id.ShouldBe(Request);
+        erasure.SubjectHash.ShouldBe(hash);
+    }
+
+    [Fact]
+    public void A_repeat_with_a_negative_count_is_refused()
+    {
+        PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 3, Now);
+
+        Should.Throw<DomainException>(() => erasure.Repeat(-1, Now.AddHours(1)));
+    }
+
+    [Fact]
     public void A_repeat_that_finds_nothing_keeps_what_the_first_pass_removed()
     {
         PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 3, Now);
