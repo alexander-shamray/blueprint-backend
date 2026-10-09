@@ -20,7 +20,7 @@ public sealed class SagaCoverageTests
     private const string Harness = "tests/Ordering.Application.Tests/";
 
     /// <summary>MassTransit's own event on every schedule, which only discards a message from a stale token.</summary>
-    private const string StaleToken = ".AnyReceived";
+    private const string AnyReceivedSuffix = ".AnyReceived";
 
     /// <summary>Transitions an arrival race or a duplicate causes, each with the suite that drives it.</summary>
     private static readonly Dictionary<(string State, string Event), string> InMemory = new()
@@ -109,7 +109,7 @@ public sealed class SagaCoverageTests
         {
             foreach (Event @event in saga.NextEvents(state))
             {
-                if (!@event.Name.EndsWith(StaleToken, StringComparison.Ordinal))
+                if (!@event.Name.EndsWith(AnyReceivedSuffix, StringComparison.Ordinal))
                     declared.Add((state.Name, @event.Name));
             }
         }
