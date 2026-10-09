@@ -1055,9 +1055,9 @@ the key spends 74 of those characters on two GUIDs and two separators and leaves
 the declared operation name the rest. Binary because this column is a key rather
 than text: the default collation is case-insensitive, and two commands are the
 same command only if their keys are the same bytes. A per-service gate,
-`Every_operation_name_fits_the_marker_key_column` in each service's
-`IdempotencyOptInTests`, holds the operation names a service declares to
-`IdempotencyKeyRule.LongestOperationName`, because a name too long fails
+`Every_operation_name_leaves_room_for_the_key_it_forms` in each service's
+`IdempotencyMarkerTests`, holds the operation names a service declares to the
+column's width as the model maps it, because a name too long fails
 neither the build nor startup — SQL Server refuses the insert on the first
 dispatch of that command, inside the transaction carrying the customer's order.
 
