@@ -97,18 +97,28 @@ public class ArchitectureTests
         refused.Message.ShouldContain("Probe reaches across a service boundary: Common.TestSupport");
     }
 
+    [Fact]
+    public void The_gate_refuses_a_test_library_named_like_this_service()
+    {
+        AssemblyName[] references = [new("Payments.Application"), new("Payments.TestSupport")];
+
+        ShouldAssertException refused =
+            Should.Throw<ShouldAssertException>(() => ShouldStayInsideThisService("Probe", references));
+
+        refused.Message.ShouldContain("Probe reaches across a service boundary: Payments.TestSupport");
+    }
+
+    /// <summary>The service's own projects by name, never its prefix, which Payments.TestSupport shares.</summary>
+    private static readonly string[] OwnProjects = [.. ServiceAssemblies.Select(assembly => assembly.GetName().Name!)];
+
     private static void ShouldStayInsideThisService(string subject, AssemblyName[] references)
     {
-        string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
-
         string[] foreign =
         [
             .. references
                 .Where(IsFirstParty)
                 .Select(reference => reference.Name!)
-                .Where(name =>
-                    !BuildingBlocks.Contains(name) &&
-                    !name.StartsWith($"{self}.", StringComparison.Ordinal))
+                .Where(name => !BuildingBlocks.Contains(name) && !OwnProjects.Contains(name))
                 .Order()
         ];
 
@@ -118,7 +128,7 @@ public class ArchitectureTests
     [Fact]
     public void Nothing_in_this_service_references_the_migrator()
     {
-        // The Migrator is a leaf (§7.4), and the gate above subtracts this service's own prefix.
+        // The Migrator is a leaf (§7.4), and the gate above admits this service's own projects, the Migrator too.
         string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
         string migrator = $"{self}.Migrator";
 
