@@ -135,7 +135,14 @@ is amended in the same PR.
 
 Each step is one transaction in the holder's own database that also writes
 its audit row and stages its completion through the outbox (§9.4), so the
-completion is published if and only if the erasure committed. A consumer that
+completion is published if and only if the erasure committed. **The BFF is
+the exception**: it has no outbox table and publishes nothing, and
+[ADR-036](../../backend-architecture/adr/ADR-036-the-broker-has-a-per-service-identity.md)
+gives it no broker account for a publish. It publishes its completion
+directly after its transaction commits. A crash between the two leaves
+silence, which the request's `Overdue` state exists to catch, and the
+operator's reissue (a fresh `MessageId`) runs the erasure again and
+publishes. A consumer that
 finds nothing writes the row with a count of zero and publishes, because a
 holder that stays silent when it has nothing to do is indistinguishable from
 a holder that did not run.
@@ -154,6 +161,7 @@ is the whole input.
 | [§9.1](../../backend-architecture/09-messaging.md) | The contract with many publishers, in one place |
 | [`docs/personal-data.md`](../../personal-data.md) | Every *None decided* above becomes a decision; Privacy's request and each audit table are rows |
 | [§15](../../backend-architecture/15-cicd-deployment.md), `deploy/` | Privacy's chart and compose entry, and its broker account |
+| [ADR-036](../../backend-architecture/adr/ADR-036-the-broker-has-a-per-service-identity.md), [ADR-051](../../backend-architecture/adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md) | The BFF becomes a publisher of one message, directly and with no outbox, and its broker account gains the permission to publish it |
 | A new ADR | Privacy is a service, the subject's id in the request is the one exception to ADR-035, and the responder set is stored on the request |
 | [Appendix C](../../backend-architecture/appendix-c-delivery-plan.md) | Not edited; it is closed, and each PR body says it fills a gap |
 
@@ -180,9 +188,14 @@ holder consumes it.
 The journey requests erasure for a customer with a delivered order, runs the
 whole stack, and then **scans every column of every table in every service's
 database for the subject's id and the address's text**, passing only when
-neither appears anywhere but an audit row's hash. A scan, because a
-per-table assertion covers the tables its author remembered, and a store
-nobody listed is exactly what is being looked for. Its mutation case drops a
+neither appears anywhere but an audit row's hash **and the holdings §6 and
+`docs/personal-data.md` mark lifetime only**: outbox rows, idempotency
+markers and the broker's queues, whose ages are not the test's to wait out.
+Privacy's own request row is exempt while the request is open and must hold
+the hash once it is closed. A scan, because a per-table assertion covers the
+tables its author remembered, and a store nobody listed is exactly what is
+being looked for; the exemptions are a named list the test's own case checks
+against that file, so a holding cannot be exempted by being forgotten. Its mutation case drops a
 responder from the set and requires the run to fail. Each consumer's own
 tests cover the second erasure, the zero-row case and the rollback that
 publishes nothing.
