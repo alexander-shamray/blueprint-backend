@@ -56,7 +56,7 @@ public sealed class ShipmentMetrics
             "shipping.shipments.unscanned",
             () => Unscanned(stats, logger),
             unit: "{shipment}",
-            description: "Booked shipments past their first-scan age that the carrier has never scanned.");
+            description: "Booked shipments past their first-scan age, never scanned, with no cancellation pending.");
     }
 
     /// <summary>States from the enum, so a new state cannot be left without a gauge.</summary>
