@@ -61,7 +61,10 @@ public readonly record struct Money
 
     private Money(decimal amount, string currency)
     {
-        Amount = amount;
+        // On the way out of a decimal(19,4) column as well as in through Of:
+        // the column hands back four places for a currency of two, and the
+        // wire carries the scale it is given (ADR-067).
+        Amount = decimal.Round(amount, CurrencyMinorUnits.Of(currency), MidpointRounding.ToEven);
         Currency = currency;
     }
 
