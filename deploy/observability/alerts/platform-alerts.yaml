@@ -231,6 +231,29 @@ groups:
             credential or a grant, which no retry will change.
           runbook_url: docs/runbooks/address-refused.md
 
+      # A count of rows already past ShipmentStats.FirstScanAge, so no `for`:
+      # as the lanes argue, the wait is the metric. `max`, as every replica
+      # reads the one table. A ticket, as the saga has raised, or is about to
+      # raise, each order for review (§9.6) and a row is polled until
+      # TrackingWorker.GiveUpAge; the runbook argues the age.
+      - alert: UnscannedShipments
+        expr: max by (service_name) (shipping_shipments_unscanned) > 0
+        labels:
+          severity: ticket
+          owner: service
+        annotations:
+          summary: "Bookings past their first-scan age with no scan on {{ $labels.service_name }}"
+          description: >-
+            Booked shipments whose orders were confirmed as long ago as the
+            saga waits for a despatch have never been scanned by the carrier.
+            Its events route answers 404 for a booking it has not scanned,
+            which the tracking worker reads as nothing yet, so a route that
+            has gone looks like healthy polling: the 404 counter rises, but a
+            backlog awaiting collection raises it too, and this count is the
+            one with a threshold. A parcel the warehouse never handed over
+            looks the same here, and the runbook tells the two apart.
+          runbook_url: docs/runbooks/unscanned-shipment.md
+
       # AddressReadRefused's form for Notifications' owner read: SendClaims backs
       # a row off on the same OutboxDispatcher ladder, so the same window
       # outlasts its longest backoff and a send tick. A page, because a refused

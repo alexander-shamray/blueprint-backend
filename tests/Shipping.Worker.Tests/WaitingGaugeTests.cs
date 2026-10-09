@@ -5,13 +5,14 @@ using Shipping.Domain.Shipments;
 using Shipping.Infrastructure;
 using Shipping.Infrastructure.Carrier;
 using Shipping.Infrastructure.Observability;
+using Shipping.Infrastructure.Tracking;
 using Shipping.TestSupport;
 using Shouldly;
 using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>Rows past their first backoff by state, and the wait of the longest-due row each pass claims.</summary>
+/// <summary>Rows past their first backoff by state, the longest-due row's wait by pass, and unscanned rows.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -155,6 +156,86 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
 
         measured.Single(m => m.Tag == "fulfilment").Value.ShouldBeInRange(30, 90);
     }
+
+    [Fact]
+    public async Task A_booking_never_scanned_past_its_first_scan_age_is_counted()
+    {
+        // Never polled, so neither has a scan; only the age tells them apart.
+        Shipment old = await fixture.BookedAsync("SIM-TRANSIT");
+        Shipment recent = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.AgeCreatedAsync(old.Id, ShipmentStats.FirstScanAge + TimeSpan.FromHours(1));
+        await fixture.AgeCreatedAsync(recent.Id, ShipmentStats.FirstScanAge - TimeSpan.FromHours(1));
+
+        ReadUnscanned().ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_booking_the_carrier_has_scanned_is_not_counted()
+    {
+        // Collected and so Dispatched, and a scan that leaves the row Booked: the carrier knows both.
+        Shipment dispatched = await fixture.BookedAsync("SIM-TRANSIT");
+        (await fixture.RunTrackingPassAsync()).ShouldBe(1);
+        Shipment scanned = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.ExecuteAsync(
+            """
+            INSERT INTO shipping.TrackingEvents (ShipmentId, CarrierEventId, Status, OccurredAt, RecordedAt)
+            VALUES ({0}, 'evt-in-transit', 'InTransit', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+            """,
+            scanned.Id.Value);
+        await fixture.AgeCreatedAsync(dispatched.Id, ShipmentStats.FirstScanAge + TimeSpan.FromHours(1));
+        await fixture.AgeCreatedAsync(scanned.Id, ShipmentStats.FirstScanAge + TimeSpan.FromHours(1));
+
+        (await fixture.StatusAsync(dispatched.Id)).ShouldBe("Dispatched");
+        (await fixture.StatusAsync(scanned.Id)).ShouldBe("Booked");
+        ReadUnscanned().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_booking_whose_cancellation_was_asked_is_not_counted()
+    {
+        Shipment held = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.RequestCancellationAsync(held.Id);
+        await fixture.AgeCreatedAsync(held.Id, ShipmentStats.FirstScanAge + TimeSpan.FromHours(1));
+
+        ReadUnscanned().ShouldBe(0, "a parcel held back for the carrier's answer is not one it should have collected");
+    }
+
+    [Fact]
+    public async Task A_booking_whose_cancellation_the_carrier_refused_is_counted()
+    {
+        // Too late to cancel, so the parcel is moving and the row stays Booked and polled.
+        Shipment refused = await fixture.BookedAsync("SIM-LATE");
+        await fixture.RequestCancellationAsync(refused.Id);
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+        await fixture.AgeCreatedAsync(refused.Id, ShipmentStats.FirstScanAge + TimeSpan.FromHours(1));
+
+        (await fixture.StatusAsync(refused.Id)).ShouldBe("Booked");
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Id = {0} AND CancellationRefusedAt IS NOT NULL",
+            refused.Id.Value)).ShouldBe(1);
+        ReadUnscanned().ShouldBe(1, "a refused cancellation leaves a parcel the carrier should have scanned");
+    }
+
+    [Fact]
+    public async Task A_shipment_that_has_ended_is_not_counted()
+    {
+        // Abandoned without asking the carrier, and voided by it, so neither ever had a scan.
+        Shipment delivered = await fixture.DeliveredAsync();
+        Shipment voided = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.RequestCancellationAsync(voided.Id);
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+        Shipment abandoned = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.AgeCreatedAsync(abandoned.Id, TrackingWorker.GiveUpAge + TimeSpan.FromHours(1));
+        (await fixture.RunTrackingPassAsync()).ShouldBe(1);
+        await fixture.AgeCreatedAsync(delivered.Id, ShipmentStats.FirstScanAge + TimeSpan.FromHours(1));
+        await fixture.AgeCreatedAsync(voided.Id, ShipmentStats.FirstScanAge + TimeSpan.FromHours(1));
+
+        (await fixture.StatusAsync(voided.Id)).ShouldBe("Voided");
+        (await fixture.StatusAsync(abandoned.Id)).ShouldBe("Abandoned");
+        ReadUnscanned().ShouldBe(0);
+    }
+
+    private double ReadUnscanned() => ReadGauge("shipping.shipments.unscanned", tagKey: "").Single().Value;
 
     /// <summary>One of <see cref="ShipmentMetrics"/>' gauges, read once over this suite's own stats reader.</summary>
     private List<(string Tag, double Value)> ReadGauge(string instrumentName, string tagKey)

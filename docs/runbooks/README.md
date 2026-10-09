@@ -33,6 +33,7 @@ clock.
 | [`queue-backlog.md`](queue-backlog.md) | `QueueBacklogGrowing`, `DeliveryLagHigh` | yes |
 | [`unattributed-order.md`](unattributed-order.md) | `UnattributedOrders` | yes |
 | [`address-refused.md`](address-refused.md) | `AddressReadRefused` | yes |
+| [`unscanned-shipment.md`](unscanned-shipment.md) | `UnscannedShipments` | yes |
 | [`contact-refused.md`](contact-refused.md) | `ContactReadRefused` | yes |
 | [`migration-failure.md`](migration-failure.md) | `MigrationJobFailed` | yes |
 | [`business-volume.md`](business-volume.md) | `BusinessVolumeDrop` | yes |

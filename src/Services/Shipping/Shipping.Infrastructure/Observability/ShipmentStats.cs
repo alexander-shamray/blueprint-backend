@@ -11,6 +11,13 @@ namespace Shipping.Infrastructure.Observability;
 /// <remarks>It throws; <see cref="ShipmentMetrics"/> contains that into an absent series (§13.6).</remarks>
 internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmentStats, IDisposable
 {
+    /// <summary>How long a booking may go unscanned: <c>OrderFulfilmentSaga.DespatchTimeoutDelay</c>.</summary>
+    /// <remarks>
+    /// From <c>CreatedAt</c>, as both waits start at the order's confirmation (§9.6). A shorter age is a collection
+    /// time only the carrier could promise, and its contract names none.
+    /// </remarks>
+    public static readonly TimeSpan FirstScanAge = TimeSpan.FromDays(3);
+
     /// <summary>Inside one export interval, so a repeat callback within it reuses the result.</summary>
     private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(5);
 
@@ -50,6 +57,17 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
         WHERE {TrackingClaims.Claimable};
         """;
 
+    // A cancellation awaiting the carrier's answer holds the parcel back; one it refused leaves the parcel moving.
+    private const string UnscannedSql =
+        """
+        SELECT COUNT(*)
+        FROM shipping.Shipments s
+        WHERE s.Status = 'Booked'
+            AND (s.CancellationRequestedAt IS NULL OR s.CancellationRefusedAt IS NOT NULL)
+            AND s.CreatedAt < DATEADD(second, -@AgeSeconds, SYSDATETIMEOFFSET())
+            AND NOT EXISTS (SELECT 1 FROM shipping.TrackingEvents e WHERE e.ShipmentId = s.Id);
+        """;
+
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
     public int WaitingCount(string state) =>
@@ -70,6 +88,21 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
     public double FulfilmentOverdueSeconds() => OverdueSeconds(FulfilmentOverdueSql);
 
     public double TrackingOverdueSeconds() => OverdueSeconds(TrackingOverdueSql);
+
+    public int UnscannedCount() =>
+        _cache.GetOrCreate(
+            UnscannedSql,
+            entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = CacheFor;
+                using IDbConnection connection = connections.Create();
+
+                return connection.ExecuteScalar<int>(
+                    new CommandDefinition(
+                        UnscannedSql,
+                        new { AgeSeconds = (int)FirstScanAge.TotalSeconds },
+                        commandTimeout: CommandTimeoutSeconds));
+            });
 
     // Keyed by the statement, which no state's name equals; floored, as host-stamped instants meet the engine's clock.
     private double OverdueSeconds(string sql) =>
