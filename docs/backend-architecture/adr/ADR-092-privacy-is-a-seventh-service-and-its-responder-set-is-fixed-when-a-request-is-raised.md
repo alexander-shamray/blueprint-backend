@@ -13,6 +13,18 @@ and never counted. Nothing closes an overdue request by itself: an operator
 reissues it under the same `RequestId` and a fresh `MessageId`, and every
 consumer is idempotent on the request, not on the message.
 
+**Each holder's step is decided here where the data map had none.** Ordering
+deletes the buyer's `OrderSummaries` rows beside anonymising `Orders`;
+Payments anonymises `PaymentOrders.CustomerId` and keeps the money;
+Notifications deletes its order records and the subject's waiting notices
+beside its contact rows, and anonymises the ended log rows; the BFF deletes
+the subject's `bff.Orders` rows. Shipping's delete is
+[ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s.
+Each is one transaction in the holder's database that writes its audit row
+and stages its completion through the outbox, bar the BFF, which has no
+outbox and publishes directly after its commit; a crash between the two is
+silence, which an overdue request exists to catch.
+
 **The request carries the subject's id and nothing else about the subject.**
 `PersonalDataDeleteRequested` holds a `SubjectId` as `OrderPlaced` holds a
 `CustomerId`: an identifier, which
