@@ -475,8 +475,9 @@ boundary needs no exception of its own.
 >
 > So the predicate asks a question the rename cannot answer wrongly: **every
 > package this platform pins is strong-named, and none of this repository's own
-> projects is.** Checked across all ten service assemblies, which between them
-> reference thirty-odd packages. `Dapper` is the one unsigned package in the
+> projects is.** No project here sets `SignAssembly`, and every service's gate
+> re-measures the package half on each run, since an unsigned package it does
+> not name fails it, as below. `Dapper` is the one unsigned package in the
 > graph and is named for that reason alone.
 >
 > ```csharp
@@ -1256,8 +1257,12 @@ somebody stops reading its output:
   ignored.
 
 Which versions those are is `Directory.Packages.props`'s answer and never this
-chapter's. Currency and vulnerability scanning are a separate obligation, and
-the tooling for them is not in this repository.
+chapter's. A version with a known vulnerability fails the restore: NuGet's
+audit raises NU1903 and NU1904, and
+[ADR-019](adr/ADR-019-warnings-are-errors-and-the-editorconfig-is-a-build-input.md)
+makes a warning a failed build, which is how several of that file's pins were
+chosen. Currency, whether a newer version exists, is a separate obligation, and
+the tooling for it is not in this repository.
 
 > **Trap — pinning floors instead of versions.** Writing `Version="8.*"`, or
 > treating the file as a set of minimums to be "reviewed quarterly", means a
@@ -1389,12 +1394,12 @@ be a second implementation of which substring each rule matches — and a
 fingerprint matching nothing is a stale entry that fails the build. Where
 `.github/secret-scan/` is absent it writes nothing and says nothing, which is
 the case in the scaffold suite's own synthetic root. The new service
-builds and its **ninety-four** tests pass before a line of it is written,
-**forty-six** of them against real SQL Server and RabbitMQ containers —
-counts measured against a rendered service, whose `Yankee.Domain.Tests`,
-`Yankee.Application.Tests` and `Yankee.Api.Tests` hold 1, 18 and 75 of them.
-The forty-six is the `Category=Integration` count of §12.4, which is a filter
-rather than a tally.
+builds and its **122** tests pass before a line of it is written, **47** of
+them against real SQL Server and RabbitMQ containers — counts measured on
+2026-10-09 against a rendered service, whose `Yankee.Domain.Tests`,
+`Yankee.Application.Tests` and `Yankee.Api.Tests` hold 1, 18 and 103 of them.
+The 47 is the `Category=Integration` count of §12.4, which is a filter rather
+than a tally.
 
 **Arithmetic is not a remeasurement.** The total need not move by the number of
 tests a change adds to the template, so whoever changes what the scaffold copies
