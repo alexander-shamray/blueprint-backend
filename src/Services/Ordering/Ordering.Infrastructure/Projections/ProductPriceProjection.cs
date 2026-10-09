@@ -8,7 +8,7 @@ namespace Ordering.Infrastructure.Projections;
 /// <summary>§6.6's price projection, the read model <c>PlaceOrder</c>'s write path depends on.</summary>
 /// <remarks>
 /// Public, because §6.2's scan is public-only and an internal handler registers as nothing with the endpoint
-/// still bound. It has no rebuild path; §6.6 names the republish that is owed.
+/// still bound. It has no rebuild path of its own: Catalog's republish is the one (§6.6, ADR-090).
 /// </remarks>
 public sealed class ProductPriceProjection(IDbConnectionFactory connections)
     : IIntegrationEventHandler<ProductPublished>,

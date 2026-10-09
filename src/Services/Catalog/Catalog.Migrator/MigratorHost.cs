@@ -17,12 +17,22 @@ public static class MigratorHost
         if (MigratorTransport.Refusal(builder.Configuration, builder.Environment) is { } refusal)
             throw new InvalidOperationException(refusal);
 
+        // ADR-090's republish is a run of its own: it migrates nothing and reaches production, so it has no
+        // environment gate. Parsed, since GetValue<bool> throws on "" and a run must not fail on an empty flag.
+        bool republish = bool.TryParse(builder.Configuration["Republish:Enabled"], out bool asked) && asked;
+
         // §7.1's migrator identity, the only one with DDL. Reading the runtime key here would reduce the two
-        // principals to a naming convention.
+        // principals to a naming convention. A republish is the exception that proves it: it reads and writes
+        // data and holds no DDL, and the migrator login has no read role, so it takes the runtime key instead.
+        string? connection = republish
+            ? builder.Configuration.GetConnectionString("Catalog")
+            : builder.Configuration.GetConnectionString("CatalogMigrator");
+
+        if (republish && string.IsNullOrEmpty(connection))
+            throw new InvalidOperationException("Republish needs ConnectionStrings:Catalog, the runtime key (§7.1).");
+
         builder.Services.AddDbContext<CatalogDbContext>(o =>
-            o.UseSqlServer(
-                builder.Configuration.GetConnectionString("CatalogMigrator"),
-                sql => sql.EnableRetryOnFailure()));
+            o.UseSqlServer(connection, sql => sql.EnableRetryOnFailure()));
 
         builder.Services.AddScoped<MigrationRunner>();
 
@@ -32,6 +42,20 @@ public static class MigratorHost
 
         if (requested && builder.Environment.IsDevelopment())
             builder.Services.AddScoped<CatalogSeeder>();
+
+        if (republish)
+        {
+            // An id that does not parse throws, since a run that dropped it would republish everything.
+            Guid? only = builder.Configuration["Republish:Id"] switch
+            {
+                null or "" => null,
+                string text when Guid.TryParse(text, out Guid id) => id,
+                _ => throw new InvalidOperationException("Republish:Id is not a GUID.")
+            };
+
+            builder.Services.AddSingleton(new RepublishRequest(only));
+            builder.Services.AddScoped<CatalogRepublisher>();
+        }
 
         return builder.Build();
     }
