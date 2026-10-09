@@ -9,16 +9,11 @@ workload:
 
 replicaCount: 3
 
-# §15.5's canary track, and OFF is what every ordinary release means.
-#
-# Turned on, this chart renders the SECOND of two Deployments answering to the
-# one Service: its objects take a `-canary` suffix, its pods carry
-# `app.kubernetes.io/track: canary`, and the Service, Ingress, HPA and
-# PodDisruptionBudget are suppressed because the stable release owns those
-# names (ADR-022). The share of traffic it serves is its replica count over
-# the total, which is why `deploy/canary/canary.py` does the arithmetic.
-#
-# Set by the rollout, not by an operator: `deploy/canary/` drives it.
+# §15.5's canary track, off for every ordinary release. Turned on, this chart
+# renders the second Deployment answering to the one Service, suffixed
+# `-canary`; the Service, Ingress, HPA and PodDisruptionBudget are suppressed
+# because the stable release owns them (ADR-022). The rollout sets it, not an
+# operator: `deploy/canary/` drives it.
 canary:
   enabled: false
 
@@ -113,14 +108,10 @@ database:
     key: connection-string
 
 # The bus (§9). One Secret per service, never a shared one: a single broker
-# principal is what makes queue arrival a boundary in name only (§9.4), since
-# anything able to reach the broker could publish onto another service's queue
-# and be mapped as system-initiated.
-#
-# The Secret this names must carry a connection string for the `payments-svc`
-# account, whose permissions deploy/compose/rabbitmq/definitions.json declares
-# and `check_permissions.py` holds to the code. Provisioning it on a deployed
-# broker is an obligation stated and not checked — §15.4's division.
+# principal makes queue arrival a boundary in name only (§9.4).
+# The Secret must carry a connection string for the `payments-svc` account,
+# declared in deploy/compose/rabbitmq/definitions.json; provisioning it on a
+# deployed broker is stated and not checked (§15.4).
 broker:
   enabled: true
   secretRef:

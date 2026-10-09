@@ -1,16 +1,8 @@
-# The shared baseline of §14.1: what every service talks to, plus the volumes
-# that outlive a `down`. Nothing here belongs to one service, which is why it is
-# one file: there is no service whose PR owns any of it, so there is no line to
-# divide it along.
-#
-# deploy/compose/docker-compose.yml includes it;
-# docs/backend-architecture/14-local-development.md specifies it and this file
-# must stay reconciled with the chapter.
-#
-# This is the one include that sits beside the index, so every relative path in
-# it is relative to the compose directory — `include` resolves a path against
-# the file that declares it, and for this file those two directories are the
-# same one.
+# The shared baseline of §14.1, included by deploy/compose/docker-compose.yml:
+# what every service talks to, plus the volumes that outlive a `down`. No
+# service owns any of it. docs/backend-architecture/14-local-development.md
+# specifies it; its paths resolve against the compose directory, as the
+# including file sits there too.
 services:
   sql:
     image: mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
@@ -78,13 +70,10 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      # One issuer, whichever host asks. Without this Keycloak derives the
-      # issuer from each request's Host header, so a token minted through
-      # localhost:8080 carries iss=http://localhost:8080/... while the
-      # discovery document catalog-api reads over the compose network
-      # advertises http://keycloak:8080/... — and ValidateIssuer rejects every
-      # token the README tells a developer to obtain. The two names are the
-      # same server; only the route differs.
+      # One issuer, whichever host asks: Keycloak otherwise derives it from
+      # each request's Host header, so a token minted through localhost:8080
+      # fails ValidateIssuer against the discovery document catalog-api reads
+      # at http://keycloak:8080/.
       KC_HOSTNAME: http://localhost:8080
       # ...which leaves the container-side route to be restored: with a fixed
       # hostname Keycloak would otherwise advertise localhost:8080 for the
@@ -97,13 +86,9 @@ services:
       KC_HEALTH_ENABLED: "true"
     ports: [ "127.0.0.1:8080:8080" ]
     volumes: [ ./keycloak/realm-export.json:/opt/keycloak/data/import/realm.json:ro ]
-    # The image has a shell — CMD-SHELL below needs one — but no HTTP client:
-    # no curl, no wget. So the check is a bash TCP redirection against the
-    # management port, which is the form Keycloak's own documentation gives for
-    # exactly that reason. Without it `up --wait` returns as soon as the process
-    # launches, and the README's token command can reach a realm that has not
-    # finished importing: a 404 on the token endpoint, on a stack that has just
-    # reported healthy.
+    # The image has a shell but no curl or wget, so the check is a bash TCP
+    # redirection against the management port, Keycloak's documented form.
+    # Without it `up --wait` returns before the realm has finished importing.
     healthcheck:
       test:
         [
