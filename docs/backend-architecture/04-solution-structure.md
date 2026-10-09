@@ -1394,10 +1394,10 @@ be a second implementation of which substring each rule matches — and a
 fingerprint matching nothing is a stale entry that fails the build. Where
 `.github/secret-scan/` is absent it writes nothing and says nothing, which is
 the case in the scaffold suite's own synthetic root. The new service
-builds and its **122** tests pass before a line of it is written, **47** of
+builds and its **123** tests pass before a line of it is written, **47** of
 them against real SQL Server and RabbitMQ containers — counts measured on
 2026-10-09 against a rendered service, whose `Yankee.Domain.Tests`,
-`Yankee.Application.Tests` and `Yankee.Api.Tests` hold 1, 18 and 103 of them.
+`Yankee.Application.Tests` and `Yankee.Api.Tests` hold 1, 19 and 103 of them.
 The 47 is the `Category=Integration` count of §12.4, which is a filter rather
 than a tally.
 

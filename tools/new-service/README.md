@@ -112,7 +112,7 @@ its marker statements — the candidate select and the delete that joins the
 rows it returned — so a service scaffolded without the migration fails its own
 purge with `Invalid column name 'RowVersion'` on the first pass.
 
-The service builds and its 122 tests pass before you have written a line,
+The service builds and its 123 tests pass before you have written a line,
 and 47 of them run against real SQL Server and RabbitMQ containers:
 the migrator's exit code, §7.1's two-key boundary, the readiness probe — 200
 only once the bus connects — `EfUnitOfWork`'s commit, rollback and retry
@@ -131,8 +131,10 @@ which found the pair already stale by four before it had added anything, PR-34
 having put its own four into `RetentionPurgeTests` without recounting — and
 eighty-nine until the outbox gauges' registration suite joined the template
 and a render read 1, 18 and 75, and ninety-four until a render on 2026-10-09
-read 1, 18 and 103 with forty-seven against containers. A figure nobody
-recounts goes stale on the next PR's clock rather than on its own.
+read 1, 18 and 103 with forty-seven against containers, and 122 until
+the operation-name length gate joined the template and a render read 1, 19
+and 103. A figure nobody recounts goes stale on the next PR's clock rather
+than on its own.
 
 **Adding to the number is not recounting it.** PR-22 put three tests into the
 template and the total moved by four, so the only way to know this pair is to
