@@ -732,11 +732,14 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
 > accessor's own message. So the naive body fails on the ordinary success path
 > rather than under an unusual fault, and it fails *after* §6.3 has committed:
 > the caller sees 500 for an order that exists. **What stops the retry placing
-> a second order is the marker.** `Capture` runs after `next()` returns, so the
-> throw is after the commit — but the marker committed with it, so the retry
-> claims a free Redis key and meets `CommandAlreadyCommittedException`. The
-> naive body turns a succeeded command into a 500 and loses the result; it does
-> not produce a duplicate write.
+> a second order is the marker.** `Capture` runs after `next()` returns and
+> outside the `try` that releases the claim, so the throw is after the commit
+> and the claim is held, as when `CompleteAsync` throws (the release table
+> below): a retry inside the retention meets `ConcurrentRequestException`, and
+> one after it claims a free Redis key and is refused with
+> `CommandAlreadyCommittedException` by the marker that committed with the
+> work. The naive body turns a succeeded command into a 500 and loses the
+> result; it does not produce a duplicate write.
 >
 > Adding a `[JsonConstructor]` and non-throwing accessors to `Result` is the
 > other way out and is refused — though not for the reason that suggests
@@ -854,11 +857,11 @@ the lost commit acknowledgement below is about.
 > **Holding the claim instead of releasing it is worse in both directions.**
 > The row above already says what holding buys against a `CompleteAsync`
 > failure: every Redis entry has a TTL, so a held key expires and the attempt
-> after that claims a free key and runs the command a second time — a
-> postponement rather than a fix. It would also cost every ordinary fault its
-> retry for whatever the claim had left, which on a fault raised early is very
-> nearly the full retention and is a large availability price for a
-> postponement. A row has no TTL; what deletes it is §9.5's purge on a window
+> after that claims a free key and is refused by the marker — a postponement
+> of what the marker already gives, not a protection of its own. It would also
+> cost every ordinary fault its retry for whatever the claim had left, which on
+> a fault raised early is very nearly the full retention and is a large
+> availability price for a postponement. A row has no TTL; what deletes it is §9.5's purge on a window
 > `RetentionPolicy` refuses to set below this store's own.
 >
 > **What the caller gets is a refusal and not a replay, and there are two ways
