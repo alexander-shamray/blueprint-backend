@@ -476,9 +476,9 @@ boundary needs no exception of its own.
 > So the predicate asks a question the rename cannot answer wrongly: **every
 > package this platform pins is strong-named, and none of this repository's own
 > projects is.** No project here sets `SignAssembly`, and every service's gate
-> re-measures the package half on each run, since an unsigned package it does
-> not name fails it, as below. `Dapper` is the one unsigned package in the
-> graph and is named for that reason alone.
+> re-measures the package half for what its assemblies reference on each run,
+> since an unsigned package it does not name fails it, as below. `Dapper` is
+> the one unsigned package in the graph and is named for that reason alone.
 >
 > ```csharp
 > private static bool IsFirstParty(AssemblyName reference) =>
