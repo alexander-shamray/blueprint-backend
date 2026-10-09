@@ -13,7 +13,7 @@ namespace Ordering.Api.Tests;
 [Collection(nameof(IntegrationCollection))]
 public sealed class RegistrationTests(ServiceFixture fixture)
 {
-    /// <summary>The host and every Ordering assembly it reaches, so a new layer is covered and a test library is not.</summary>
+    /// <summary>The host and every Ordering assembly it reaches.</summary>
     private static List<Assembly> ServiceAssemblies()
     {
         List<Assembly> found = [typeof(Program).Assembly];
@@ -36,7 +36,7 @@ public sealed class RegistrationTests(ServiceFixture fixture)
     [Fact]
     public void The_scan_reaches_both_layers_that_hold_handlers()
     {
-        // The subject of the test below: a set that lost a layer would pass it over nothing.
+        // The subject of the test below.
         string[] names = [.. ServiceAssemblies().Select(a => a.GetName().Name!)];
 
         names.ShouldContain("Ordering.Application");
@@ -98,8 +98,6 @@ public sealed class RegistrationTests(ServiceFixture fixture)
     {
         using IServiceScope scope = fixture.Factory.Services.CreateScope();
 
-        // The query's own result type: a closed behaviour asked for with the wrong TResult resolves to an empty
-        // sequence, and an empty sequence passes any assertion about what is absent.
         Type[] actual =
         [
             .. scope.ServiceProvider
