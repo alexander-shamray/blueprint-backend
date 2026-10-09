@@ -93,7 +93,7 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │                                   nothing compiles differently when it is
 │   │                                   missing
 │   ├── Web.Bff.TestSupport/            The stub Catalog, the SERVER half of
-│   │                                   pricing.proto with it, and PR-26's
+│   │                                   pricing.proto with it, and the
 │   │                                   PricingContract — the BFF's expectations
 │   │                                   of §9.7's hop (§12.6), authored here
 │   │                                   because only a consumer can write one,
@@ -243,37 +243,35 @@ to fail that have nothing to do with migrations.
 
 `*.Domain` having no third-party dependencies is what makes domain tests
 instant and mock-free. It is worth defending. Enforce it with an architecture
-test rather than a code review convention:
+test rather than a code review convention, as Ordering's in
+`tests/Ordering.Domain.Tests/ArchitectureTests.cs` does:
 
 ```csharp
-[Fact]
-public void Domain_references_only_common_domain_and_the_framework()
-{
-    // The table's rule is an allow-list — "Common.Domain and nothing else" —
-    // so the gate is one too, and an exact one: a blacklist only bans what
-    // someone thought to name, and a System.* prefix still passes
-    // System.Data.SqlClient or a serialiser. Each BCL assembly Domain starts
-    // using earns its line here on purpose — extending this list is the
-    // decision the gate exists to force, and System.Text.Json is the
-    // extension the table forbids by name.
-    //
-    // Two entries, because two is what an EMPTY domain references — this is
-    // the form §4.5's scaffold renders. A live one grows: Catalog's and
-    // Ordering's both carry System.Collections, earned by the first domain
-    // event, whose generated record equality goes through
-    // EqualityComparer<T>, and System.Linq, earned by the first value object
-    // doing enumerable logic over owned values. Run as printed against either
-    // of them, this list fails — which is the gate working, not the sample
-    // being wrong.
-    string[] allowed = ["Common.Domain", "System.Runtime"];
+    [Fact]
+    public void Domain_references_only_common_domain_and_the_framework()
+    {
+        // An exact allow-list, as §4.2's table is: a System.* prefix would pass System.Data.SqlClient.
+        // System.Collections is the records' generated equality; System.Linq is the value objects'
+        // letter scans and Order's Aggregate over its lines.
+        string[] allowed = ["Common.Domain", "System.Runtime", "System.Collections", "System.Linq"];
 
-    IEnumerable<string> referenced = typeof(Order).Assembly
-        .GetReferencedAssemblies()
-        .Select(a => a.Name!);
+        IEnumerable<string> referenced = typeof(Order).Assembly
+            .GetReferencedAssemblies()
+            .Select(a => a.Name!);
 
-    referenced.ShouldAllBe(name => allowed.Contains(name));
-}
+        referenced.ShouldAllBe(name => allowed.Contains(name));
+    }
 ```
+
+**The gate is an exact allow-list, because the table's row is one** —
+"`Common.Domain` and nothing else". A blacklist only bans what someone thought
+to name, and a `System.*` prefix still passes `System.Data.SqlClient` or a
+serialiser. Each BCL assembly a domain starts using earns its line on purpose:
+extending the list is the decision the gate exists to force, and
+`System.Text.Json` is the extension the table forbids by name. §4.5's scaffold
+renders the list with two entries, `Common.Domain` and `System.Runtime`,
+because that is what an empty domain references; a live one grows, as the two
+further entries above show.
 
 ### The composition-root rule
 
@@ -284,70 +282,68 @@ public void Domain_references_only_common_domain_and_the_framework()
   repository, no `IPublishEndpoint`, no `IConnectionMultiplexer` — Application
   and Domain contracts only.
 
-> **The first bullet used to grant host-level `*ServiceCollectionExtensions`
-> the same exemption, and the gate never implemented it.** No file in any of
-> the four hosts is named `*ServiceCollectionExtensions` — `Catalog.Api`,
-> `Ordering.Api`, `Gateway.Api` and `Web.Bff` alike — so the sentence granted
-> a hole to nothing, and the test below exempts the composition root alone.
->
-> Narrowing the prose to the code is the right direction rather than the
-> convenient one. The exemption is the whole of this gate's trust, and the
-> companion test that asserts it has not grown is only meaningful while the
-> exempted set is something a reader can hold in mind. A host that genuinely
-> wants a registration extension is welcome to one; what it does not get is a
-> pre-granted licence written before it existed.
-
 Without this rule the dependency table is satisfied at project level while being
 violated everywhere that matters, because "Api may reference Infrastructure"
 silently licenses an endpoint to inject a `DbContext`.
 
+Ordering's gate, in `tests/Ordering.Api.Tests/ArchitectureTests.cs`, judges the
+assembly whole and subtracts the root from the failures afterwards, where full
+names are available to subtract it by and there is no candidate set to be
+narrow:
+
 ```csharp
-[Fact]
-public void Nothing_but_the_composition_root_depends_on_infrastructure()
-{
-    // No selector at all. The rule above is "only Program.cs may reference
-    // Infrastructure", so the assembly is judged whole and the root is
-    // subtracted from the FAILURES afterwards — where full names are available
-    // to subtract it by, and where there is no candidate set to be narrow.
-    TestResult result = Types
-        .InAssembly(typeof(Program).Assembly)
-        .ShouldNot().HaveDependencyOnAny(
-            "Ordering.Infrastructure",
-            "Microsoft.EntityFrameworkCore",
-            "MassTransit",
-            "StackExchange.Redis")
-        .GetResult();
+    private static readonly string[] Forbidden =
+    [
+        "Ordering.Infrastructure",
+        "Microsoft.EntityFrameworkCore",
+        "MassTransit",
+        "StackExchange.Redis"
+    ];
 
-    string[] leaked = [.. (result.FailingTypeNames ?? []).Where(name => !IsCompositionRoot(name))];
+    /// <summary>Program or its global-namespace generated helpers, the one exemption §4.2 grants.</summary>
+    private static bool IsCompositionRoot(string fullName) =>
+        fullName == "Program" || (!fullName.Contains('.') && fullName.StartsWith('<'));
 
-    leaked.ShouldBeEmpty($"leaked: {string.Join(", ", leaked)}");
-}
+    [Fact]
+    public void Nothing_but_the_composition_root_depends_on_infrastructure()
+    {
+        // Every banned package, not the Infrastructure namespace alone: DbContext and the like arrive transitively.
+        TestResult result = Types
+            .InAssembly(typeof(Program).Assembly)
+            .ShouldNot().HaveDependencyOnAny(Forbidden)
+            .GetResult();
 
-// Top-level statements put Program and its helpers in the GLOBAL namespace, so
-// they carry no dot; anything an endpoint generates is nested inside the
-// endpoint class and keeps its namespace.
-private static bool IsCompositionRoot(string fullName) =>
-    fullName == "Program" || (!fullName.Contains('.') && fullName.StartsWith('<'));
+        string[] leaked = [.. (result.FailingTypeNames ?? []).Where(name => !IsCompositionRoot(name))];
+
+        leaked.ShouldBeEmpty($"leaked: {string.Join(", ", leaked)}");
+    }
 ```
 
-> **This gate was wrong four times, always by selecting less than it claimed,
-> and the sequence is worth keeping because each fix looked complete.**
-> `.ResideInNamespaceContaining(".Endpoints")` stopped covering the transport
-> surface the moment a gRPC service arrived in `.Grpc`. A namespace *pattern*
-> moved the hole one namespace further out. Excluding compiler-generated types
-> by name exempted endpoint lambdas, because a closure is generated code. And
-> filtering candidates through `HaveName(...)` exempted them again, because
-> that predicate selects nothing for a nested async state machine — and an
-> empty selection reports **success**.
->
-> A companion test naming the known adapters closes none of it, and believing
-> otherwise is the subtler error: the set such a test inspects is unchanged by
-> a type the selector never picked up, so it passes exactly as before. It
-> guards against *narrowing* the rule, never against *outgrowing* it.
+Top-level statements put `Program` and its helpers in the global namespace, so
+they carry no dot; anything an endpoint generates is nested inside the
+endpoint class and keeps its namespace. The exemption is the composition root
+alone, and `The_composition_root_is_the_only_thing_exempted`, in the same
+file, asserts that it has not grown.
 
-> **One gap survives all four, and it belongs to NetArchTest rather than to the
-> rule.** The library does not analyse compiler-generated nested types, so a
-> forbidden reference used *only* inside an endpoint lambda is invisible to it.
+> **The gate has no selector, because each selector it could use selects
+> less than it claims.** A namespace selector such as
+> `.ResideInNamespaceContaining(".Endpoints")` stops covering the transport
+> surface the moment a service adds one in another namespace, as Ordering's
+> gRPC service in `.Grpc` is. A namespace *pattern* moves the hole one
+> namespace further out. Excluding compiler-generated types by name exempts
+> endpoint lambdas, because a closure is generated code. And filtering
+> candidates through `HaveName(...)` exempts them again, because that predicate
+> selects nothing for a nested async state machine — and an empty selection
+> reports **success**.
+>
+> A companion test naming the known adapters closes none of it: the set such a
+> test inspects is unchanged by a type the selector never picked up, so it
+> passes exactly as before. It guards against *narrowing* the rule, never
+> against *outgrowing* it.
+
+> **One gap belongs to NetArchTest rather than to the rule.** The library does
+> not analyse compiler-generated nested types, so a forbidden reference used
+> *only* inside an endpoint lambda is invisible to it.
 > Measured rather than inferred: a `DbContextOptionsBuilder` in an endpoint
 > method's own body fails the gate and names the endpoint class; the identical
 > line inside that method's lambda leaves it green — with no selector at all,
@@ -361,40 +357,42 @@ private static bool IsCompositionRoot(string fullName) =>
 One more, for the rule [§9.3](09-messaging.md) states in prose: application code publishes through
 `IIntegrationEventPublisher` and the outbox, never through the bus directly.
 The saga is the documented exception (§9.6) and it lives in Infrastructure, so
-the boundary is checkable:
+the boundary is checkable, in
+`tests/Ordering.Application.Tests/ArchitectureTests.cs`:
 
 ```csharp
-[Fact]
-public void Application_and_domain_do_not_reference_masstransit()
-{
-    // §9.3's must-not list. The saga may Send and Publish because its receive
-    // endpoint carries MassTransit's transactional outbox (ADR-032), which
-    // writes those sends to the same DbContext and the same transaction as the
-    // saga instance — a guarantee that exists on the consume pipeline and
-    // nowhere else. A handler that copies the saga's style gets a dual write
-    // with no outbox behind it, and it works in every test where the broker is
-    // up.
-    Assembly[] assemblies = [typeof(PlaceOrderHandler).Assembly, typeof(Order).Assembly];
-    foreach (Assembly assembly in assemblies)
+    [Fact]
+    public void Application_and_domain_do_not_reference_masstransit()
     {
-        Types
-            .InAssembly(assembly)
-            .ShouldNot().HaveDependencyOn("MassTransit")
-            .GetResult().IsSuccessful
-            .ShouldBeTrue(assembly.GetName().Name);
+        // §9.3's must-not list, whose one exemption is a saga's receive endpoint and its outbox (ADR-032).
+        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(Order).Assembly];
+        foreach (Assembly assembly in assemblies)
+        {
+            Types
+                .InAssembly(assembly)
+                .ShouldNot().HaveDependencyOn("MassTransit")
+                .GetResult().IsSuccessful
+                .ShouldBeTrue(assembly.GetName().Name);
+        }
     }
-}
 ```
+
+The saga may send and publish because its receive endpoint carries
+MassTransit's transactional outbox (ADR-032), which writes those messages to
+the same `DbContext` and the same transaction as the saga instance — a
+guarantee that exists on the consume pipeline and nowhere else. A handler that
+copies the saga's style gets a dual write with no outbox behind it, and it
+works in every test where the broker is up.
 
 If the namespace rule proves awkward to enforce, split the host into
 `Ordering.Host` (composition, references Infrastructure) and `Ordering.Api`
 (endpoints, does not) and let the project reference enforce it. That is the more
 robust option; the single-project namespace rule is the lighter one.
 
-**"Namespace rule" here is the rule, not the selector the callouts above
-abandoned**, and the two are easy to read as one thing this close together. What
-the gate stopped doing is *selecting* candidates by namespace; what it still
-does is tell the composition root from everything else by exactly that —
+**"Namespace rule" here is the rule, not the selector the callout above
+rules out**, and the two are easy to read as one thing this close together.
+What the gate does not do is *select* candidates by namespace; what it does do
+is tell the composition root from everything else by exactly that —
 `IsCompositionRoot` tests `!fullName.Contains('.')`, because top-level
 statements put `Program` in the global namespace while an endpoint keeps
 `Catalog.Api.Endpoints`. The alternative above replaces that discrimination
@@ -407,13 +405,11 @@ backlog item; one introduced before them is a constraint.
 
 ### The rest of the table, enforced
 
-**What the three gates above leave uncovered is a clause rather than a row**,
-and saying "three rows had no test" would erase work that exists. Between them
-they cover the Domain row whole, the Application row's named must-nots, and the
-Api row's composition-root half. What none of them says is the clause
+**The three gates above leave one clause and one row uncovered.** Between
+them they cover the Domain row whole, the Application row's named must-nots,
+and the Api row's composition-root half. What none of them says is the clause
 **Infrastructure, Migrator and Api** all carry — *must never reference another
-service's projects* — and the Migrator row is the one with no gate of any kind
-until PR-22.
+service's projects* — and none of them gates the Migrator row.
 
 **The table has two kinds of row, so the gates have two shapes.** A row that
 says what a project *may* reference is an allow-list, and gets an allow-list
@@ -434,28 +430,39 @@ it enforces:
 stated as an allow-list rather than a deny-list of service names, which is
 what makes it cover a service before it exists: this service by *prefix*,
 and the building blocks *by name*, because `Common.TestSupport` (§4.1) is
-named like one and is not one:
+named like one and is not one.
+
+Ordering's, in `tests/Ordering.Api.Tests/ArchitectureTests.cs`, is the list of
+building blocks and the helper its test calls once for each of the five
+assemblies; the excerpt leaves out the lines between the two:
 
 ```csharp
-// Every referenced assembly that is one of this repository's own must belong
-// to this service or be a building block. Common.Contracts is on the list,
-// which is §4.3 from the other side: it is a building block rather than a
-// service, so the one assembly permitted to cross a boundary needs no
-// exception of its own.
-string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
+    /// <summary>§4.1's building blocks by name, because Common.TestSupport is named like one and is not.</summary>
+    private static readonly string[] BuildingBlocks =
+        ["Common.Application", "Common.Contracts", "Common.Domain", "Common.Infrastructure", "Common.Web"];
 
-string[] foreign =
-[
-    .. assembly
-        .GetReferencedAssemblies()
-        .Where(IsFirstParty)
-        .Select(reference => reference.Name!)
-        .Where(name =>
-            !BuildingBlocks.Contains(name) &&
-            !name.StartsWith($"{self}.", StringComparison.Ordinal))
-        .Order()
-];
+    private static void ShouldStayInsideThisService(string subject, AssemblyName[] references)
+    {
+        string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
+
+        string[] foreign =
+        [
+            .. references
+                .Where(IsFirstParty)
+                .Select(reference => reference.Name!)
+                .Where(name =>
+                    !BuildingBlocks.Contains(name) &&
+                    !name.StartsWith($"{self}.", StringComparison.Ordinal))
+                .Order()
+        ];
+
+        foreign.ShouldBeEmpty($"{subject} reaches across a service boundary: {string.Join(", ", foreign)}");
+    }
 ```
+
+`Common.Contracts` is on the list, which is §4.3 from the other side: it is a
+building block rather than a service, so the one assembly permitted to cross a
+boundary needs no exception of its own.
 
 > **`IsFirstParty` is a measured property rather than a list, and the reason
 > is the scaffold.** §4.5's script renders this file:
@@ -494,8 +501,8 @@ build failure; no ASP.NET, because it is a job host
 resolves a `DbContext` and calls `Database.Migrate()`, and none of the building
 blocks is on that path.
 
-**Nothing references the migrator, and saying so took a third gate rather than
-a wider prefix.** No row in the table names the `*.Migrator` as something a
+**Nothing references the migrator, and saying so is a third gate rather than a
+wider prefix.** No row in the table names the `*.Migrator` as something a
 project *may* reference: it is a leaf, a job host that resolves a `DbContext`
 and calls `Database.Migrate()` ([§7.4](07-persistence.md)), so it references
 and is not referenced. The cross-service gate cannot see that edge, because it
@@ -514,14 +521,15 @@ genuinely absent: a service's Application references its own Domain, and that
 Domain cannot exist without `Common.Domain` (row one), so it arrives carrying
 it. The gate is about *assembly* references, where §9.3's mapper naming
 `IDomainEvent` puts `Common.Domain` in the list whether or not any csproj says
-so. Adding the project reference to close the gap was considered and rejected:
+so. Adding the project reference to close the gap is rejected:
 it would make the second row disagree with the first about what "its own
 Domain" includes, to no benefit a compiler can see.
 
 **Each list is a subset check rather than an equality.** An entry for something
-no longer referenced is a pre-authorised hole rather than a failure, which is a
-real cost and the smaller one — the alternative fails a build for a legitimate
-*removal*, and the decision worth forcing is the one that adds a dependency.
+an assembly does not reference is a pre-authorised hole rather than a failure,
+which is a real cost and the smaller one — the alternative fails a build for a
+legitimate *removal*, and the decision worth forcing is the one that adds a
+dependency.
 
 > **Every gate above reads *emitted* references, which is narrower than the
 > word this table uses.** `GetReferencedAssemblies` reads an assembly's
@@ -552,292 +560,216 @@ does nothing else with Infrastructure — which is what makes the rule above
 enforceable rather than aspirational, and what lets tests exercise the real
 registration path ([§6.2](06-cqrs.md)) instead of a hand-built container.
 
-```csharp
-// Ordering.Application/DependencyInjection.cs
-public static IServiceCollection AddOrderingApplication(this IServiceCollection services)
-{
-    services.AddPluggableFrom(typeof(PlaceOrderCommand).Assembly);       // §6.2
-
-    // The clock. TimeProvider is an abstract BCL class, not an ambient
-    // service — ASP.NET Core does not register it, so without this line every
-    // handler that takes one fails to resolve. §5.4's "pass time in as a
-    // parameter" discipline runs through here, and FakeTimeProvider replaces
-    // exactly this registration in tests (§12.7).
-    services.AddSingleton(TimeProvider.System);
-
-    // Application-layer metrics: OrderMetrics records domain quantities, so it
-    // lives and registers here rather than in Infrastructure (§13.3).
-    // RequestMetrics likewise — LoggingBehavior injects it, and the pipeline
-    // is Application.
-    //
-    // Registration is not construction, and neither of these is reachable
-    // without traffic: OrderMetrics waits for the first order event (§6.6),
-    // RequestMetrics for a dispatched request — which a health probe is not.
-    // MetricsInitialiser (§13.6) forces both, and a test there asserts that
-    // every registered *Metrics type is on its parameter list.
-    services.AddSingleton<OrderMetrics>();                               // §13.3
-    services.AddSingleton<RequestMetrics>();                             // §13.3
-
-    // Not AddScoped<IDispatcher, Dispatcher>: Dispatcher is internal to
-    // Common.Application (§6.2), so this assembly cannot name it.
-    services.AddDispatcher();
-
-    // The same reason, one section over: DomainEventDispatcher,
-    // ProjectionRegistry and its cache are all internal to Common.Application
-    // (§7.5), so the three registration lines they need are not lines this
-    // assembly can write either. Not three AddScoped lines — the cache is a
-    // singleton, for the reason §7.5 gives beside it.
-    services.AddDomainEventDispatcher();                                // §7.5
-
-    // Not an open generic, so the §6.2 scan cannot find it — one service, one
-    // mapper, registered by hand. DomainEventDispatcher injects it, so a
-    // missing line here fails ValidateOnBuild rather than failing silently.
-    services.AddScoped<IIntegrationEventMapper, OrderingIntegrationEventMapper>();
-
-    // Ordered, explicit, not scanned — registration order is pipeline order
-    // (§6.3). Unregistered, nothing opens a transaction and no write persists.
-    services.AddScoped(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
-    services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
-    services.AddScoped(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
-    services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
-
-    // The key one of those two builds and the other writes (§8.5, ADR-037).
-    // Scoped, because a command is. Here rather than inside AddDispatcher,
-    // because these lines are where a reader finds out what the pipeline is
-    // made of — and because omitting it does not fail at startup:
-    // ValidateOnBuild never constructs an open generic, so the miss surfaces
-    // as an unresolvable TransactionBehavior on the first dispatched command.
-    services.AddScoped<IdempotencyContext>();
-
-    services.AddValidatorsFromAssemblyContaining<PlaceOrderValidator>();
-    return services;
-}
-```
+`AddOrderingApplication`, in
+`src/Services/Ordering/Ordering.Application/DependencyInjection.cs`:
 
 ```csharp
-// Ordering.Infrastructure/DependencyInjection.cs
-public static IServiceCollection AddOrderingInfrastructure(
-    this IServiceCollection services,
-    IConfiguration configuration)
-{
-    services.AddDbContext<OrderingDbContext>(o =>
-        o.UseSqlServer(
-            configuration.GetConnectionString("Ordering"),   // runtime identity, §7.1
-            sql => sql.EnableRetryOnFailure()));
-
-    // Projections, cache invalidators and command mappers live here, not in
-    // Application — scanning only Application would skip them all (§6.2).
-    services.AddPluggableFrom(typeof(OrderRepository).Assembly);
-
-    // §9.5's inbox filter is common code, so it names DbContext rather than
-    // this service's derived type — and this alias is what makes that legal.
-    // GetRequiredService, not AddScoped<DbContext, OrderingDbContext>(): the
-    // second form compiles, resolves and builds a SECOND context in the same
-    // scope, so the inbox row commits in its own transaction and §9.5's
-    // atomic-with-the-handler row silently becomes its non-atomic one.
-    services.AddScoped<DbContext>(sp => sp.GetRequiredService<OrderingDbContext>());
-
-    services.AddScoped<IUnitOfWork, EfUnitOfWork>();                    // §6.3
-    services.AddScoped<IDomainEventCollector, EfDomainEventCollector>(); // §7.5
-    services.AddScoped<IIntegrationEventPublisher, OutboxPublisher>();   // §9.3
-    services.AddScoped<IOrderRepository, OrderRepository>();
-
-    // §6.5's read side. Singleton, holding the runtime connection string and
-    // constructing per call — the connections it hands out are the caller's
-    // to dispose, so there is no scoped state to capture. An instance, not a
-    // type: SqlConnectionFactory takes the string, so a type registration has
-    // no constructor the container can satisfy, and the ValidateOnBuild in
-    // Program.cs below refuses the host before it serves a request.
-    services.AddSingleton<IDbConnectionFactory>(
-        new SqlConnectionFactory(configuration.GetConnectionString("Ordering")!));
-
-    // The outbox's persisted type names (§9.4). Singleton and built here, so a
-    // duplicate name fails this host at startup rather than one message at
-    // delivery. Two assemblies: contracts for the Broker lane, this service's
-    // domain events for the Local one.
-    //
-    // Registered as a source rather than a finished map, because a test host
-    // has to add its own event types (§12.4) and a map built by `new` in this
-    // line leaves no way to. Adding to the source is not the same as replacing
-    // the map: the production assemblies stay in the list, so a test still
-    // cannot stage something the real host would reject.
-    //
-    // An instance, not a factory, and that is what makes the sentence above
-    // true — a test resolves the registered descriptor and calls Add on it.
-    // A factory would leave a test with nothing to reach, and re-registering
-    // a second source is the replacement this is written to avoid.
-    services.AddSingleton(
-        new MessageTypeSource(typeof(V1.OrderPlaced).Assembly, typeof(Order).Assembly));
-
-    // All three of the source, not just its assemblies. §9.4's rename
-    // procedure records an Alias and a WriteAs on this object, and a factory
-    // that reads only Assemblies drops both — the host starts clean and the
-    // rename abandons rows on the release the procedure exists to make safe.
-    services.AddSingleton(sp =>
+    public static IServiceCollection AddOrderingApplication(this IServiceCollection services)
     {
-        MessageTypeSource source = sp.GetRequiredService<MessageTypeSource>();
-        return new MessageTypeMap(source.Assemblies, source.Aliases, source.WrittenNames);
-    });
+        services.AddPluggableFrom(typeof(DependencyInjection).Assembly);   // §6.2
+        services.AddDispatcher();
 
-    // The map's factory is lazy, and this is what makes "a duplicate name
-    // fails the host" true: ValidateOnBuild checks the call site and never
-    // invokes it, so without a hosted service resolving the map the
-    // constructor's throw lands on a background thread in a host that has
-    // been ready for hours. Registered before the dispatcher, because hosted
-    // services start in order.
-    services.AddHostedService<MessageTypeMapValidator>();                 // §9.4
+        // Explicit rather than scanned, beside the dispatcher it serves, as §4.2's sample has it (§7.5).
+        services.AddDomainEventDispatcher();
 
-    // The schemas the dispatcher and the retention purge compose their
-    // statements against (§9.4, §9.5, §8.5). Values, because
-    // Common.Infrastructure is every service's and cannot hold a literal — and
-    // every one of them from ONE local, so no two of these tables can end up
-    // naming different schemas. No count in this comment: it said "both" and
-    // "the two tables" while there were two, and §8.5's marker made it three.
-    const string schema = "ordering";
-    services.AddSingleton(new OutboxTable(schema));
-    services.AddSingleton(new InboxTable(schema));
-    services.AddSingleton(new IdempotencyMarkerTable(schema));
+        // §9.3's allow-list, explicit so that what this service publishes is a decision, not a scan's finding.
+        services.AddScoped<IIntegrationEventMapper, OrderingIntegrationEventMapper>();
 
-    // The retention windows of §9.4, §9.5 and §8.5, the batch size and the
-    // per-pass ceiling.
-    // Registered rather than const: §9.5 tells the reader to check the inbox
-    // window against their broker's redelivery limits, and a number a chapter
-    // says to check has to be one a service can change.
-    services.AddSingleton(new RetentionPolicy());
+        // The clock (§5.4) and the request histogram (§13.3), which LoggingBehavior injects.
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<RequestMetrics>();
 
-    // The payload format, and the converters that put this service's value
-    // objects in it. Money has a private constructor, so without its converter
-    // it deserialises to a zero amount and a null currency and nothing says so
-    // (§9.4).
-    services.AddSingleton<JsonConverter, MoneyJsonConverter>();
-    services.AddSingleton<OutboxJson>();
+        // §13.3's business instruments; Infrastructure's projection is the only caller (§6.6).
+        services.AddSingleton<OrderMetrics>();
 
-    // Plain ports — not open generics, so the §6.2 scan does not see them and
-    // each needs a line here. Omitting one fails at DI resolution on the first
-    // request that needs it, not at startup — unless ValidateOnBuild is on.
-    services.AddScoped<IProductPriceReader, ProjectedPriceReader>();      // §6.4
+        // Registration order is pipeline order; idempotency sits inside validation and outside the transaction (§6.3).
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
 
-    // §8.5's durable half, beside the unit of work rather than with its Redis
-    // sibling below: the two ports are backed by different systems, and only
-    // this one has to land on the transaction EfUnitOfWork opens. It resolves
-    // the DbContext alias registered above — which is what puts the marker in
-    // that transaction (ADR-037).
-    services.AddScoped<IIdempotencyMarkerStore, EfIdempotencyMarkerStore>();
+        // Scoped, as a command is; only open generics inject it, so a missing one fails the first command.
+        services.AddScoped<IdempotencyContext>();
 
-    // No ICurrentUser and no AddHttpContextAccessor. Both were here until
-    // PR-16 and both moved to AddCommonWebDefaults (§11.4, §13.2): neither type
-    // names a service, and the implementation reads IHttpContextAccessor, which
-    // arrives with a FrameworkReference that only Common.Web has. Every host
-    // that authenticates has a current user, which is the criterion that helper
-    // exists for.
-
-    // No IIdempotencyStore line, and its absence is a registration rather than
-    // an omission: RedisIdempotencyStore is Common.Infrastructure's (§8.5) and
-    // arrives with AddRedisConnections below, on RedisDistributedLockFactory's
-    // terms. That method is one call by design (§8.2) — a service either has
-    // Redis or does not — so a second registration here would be a second
-    // place for the lifetime and the keyed connection to disagree.
-
-    // No ITokenCache, no ClientCredentialsHandler and no ServiceIdentityOptions
-    // here. Ordering makes no synchronous outbound call — the price it needs
-    // comes from a local projection (§6.4) and everything else it says goes
-    // over the broker. Outbound identity belongs to a host calling out under a
-    // grant of its own (§9.7, §11.5), and Ordering is not one.
-
-    // Outbox metrics (§13.6) read the database, so they belong here.
-    // OrderMetrics does not — it is an Application type (§13.3) and is
-    // registered by AddOrderingApplication above. OutboxStats gets its OWN
-    // connection factory, bounded by OutboxStats.ConnectTimeoutSeconds: the
-    // shared IDbConnectionFactory would leave SqlClient's default on the open,
-    // and §13.6 argues why its two bounds only work together.
-    string metricsConnectionString =
-        new SqlConnectionStringBuilder(configuration.GetConnectionString("Ordering"))
-        {
-            ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
-        }.ConnectionString;
-
-    services.AddSingleton<IOutboxStats>(sp =>
-        new OutboxStats(new SqlConnectionFactory(metricsConnectionString), sp.GetRequiredService<OutboxTable>()));
-    services.AddSingleton<OutboxMetrics>();
-
-    // The two delivery lags, the rejection counter and the inbox suppression
-    // counter (§13.3). Injected by IntegrationEventConsumer<T>,
-    // CommandConsumer<,> and InboxFilter<T>, resolved from the provider by
-    // ProjectionInvoker — all four live here. Forced at startup for the same
-    // reason as OrderMetrics: a consumer is constructed when a message
-    // arrives, so on a quiet service these instruments do not exist.
-    services.AddSingleton<MessagingMetrics>();
-
-    // Forces construction of the metrics singletons in both layers. Resolving
-    // them is the whole job: nothing else injects OutboxMetrics, and an
-    // observable gauge that is never constructed never reports.
-    services.AddHostedService<MetricsInitialiser>();
-
-    // Keyed connections (§8.1), the HybridCache over the cache one (§8.2), the
-    // lock factory and §8.5's idempotency store — all four, because this is
-    // one call by design. No service name passed: the key prefix comes from
-    // ApplicationName, the single source §8.5 already uses for idempotency
-    // keys.
-    //
-    // Both connection strings are read EAGERLY here and throw naming the
-    // missing one, so this line is what a half-configured deployment stops.
-    services.AddRedisConnections(configuration);
-    services.AddMassTransitMessaging(configuration);                     // §9
-
-    // After the bus: hosted services stop in reverse, so the dispatcher stops
-    // while the transport it drains into is still up. Registered by type, not
-    // by factory: the generic overload records an ImplementationType, and the
-    // integration-test fixture removes this exact descriptor by it (§12.4),
-    // since MassTransit's bus is a hosted service too.
-    services.AddHostedService<OutboxDispatcher>();
-
-    // §9.4's, §9.5's and §8.5's retention, in the one hosted service §9.5
-    // asks for. Registered last, so it is the first stopped: a deploy that
-    // interrupts a purge loses nothing an hour will not redo.
-    services.AddHostedService<RetentionPurgeService>();
-
-    // Readiness checks live here, not in Common.Web — they need connection
-    // strings, which the shared host package does not have (§13.5).
-    services
-        .AddHealthChecks()
-        .AddSqlServer(configuration.GetConnectionString("Ordering")!, name: "sql", tags: ["ready"])
-        .AddRedis(configuration.GetConnectionString("RedisCache")!, name: "redis-cache", tags: ["ready"])
-        // No RabbitMQ line, deliberately: AddMassTransit above registers the
-        // bus health check itself — "masstransit-bus", tagged ready (§13.5).
-        // No outbox line either: the backlog is §13.6's gauges and alerts, and
-        // §13.5 says why it must not be a check.
-        .AddRedis(configuration.GetConnectionString("RedisCoordination")!, name: "redis-coordination", tags: ["ready"]);
-
-    return services;
-}
+        // §4.2's sample line, anchored on a validator: losing the last one fails the build, not silently.
+        services.AddValidatorsFromAssemblyContaining<PlaceOrderValidator>();
+        return services;
+    }
 ```
 
+Most comments name their line's owner, and three reasons live here alone.
+`TimeProvider.System` is registered here so that Application's registration
+stands on its own, rather than on whatever a host's other building blocks happen
+to `TryAdd`. `AddDispatcher` and `AddDomainEventDispatcher` stand in for
+`AddScoped` lines this assembly cannot write, because `Dispatcher`,
+`DomainEventDispatcher` and `ProjectionRegistry` are internal to
+`Common.Application` (§6.2, §7.5). And the mapper is not an open generic, so
+§6.2's scan cannot find it; `DomainEventDispatcher` injects it, so a missing
+line fails `ValidateOnBuild` rather than failing silently.
+
+`AddOrderingInfrastructure`, in
+`src/Services/Ordering/Ordering.Infrastructure/DependencyInjection.cs`:
+
 ```csharp
-// Ordering.Api/Program.cs — the only file that may reference Infrastructure.
+    public static IServiceCollection AddOrderingInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        // ADR-079, before any connection below is opened.
+        services.AddTransportSecurity();
+
+        // §7.1's runtime identity, no DDL; EnableRetryOnFailure makes §6.3's CreateExecutionStrategy a real retry.
+        services.AddDbContext<OrderingDbContext>(o =>
+            o.UseSqlServer(
+                configuration.GetConnectionString("Ordering"),
+                sql => sql.EnableRetryOnFailure()));
+
+        // §9.5's inbox filter names DbContext. One instance, not AddScoped<DbContext, OrderingDbContext>(), which
+        // would commit the inbox row in a second context's own transaction.
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<OrderingDbContext>());
+
+        // Each layer scans itself (§6.2); scanning only Application would skip this layer's projections and mappers.
+        services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
+
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
+        services.AddScoped<IOrderRepository, OrderRepository>();             // §5.6
+
+        // §6.4's price port, over the local projection, so the write transaction never waits on Catalog.
+        services.AddScoped<IProductPriceReader, ProjectedPriceReader>();
+
+        // §8.5's durable half, in EfUnitOfWork's transaction through the alias above. A missing line fails the
+        // first command, not startup: ValidateOnBuild never constructs TransactionBehavior's open generic.
+        services.AddScoped<IIdempotencyMarkerStore, EfIdempotencyMarkerStore>();
+
+        // §7.5's two halves, scoped because the context is.
+        services.AddScoped<IDomainEventCollector, EfDomainEventCollector>();
+        services.AddScoped<IIntegrationEventPublisher, OutboxPublisher>();
+
+        // Values, since Common.Infrastructure is every service's; one local, so no two tables name different schemas.
+        const string schema = "ordering";
+        services.AddSingleton(new OutboxTable(schema));
+        services.AddSingleton(new InboxTable(schema));
+        services.AddSingleton(new IdempotencyMarkerTable(schema));
+
+        // §9.4's, §9.5's and §8.5's retention windows, registered rather than const so the service can change them.
+        services.AddSingleton(new RetentionPolicy());
+
+        // §9.4's persisted type names; the source is separate so a test host can add its own assembly.
+        // The map is lazy, so MessageTypeMapValidator is what fails the host, not the first message, on a duplicate.
+        services.AddSingleton(
+            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(Order).Assembly));
+        services.AddSingleton(sp =>
+        {
+            MessageTypeSource source = sp.GetRequiredService<MessageTypeSource>();
+            return new MessageTypeMap(source.Assemblies, source.Aliases, source.WrittenNames);
+        });
+        services.AddHostedService<MessageTypeMapValidator>();
+
+        // §9.4's payload format. A value object on a domain event needs a converter here: most deserialise to
+        // their default rather than failing, which §12.4's round trip catches.
+        services.AddSingleton<JsonConverter, MoneyJsonConverter>();
+        services.AddSingleton<JsonConverter, AddressJsonConverter>();
+        services.AddSingleton<JsonConverter, PaymentReferenceJsonConverter>();
+        services.AddSingleton<JsonConverter, TrackingNumberJsonConverter>();
+        services.AddSingleton<OutboxJson>();
+
+        // §13.3's messaging instruments.
+        services.AddSingleton<MessagingMetrics>();
+
+        // §13.6's outbox gauges. OutboxStats reads the runtime key's data plane (§7.1), and runs in gauge callbacks,
+        // so it gets its own bounded connect timeout, which no query inherits.
+        string metricsConnectionString =
+            new SqlConnectionStringBuilder(configuration.GetConnectionString("Ordering"))
+            {
+                ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
+            }.ConnectionString;
+
+        services.AddSingleton<IOutboxStats>(sp =>
+            new OutboxStats(new SqlConnectionFactory(metricsConnectionString), sp.GetRequiredService<OutboxTable>()));
+        services.AddSingleton<OutboxMetrics>();
+
+        // Constructs the metrics singletons at start, before the bus, so they exist for the first message (§13.6).
+        services.AddHostedService<MetricsInitialiser>();
+
+        // §8's two connections, read eagerly, so a missing key stops the host.
+        services.AddRedisConnections(configuration);
+
+        // The bus (§9); AddMassTransit registers its own readiness check.
+        services.AddMassTransitMessaging(configuration);
+
+        // §9.4's poll loop. The generic overload records the ImplementationType §12.4's fixture removes it by.
+        // After the bus, since hosted services stop in reverse and the dispatcher drains into a live transport.
+        services.AddHostedService<OutboxDispatcher>();
+
+        // §9.4's, §9.5's and §8.5's retention. Last, so first stopped: an interrupted purge loses nothing.
+        services.AddHostedService<RetentionPurgeService>();
+
+        // §6.5's read side, singleton as §4.2's sample has it, on the runtime key rather than the migrator's (§7.1).
+        services.AddSingleton<IDbConnectionFactory>(
+            new SqlConnectionFactory(configuration.GetConnectionString("Ordering")!));
+
+        // Readiness lives here, not in Common.Web, because it needs the connection strings (§13.5). Both Redis
+        // instances, since AbortOnConnectFail is false and §8.1 gives them different servers.
+        services
+            .AddHealthChecks()
+            .AddSqlServer(configuration.GetConnectionString("Ordering")!, name: "sql", tags: ["ready"])
+            .AddRedis(
+                configuration.GetConnectionString(RedisConnections.Cache)!,
+                name: "redis-cache",
+                tags: ["ready"])
+            .AddRedis(
+                configuration.GetConnectionString(RedisConnections.Coordination)!,
+                name: "redis-coordination",
+                tags: ["ready"]);
+
+        return services;
+    }
+```
+
+Three reasons live here alone, and so do three absences.
+`SqlConnectionFactory` is registered as an instance because it takes the
+connection string, so a type registration leaves the container no constructor
+to satisfy and `ValidateOnBuild` refuses the host; a singleton is safe because
+the connections it hands out are the caller's to dispose.
+`MessageTypeMapValidator` is registered before the dispatcher because hosted
+services start in order. `Money` has a private constructor, so without its
+converter it deserialises to a zero amount and a null currency and nothing
+says so (§9.4).
+
+The absences are registrations made elsewhere. `ICurrentUser` and
+`AddHttpContextAccessor` belong to `AddCommonWebDefaults` (§11.4, §13.2):
+neither names a service, and the implementation reads `IHttpContextAccessor`,
+which arrives with a `FrameworkReference` that among the building blocks only
+`Common.Web` has. `IIdempotencyStore` arrives with `AddRedisConnections`, which
+registers `RedisIdempotencyStore` (§8.5), because a service either has Redis or
+does not (§8.2). And there is no `ITokenCache`, `ClientCredentialsHandler` or
+`ServiceIdentityOptions`, because Ordering makes no synchronous outbound call
+and so holds no outbound identity of its own (§9.7, §11.5).
+
+And `src/Services/Ordering/Ordering.Api/Program.cs`, from its builder on:
+
+```csharp
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-// Refuse to start if any registered service has a dependency the container
-// cannot satisfy, or if a singleton captures a scoped one. Both are otherwise
-// discovered on the first request that happens to need them.
+// Refuse to start on an unsatisfiable dependency or a captured scope, rather than on the first request.
 builder.Host.UseDefaultServiceProvider(o =>
 {
     o.ValidateOnBuild = true;
     o.ValidateScopes = true;
 });
 
-builder.AddCommonWebDefaults();                                     // §13.2
-builder.Services.AddOrderingApplication();                          // §6.2
-builder.Services.AddOrderingInfrastructure(builder.Configuration);  // above
+builder.AddCommonWebDefaults();                 // §13.2
+builder.Services.AddOrderingApplication();       // §6.2
+builder.Services.AddOrderingInfrastructure(builder.Configuration);   // §4.2, §7.1
 
-// Ordering's permission policies (§11.4). Deliberately not inside either
-// helper: Application knows nothing about HTTP, and Common.Web must not know
-// Ordering's names. A policy named by an endpoint and registered nowhere
-// throws on the first request that reaches it — never at startup.
-//
-// RequirePermission rather than RequireClaim("permission", …), and constants
-// rather than literals: the claim type belongs to Common.Web so a policy and a
-// resource check cannot drift apart, and the name is written twice — here and
-// at the endpoint — so the compiler should be the thing comparing them.
+// Appendix C's OpenAPI deliverable: document only, no UI.
+builder.Services.AddCommonOpenApi();
+
+// ADR-052's server half; no interceptor, as the only caller-supplied value is parsed before the dispatcher.
+builder.Services.AddGrpc();
+
+// RequirePermission, so the claim type is PermissionClaim.Type's alone (§11.4). No orders:admin policy: that string
+// is a claim CancelOrderHandler checks against a loaded aggregate.
 builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(OrderingPermissions.Write, p => p.RequirePermission(OrderingPermissions.Write))
@@ -846,36 +778,41 @@ builder.Services
 
 WebApplication app = builder.Build();
 
-// Middleware order is behaviour, not formatting. Each line below depends on
-// the ones above it, and getting it wrong fails silently rather than loudly.
-// §10.6's one header: nosniff on every response, including the ones
-// UseExceptionHandler writes below. Above everything, so nothing can answer
-// without it — and written from OnStarting, so the handler's clear does not
-// take it off the 500.
+// Middleware order is behaviour, not formatting (§4.2).
+// §10.6's nosniff, above everything, so every response carries it, the handler's 500 included.
 app.UseSecurityHeaders();
 app.UseExceptionHandler();        // §10.5 — catches every fault below it
 app.UseCorrelationId();           // §10.4 — above everything else that logs
-app.UseRequestTimeouts();         // §9.7, ADR-066 — below the exception handler
-// §10.5's promise applied to the statuses no handler produces: a challenge
-// and a forbid are written by the middleware below and carry NO BODY, so the
-// platform's one error shape had two holes in it until PR-17 measured a 401.
-// Since .NET 8 this middleware writes them through IProblemDetailsService.
+app.UseRequestTimeouts();         // §9.7 — below the exception handler, which would answer 499
+
+// §10.5's error shape for the bodiless challenge and forbid the middleware below writes.
 app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4 — evaluates the permission policies
 
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
-app.MapOrderEndpoints();          // §11.4
+app.MapOpenApi();
+
+app.MapOrderEndpoints();          // §11.4 — the group fails closed
+
+// ADR-052, on the Http2 endpoint appsettings.json declares; [Authorize] travels on the service class.
+app.MapGrpcService<DeliveryAddressService>().RetrySafe(RetrySafety.ReadOnly);   // ADR-052 — Get reads one address
 
 app.Run();
 
-// Top-level statements compile to an INTERNAL Program, which
-// WebApplicationFactory<Program> cannot see from another assembly (§12.4).
-// One line here rather than InternalsVisibleTo: it does not have to name the
-// assembly that consumes it, and the consumer is Ordering.TestSupport rather
-// than either of the test projects — which is the version people get wrong.
+// Top-level statements compile to an internal Program, which WebApplicationFactory cannot see (§12.4).
 public partial class Program;
 ```
+
+Ordering's permission policies are registered here rather than inside either
+helper, because Application knows nothing about HTTP and `Common.Web` must not
+know Ordering's names; a policy an endpoint names and nothing registers throws
+on the first request that reaches it, never at startup. A constant names each
+one, so the compiler compares the name written here with the one at the
+endpoint. `public partial class Program` is one line rather than
+`InternalsVisibleTo` because it does not have to name the assemblies that
+consume it, `Ordering.TestSupport` and `Ordering.Api.Tests` among them, each of
+which `InternalsVisibleTo` would have to list.
 
 Every ordering constraint below is stated rather than left to the sample,
 because each one produces a defect that no test catches by accident:
@@ -883,28 +820,30 @@ because each one produces a defect that no test catches by accident:
 | Rule | What breaks otherwise |
 |---|---|
 | `UseSecurityHeaders` outermost, above `UseExceptionHandler` | A response written by anything above it carries no `nosniff` ([§10.6](10-api-gateway.md), [ADR-031](adr/ADR-031-the-service-owns-nosniff-the-ingress-owns-hsts.md)). Outermost is only half the rule, though, and the other half is not an ordering at all: the extension writes from `Response.OnStarting` rather than before `next`, because `UseExceptionHandler` **clears** the response before writing §10.5's problem body. A header assigned on the way in is gone from exactly the 500 where a caller-supplied value is most likely to be reflected — so this line placed first and assigning eagerly would still lose the case it exists for |
-| `UseCorrelationId` before everything that logs, `UseExceptionHandler` immediately above it | Early log lines and traces have no correlation ID, so the one request you need to follow is the one you cannot. The handler is the deliberate exception — it has to wrap the middleware below it to catch their faults, and it reaches the ID through `Request.Headers` rather than the log scope ([§10.4](10-api-gateway.md)). This row said the handler was **alone** above it until `UseSecurityHeaders` landed; that line sits above both and decides nothing about correlation, which is why "immediately" is the word doing the work |
+| `UseCorrelationId` before everything that logs, `UseExceptionHandler` immediately above it | Early log lines and traces have no correlation ID, so the one request you need to follow is the one you cannot. The handler is the deliberate exception — it has to wrap the middleware below it to catch their faults, and it reaches the ID through `Request.Headers` rather than the log scope ([§10.4](10-api-gateway.md)). `UseSecurityHeaders` sits above both and decides nothing about correlation, which is why the handler is *immediately* above it rather than alone |
 | `UseRequestTimeouts` below `UseExceptionHandler` | Above it, the handler answers the cancelled request first, as a 499, and §10.5's 504 is never written ([ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)) |
 | `UseAuthentication` before `UseAuthorization` | **Every authenticated request 401s** — in a `WebApplication` too. Omitting a call is repaired by auto-insertion; writing both in the wrong order is not, because the markers they set suppress it. See the callout below |
 | `UseAuthentication` before `UseRateLimiter` (gateway only) | Same empty `User`, but this one does not 403 — §10.3's per-user partition key silently degrades to per-IP, and everyone behind one NAT shares a single bucket. **Silent is the measured half**: reversing the two leaves every test in `Gateway.Api.Tests` green, the authenticated-partition test included, so nothing in the repository is watching this line (see below) |
-| `UseForwardedHeaders` above the limiter, and **below** the handler and the correlation ID (gateway only) | Two rules meeting, and this sample had them the wrong way round until PR-17: putting it first means a fault parsing a forwarded header unwinds past no exception handler, and anything the middleware logs runs outside the correlation scope. Neither of those two reads the address, so nothing is lost by letting them wrap it — while the limiter, which does read it, stays below. `ForwardedHeadersTests` covers the lower half: below `UseRateLimiter`, two forwarded addresses collapse onto the one connection the gateway can see |
+| `UseForwardedHeaders` above the limiter, and **below** the handler and the correlation ID (gateway only) | Two rules meeting: putting it first means a fault parsing a forwarded header unwinds past no exception handler, and anything the middleware logs runs outside the correlation scope. Neither of those two reads the address, so nothing is lost by letting them wrap it — while the limiter, which does read it, stays below. `ForwardedHeadersTests` covers the lower half: below `UseRateLimiter`, two forwarded addresses collapse onto the one connection the gateway can see |
 | Both before endpoint mapping | `RequireAuthorization` has nothing to evaluate against |
 | Health endpoints mapped **anonymous** | Probes 401, Kubernetes reads that as unhealthy, and the pod is killed in a loop |
 
 Registration without middleware is the quiet failure mode here. `AddRateLimiter`
 succeeds and does nothing if `UseRateLimiter` is absent — no error, no warning,
 no failing test unless one specifically asserts on a limit.
+`AddResponseCompression` is the same: without `UseResponseCompression` it
+succeeds and compresses nothing.
 
-`MapCommonHealthEndpoints()` is the same line it has always been and now means
-something stronger. An empty predicate set is a passing predicate set, so a host
-that registered no readiness checks answers `/health/ready` with 200 without
-having verified anything — indistinguishable from a host that deliberately gates
-readiness on nothing. The parameterless call is now the claim that this service
-**does** gate readiness on something, and [§13.5](13-observability.md)'s helper
-refuses to start it when no `ready`-tagged check is registered. A service whose
-readiness set goes missing whole in a refactor therefore fails at startup rather
-than taking traffic it cannot serve; the one host entitled to an empty set says
-so at the call site instead, and it is the gateway below.
+`MapCommonHealthEndpoints()` means more than it reads. An empty predicate set
+is a passing predicate set, so a host that registered no readiness checks
+answers `/health/ready` with 200 without having verified anything —
+indistinguishable from a host that deliberately gates readiness on nothing.
+So the parameterless call is the claim that this service **does** gate
+readiness on something, and [§13.5](13-observability.md)'s helper refuses to
+start it when no `ready`-tagged check is registered. A service whose readiness
+set goes missing whole in a refactor therefore fails at startup rather than
+taking traffic it cannot serve; the one host entitled to an empty set says so
+at the call site instead, and it is the gateway below.
 
 **Whole, and not one member of it** — the guard asks whether *any* registration
 carries the tag, so a service that drops its `AddSqlServer(...)` while keeping
@@ -913,151 +852,117 @@ argues why the narrower case is not caught; it is named here because this table
 is where the line gets read, and a guard read as stronger than it is buys a
 confidence nobody checked.
 
-> **`AddAuthentication` is not in that class, and saying it was cost this table
-> a wrong row — twice, in opposite directions.** `WebApplication` adds the
-> authentication and authorization middleware itself whenever the matching
-> services are registered, so **deleting** `app.UseAuthentication()` from a
-> service host changes nothing observable — verified by deleting it from
-> `Catalog.Api/Program.cs`, after which every test in the repository still
-> passed. That is the correction this callout was written for.
+> **`AddAuthentication` is not one of the registrations that does nothing
+> without its middleware.** `WebApplication` adds the authentication and
+> authorization middleware itself whenever the matching services are
+> registered, so **deleting** `app.UseAuthentication()` from a service host
+> changes nothing observable.
 >
-> **Reversing the two is a different matter, and the row above used to promise
-> it was harmless.** Auto-insertion is suppressed by the markers the explicit
-> calls set, and it repairs an *omission* rather than an ordering: with both
-> calls present in the wrong order, authorization evaluates against a `User`
-> nothing has populated and challenges. Measured through a real
-> `WebApplication` over three pipelines — correct order 200, **reversed 401**,
-> neither call 200 — which is the only arrangement of those three that a reader
-> would not predict.
+> **Reversing the two is a different matter.** Auto-insertion is suppressed by
+> the markers the explicit calls set, and it repairs an *omission* rather than
+> an ordering: with both calls present in the wrong order, authorization
+> evaluates against a `User` nothing has populated and challenges. Through a
+> real `WebApplication`, the correct order answers 200, the **reversed one
+> 401** and neither call 200 — the only arrangement of those three that a
+> reader would not predict.
 >
-> So the honest summary is that the framework protects you from forgetting a
-> line and not from misplacing one. Write both, in this order, and let
-> `AuthenticationMiddlewareTests` hold the claim: it drives all three pipelines
-> and is the regression guard if a release ever stops auto-inserting.
+> So the framework protects you from forgetting a line and not from misplacing
+> one. Write both, in this order, and let `AuthenticationMiddlewareTests` hold
+> the claim: it drives all three pipelines and is the regression guard if a
+> release ever stops auto-inserting.
 
 The **gateway** has its own pipeline and is the only place rate limiting is
-applied (§10.1); a service behind it does not call `UseRateLimiter`:
+applied (§10.1); a service behind it does not call `UseRateLimiter`.
+`src/Gateway/Gateway.Api/Program.cs` follows in three excerpts. Its
+registrations, up to the reverse proxy:
 
 ```csharp
-// Gateway.Api/Program.cs
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-builder.AddCommonWebDefaults(GatewayLimits.RequestTimeout);      // §13.2, ADR-066
+builder.Host.UseDefaultServiceProvider(o =>
+{
+    o.ValidateOnBuild = true;
+    o.ValidateScopes = true;
+});
 
-// §10.1's body ceiling, and the only one in the platform. Kestrel's 30 MB is a
-// web server's default rather than a choice; GatewayLimits argues the number.
-// Enforced where the body is READ, which is inside the forwarder — so a request
-// that fails authorization is refused without its size being considered.
+builder.AddCommonWebDefaults(GatewayLimits.RequestTimeout);   // §13.2, §9.7
+
+// ADR-083's root trace per request, which needs both: the hosting layer's propagator and OpenTelemetry's.
+builder.Services.AddSingleton<DistributedContextPropagator, EdgeTracePropagator>();
+Sdk.SetDefaultTextMapPropagator(new TraceContextPropagator());
+
+// §10.1's request size limit; GatewayLimits argues the number.
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = GatewayLimits.MaxRequestBodyBytes);
 
-// §10.1's response compression. The providers and the compressible MIME types
-// are the framework's defaults, deliberately — that list omits
-// application/problem+json, which is what keeps §10.5's error bodies (the one
-// place a client-supplied value is reflected back) out of the compressed set.
-// EnableForHttps is the whole of ADR-020, and it is what makes compression
-// happen at all: the block below rewrites Request.Scheme from the ingress's
-// X-Forwarded-Proto, and this middleware decides at the first WRITE, so the
-// scheme it reads is https even though the hop was plain.
+// §10.1's response compression; EnableForHttps is true against BREACH (ADR-020).
 builder.Services.AddResponseCompression(o => o.EnableForHttps = true);
 
-// RFC 9111's no-transform, which ASP.NET Core does not implement and which an
-// intermediary may not ignore (ADR-020). Replace rather than a registration
-// placed above AddResponseCompression, whose TryAddSingleton would otherwise
-// make ordering decide it silently.
+// ADR-020's no-transform. Replace, because AddResponseCompression's TryAddSingleton would let order decide.
 builder.Services.Replace(
     ServiceDescriptor.Singleton<IResponseCompressionProvider, NoTransformResponseCompressionProvider>());
 
-// YARP is registered here and configured from the "ReverseProxy" section
-// shown in §10.2. Without this, MapReverseProxy() throws at startup and the
-// entire routing configuration is inert.
+// §10.2.
 builder.Services
     .AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+```
 
-builder.Services.AddRateLimiter(/* §10.3 */);
+Then, past the rate limiter's two policies and its rejection writer, which are
+§10.3's, the gateway's own authorization policies and the two blocks that are
+conditional on the deployment shape:
 
-// Every policy §10.2's routes name that Common.Web does not already register.
-// "authenticated" comes from AddCommonWebDefaults; these two are the gateway's
-// own, and each is a permission check rather than a role check for the reason
-// §11.4 gives. A route naming a policy nobody registered fails CLOSED and
-// loudly: the config load throws out of MapReverseProxy() below, naming the
-// policy and the route, so the process does not start (§10.2).
+```csharp
+// §10.2's route policies beyond Common.Web's "authenticated", as permission checks for §11.4's reason.
 builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(GatewayPermissions.InventoryAdmin, p => p.RequirePermission(GatewayPermissions.InventoryAdmin))
     .AddPolicy(GatewayPermissions.PaymentsAdmin, p => p.RequirePermission(GatewayPermissions.PaymentsAdmin));
 
-// Both of the following are conditional on the deployment shape, and each is
-// REQUIRED once switched on. "Off" and "on but unconfigured" are different
-// states: the first is a valid topology, the second is a silent defect.
+// Each is optional, and required once switched on: "on but unconfigured" is a silent defect.
 bool behindProxy = builder.Configuration.GetValue<bool>("Ingress:Enabled");
 bool corsEnabled = builder.Configuration.GetValue<bool>("Cors:Enabled");
 
 if (behindProxy)
 {
-    // A load balancer or Ingress sits in front (§15.3), so
-    // Connection.RemoteIpAddress is the proxy on every request. Without this
-    // the rate limiter partitions all anonymous traffic into ONE bucket and
-    // its per-client limit becomes a global cap — configured, running, and a
-    // denial of service against legitimate users rather than a defence.
-    //
-    // Read HERE and not inside the callback: an options callback runs when the
-    // options are first resolved, so a missing section read from inside one
-    // throws on a request rather than at startup — the deferral this pair of
-    // flags exists to avoid.
+    // Read here, not in the Configure callback, so a missing section fails at startup rather than on a request.
     string[] trusted = builder.Configuration.GetRequiredSection("Ingress:TrustedNetworks").Get<string[]>()!;
 
     builder.Services.Configure<ForwardedHeadersOptions>(o =>
     {
         o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
-        // Trust only the ingress. Left empty, ASP.NET Core trusts nothing
-        // beyond loopback and silently keeps the proxy's address; opened to
-        // all, any client can spoof its partition key and bypass the limit.
-        //
-        // KnownIPNetworks and System.Net.IPNetwork, both spelled deliberately:
-        // KnownNetworks carries ASPDEPR005 at .NET 10 — an error under
-        // ADR-019 — and the IPNetwork it held is the one
-        // Microsoft.AspNetCore.HttpOverrides declares, which the using above
-        // brings into scope in place of the framework type the new property
-        // takes. This sample said both the other way and did not compile.
+        // Trust only the ingress: opened to all, any client could choose its own rate-limit partition.
+        // KnownNetworks carries ASPDEPR005, an error under ADR-019; IPNetwork is qualified past HttpOverrides' own.
         o.KnownIPNetworks.Clear();
         o.KnownProxies.Clear();
+
         foreach (string cidr in trusted)
             o.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(cidr));
     });
 }
 
-// Only when browsers call the gateway directly rather than through a CDN or
-// same-origin edge (§10.2). Enabled but unset would yield WithOrigins([]),
-// which rejects every browser request while starting cleanly — surfacing as a
-// CORS error in a console rather than as the missing setting it is (§15.4).
-// Hoisted out of the callback for the reason given above: the CORS options are
-// built on the first request that needs them.
+// Only when browsers call the gateway directly (§10.2); read here for the reason above.
 if (corsEnabled)
 {
     string[] origins = builder.Configuration.GetRequiredSection("Cors:Origins").Get<string[]>() ?? [];
 
-    // GetRequiredSection proves the section EXISTS and nothing more, and four
-    // review rounds each found a value the previous check admitted:
-    //
-    //   ""                       binds from `Cors__Origins__0=`; WithOrigins
-    //                            takes it and matches no browser. "Blank
-    //                            counts as missing", §11.3's rule for
-    //                            Identity:Authority
-    //   "*"                      invalid beside AllowCredentials below, and
-    //                            ASP.NET Core only says so when the policy is
-    //                            BUILT — on a preflight, not at startup
-    //   "https//spa.example"     one missing colon, compared literally
-    //   "https://spa.example/"   every parsed property agrees it is fine;
-    //                            the browser sends no trailing slash
-    //   "https://spa.example:443" a browser omits the scheme's default port
-    //
-    // Seven rounds of that produced six clauses and a seventh value, so the
-    // check stopped enumerating prohibitions. GetLeftPart(UriPartial.Authority)
-    // IS the canonical origin — scheme, host, and a port only when it is not
-    // the default — so the parse and that equality between them reject every
-    // variant above.
+    if (origins.Length == 0 || origins.Any(string.IsNullOrWhiteSpace))
+    {
+        throw new InvalidOperationException(
+            "'Cors:Origins' is enabled but holds no usable origin. An empty or blank entry yields a policy " +
+            "matching nothing, so every browser request fails while the host reports healthy (§15.4).");
+    }
+
+    if (origins.Any(o => o == "*"))
+    {
+        throw new InvalidOperationException(
+            "'Cors:Origins' contains '*', which cannot be combined with AllowCredentials — ASP.NET Core " +
+            "throws when the policy is built, on the first preflight rather than at startup. Name the " +
+            "origins, or drop credentials as a deliberate separate decision (§10.2).");
+    }
+
+    // One equality with the canonical origin rather than a list of prohibitions: the ways a string can be
+    // an origin are finite and the ways it can fail are not. UserInfo is tested apart; the authority keeps it.
     int[] malformed =
     [
         .. origins
@@ -1070,26 +975,13 @@ if (corsEnabled)
             .Select(entry => entry.index)
     ];
 
-    // Three guards, not one condition. They fail for different reasons and a
-    // reader needs to be told which: an empty list has no index to report, and
-    // the wildcard's whole diagnostic is the word AllowCredentials — collapsing
-    // them into one `||` produces "unusable at index " with nothing after it,
-    // and loses the only sentence that makes the wildcard case actionable.
-    if (origins.Length == 0 || origins.Any(string.IsNullOrWhiteSpace))
-        throw new InvalidOperationException("'Cors:Origins' is enabled but holds no usable origin.");
-
-    if (origins.Any(o => o == "*"))
-        throw new InvalidOperationException("'Cors:Origins' contains '*', which AllowCredentials below forbids.");
-
-    // Indexes, never the values: credentials in the authority are one of the
-    // rejected shapes, and an exception message reaches the logs — where
-    // §13.4's redactor scrubs keyed attributes and cannot see a secret
-    // interpolated into a string. The guard that rejects a password must not
-    // be the thing that publishes one.
+    // Indexes, never the values: a message reaches the logs, where §13.4's redactor cannot see a secret.
     if (malformed.Length > 0)
     {
         throw new InvalidOperationException(
-            $"'Cors:Origins' is not an origin at index {string.Join(", ", malformed)}.");
+            $"'Cors:Origins' is not a canonical origin at index {string.Join(", ", malformed)}. One is an http " +
+            "or https scheme, a host and a port only when it is not the scheme's default, in lowercase: the " +
+            "check is one equality with that canonical form (§4.2). The value is deliberately not echoed (§13.4).");
     }
 
     builder.Services
@@ -1098,77 +990,85 @@ if (corsEnabled)
                 .WithOrigins(origins)
                 .AllowAnyHeader()
                 .AllowAnyMethod()
+                // Neither header is CORS-safelisted, so a browser cannot read either without this.
+                .WithExposedHeaders("Retry-After", CorrelationIdExtensions.Header)
                 .AllowCredentials()));
 }
+```
 
+And its pipeline:
+
+```csharp
 WebApplication app = builder.Build();
 
-// §10.6's one header: nosniff on every response, including the ones
-// UseExceptionHandler writes below. Above everything, so nothing can answer
-// without it — and written from OnStarting, so the handler's clear does not
-// take it off the 500.
+// Middleware order is behaviour, not formatting (§4.2).
+// §10.6's header on every response, the exception handler's 500 included.
 app.UseSecurityHeaders();
-app.UseExceptionHandler();
+app.UseExceptionHandler();        // §10.5 — catches every fault below it
 app.UseCorrelationId();           // §10.4 — adopts a plausible client ID, replaces any other
-app.UseRequestTimeouts();         // §9.7, ADR-066 — below the exception handler
+app.UseRequestTimeouts();         // §9.7 — below the exception handler, which would answer 499
 
-// High enough to wrap every writer below it, because this middleware acts by
-// replacing the response body feature. Nothing here is an ordering rule a test
-// can catch — moving it below the auth pair changes no observable response,
-// measured — but its ABSENCE is: AddResponseCompression succeeds and compresses
-// nothing without it, the same quiet shape the limiter's registration has.
+// Above every writer it has to compress, because it works by replacing the response body feature.
 app.UseResponseCompression();     // §10.1, ADR-020
 
+// Above the auth pair, because it converts the bodiless challenge and forbid they write.
 app.UseStatusCodePages();         // §10.5
 
-// Above everything that reads the client address, and below the two that do
-// not. Until this runs the address is the proxy's; skipped when the gateway IS
-// the edge (Compose), where it is already the client and trusting a forwarded
-// header would let any caller choose its own rate-limit bucket.
+// Above everything that reads the client address; skipped at the edge (Compose), where a forwarded header
+// would let a caller choose its own rate-limit bucket.
 if (behindProxy)
     app.UseForwardedHeaders();
 
 if (corsEnabled)
     app.UseCors();
 
-// Authentication FIRST, then the limiter, then authorization. §10.3's
-// "authenticated" policy partitions on the subject claim, and until this line
-// runs HttpContext.User is an empty principal.
-app.UseAuthentication();
+// Authentication before the limiter, because §10.3's "authenticated" policy partitions on the subject claim.
+app.UseAuthentication();          // §11.3
 app.UseRateLimiter();             // §10.3 — needs the user, precedes policy work
-app.UseAuthorization();
+app.UseAuthorization();           // §11.4
 
+// MapReverseProxy()'s own three steps, beneath the one that keeps the edge's deadline a 504 (§9.7).
 app.MapReverseProxy(proxy =>
 {
-    proxy.Use(ProxyDeadline.RethrowAsync);   // ADR-066 — the edge's deadline is a 504
+    proxy.Use(ProxyDeadline.RethrowAsync);
     proxy.UseSessionAffinity();
     proxy.UseLoadBalancing();
     proxy.UsePassiveHealthChecks();
 });
 
-// The edge owns no database and no broker, so its readiness set is empty and
-// that is the whole of §10.1's design rather than a gap. Declared rather than
-// implied: an empty predicate set passes, so the one host entitled to it says
-// so at the call site and every other host fails to start without checks.
+// The edge owns no database and no broker, so its readiness set is empty (§10.1).
 app.MapCommonHealthEndpoints(ownsNoReadinessDependencies: true);   // §13.5 — anonymous; kubelet carries no token
 
 app.Run();
 ```
 
-> **Nothing tests this ordering, and the attempt to test it is the evidence.**
-> PR-17 added a test proving two authenticated subjects hold independent
-> buckets — the property the subject partition key exists for — and then ran it
-> against a pipeline with `UseRateLimiter` moved above `UseAuthentication`. It
-> passed, and so did every other test in that project. The limiter is still
-> live under the reversal, because the anonymous window still rejects at its
-> hundredth request; why the authenticated bucket does not collapse onto the
-> shared fallback there is unexplained, and an unexplained pass is not a guard.
+**The origin check is one equality with the canonical origin**, not a list of
+prohibitions, because `GetRequiredSection` proves only that the section
+exists. `GetLeftPart(UriPartial.Authority)` is the canonical origin — scheme,
+host, and a port only when it is not the scheme's default — so the parse and
+that equality between them reject a missing colon, a trailing slash and a
+default port written out, none of which a browser's `Origin` header ever
+matches. A blank entry, which binds from `Cors__Origins__0=`, counts as
+missing, which is §11.3's rule for `Identity:Authority`; `*` is refused
+because it is invalid beside `AllowCredentials`, and ASP.NET Core says so only
+when the policy is built, on a preflight rather than at startup. The three
+refusals stay three guards rather than one condition because they fail for
+different reasons and each message says which.
+
+> **Nothing tests this ordering.** `RateLimitedRouteTests`'
+> `The_authenticated_policy_gives_each_subject_its_own_bucket` proves two
+> authenticated subjects hold independent buckets — the property the subject
+> partition key exists for — and it stays green, as does every other test in
+> that project, with `UseRateLimiter` moved above `UseAuthentication`. The
+> limiter is still live under the reversal, because the anonymous window still
+> rejects at its hundredth request; why the authenticated bucket does not
+> collapse onto the shared fallback there is unexplained, and an unexplained
+> pass is not a guard.
 >
 > So the row above is two claims of different standing. That the failure is
 > **silent** is measured. That the partition **degrades to per-IP** is
 > reasoned from the code and is not observed by anything. Keep the order, and
-> do not believe a test is holding it — the same posture the callout below
-> takes for `app.UseAuthentication()` itself.
+> do not believe a test is holding it.
 
 Rate limiting sits **between** authentication and authorization, and both halves
 of that are load-bearing.
@@ -1196,7 +1096,7 @@ than mapping a probe inline. Its readiness set is empty — the gateway owns no
 database — so `/health/ready` returns healthy as soon as the process is up,
 which is correct.
 
-**What changed is that the emptiness is now declared rather than left silent.**
+**The emptiness is declared rather than left silent.**
 `ownsNoReadinessDependencies: true` is a claim made at the call site, and
 without it [§13.5](13-observability.md)'s helper refuses to start the host at
 all. The reason is that the probe cannot tell the two cases apart: "nothing of
@@ -1282,35 +1182,35 @@ rather than `latestPatch`: only one of the two makes that first sentence true.
 > without it.** `latestPatch` accepts any patch inside the feature band, so it
 > resolves to whatever the machine happens to have: a developer on `10.0.305`
 > compiles with those analysers while CI, which `setup-dotnet` gives exactly the
-> version named here, compiles with these. Since ADR-019 makes analyser output a
-> build gate, that divergence does not show up as a warning — it shows up as a
-> build that is green on every machine and red in CI, reproducing nowhere. This
-> repository has had one.
+> version named here, compiles with these. Because ADR-019 makes analyser
+> output a build gate, that divergence does not show up as a warning — it shows
+> up as a build that is green on every machine and red in CI, reproducing
+> nowhere.
 >
 > `disable` is what closes it: the version named is the version used, or
 > `dotnet` refuses to run at all rather than quietly choosing another. Feature
-> bands were never the exposure — `latestPatch` already declined to cross them
-> (`10.0.100` rejects `10.0.302`) — patches were, and they are the ones that
+> bands are not the exposure — `latestPatch` declines to cross them
+> (`10.0.100` rejects `10.0.302`) — patches are, and they are the ones that
 > ship analyser changes.
 >
-> The cost is the intended one and it is larger than it was: every machine needs
-> this exact patch, not merely one in the band, so a bump is a deliberate edit
-> here that everyone installs before they can build. That is the same trade as
-> the exact package pins below, applied to the compiler that reads them.
+> The cost is the intended one: every machine needs this exact patch, not
+> merely one in the band, so a bump is a deliberate edit here that everyone
+> installs before they can build. That is the same trade as the exact package
+> pins below, applied to the compiler that reads them.
 >
 > **One "machine" cannot install anything, and that makes the pin a two-file
 > edit.** The build stage of each service image ([§15.2](15-cicd-deployment.md))
 > runs whatever SDK its base tag carries, so those `FROM` lines name this exact
-> patch too and a bump here is a bump there in the same change. They floated on
-> `10.0-noble` once, on the argument that copying this file in would make any
-> mismatch loud. It did: the tag moved a feature band, `disable` refused it, and
-> every image stopped building on a restore that exited 155. Loud is the right
-> behaviour for a drift nobody chose and the wrong one for the artefact that
-> ships.
+> patch too and a bump here is a bump there in the same change. A floating tag
+> such as `10.0-noble` is no substitute: when it moves, `disable` refuses the
+> SDK it carries and every image stops building. Loud is the right behaviour
+> for a drift nobody chose and the wrong one for the artefact that ships.
 
 `Directory.Packages.props` pins every package version once for the whole
 repository. This prevents the situation where two services depend on different
-EF Core minor versions and behave differently under identical code.
+EF Core minor versions and behave differently under identical code. The file
+opens with the two properties below, and one `PackageVersion` per package
+follows, exact and grouped by `Label`:
 
 ```xml
 <Project>
@@ -1318,8 +1218,6 @@ EF Core minor versions and behave differently under identical code.
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
-  <!-- One PackageVersion per package, exact, grouped by Label. -->
-</Project>
 ```
 
 **Every package means every package**, including the test ones, and the set is
@@ -1356,7 +1254,7 @@ somebody stops reading its output:
 
 Which versions those are is `Directory.Packages.props`'s answer and never this
 chapter's. Currency and vulnerability scanning are a separate obligation, and
-the tooling for them is not yet in this repository.
+the tooling for them is not in this repository.
 
 > **Trap — pinning floors instead of versions.** Writing `Version="8.*"`, or
 > treating the file as a set of minimums to be "reviewed quarterly", means a
@@ -1385,12 +1283,10 @@ different from the rest. One command renders it instead:
 python tools/new-service/new_service.py Yankee --port 5199
 ```
 
-The name and the port are a probe rather than a real service, and that is
-deliberate: this sample said `Ordering --port 5101` until PR-18 made both of
-those taken, at which point the command a reader copies from the chapter
-raised `ScaffoldError` — and the paragraph below, which says the run refuses a
-port another service already publishes, made the chapter contradict its own
-sample. A probe cannot quietly become a service later.
+The name and the port are a probe rather than a real service, deliberately:
+the run refuses a port another service already publishes (below), so a
+command naming a real service's port would raise `ScaffoldError` as printed,
+and a probe cannot quietly become a service later.
 
 `--worker` renders §4.1's other host shape. The nine projects are the same
 nine with `<Name>.Worker` where `<Name>.Api` would be, and what leaves is
@@ -1399,10 +1295,10 @@ consumes from the broker and nothing dials it (§3.2). **Kestrel stays bound
 all the same**, because §15.3 separates a worker's chart from Ordering's
 by `service.enabled` alone and its probes still address the container port:
 §13.5's health endpoint is the one listener a worker has, and the kubelet
-reaches it without a Service in front of it. The mode is the rename's rather than a patch
-table's: the host's name reaches a project, a namespace, a Compose service
-key, a Dockerfile entry point and a test fixture's type, and a patch can
-edit a file's text but not its path.
+reaches it without a Service in front of it. The mode is the rename's rather
+than a patch table's: the host's name reaches a project, a namespace, a
+Compose service key, a Dockerfile entry point and a test fixture's type, and a
+patch can edit a file's text but not its path.
 
 `--pure-consumer` renders §4.1's third shape and implies `--worker`. §4.1
 gives such a service no Domain project and §3.2 nothing to publish, so the
@@ -1428,7 +1324,7 @@ template has accumulated: the
 connection factory ([§6.5](06-cqrs.md)), the readiness checks
 ([§13.5](13-observability.md)) — SQL registered by the service, the bus's
 `masstransit-bus` by MassTransit itself, and a rendered service that lost them
-would now fail to start rather than report ready, because
+would fail to start rather than report ready, because
 `MapCommonHealthEndpoints` refuses an empty readiness set unless the host
 declares it owns none (§4.2) — the bus registration of
 [§9](09-messaging.md), whose eager read means a scaffolded host refuses to
@@ -1459,7 +1355,7 @@ so a service scaffolded with the table and without the default ages its markers
 on the writing pod's clock while the purge ages them on the server's — the skew
 that migration exists to remove, reintroduced in every new service by omission.
 **`AddIdempotencyMarkerRowVersion` adds that table's `rowversion` and travels
-on the sharpest version of the argument yet**: `RetentionPurgeService` names
+on the sharpest version of the argument**: `RetentionPurgeService` names
 the column in both of its marker statements, so a service scaffolded without
 the migration fails its own purge with `Invalid column name 'RowVersion'` on
 the first pass
@@ -1472,8 +1368,9 @@ It then edits the shared files: `Platform.slnx`, the Compose index — one
 excludes both halves of the pair, `.env.example`
 ([§14.1](14-local-development.md)), the broker definitions that grant the new
 service an account of its own — without which it renders a service that starts
-and cannot authenticate, since the broker has held no shared principal since
-#44 — the `AddMeter` line in `Common.Web` for a publishing service's outbox
+and cannot authenticate, since the broker holds no shared principal
+([ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md)) —
+the `AddMeter` line in `Common.Web` for a publishing service's outbox
 meter, without which §13.6's gauges are published and collected by nothing,
 since §13.2's export names meters one by one — and, under
 `.github/secret-scan/allowed/`, the file covering each
@@ -1491,42 +1388,19 @@ fingerprint matching nothing is a stale entry that fails the build. Where
 the case in the scaffold suite's own synthetic root. The new service
 builds and its **ninety-four** tests pass before a line of it is written,
 **forty-six** of them against real SQL Server and RabbitMQ containers —
-counts measured against a rendered service, by PR-18 when they read forty-one
-and sixteen three PRs after they stopped being true, again by PR-22 when they
-read fifty-six, twice by PR-32, twice by PR-33, again by PR-35, and again when
-the outbox gauges' registration suite joined the template: 1, 18 and 75. The
-forty-six is the `Category=Integration` count of §12.4, which is a filter
+counts measured against a rendered service, whose `Yankee.Domain.Tests`,
+`Yankee.Application.Tests` and `Yankee.Api.Tests` hold 1, 18 and 75 of them.
+The forty-six is the `Category=Integration` count of §12.4, which is a filter
 rather than a tally.
 
-**PR-35 found them stale by four before it had added anything**, which is the
-first time the drift was somebody else's rather than the recounting PR's own.
-PR-34 put four cases into `RetentionPurgeTests` for
-[ADR-039](adr/ADR-039-the-markers-purge-asks-the-claim-rather-than-out-counting-it.md)
-— a file the scaffold copies — and left this pair alone, so the tree read
-eighty-seven while this sentence said eighty-three. PR-35 then added two and
-measured eighty-nine, which is the arithmetic *failing* in the direction the
-rule below predicts: two added, six apparent. **A figure nobody recounts goes
-stale on the next PR's clock, not on its own**, and the only way to find that
-out is the render.
-
-**Arithmetic is not a remeasurement, and the two rules that follow from that
-have both been tested by now.** PR-22 added three tests to the template and the
-total moved by four, so whoever changes what the scaffold copies renders
-`Yankee` and runs it rather than adding to the number here — which is what
-PR-32 did when ADR-037's marker suite joined the template: rendered, built, and
-run as `Yankee.Domain.Tests` (1), `Yankee.Application.Tests` (18) and
-`Yankee.Api.Tests` (60) — **twice**, because the first render predated a test
-that the same pull request later added to the template, and the figures were
-stale between one commit and the next. PR-33 rendered again and read 1, 18 and
-64, its four additions all landing in the API suite and all wanting a
-container; it recounted because a reviewer noticed the figures had gone stale
-inside the pull request that made them so, and then rendered a second time
-because a later round of the same review added a fourth test — which is PR-32's
-own two-render story arriving for the same reason one pull request on. The
-second rule is that this is the only figure in
-this section a reader cannot check from the tree, so it is the one to distrust
-first — a number three PRs stale here looks exactly like a number taken
-yesterday.
+**Arithmetic is not a remeasurement.** The total need not move by the number of
+tests a change adds to the template, so whoever changes what the scaffold copies
+renders `Yankee` and runs it rather than adding to the number here, and renders
+again after the last commit that changes the template, because a figure taken
+before it is stale by the next one. **A figure nobody recounts goes stale on the
+next PR's clock, not on its own**, and this is the only figure in this section a
+reader cannot check from the tree, so it is the one to distrust first — a number
+three PRs stale looks exactly like a number taken yesterday.
 
 **There is no template directory, and that is the design.** The script reads
 `src/Services/Catalog` at run time, so there is exactly one copy of the
@@ -1536,8 +1410,8 @@ beside it would be a second `DbContext`, a second migrator host and a second
 Dockerfile that nothing builds and nothing reconciles.
 
 **It copies no domain.** Catalog's `Product`, its command, its query and its
-endpoints are excluded by name; what a new service inherits is PR-07's state
-with the later wiring on it, not PR-10's state with the nouns changed.
+endpoints are excluded by name; what a new service inherits is Catalog's
+wiring, not Catalog's slice with the nouns changed.
 Renaming an aggregate would hand the next service a deletion job and a
 vocabulary it did not choose. Three things therefore arrive with the first real
 slice rather than with the scaffold — each with the part of it that needs them,
@@ -1591,10 +1465,7 @@ route ([§10.2](10-api-gateway.md)) — the route belongs to the gateway's
 configuration, not the service's tree — and the Helm chart
 ([§15.3](15-cicd-deployment.md)).
 
-**The chart's exclusion cost nothing until PR-23 and now costs something**, and
-the sentence above is the same either way, which is why it is worth saying
-separately. Before the charts existed, "the scaffold writes no chart" described
-a file nobody had; since they exist, a scaffolded service compiles, tests,
+**The chart's exclusion has a cost**: a scaffolded service compiles, tests,
 starts under Compose — and cannot be deployed, with nothing in the render
 saying so. That is a gap in the scaffold rather than a contradiction here, and
 it is **owed**, and the shape of what is owed is the shape §15.3 already
@@ -1603,19 +1474,14 @@ defines, and a `values.yaml`. Only the last is real work, and it is real work �
 it carries every per-service decision, which is precisely what a template
 cannot guess and what §15.3 spends a section arguing.
 
-**No file count here, deliberately.** An earlier revision said "four files,
-three of which are one line", which was wrong on both numbers and wrong in a
-way that would have propagated: a later PR closing this gap by emitting four
-files emits a chart that does not deploy. The count moves whenever the library
-gains a template — the deployables today carry six of those includes or seven,
-depending on whether the service owns a database — so the thing worth writing
-down is the rule, not the arithmetic.
+**No file count here, deliberately.** The count moves whenever the library
+gains a template, so a chart emitted to a remembered count would not deploy;
+the thing worth writing down is the rule, not the arithmetic.
 
 **The scaffold refuses `Shipping` without `--worker` and `Notifications`
-without `--pure-consumer`.** Documenting the gap left the script willing to
-render either in a shape §4.1 does not give it, which would have contradicted
-the chapter quietly. A note is not a guard, so the guard stayed and narrowed
-with each mode that joined.
+without `--pure-consumer`.** A note is not a guard: without the refusal the
+script would render either in a shape §4.1 does not give it, and contradict
+the chapter quietly.
 
 ---
 
