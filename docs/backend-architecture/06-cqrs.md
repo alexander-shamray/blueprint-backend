@@ -1544,13 +1544,14 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > word that matters: a rule rejection is a *correct* answer from a service with
 > no prices, so nothing about it looks like a fault. Two mitigations, both
 > worth having: Catalog republishing its full catalogue on demand (an
-> operational task, not a code path), which does not exist yet, as the next
-> callout says, and the [§13.6](13-observability.md) alert on business volume,
-> which catches the case where orders stop for a reason no technical metric
-> shows.
+> operational run of its migrator image, not a code path;
+> [ADR-090](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)),
+> and the [§13.6](13-observability.md) alert on business volume, which catches
+> the case where orders stop for a reason no technical metric shows.
 
-> **This projection's rebuild procedure is Catalog's republish, and it does not
-> exist yet — for `ordering.Products` exactly as for `ordering.ProductPrices`.**
+> **This projection's rebuild procedure is Catalog's republish
+> ([ADR-090](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)),
+> for `ordering.Products` exactly as for `ordering.ProductPrices`.**
 > The trap at the end of this chapter says to keep a rebuild script in source
 > control from day one, and Ordering cannot hold one: it has no source of truth
 > for either a price or a name to rebuild *from*. Both tables guard on
@@ -1571,17 +1572,19 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > turns on it: an order placed through this door is the one a repair that read
 > names at *insert* time could never fill, because at insert there is no name
 > to read. A product whose price never changes stays absent indefinitely,
-> which is why the republish is the procedure that is owed.
+> which is why a republish is the procedure that repairs it.
 >
-> **The republish must carry each product's original `OccurredAt`, and this is
+> **The republish carries each product's original `OccurredAt`, and this is
 > the part that is easy to get wrong.** A loop that re-emits `ProductPublished`
 > stamped `now` would sail past every guard the projection has: the withdrawal
 > watermark compares against the event's own timestamp, so a fresh one re-lists
 > every product Catalog has ever discontinued. Rebuilding a read model is
 > therefore not "replay the current state" but "replay the facts with the times
-> they happened", which means Catalog has to have kept them. Naming that here
-> is cheaper than discovering it during an incident, which is when a rebuild is
-> reached for.
+> they happened", which means Catalog has to have kept them: it has
+> (`PublishedAt`, `LastEventAt` and `WithdrawnAt`, [ADR-075](adr/ADR-075-a-products-events-are-stamped-in-the-order-its-writes-committed.md)),
+> and the run stages each product's current state under those stamps. The price
+> a product held between its first and last change is kept nowhere, and is not
+> replayed.
 
 Ordering's read models react to two different sources through two different
 interfaces (§9.4): `OrderSummaryProjection` implements `IProjectionHandler<T>`
