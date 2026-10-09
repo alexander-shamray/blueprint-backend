@@ -145,6 +145,21 @@
     "OrderId": "required System.Guid",
     "Reference": "required System.String"
   },
+  "Common.Contracts.Privacy.V1.PersonalDataDeleteCompleted": {
+    "CorrelationId": "required System.Guid",
+    "Count": "required System.Int32",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "RequestId": "required System.Guid",
+    "Responder": "required System.String"
+  },
+  "Common.Contracts.Privacy.V1.PersonalDataDeleteRequested": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "RequestId": "required System.Guid",
+    "SubjectId": "required System.Guid"
+  },
   "Common.Contracts.Shipping.V1.ShipmentDelivered": {
     "CorrelationId": "required System.Guid",
     "MessageId": "required System.Guid",
