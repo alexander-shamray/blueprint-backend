@@ -96,6 +96,7 @@ decision looks wrong.
 | **ADR-087** | [A caller cancels an order only as a customer request](adr/ADR-087-a-caller-cancels-an-order-only-as-a-customer-request.md) |
 | **ADR-088** | [The realm gate judges a worker's cap expanded, and the audience scope's mappers exactly](adr/ADR-088-the-realm-gate-judges-a-workers-cap-expanded-and-the-audience-scopes-mappers-exactly.md) |
 | **ADR-089** | [The browser-origin obligation binds the clients that exchange a code from a page](adr/ADR-089-the-browser-origin-obligation-binds-the-clients-that-exchange-a-code-from-a-page.md) |
+| **ADR-090** | [Catalog republishes the facts it still holds, from the migrator image, with their original stamps](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md) |
 
 ---
 
