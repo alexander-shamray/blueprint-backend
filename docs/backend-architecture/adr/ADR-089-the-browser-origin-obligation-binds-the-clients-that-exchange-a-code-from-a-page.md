@@ -15,11 +15,11 @@ origin declared for it would be a CORS grant nothing uses. ADR-046's sentence
 was true while the gate named only the two browser clients; ADR-052's workers
 and the BFF's client made it untrue, and the gate was right not to follow it.
 **Consequences.** A client added to the gate's named set is not held to an
-origin by being named; it is held only if it is added beside `web-app` and
-`mobile-app` as a browser client. A public client that runs a page exchange and
-is named without that entry would ship with no origin and fail as ADR-046
-describes, silently, so the gate's browser-client list is the place a new
-browser client has to be written.
+origin by being named; it is held only by a `check_web_origins` call of its own
+beside `web-app`'s and `mobile-app`'s in `realm_check.py`'s realm check. A
+public client that runs a page exchange and is named without that call could
+ship with no origin and fail as ADR-046 describes, and the gate would not say
+so; that call is where a new browser client has to be written.
 
 ---
 
