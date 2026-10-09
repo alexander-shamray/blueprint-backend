@@ -40,10 +40,20 @@ public class PersonalDataErasureTests
     }
 
     [Fact]
-    public void The_hash_is_the_same_for_the_same_request_and_subject()
+    public void The_hash_is_the_sha256_of_the_request_digits_then_the_subjects()
     {
+        // Pinned to a literal, so swapping the two or dropping the subject cannot pass.
         PersonalDataErasure.HashSubject(Request, Subject)
-            .ShouldBe(PersonalDataErasure.HashSubject(Request, Subject));
+            .ShouldBe("fdd2a64d014f2c406d2ece67c23212a92b356314f4deb42b24c395296ee304d2");
+    }
+
+    [Fact]
+    public void Two_subjects_in_one_request_do_not_share_a_hash()
+    {
+        Guid other = new("cccccccc-cccc-cccc-cccc-cccccccccccc");
+
+        PersonalDataErasure.HashSubject(Request, Subject)
+            .ShouldNotBe(PersonalDataErasure.HashSubject(Request, other));
     }
 
     [Fact]
