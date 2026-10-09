@@ -69,10 +69,8 @@ def _argument(flag: str, variable: str) -> str:
 # The two verdicts, and there are only two: a third reads as caution, but an
 # unattended rollout that cannot decide leaves a canary serving on nobody's
 # authority. Rollback is cheap because the canary is a second Deployment and
-# the stable one is never touched (ADR-022); the schema stays migrated, which
-# §15.5's backward-compatibility requirement is what makes survivable.
-#
-# When rollback is cheap, every doubt resolves to it.
+# the stable one is never touched (ADR-022), so every doubt resolves to it; the
+# schema stays migrated, which §15.5's compatibility rule makes survivable.
 PROMOTE = "promote"
 ROLLBACK = "rollback"
 
@@ -150,9 +148,8 @@ def migration_prefix(workload: str, plan_document: dict, root: Path = ROOT) -> s
 def validate_tag(tag: str, job_prefix: str | None = None) -> None:
     """Refuse a tag Helm's `--set-string` would read as more than a tag.
 
-    Helm's `strvals` splits assignments on a comma, so `deadbeef,image.registry=x`
-    also overrides the registry. The rule is `commerce.tag`'s (DNS-1123 labels,
-    63 characters at most), which admits no comma, equals or whitespace.
+    `strvals` splits on a comma, so `deadbeef,image.registry=x` sets the registry
+    too; the rule is `commerce.tag`'s (DNS-1123 labels, 63 characters at most).
     """
     if not tag:
         raise PlanError("image tag is empty: §15.3 refuses a deploy that cannot name its image")
@@ -263,9 +260,8 @@ def required_stable(weight_percent: int, overshoot_points: int) -> int:
 def plan(weight_percent: int, stable_replicas: int, overshoot_points: int) -> dict:
     """How many canary pods a requested weight costs, and what it really buys.
 
-    The share served is `canary / (stable + canary)` (§15.5), and the requested
-    weight is a ceiling: the largest canary within it, never the nearest. Where
-    one pod exceeds it this raises, naming the stable count that fits.
+    A pod's share is `canary / (stable + canary)` (§15.5), and the requested
+    weight is a ceiling, never a target: where one pod exceeds it, this raises.
     """
     if not 0 < weight_percent <= 100:
         raise PlanError(f"weight must be in (0, 100]; got {weight_percent}")
