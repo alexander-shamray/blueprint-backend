@@ -13,7 +13,10 @@ public sealed class PersonalDataErasure : AggregateRoot<Guid>
 
     private PersonalDataErasure() { }
 
-    /// <summary>The SHA-256 of the request id and the subject's, so two requests for one person do not link.</summary>
+    /// <summary>
+    /// The SHA-256 of the request id's 32 lowercase hex digits then the subject's, as UTF-8, so two requests for one
+    /// person do not link (ADR-092).
+    /// </summary>
     public static string HashSubject(Guid requestId, Guid subjectId) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"{requestId:N}{subjectId:N}")));
 
