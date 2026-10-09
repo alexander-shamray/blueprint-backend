@@ -116,8 +116,9 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │                                   referenced by the two above, which each need
 │   │                                   containers and cannot reference each other.
 │   ├── ...
-│   └── Platform.IntegrationTests/      Contract-assembly tests (§12.6) — the
-│                                       only suite that references every service
+│   └── Platform.IntegrationTests/      Contract-assembly tests (§12.6) and the
+│                                       journey (§12.1) — the only suite that
+│                                       references every service
 │
 ├── deploy/
 │   ├── compose/                        the index, one file per unit, overrides

@@ -99,6 +99,7 @@ decision looks wrong.
 | **ADR-090** | [Catalog republishes the facts it still holds, from the migrator image, with their original stamps](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md) |
 | **ADR-091** | [A host holding client credentials makes a call under a grant of its own, and not always to a peer](adr/ADR-091-a-host-holding-client-credentials-makes-a-call-under-a-grant-of-its-own-and-not-always-to-a-peer.md) |
 | **ADR-092** | [Privacy is a seventh service, and its responder set is fixed when a request is raised](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md) |
+| **ADR-093** | [The journey test walks one order across the services and asserts that they converge](adr/ADR-093-the-journey-test-walks-one-order-across-the-services-and-asserts-that-they-converge.md) |
 
 ---
 
