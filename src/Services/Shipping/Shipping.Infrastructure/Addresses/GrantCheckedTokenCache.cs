@@ -68,6 +68,8 @@ public sealed partial class GrantCheckedTokenCache(
         return token;
     }
 
+    public void Evict(string scope, string token) => inner.Evict(scope, token);
+
     /// <summary>Read, never validated: this host is not the token's audience, and a signature sizes no grant.</summary>
     /// <remarks>The parser's exception is dropped, as its message can quote the token (§13.4).</remarks>
     private JwtSecurityToken Read(string token)

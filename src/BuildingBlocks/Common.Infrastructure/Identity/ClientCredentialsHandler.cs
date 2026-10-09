@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Options;
 
@@ -13,9 +14,21 @@ public sealed class ClientCredentialsHandler(ITokenCache tokens, IOptions<Servic
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        string token = await tokens.GetAsync(identity.Value.Scope, cancellationToken);
+        string scope = identity.Value.Scope;
+        string token = await tokens.GetAsync(scope, cancellationToken);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        return await base.SendAsync(request, cancellationToken);
+        HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
+
+        // Evicted and handed back, not retried: the next call fetches afresh (§11.5).
+        if (Refused(response))
+            tokens.Evict(scope, token);
+
+        return response;
     }
+
+    /// <summary>A 401, as a gRPC peer's authorization answers too; or a method's <c>Unauthenticated</c>.</summary>
+    private static bool Refused(HttpResponseMessage response) =>
+        response.StatusCode == HttpStatusCode.Unauthorized ||
+        (response.Headers.TryGetValues("grpc-status", out IEnumerable<string>? status) && status.Contains("16"));
 }

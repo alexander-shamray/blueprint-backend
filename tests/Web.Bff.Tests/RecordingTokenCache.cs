@@ -14,6 +14,9 @@ public sealed class RecordingTokenCache : ITokenCache
     /// <summary>How many tokens have been handed out.</summary>
     public int Issued => _issued;
 
+    /// <summary>Every token evicted, in order.</summary>
+    public List<string> Evicted { get; } = [];
+
     public Task<string> GetAsync(string scope, CancellationToken ct)
     {
         lock (Scopes)
@@ -22,5 +25,13 @@ public sealed class RecordingTokenCache : ITokenCache
         }
 
         return Task.FromResult($"token-{Interlocked.Increment(ref _issued)}");
+    }
+
+    public void Evict(string scope, string token)
+    {
+        lock (Evicted)
+        {
+            Evicted.Add(token);
+        }
     }
 }

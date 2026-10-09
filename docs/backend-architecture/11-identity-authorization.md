@@ -1166,7 +1166,12 @@ each other.
 Mechanically this is a `DelegatingHandler` attached to every outbound client
 that calls a peer (§9.7), so no call site has to remember it. It is
 `src/BuildingBlocks/Common.Infrastructure/Identity/ClientCredentialsHandler.cs`,
-and the token it asks for is cached, so one fetch serves many calls:
+and the token it asks for is cached, so one fetch serves many calls. A token
+the callee refuses is evicted from the cache, so the next call fetches a fresh
+one rather than presenting the refused one until it expires; the refused call
+itself is handed back, not retried. The refusal is a 401, which is how a
+peer's authorization middleware answers a gRPC call too, or a `grpc-status`
+of `Unauthenticated` should a method ever raise one:
 
 ```csharp
 public sealed class ClientCredentialsHandler(ITokenCache tokens, IOptions<ServiceIdentityOptions> identity)
@@ -1177,11 +1182,23 @@ public sealed class ClientCredentialsHandler(ITokenCache tokens, IOptions<Servic
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
-        string token = await tokens.GetAsync(identity.Value.Scope, cancellationToken);
+        string scope = identity.Value.Scope;
+        string token = await tokens.GetAsync(scope, cancellationToken);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        return await base.SendAsync(request, cancellationToken);
+        HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
+
+        // Evicted and handed back, not retried: the next call fetches afresh (§11.5).
+        if (Refused(response))
+            tokens.Evict(scope, token);
+
+        return response;
     }
+
+    /// <summary>A 401, as a gRPC peer's authorization answers too; or a method's <c>Unauthenticated</c>.</summary>
+    private static bool Refused(HttpResponseMessage response) =>
+        response.StatusCode == HttpStatusCode.Unauthorized ||
+        (response.Headers.TryGetValues("grpc-status", out IEnumerable<string>? status) && status.Contains("16"));
 }
 ```
 
@@ -1192,9 +1209,11 @@ every retry replays the token the first attempt built — see the ordering in
 
 > **The inner position is not about a retry after a 401, because none
 > happens.** §9.7's standard resilience handler retries 5xx, 408 and
-> `HttpRequestException`; a 401 is none of them. On the gRPC hop it is further
-> off still, because the callee answers `Unauthenticated` as `grpc-status` on
-> an HTTP 200 and the pipeline never sees a status at all. What the inner
+> `HttpRequestException`; a 401 is none of them. That holds on the gRPC hop
+> too: a peer's authorization middleware refuses the call before the service
+> runs, with a plain HTTP 401 carrying no `grpc-status`, which the client
+> surfaces as `Unauthenticated` and the pipeline reads as a status it does not
+> retry. What the inner
 > position buys is narrower and real: **whenever a retry fires — which means
 > a transport fault — the repeated attempt asks the token cache again instead
 > of replaying the first attempt's token.** `PricingCredentialsTests` drives

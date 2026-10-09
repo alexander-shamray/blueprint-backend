@@ -133,6 +133,23 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
         counted.Value.ShouldBe(1, "a revoked grant is a defect somebody must see, not an outage to wait out");
     }
 
+    [Theory]
+    [InlineData(StatusCode.Unauthenticated, true)]
+    [InlineData(StatusCode.PermissionDenied, false)]
+    public async Task Only_an_Unauthenticated_answer_evicts_the_token_the_call_presented(
+        StatusCode status,
+        bool evicted)
+    {
+        _ordering.Fail(status);
+
+        await Should.ThrowAsync<AddressSourceRefusedException>(() =>
+            Source().GetAsync(new OrderId(KnownOrder()), TestContext.Current.CancellationToken));
+
+        // The stub answers with a status on an HTTP 200, which the handler reads from the headers (§11.5).
+        string presented = _ordering.Tokens.ShouldHaveSingleItem()["Bearer ".Length..];
+        _factory.Tokens.Evicted.Contains(presented).ShouldBe(evicted);
+    }
+
     [Fact]
     public async Task A_refusal_decided_inside_the_pipeline_reaches_the_caller_as_itself_and_is_counted_once()
     {
@@ -429,5 +446,9 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     {
         public Task<string> GetAsync(string scope, CancellationToken ct) =>
             throw new InvalidOperationException("The token endpoint refused this host's client credentials.");
+
+        public void Evict(string scope, string token)
+        {
+        }
     }
 }
