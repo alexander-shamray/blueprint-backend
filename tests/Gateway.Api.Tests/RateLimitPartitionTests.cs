@@ -74,7 +74,7 @@ public sealed class RateLimitPartitionTests(StubDestination stub) : IClassFixtur
         }
     }
 
-    /// <summary>The socket peer, which a TestServer request leaves null, set from a header only this test sends.</summary>
+    /// <summary>The socket peer, null on a TestServer request, set from a header only this test sends.</summary>
     private sealed class PeerStartupFilter : IStartupFilter
     {
         public const string Header = "X-Test-Peer";

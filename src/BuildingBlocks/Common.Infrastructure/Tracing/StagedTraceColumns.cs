@@ -20,7 +20,7 @@ public static class StagedTraceColumns
         builder.Property<string?>(StateColumn).HasMaxLength(StagedTrace.StateMaxLength).IsUnicode(false);
     }
 
-    /// <summary>Writes the current activity's context on a tracked row, in the transaction that writes the row.</summary>
+    /// <summary>Writes the current activity's context on a tracked row, in the row's own transaction.</summary>
     public static void Stamp(EntityEntry entry)
     {
         StagedTrace current = StagedTrace.Current;

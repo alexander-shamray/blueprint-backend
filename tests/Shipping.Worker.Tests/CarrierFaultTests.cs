@@ -35,7 +35,7 @@ public sealed class CarrierFaultTests : IDisposable
 
     private static string StallMapping() => Path.Combine(SimulatorMappings.Directory(), "book-stalled.json");
 
-    /// <summary>The simulator's stall cut to just past one attempt, since a stopping server waits out every delay.</summary>
+    /// <summary>The simulator's stall cut to just past one attempt, so a stop does not wait it out.</summary>
     private void ShortenTheStall()
     {
         JsonNode stall = JsonNode.Parse(File.ReadAllText(StallMapping()))!;
@@ -140,9 +140,9 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task An_open_circuit_makes_no_call_at_all()
     {
-        // The breaker sits inside the retry, so one call is MaxRetryAttempts + 1 attempts toward the throughput. Bounded
-        // by that throughput, since each call that reaches the stub logs at least one request: a call that throws
-        // before any request would otherwise loop for ever, and here it fails on the count below.
+        // The breaker sits inside the retry, so one call is MaxRetryAttempts + 1 attempts toward the throughput.
+        // Bounded by that throughput, since each call that reaches the stub logs at least one request: a call
+        // that throws before any request would otherwise loop for ever, and here it fails on the count below.
         CancellationToken ct = TestContext.Current.CancellationToken;
         for (int call = 0;
             call < CarrierHop.CircuitBreakerMinimumThroughput &&

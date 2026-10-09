@@ -43,7 +43,8 @@ public sealed class FulfilmentTraceContextTests(ServiceFixture fixture) : IAsync
     [Fact]
     public async Task The_booking_pass_is_a_child_of_the_trace_that_confirmed_the_order()
     {
-        (Guid order, ActivityTraceId confirming) = await InTraceAsync(() => _steps.ConfirmAsync(FulfilmentSteps.Kazakh));
+        (Guid order, ActivityTraceId confirming) =
+            await InTraceAsync(() => _steps.ConfirmAsync(FulfilmentSteps.Kazakh));
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
         (await _steps.StatusAsync(order)).ShouldBe("Booked");
@@ -56,7 +57,8 @@ public sealed class FulfilmentTraceContextTests(ServiceFixture fixture) : IAsync
     [Fact]
     public async Task The_cancellation_pass_joins_the_trace_that_asked_for_it_and_not_the_booking_s()
     {
-        (Guid order, ActivityTraceId confirming) = await InTraceAsync(() => _steps.ConfirmAsync(FulfilmentSteps.Kazakh));
+        (Guid order, ActivityTraceId confirming) =
+            await InTraceAsync(() => _steps.ConfirmAsync(FulfilmentSteps.Kazakh));
         await fixture.RunFulfilmentPassAsync();
 
         (_, ActivityTraceId cancelling) = await InTraceAsync(
