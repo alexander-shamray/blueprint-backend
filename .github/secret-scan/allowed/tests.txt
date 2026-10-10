@@ -102,3 +102,17 @@ tests/Notifications.Worker.Tests/MetricsRegistrationTests.cs | connection-string
 tests/Notifications.TestSupport/NotificationsWorkerFactory.cs | credential-assignment | ab3b082d4e53 | A relay password that says what it is, for the hosts run as Production; nothing accepts it.
 tests/Notifications.Worker.Tests/KeycloakFixture.cs | credential-assignment | c9e80f5d4b22 | ADR-052's contact reader's local client default, held where the fixture and the realm meet.
 tests/Notifications.Worker.Tests/KeycloakFixture.cs | credential-assignment | eb26d4a9a0ef | The BFF's local client default, the realm's ungranted credential the refusal is proved with.
+
+
+# --- Privacy, rendered by tools/new-service -------------------------------
+#
+# One entry per finding the gate reported over this render, carrying the
+# fingerprints it computed rather than any this script worked out. The
+# equivalent literals for a hand-built service are entries above, written
+# the day that service landed; these are the same decision, taken by the
+# tool that rendered them (#161).
+
+tests/Privacy.Api.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c5abaa | A deliberately unusable value in a host that must not reach a database.
+tests/Privacy.Api.Tests/MessageTypeMapValidatorTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the validator suite.
+tests/Privacy.Api.Tests/MessagingRegistrationTests.cs | credential-assignment | 8a3a74a3f769 | A broker URI pointing at a hostname that does not resolve.
+tests/Privacy.Api.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.
