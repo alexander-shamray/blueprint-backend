@@ -41,6 +41,14 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
         WHERE OrderId = @OrderId;
         """;
 
+    // The empty id names nobody and, unlike NULL, is not "the order has not arrived yet" (§3.2); the money stays.
+    private const string AnonymiseSql =
+        """
+        UPDATE payments.PaymentOrders
+        SET CustomerId = '00000000-0000-0000-0000-000000000000'
+        WHERE CustomerId = @SubjectId;
+        """;
+
     private sealed record Row(
         Guid OrderId,
         Guid? CustomerId,
@@ -102,6 +110,14 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
                 row.Currency?.Trim(),
                 row.PlacedAt,
                 row.CancelledAt);
+    }
+
+    public async Task<int> AnonymiseCustomerAsync(Guid subjectId, CancellationToken ct)
+    {
+        (DbConnection connection, DbTransaction transaction) = Current();
+
+        return await connection.ExecuteAsync(
+            new CommandDefinition(AnonymiseSql, new { SubjectId = subjectId }, transaction, cancellationToken: ct));
     }
 
     private (DbConnection, DbTransaction) Current()

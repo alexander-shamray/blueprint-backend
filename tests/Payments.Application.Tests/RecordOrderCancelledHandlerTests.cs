@@ -137,6 +137,9 @@ public class RecordOrderCancelledHandlerTests
 
         public Task<PaymentOrderRecord?> LockAsync(OrderId id, CancellationToken ct) =>
             throw new NotSupportedException("The stamp is this path's lock; it reads no record.");
+
+        public Task<int> AnonymiseCustomerAsync(Guid subjectId, CancellationToken ct) =>
+            throw new NotSupportedException("Not exercised on the cancellation path.");
     }
 
     // Holds a reference to the order store so a call made before the stamp is

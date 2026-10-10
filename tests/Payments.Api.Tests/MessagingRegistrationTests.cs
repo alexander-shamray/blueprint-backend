@@ -2,6 +2,7 @@ using Payments.Application.Intents.AuthorisePayment;
 using Payments.Infrastructure.Messaging;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Infrastructure.Messaging;
 using MassTransit;
 using MassTransit.Testing;
@@ -117,7 +118,8 @@ public class MessagingRegistrationTests
         Type[] consumers =
         [
             typeof(IntegrationEventConsumer<OrderPlaced>),
-            typeof(IntegrationEventConsumer<OrderCancelled>)
+            typeof(IntegrationEventConsumer<OrderCancelled>),
+            typeof(IntegrationEventConsumer<PersonalDataDeleteRequested>)
         ];
         foreach (Type consumer in consumers)
         {

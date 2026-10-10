@@ -2,6 +2,7 @@ using System.Net.Security;
 using Common.Application;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Transport;
@@ -19,6 +20,9 @@ public static class DependencyInjection
 {
     /// <summary>§3.2's Consumes column; one queue, as both events dispatch a command with no failure branch.</summary>
     public const string EventsQueue = "payments-events";
+
+    /// <summary>§11.7's erasure request, apart from <see cref="EventsQueue"/> so a provider outage never holds it.</summary>
+    public const string PrivacyQueue = "payments-privacy";
 
     /// <summary>§3.2's Accepts column; Ordering's <c>Endpoints.PaymentsQueue</c> must name it too.</summary>
     public const string CommandsQueue = "payments-commands";
@@ -44,6 +48,9 @@ public static class DependencyInjection
             // are needed; a consumer registered and never bound receives nothing.
             x.AddConsumer<IntegrationEventConsumer<OrderPlaced>>();
             x.AddConsumer<IntegrationEventConsumer<OrderCancelled>>();
+
+            // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
+            x.AddConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>();
 
             // §3.2's Accepts column.
             x.AddConsumer<CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>>();
@@ -87,6 +94,19 @@ public static class DependencyInjection
 
                         e.ConfigureConsumer<IntegrationEventConsumer<OrderPlaced>>(context);
                         e.ConfigureConsumer<IntegrationEventConsumer<OrderCancelled>>(context);
+                    });
+
+                cfg.ReceiveEndpoint(
+                    PrivacyQueue,
+                    e =>
+                    {
+                        // No provider call and no kill switch: the erasure touches this database alone.
+                        e.UseMessageRetry(RetryPolicy.Standard);
+
+                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                        e.UseInMemoryOutbox(context);
+
+                        e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>(context);
                     });
 
                 cfg.ReceiveEndpoint(

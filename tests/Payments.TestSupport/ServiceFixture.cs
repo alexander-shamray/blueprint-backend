@@ -57,7 +57,7 @@ public sealed class ServiceFixture()
 
     /// <summary>Widens <c>payments-svc</c>'s write to publish Ordering's events, which ADR-036 refuses.</summary>
     protected override string? HarnessWrite(string granted) =>
-        "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)";
+        "^(payments-|privacy-completions$|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)";
 
     protected override Task StartStubsAsync()
     {
