@@ -50,6 +50,29 @@ public sealed class ShippingErasureEndpointTests(ServiceFixture fixture) : IAsyn
     }
 
     [Fact]
+    public async Task A_pending_shipment_ends_with_its_erased_address_and_a_bystanders_does_not()
+    {
+        Guid waiting = Guid.CreateVersion7();
+        Guid bystanders = Guid.CreateVersion7();
+        await SeedAddressAsync(waiting, Subject);
+        await SeedAddressAsync(bystanders, Bystander);
+        await SeedPendingShipmentAsync(waiting);
+        await SeedPendingShipmentAsync(bystanders);
+
+        await PublishRequestAsync(Guid.CreateVersion7());
+
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = Status FROM shipping.Shipments WHERE OrderId = {0}",
+            waiting)).ShouldBe("Unfulfillable", "a worker that found no address would ask the owner again (ADR-052)");
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = UnfulfillableReason FROM shipping.Shipments WHERE OrderId = {0}",
+            waiting)).ShouldBe("personal_data_erased");
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = Status FROM shipping.Shipments WHERE OrderId = {0}",
+            bystanders)).ShouldBe("Pending");
+    }
+
+    [Fact]
     public async Task The_audit_row_holds_a_count_and_a_hash_and_never_the_subject()
     {
         Guid request = Guid.CreateVersion7();
@@ -148,6 +171,13 @@ public sealed class ShippingErasureEndpointTests(ServiceFixture fixture) : IAsyn
             request)).ShouldBe(1);
         await Eventually(CountCompletionsAsync, expected: 1, because: "the inbox dropped the second delivery");
     }
+
+    private async Task SeedPendingShipmentAsync(Guid order) =>
+        await fixture.ExecuteAsync(
+            "INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt, CreatedAt) " +
+            "VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            Guid.CreateVersion7(),
+            order);
 
     private async Task SeedAddressAsync(Guid order, Guid customer) =>
         await fixture.ExecuteAsync(
