@@ -1,11 +1,5 @@
 """Cause a runbook's alert on the Compose stack and check the runbook's first step.
-
-    py -3.12 tools/game-day/game_day.py outbox-broker.md
-    py -3.12 tools/game-day/game_day.py --list
-
-The stack has to be up already (`docker compose -f deploy/compose/docker-compose.yml up -d --wait`). README.md
-owns what a pass proves. Exit 0 is: the alert was quiet, fired within its deadline, the first step worked, and
-the stack was put back. Anything else is a finding, and it prints which.
+Usage: py -3.12 tools/game-day/game_day.py outbox-broker (or --list). The stack must be up; README.md owns the rest.
 """
 
 from __future__ import annotations

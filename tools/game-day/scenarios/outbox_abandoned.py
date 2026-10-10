@@ -1,5 +1,4 @@
-"""docs/runbooks/outbox-abandoned.md: a broker-lane row past §9.4's attempt cap.
-Alert:      OutboxAbandonedRows, no `for:`.
+"""docs/runbooks/outbox-abandoned.md (§9.4's cap). Alert: OutboxAbandonedRows, no `for:`.
 Cause:      Forced through SQL: a Broker row planted at Attempts 10; the organic route is 64 minutes of a stopped broker.
 First step: the runbook's query as written, which must return the planted row by its MessageId.
 Restore:    delete that row by its MessageId and nothing wider, then wait for the alert to resolve.

@@ -1,5 +1,4 @@
-"""docs/runbooks/projection-lag.md: the local lane stalls while ordering-api stays up.
-Alert:      OutboxLocalLaneStalled, no `for:`.
+"""docs/runbooks/projection-lag.md (the local lane). Alert: OutboxLocalLaneStalled, no `for:`.
 Cause:      Forced through SQL: OrderSummaries is renamed so the projection throws; the organic route is a migration.
 First step: the log read, Translated from kubectl to Loki (§13.4), then the runbook's SQL as written.
 Restore:    rename the table back, safe twice, then wait for the alert to resolve.

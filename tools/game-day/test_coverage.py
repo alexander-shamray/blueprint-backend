@@ -1,8 +1,5 @@
 """The coverage test: every runbook has a script or a stated reason not to.
-
-    cd tools/game-day && py -3.12 -m unittest
-
-The cases around the real tree prove it can fail, which a gate that cannot never does.
+Run: cd tools/game-day && py -3.12 -m unittest. The cases around the real tree prove it can fail.
 """
 
 import importlib
