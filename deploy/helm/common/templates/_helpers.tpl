@@ -231,6 +231,35 @@ Jurisdiction__{{ upper (substr 0 1 $key) }}{{ substr 1 (len $key) $key }}: {{ $v
 {{- /* ADR-052's give-up age for a pending shipment; FulfilmentOptions owns its range. */}}
 Fulfilment__GiveUpAge: {{ include "commerce.timeSpan" (list .Values.fulfilment.giveUpAge "fulfilment.giveUpAge" "fulfilment.giveUpAge is required when fulfilment.enabled: ADR-052 makes the give-up age a value the deployment is given, and FulfilmentOptions refuses to boot without it." "FulfilmentOptions binds it at start (ADR-052).") | quote }}
 {{- end }}
+{{- if (.Values.privacy).enabled }}
+{{- /* ADR-092's holders, one indexed key each as §15.4 spells a list, and the service
+level. Neither is defaulted: the set decides when a request closes. The name
+rule is the host's (ErasureRequest.IsResponderName), checked here so a mistake
+fails the render and not the start. */}}
+{{- $responders := (.Values.privacy).responders | default list }}
+{{- if not (kindIs "slice" $responders) }}
+{{- fail "privacy.responders is not a list. ADR-092's holders render one indexed key per name, as §15.4 spells a list." }}
+{{- end }}
+{{- if not $responders }}
+{{- fail "privacy.responders must name at least one holder: a request closes when every holder in the set has answered (ADR-092), and the host refuses an empty set at start." }}
+{{- end }}
+{{- $seen := dict }}
+{{- range $i, $responder := $responders }}
+{{- $name := include "commerce.require" (list $responder (printf "privacy.responders[%d] is blank: each entry is a holder whose answer a request waits for (ADR-092)." $i)) }}
+{{- if not (regexMatch "^[a-z0-9][a-z0-9-]{0,31}$" $name) }}
+{{- fail (printf "privacy.responders[%d] is %q, which is not a holder name the host will accept: lower-case letters, digits and hyphens, at most 32, not starting with a hyphen (ADR-092)." $i $name) }}
+{{- end }}
+{{- if hasKey $seen $name }}
+{{- fail (printf "privacy.responders names %q twice (ADR-092)." $name) }}
+{{- end }}
+{{- $_ := set $seen $name true }}
+Privacy__Responders__{{ $i }}: {{ $name | quote }}
+{{- end }}
+{{- if gt (len (join "," $responders)) 400 }}
+{{- fail "privacy.responders together are over 400 characters, the width a request stores the set in (ADR-092)." }}
+{{- end }}
+Privacy__CompletionSlo: {{ include "commerce.timeSpan" (list .Values.privacy.completionSlo "privacy.completionSlo" "privacy.completionSlo is required when privacy.enabled: it is the adopter's reading of the law (ADR-053), and the host refuses to boot without it." "PrivacyOptions binds it at start (ADR-092).") | quote }}
+{{- end }}
 {{- if (.Values.mail).enabled }}
 {{- /* The relay's five Config keys (§15.4); its password is commerce.env's. A chart
 sets no environment, so Production is what runs, where the host refuses plain
@@ -351,6 +380,9 @@ it. */}}
 {{- if and $jurisdictionSet (not (.Values.jurisdiction).enabled) }}
 {{- fail "jurisdiction.enabled is false but a jurisdiction setting is set. The host's jurisdiction options are validated at start (ADR-053), so this renders cleanly and the host does not start." }}
 {{- end }}
+{{- if and (or (.Values.privacy).responders (.Values.privacy).completionSlo) (not (.Values.privacy).enabled) }}
+{{- fail "privacy.enabled is false but a privacy setting is set. PrivacyOptions is validated at start (ADR-092), so this renders cleanly and the host does not start." }}
+{{- end }}
 {{- if and (.Values.fulfilment).giveUpAge (not (.Values.fulfilment).enabled) }}
 {{- fail "fulfilment.enabled is false but fulfilment.giveUpAge is set. FulfilmentOptions is validated at start (ADR-052), so this renders cleanly and the host does not start." }}
 {{- end }}
@@ -372,6 +404,9 @@ charts, so a further chart growing one is a design change made here. */}}
 {{- end }}
 {{- if and (.Values.carrier).enabled (ne .Chart.Name "shipping") }}
 {{- fail (printf "carrier.enabled is true on the %s chart, and only shipping books with a carrier (§3.2). This would mount the carrier's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- end }}
+{{- if and (.Values.privacy).enabled (ne .Chart.Name "privacy") }}
+{{- fail (printf "privacy.enabled is true on the %s chart, and only privacy tracks an erasure request (ADR-092). This would hand a service the holder set that decides when a person's data counts as gone." .Chart.Name) }}
 {{- end }}
 {{- if and (.Values.mail).enabled (ne .Chart.Name "notifications") }}
 {{- fail (printf "mail.enabled is true on the %s chart, and only notifications submits to a relay (§3.2). This would mount the relay's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}

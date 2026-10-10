@@ -1,0 +1,11 @@
+apiVersion: v2
+name: privacy
+description: >-
+  Privacy (§4.1) — its API and migrator hook, the tracker ADR-092 gives the
+  erasure choreography (§11.7); no peer is called and no third party.
+type: application
+version: 0.1.0
+dependencies:
+  - name: commerce-common
+    version: 0.1.0
+    repository: file://../common

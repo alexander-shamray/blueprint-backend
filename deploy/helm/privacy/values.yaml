@@ -1,0 +1,153 @@
+# Privacy, cut from the shape the other charts share. One port and no gRPC. It
+# calls no peer and no third party; what is its own is ADR-092's responder set
+# and service level, below.
+
+workload:
+  # The gateway's route file dials `http://privacy-api:8080/` as a literal, so
+  # this value is that string — _helpers.tpl argues why it is not release-derived.
+  name: privacy-api
+
+# Two, and a decision rather than a copy. A staff principal raises a request now
+# and then and the sweep is one indexed read a minute, so load does not size
+# this; availability across a node drain does. Every replica sweeps, and a
+# request marked twice is marked once (the command re-reads it under a lock).
+replicaCount: 2
+
+# §15.5's canary track, off for every ordinary release. Turned on, this chart
+# renders the second Deployment answering to the one Service, suffixed
+# `-canary`; the Service, Ingress, HPA and PodDisruptionBudget are suppressed
+# because the stable release owns them (ADR-022). The rollout sets it, not an
+# operator: `deploy/canary/` drives it.
+canary:
+  enabled: false
+
+image:
+  # Registry namespace only. Each workload appends its own name, so the chart
+  # can reference both the API and the migrator (§7.4) from one tag.
+  registry: registry.example.com/commerce
+  api: privacy-api
+  migrator: privacy-migrator
+  # Supplied by CI, never "latest"; both images share it. Deliberately empty
+  # rather than a default: a deploy that cannot name its tag must fail, not
+  # roll something (§15.3).
+  tag: ""
+  pullPolicy: IfNotPresent
+
+ports:
+  - name: http
+    containerPort: 8080
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { memory: 512Mi }          # No CPU limit — §15.3.
+
+migrationJob:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { memory: 256Mi }
+
+# Off, which is the other half of replicaCount above. The key is written down
+# rather than omitted, on service.enabled's terms (§15.3): a capability is a
+# claim a chart makes, not one to infer from a missing key.
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Spread across nodes as a rule and across zones as a preference (§15.3).
+topologySpread:
+  maxSkew: 1
+  whenUnsatisfiable:
+    node: DoNotSchedule
+    zone: ScheduleAnyway
+
+terminationGracePeriodSeconds: 45
+
+probes:
+  probePort: http
+  liveness:  { path: /health/live,  initialDelaySeconds: 10, periodSeconds: 10 }
+  readiness: { path: /health/ready, initialDelaySeconds: 5,  periodSeconds: 5 }
+  startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
+
+service:
+  enabled: true
+
+ingress:
+  enabled: false
+
+identity:
+  authority: https://id.example.com/realms/commerce
+  # False: Privacy calls no peer synchronously (§15.4 requires the grant only of
+  # a host that does).
+  clientCredentials: false
+
+database:
+  enabled: true
+  connectionName: Privacy
+  runtimeSecretRef:
+    name: privacy-database
+    key: connection-string
+  migratorSecretRef:
+    name: privacy-migrator-secret
+    key: connection-string
+
+# The bus (§9). The Secret must carry a connection string for the `privacy-svc`
+# account, whose permissions deploy/compose/rabbitmq/definitions.json declares
+# and check_permissions.py holds to the code. Provisioning it on a deployed
+# broker is an obligation stated and not checked — §15.4's division.
+broker:
+  enabled: true
+  secretRef:
+    name: privacy-rabbitmq
+    key: connection-string
+
+# §8.1's two Redis connections, required together: AddRedisConnections reads
+# both eagerly. This service's own Secret, with its own ACL user.
+redis:
+  enabled: true
+  secretRef:
+    name: privacy-redis
+    cacheKey: cache-connection-string
+    coordinationKey: coordination-connection-string
+
+# ADR-092's holders and service level (§15.4). Neither has a default a cluster
+# could use on purpose: the responders are the services that hold a person's
+# data in this deployment, and a set read at start decides when a request
+# closes, so a plausible one would be a guess; the service level is the
+# adopter's reading of the law (ADR-053). Refused rather than clamped, at
+# render and again at start. A name is a lower-case word of letters, digits and
+# hyphens, as Privacy__Responders__n is read.
+privacy:
+  enabled: true
+  responders: []
+  completionSlo: ""
+
+observability:
+  otlpEndpoint: http://otel-collector.observability:4317
+
+extraConfigMaps: []
+
+# ADR-065's fence: denied both ways but for the edges named here.
+networkPolicy:
+  ingressFrom:
+    - { workload: gateway, port: http }
+  egressTo: []
+  dns:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+        podSelector: { matchLabels: { k8s-app: kube-dns } }
+  telemetry:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
+  identity: { to: [] }
+  database: { port: 1433, to: [] }
+  redis: { port: 6379, to: [] }
+  broker: { port: 5671, to: [] }   # amqps, as ADR-079 requires; a broker named plaintext dials 5672
+
+# ADR-079's opt-out: the connection names this deployment runs in plaintext,
+# such as RabbitMq. Empty, the host refuses every hop not encrypted and
+# verified; the migration Job takes none of it.
+transport:
+  plaintext: []
