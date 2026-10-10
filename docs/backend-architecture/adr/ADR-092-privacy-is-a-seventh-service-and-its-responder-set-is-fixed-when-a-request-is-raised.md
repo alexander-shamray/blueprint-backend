@@ -73,6 +73,13 @@ a delete would reset for a replayed event to count again; the row holds no
 other personal data
 ([`docs/personal-data.md`](../../personal-data.md)).
 
+**Privacy is one host, not two.** The completions consumer and the overdue
+sweep run as hosted services inside the API's process, so there is no worker
+to build, ship or give a chart of its own, and the first sentence of the
+decision above no longer holds. The cost is that a staff request and the
+sweep scale together, which the service's volume makes no difference to: its
+replicas all sweep, and a request marked twice is marked once.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
