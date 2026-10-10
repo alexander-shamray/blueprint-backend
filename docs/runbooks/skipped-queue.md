@@ -4,7 +4,7 @@
 |---|---|
 | Alert | `SkippedQueueDepth`, in `deploy/observability/alerts/platform-alerts.yaml` |
 | Condition | Any message in any `*_skipped` queue |
-| Signal | `rabbitmq_queue_messages`, from the RabbitMQ exporter — not a solution instrument, and **per-queue series need `rabbitmq_prometheus` with per-object metrics enabled and scraped**, which §14.1's image does not configure |
+| Signal | `rabbitmq_queue_messages`, from the RabbitMQ exporter — not a solution instrument, and **per-queue series need `rabbitmq_prometheus` with per-object metrics enabled and scraped**, which §14.1's image and collector configure and the cluster's broker may not |
 | Owner | The service team that owns the endpoint ([§13.8](../backend-architecture/13-observability.md)) |
 
 ## What it means

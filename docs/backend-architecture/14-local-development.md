@@ -83,6 +83,12 @@ rabbitmq:
 of the command that does. `rabbitmq-plugins list -e` piped to `grep` matches
 the pattern the command echoes in its own banner, and passes on a stock broker.
 
+The same image enables `rabbitmq_prometheus` with per-object metrics on
+(both in `rabbitmq/Dockerfile`), because `rabbitmq_queue_messages` carries a
+`queue` label only in that mode and §13.6's `ErrorQueueDepth`,
+`SkippedQueueDepth` and `QueueBacklogGrowing` read it by that label. Port 15692
+is the plugin's, reachable on the Compose network and published nowhere.
+
 **Keycloak has one issuer, whichever host asks.** Without `KC_HOSTNAME` it
 derives the issuer from each request's `Host` header, so a token minted through
 `localhost:8080` and a discovery document read through `keycloak:8080`
@@ -304,11 +310,14 @@ image's tag is the unit file's, and the suite starts the same one, so the
 sink a person watches is the sink the tests read.
 
 The collector's mounted configuration, `deploy/compose/otel/config.yaml`, is
-OTLP in on both protocols, a batch processor — and on metrics the
-`transform/canary-track` processor
+OTLP in on both protocols, a scrape of the broker's exporter on metrics, a
+batch processor — and on metrics the `transform/canary-track` processor
 [ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)
 asks for — and OTLP out to the LGTM container, which ingests OTLP directly.
-Every unit points its API or worker host at it with
+The scrape is what puts `rabbitmq_queue_messages` in front of §13.6's queue
+alerts: the LGTM container's own Prometheus scrapes nothing but itself, and
+`.github/workflows/compose.yml` asserts the series arrives. Every unit points
+its API or worker host at the collector with
 `OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"`. Its receivers and
 its exporter, with the processors between them and the pipelines after them in
 the file:
@@ -321,6 +330,13 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+  prometheus/rabbitmq:
+    config:
+      scrape_configs:
+        - job_name: rabbitmq
+          scrape_interval: 15s
+          static_configs:
+            - targets: [ "rabbitmq:15692" ]
 
 exporters:
   otlphttp:

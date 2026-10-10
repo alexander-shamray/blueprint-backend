@@ -83,12 +83,13 @@ Inventory to either.
 with the same symptom. The runbook separates them by asking whether every
 replica is on the same build; the alert cannot, and says so.
 
-**The detection is owed a deployment this repository does not configure, and
-saying so is the point.** `rabbitmq_queue_messages` carries a `queue` label
-only where the broker runs `rabbitmq_prometheus` with per-object metrics
-enabled and something scrapes it. §14.1's image enables the delayed-exchange
-and shovel plugins and neither of those; Compose publishes 5672 and 15672 and
-not 15692; and §13.7 already states that nothing here deploys Prometheus. So
+**The detection is owed a deployment this repository configures only for
+Compose, and saying so is the point.** `rabbitmq_queue_messages` carries a
+`queue` label only where the broker runs `rabbitmq_prometheus` with per-object
+metrics enabled and something scrapes it. §14.1's image enables both and its
+collector scrapes port 15692 into the LGTM container, which is what lets the
+alert be seen to fire locally. The cluster's broker and scrape are not in this
+repository, and §13.7 already states that nothing here deploys Prometheus. So
 the rule above is enforceable *by an operator who has wired that up*, and is
 advice until then. `ErrorQueueDepth` has carried the same dependency since
 PR-24 without anyone writing it down — the difference is that this ADR leans a
