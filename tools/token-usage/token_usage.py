@@ -257,8 +257,13 @@ def markdown_read(tool: str, given) -> list[str]:
     found = []
     for segment in SHELL_SEGMENT.split(command):
         words = [w.strip("\"'") for w in SHELL_WORD.findall(segment)]
-        if words and words[0].lower() in SHELL_READERS:
-            found += [w for w in words[1:] if w.lower().endswith(".md") and not w.startswith("-")]
+        if not words or words[0].lower() not in SHELL_READERS:
+            continue
+        if words[0].lower() == "sed" and any(w == "--in-place" or re.fullmatch(r"-i\S*", w) for w in words):
+            continue
+        # A redirect's target is written, and so is everything after it.
+        printed = next((i for i, w in enumerate(words) if ">" in w), len(words))
+        found += [w for w in words[1:printed] if w.lower().endswith(".md") and not w.startswith("-")]
     return found
 
 
@@ -307,7 +312,7 @@ def named_in(source: str, text: str, docs: dict[str, str]) -> set[str]:
         if PLACEHOLDER.search(mention):
             # A bare `<name>.md` fits every file, so only a template with a directory names any.
             if "/" in mention:
-                parts = PLACEHOLDER.split(mention.lstrip("./"))
+                parts = PLACEHOLDER.split(re.sub(r"^(?:\./)+", "", mention))
                 fits = re.compile(r"(?:^|/)" + "[^/]+".join(map(re.escape, parts)) + "$")
                 found |= {doc for doc in docs if fits.search(doc)}
             continue
