@@ -110,9 +110,9 @@
     {
       "user": "bff-svc",
       "vhost": "/",
-      "configure": "^(bff-|Common\\.Contracts\\.(Catalog|Ordering|Payments|Shipping)\\.V1:|MassTransit:)",
-      "write": "^(bff-|MassTransit:)",
-      "read": "^(bff-|Common\\.Contracts\\.(Catalog|Ordering|Payments|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--))"
+      "configure": "^(bff-|privacy-completions$|Common\\.Contracts\\.(Catalog|Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:)",
+      "write": "^(bff-|privacy-completions$|MassTransit:)",
+      "read": "^(bff-|privacy-completions$|Common\\.Contracts\\.(Catalog|Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "dead-letter-operator",

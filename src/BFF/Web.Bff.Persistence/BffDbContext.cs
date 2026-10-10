@@ -1,3 +1,4 @@
+using Common.Domain;
 using Common.Infrastructure.Inbox;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,9 @@ public sealed class BffDbContext(DbContextOptions<BffDbContext> options) : DbCon
 
     /// <summary>§9.5's inbox.</summary>
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+
+    /// <summary>§11.7's audit rows: a hash, a count and a time per request, holding no personal data.</summary>
+    public DbSet<PersonalDataErasure> PersonalDataErasures => Set<PersonalDataErasure>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

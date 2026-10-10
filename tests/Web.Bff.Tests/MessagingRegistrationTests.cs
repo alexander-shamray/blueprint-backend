@@ -1,6 +1,7 @@
 using Common.Contracts.Catalog.V1;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Contracts.Shipping.V1;
 using Common.Infrastructure.Messaging;
 using MassTransit;
@@ -30,6 +31,9 @@ public sealed class MessagingRegistrationTests
         typeof(ShipmentDelivered),
         typeof(ProductPublished)
     ];
+
+    /// <summary>§11.7's erasure request, which every holder consumes (ADR-092); not a projection event.</summary>
+    private static readonly Type[] Erasure = [typeof(PersonalDataDeleteRequested)];
 
     private static readonly TimeSpan HarnessInactivityTimeout = TimeSpan.FromSeconds(30);
 
@@ -92,7 +96,7 @@ public sealed class MessagingRegistrationTests
 
         services.AddMassTransitMessaging(Configuration());
 
-        foreach (Type consumer in Consumed.Select(e => typeof(IntegrationEventConsumer<>).MakeGenericType(e)))
+        foreach (Type consumer in Consumed.Concat(Erasure).Select(e => typeof(IntegrationEventConsumer<>).MakeGenericType(e)))
         {
             services.ShouldContain(
                 d => d.ImplementationType == consumer || d.ServiceType == consumer,

@@ -29,12 +29,12 @@ public sealed class BffServiceFixture()
             migratorConnectionString,
             runtimeConnectionString);
 
-    /// <summary>Sends an event to <c>bff-order-events</c> as the account may, then awaits its inbox row.</summary>
+    /// <summary>Sends an event to a queue of its own as the account may, then awaits its inbox row.</summary>
     /// <remarks>
     /// To the queue, never a contract's exchange: <c>bff-svc</c> writes none (ADR-036), and nothing here widens it,
     /// so what the endpoint binds under this account is what the shipped grant allows.
     /// </remarks>
-    public async Task DeliverAsync<T>(T message)
+    public async Task DeliverAsync<T>(T message, string queue = MessagingRegistration.EventsQueue)
         where T : class, IIntegrationEvent
     {
         // Bounded, because a send the broker refuses is retried rather than failed.
@@ -44,7 +44,7 @@ public sealed class BffServiceFixture()
 
         ISendEndpoint endpoint = await Factory.Services
             .GetRequiredService<IBus>()
-            .GetSendEndpoint(new Uri($"queue:{MessagingRegistration.EventsQueue}"));
+            .GetSendEndpoint(new Uri($"queue:{queue}"));
 
         await endpoint.Send(
             message,
