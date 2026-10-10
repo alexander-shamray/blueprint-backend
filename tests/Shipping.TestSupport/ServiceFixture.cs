@@ -58,13 +58,25 @@ public sealed class ServiceFixture()
             migratorConnectionString,
             runtimeConnectionString);
 
+    /// <summary>Messages a queue holds, read from the broker, or zero when the queue does not exist yet.</summary>
+    public async Task<int> QueueDepthAsync(string queue)
+    {
+        foreach (string[] columns in await BrokerRowsAsync(["list_queues", "name", "messages"]))
+        {
+            if (columns.Length == 2 && columns[0] == queue)
+                return int.Parse(columns[1], System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return 0;
+    }
+
     protected override Task<int> MigrateAsync(string connectionString) => RunMigratorAsync(connectionString);
 
     // The factory's retention defaults are the invented windows, so this
     // host runs as ADR-053 rule 2's made-up jurisdiction and no test opts in.
     protected override ShippingWorkerFactory CreateFactory() => NewWorkerHost(Carrier.Urls[0] + "/");
 
-    /// <summary>Widens <c>shipping-svc</c>'s write to publish Ordering's events, which ADR-036 refuses.</summary>
+    /// <summary>Widens <c>shipping-svc</c>'s write to publish Ordering's and Privacy's events (ADR-036).</summary>
     protected override string? HarnessWrite(string granted)
     {
         const string contracts = "Common\\.Contracts(";
@@ -77,7 +89,7 @@ public sealed class ServiceFixture()
                 granted);
         }
 
-        return granted.Insert(anchor + contracts.Length, "\\.Ordering\\.V1:|");
+        return granted.Insert(anchor + contracts.Length, "\\.(Ordering|Privacy)\\.V1:|");
     }
 
     protected override async Task StartStubsAsync()
