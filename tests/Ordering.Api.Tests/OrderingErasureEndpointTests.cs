@@ -43,11 +43,14 @@ public sealed class OrderingErasureEndpointTests(ServiceFixture fixture) : IAsyn
         (await CountOrdersAsync(Guid.Empty)).ShouldBe(1, "the order stays, under the id that names nobody");
         (await CountOrdersAsync(Bystander)).ShouldBe(1);
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM ordering.Orders WHERE CustomerId = {0} AND ShipToLine1 = ''",
-            Guid.Empty)).ShouldBe(1, "the address is cleared with the id");
+            "SELECT Value = COUNT(*) FROM ordering.Orders WHERE CustomerId = {0} AND ShipToLine1 = '' " +
+            "AND ShipToLine2 IS NULL AND ShipToCity = '' AND ShipToPostalCode = '' AND ShipToCountry = 'ZZ'",
+            Guid.Empty)).ShouldBe(1, "every address field is cleared with the id");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM ordering.Orders WHERE CustomerId = {0} AND ShipToLine1 <> ''",
-            Bystander)).ShouldBe(1, "a bystander keeps their address");
+            "SELECT Value = COUNT(*) FROM ordering.Orders WHERE CustomerId = {0} AND ShipToLine1 = '1 Rue Exemple' " +
+            "AND ShipToLine2 = 'Apt 2' AND ShipToCity = 'Paris' AND ShipToPostalCode = '75001' " +
+            "AND ShipToCountry = 'FR'",
+            Bystander)).ShouldBe(1, "a bystander keeps their whole address");
     }
 
     [Fact]
