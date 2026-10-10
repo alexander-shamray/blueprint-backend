@@ -1400,7 +1400,7 @@ defines the seams and the rules that apply *if* the extension is enabled.
 | Extension | Seam | Baseline rule |
 |---|---|---|
 | **Multi-tenancy** | `TenantId` on the integration event metadata envelope; a logging enrichment hook; an ambient `ITenantContext` resolved from token claims | No tenant is required. **If** tenancy is enabled, `TenantId` must appear in every Redis key — `{service}:cache:{tenant}:...`, after the keyspace segment rather than before it, so [§8.1](08-caching-redis.md)'s eviction split still reads off position two (§8.3) — plus every query predicate and every log scope |
-| **Personal data erasure** | `PersonalDataDeleteRequested` in `Common.Contracts.Privacy.V1` | Defined, and published by no host in the baseline. The consumer shape is defined below so services are built ready for it |
+| **Personal data erasure** | `PersonalDataDeleteRequested` in `Common.Contracts.Privacy.V1` | Defined; Privacy publishes it ([§3.2](03-bounded-contexts.md)) and raises none until a request is made. The consumer shape is defined below so services are built ready for it |
 | **PCI / HIPAA / SOC 2** | — | Decide before handling regulated data, not after. Record the constraints as an ADR |
 
 > **Decision — a jurisdiction is a value the deployment is given.** See
