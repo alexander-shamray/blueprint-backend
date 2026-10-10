@@ -273,6 +273,25 @@ groups:
             change.
           runbook_url: docs/runbooks/contact-refused.md
 
+      # An erasure request is only done when every holder has said so, and a holder
+      # that never answers looks like one that has not been asked (ADR-092). The
+      # gauge counts requests the sweep has marked overdue, so it is already an age
+      # and takes no `for`. A ticket: the request keeps the subject's id and a late
+      # answer still counts, so waiting loses nothing.
+      - alert: ErasureRequestsOverdue
+        expr: max by (service_name) (privacy_erasure_overdue) > 0
+        labels:
+          severity: ticket
+          owner: service
+        annotations:
+          summary: "Erasure requests past their due time on {{ $labels.service_name }}"
+          description: >-
+            At least one holder has not said it erased a subject's personal
+            data within the service level. privacy_erasure_overdue_missing by
+            responder names the holders; the runbook tells a request that
+            never arrived from an answer that was lost, and reissues it.
+          runbook_url: docs/runbooks/erasure-overdue.md
+
   - name: platform-infrastructure
     rules:
       # The rules whose signal comes from an exporter rather than from this
