@@ -1,8 +1,7 @@
 """docs/runbooks/outbox-growth.md. Alert: OutboxGrowth, over 1000 pending and rising, `for: 10m`.
-Cause:      Forced through SQL: `stop rabbitmq`, 1100 Broker rows planted, 20 more every 30s; the organic route is
-            orders arriving faster than the broker drains. OutboxBrokerLaneStalled fires too, and is asserted.
-First step: the runbook's age, count and derivative queries as written, then its SQL for pending and processed.
-Restore:    stop the top-up, delete the planted rows by their type, start rabbitmq, wait for both alerts to resolve.
+Cause:      Forced through SQL: `stop rabbitmq`, Broker rows planted and topped up; the organic route is a long outage.
+First step: the runbook's queries as written, and OutboxBrokerLaneStalled asserted firing beside it.
+Restore:    stop the top-up, delete the planted rows by type, start rabbitmq, wait for both alerts to resolve.
 """
 
 from __future__ import annotations
