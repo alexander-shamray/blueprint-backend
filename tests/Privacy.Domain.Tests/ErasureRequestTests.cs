@@ -98,6 +98,27 @@ public class ErasureRequestTests
     }
 
     [Fact]
+    public void The_most_names_the_column_holds_are_accepted_and_one_more_is_refused()
+    {
+        string[] fits = [.. Enumerable.Range(0, 12).Select(i => $"{(char)('a' + i)}{new string('x', 31)}")];
+        string[] overflows = [.. fits, $"m{new string('x', 31)}"];
+
+        string.Join(',', fits).Length.ShouldBeLessThanOrEqualTo(ErasureRequest.MaxRespondersLength);
+        string.Join(',', overflows).Length.ShouldBeGreaterThan(ErasureRequest.MaxRespondersLength);
+
+        ErasureRequest.Raise(Request, Subject, fits, Slo, Now).Responders.ShouldBe(fits);
+        Should.Throw<DomainException>(() => ErasureRequest.Raise(Request, Subject, overflows, Slo, Now));
+    }
+
+    [Fact]
+    public void A_fit_set_has_no_reason_to_be_refused_and_a_refused_one_names_the_holder()
+    {
+        ErasureRequest.WhyNotAResponderSet(Holders).ShouldBeNull();
+        ErasureRequest.WhyNotAResponderSet(["ordering", "Payments"]).ShouldNotBeNull().ShouldContain("Payments");
+        ErasureRequest.WhyNotAResponderSet(["ordering", "ordering"]).ShouldNotBeNull().ShouldContain("ordering");
+    }
+
+    [Fact]
     public void The_longest_name_the_column_holds_is_accepted()
     {
         string longest = new('a', ErasureRequest.MaxResponderLength);
