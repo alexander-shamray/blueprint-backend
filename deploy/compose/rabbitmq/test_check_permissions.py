@@ -403,7 +403,7 @@ class ConfigureAndReadAreBoundedToo(unittest.TestCase):
                                "const string S = \"Common.Contracts.Shipping.V1\";\n", encoding="utf-8")
             self.assertEqual({"Common.Contracts.Ordering.V1:"}, gate.referenced_contexts(Path(directory), self.names()))
         found = gate.referenced_contexts(gate.messaging_dirs()["Shipping"], self.names())
-        self.assertEqual({"Common.Contracts.Ordering.V1:"}, found)
+        self.assertEqual({"Common.Contracts.Ordering.V1:", "Common.Contracts.Privacy.V1:"}, found)
 
     @staticmethod
     def names() -> dict[str, set[str]]:
