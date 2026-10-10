@@ -25,4 +25,9 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Named here rather than widening a type no production caller uses. -->
+    <InternalsVisibleTo Include="Privacy.Api.Tests" />
+  </ItemGroup>
+
 </Project>
