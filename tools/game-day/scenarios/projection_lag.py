@@ -1,18 +1,8 @@
-"""docs/runbooks/projection-lag.md — Ordering's local lane stalls while ordering-api stays up.
-
-Alert:      OutboxLocalLaneStalled (outbox_oldest_age_seconds{lane="Local"} > 30, no `for:`).
-Cause:      ordering-api has to stay up, because that process emits the gauge, so the broker and the host are
-            left alone. Forced through SQL: `ordering.OrderSummaries` is renamed, so OrderSummaryProjection's
-            MERGE throws "Invalid object name" on every attempt, which is the runbook's schema-drift cause. The
-            organic route is a migration that renames a column under a running host, which a Compose run does
-            not produce without a second build; the order placed afterwards is the real trigger.
-First step: the runbook's "Find the throwing handler" log read. Translated: `kubectl -n <ns> logs deploy/ordering
-            --since=15m | grep "Outbox message .* failed"` reads a container's stdout, and the hosts log through
-            OpenTelemetry alone (§13.4), so the step as written finds nothing; the Compose equivalent reads the
-            same lines from Loki under the same pattern. Then its SQL, run as written through sqlcmd: the step passes
-            when the row it selects is on the Local lane and its LastError names the renamed table.
-Restore:    rename the table back (a no-op when it is not renamed), then wait for the alert to resolve, which
-            needs the failed rows to retry and succeed.
+"""docs/runbooks/projection-lag.md: the local lane stalls while ordering-api stays up.
+Alert:      OutboxLocalLaneStalled, no `for:`.
+Cause:      Forced through SQL: OrderSummaries is renamed so the projection throws; the organic route is a migration.
+First step: the log read, Translated from kubectl to Loki (§13.4), then the runbook's SQL as written.
+Restore:    rename the table back, safe twice, then wait for the alert to resolve.
 """
 
 from __future__ import annotations
