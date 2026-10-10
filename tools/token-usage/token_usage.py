@@ -30,6 +30,7 @@ WORKTREE = re.compile(r"[\\/]\.claude[\\/]worktrees[\\/].*$")
 # A shell command whose markdown arguments it prints: the reads that do not go through the Read tool.
 SHELL_READERS = {"cat", "head", "tail", "sed", "less", "more", "type", "gc", "get-content"}
 SHELL_SEGMENT = re.compile(r"&&|\|\||[;|\n]")
+SED_IN_PLACE = re.compile(r"--in-place(?:=.*)?|-[A-Za-z]*i.*")
 SHELL_WORD = re.compile(r'"[^"]*"|\'[^\']*\'|\S+')
 # Where a run starts: what a command, an agent or a skill names, it is handed.
 ENTRY = re.compile(r"\.claude/(?:commands/[^/]+|agents/[^/]+|skills/[^/]+/SKILL)\.md")
@@ -259,7 +260,7 @@ def markdown_read(tool: str, given) -> list[str]:
         words = [w.strip("\"'") for w in SHELL_WORD.findall(segment)]
         if not words or words[0].lower() not in SHELL_READERS:
             continue
-        if words[0].lower() == "sed" and any(w == "--in-place" or re.fullmatch(r"-i\S*", w) for w in words):
+        if words[0].lower() == "sed" and any(SED_IN_PLACE.fullmatch(w) for w in words):
             continue
         # A redirect's target is written, and so is everything after it.
         printed = next((i for i, w in enumerate(words) if ">" in w), len(words))
