@@ -54,6 +54,7 @@ public static class ObservabilityExtensions
                 .AddMeter("Shipping.Outbox")                       // §13.6 per-lane
                 .AddMeter("Notifications.Outbound")                // Notifications' outbound calls (§3.2)
                 .AddMeter("Web.Bff.Projection")                    // ADR-051's projection
+                .AddMeter("Privacy.Outbox")                        // §13.6 per-lane
 
                 // Shared names, not service-prefixed: the service.name resource attribute separates them.
                 .AddMeter("Commerce.Requests")                     // §13.3, §13.7

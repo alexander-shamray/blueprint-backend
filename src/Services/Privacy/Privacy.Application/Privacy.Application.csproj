@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Domain and Common.Application, §4.2's second row; Common.Contracts joins with the §9.3 mapper's first entry.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Privacy.Domain\Privacy.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Application\Common.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Dapper joins with the first query handler (§6.5). -->
+    <!-- Referenced directly because used directly, for §4.2's assembly-scan registration. -->
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+  </ItemGroup>
+
+</Project>

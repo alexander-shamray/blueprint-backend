@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- xUnit v3 test projects are self-executing: the runner is compiled in
+         rather than loaded by a host, so the assembly has to be an Exe. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Shouldly" />
+    <!-- The §4.2 gates that reason over type dependencies rather than
+         assembly references — a job GetReferencedAssemblies cannot do. -->
+    <PackageReference Include="NetArchTest.Rules" />
+    <!-- ServiceCollection itself; the abstractions package has no container to build. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Services\Privacy\Privacy.Application\Privacy.Application.csproj" />
+    <!-- TestSupport, Infrastructure and the EF provider return with the first handler test (§12.1). -->
+    <!-- CommandFingerprintRule's selection of an idempotent command, the one every gate over them reads. -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
+  </ItemGroup>
+
+</Project>

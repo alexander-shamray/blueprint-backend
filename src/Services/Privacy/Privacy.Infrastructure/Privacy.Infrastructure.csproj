@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Domain and Application, and any package besides, per §4.2's third row. -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Dapper" />
+    <!-- Named directly for SqlConnectionFactory (§6.5), though the EF provider carries it too. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
+    <PackageReference Include="AspNetCore.HealthChecks.Redis" />
+    <!-- The bus (§9); no RabbitMQ health-check package, because AddMassTransit registers its own. -->
+    <PackageReference Include="MassTransit.RabbitMQ" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <!-- OutboxStats' MemoryCache (§13.6), named directly though Common.Infrastructure carries it. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Privacy.Domain\Privacy.Domain.csproj" />
+    <ProjectReference Include="..\Privacy.Application\Privacy.Application.csproj" />
+    <!-- §9.4's outbox, and §8's Redis helpers beside it. -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
+    <!-- MessageTypeSource's Broker half, through IIntegrationEvent until this service has a contract (§9.4). -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

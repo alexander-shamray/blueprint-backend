@@ -21,3 +21,4 @@ include:
   - services/payments.yml
   - services/shipping.yml
   - services/notifications.yml
+  - services/privacy.yml

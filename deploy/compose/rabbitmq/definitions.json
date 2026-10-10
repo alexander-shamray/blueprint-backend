@@ -51,6 +51,12 @@
       "tags": [
         "management"
       ]
+    },
+    {
+      "name": "privacy-svc",
+      "password_hash": "20x90gSOCMCMqhdbKty9kThvslqSHbaR+WWRm+3g5AyDYQgH",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": []
     }
   ],
   "vhosts": [
@@ -114,6 +120,13 @@
       "configure": "",
       "write": "^[a-z][a-z0-9-]*(_error|_skipped)?$",
       "read": "_(error|skipped)$"
+    },
+    {
+      "user": "privacy-svc",
+      "vhost": "/",
+      "configure": "^(privacy-|Common\\.Contracts(\\.Privacy\\.V1:|:)|MassTransit:)",
+      "write": "^(privacy-|Common\\.Contracts(\\.Privacy\\.V1:|:)|MassTransit:)",
+      "read": "^(privacy-|Common\\.Contracts\\.Privacy\\.V1:|MassTransit:(ReceiveFault$|Fault--))"
     }
   ],
   "topic_permissions": [],

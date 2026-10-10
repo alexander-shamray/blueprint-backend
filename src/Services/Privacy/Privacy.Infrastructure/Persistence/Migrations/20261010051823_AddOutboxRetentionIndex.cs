@@ -1,0 +1,28 @@
+using Microsoft.EntityFrameworkCore.Migrations;
+
+namespace Privacy.Infrastructure.Persistence.Migrations;
+
+/// <summary>
+/// The index §9.4's retention purge deletes through, generated from <see cref="OutboxMessageConfiguration"/>,
+/// because <c>IX_Outbox_Unprocessed</c> excludes every row the purge targets.
+/// </summary>
+public partial class AddOutboxRetentionIndex : Migration
+{
+    protected override void Up(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.CreateIndex(
+            name: "IX_Outbox_Processed",
+            schema: "privacy",
+            table: "OutboxMessages",
+            column: "ProcessedAt",
+            filter: "[ProcessedAt] IS NOT NULL");
+    }
+
+    protected override void Down(MigrationBuilder migrationBuilder)
+    {
+        migrationBuilder.DropIndex(
+            name: "IX_Outbox_Processed",
+            schema: "privacy",
+            table: "OutboxMessages");
+    }
+}
