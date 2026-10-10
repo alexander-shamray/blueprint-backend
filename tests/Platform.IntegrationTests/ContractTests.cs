@@ -6,6 +6,7 @@ using Common.Contracts;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
+using Common.Contracts.Privacy.V1;
 using Shouldly;
 using Xunit;
 
@@ -252,7 +253,8 @@ public class ContractTests
         typeof(MarkOrderShipped),
         typeof(FlagOrderForReview),
         typeof(ReserveStock),
-        typeof(ReleaseStock)
+        typeof(ReleaseStock),
+        typeof(PersonalDataDeleteCompleted)
     ];
 
     /// <summary>The non-event contracts that are not command roots, so every contract is classified.</summary>
@@ -358,7 +360,10 @@ public class ContractTests
         (typeof(ReserveStock), "Lines"),
         (typeof(ReleaseStock), "OrderId"),
         (typeof(StockLine), "ProductId"),
-        (typeof(StockLine), "Quantity")
+        (typeof(StockLine), "Quantity"),
+        (typeof(PersonalDataDeleteCompleted), "RequestId"),
+        (typeof(PersonalDataDeleteCompleted), "Responder"),   // the holder's claim, checked by Privacy (ADR-094)
+        (typeof(PersonalDataDeleteCompleted), "Count")
     ];
 
     [Fact]

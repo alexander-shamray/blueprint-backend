@@ -1450,9 +1450,10 @@ sequenceDiagram
 
 > **Both messages are in `Common.Contracts.Privacy.V1`, which is where the
 > version lives** ([§9.2](09-messaging.md)); the names above carry none.
-> `PersonalDataDeleteCompleted` is **sent** to Privacy's queue by each holder
-> and not published, which the broker's accounts leave no other way for a
-> service with no Domain project ([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)).
+> `PersonalDataDeleteCompleted` is a command Privacy accepts
+> ([§3.2](03-bounded-contexts.md)'s Accepts column), **sent** to its queue by
+> each holder and not published, which the broker's accounts leave no other
+> way for a service with no Domain project ([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)).
 
 Rules for each service's consumer:
 
