@@ -244,6 +244,13 @@ class ReportTests(unittest.TestCase):
         rows, _ = self.rows()
         self.assertEqual(rows["/ship", "main"]["input_equivalent"], 10 + 125 + 200 + 100)
 
+    def test_the_mean_context_is_what_a_call_sent_counting_fresh_input_writes_and_reads(self):
+        self.files.write("s.jsonl", [ship(), reply("m1", fresh=10, write_5m=20, write_1h=30, read=140),
+                                     reply("m2", read=400), reply("m3", read=0)])
+        rows, _ = self.rows()
+        self.assertEqual(rows["/ship", "main"]["mean_context"], (10 + 20 + 30 + 140 + 400) // 3)
+        self.assertEqual(rows["TOTAL", ""]["mean_context"], 200)
+
     def test_the_total_sums_every_group(self):
         self.files.write("s.jsonl", [reply("m0", read=1, output=2), ship(), reply("m1", read=4, output=8)])
         rows, _ = self.rows()
