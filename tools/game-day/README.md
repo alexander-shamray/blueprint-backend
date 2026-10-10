@@ -247,8 +247,11 @@ A dispatch plans its runbooks with `game_day.py --matrix` and gives each its
 own job and its own stack, so a scenario that dies cannot poison the next and
 the longest runbook bounds the dispatch, not the sum. The job's
 `timeout-minutes` is 60 and the longest timed run in *The scripts* is
-`address-refused` at 34m45s, so every timed runbook fits alone. A job that
-times out still runs its teardown.
+`address-refused` at 34m45s, so every timed runbook fits alone, but
+`queue-backlog` is one job that runs both its halves: the lag half's 23m16s
+and the backlog half's, which is not timed, plus its own `for:` of 10 minutes
+and the settle. That total is owed a run before it is claimed to fit. A job
+that times out still runs its teardown.
 
 Why it is not scheduled: the timed runbooks alone are about three hours of
 runner time, and the suite already runs on every pull request that changes
