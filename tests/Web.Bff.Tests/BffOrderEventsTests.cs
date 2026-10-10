@@ -56,6 +56,20 @@ public sealed class BffOrderEventsTests(BffServiceFixture fixture) : IAsyncLifet
     }
 
     [Fact]
+    public async Task The_narrow_account_binds_the_erasure_request_to_its_own_queue()
+    {
+        BusHealthStatus health = await fixture.Factory.Services
+            .GetRequiredService<IBusControl>()
+            .WaitForHealthStatus(BusHealthStatus.Healthy, BffServiceFixture.StepDeadline);
+        health.ShouldBe(BusHealthStatus.Healthy, "a refused exchange.bind closes the channel and the endpoint with it");
+
+        (await fixture.BindingsAsync(MessagingRegistration.PrivacyQueue))
+            .ShouldContain("Common.Contracts.Privacy.V1:PersonalDataDeleteRequested");
+        (await fixture.BindingsAsync(MessagingRegistration.EventsQueue))
+            .ShouldNotContain("Common.Contracts.Privacy.V1:PersonalDataDeleteRequested", "it has a queue of its own");
+    }
+
+    [Fact]
     public async Task The_account_holds_exactly_the_grant_definitions_json_ships()
     {
         (string configure, string write, string read) = await fixture.BrokerPermissionsAsync(Account);
