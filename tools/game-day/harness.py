@@ -6,9 +6,13 @@ Stdlib only, on the terms of deploy/observability/check.py. Nothing here knows a
 
 from __future__ import annotations
 
+import base64
 import json
 import os
+import secrets
 import subprocess
+import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -154,6 +158,10 @@ class Compose:
     def exec_redis(self, service: str, *args: str) -> str:
         return self._call("exec", "-T", service, "redis-cli", *args).strip()
 
+    def rabbitmqctl(self, *args: str, stdin: str | None = None) -> str:
+        """The broker through its container, which needs no account (deploy/compose/README.md)."""
+        return self._call("exec", "-T", "rabbitmq", "rabbitmqctl", *args, stdin=stdin).strip()
+
 
 Http = Callable[[str, str, dict[str, str], bytes | None], tuple[int, str]]
 
@@ -213,6 +221,11 @@ class Alerts:
         """Whether the rule is loaded at all, which `inactive` cannot say: a rule nobody loaded is also quiet."""
         groups = self._get("/api/v1/rules")["data"]["groups"]
         return any(rule["name"] == name for group in groups for rule in group["rules"])
+
+    def labels(self, name: str) -> list[dict[str, str]]:
+        """The labels of each active alert of that name, for a runbook that reads one (`queue`) to find its subject."""
+        alerts = self._get("/api/v1/alerts")["data"]["alerts"]
+        return [alert["labels"] for alert in alerts if alert["labels"].get("alertname") == name]
 
 
 def regex_literal(text: str) -> str:
@@ -452,6 +465,112 @@ class Grant:
             raise GameDayError(f"{self.account} holds {held} of {self.client} after the restore, not [{self.role!r}]")
 
 
+# The Management API under the tool's own variable, so one setting points both at a broker published elsewhere.
+# Compose publishes 15672, which is why the runbooks' `kubectl port-forward` has nothing to translate to here.
+MANAGEMENT = os.environ.get("DEAD_LETTERS_URL", "http://localhost:15672")
+DEAD_LETTERS = ROOT / "tools" / "dead-letters" / "dead_letters.py"
+OPERATOR = "dead-letter-operator"
+# MassTransit's default envelope, which this platform keeps (skipped-queue.md says why the type is in the body).
+MASSTRANSIT_JSON = "application/vnd.masstransit+json"
+
+
+class Broker:
+    """The broker as the queue runbooks reach it: as dead-letter-operator, through the Management API and the tool.
+
+    The account ships with no password on Compose (deploy/compose/README.md), so `open` sets one for the run and
+    `close` clears it, the tool README's local route. The password is on no argv: rabbitmqctl reads it from stdin
+    and the tool from its environment, as the runbooks' `read -s` gives it.
+    """
+
+    def __init__(self, compose: Compose, send: Http = http, base: str = MANAGEMENT,
+                 run: Callable[..., subprocess.CompletedProcess] = subprocess.run, python: str = sys.executable,
+                 secret: Callable[[], str] = lambda: secrets.token_urlsafe(24)) -> None:
+        self._compose = compose
+        self._send = send
+        self._base = base.rstrip("/")
+        self._run = run
+        self._python = python
+        self._secret = secret
+        self._password = ""
+
+    def open(self) -> None:
+        self._password = self._secret()
+        self._compose.rabbitmqctl("change_password", OPERATOR, stdin=self._password)
+
+    def close(self) -> None:
+        """Clear the password, which the shipped definitions leave empty; safe to run twice."""
+        self._password = ""
+        self._compose.rabbitmqctl("clear_password", OPERATOR)
+
+    def publish(self, exchange: str, message_type: str, message: dict) -> str:
+        """Publish one message in MassTransit's envelope to an endpoint's exchange, and return its MessageId."""
+        message_id, correlation_id = str(uuid.uuid4()), str(uuid.uuid4())
+        envelope = {
+            "messageId": message_id, "correlationId": correlation_id, "conversationId": str(uuid.uuid4()),
+            "sourceAddress": "rabbitmq://rabbitmq/game-day", "destinationAddress": f"rabbitmq://rabbitmq/{exchange}",
+            "messageType": [message_type], "message": message, "headers": {},
+            "sentTime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        body = json.dumps({
+            "properties": {"content_type": MASSTRANSIT_JSON, "message_id": message_id,
+                           "correlation_id": correlation_id, "delivery_mode": 2},
+            "routing_key": "", "payload": json.dumps(envelope), "payload_encoding": "string"}).encode()
+        credential = base64.b64encode(f"{OPERATOR}:{self._password}".encode()).decode()
+        status, text = self._send(
+            "POST", f"{self._base}/api/exchanges/%2F/{urllib.parse.quote(exchange, safe='')}/publish",
+            {"Authorization": f"Basic {credential}", "Content-Type": "application/json"}, body)
+        if status != 200 or not json.loads(text).get("routed"):
+            raise GameDayError(f"the publish to {exchange} as {OPERATOR} was not routed: {status} {text[:200]}")
+        return message_id
+
+    def tool(self, *args: str) -> tuple[int, dict]:
+        """dead_letters.py as the runbooks run it, with `--json`: its exit code and its document."""
+        env = {key: value for key, value in os.environ.items()
+               if key not in ("DEAD_LETTERS_CREDENTIALS", "DEAD_LETTERS_USER")}
+        env.update(DEAD_LETTERS_PASSWORD=self._password, DEAD_LETTERS_URL=self._base)
+        result = self._run([self._python, str(DEAD_LETTERS), *args, "--json"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", env=env, check=False)
+        try:
+            return result.returncode, json.loads(result.stdout)
+        except ValueError:
+            raise GameDayError(f"dead_letters.py {' '.join(args)} exited {result.returncode} with no JSON: "
+                               f"{result.stderr.strip()[:300]}") from None
+
+    def discard(self, queue: str, message_ids: list[str]) -> list[str]:
+        """The runbooks' Discard, by id with a record; returns what it discarded. An id already gone is not an error,
+        so a restore that runs twice finds nothing to do the second time."""
+        if not message_ids:
+            return []
+        handle, record = tempfile.mkstemp(prefix="game-day-", suffix=".jsonl")
+        os.close(handle)
+        try:
+            selection = [part for message_id in message_ids for part in ("--message-id", message_id)]
+            code, document = self.tool("discard", queue, *selection, "--execute", "--record", record)
+        finally:
+            # The record is the tool's last copy of a message, and these are the run's own synthetic ones.
+            os.remove(record)
+        if "error" in document:
+            raise GameDayError(f"dead_letters.py discard {queue} was refused: {document['error']}")
+        discarded = [action["message_id"] for action in document["actions"] if action["action"] == "discarded"]
+        failed = [action for action in document["actions"] if action["action"] in ("failed", "refused")]
+        if failed or set(message_ids) - set(discarded) - set(document["not_found"]):
+            raise GameDayError(f"dead_letters.py discard {queue} exited {code}: {document['actions']}")
+        return discarded
+
+    def queues(self) -> dict[str, tuple[int, int]]:
+        """Each queue's depth and consumer count, through the container rather than any account."""
+        text = self._compose.rabbitmqctl("list_queues", "name", "messages", "consumers", "--quiet",
+                                         "--no-table-headers")
+        found: dict[str, tuple[int, int]] = {}
+        for line in text.splitlines():
+            parts = line.split()
+            if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+                found[parts[0]] = (int(parts[1]), int(parts[2]))
+        return found
+
+    def purge(self, queue: str) -> None:
+        self._compose.rabbitmqctl("purge_queue", queue)
+
+
 @dataclass
 class World:
     compose: Compose
@@ -462,6 +581,7 @@ class World:
     caused_at: float = 0.0
     realm: Realm | None = None
     traffic: Traffic = field(default_factory=Traffic)
+    broker: Broker | None = None
 
     def since_cause(self) -> int:
         """Seconds since the runner began the cause, rounded up, so a first step reads this run's lines and no

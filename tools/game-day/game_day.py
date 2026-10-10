@@ -107,16 +107,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"coverage: {message}")
         for name in sorted(coverage.runbooks()):
             state = ("script" if coverage.module_name(name) in coverage.scripts()
-                     else f"NOT_ON_COMPOSE: {coverage.NOT_ON_COMPOSE[name]}" if name in coverage.NOT_ON_COMPOSE
-                     else f"OWED to {', '.join(coverage.OWED.get(name, ('?',)))}")
+                     else f"NOT_ON_COMPOSE: {coverage.NOT_ON_COMPOSE.get(name, '?')}")
             print(f"{name:26} {state}")
         return 0
     if not args.runbook:
         parser.error("name a runbook, or --list")
 
     orders = harness.Orders()
-    world = harness.World(harness.Compose(), harness.Alerts(), orders, harness.Logs(), print, realm=harness.Realm(),
-                          traffic=harness.Traffic(token=orders.token))
+    compose = harness.Compose()
+    world = harness.World(compose, harness.Alerts(), orders, harness.Logs(), print, realm=harness.Realm(),
+                          traffic=harness.Traffic(token=orders.token), broker=harness.Broker(compose))
     findings = run(load(args.runbook), world)
     for finding in findings:
         print(f"FINDING: {finding}", file=sys.stderr)
