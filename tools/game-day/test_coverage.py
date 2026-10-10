@@ -23,34 +23,38 @@ class RealTree(unittest.TestCase):
         self.assertNotIn("README.md", names)
         self.assertEqual(len(list(coverage.RUNBOOKS.glob("*.md"))) - 1, len(names))
 
-    def test_the_series_so_far_delivers_these_scripts(self):
+    def test_the_series_delivers_these_scripts(self):
         self.assertTrue({"outbox_broker", "projection_lag", "outbox_abandoned", "queue_backlog", "address_refused",
                          "contact_refused", "unscanned_shipment", "unattributed_order", "erasure_overdue",
-                         "error_rate", "latency", "outbox_growth"} <= coverage.scripts())
+                         "error_rate", "latency", "outbox_growth", "error_queue", "skipped_queue"}
+                        <= coverage.scripts())
 
-    def test_the_traffic_runbooks_are_no_longer_owed(self):
-        for name in ("error-rate.md", "latency.md", "outbox-growth.md"):
-            self.assertNotIn(name, coverage.OWED)
+    def test_every_runbook_without_a_script_is_one_that_cannot_run_on_compose(self):
+        self.assertFalse(hasattr(coverage, "OWED"))
+        unscripted = {name for name in coverage.runbooks() if coverage.module_name(name) not in coverage.scripts()}
+        self.assertEqual(set(coverage.NOT_ON_COMPOSE), unscripted)
 
-    def test_what_is_still_owed_is_pr_4s(self):
-        self.assertEqual({"PR-4"}, {pull for pulls in coverage.OWED.values() for pull in pulls})
+    def test_the_rules_are_read_from_the_loaded_file_and_both_shared_runbooks_are_caused_whole(self):
+        rules = coverage.loaded_rules()
+        self.assertEqual({"DeliveryLagHigh", "QueueBacklogGrowing"}, rules["queue-backlog.md"])
+        self.assertEqual({"ErrorRateGateway", "ErrorRateService"}, rules["error-rate.md"])
+        causes = coverage.caused(coverage.scripts())
+        shared = set(coverage._gate().SHARED_RUNBOOKS)
+        self.assertEqual({"error-rate.md", "queue-backlog.md"}, shared)
+        for name in shared:
+            with self.subTest(name):
+                self.assertEqual(rules[name], causes[coverage.module_name(name)])
 
-    def test_queue_backlog_is_half_covered_and_owed_its_backlog_half_to_pr_4_alone(self):
-        self.assertEqual(("PR-4",), coverage.OWED["queue-backlog.md"])
-        self.assertIn("queue-backlog.md", coverage.shared_runbooks())
-
-    def test_a_reason_is_never_empty_and_owed_names_a_real_pull_request(self):
+    def test_a_reason_is_never_empty(self):
         for name, reason in coverage.NOT_ON_COMPOSE.items():
             self.assertGreater(len(reason.split()), 4, name)
-        for name, pulls in coverage.OWED.items():
-            self.assertTrue(set(pulls) <= coverage.OWED_PULL_REQUESTS, name)
 
 
 class Problems(unittest.TestCase):
     """The rules over a fixture, which is how a case proves a runbook dropped in fails."""
 
-    def problems(self, runbooks, scripts=(), not_on_compose=None, owed=None, shared=()):
-        return coverage.problems(set(runbooks), set(scripts), not_on_compose or {}, owed or {}, set(shared))
+    def problems(self, runbooks, scripts=(), not_on_compose=None, rules=None, causes=None):
+        return coverage.problems(set(runbooks), set(scripts), not_on_compose or {}, rules or {}, causes or {})
 
     def test_a_new_runbook_with_nothing_fails(self):
         found = self.problems({"brand-new.md"})
@@ -74,32 +78,32 @@ class Problems(unittest.TestCase):
 
     def test_a_reason_covers_a_runbook(self):
         self.assertEqual([], self.problems({"a.md"}, not_on_compose={"a.md": "no kube-state-metrics here"}))
-        self.assertEqual([], self.problems({"a.md"}, owed={"a.md": ("PR-2",)}))
 
     def test_a_script_beside_a_reason_that_says_it_cannot_run_fails(self):
         found = self.problems({"a.md"}, {"a"}, not_on_compose={"a.md": "no kube-state-metrics here"})
         self.assertIn("a.md: has a script and is listed NOT_ON_COMPOSE", found[0])
 
-    def test_a_delivered_script_must_leave_owed(self):
-        found = self.problems({"a.md"}, {"a"}, owed={"a.md": ("PR-2",)})
-        self.assertIn("a.md: has a script and is still listed OWED", found[0])
+    def test_a_script_must_cause_every_loaded_rule_that_names_its_runbook(self):
+        rules = {"a.md": {"First", "Second"}}
+        found = self.problems({"a.md"}, {"a"}, rules=rules, causes={"a": {"First"}})
+        self.assertEqual(
+            ["a.md: a loaded rule sends Second here and its script does not cause it; add a phase as NEXT"], found)
+        self.assertEqual([], self.problems({"a.md"}, {"a"}, rules=rules, causes={"a": {"First", "Second"}}))
 
-    def test_a_shared_runbook_may_have_a_script_and_still_be_owed_its_other_half(self):
-        self.assertEqual([], self.problems({"a.md"}, {"a"}, owed={"a.md": ("PR-4",)}, shared={"a.md"}))
+    def test_a_rule_whose_runbook_cannot_run_on_compose_needs_no_cause(self):
+        self.assertEqual([], self.problems({"a.md"}, not_on_compose={"a.md": "no kube-state-metrics here"},
+                                           rules={"a.md": {"First"}}))
 
-    def test_both_tables_fail(self):
-        found = self.problems({"a.md"}, not_on_compose={"a.md": "no kube-state-metrics here"}, owed={"a.md": ("PR-2",)})
-        self.assertIn("a.md: listed in both", "\n".join(found))
-
-    def test_owed_must_name_a_pull_request(self):
-        self.assertIn("OWED must name", self.problems({"a.md"}, owed={"a.md": ("PR-9",)})[0])
-        self.assertIn("OWED must name", self.problems({"a.md"}, owed={"a.md": ()})[0])
+    def test_the_causes_are_read_through_next(self):
+        causes = coverage.caused({"error_rate", "outbox_broker"})
+        self.assertEqual({"ErrorRateGateway", "ErrorRateService"}, causes["error_rate"])
+        self.assertEqual({"OutboxBrokerLaneStalled"}, causes["outbox_broker"])
 
     def test_an_empty_reason_fails(self):
         self.assertIn("carries no reason", "\n".join(self.problems({"a.md"}, not_on_compose={"a.md": " "})))
 
     def test_a_listing_for_a_deleted_runbook_fails(self):
-        found = "\n".join(self.problems(set(), owed={"gone.md": ("PR-2",)}))
+        found = "\n".join(self.problems(set(), not_on_compose={"gone.md": "no kube-state-metrics here"}))
         self.assertIn("gone.md: listed, but docs/runbooks/ has no such file", found)
 
     def test_a_script_with_no_runbook_fails(self):

@@ -350,9 +350,10 @@ class Cli(unittest.TestCase):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(0, game_day.main(["--list"]))
-        for line in ("outbox-broker.md", "NOT_ON_COMPOSE", "OWED to PR-4"):
+        for line in ("outbox-broker.md", "NOT_ON_COMPOSE", "error-queue.md             script"):
             self.assertIn(line, out.getvalue())
-        self.assertNotRegex(out.getvalue(), r"coverage:")
+        self.assertNotRegex(out.getvalue(), r"coverage:|OWED")
+
 
 
 class Scenarios(unittest.TestCase):
