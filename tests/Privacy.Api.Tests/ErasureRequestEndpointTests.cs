@@ -62,6 +62,24 @@ public sealed class ErasureRequestEndpointTests(ServiceFixture fixture) : IAsync
     }
 
     [Fact]
+    public async Task Raises_that_race_for_one_subject_all_get_the_one_request_and_one_broadcast()
+    {
+        // Several at once, so a check-then-add that is not serialised loses on the unique index with a fault.
+        HttpResponseMessage[] responses = await Task.WhenAll(
+            Enumerable.Range(0, 6).Select(_ => PostAsync(Subject, PrivacyPermissions.Erase)));
+
+        responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.OK);
+        Guid[] ids =
+        [
+            .. await Task.WhenAll(
+                responses.Select(r => r.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken)))
+        ];
+        ids.Distinct().Count().ShouldBe(1, "a race for one subject answers with one request");
+        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM privacy.ErasureRequests")).ShouldBe(1);
+        (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task Two_subjects_get_two_requests()
     {
         Guid first = await RaiseAsync(Subject);
