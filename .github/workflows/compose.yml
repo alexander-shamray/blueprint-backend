@@ -94,14 +94,11 @@ jobs:
             echo "dashboard $uid provisioned"
           done
 
-      # The rule count above says the three queue alerts are loaded, and a loaded
-      # rule that reads a series nobody publishes cannot fire (#800). So the
-      # subject here is the series: a queue named like the ones the alerts
-      # select (`_error`) is declared on the live broker and its depth must
-      # reach the local Prometheus with the `queue` label, through the broker's
-      # exporter and the collector's scrape. No service has faulted a message
-      # by now, so no real `_error` queue exists to read; the probe user is
-      # removed with the stack.
+      # The rule count above says the queue alerts are loaded, and a loaded rule
+      # that reads a series nobody publishes cannot fire. So the subject here is
+      # the series: an `_error` queue is declared on the live broker and its
+      # depth must reach the local Prometheus with a `queue` label. No service
+      # has faulted a message yet, so the probe makes the queue it reads.
       - name: The broker's per-queue depth reaches the local Prometheus
         run: |
           compose="docker compose -f deploy/compose/docker-compose.yml"

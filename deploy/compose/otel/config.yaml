@@ -11,10 +11,9 @@ receivers:
 
   # The only receiver that pulls. The broker publishes Prometheus text, not
   # OTLP, and the LGTM container's own Prometheus scrapes nothing but itself,
-  # so without this the three §13.6 queue alerts read a series nobody
-  # publishes (#800). Per-queue output is switched on in
-  # rabbitmq/Dockerfile. Port 15692 is the plugin's and is reachable
-  # on the Compose network only; infrastructure.yml publishes nothing for it.
+  # so without this §13.6's queue alerts read a series nobody publishes.
+  # Per-queue output is switched on in rabbitmq/Dockerfile; port 15692 is
+  # reachable on the Compose network only.
   prometheus/rabbitmq:
     config:
       scrape_configs:
