@@ -286,11 +286,9 @@ class Orders:
 
 class Traffic:
     """A bounded request generator through the gateway, so a rule over request counts has a window to read.
-
-    Each tick sends one request, alternating an anonymous catalog read and an authenticated cancel of an order
-    that does not exist: neither writes, and both reach a database. Each request runs on its own thread, so a
-    database that holds them does not slow the loop. It ends at `stop()` or at its bound, whichever is first.
-    """
+    Each tick alternates an anonymous catalog read and an authenticated cancel of an order that does not exist:
+    neither writes, and both reach a database. Each request runs on its own thread, so a database that holds
+    them does not slow the loop. It ends at `stop()` or at its bound, whichever is first."""
 
     def __init__(self, send: Http = patient_http, token: Callable[[], str] | None = None,
                  clock: Callable[[], float] = time.monotonic, tick: float = TRAFFIC_TICK_SECONDS,
