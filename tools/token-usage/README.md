@@ -23,6 +23,7 @@ for a subagent.
 |---|---|
 | `contexts` | prompts for `main`, subagents spawned for an agent type |
 | `calls` | API responses, each counted once however many lines it was written across |
+| `mean_context` | what a call sent on average — fresh input, cache writes and cache reads — the context a turn re-sends |
 | `input`, `output` | uncached input and output |
 | `cache_write`, `cache_read` | the prompt cache's writes and reads |
 | `input_equivalent` | the input side priced as uncached input: writes at 1.25× (5-minute) or 2× (1-hour), reads at 0.1× |

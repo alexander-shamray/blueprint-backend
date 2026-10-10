@@ -75,9 +75,16 @@ class Usage:
         """Input-price tokens: what the input side costs, priced as uncached input."""
         return self.input + WRITE_5M * self.write_5m + WRITE_1H * self.write_1h + READ * self.read
 
+    @property
+    def mean_context(self) -> int:
+        """Prompt tokens a call sent on average: fresh input, cache writes and cache reads."""
+        sent = self.input + self.write_5m + self.write_1h + self.read
+        return round(sent / self.calls) if self.calls else 0
+
     def row(self) -> dict:
         return {
-            "contexts": len(self.contexts), "calls": self.calls, "input": self.input,
+            "contexts": len(self.contexts), "calls": self.calls, "mean_context": self.mean_context,
+            "input": self.input,
             "cache_write": self.write_5m + self.write_1h, "cache_read": self.read,
             "output": self.output, "input_equivalent": round(self.equivalent),
             "woken_equivalent": round(self.woken),
@@ -429,8 +436,8 @@ def default_projects(cwd: Path) -> list[Path]:
     return [main, *sorted(main.parent.glob(main.name + "-*"))]
 
 
-ROWS = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output", "input_equivalent",
-        "woken_equivalent")
+ROWS = ("command", "agent", "contexts", "calls", "mean_context", "input", "cache_write", "cache_read", "output",
+        "input_equivalent", "woken_equivalent")
 DOCS = ("doc", "named_by", "reads", "main", "subagents")
 RESULTS = ("command", "tool", "results", "characters", "approx_tokens")
 SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
