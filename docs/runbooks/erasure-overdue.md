@@ -28,8 +28,8 @@ service level is the statutory clock, and the adopter's reading of it is
 - **Holders that have answered.** Their audit rows carry the hash of the
   request and the subject, and their data is gone.
 - **Any other request.** Each request is its own row and its own count.
-- **A request in a holder's error queue.** That is `error-queue.md`'s alert, and
-  it is a cause of this one, not a separate fault.
+- **Other alerts.** A request parked in a holder's error queue raises
+  `error-queue.md`'s own alert as well as this one.
 
 ## Find the cause
 
@@ -61,11 +61,11 @@ flagged and never standing in for a holder: a holder missing from
 Then ask why the holder did not answer, in this order:
 
 1. **The request never reached it.** Its queue, named `<holder>-privacy` as
-   in `ordering-privacy` and `bff-privacy`, shows the delivery; a request parked in `_error` or
-   `_skipped` is `error-queue.md` or `skipped-queue.md`.
-2. **It ran and its answer was lost.** A holder sends `PersonalDataDeleteCompleted`
-   to `privacy-completions` after its unit commits, so a crash between the two
-   is silence (ADR-094). The holder's own audit table holds a row for the
+   in `ordering-privacy` and `bff-privacy`, shows the delivery; a request
+   parked in `_error` or `_skipped` is `error-queue.md` or `skipped-queue.md`.
+2. **It ran and its answer was lost.** A holder sends
+   `PersonalDataDeleteCompleted` to `privacy-completions` after its unit
+   commits, so a crash between the two is silence (ADR-094). The holder's own audit table holds a row for the
    request id's hash if it ran: the table is `PersonalDataErasures` in the
    holder's own schema.
 3. **Privacy cannot read it.** A completion the broker refuses to deliver, or
