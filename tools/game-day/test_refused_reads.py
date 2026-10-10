@@ -475,5 +475,44 @@ class QueueBacklog(unittest.TestCase):
         self.assertEqual([("unpause", "web-bff")] * 2, stack.calls)
 
 
+class ErasureOverdue(unittest.TestCase):
+    def test_the_plant_is_an_open_request_past_its_due_time_with_the_five_holders(self):
+        from scenarios import erasure_overdue as module
+        plant = " ".join(module._PLANT.split())
+        self.assertIn("N'Open'", plant)
+        self.assertRegex(plant, r"DATEADD\(day, -1, SYSDATETIMEOFFSET\(\)\), N'ordering,payments,shipping,notifications,bff'")
+        stack = Stack()
+        module.cause(stack.world)
+        self.assertEqual("Privacy", stack.calls[0][1])
+
+    def test_the_first_step_needs_the_planted_request_in_the_runbooks_query(self):
+        from scenarios import erasure_overdue as module
+        row = f"{module.REQUEST_ID.upper()}|Overdue|2026-09-09"
+        self.assertTrue(module.first_step(Stack(sql_results=[row]).world)[0])
+        self.assertFalse(module.first_step(Stack(sql_results=[""]).world)[0])
+
+    def test_the_restore_deletes_by_id_and_nothing_wider(self):
+        from scenarios import erasure_overdue as module
+        stack = Stack()
+        module.restore(stack.world)
+        self.assertEqual(
+            f"DELETE FROM privacy.ErasureCompletions WHERE RequestId = '{module.REQUEST_ID}'; "
+            f"DELETE FROM privacy.ErasureRequests WHERE RequestId = '{module.REQUEST_ID}';",
+            stack.calls[0][2])
+
+    def test_the_query_is_the_runbooks(self):
+        from scenarios import erasure_overdue as module
+        text = (harness.ROOT / "docs/runbooks/erasure-overdue.md").read_text(encoding="utf-8")
+        squash = lambda s: re.sub(r"\s+", "", s)
+        self.assertIn(squash(module._OVERDUE), squash(text))
+
+    def test_the_deadline_outlasts_the_sweeps_interval(self):
+        from scenarios import erasure_overdue as module
+        source = (harness.ROOT / "src/Services/Privacy/Privacy.Infrastructure/Sweep/OverdueSweepService.cs").read_text(
+            encoding="utf-8")
+        minutes = int(re.search(r"Interval = TimeSpan\.FromMinutes\((\d+)\)", source).group(1))
+        self.assertGreater(module.DEADLINE.signal_seconds, minutes * 60)
+
+
 if __name__ == "__main__":
     unittest.main()

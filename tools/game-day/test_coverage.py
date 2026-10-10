@@ -25,7 +25,8 @@ class RealTree(unittest.TestCase):
 
     def test_the_series_so_far_delivers_these_scripts(self):
         self.assertTrue({"outbox_broker", "projection_lag", "outbox_abandoned", "queue_backlog", "address_refused",
-                         "contact_refused", "unscanned_shipment", "unattributed_order"} <= coverage.scripts())
+                         "contact_refused", "unscanned_shipment", "unattributed_order",
+                         "erasure_overdue"} <= coverage.scripts())
 
     def test_queue_backlog_is_half_covered_and_owed_its_backlog_half_to_pr_4_alone(self):
         self.assertEqual(("PR-4",), coverage.OWED["queue-backlog.md"])

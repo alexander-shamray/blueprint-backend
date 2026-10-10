@@ -144,6 +144,7 @@ not timed whole, and the deadline paragraph above has when they fired.
 | `contact-refused` | `ContactReadRefused` | `view-users` taken from `notifications-worker`'s, the stored contacts dropped | 32m40s |
 | `unscanned-shipment` | `UnscannedShipments` | a four-day-old Booked shipment planted through SQL | 4m08s |
 | `unattributed-order` | `UnattributedOrders` | an unowned payment fact planted through SQL, held 900 seconds | 18m40s |
+| `erasure-overdue` | `ErasureRequestsOverdue` | an Open request due a day ago planted through SQL, which Privacy's sweep marks | not timed |
 
 The two Keycloak causes restart the worker because it keeps the token it
 fetched until that expires. Their restore gives the grant back, reads the
