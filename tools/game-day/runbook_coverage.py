@@ -27,11 +27,7 @@ NOT_ON_COMPOSE: dict[str, str] = {
 # The last of them empties this and deletes it, with its case in test_coverage.py.
 OWED_PULL_REQUESTS = {"PR-2", "PR-3", "PR-4"}
 OWED: dict[str, tuple[str, ...]] = {
-    "address-refused.md": ("PR-2",),
-    "contact-refused.md": ("PR-2",),
-    "unscanned-shipment.md": ("PR-2",),
-    "unattributed-order.md": ("PR-2",),
-    "queue-backlog.md": ("PR-2", "PR-4"),
+    "queue-backlog.md": ("PR-4",),
     "error-rate.md": ("PR-3",),
     "latency.md": ("PR-3",),
     "outbox-growth.md": ("PR-3",),
