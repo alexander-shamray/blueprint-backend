@@ -31,11 +31,11 @@ not a failure.
 
 | File | Owns |
 |---|---|
-| `harness.py` | Compose control (`stop`, `start`, `pause`, `exec_sql`, `exec_redis`, `logs`), a token and an order, alert state, `wait_until` and `Deadline` |
+| `harness.py` | Compose control (`stop`, `start`, `restart`, `pause`, `exec_sql`, `exec_redis`, `logs`), a token and an order, alert state and PromQL (`Alerts`), Loki (`Logs`), a service account's Keycloak grants (`Realm`, `Grant`), `wait_until` and `Deadline` |
 | `game_day.py` | The runner: quiet start, cause, wait, first step, restore, in that order |
 | `scenarios/<runbook>.py` | One runbook, named for it with `-` as `_` |
 | `runbook_coverage.py` | `NOT_ON_COMPOSE` and `OWED`, and the rules that hold every runbook to a script or a reason |
-| `test_harness.py`, `test_coverage.py` | The suite, run in CI by `.github/workflows/game-day.yml` |
+| `test_harness.py`, `test_refused_reads.py`, `test_coverage.py` | The suite, run in CI by `.github/workflows/game-day.yml` |
 
 ## The shape of a script
 
@@ -53,6 +53,14 @@ Every script is a module that follows this, and the coverage test holds it:
 half-way, and must be safe to run twice. A restore that does not settle is a
 finding, because the next scenario would start poisoned by it.
 
+A rule over a window (`increase(...[30m]) > 0`) stays true until the last
+sample leaves it, which the cause's sum does not bound, so such a script names
+`SETTLE`, a `Deadline` as long as the window, and the runner waits that long
+for the restore instead. The coverage test holds `SETTLE` to the rule's window.
+A restore that takes a grant away from the stack gives it back and reads it
+back (`Grant.give_back`), because a restore assumed is the next scenario's
+poison.
+
 ## Waits are predicates with deadlines
 
 `wait_until` polls a predicate and fails naming the last thing it saw; there is
@@ -61,13 +69,23 @@ no sleep that stands in for a condition. A `Deadline` is a sum written out, as
 rule's threshold (an age gauge needs that many seconds to cross it), plus its
 `for:`, plus the export interval (60 seconds, the OpenTelemetry SDK's default,
 which the suite fails on the day anything under `src/`, `deploy/compose/` or `deploy/helm/` sets it),
-plus the evaluation interval (60 seconds). The bundled Grafana image's Prometheus
+plus the evaluation interval (60 seconds), plus the same interval again for
+reporting. The bundled Grafana image's Prometheus
 configuration sets no `evaluation_interval`, which was read from the running
 container, so the default applies. The first runs, on 2026-10-10, fired
 `OutboxAbandonedRows` after 75 seconds of a 120-second deadline,
 `OutboxLocalLaneStalled` after 128 of 150, and `OutboxBrokerLaneStalled` after
 209 and 226 of 240. The last is close to its ceiling, which is what a sum of
 ceilings looks like when the cause lands on a bad phase of both intervals.
+
+**Reporting is a second evaluation.** Prometheus shows an alert one evaluation
+after the one whose expression first read true: the rule's entry in
+`/api/v1/rules` has no alert at that evaluation, and the next one lists it
+`firing` with an `activeAt` back-dated to the earlier. `UnscannedShipments`,
+a count that reads above zero the moment it is exported, fired 169, 172, 176
+and 181 seconds after its row was planted, where the export and one evaluation
+allow 125. The three terms above could not hold it, so `REPORT_LAG_SECONDS` is
+the fourth and every deadline carries it; the runs above fit under it too.
 
 ## Alert state
 
@@ -77,10 +95,11 @@ route `compose.yml`'s smoke already uses. A rule Prometheus has not loaded is
 also quiet, so the runner asks `/api/v1/rules` first and refuses to start
 against an alert that is already firing.
 
-## Findings the first run made
+## Findings the runs made
 
 Each is a defect in a runbook or a rule, not in this tool, and each has its
-own issue; the scripts keep reporting them until they are repaired.
+own issue; a script keeps reporting one it can reach until it is repaired, and
+names in its header one it has to work around.
 
 - **A container's stdout is empty.** The hosts log through OpenTelemetry alone
   (§13.4), so the `kubectl logs … | grep` that opens `outbox-broker.md` and
@@ -94,6 +113,42 @@ own issue; the scripts keep reporting them until they are repaired.
 - **`sqlcmd` needs `-I`.** The runbooks' SQL is written for a client with
   `QUOTED_IDENTIFIER` on; `sqlcmd` leaves it off, and the outbox's filtered
   indexes refuse a write without it. The harness passes `-I`.
+
+- **A runbook's "with the refusal as its exception" is not in the line.**
+  `address-refused.md` and `contact-refused.md` tell their four causes apart by
+  the exception on the `PassFailed` and `ContactRefused` lines. Loki holds the
+  line without it: the exception is the entry's `exception_message` metadata,
+  so a reader who greps the line for the wording finds nothing. The scripts
+  filter on that field (`Logs.search(..., exception=)`) and say so in their
+  headers.
+- **`DeliveryLagHigh` cannot see a consumer's first export.** A restarted
+  consumer is a new series, and `rate` counts nothing for a series' first
+  sample, which is where the deliveries it was late with land. The runbook's
+  lookalike, a consumer in a crash loop, therefore raises no lag at all while
+  its backlog grows; `queue_backlog.py` pauses the consumer for that reason
+  and not with the row's `stop`.
+
+## The scripts
+
+The runtime is the wall clock of one run on the Compose stack, from the quiet
+start to the restore settling, measured on 2026-10-10; the first three were
+not timed whole, and the deadline paragraph above has when they fired.
+
+| Runbook | Alert | Cause | Runtime |
+|---|---|---|---|
+| `outbox-broker` | `OutboxBrokerLaneStalled` | `stop rabbitmq` | not timed |
+| `projection-lag` | `OutboxLocalLaneStalled` | a table renamed through SQL | not timed |
+| `outbox-abandoned` | `OutboxAbandonedRows` | a row planted at the ceiling | not timed |
+| `queue-backlog` (lag half) | `DeliveryLagHigh` | `web-bff` paused for 20 seconds in each round, for 12 minutes, to outlast the `for:` | 23m16s |
+| `address-refused` | `AddressReadRefused` | `orders:delivery-address` taken from `shipping-worker`'s service account, the worker restarted | 34m45s |
+| `contact-refused` | `ContactReadRefused` | `view-users` taken from `notifications-worker`'s, the stored contacts dropped | 32m40s |
+| `unscanned-shipment` | `UnscannedShipments` | a four-day-old Booked shipment planted through SQL | 4m08s |
+| `unattributed-order` | `UnattributedOrders` | an unowned payment fact planted through SQL, held 900 seconds | 18m40s |
+
+The two Keycloak causes restart the worker because it keeps the token it
+fetched until that expires. Their restore gives the grant back, reads the
+account back, restarts the worker, and then waits out the rule's 30-minute
+window, which is why they take over half an hour.
 
 ## The order
 
