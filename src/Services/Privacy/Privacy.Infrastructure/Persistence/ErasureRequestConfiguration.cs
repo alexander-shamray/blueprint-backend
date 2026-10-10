@@ -17,8 +17,8 @@ internal sealed class ErasureRequestConfiguration : IEntityTypeConfiguration<Era
         // Personal data until the request closes, so it is nullable and indexed only while it is present.
         builder.Property(r => r.SubjectId);
 
-        // One request carries a subject's id at a time: a second raise finds the first, and a race between two
-        // loses on this index and not by writing a second request.
+        // One request carries a subject's id at a time. The repository's per-subject lock serialises a race, and
+        // this index is the backstop behind it (ADR-092).
         builder
             .HasIndex(r => r.SubjectId)
             .IsUnique()
