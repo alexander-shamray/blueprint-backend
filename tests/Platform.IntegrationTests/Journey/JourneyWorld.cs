@@ -21,6 +21,7 @@ using Xunit;
 using CatalogFixture = Catalog.TestSupport.ServiceFixture;
 using InventoryFixture = Inventory.TestSupport.ServiceFixture;
 using NotificationsFixture = Notifications.TestSupport.ServiceFixture;
+using PrivacyFixture = Privacy.TestSupport.ServiceFixture;
 using OrderingFixture = Ordering.TestSupport.ServiceFixture;
 using PaymentsFixture = Payments.TestSupport.ServiceFixture;
 using PaymentsMappings = Payments.TestSupport.SimulatorMappings;
@@ -39,7 +40,7 @@ public sealed record JourneyOrder(Guid Id, Guid Customer, Guid Product, int Quan
     public static string MailboxOf(Guid customer) => $"customer-{customer:N}@example.test";
 }
 
-/// <summary>Six services over one SQL Server, one broker and one Redis pair, each under its own account (§12.1).</summary>
+/// <summary>Eight hosts over one SQL Server, one broker and one Redis pair, each under its own account (§12.1).</summary>
 /// <remarks>
 /// Nothing is widened for the harness, so a publish or bind the shipped grant refuses fails here (ADR-036).
 /// Ordering's address read is Ordering's own service. Every order is new to its scenario, so nothing is reset.
@@ -54,6 +55,11 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
     public const string Payments = "Payments";
     public const string Shipping = "Shipping";
     public const string Notifications = "Notifications";
+
+    /// <summary>The erasure choreography's tracker and its last holder (§11.7), which the fulfilment path does not need.</summary>
+    public const string Privacy = "Privacy";
+
+    public const string Bff = "Bff";
 
     private readonly MsSqlContainer _sql = new MsSqlBuilder().WithImage(ComposeImage.Of("sql")).Build();
 
@@ -73,7 +79,8 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
         [Ordering] = new OutboxGate(),
         [Inventory] = new OutboxGate(),
         [Payments] = new OutboxGate(),
-        [Shipping] = new OutboxGate()
+        [Shipping] = new OutboxGate(),
+        [Privacy] = new OutboxGate()
     };
 
     private RabbitMqContainer? _broker;
@@ -106,6 +113,10 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
     internal JourneyShippingFactory ShippingHost { get; private set; } = null!;
 
     internal JourneyNotificationsFactory NotificationsHost { get; private set; } = null!;
+
+    internal JourneyPrivacyFactory PrivacyHost { get; private set; } = null!;
+
+    internal JourneyBffFactory BffHost { get; private set; } = null!;
 
     /// <summary>One service's outbox, which a scenario holds to park an order where it needs it.</summary>
     public OutboxGate OutboxOf(string service) => _gates[service];
@@ -150,7 +161,9 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
             Migrated(InventoryFixture.RunMigratorAsync(Connection(Inventory)), Inventory),
             Migrated(PaymentsFixture.RunMigratorAsync(Connection(Payments)), Payments),
             Migrated(ShippingFixture.RunMigratorAsync(Connection(Shipping)), Shipping),
-            Migrated(NotificationsFixture.RunMigratorAsync(Connection(Notifications)), Notifications));
+            Migrated(NotificationsFixture.RunMigratorAsync(Connection(Notifications)), Notifications),
+            Migrated(PrivacyFixture.RunMigratorAsync(Connection(Privacy)), Privacy),
+            Migrated(JourneyBffFactory.RunMigratorAsync(Connection(Bff)), Bff));
 
         string cache = _cache.GetConnectionString();
         string coordination = _coordination.GetConnectionString();
@@ -193,10 +206,18 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
             new Uri(Contacts.Urls[0] + "/"),
             Jurisdiction);
 
+        PrivacyHost = new JourneyPrivacyFactory(
+            Connection(Privacy),
+            Account("privacy"),
+            cache,
+            coordination,
+            _gates[Privacy]);
+        BffHost = new JourneyBffFactory(Connection(Bff), Account("bff"));
+
         // Every host is up, and so every queue bound, before the first order is placed: a publish to an exchange
         // nothing is bound to yet is dropped by the broker, not held.
         _ = (CatalogHost.Services, OrderingHost.Services, InventoryHost.Services, PaymentsHost.Services);
-        _ = (ShippingHost.Services, NotificationsHost.Services);
+        _ = (ShippingHost.Services, NotificationsHost.Services, PrivacyHost.Services, BffHost.Services);
     }
 
     public async ValueTask DisposeAsync()
@@ -205,7 +226,8 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
 
         foreach (IDisposable? host in new IDisposable?[]
         {
-            NotificationsHost, ShippingHost, PaymentsHost, InventoryHost, OrderingHost, CatalogHost
+            BffHost, PrivacyHost, NotificationsHost, ShippingHost, PaymentsHost, InventoryHost, OrderingHost,
+            CatalogHost
         })
         {
             host?.Dispose();
