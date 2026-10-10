@@ -3409,7 +3409,7 @@ cfg.ReceiveEndpoint(
         // exception for a state machine.
         e.UseConsumeFilter(typeof(InboxFilter<>), context);
 
-        // And the one line that differs from the other three endpoints:
+        // And the one line that differs from the other endpoints:
         // MassTransit's transactional outbox rather than the in-memory one, on
         // the DbContext the saga repository already holds, so the sends commit
         // with the instance (ADR-032).
@@ -3428,11 +3428,11 @@ cfg.ReceiveEndpoint(
 > departs from it.**
 > [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
 > carries the argument. The short version is that the other endpoints
-> buffer nothing that matters — their consumers publish through §9.4's
+> buffer nothing that matters — their consumers either publish through §9.4's
 > application outbox, whose row commits with the aggregate, so the in-memory
 > outbox there defers sends that are already durable, or send a completion
 > that [ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)
-> allows to be lost to silence. The saga is the one
+> lets an overdue request cover. The saga is the one
 > consumer that `Send`s and `Schedule`s on the bus directly, and an in-memory
 > buffer flushes *after* `EntityFrameworkRepository` has committed the
 > instance, which is a dual write.
