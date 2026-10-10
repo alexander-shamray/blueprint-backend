@@ -83,11 +83,18 @@ subscriber silently executing your business commands.
 | **Privacy** | ErasureRequest | `PersonalDataDeleteRequested` | — | `PersonalDataDeleteCompleted` |
 | **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model owning no fact ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested` | — |
 
+A service that holds personal data also takes part in
+[§11.7](11-identity-authorization.md)'s erasure, beyond its row: it consumes
+`PersonalDataDeleteRequested` and sends `PersonalDataDeleteCompleted` to
+Privacy's queue
+([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)),
+which is why neither is in a cell above.
+
 Every cell enumerates. "All customer-relevant events" would be shorter and is
 not a contract: it cannot be versioned, reviewed, or checked against what
 publishers actually emit. Notifications is the clearest case: it publishes
-nothing, so this row is the whole of its contract, and the delivery plan builds
-it last for that reason ([Appendix C.1](appendix-c-delivery-plan.md#c1-service-build-order)) — every name in it belongs to a
+nothing, so this row is the whole of its contract with the domain's events, and
+the delivery plan builds it last for that reason ([Appendix C.1](appendix-c-delivery-plan.md#c1-service-build-order)) — every name in it belongs to a
 service that has to exist first. A subscription list that grows silently is how
 a consumer ends up bound to a type nobody meant to give it.
 
