@@ -64,7 +64,8 @@ of six pull requests.
 A holder sends its completion to Privacy's queue and does not stage it through
 an outbox, so the paragraph above on each holder's transaction and the BFF's
 exception no longer hold, and the completion has one sender per holder and not
-five publishers.
+five publishers. Notifications never had an outbox either, so the atomicity
+that paragraph described held for three services and not four.
 
 ---
 
