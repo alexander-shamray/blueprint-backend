@@ -477,9 +477,8 @@ MASSTRANSIT_JSON = "application/vnd.masstransit+json"
 class Broker:
     """The broker as the queue runbooks reach it: as dead-letter-operator, through the Management API and the tool.
 
-    The account ships with no password on Compose (deploy/compose/README.md), so `open` sets one for the run and
-    `close` clears it, the tool README's local route. The password is on no argv: rabbitmqctl reads it from stdin
-    and the tool from its environment, as the runbooks' `read -s` gives it.
+    The account ships with no password on Compose, so `open` sets one and `close` clears it, the tool README's local
+    route; rabbitmqctl reads it from stdin and the tool from its environment, so it is on no argv.
     """
 
     def __init__(self, compose: Compose, send: Http = http, base: str = MANAGEMENT,

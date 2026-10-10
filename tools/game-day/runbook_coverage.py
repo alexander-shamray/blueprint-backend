@@ -1,8 +1,7 @@
 """Which runbooks have a game-day script, and why each of the others has none.
 
-The coverage test (test_coverage.py) reads docs/runbooks/ and the loaded rule file and keeps no list of runbooks or
-rules of its own: a runbook dropped into that directory is uncovered until it has a script or an entry below, and a
-rule sending a scripted runbook an alert its script does not cause is uncovered too.
+The coverage test reads docs/runbooks/ and the loaded rules and keeps no list of its own: a new runbook is uncovered
+until it has a script or a reason, and a rule naming a scripted runbook until that script causes it.
 """
 
 from __future__ import annotations

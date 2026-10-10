@@ -1,12 +1,7 @@
-"""docs/runbooks/queue-backlog.md. Alerts: DeliveryLagHigh, then QueueBacklogGrowing, each `for: 10m`.
-Cause:      §9.8's consumer-down row: pause web-bff, order, unpause it, again until the lag has lasted `for:`. Then
-            `stop web-bff` and 1100 messages sent to bff-order-events as dead-letter-operator, 20 more every 30s;
-            the organic route is a consumer down through a busy hour.
-First step: the runbook's arrival-or-service reads, Translated: the consume-rate query, the lag query, a running check.
-            For the backlog, its depth query, the alert's `queue` label, and the lookalike: the endpoint's consumers,
-            read through rabbitmqctl, and `compose ps` for the replica count.
-Restore:    unpause web-bff if a round left it paused, then wait for the late deliveries to leave the 10m window. Then
-            stop the top-up, purge bff-order-events before web-bff starts so it never reads one, and clear the password.
+"""docs/runbooks/queue-backlog.md. Alerts: DeliveryLagHigh, then QueueBacklogGrowing as NEXT, each `for: 10m`.
+Cause:      web-bff paused 20s a round past the `for:`; then stopped, its queue sent 1100 messages and 20 every 30s.
+First step: Translated: the consume-rate and lag queries, a running check; then the depth, `queue` and consumer reads.
+Restore:    unpause web-bff and wait out the 10m window; then stop the top-up, purge, and start web-bff again.
 """
 
 from __future__ import annotations
