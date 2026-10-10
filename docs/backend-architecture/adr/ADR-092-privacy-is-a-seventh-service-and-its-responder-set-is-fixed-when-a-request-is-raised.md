@@ -67,6 +67,12 @@ exception no longer hold, and the completion has one sender per holder and not
 five publishers. Notifications never had an outbox either, so the atomicity
 that paragraph described held for three services and not four.
 
+**Ordering takes the id off its order summaries and does not delete them.**
+A row carries the counted-once flags of [§13.3](../13-observability.md), which
+a delete would reset for a replayed event to count again; the row holds no
+other personal data
+([`docs/personal-data.md`](../../personal-data.md)).
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
