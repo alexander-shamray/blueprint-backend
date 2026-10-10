@@ -1,15 +1,16 @@
+using Common.Domain;
 using Common.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Payments.TestSupport;
 
-/// <summary>A commit that fails once, on demand, after the unit has staged its outbox row.</summary>
+/// <summary>A commit that fails once, on demand, after the unit has staged its outbox row or its audit row.</summary>
 public sealed class CommitFaultInterceptor : SaveChangesInterceptor
 {
     private CommitFault? _armed;
 
-    /// <summary>Arms the next save that stages an outbox row, one fault at a time.</summary>
+    /// <summary>Arms the next save that stages an outbox or an erasure row, one fault at a time.</summary>
     public CommitFault Arm()
     {
         CommitFault fault = new(this);
@@ -26,9 +27,10 @@ public sealed class CommitFaultInterceptor : SaveChangesInterceptor
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        // Only a save with an outbox row staged qualifies, so Fired is a claim about the unit under test.
+        // Only a save with an outbox row or an erasure row staged qualifies, so Fired is a claim about the unit.
         bool staged = eventData.Context is not null &&
-            eventData.Context.ChangeTracker.Entries<OutboxMessage>().Any(e => e.State == EntityState.Added);
+            (eventData.Context.ChangeTracker.Entries<OutboxMessage>().Any(e => e.State == EntityState.Added) ||
+                eventData.Context.ChangeTracker.Entries<PersonalDataErasure>().Any(e => e.State == EntityState.Added));
 
         if (!staged)
             return base.SavingChangesAsync(eventData, result, cancellationToken);

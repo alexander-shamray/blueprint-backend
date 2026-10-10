@@ -9,11 +9,10 @@ namespace Payments.Application.Privacy.ErasePersonalData;
 public sealed class ErasePersonalDataHandler(
     IPaymentOrderStore orders,
     IPersonalDataErasureRepository erasures,
-    IErasureReporter reporter,
     TimeProvider clock)
-    : ICommandHandler<ErasePersonalDataCommand, Result>
+    : ICommandHandler<ErasePersonalDataCommand, Result<int>>
 {
-    public async Task<Result> HandleAsync(ErasePersonalDataCommand command, CancellationToken ct)
+    public async Task<Result<int>> HandleAsync(ErasePersonalDataCommand command, CancellationToken ct)
     {
         int count = await orders.AnonymiseCustomerAsync(command.SubjectId, ct);
         DateTimeOffset now = clock.GetUtcNow();
@@ -24,9 +23,6 @@ public sealed class ErasePersonalDataHandler(
         else
             seen.Repeat(count, now);
 
-        // Held by the endpoint until the unit has committed, so nothing is reported for a rolled-back erasure.
-        await reporter.ReportAsync(command.RequestId, count, ct);
-
-        return Result.Success();
+        return Result.Success(count);
     }
 }
