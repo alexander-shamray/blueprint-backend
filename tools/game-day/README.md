@@ -178,8 +178,9 @@ names in its header one it has to work around.
 ## The scripts
 
 The runtime is the wall clock of one run on the Compose stack, from the quiet
-start to the restore settling, measured on 2026-10-10; the first three were
-not timed whole, and the deadline paragraph above has when they fired.
+start to the restore settling, measured on 2026-10-10; a row marked not
+timed was not timed whole, and the deadline paragraph above has when the first
+three fired.
 
 | Runbook | Alert | Cause | Runtime |
 |---|---|---|---|
@@ -187,6 +188,9 @@ not timed whole, and the deadline paragraph above has when they fired.
 | `projection-lag` | `OutboxLocalLaneStalled` | a table renamed through SQL | not timed |
 | `outbox-abandoned` | `OutboxAbandonedRows` | a row planted at the ceiling | not timed |
 | `queue-backlog` (lag half) | `DeliveryLagHigh` | `web-bff` paused for 20 seconds in each round, for 12 minutes, to outlast the `for:` | 23m16s |
+| `error-queue` | `ErrorQueueDepth` | a `CancelOrder` with a reason no mapper knows, sent to `ordering-commands`, which faults to `_error` | not timed |
+| `skipped-queue` | `SkippedQueueDepth` | a message type nothing binds, sent to `ordering-stock-events` | not timed |
+| `queue-backlog` (backlog half) | `QueueBacklogGrowing` | `web-bff` stopped, 1100 messages sent to `bff-order-events` and more topped up | not timed |
 | `address-refused` | `AddressReadRefused` | `orders:delivery-address` taken from `shipping-worker`'s service account, the worker restarted | 34m45s |
 | `contact-refused` | `ContactReadRefused` | `view-users` taken from `notifications-worker`'s, the stored contacts dropped | 32m40s |
 | `unscanned-shipment` | `UnscannedShipments` | a four-day-old Booked shipment planted through SQL | 4m08s |
