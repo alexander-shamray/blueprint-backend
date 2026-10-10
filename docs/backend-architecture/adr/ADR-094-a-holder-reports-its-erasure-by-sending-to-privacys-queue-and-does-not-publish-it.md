@@ -33,6 +33,13 @@ one mechanism for all five. `PersonalDataErasedDomainEvent`,
 which Common.Domain's audit record raises for a mapper to publish, has no
 consumer and is removed with the first holder's pull request.
 
+**The V1 record changed in place.** Nothing consumed it, so
+[§9.2](../09-messaging.md)'s exception for a contract with no consumer applies:
+`PersonalDataDeleteCompleted` is a positional command carrying the request, the
+responder and the count, without the envelope an event has, because §3.2 gives
+a queue's owner a column for what many senders put on its queue and an event
+must have exactly one publisher.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
