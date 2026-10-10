@@ -827,14 +827,16 @@ A stop is a case where the person has something to do, and a machine asleep
 under an unreported stop is the one failure this step could add, so every stop
 and every run that ended at step 0 skips it and says so.
 
-**A failed suspend is reported, not a stop.** The PR has merged and the
+**A failed suspend is reported, not a stop, and it is the one helper whose
+non-zero exit the stop list does not take.** The PR has merged and the
 workspace is torn down; nothing a retry could change is left, so the report
 says the machine was not suspended and why.
 
 **The command is fixed in a helper, and the grant is exact.** A prefix grant
 on `rundll32` would run any export of any DLL. `system-sleep.sh` spells the
-one call itself and takes no argument but `--dry-run`, which the suite uses
-to prove a refusal suspends nothing; `Bash(bash .claude/scripts/system-sleep.sh)`
+one call itself and takes no argument but `--dry-run`, which shows the
+command without running it. The suite proves a refusal suspends nothing with
+a probe `rundll32.exe` first on `PATH`. `Bash(bash .claude/scripts/system-sleep.sh)`
 has no `:*`, so the flag is not granted either. Windows hibernates in place of
 sleeping where hibernation is on; `powercfg /a` says which this machine does,
 and `powercfg /hibernate off` makes the call a sleep.
