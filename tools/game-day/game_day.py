@@ -58,7 +58,22 @@ def run(scenario: ModuleType, world: harness.World, *, clock=time.monotonic, sle
     except harness.GameDayError as error:
         findings.append(f"the cause or the step failed: {error}")
     finally:
-        findings.extend(_restore(scenario, world, clock, sleep))
+        restored = _restore(scenario, world, clock, sleep)
+        findings.extend(restored)
+        # After the settle and not before it: a ratio or a quantile over a window that has no requests in it is
+        # empty, and an empty rule is quiet whether or not the cause went. The stop is the runner's, so a scenario
+        # that raised half-way cannot leave a loop running into the next.
+        if world.traffic.running:
+            say(f"traffic: {world.traffic.counts()}")
+        world.traffic.stop()
+    # A scenario with a second alert of its own runbook (error-rate.md's two rules) hands it on as NEXT, and it runs
+    # only on a stack the first restored: one that did not settle would make the second a finding about the first.
+    follow_up = getattr(scenario, "NEXT", None)
+    if follow_up is not None:
+        if restored:
+            findings.append(f"{follow_up.ALERT}: not run, because {alert}'s restore did not settle")
+        else:
+            findings.extend(run(follow_up, world, clock=clock, sleep=sleep))
     return findings
 
 
@@ -99,7 +114,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.runbook:
         parser.error("name a runbook, or --list")
 
-    world = harness.World(harness.Compose(), harness.Alerts(), harness.Orders(), harness.Logs(), print, realm=harness.Realm())
+    orders = harness.Orders()
+    world = harness.World(harness.Compose(), harness.Alerts(), orders, harness.Logs(), print, realm=harness.Realm(),
+                          traffic=harness.Traffic(token=orders.token))
     findings = run(load(args.runbook), world)
     for finding in findings:
         print(f"FINDING: {finding}", file=sys.stderr)

@@ -9,12 +9,13 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -42,6 +43,22 @@ EVALUATION_INTERVAL_SECONDS = 60
 REPORT_LAG_SECONDS = EVALUATION_INTERVAL_SECONDS
 
 POLL_SECONDS = 2.0
+
+# The traffic loop's rate. A fixture and not a load test (deploy/observability/slo/slo.js is §13.7's). The rate is the
+# lowest that keeps the widest window of the three rules populated, which is Latency's: a p99 over fewer than 100
+# observations is its maximum, and one slow request would then be the quantile. 100 observations in 600 seconds is
+# one for each route every 6 seconds, and the loop sends its two routes alternately, so one request every 3 seconds.
+# Each service sees one route, so the 5-minute window of ErrorRate holds 50 of them and the ratio moves by one failure
+# in 50; README.md owns the argument.
+LATENCY_WINDOW_SECONDS = 600
+WINDOW_OBSERVATIONS = 100
+TRAFFIC_ROUTES = 2
+TRAFFIC_TICK_SECONDS = LATENCY_WINDOW_SECONDS / WINDOW_OBSERVATIONS / TRAFFIC_ROUTES
+# A request held by a paused database runs on, so the loop bounds what it has out; §10.3's limiters admit 100 a
+# minute per address and 300 per subject, and this loop sends 20 a minute.
+TRAFFIC_MAX_IN_FLIGHT = 40
+# The access token lives five minutes; a new one is fetched well inside that.
+TRAFFIC_TOKEN_SECONDS = 120
 
 
 class GameDayError(Exception):
@@ -146,15 +163,28 @@ class Compose:
 Http = Callable[[str, str, dict[str, str], bytes | None], tuple[int, str]]
 
 
-def http(method: str, url: str, headers: dict[str, str], body: bytes | None) -> tuple[int, str]:
+def _request(method: str, url: str, headers: dict[str, str], body: bytes | None, timeout: float) -> tuple[int, str]:
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.status, response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as error:
         return error.code, error.read().decode("utf-8", errors="replace")
     except (urllib.error.URLError, TimeoutError, ConnectionError) as error:
         return 0, str(error)
+
+
+def http(method: str, url: str, headers: dict[str, str], body: bytes | None) -> tuple[int, str]:
+    return _request(method, url, headers, body, 15)
+
+
+# Longer than a SQL command's 30 seconds, so a request held by a paused database ends as the server's answer and not
+# as the loop hanging up, which would leave the server's own duration to the disconnect.
+TRAFFIC_TIMEOUT_SECONDS = 45
+
+
+def patient_http(method: str, url: str, headers: dict[str, str], body: bytes | None) -> tuple[int, str]:
+    return _request(method, url, headers, body, TRAFFIC_TIMEOUT_SECONDS)
 
 
 class Alerts:
@@ -259,6 +289,102 @@ class Orders:
         return json.loads(text)
 
 
+class Traffic:
+    """A bounded request generator through the gateway, so a rule over request counts has a window to read.
+
+    ErrorRate and Latency are a ratio and a quantile over what the gateway and the services served, and with no
+    traffic they have no series to fire on. Each tick sends one request, alternating an anonymous catalog read and an
+    authenticated cancel of an order that does not exist: neither changes state, and both reach the service's
+    database, so a stopped or paused SQL Server is felt on both. A request that outlives its tick runs on its own
+    thread, so a database that holds every request for 30 seconds does not slow the loop that is meant to outlast it.
+    The loop ends at `stop()` or at the bound it was started with, whichever is first.
+    """
+
+    def __init__(self, send: Http = patient_http, token: Callable[[], str] | None = None,
+                 clock: Callable[[], float] = time.monotonic, tick: float = TRAFFIC_TICK_SECONDS,
+                 base: str = GATEWAY) -> None:
+        self._send = send
+        self._token = token
+        self._clock = clock
+        self._tick = tick
+        self._base = base
+        self._halt = threading.Event()
+        self._lock = threading.Lock()
+        self._token_lock = threading.Lock()
+        self._thread: threading.Thread | None = None
+        self._workers: list[threading.Thread] = []
+        self._bearer = ""
+        self._bearer_at = float("-inf")
+        self._sent = 0
+        self._skipped = 0
+        self._statuses: dict[int, int] = {}
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def start(self, max_seconds: float) -> None:
+        if self.running:
+            raise GameDayError("the traffic loop is already running")
+        self._halt.clear()
+        with self._lock:
+            self._sent, self._skipped, self._statuses = 0, 0, {}
+        self._thread = threading.Thread(target=self._loop, args=(max_seconds,), name="game-day-traffic", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        """End the loop and wait for the requests it still has out, none of which outlives the client timeout."""
+        self._halt.set()
+        if self._thread is not None:
+            self._thread.join()
+        for worker in self._workers:
+            worker.join(TRAFFIC_TIMEOUT_SECONDS + 5)
+        self._workers = []
+
+    def counts(self) -> dict[str, object]:
+        with self._lock:
+            return {"sent": self._sent, "skipped": self._skipped, "statuses": dict(sorted(self._statuses.items()))}
+
+    def _loop(self, max_seconds: float) -> None:
+        started = self._clock()
+        sent = 0
+        while not self._halt.is_set() and self._clock() - started < max_seconds:
+            self._workers = [worker for worker in self._workers if worker.is_alive()]
+            if len(self._workers) >= TRAFFIC_MAX_IN_FLIGHT:
+                with self._lock:
+                    self._skipped += 1
+            else:
+                worker = threading.Thread(target=self._one, args=(sent % TRAFFIC_ROUTES,), daemon=True)
+                self._workers.append(worker)
+                worker.start()
+            sent += 1
+            self._halt.wait(self._tick)
+
+    def _headers(self) -> dict[str, str]:
+        with self._token_lock:
+            now = self._clock()
+            if self._token is not None and now - self._bearer_at >= TRAFFIC_TOKEN_SECONDS:
+                try:
+                    self._bearer = self._token()
+                    self._bearer_at = now
+                except GameDayError:
+                    # An old token is good for minutes, and a loop that dies on one failed fetch ends the window it
+                    # exists to fill; the 401s a lapsed one earns are in the counts.
+                    pass
+            return {"Authorization": f"Bearer {self._bearer}", "Content-Type": "application/json"}
+
+    def _one(self, route: int) -> None:
+        if route == 0:
+            status, _ = self._send("GET", f"{self._base}/api/v1/catalog/products?limit=1", {}, None)
+        else:
+            body = json.dumps({"reason": "customer_request"}).encode()
+            status, _ = self._send(
+                "POST", f"{self._base}/api/v1/orders/{uuid.uuid4()}/cancel", self._headers(), body)
+        with self._lock:
+            self._sent += 1
+            self._statuses[status] = self._statuses.get(status, 0) + 1
+
+
 class Realm:
     """The commerce realm's service-account grants, read and changed through Keycloak's admin API.
 
@@ -345,6 +471,7 @@ class World:
     say: Callable[[str], None] = print
     caused_at: float = 0.0
     realm: Realm | None = None
+    traffic: Traffic = field(default_factory=Traffic)
 
     def since_cause(self) -> int:
         """Seconds since the runner began the cause, rounded up, so a first step reads this run's lines and no
