@@ -1,9 +1,7 @@
 """docs/runbooks/skipped-queue.md. Alert: SkippedQueueDepth, any message on a `_skipped` queue, `for: 1m`.
-Cause:      a message of a type nothing binds sent to ordering-stock-events' exchange as dead-letter-operator, the
-            runbook's "addressed here and does not belong here"; the organic route is a producer ahead of its consumer.
-First step: the tool's `list` and `inspect` as dead-letter-operator, Translated: Compose publishes 15672, so the
-            runbook's `kubectl port-forward` has nothing to do; the type read out of the body, where the runbook says.
-Restore:    the runbook's Discard with a record, the tool's `discard --message-id --execute`, then the password cleared.
+Cause:      a type nothing binds, sent to ordering-stock-events: "addressed here and does not belong here".
+First step: the alert's `queue` label, the tool's `list` and `inspect`, the body's type; Translated: no port-forward.
+Restore:    the runbook's Discard with a record, `discard --message-id --execute`, then the password cleared.
 """
 
 from __future__ import annotations

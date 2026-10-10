@@ -1,9 +1,7 @@
 """docs/runbooks/error-queue.md. Alert: ErrorQueueDepth, any message on an `_error` queue, `for: 1m`.
-Cause:      a poison CancelOrder sent to ordering-commands as dead-letter-operator; no mapper knows its reason, so it
-            faults with no retry (§9.8). The organic route is a sibling service shipping a code Ordering cannot read.
-First step: the tool's `list` and `inspect` as dead-letter-operator, Translated: Compose publishes 15672, so the
-            runbook's `kubectl port-forward` has nothing to do; the alert's `queue` label read first.
-Restore:    the runbook's Discard with a record, the tool's `discard --message-id --execute`, then the password cleared.
+Cause:      a CancelOrder whose reason no mapper knows, sent to ordering-commands: it faults with no retry (§9.8).
+First step: the alert's `queue` label, the tool's `list` and `inspect`; Translated: Compose publishes 15672 already.
+Restore:    the runbook's Discard with a record, `discard --message-id --execute`, then the password cleared.
 """
 
 from __future__ import annotations

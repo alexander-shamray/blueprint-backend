@@ -1,9 +1,7 @@
-"""The broker-queue runbooks: error-queue, skipped-queue and queue-backlog's backlog half, against doubles.
-
-    cd tools/game-day && py -3.12 -m unittest
+"""The broker-queue scripts and harness.Broker, against doubles: cd tools/game-day && py -3.12 -m unittest
 
 The causes publish as dead-letter-operator and the first steps run tools/dead-letters as that account, so the cases
-read the account's grant, the endpoints and the contract from where they are declared rather than copying them.
+read its grant, the endpoints and the contract from where each is declared rather than copying them.
 """
 
 import base64
