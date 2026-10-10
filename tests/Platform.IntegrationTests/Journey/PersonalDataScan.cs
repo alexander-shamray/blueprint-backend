@@ -4,9 +4,8 @@ namespace Platform.IntegrationTests.Journey;
 
 /// <summary>Every column of every table of every database the platform runs, searched for a person (§11.7).</summary>
 /// <remarks>
-/// Text, not structure: the scan knows no table, so a store added next quarter is searched without a line here,
-/// which is the point of a proof over a list of places someone remembered. A column is read as text however it is
-/// typed, so a key, an address and a message payload are all found by the same needle.
+/// Text, not structure: the scan knows no table, so a store added later is searched without a line here (§11.7).
+/// A column is read as text however it is typed, so a key, an address and a payload are found by one needle.
 /// </remarks>
 internal static class PersonalDataScan
 {
