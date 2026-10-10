@@ -40,7 +40,7 @@ that carries it.
 | Holding | Owner | Holds | Kept for | Erasure | Runs in |
 |---|---|---|---|---|---|
 | `ordering.Orders` | Ordering | The customer's id and the shipping address | No window: the order is the financial record | Anonymise: the id replaced, the address cleared (§11.7) | Ordering's database |
-| `ordering.OrderSummaries` | Ordering | The customer's id, as the key of the buyer's list | No window, as its order | Delete the buyer's rows ([ADR-092](backend-architecture/adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)); the order beside it is the record that survives | Ordering's database |
+| `ordering.OrderSummaries` | Ordering | The customer's id, as the key of the buyer's list | No window, as its order | Anonymise: the id taken off the row, which keeps its counted-once flags that a delete would reset ([ADR-092](backend-architecture/adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)); the order beside it is the record that survives | Ordering's database |
 | `ordering.OutboxMessages` | Ordering | The customer's id in the payloads of the order events that carry one | `RetentionPolicy.OutboxWindow` after dispatch; an abandoned row until an operator acts on it ([§9.4](backend-architecture/09-messaging.md)) | Lifetime only | Ordering's database |
 | `payments.PaymentOrders` | Payments | The customer's id, read from `OrderPlaced` as the payer ([ADR-028](backend-architecture/adr/ADR-028-a-money-movement-command-carries-no-subject.md)) | No window | Anonymise the id and keep the money (ADR-092); an order not yet authorised is then authorised under the empty payer | Payments' database |
 | `shipping.DeliveryAddresses` | Shipping | The customer's id and the postal address read from Ordering ([ADR-052](backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)) | `ShippingJurisdictionOptions.AddressRetention` after its shipment is terminal, which a pending one is at `FulfilmentOptions.GiveUpAge` | Delete (ADR-052) | Shipping's database |
@@ -51,8 +51,8 @@ that carries it.
 | `bff.Orders` | The BFF | The customer's id, as the buyer an order is shown to, and a tracking number ([ADR-051](backend-architecture/adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) | No window | Delete (ADR-092); ADR-051's rebuild re-reads what the publishers' outboxes still hold, which this does not reach | The BFF's database |
 | Each service's `IdempotencyMarkers`, and the coordination Redis's claim keys | Every service with a keyed command | The authenticated caller's id, as the key's first segment (`IdempotencyBehavior`): a customer's for Ordering's `PlaceOrder`, a staff user's for Catalog's | A marker for `RetentionPolicy.IdempotencyWindow`; a claim key for `IdempotencyRetention.Window`, or until its release | Lifetime only | Each service's database; the coordination Redis |
 
-**Checked and holding none**: Payments' `PersonalDataErasures`, an audit row
-of a request id, a salted hash, a count and a time
+**Checked and holding none**: Payments' and Ordering's `PersonalDataErasures`,
+an audit row of a request id, a salted hash, a count and a time
 ([ADR-092](backend-architecture/adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
 Catalog's and Inventory's other tables, every
 service's inbox — §9.5's `InboxMessage` keeps no payload, under
