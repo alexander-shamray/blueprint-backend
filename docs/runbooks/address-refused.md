@@ -32,7 +32,9 @@ retry changes the answer, because the cause is a credential or a grant.
 
 The worker logs each backed-off row as `PassFailed` — *"Fulfilment pass for
 shipment … failed; the row backs off"* — with the refusal as its exception.
-Its message names which of four it is:
+The line itself does not carry it: read the entry's `exception_message` field
+in Grafana's log view, and `kubectl logs` shows nothing, since the hosts log
+through OpenTelemetry alone (§13.4). Its message names which of four it is:
 
 | The exception says | The cause |
 |---|---|

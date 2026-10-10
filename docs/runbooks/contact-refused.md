@@ -49,7 +49,10 @@ max by (step) (notifications_waiting)
 
 The worker logs each refused row as `ContactRefused` — *"The contact read for
 notification … was refused over this host's credential; the row backs off"* —
-with the refusal as its exception. Its message names which of four it is:
+with the refusal as its exception. The line itself does not carry it: read the
+entry's `exception_message` field in Grafana's log view, and `kubectl logs`
+shows nothing, since the hosts log through OpenTelemetry alone (§13.4). Its
+message names which of four it is:
 
 | The exception says | The cause |
 |---|---|
