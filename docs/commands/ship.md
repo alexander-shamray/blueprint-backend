@@ -810,3 +810,35 @@ run.** The whole value of chaining these commands is that the summary is
 still honest about each one — and because nothing stops for a person, the
 report is the only place a person finds out what was decided on their
 behalf.
+
+## Step 7: sleep, only when asked
+
+**The ask is a token, not a word.** `--sleep` standing alone in the argument
+requests it; the argument is otherwise the change's description, and a
+description of a fix to a sleep timer must not suspend the machine. Step 1 is
+handed the argument without the token, so the branch name is not derived from
+it.
+
+**It is the last thing the run does, and the report comes first.** A suspend
+freezes the session, the network and every wait with it, so nothing may be
+owed afterwards: the reply carries the whole report, then the helper runs as
+the final tool call. It is reached only when step 6's teardown ran to the end.
+A stop is a case where the person has something to do, and a machine asleep
+under an unreported stop is the one failure this step could add, so every stop
+and every run that ended at step 0 skips it and says so.
+
+**A failed suspend is reported, not a stop.** The PR has merged and the
+workspace is torn down; nothing a retry could change is left, so the report
+says the machine was not suspended and why.
+
+**The command is fixed in a helper, and the grant is exact.** A prefix grant
+on `rundll32` would run any export of any DLL. `system-sleep.sh` spells the
+one call itself and takes no argument but `--dry-run`, which the suite uses
+to prove a refusal suspends nothing; `Bash(bash .claude/scripts/system-sleep.sh)`
+has no `:*`, so the flag is not granted either. Windows hibernates in place of
+sleeping where hibernation is on; `powercfg /a` says which this machine does,
+and `powercfg /hibernate off` makes the call a sleep.
+
+**A hook is the wrong home for it.** A `Stop` hook fires at the end of every
+turn, not at the end of a ship that was asked to sleep afterwards, and it
+cannot read the argument.
