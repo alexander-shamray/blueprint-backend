@@ -295,6 +295,15 @@ same to everything downstream, and there is only one of them to describe —
 forgoes the worktree for good, and the manual attachment stated there is the
 only route to one afterwards.
 
+**The `TODO.md` row is written before `EnterWorktree`, because after it the
+copy is refused.** The contract's §6 makes the main checkout's `TODO.md` the
+one task list, and a session moved into `.claude/worktrees/` is denied it by
+Claude Code's isolation. Left to "when a PR opens", the update fell to a
+session that could not make it, and a branch holding commits with no PR was
+missing from *In progress*. So the row goes in while the session is still in
+the main checkout, whichever step 5 row ran; where
+step 0 found a linked worktree, the row is carried in the report as owed.
+
 **If the session cannot enter a worktree that was created, stop and report
 the path** — this is the other half and it fails the other way. Do
 not carry on issuing `git -C` commands against a directory the session is
