@@ -263,7 +263,7 @@ class Realm:
     """The commerce realm's service-account grants, read and changed through Keycloak's admin API.
 
     The admin login is the bootstrap one infrastructure.yml sets (§14.1's local-development exception), which
-    test_harness.py reads from that file. A scenario that revokes a grant restores it and reads it back here.
+    test_refused_reads.py reads from that file. A scenario that revokes a grant restores it and reads it back here.
     """
 
     def __init__(self, send: Http = http, base: str = KEYCLOAK) -> None:
