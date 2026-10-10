@@ -2,3 +2,10 @@
 # line as `<host> <column> <name> #<issue>`, the issue being what builds it.
 # Only a name the table has and the code lacks can be owed; a line that stops
 # being a difference fails the gate until it is deleted.
+Privacy publishes PersonalDataDeleteRequested #440
+Privacy accepts PersonalDataDeleteCompleted #440
+Ordering consumes PersonalDataDeleteRequested #440
+Payments consumes PersonalDataDeleteRequested #440
+Shipping consumes PersonalDataDeleteRequested #440
+Notifications consumes PersonalDataDeleteRequested #440
+Web.Bff consumes PersonalDataDeleteRequested #440
