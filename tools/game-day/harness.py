@@ -25,6 +25,7 @@ COMPOSE_FILE = ROOT / "deploy" / "compose" / "docker-compose.yml"
 # of the four stops agreeing, so this is a copy that is checked rather than a second opinion.
 GATEWAY = os.environ.get("GATEWAY", "http://localhost:5000")
 KEYCLOAK = os.environ.get("KEYCLOAK", "http://localhost:8080")
+KEYCLOAK_ADMIN = ("admin", "admin")
 PRODUCT = os.environ.get("PRODUCT", "5eed0000-0000-0000-0000-000000000003")
 # 9090 is not published, so Prometheus is read through Grafana's datasource proxy, as compose.yml's smoke does.
 GRAFANA = os.environ.get("GRAFANA", "http://localhost:3000")
@@ -36,6 +37,9 @@ EXPORT_INTERVAL_SECONDS = 60
 # Prometheus's default rule evaluation interval, which the bundled image's configuration leaves unset;
 # README.md's deadline paragraph owns how that was read and what the first runs measured.
 EVALUATION_INTERVAL_SECONDS = 60
+# The bundled Prometheus reports an alert one evaluation after the one that first saw its expression true, with
+# activeAt back-dated to the earlier one; README.md's deadline paragraph owns the measurements.
+REPORT_LAG_SECONDS = EVALUATION_INTERVAL_SECONDS
 
 POLL_SECONDS = 2.0
 
@@ -57,12 +61,13 @@ class Deadline:
 
     @property
     def seconds(self) -> int:
-        return self.signal_seconds + self.for_seconds + EXPORT_INTERVAL_SECONDS + EVALUATION_INTERVAL_SECONDS
+        return (self.signal_seconds + self.for_seconds + EXPORT_INTERVAL_SECONDS + EVALUATION_INTERVAL_SECONDS
+                + REPORT_LAG_SECONDS)
 
     @property
     def derivation(self) -> str:
         return (f"{self.signal_seconds}s signal + {self.for_seconds}s for: + {EXPORT_INTERVAL_SECONDS}s export "
-                f"+ {EVALUATION_INTERVAL_SECONDS}s evaluation = {self.seconds}s")
+                f"+ {EVALUATION_INTERVAL_SECONDS}s evaluation + {REPORT_LAG_SECONDS}s reporting = {self.seconds}s")
 
 
 def wait_until(predicate: Callable[[], tuple[bool, str]], deadline_seconds: float, what: str, *,
@@ -108,6 +113,9 @@ class Compose:
 
     def start(self, service: str) -> None:
         self._call("start", service)
+
+    def restart(self, service: str) -> None:
+        self._call("restart", service)
 
     def pause(self, service: str) -> None:
         self._call("pause", service)
@@ -171,10 +179,20 @@ class Alerts:
                 return state
         return "inactive"
 
+    def query(self, expression: str) -> list[dict]:
+        """An instant PromQL query's result vector, for a runbook step that is a query."""
+        found = self._get("/api/v1/query?" + urllib.parse.urlencode({"query": expression}))["data"]
+        return found["result"]
+
     def loaded(self, name: str) -> bool:
         """Whether the rule is loaded at all, which `inactive` cannot say: a rule nobody loaded is also quiet."""
         groups = self._get("/api/v1/rules")["data"]["groups"]
         return any(rule["name"] == name for group in groups for rule in group["rules"])
+
+
+def regex_literal(text: str) -> str:
+    """`text` as a RE2 pattern that matches itself: Loki's regexes are RE2, which rejects an escaped space."""
+    return "".join("\\" + char if char in "\\.^$*+?()[]{}|" else char for char in text)
 
 
 class Logs:
@@ -189,11 +207,19 @@ class Logs:
         self._base = base
         self._clock = clock
 
-    def search(self, service_name: str, pattern: str, since_seconds: int = 900, limit: int = 20) -> list[str]:
-        """The lines of `service_name` matching `pattern` (a RE2 regex) in the last `since_seconds`, newest first."""
+    def search(self, service_name: str, pattern: str, since_seconds: int = 900, limit: int = 20,
+               exception: str | None = None) -> list[str]:
+        """The lines of `service_name` matching `pattern` (a RE2 regex) in the last `since_seconds`, newest first.
+
+        `exception` also matches the entry's exception message, which the hosts log as structured metadata and
+        never in the line itself, so a runbook's "with the refusal as its exception" is read through it.
+        """
         now = int(self._clock() * 1e9)
+        selector = '{service_name="' + service_name + '"} |~ "' + pattern.replace("\\", "\\\\") + '"'
+        if exception is not None:
+            selector += ' | exception_message =~ ".*' + exception.replace("\\", "\\\\") + '.*"'
         query = urllib.parse.urlencode({
-            "query": '{service_name="' + service_name + '"} |~ "' + pattern.replace("\\", "\\\\") + '"',
+            "query": selector,
             "start": now - since_seconds * 10**9, "end": now, "limit": limit, "direction": "backward"})
         status, text = self._send(
             "GET", f"{self._base}/api/datasources/proxy/uid/loki/loki/api/v1/query_range?{query}", {}, None)
@@ -233,6 +259,83 @@ class Orders:
         return json.loads(text)
 
 
+class Realm:
+    """The commerce realm's service-account grants, read and changed through Keycloak's admin API.
+
+    The admin login is the bootstrap one infrastructure.yml sets (§14.1's local-development exception), which
+    test_harness.py reads from that file. A scenario that revokes a grant restores it and reads it back here.
+    """
+
+    def __init__(self, send: Http = http, base: str = KEYCLOAK) -> None:
+        self._send = send
+        self._base = base
+
+    def _token(self) -> str:
+        form = urllib.parse.urlencode({
+            "grant_type": "password", "client_id": "admin-cli", "username": KEYCLOAK_ADMIN[0],
+            "password": KEYCLOAK_ADMIN[1]}).encode()
+        status, text = self._send(
+            "POST", f"{self._base}/realms/master/protocol/openid-connect/token",
+            {"Content-Type": "application/x-www-form-urlencoded"}, form)
+        if status != 200:
+            raise GameDayError(f"no admin token from {self._base}: {status} {text[:200]}")
+        return json.loads(text)["access_token"]
+
+    def _admin(self, method: str, path: str, body: object = None, ok: tuple[int, ...] = (200, 204)):
+        # A token per call: the admin one lives for a minute, and a restore may run half an hour after a cause.
+        headers = {"Authorization": f"Bearer {self._token()}"}
+        data = None
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+            data = json.dumps(body).encode()
+        status, text = self._send(method, f"{self._base}/admin/realms/commerce{path}", headers, data)
+        if status not in ok:
+            raise GameDayError(f"Keycloak admin: {method} {path} answered {status}: {text[:200]}")
+        return json.loads(text) if text.strip() else None
+
+    def _ids(self, account: str, client: str) -> tuple[str, str]:
+        users = self._admin("GET", "/users?" + urllib.parse.urlencode({"username": account, "exact": "true"}))
+        clients = self._admin("GET", "/clients?" + urllib.parse.urlencode({"clientId": client}))
+        if not users or not clients:
+            raise GameDayError(f"Keycloak has no user {account} or no client {client} in the commerce realm")
+        return users[0]["id"], clients[0]["id"]
+
+    def roles(self, account: str, client: str) -> list[str]:
+        """The names of `client`'s roles that `account` holds directly."""
+        user, container = self._ids(account, client)
+        return sorted(role["name"] for role in self._admin("GET", f"/users/{user}/role-mappings/clients/{container}"))
+
+    def _role(self, container: str, role: str) -> dict:
+        return self._admin("GET", f"/clients/{container}/roles/{urllib.parse.quote(role, safe='')}")
+
+    def revoke(self, account: str, client: str, role: str) -> None:
+        user, container = self._ids(account, client)
+        self._admin("DELETE", f"/users/{user}/role-mappings/clients/{container}", [self._role(container, role)])
+
+    def grant(self, account: str, client: str, role: str) -> None:
+        user, container = self._ids(account, client)
+        self._admin("POST", f"/users/{user}/role-mappings/clients/{container}", [self._role(container, role)])
+
+
+@dataclass(frozen=True)
+class Grant:
+    """The one role a worker's service account holds, which a scenario takes away and must give back."""
+
+    account: str
+    client: str
+    role: str
+
+    def take(self, realm: Realm) -> None:
+        realm.revoke(self.account, self.client, self.role)
+
+    def give_back(self, realm: Realm) -> None:
+        """Restore the grant, then read the account back: the realm export gives it this role and no other."""
+        realm.grant(self.account, self.client, self.role)
+        held = realm.roles(self.account, self.client)
+        if held != [self.role]:
+            raise GameDayError(f"{self.account} holds {held} of {self.client} after the restore, not [{self.role!r}]")
+
+
 @dataclass
 class World:
     compose: Compose
@@ -241,6 +344,7 @@ class World:
     logs: Logs
     say: Callable[[str], None] = print
     caused_at: float = 0.0
+    realm: Realm | None = None
 
     def since_cause(self) -> int:
         """Seconds since the runner began the cause, rounded up, so a first step reads this run's lines and no

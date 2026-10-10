@@ -54,9 +54,16 @@ class WaitUntil(unittest.TestCase):
 class Deadlines(unittest.TestCase):
     def test_the_sum_is_every_term_and_says_so(self):
         deadline = harness.Deadline(signal_seconds=120, for_seconds=600)
-        self.assertEqual(120 + 600 + harness.EXPORT_INTERVAL_SECONDS + harness.EVALUATION_INTERVAL_SECONDS,
+        self.assertEqual(120 + 600 + harness.EXPORT_INTERVAL_SECONDS + 2 * harness.EVALUATION_INTERVAL_SECONDS,
                          deadline.seconds)
         self.assertIn(f"= {deadline.seconds}s", deadline.derivation)
+
+    def test_an_alert_is_reported_one_evaluation_after_the_one_that_saw_it(self):
+        deadline = harness.Deadline(signal_seconds=0)
+        self.assertEqual(harness.EXPORT_INTERVAL_SECONDS + harness.REPORT_LAG_SECONDS
+                         + harness.EVALUATION_INTERVAL_SECONDS, deadline.seconds)
+        self.assertEqual(harness.EVALUATION_INTERVAL_SECONDS, harness.REPORT_LAG_SECONDS)
+        self.assertIn("reporting", deadline.derivation)
 
     def test_the_export_interval_is_still_the_sdk_default(self):
         """If something sets it, the constant is a guess; this fails so the deadline is re-derived."""
