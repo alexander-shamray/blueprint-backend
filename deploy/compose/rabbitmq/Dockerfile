@@ -67,7 +67,7 @@ RUN rabbitmq-plugins enable --offline rabbitmq_shovel rabbitmq_shovel_management
 # The exporter §13.6's three queue alerts read. Nothing this solution runs needs
 # it to start; `rabbitmq_queue_messages` is published by this plugin or by
 # nothing, so without it `ErrorQueueDepth`, `SkippedQueueDepth` and
-# `QueueBacklogGrowing` load and can never fire (#800). Shipped in the base
+# `QueueBacklogGrowing` load and can never fire. Shipped in the base
 # image like the shovel above, so only enabling.
 #
 # PER-OBJECT, because the plugin's default /metrics is AGGREGATED:
