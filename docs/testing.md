@@ -243,7 +243,8 @@ py -3.12 tools/game-day/game_day.py outbox-broker
 ```
 
 A run takes minutes per runbook, because each waits out a rule's threshold
-and two intervals, so CI runs the suite on pull requests and the run itself
+and its intervals, and over half an hour where the rule reads a 30-minute
+window, so CI runs the suite on pull requests and the run itself
 only by `workflow_dispatch`. [Its README](../tools/game-day/README.md) owns
 what a pass proves.
 
