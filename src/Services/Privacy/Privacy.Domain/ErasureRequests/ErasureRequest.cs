@@ -17,6 +17,7 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
     public const int MaxRespondersLength = 400;
 
     private string _respondersCsv = "";
+    private readonly List<ErasureCompletion> _completions = [];
 
     /// <summary>The subject, or null once the request has closed and only the hash remains.</summary>
     public Guid? SubjectId { get; private set; }
@@ -30,6 +31,35 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
 
     /// <summary>The holders that were expected to answer when the request was raised.</summary>
     public IReadOnlyList<string> Responders => _respondersCsv.Split(',');
+
+    /// <summary>Every answer heard, including any from a name outside the set, which is flagged and not counted.</summary>
+    public IReadOnlyList<ErasureCompletion> Completions => _completions.AsReadOnly();
+
+    /// <summary>The hash the holders' audit rows carry, which replaces the subject's id when the request closes.</summary>
+    public string? SubjectHash { get; private set; }
+
+    public DateTimeOffset? ClosedAt { get; private set; }
+
+    public DateTimeOffset? OverdueAt { get; private set; }
+
+    /// <summary>How many times an operator has reissued the request (ADR-092).</summary>
+    public int Reissues { get; private set; }
+
+    /// <summary>The expected holders that have not yet been counted.</summary>
+    public IReadOnlyList<string> Missing
+    {
+        get
+        {
+            List<string> missing = [];
+            foreach (string responder in Responders)
+            {
+                if (!IsCounted(responder))
+                    missing.Add(responder);
+            }
+
+            return missing;
+        }
+    }
 
     // EF Core materialisation only (§5.4).
     private ErasureRequest() { }
@@ -68,6 +98,74 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
     }
 
     /// <summary>
+    /// Records a holder's answer, closing the request when every expected holder has been counted.
+    /// </summary>
+    /// <remarks>A request that has closed ignores a late answer, since the subject is no longer here to match it to.</remarks>
+    public CompletionOutcome RecordCompletion(string responder, int count, DateTimeOffset now)
+    {
+        if (!IsResponderName(responder))
+            throw new DomainException("A completion names a holder by a valid name.");
+
+        if (count < 0)
+            throw new DomainException("A holder cannot have erased a negative number of records.");
+
+        if (Status == ErasureStatus.Closed)
+            return CompletionOutcome.Ignored;
+
+        bool expected = IsExpected(responder);
+
+        foreach (ErasureCompletion heard in _completions)
+        {
+            if (heard.Responder == responder)
+            {
+                heard.Repeat(count, now);
+                return expected ? CompletionOutcome.Repeated : CompletionOutcome.Unexpected;
+            }
+        }
+
+        _completions.Add(new ErasureCompletion(responder, count, expected, now));
+
+        if (!expected)
+            return CompletionOutcome.Unexpected;
+
+        if (Missing.Count == 0)
+            Close(now);
+
+        return CompletionOutcome.Counted;
+    }
+
+    /// <summary>Moves an open request that has outlived its due time to overdue; false when it has not.</summary>
+    public bool MarkOverdue(DateTimeOffset now)
+    {
+        if (Status != ErasureStatus.Open || now < DueAt)
+            return false;
+
+        Status = ErasureStatus.Overdue;
+        OverdueAt = now;
+        return true;
+    }
+
+    /// <summary>
+    /// Asks the holders again under the same request, with a fresh time to answer in. False for a closed request,
+    /// which no longer holds the subject to ask about (ADR-092).
+    /// </summary>
+    public bool Reissue(TimeSpan completionSlo, DateTimeOffset now)
+    {
+        if (completionSlo <= TimeSpan.Zero)
+            throw new DomainException("A reissue needs a positive time to complete in.");
+
+        if (Status == ErasureStatus.Closed || SubjectId is not { } subject)
+            return false;
+
+        Status = ErasureStatus.Open;
+        DueAt = now + completionSlo;
+        OverdueAt = null;
+        Reissues++;
+        Raise(new ErasureRequestedDomainEvent(Id, subject, now));
+        return true;
+    }
+
+    /// <summary>
     /// Why a set cannot be a request's, or null when it can. The aggregate and the options both ask, so the host
     /// refuses at start what the first request would refuse.
     /// </summary>
@@ -92,6 +190,37 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
         return string.Join(',', responders).Length > MaxRespondersLength
             ? $"The holders together are over {MaxRespondersLength} characters, the width the set is stored in."
             : null;
+    }
+
+    private bool IsExpected(string responder)
+    {
+        foreach (string expected in Responders)
+        {
+            if (expected == responder)
+                return true;
+        }
+
+        return false;
+    }
+
+    private bool IsCounted(string responder)
+    {
+        foreach (ErasureCompletion heard in _completions)
+        {
+            if (heard.Counted && heard.Responder == responder)
+                return true;
+        }
+
+        return false;
+    }
+
+    // The id goes and its hash stays, so what the closed row proves is that the holders answered, not for whom.
+    private void Close(DateTimeOffset now)
+    {
+        SubjectHash = PersonalDataErasure.HashSubject(Id, SubjectId!.Value);
+        SubjectId = null;
+        Status = ErasureStatus.Closed;
+        ClosedAt = now;
     }
 
     /// <summary>A name never holds a comma, which is what lets the set be stored as one delimited column.</summary>
