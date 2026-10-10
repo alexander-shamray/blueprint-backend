@@ -60,6 +60,12 @@ consumers ship a release before the producer, as
 [§9.2](../09-messaging.md) requires, which is why the service is the fifth
 of six pull requests.
 
+**Amended by [ADR-094](ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md).**
+A holder sends its completion to Privacy's queue and does not stage it through
+an outbox, so the paragraph above on each holder's transaction and the BFF's
+exception no longer hold, and the completion has one sender per holder and not
+five publishers.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

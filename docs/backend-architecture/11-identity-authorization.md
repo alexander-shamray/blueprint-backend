@@ -1440,18 +1440,19 @@ sequenceDiagram
     S->>S: delete DeliveryAddresses rows (ADR-052)
     Y->>Y: anonymise PaymentOrders.CustomerId
     F->>F: delete the subject's bff.Orders rows
-    O->>B: PersonalDataDeleteCompleted {RequestId, "ordering"}
-    N->>B: PersonalDataDeleteCompleted {RequestId, "notifications"}
-    S->>B: PersonalDataDeleteCompleted {RequestId, "shipping"}
-    Y->>B: PersonalDataDeleteCompleted {RequestId, "payments"}
-    F->>B: PersonalDataDeleteCompleted {RequestId, "bff"}
+    O->>P: PersonalDataDeleteCompleted {RequestId, "ordering"}
+    N->>P: PersonalDataDeleteCompleted {RequestId, "notifications"}
+    S->>P: PersonalDataDeleteCompleted {RequestId, "shipping"}
+    Y->>P: PersonalDataDeleteCompleted {RequestId, "payments"}
+    F->>P: PersonalDataDeleteCompleted {RequestId, "bff"}
     P->>P: all services reported → close request
 ```
 
 > **Both messages are in `Common.Contracts.Privacy.V1`, which is where the
 > version lives** ([§9.2](09-messaging.md)); the names above carry none.
-> `PersonalDataDeleteCompleted` has five publishers and sits with Privacy,
-> which consumes it.
+> `PersonalDataDeleteCompleted` is **sent** to Privacy's queue by each holder
+> and not published, which the broker's accounts leave no other way for a
+> service with no Domain project ([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)).
 
 Rules for each service's consumer:
 
@@ -1468,8 +1469,7 @@ Rules for each service's consumer:
 - **Write an audit record** of what was erased and when. That record itself
   contains no personal data — a subject ID hash, a timestamp, a count. It is
   `Common.Domain`'s `PersonalDataErasure`, which each holder maps to a table in
-  its own schema, and its domain event is what the holder's mapper turns into
-  the completion ([§9.3](09-messaging.md)).
+  its own schema.
 - **Idempotent.** The message is delivered at least once, and a second erasure
   of already-erased data must succeed silently.
 - **Report completion.** The privacy service tracks which services have

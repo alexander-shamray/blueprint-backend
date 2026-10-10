@@ -100,6 +100,7 @@ decision looks wrong.
 | **ADR-091** | [A host holding client credentials makes a call under a grant of its own, and not always to a peer](adr/ADR-091-a-host-holding-client-credentials-makes-a-call-under-a-grant-of-its-own-and-not-always-to-a-peer.md) |
 | **ADR-092** | [Privacy is a seventh service, and its responder set is fixed when a request is raised](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md) |
 | **ADR-093** | [The journey test walks one order across the services and asserts that they converge](adr/ADR-093-the-journey-test-walks-one-order-across-the-services-and-asserts-that-they-converge.md) |
+| **ADR-094** | [A holder reports its erasure by sending to Privacy's queue, and does not publish it](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md) |
 
 ---
 
