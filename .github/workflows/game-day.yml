@@ -1,0 +1,87 @@
+name: Game day
+
+# Two jobs with different triggers. `coverage` is the harness's suite and the
+# test that every runbook has a script or a stated reason not to; it reads text
+# and needs no Docker, so it runs on the pull requests that could break it.
+# `run` causes real alerts on the Compose stack, takes the better part of an
+# hour once a stack is built, and is `workflow_dispatch` only until the last of
+# #430's pull requests decides otherwise from the measured runtimes.
+
+on:
+  pull_request:
+    paths:
+      - 'tools/game-day/**'
+      - '.github/workflows/game-day.yml'
+      - 'docs/runbooks/**'
+      - 'deploy/observability/**'
+      - 'deploy/compose/walk-an-order.sh'
+      - 'src/**'
+  push:
+    branches: [main]
+    paths:
+      - 'tools/game-day/**'
+      - '.github/workflows/game-day.yml'
+      - 'docs/runbooks/**'
+      - 'deploy/observability/**'
+      - 'deploy/compose/walk-an-order.sh'
+      - 'src/**'
+  workflow_dispatch:
+    inputs:
+      runbooks:
+        description: 'Runbook files to run, space-separated'
+        default: 'outbox-broker projection-lag outbox-abandoned'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: game-day-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: The harness, and every runbook has a script or a reason
+        working-directory: tools/game-day
+        run: python -m unittest
+
+  run:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Start the stack
+        run: docker compose -f deploy/compose/docker-compose.yml up -d --wait --quiet-pull
+
+      # One process per runbook, so a scenario that dies leaves the next a stack
+      # its own restore has already put back or reported.
+      - name: Cause each alert and check the runbook's first step
+        run: |
+          status=0
+          for runbook in ${{ inputs.runbooks }}; do
+            python tools/game-day/game_day.py "$runbook" || status=1
+          done
+          exit $status
+
+      - name: Show state on failure
+        if: failure()
+        run: docker compose -f deploy/compose/docker-compose.yml ps -a && docker compose -f deploy/compose/docker-compose.yml logs --tail 50
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f deploy/compose/docker-compose.yml down -v
