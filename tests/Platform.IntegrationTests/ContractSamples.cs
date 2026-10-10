@@ -176,15 +176,7 @@ internal static class ContractSamples
             RequestId = Request,
             SubjectId = Customer
         },
-        [typeof(PersonalDataDeleteCompleted)] = () => new PersonalDataDeleteCompleted
-        {
-            MessageId = Message,
-            CorrelationId = Correlation,
-            OccurredAt = Occurred,
-            RequestId = Request,
-            Responder = "shipping",
-            Count = 3
-        }
+        [typeof(PersonalDataDeleteCompleted)] = () => new PersonalDataDeleteCompleted(Request, "shipping", 3)
     };
 
     /// <summary>The sample for one contract, or a failure naming it, never a null the suite could skip.</summary>

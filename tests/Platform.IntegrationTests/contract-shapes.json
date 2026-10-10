@@ -146,10 +146,7 @@
     "Reference": "required System.String"
   },
   "Common.Contracts.Privacy.V1.PersonalDataDeleteCompleted": {
-    "CorrelationId": "required System.Guid",
     "Count": "required System.Int32",
-    "MessageId": "required System.Guid",
-    "OccurredAt": "required System.DateTimeOffset",
     "RequestId": "required System.Guid",
     "Responder": "required System.String"
   },
