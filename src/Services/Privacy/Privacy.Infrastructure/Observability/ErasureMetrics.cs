@@ -25,7 +25,8 @@ public sealed class ErasureMetrics
             unit: "{request}",
             description: "Erasure requests past their due time with a holder still to answer.");
 
-        // Only holders missing from something, so an absent series is none missing; the name is a closed set.
+        // Only holders missing from something, so an absent series is none missing or a failed read, which
+        // GaugeReadFailed logs; the name is a closed set.
         meter.CreateObservableGauge(
             "privacy.erasure.overdue.missing",
             () => PerResponder(stats, logger),
