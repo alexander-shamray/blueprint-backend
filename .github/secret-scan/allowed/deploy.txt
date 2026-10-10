@@ -142,3 +142,20 @@ deploy/compose/services/web-bff.yml | credential-assignment | c0f9cb4d3e51 | The
 deploy/compose/README.md | credential-assignment | fa837a4d0011 | Section 14.1's local database default, in the BFF's host-run export.
 deploy/compose/README.md | credential-assignment | 368c4fb3fa92 | The host-run broker recipe for the BFF, its own service account (ADR-051).
 deploy/compose/walk-an-order.sh | connection-string-password | 2a97516c354b | Keycloak's demo user in the walk's token fetch, the README recipe's same seeded login.
+
+
+# --- Privacy, rendered by tools/new-service -------------------------------
+#
+# One entry per finding the gate reported over this render, carrying the
+# fingerprints it computed rather than any this script worked out. The
+# equivalent literals for a hand-built service are entries above, written
+# the day that service landed; these are the same decision, taken by the
+# tool that rendered them (#161).
+
+deploy/compose/services/privacy.yml | connection-string-password | 8a11e54d9d5b | Section 14.1's local database default, nested inside this service's two connection defaults.
+deploy/compose/services/privacy.yml | credential-assignment | 0b7f76e34108 | Privacy's local connection default, in-cluster hostname.
+deploy/compose/services/privacy.yml | credential-assignment | 3ab10c6240e0 | Section 14.1's broker default for Privacy, the per-service account that replaced guest.
+deploy/compose/services/privacy.yml | connection-string-password | 098bf5bddb82 | Section 14.1's local Redis default for Privacy's own ACL user, on both instances.
+deploy/compose/services/privacy.yml | credential-assignment | 30486867cf4d | Privacy's local Redis cache default, under its own ACL user.
+deploy/compose/services/privacy.yml | credential-assignment | 8f933555e088 | Privacy's local Redis coordination default, the same ACL user.
+deploy/compose/rabbitmq/definitions.json | credential-assignment | b984e787a117 | The Privacy service account's password hash, Section 14.1's local default.

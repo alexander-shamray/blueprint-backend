@@ -50,6 +50,13 @@
     <Project Path="src/Services/Payments/Payments.Infrastructure/Payments.Infrastructure.csproj" />
     <Project Path="src/Services/Payments/Payments.Migrator/Payments.Migrator.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Privacy/">
+    <Project Path="src/Services/Privacy/Privacy.Api/Privacy.Api.csproj" />
+    <Project Path="src/Services/Privacy/Privacy.Application/Privacy.Application.csproj" />
+    <Project Path="src/Services/Privacy/Privacy.Domain/Privacy.Domain.csproj" />
+    <Project Path="src/Services/Privacy/Privacy.Infrastructure/Privacy.Infrastructure.csproj" />
+    <Project Path="src/Services/Privacy/Privacy.Migrator/Privacy.Migrator.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Shipping/">
     <Project Path="src/Services/Shipping/Shipping.Application/Shipping.Application.csproj" />
     <Project Path="src/Services/Shipping/Shipping.Domain/Shipping.Domain.csproj" />
@@ -84,6 +91,10 @@
     <Project Path="tests/Payments.Domain.Tests/Payments.Domain.Tests.csproj" />
     <Project Path="tests/Payments.TestSupport/Payments.TestSupport.csproj" />
     <Project Path="tests/Platform.IntegrationTests/Platform.IntegrationTests.csproj" />
+    <Project Path="tests/Privacy.Api.Tests/Privacy.Api.Tests.csproj" />
+    <Project Path="tests/Privacy.Application.Tests/Privacy.Application.Tests.csproj" />
+    <Project Path="tests/Privacy.Domain.Tests/Privacy.Domain.Tests.csproj" />
+    <Project Path="tests/Privacy.TestSupport/Privacy.TestSupport.csproj" />
     <Project Path="tests/Shipping.Application.Tests/Shipping.Application.Tests.csproj" />
     <Project Path="tests/Shipping.Domain.Tests/Shipping.Domain.Tests.csproj" />
     <Project Path="tests/Shipping.OrderingStub/Shipping.OrderingStub.csproj" />

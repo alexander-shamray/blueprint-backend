@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The service's one web host; Infrastructure is referenced for Program.cs alone, the composition root (§4.2). -->
+
+  <ItemGroup>
+    <!-- Appendix C's OpenAPI deliverable: document only, no UI. -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Privacy.Application\Privacy.Application.csproj" />
+    <ProjectReference Include="..\Privacy.Infrastructure\Privacy.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
+  </ItemGroup>
+
+</Project>
