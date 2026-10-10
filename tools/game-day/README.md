@@ -150,12 +150,9 @@ names in its header one it has to work around.
   so a reader who greps the line for the wording finds nothing. The scripts
   filter on that field (`Logs.search(..., exception=)`) and say so in their
   headers.
-- **`DeliveryLagHigh` cannot see a consumer's first export.** A restarted
-  consumer is a new series, and `rate` counts nothing for a series' first
-  sample, which is where the deliveries it was late with land. The runbook's
-  lookalike, a consumer in a crash loop, therefore raises no lag at all while
-  its backlog grows; `queue_backlog.py` pauses the consumer for that reason
-  and not with the row's `stop`.
+- **`DeliveryLagHigh` cannot see a consumer's first export.** The runbook's
+  lookalike paragraph says why a crash loop raises no lag; `queue_backlog.py`
+  pauses the consumer for that reason and not with the row's `stop`.
 
 ## The scripts
 

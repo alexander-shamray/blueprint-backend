@@ -89,6 +89,14 @@ but was never registered for a message its endpoint receives is a different
 fault again, and raises [`skipped-queue.md`](skipped-queue.md) rather than
 this.
 
+**The lag alert cannot see that consumer, so read the backlog alert for it.**
+A restarted process exports as a new series, and `rate` counts nothing for a
+series' first sample, which is where the late deliveries it makes while it
+drains its backlog are recorded. A consumer restarting in a loop therefore
+leaves the p95 with no data while `QueueBacklogGrowing` fires, and a quiet
+`DeliveryLagHigh` beside a growing queue is that, not health. A consumer that
+stays up but stalls is one series and does raise the lag.
+
 ## Mitigation before diagnosis
 
 In order of preference: scale the consuming workload out; pause the producer if
