@@ -4,6 +4,7 @@ using Common.Application;
 using Common.Contracts.Catalog.V1;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Transport;
@@ -33,6 +34,9 @@ public static class DependencyInjection
     /// <summary>Inventory's <c>StockReserved</c>, read here beside the saga, on its own retry policy (§9.6).</summary>
     public const string StockEventsQueue = "ordering-stock-events";
 
+    /// <summary>§11.7's erasure request, on its own endpoint so no other consumer's failure holds it.</summary>
+    public const string PrivacyQueue = "ordering-privacy";
+
     public static IServiceCollection AddMassTransitMessaging(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -58,6 +62,9 @@ public static class DependencyInjection
 
             // Consumed here and by the saga, because it means two things (StockEventsQueue).
             x.AddConsumer<IntegrationEventConsumer<StockReserved>>();
+
+            // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
+            x.AddConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>();
 
             // §3.2's Accepts column.
             x.AddConsumer<CommandConsumer<CancelOrder, CancelOrderCommand>>();
@@ -151,6 +158,18 @@ public static class DependencyInjection
                         e.UseInMemoryOutbox(context);
 
                         e.ConfigureConsumer<IntegrationEventConsumer<StockReserved>>(context);
+                    });
+
+                cfg.ReceiveEndpoint(
+                    PrivacyQueue,
+                    e =>
+                    {
+                        e.UseMessageRetry(RetryPolicy.Standard);
+
+                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                        e.UseInMemoryOutbox(context);
+
+                        e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>(context);
                     });
 
                 cfg.ReceiveEndpoint(

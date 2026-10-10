@@ -13,4 +13,7 @@ internal static class Endpoints
 
     /// <summary>This service's own queue: the saga coordinates by message only (§9.6).</summary>
     public static readonly Uri OrderingQueue = new("queue:ordering-commands");
+
+    /// <summary>Where a holder reports an erasure (ADR-094).</summary>
+    public static readonly Uri PrivacyCompletionsQueue = new("queue:privacy-completions");
 }

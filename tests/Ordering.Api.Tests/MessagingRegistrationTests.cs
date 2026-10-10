@@ -1,6 +1,7 @@
 using Common.Contracts.Catalog.V1;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Infrastructure.Messaging;
 using Ordering.Application.Orders.CancelOrder;
 using Ordering.Application.Orders.ConfirmOrder;
@@ -137,6 +138,9 @@ public class MessagingRegistrationTests
                 // Recorded on the aggregate as well as read by the saga through its own correlation.
                 typeof(IntegrationEventConsumer<StockReserved>),
 
+                // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
+                typeof(IntegrationEventConsumer<PersonalDataDeleteRequested>),
+
                 // §3.2's Accepts column: a type missing here is sent into a queue that ignores it.
                 typeof(CommandConsumer<CancelOrder, CancelOrderCommand>),
                 typeof(CommandConsumer<ConfirmOrder, ConfirmOrderCommand>),
@@ -144,7 +148,7 @@ public class MessagingRegistrationTests
                 typeof(CommandConsumer<FlagOrderForReview, FlagOrderForReviewCommand>)
             ],
             ignoreOrder: true,
-            "these eight are every event and command §3.2 gives Ordering a CONSUMER for — a ninth is a " +
+            "these nine are every event and command §3.2 gives Ordering a CONSUMER for — a tenth is a " +
             "subscription no chapter grants, and a missing one is a handler that silently stops being " +
             "invoked. §3.2's Consumes column is longer: the seven fulfilment events reach the saga through " +
             "its own correlation rather than through an IConsumer<>, which is why they are absent here " +

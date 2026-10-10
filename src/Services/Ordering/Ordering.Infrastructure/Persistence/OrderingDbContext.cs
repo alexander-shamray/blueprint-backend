@@ -1,3 +1,4 @@
+using Common.Domain;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
@@ -22,6 +23,9 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
     /// <summary>§8.5's markers; common code reaches them through <c>Set</c>, so this states the model.</summary>
     public DbSet<IdempotencyMarker> IdempotencyMarkers => Set<IdempotencyMarker>();
+
+    /// <summary>§11.7's audit rows: a hash, a count and a time per request, holding no personal data.</summary>
+    public DbSet<PersonalDataErasure> PersonalDataErasures => Set<PersonalDataErasure>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
