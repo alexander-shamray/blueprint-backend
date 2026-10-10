@@ -9,7 +9,7 @@ namespace Privacy.Api.Endpoints;
 /// <summary>
 /// One static class per aggregate (ADR-015); the gateway strips <c>/api</c> (§10.2), so routes start at the version.
 /// </summary>
-/// <remarks>No gateway route: how an operator reaches an internal host is the deployment's (ADR-092).</remarks>
+/// <remarks>The gateway's privacy-erase route admits holders of <c>privacy:erase</c> to this group (§10.2).</remarks>
 public static class ErasureRequestEndpoints
 {
     public static void MapErasureRequestEndpoints(this IEndpointRouteBuilder app)
