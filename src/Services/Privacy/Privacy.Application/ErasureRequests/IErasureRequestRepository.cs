@@ -12,5 +12,11 @@ public interface IErasureRequestRepository
     /// </summary>
     Task<ErasureRequest?> GetUnclosedForSubjectAsync(Guid subjectId, CancellationToken ct);
 
+    /// <summary>
+    /// One request by id, tracked, with its holders' answers. Runs inside the unit of work, since it takes the
+    /// request's lock for the transaction: five holders answering at once are taken in turn, not retried (§6.3).
+    /// </summary>
+    Task<ErasureRequest?> GetLockedAsync(Guid requestId, CancellationToken ct);
+
     void Add(ErasureRequest request);
 }

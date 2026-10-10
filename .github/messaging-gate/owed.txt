@@ -2,4 +2,3 @@
 # line as `<host> <column> <name> #<issue>`, the issue being what builds it.
 # Only a name the table has and the code lacks can be owed; a line that stops
 # being a difference fails the gate until it is deleted.
-Privacy accepts PersonalDataDeleteCompleted #440

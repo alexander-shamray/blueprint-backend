@@ -37,10 +37,42 @@ internal sealed class ErasureRequestConfiguration : IEntityTypeConfiguration<Era
 
         builder.Property(r => r.RaisedAt);
         builder.Property(r => r.DueAt);
+        builder.Property(r => r.ClosedAt);
+        builder.Property(r => r.OverdueAt);
+        builder.Property(r => r.Reissues);
+
+        // SHA-256 as lowercase hex, always 64 characters; set when the request closes and its id goes.
+        builder.Property(r => r.SubjectHash).HasMaxLength(64).IsFixedLength().IsUnicode(false);
+
+        // The sweep's population: open requests by the time they fall due, so a pass reads nothing else.
+        builder
+            .HasIndex(r => r.DueAt)
+            .HasDatabaseName("IX_ErasureRequests_Open")
+            .HasFilter("[Status] = 'Open'");
 
         builder.Property(r => r.Version).HasColumnName("RowVersion").IsRowVersion();
 
+        // Owned, since an answer means nothing outside its request and is read and written only through it.
+        builder.OwnsMany(
+            r => r.Completions,
+            completion =>
+            {
+                completion.ToTable("ErasureCompletions", "privacy");
+                completion.WithOwner().HasForeignKey("RequestId");
+                completion.HasKey("RequestId", nameof(ErasureCompletion.Responder));
+                completion.Property(c => c.Responder).HasMaxLength(ErasureRequest.MaxResponderLength);
+                completion.Property(c => c.Count);
+                completion.Property(c => c.Counted);
+                completion.Property(c => c.ReceivedAt);
+            });
+
+        builder
+            .Navigation(r => r.Completions)
+            .HasField("_completions")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.Ignore(r => r.Responders);
+        builder.Ignore(r => r.Missing);
         builder.Ignore(r => r.DomainEvents);
     }
 }

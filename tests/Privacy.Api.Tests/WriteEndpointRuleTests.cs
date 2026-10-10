@@ -36,7 +36,7 @@ public class WriteEndpointRuleTests(HostSmokeTests.UnreachableInfrastructureFact
     {
         // The floor: an offender list is as green over an empty selection.
         Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(
-            ["RaiseErasureRequest"],
+            ["RaiseErasureRequest", "ReissueErasureRequest"],
             "the rule above would be vacuous if it looked at no write, which is as green as it is clean (§8.5)");
 
         // What the selection leaves out by shape, named, so a route this host maps that way is not left out too.

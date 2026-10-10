@@ -6,4 +6,11 @@ public sealed record ErasureRequestView(
     string Status,
     DateTimeOffset RaisedAt,
     DateTimeOffset DueAt,
-    IReadOnlyList<string> Responders);
+    DateTimeOffset? ClosedAt,
+    int Reissues,
+    IReadOnlyList<string> Responders,
+    IReadOnlyList<string> Missing,
+    IReadOnlyList<HolderAnswer> Answers);
+
+/// <summary>One holder's answer; <c>Counted</c> is false for a name outside the set the request was raised with.</summary>
+public sealed record HolderAnswer(string Responder, int Count, bool Counted, DateTimeOffset ReceivedAt);

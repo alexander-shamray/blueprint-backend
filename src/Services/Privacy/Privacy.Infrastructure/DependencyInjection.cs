@@ -4,6 +4,7 @@ using Privacy.Domain.ErasureRequests;
 using Privacy.Infrastructure.Messaging;
 using Privacy.Infrastructure.Observability;
 using Privacy.Infrastructure.Persistence;
+using Privacy.Infrastructure.Sweep;
 using Common.Application;
 using Common.Contracts;
 using Common.Infrastructure.Idempotency;
@@ -103,6 +104,11 @@ public static class DependencyInjection
             new OutboxStats(new SqlConnectionFactory(metricsConnectionString), sp.GetRequiredService<OutboxTable>()));
         services.AddSingleton<OutboxMetrics>();
 
+        // ADR-092's silence made visible: who has not answered an overdue request, on the same bounded connection.
+        services.AddSingleton<IErasureStats>(
+            _ => new ErasureStats(new SqlConnectionFactory(metricsConnectionString)));
+        services.AddSingleton<ErasureMetrics>();
+
         // Resolves the metrics classes at start, before the bus and the dispatcher, so every instrument
         // exists before the first message (§13.6).
         services.AddHostedService<MetricsInitialiser>();
@@ -117,6 +123,9 @@ public static class DependencyInjection
         // The poll loop of §9.4, by AddHostedService<T> because §12.4's fixture removes it by ImplementationType.
         // After the bus and before the purge: hosted services stop in reverse, so it drains into a live transport.
         services.AddHostedService<OutboxDispatcher>();
+
+        // ADR-092's sweep for a request past its due time, by implementation type so §12.4's fixture can drive it.
+        services.AddHostedService<OverdueSweepService>();
 
         // The one retention service §9.5 asks for, registered last so it is stopped first.
         services.AddHostedService<RetentionPurgeService>();

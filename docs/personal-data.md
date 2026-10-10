@@ -53,9 +53,10 @@ that carries it.
 | `privacy.OutboxMessages` | Privacy | The subject's id in the payload of the `PersonalDataDeleteRequested` it broadcasts (ADR-092) | `RetentionPolicy.OutboxWindow` after dispatch; an abandoned row until an operator acts on it ([§9.4](backend-architecture/09-messaging.md)) | Lifetime only | Privacy's database |
 | Each service's `IdempotencyMarkers`, and the coordination Redis's claim keys | Every service with a keyed command | The authenticated caller's id, as the key's first segment (`IdempotencyBehavior`): a customer's for Ordering's `PlaceOrder`, a staff user's for Catalog's | A marker for `RetentionPolicy.IdempotencyWindow`; a claim key for `IdempotencyRetention.Window`, or until its release | Lifetime only | Each service's database; the coordination Redis |
 
-**Checked and holding none**: each holder's `PersonalDataErasures`,
-an audit row of a request id, a salted hash, a count and a time
+**Checked and holding none**: each holder's `PersonalDataErasures`, an audit
+row of a request id, a salted hash, a count and a time
 ([ADR-092](backend-architecture/adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
+Privacy's `ErasureCompletions`, a holder's name, a count and a time per request,
 Catalog's and Inventory's other tables, every
 service's inbox — §9.5's `InboxMessage` keeps no payload, under
 `RetentionPolicy.InboxWindow` — Redis's locks, and its cache, which no read

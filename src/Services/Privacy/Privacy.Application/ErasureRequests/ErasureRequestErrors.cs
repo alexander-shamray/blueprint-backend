@@ -7,4 +7,7 @@ public static class ErasureRequestErrors
 {
     public static readonly Error NotFound =
         Error.NotFound("erasure_request.not_found", "No erasure request under that identifier.");
+
+    public static readonly Error Closed =
+        Error.Rule("erasure_request.closed", "The request has closed, so it no longer holds the subject to ask about.");
 }

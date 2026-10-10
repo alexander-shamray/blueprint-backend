@@ -30,7 +30,7 @@ public class RequestExampleRuleTests(HostSmokeTests.UnreachableInfrastructureFac
     public void This_host_binds_the_body_the_rule_above_looks_at()
     {
         Names(RequestExampleRule.Bodied(Endpoints)).ShouldBe(
-            ["RaiseErasureRequest"],
+            ["RaiseErasureRequest", "ReissueErasureRequest"],
             "the rule above would be vacuous if it looked at no body, which is as green as it is clean");
     }
 

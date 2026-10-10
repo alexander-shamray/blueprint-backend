@@ -62,10 +62,8 @@ public class IdempotencyOptInTests
         ];
 
         // The gate's own subject, asserted first, since both checks below are green on an empty selection.
-        candidates.ShouldBeEmpty(
-            "This service opts no command into idempotency yet, so the two shape checks below " +
-            "are vacuous. The day it does, this test fails — restore the ShouldNotBeEmpty " +
-            "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
+        candidates.ShouldNotBeEmpty(
+            "the two shape checks below are as green over no idempotent command as over a sound one");
 
         // Exactly the two shapes ValueTypeOf accepts.
         candidates
@@ -98,10 +96,8 @@ public class IdempotencyOptInTests
         string[] names = [.. Idempotent().Select(OperationNameOf)];
 
         // With fewer than two idempotent commands the distinctness check cannot fail.
-        names.ShouldBeEmpty(
-            "This service opts no command into idempotency yet, so the check below is "
-            + "vacuous. The day it does, this test fails — replace it with the ShouldNotBeEmpty "
-            + "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
+        names.ShouldNotBeEmpty(
+            "the check below is as green over no operation names as over distinct ones, so it must see one");
 
         names.Distinct(StringComparer.Ordinal).Count().ShouldBe(
             names.Length,
