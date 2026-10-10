@@ -31,11 +31,11 @@ not a failure.
 
 | File | Owns |
 |---|---|
-| `harness.py` | Compose control (`stop`, `start`, `restart`, `pause`, `exec_sql`, `exec_redis`, `logs`), a token and an order, alert state and PromQL (`Alerts`), Loki (`Logs`), a service account's Keycloak grants (`Realm`, `Grant`), the request generator (`Traffic`), `wait_until` and `Deadline` |
-| `game_day.py` | The runner: quiet start, cause, wait, first step, restore, in that order, then the scenario's `NEXT` if it has one |
+| `harness.py` | Compose control (`stop`, `start`, `restart`, `pause`, `exec_sql`, `exec_redis`, `rabbitmqctl`, `logs`), a token and an order, alert state, labels and PromQL (`Alerts`), Loki (`Logs`), a service account's Keycloak grants (`Realm`, `Grant`), the request generator (`Traffic`), the broker as `dead-letter-operator` (`Broker`), `wait_until` and `Deadline` |
+| `game_day.py` | The runner: quiet start, cause, wait, first step, restore, in that order, then the scenario's `NEXT` if it has one; and `--matrix`, the CI dispatch's plan |
 | `scenarios/<runbook>.py` | One runbook, named for it with `-` as `_` |
-| `runbook_coverage.py` | `NOT_ON_COMPOSE` and `OWED`, and the rules that hold every runbook to a script or a reason |
-| `test_harness.py`, `test_refused_reads.py`, `test_sustained_traffic.py`, `test_coverage.py` | The suite, run in CI by `.github/workflows/game-day.yml` |
+| `runbook_coverage.py` | `NOT_ON_COMPOSE`, and the rules that hold every runbook to a script or a reason and every loaded rule to a script that causes it |
+| `test_harness.py`, `test_refused_reads.py`, `test_sustained_traffic.py`, `test_broker_queues.py`, `test_coverage.py` | The suite, run in CI by `.github/workflows/game-day.yml` |
 
 ## The shape of a script
 
@@ -89,6 +89,24 @@ address and 300 per subject (§10.3), so the loop is never the 429s.
 at one failure in 50. A request a database holds runs on its own thread,
 bounded at 40 out, and the client waits 45 seconds so that a request held for a
 SQL command's 30 ends as the server's answer and not as the loop hanging up.
+
+## The broker account
+
+`error-queue`, `skipped-queue` and the backlog half of `queue-backlog` cause
+their alerts with messages on the broker, and their runbooks' first steps are
+`tools/dead-letters` run as `dead-letter-operator`. That account ships with no
+password on Compose (`deploy/compose/README.md`), so `harness.Broker` sets one
+for the run through `rabbitmqctl`, on stdin, and its restore clears it, which
+is the route the tool's README gives for the local stack. The causes publish as
+that account too, through the Management API: its write grant covers every
+endpoint's exchange, and `test_broker_queues.py` reads the grant from
+`definitions.json` and fails if a cause sends somewhere it does not reach.
+
+The runbooks' `kubectl port-forward` is the one translation: Compose publishes
+15672 already. `DEAD_LETTERS_URL`, the tool's own variable, points both the
+harness and the tool at a broker published elsewhere. The tool itself runs as
+written, from `py -3.12` with `--json`, and the password reaches it through its
+environment, as the runbooks' `read -s` gives it, and never through an argv.
 
 ## Waits are predicates with deadlines
 
@@ -205,20 +223,29 @@ Every file in `docs/runbooks/` except `check.py`'s `NOT_A_RUNBOOK` has a
 script or a stated reason not to. The test reads the directory and keeps no
 list of runbooks, so a new runbook fails it until it is dealt with.
 
-- `NOT_ON_COMPOSE` is permanent and carries its reason.
-- `OWED` names the pull request of #430 that delivers the script. A runbook
-  two rules share (`check.py`'s `SHARED_RUNBOOKS`) may have a script for one
-  rule and stay `OWED` the other's. PR-4 empties `OWED` and deletes it.
+- `NOT_ON_COMPOSE` is permanent and carries its reason, and it is the only
+  reason there is: every other runbook has a script.
+- A script causes every rule the Compose Prometheus loads that names its
+  runbook. The test reads the rules through `check.py`'s own parser, so a
+  rule added to a scripted runbook, or a second rule on one (`check.py`'s
+  `SHARED_RUNBOOKS`), fails it until the script has a phase for it as `NEXT`.
 
 ## Running it in CI
 
 `.github/workflows/game-day.yml` runs the suite on the pull requests that touch
-what it reads. The game day itself is `workflow_dispatch` only, until PR-4
-decides from the measured runtimes.
+what it reads. The game day itself is `workflow_dispatch` only, and is not
+scheduled.
 
-The dispatch job's `timeout-minutes` is 60 and runs its runbooks in turn, so
-one dispatch must name runbooks whose runtimes in *The scripts* sum to less:
-`address-refused` and `contact-refused` take over half an hour each and go in
-dispatches of their own, and `error-rate` (27m36s) with `latency` (24m18s) is
-52 minutes, which fits only with nothing else beside it. A job that times out
-still runs its teardown.
+A dispatch plans its runbooks with `game_day.py --matrix` and gives each its
+own job and its own stack, so a scenario that dies cannot poison the next and
+the longest runbook bounds the dispatch, not the sum. The job's
+`timeout-minutes` is 60 and the longest timed run in *The scripts* is
+`address-refused` at 34m45s, so every timed runbook fits alone. A job that
+times out still runs its teardown.
+
+Why it is not scheduled: the timed runbooks alone are about three hours of
+runner time, and the suite already runs on every pull request that changes
+what a script reads, which is where an alert rule and its script drift apart.
+A schedule would add a nightly cost to catch a stack that changed under an
+unchanged rule, and nothing has yet shown that happen. It is a new decision,
+owed an issue, once a runbook goes stale between dispatches.
