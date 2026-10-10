@@ -7,6 +7,7 @@ using Common.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -30,6 +31,17 @@ public class PrivacyApiFactory(
     /// </remarks>
     public const string UnreachableRedis = "redis.invalid:6379";
 
+    /// <summary>What a request is raised with: the five holders §11.7 draws, and a service level the host accepts.</summary>
+    public static IReadOnlyDictionary<string, string?> PrivacySettings { get; } = new Dictionary<string, string?>
+    {
+        ["Privacy:Responders:0"] = "ordering",
+        ["Privacy:Responders:1"] = "payments",
+        ["Privacy:Responders:2"] = "shipping",
+        ["Privacy:Responders:3"] = "notifications",
+        ["Privacy:Responders:4"] = "bff",
+        ["Privacy:CompletionSlo"] = "30.00:00:00"
+    };
+
     /// <summary>Supplies only §7.1's runtime connection; the host must not read <c>PrivacyMigrator</c>.</summary>
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
         builder
@@ -42,6 +54,7 @@ public class PrivacyApiFactory(
                 $"ConnectionStrings:{RedisConnections.Coordination}",
                 redisCoordinationConnectionString ?? UnreachableRedis)
             .UseSetting(AuthenticationExtensions.AuthorityKey, UnreachableAuthority)
+            .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(PrivacySettings))
             .ConfigureServices(services =>
             {
                 ConfigureAuthentication(services);

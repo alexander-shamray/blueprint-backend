@@ -1,3 +1,4 @@
+using Privacy.Domain.ErasureRequests;
 using Shouldly;
 using Xunit;
 
@@ -10,9 +11,10 @@ public class ArchitectureTests
     public void Domain_references_only_common_domain_and_the_framework()
     {
         // An exact allow-list, as §4.2's table is: a System.* prefix would pass System.Data.SqlClient.
-        string[] allowed = ["Common.Domain", "System.Runtime"];
+        // System.Collections is the aggregate's responder set and the event list it inherits.
+        string[] allowed = ["Common.Domain", "System.Runtime", "System.Collections"];
 
-        IEnumerable<string> referenced = typeof(AssemblyMarker).Assembly
+        IEnumerable<string> referenced = typeof(ErasureRequest).Assembly
             .GetReferencedAssemblies()
             .Select(a => a.Name!);
 

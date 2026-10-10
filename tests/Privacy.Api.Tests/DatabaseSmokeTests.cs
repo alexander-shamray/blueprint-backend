@@ -29,7 +29,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
 
         // Named and ordered, since a count passes on a shorter prefix applied twice.
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(8);
+        applied.Length.ShouldBe(9);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -38,6 +38,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[5].ShouldEndWith("_IdempotencyMarkerCommittedAtDefault");
         applied[6].ShouldEndWith("_AddIdempotencyMarkerRowVersion");
         applied[7].ShouldEndWith("_AddOutboxTraceContext");
+        applied[8].ShouldEndWith("_AddErasureRequests");
     }
 
     [Fact]
@@ -271,6 +272,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
                         ["ConnectionStrings:RedisCache"] = "privacy-redis.invalid:6379",
                         ["ConnectionStrings:RedisCoordination"] = "privacy-redis.invalid:6380"
                     })
+                .AddInMemoryCollection(PrivacyApiFactory.PrivacySettings)
                 .Build());
 
         ServiceDescriptor options =

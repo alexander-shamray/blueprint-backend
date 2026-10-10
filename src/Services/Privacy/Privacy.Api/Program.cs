@@ -1,3 +1,5 @@
+using Privacy.Api;
+using Privacy.Api.Endpoints;
 using Privacy.Application;
 using Privacy.Infrastructure;
 using Common.Web;
@@ -20,7 +22,11 @@ builder.Services.AddPrivacyInfrastructure(builder.Configuration);   // §4.2, §
 // Appendix C's OpenAPI deliverable: document only, no UI.
 builder.Services.AddCommonOpenApi();
 
-// This service registers no permission policy until an endpoint names one (§11.4).
+// Privacy's permission policies (§11.4). Deliberately not inside either helper above: Application knows nothing
+// about HTTP, and Common.Web must not know Privacy's names.
+builder.Services
+    .AddAuthorizationBuilder()
+    .AddPolicy(PrivacyPermissions.Erase, p => p.RequirePermission(PrivacyPermissions.Erase));
 
 WebApplication app = builder.Build();
 
@@ -39,7 +45,7 @@ app.UseAuthorization();           // §11.4 — evaluates the permission policie
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapOpenApi();
 
-// This service maps no endpoint of its own yet. The first one goes behind RequireAuthorization at the group (§11.4).
+app.MapErasureRequestEndpoints();
 
 app.Run();
 

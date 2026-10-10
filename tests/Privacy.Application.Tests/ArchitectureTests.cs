@@ -1,5 +1,5 @@
 using System.Reflection;
-using Privacy.Domain;
+using Privacy.Domain.ErasureRequests;
 using NetArchTest.Rules;
 using Shouldly;
 using Xunit;
@@ -15,6 +15,7 @@ public class ArchitectureTests
     {
         // §4.2's second row as an allow-list: Dapper is §6.5's read side and brings System.Data.Common, and
         // Common.Domain is here because the mapper's IDomainEvent puts it among the references.
+        // Microsoft.Extensions.Options is the handler's IOptions<PrivacyOptions> (§15.4).
         string[] allowed =
         [
             "Privacy.Domain",
@@ -25,6 +26,7 @@ public class ArchitectureTests
             "FluentValidation",
             "FluentValidation.DependencyInjectionExtensions",
             "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "Microsoft.Extensions.Options",
             "System.Collections",
             "System.Data.Common",
             "System.Linq",
@@ -60,7 +62,7 @@ public class ArchitectureTests
     public void Application_and_domain_do_not_reference_masstransit()
     {
         // §9.3's must-not list, whose one exemption is a saga's receive endpoint and its outbox (ADR-032).
-        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(AssemblyMarker).Assembly];
+        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(ErasureRequest).Assembly];
         foreach (Assembly assembly in assemblies)
         {
             Types
