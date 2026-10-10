@@ -5,7 +5,7 @@ using Privacy.Domain.ErasureRequests;
 namespace Privacy.Infrastructure;
 
 /// <summary>Refuses to start on a responder set or a service level no request could be raised with.</summary>
-/// <remarks>Checked here as well as in the aggregate, so a mistake is the host's and not the first request's.</remarks>
+/// <remarks>Checked here as well as in the aggregate, so a mistake is the host's, not a request's (§15.4).</remarks>
 internal sealed class PrivacyOptionsValidator : IValidateOptions<PrivacyOptions>
 {
     public ValidateOptionsResult Validate(string? name, PrivacyOptions options)
