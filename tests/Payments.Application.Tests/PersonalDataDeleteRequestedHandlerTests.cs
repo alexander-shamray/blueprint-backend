@@ -58,9 +58,23 @@ public class PersonalDataDeleteRequestedHandlerTests
         _reporter.Reported.ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task A_failed_result_is_thrown_with_its_error_and_reports_nothing()
+    {
+        _dispatcher.Failure = new Error("erasure.refused", "No.", ErrorType.Rule);
+
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
+            () => Handler().HandleAsync(Requested, TestContext.Current.CancellationToken));
+
+        thrown.Message.ShouldContain("erasure.refused");
+        _reporter.Reported.ShouldBeEmpty();
+    }
+
     private sealed class FakeDispatcher : IDispatcher
     {
         public int Count { get; set; }
+
+        public Error? Failure { get; set; }
 
         public Exception? Fault { get; set; }
 
@@ -72,7 +86,9 @@ public class PersonalDataDeleteRequestedHandlerTests
                 throw Fault;
 
             Sent.Add(command);
-            return Task.FromResult((TResult)(object)Result.Success(Count));
+            return Task.FromResult((TResult)(object)(Failure is null
+                ? Result.Success(Count)
+                : Result.Failure<int>(Failure)));
         }
 
         public Task<TResult> QueryAsync<TResult>(IQuery<TResult> query, CancellationToken ct) =>
