@@ -286,8 +286,11 @@ the last row of the table above, the door mat, is the walk that ends
 **Run it after `up` on a stack you mean to trust.** The Compose workflow
 checks the model, the start order and the health probes, and it places no
 order: it runs only when this tree or a host's start-up files change, so it
-would miss the service changes a walk is for. The CI half is the journey test
-#426 asks of `Platform.IntegrationTests`, which does not exist yet. Run
+would miss the service changes a walk is for. The CI half is the journey
+test of `Platform.IntegrationTests`
+([§12.1](../../docs/backend-architecture/12-test-strategy.md)): it runs in
+the integration stage's `rest` shard, which no service name selects, over
+hosts it starts itself rather than over this stack. Run
 `docker compose down -v` first on a machine that has applied an earlier draft
 of a migration: its row stays in `__EFMigrationsHistory` on the named volume,
 and the migrator then applies nothing and reports success.
