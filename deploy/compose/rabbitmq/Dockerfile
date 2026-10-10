@@ -64,6 +64,29 @@ RUN cd /opt/rabbitmq/plugins \
 # half that exposes /api/parameters/shovel, which is what the runbook drives.
 RUN rabbitmq-plugins enable --offline rabbitmq_shovel rabbitmq_shovel_management
 
+# The exporter §13.6's three queue alerts read. Nothing this solution runs needs
+# it to start; `rabbitmq_queue_messages` is published by this plugin or by
+# nothing, so without it `ErrorQueueDepth`, `SkippedQueueDepth` and
+# `QueueBacklogGrowing` load and can never fire (#800). Shipped in the base
+# image like the shovel above, so only enabling.
+#
+# PER-OBJECT, because the plugin's default /metrics is AGGREGATED:
+# `rabbitmq_queue_messages` there is one number for the whole node with no
+# `queue` label, and `queue=~".+_error"` matches nothing in it. Per-object
+# output gives the series its label under the name the rules and the runbooks
+# already use. The alternative, /metrics/detailed?family=queue_coarse_metrics,
+# is the plugin's route above a few hundred queues but publishes
+# `rabbitmq_detailed_queue_messages`, so every rule, runbook and
+# EXTERNAL_METRICS would be renamed. A local stack's queue count is far below
+# the cost the plugin warns about.
+#
+# A RUN rather than a COPY, and not for tidiness: the permissions gate holds
+# every COPY here to a mapping in §12.4's fixture, which runs the STOCK image,
+# and a stock broker has no plugin schema for this key. Nothing the fixture
+# tests reads the series.
+RUN rabbitmq-plugins enable --offline rabbitmq_prometheus \
+    && echo "prometheus.return_per_object_metrics = true" > /etc/rabbitmq/conf.d/30-prometheus.conf
+
 # §9.4's per-service identity (#44). Two files, and both are plain COPY for the
 # reason the checksum above is a RUN: this image is built by BuildKit under
 # Compose and by the classic /build API under §12.4's Testcontainers fixture,

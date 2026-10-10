@@ -94,6 +94,32 @@ jobs:
             echo "dashboard $uid provisioned"
           done
 
+      # The rule count above says the three queue alerts are loaded, and a loaded
+      # rule that reads a series nobody publishes cannot fire (#800). So the
+      # subject here is the series: a queue named like the ones the alerts
+      # select (`_error`) is declared on the live broker and its depth must
+      # reach the local Prometheus with the `queue` label, through the broker's
+      # exporter and the collector's scrape. No service has faulted a message
+      # by now, so no real `_error` queue exists to read; the probe user is
+      # removed with the stack.
+      - name: The broker's per-queue depth reaches the local Prometheus
+        run: |
+          compose="docker compose -f deploy/compose/docker-compose.yml"
+          $compose exec -T rabbitmq rabbitmqctl add_user probe probe
+          $compose exec -T rabbitmq rabbitmqctl set_user_tags probe administrator
+          $compose exec -T rabbitmq rabbitmqctl set_permissions probe '.*' '.*' '.*'
+          $compose exec -T rabbitmq rabbitmqadmin -u probe -p probe declare queue \
+            --name compose-smoke_error --type classic --durable true
+          series=0
+          for attempt in $(seq 45); do
+            series=$(curl -sf -G http://localhost:3000/api/datasources/proxy/uid/prometheus/api/v1/query \
+              --data-urlencode 'query=count(rabbitmq_queue_messages{queue=~".+_error"})' |
+              jq -r '.data.result[0].value[1] // 0') && [ "$series" != 0 ] && break
+            sleep 2
+          done
+          echo "rabbitmq_queue_messages series for an _error queue: $series"
+          [ "$series" != 0 ] || { echo "::error::rabbitmq_queue_messages has no series for an _error queue"; exit 1; }
+
       - name: Show state on failure
         if: failure()
         run: docker compose -f deploy/compose/docker-compose.yml ps -a && docker compose -f deploy/compose/docker-compose.yml logs --tail 50

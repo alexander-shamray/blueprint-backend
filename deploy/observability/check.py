@@ -99,8 +99,9 @@ EXTERNAL_METRICS = {
     "http_server_request_duration_seconds": (
         "Histogram", "ASP.NET Core instrumentation, enabled in §13.2"),
     "rabbitmq_queue_messages": (
-        "Gauge", "the RabbitMQ exporter — §14.1's broker; §13.6's error-queue, "
-                 "skipped-queue and queue-backlog alerts read it"),
+        "Gauge", "the broker's rabbitmq_prometheus plugin, per-object, scraped "
+                 "by §14.1's collector; §13.6's error-queue, skipped-queue "
+                 "and queue-backlog alerts read it"),
     "kube_job_failed": (
         "Gauge", "kube-state-metrics — the Job's Failed CONDITION, which is "
                  "retries exhausted. `kube_job_status_failed` counts failed "
