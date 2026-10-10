@@ -5,4 +5,5 @@ public static class GatewayPermissions
 {
     public const string InventoryAdmin = "inventory:admin";
     public const string PaymentsAdmin = "payments:admin";
+    public const string PrivacyErase = "privacy:erase";
 }

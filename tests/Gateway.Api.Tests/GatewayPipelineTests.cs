@@ -100,6 +100,20 @@ public sealed class GatewayPipelineTests(GatewayFactory factory) : IClassFixture
     }
 
     [Fact]
+    public async Task The_privacy_route_refuses_an_authenticated_caller_without_the_permission()
+    {
+        using HttpClient client = factory.CreateClient();
+
+        using HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/privacy/erasure-requests");
+        request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
+
+        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        await ShouldBeProblemJson(response);
+    }
+
+    [Fact]
     public async Task The_payments_admin_route_refuses_an_authenticated_caller_without_the_permission()
     {
         using HttpClient client = factory.CreateClient();

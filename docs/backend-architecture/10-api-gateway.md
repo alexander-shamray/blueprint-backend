@@ -106,9 +106,9 @@ set of products
 ## 10.2 YARP configuration
 
 The route file is the `ReverseProxy` section of
-`src/Gateway/Gateway.Api/appsettings.json`. Four of its seven routes carry the
+`src/Gateway/Gateway.Api/appsettings.json`. Four of its eight routes carry the
 rules below; `catalog-write` and `catalog-own` are described after them, and
-`payments-admin` has `inventory-admin`'s shape:
+`payments-admin` and `privacy-erase` have `inventory-admin`'s shape:
 
 ```json
 "Routes": {
@@ -156,8 +156,8 @@ registered separately.
 are checked when YARP loads this configuration — `AuthorizationPolicy` through
 `IAuthorizationPolicyProvider`, `RateLimiterPolicy` through the limiter's
 options. `authenticated` comes from `AddCommonWebDefaults`
-([§13.2](13-observability.md)) and the two permission policies,
-`inventory:admin` and `payments:admin`, from the gateway's own
+([§13.2](13-observability.md)) and the permission policies,
+`inventory:admin`, `payments:admin` and `privacy:erase`, from the gateway's own
 `Program.cs` (§4.2).
 
 **`anonymous` is the exception, because YARP reserves it.** It is the proxy's

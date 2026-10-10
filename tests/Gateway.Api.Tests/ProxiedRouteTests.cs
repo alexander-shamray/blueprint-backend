@@ -227,6 +227,24 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
         stub.ReceivedPaths.Last().ShouldBe($"/v1/payments/{order}");
     }
 
+    [Fact]
+    public async Task The_privacy_route_forwards_the_stripped_path_to_its_cluster()
+    {
+        using StubbedGatewayFactory factory = new(stub.Address);
+        using HttpClient client = factory.CreateClient();
+
+        Guid request = Guid.CreateVersion7();
+
+        using HttpRequestMessage message = new(HttpMethod.Get, $"/api/v1/privacy/erasure-requests/{request}");
+        message.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
+        message.Headers.Add(TestAuthHandler.PermissionsHeader, GatewayPermissions.PrivacyErase);
+
+        HttpResponseMessage response = await client.SendAsync(message, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        stub.ReceivedPaths.Last().ShouldBe($"/v1/privacy/erasure-requests/{request}");
+    }
+
     /// <summary>DELETE names neither catalog route, so routing answers an authenticated caller 405 (§10.2).</summary>
     /// <remarks>
     /// The anonymous half is <see cref="A_wrong_method_is_challenged_before_it_is_refused"/> (ADR-030).
