@@ -28,9 +28,6 @@ NOT_ON_COMPOSE: dict[str, str] = {
 OWED_PULL_REQUESTS = {"PR-2", "PR-3", "PR-4"}
 OWED: dict[str, tuple[str, ...]] = {
     "queue-backlog.md": ("PR-4",),
-    "error-rate.md": ("PR-3",),
-    "latency.md": ("PR-3",),
-    "outbox-growth.md": ("PR-3",),
     "error-queue.md": ("PR-4",),
     "skipped-queue.md": ("PR-4",),
 }
