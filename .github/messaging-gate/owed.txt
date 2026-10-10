@@ -5,7 +5,6 @@
 Privacy publishes PersonalDataDeleteRequested #440
 Privacy accepts PersonalDataDeleteCompleted #440
 Ordering consumes PersonalDataDeleteRequested #440
-Payments consumes PersonalDataDeleteRequested #440
 Shipping consumes PersonalDataDeleteRequested #440
 Notifications consumes PersonalDataDeleteRequested #440
 Web.Bff consumes PersonalDataDeleteRequested #440
