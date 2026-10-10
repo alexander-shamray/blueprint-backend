@@ -12,6 +12,7 @@ import unittest
 
 import game_day
 import harness
+import runbook_coverage as coverage
 
 
 class Clock:
@@ -354,6 +355,37 @@ class Cli(unittest.TestCase):
             self.assertIn(line, out.getvalue())
         self.assertNotRegex(out.getvalue(), r"coverage:|OWED")
 
+    def test_the_matrix_for_all_is_every_script_and_nothing_excused(self):
+        names = game_day.matrix("all")
+        self.assertEqual(len(coverage.scripts()), len(names))
+        self.assertIn("queue-backlog", names)
+        self.assertFalse(set(names) & {name.removesuffix(".md") for name in coverage.NOT_ON_COMPOSE})
+
+    def test_the_matrix_keeps_named_runbooks_and_refuses_one_without_a_script(self):
+        self.assertEqual(["error-queue", "latency"], game_day.matrix("error-queue  latency.md"))
+        for names in ("error-queue stuck-saga", "  "):
+            with self.subTest(names):
+                with self.assertRaises(harness.GameDayError):
+                    game_day.matrix(names)
+
+    def test_the_matrix_is_a_github_output_line_and_a_refusal_is_exit_2(self):
+        import contextlib
+        import io
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(0, game_day.main(["--matrix", "error-queue"]))
+        self.assertEqual('runbooks=["error-queue"]\n', out.getvalue())
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(2, game_day.main(["--matrix", "stuck-saga"]))
+
+    def test_the_workflow_plans_its_matrix_with_this_and_runs_one_runbook_a_job(self):
+        workflow = (harness.ROOT / ".github" / "workflows" / "game-day.yml").read_text(encoding="utf-8")
+        self.assertIn('game_day.py --matrix "$RUNBOOKS" >> "$GITHUB_OUTPUT"', workflow)
+        self.assertIn("runbook: ${{ fromJSON(needs.plan.outputs.runbooks) }}", workflow)
+        self.assertIn('game_day.py "$RUNBOOK"', workflow)
+        self.assertIn("default: 'all'", workflow)
+        self.assertNotIn("schedule:", workflow)
 
 
 class Scenarios(unittest.TestCase):
