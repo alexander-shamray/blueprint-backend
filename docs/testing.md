@@ -233,6 +233,20 @@ local Grafana's loaded rules and dashboards to `deploy/observability/`;
 `deploy/compose/README.md`'s *What the local Grafana loads* gives the reads
 to run it locally.
 
+**The game day causes each alert on that stack and runs its runbook's first
+step.** Its suite and its coverage test (every runbook has a script or a
+stated reason) need no daemon; the run itself does, with the stack up:
+
+```bash
+cd tools/game-day && py -3.12 -m unittest
+py -3.12 tools/game-day/game_day.py outbox-broker
+```
+
+A run takes minutes per runbook, because each waits out a rule's threshold
+and two intervals, so CI runs the suite on pull requests and the run itself
+only by `workflow_dispatch`. [Its README](../tools/game-day/README.md) owns
+what a pass proves.
+
 **`HELM=` is an override, not a gate run.** The chart gate runs
 `helm dependency update` itself — `file://` dependencies resolve from disk, so
 there is no network step and no chart repository — and this only tells it

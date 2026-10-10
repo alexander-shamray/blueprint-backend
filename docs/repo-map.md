@@ -244,6 +244,11 @@ tools/dead-letters/          the dead-letter queues' hands: list, inspect,
                              dry run unless told otherwise, as the one broker
                              account that is not a service's. Stdlib Python
                              with a suite; the runbooks name it at each step
+tools/game-day/              the runbooks' proof: causes each alert on the
+                             Compose stack and runs the runbook's first step.
+                             One script per runbook, a coverage test that
+                             holds every runbook to a script or a reason;
+                             stdlib Python with a suite
 tools/token-usage/           Claude Code's recorded token usage per command
                              and agent type, from local transcripts; stdlib
                              Python with a suite, for docs/token-plan.md
