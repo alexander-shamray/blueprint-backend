@@ -21,16 +21,6 @@ public class PersonalDataErasureTests
     }
 
     [Fact]
-    public void Recording_an_erasure_raises_one_event_for_the_request()
-    {
-        PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 3, Now);
-
-        erasure.DomainEvents
-            .ShouldHaveSingleItem()
-            .ShouldBe(new PersonalDataErasedDomainEvent(Request, 3, Now));
-    }
-
-    [Fact]
     public void Two_requests_for_one_subject_do_not_share_a_hash()
     {
         Guid other = new("cccccccc-cccc-cccc-cccc-cccccccccccc");
@@ -62,7 +52,6 @@ public class PersonalDataErasureTests
         PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 0, Now);
 
         erasure.Count.ShouldBe(0);
-        erasure.DomainEvents.ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -84,16 +73,14 @@ public class PersonalDataErasureTests
     }
 
     [Fact]
-    public void A_repeat_keeps_the_row_and_reports_again()
+    public void A_repeat_keeps_the_row_and_moves_its_time()
     {
         PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 3, Now);
-        erasure.ClearDomainEvents();
 
         erasure.Repeat(0, Now.AddHours(1));
 
         erasure.ErasedAt.ShouldBe(Now.AddHours(1));
-        erasure.DomainEvents.ShouldHaveSingleItem()
-            .ShouldBe(new PersonalDataErasedDomainEvent(Request, 0, Now.AddHours(1)));
+        erasure.Count.ShouldBe(3);
     }
 
     [Fact]

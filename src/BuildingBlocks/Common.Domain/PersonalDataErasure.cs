@@ -30,18 +30,16 @@ public sealed class PersonalDataErasure : AggregateRoot<Guid>
 
         RequireCount(count);
 
-        PersonalDataErasure erasure = new()
+        return new PersonalDataErasure
         {
             Id = requestId,
             SubjectHash = HashSubject(requestId, subjectId),
             Count = count,
             ErasedAt = now
         };
-        erasure.Raise(new PersonalDataErasedDomainEvent(requestId, count, now));
-        return erasure;
     }
 
-    /// <summary>A reissue erases again; the row keeps the most it ever removed, and the holder reports again.</summary>
+    /// <summary>A reissue erases again; the row keeps the most it ever removed.</summary>
     public void Repeat(int count, DateTimeOffset now)
     {
         RequireCount(count);
@@ -49,7 +47,6 @@ public sealed class PersonalDataErasure : AggregateRoot<Guid>
         // A reissue that finds nothing left must not overwrite the record of what the first pass removed.
         Count = Math.Max(Count, count);
         ErasedAt = now;
-        Raise(new PersonalDataErasedDomainEvent(Id, count, now));
     }
 
     private static void RequireCount(int count)
@@ -58,7 +55,3 @@ public sealed class PersonalDataErasure : AggregateRoot<Guid>
             throw new DomainException("An erasure cannot have removed a negative number of records.");
     }
 }
-
-/// <summary>A holder finished erasing for a request; its mapper turns this into the completion (§9.3).</summary>
-public sealed record PersonalDataErasedDomainEvent(Guid RequestId, int Count, DateTimeOffset OccurredAt)
-    : IDomainEvent;
