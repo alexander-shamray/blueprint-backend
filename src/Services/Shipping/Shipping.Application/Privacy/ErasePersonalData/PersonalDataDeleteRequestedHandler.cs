@@ -6,10 +6,8 @@ namespace Shipping.Application.Privacy.ErasePersonalData;
 
 /// <summary>Ends what waits on the subject's addresses, erases them, then tells Privacy (ADR-094).</summary>
 /// <remarks>
-/// The shipments end first, while the rows that name their orders still exist, so a redelivery after a crash between
-/// the steps finds the same orders and repeats harmlessly. Reported here and not in a command, because the execution
-/// strategy re-runs a command whole and a send inside it would repeat (ADR-094); the consumer's in-memory outbox
-/// holds it until this handler returns.
+/// Ended first, while the rows naming the orders exist, so a redelivery repeats harmlessly. Reported here and
+/// not in a command, which a retry would re-run whole and send twice (ADR-094).
 /// </remarks>
 public sealed class PersonalDataDeleteRequestedHandler(
     IDispatcher dispatcher,
