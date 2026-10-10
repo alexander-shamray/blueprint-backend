@@ -30,8 +30,8 @@ public sealed class ErasureRequestIndexTests(ServiceFixture fixture) : IAsyncLif
         Exception refused = await Should.ThrowAsync<Exception>(
             () => fixture.ExecuteAsync(InsertSql, Guid.CreateVersion7(), subject));
 
-        // 2601 is a unique index, 2627 a constraint; either way it is the subject's uniqueness that held.
-        (refused.GetBaseException() as SqlException)?.Number.ShouldBeOneOf(2601, 2627);
+        // 2601 is a unique index, 2627 a constraint; any other failure would not prove the index held.
+        refused.GetBaseException().ShouldBeOfType<SqlException>().Number.ShouldBeOneOf(2601, 2627);
     }
 
     [Fact]
