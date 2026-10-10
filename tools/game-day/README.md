@@ -60,7 +60,7 @@ no sleep that stands in for a condition. A `Deadline` is a sum written out, as
 `tests/Platform.IntegrationTests/Journey/Deadlines.cs` writes its own: the
 rule's threshold (an age gauge needs that many seconds to cross it), plus its
 `for:`, plus the export interval (60 seconds, the OpenTelemetry SDK's default,
-which the suite fails on the day anything under `src/` or `deploy/` sets it),
+which the suite fails on the day anything under `src/`, `deploy/compose/` or `deploy/helm/` sets it),
 plus the evaluation interval (60 seconds). The bundled Grafana image's Prometheus
 configuration sets no `evaluation_interval`, which was read from the running
 container, so the default applies. The first runs, on 2026-10-10, fired
