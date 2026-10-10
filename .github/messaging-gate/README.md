@@ -31,4 +31,6 @@ Its suite, then `check`, in the fast job of [`ci.yml`](../workflows/ci.yml).
 The suite holds a negative case for each refusal beside its positive control,
 cases whose subject is the parser, and two whose subject is coverage of this
 repository: every host under `src/` has a row and every row a host, and every
-host's code yields at least one name.
+host's code yields at least one name, unless the host reads nothing and every
+name its row states is in `owed.txt`, which is how a freshly rendered service
+can arrive before the code that builds what its row says.
