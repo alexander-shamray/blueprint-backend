@@ -93,13 +93,21 @@ public sealed class OverdueSweepService : BackgroundService
 
         foreach (Guid id in due)
         {
-            // One aggregate per transaction (§2.3), and a request that fails does not stop the others.
-            Result result = await dispatcher.SendAsync(new MarkErasureRequestOverdueCommand(id), ct);
+            // One aggregate per transaction (§2.3), and a request that fails, by result or by throw, does not
+            // stop the others: the oldest is first in every batch, so one that always threw would starve the rest.
+            try
+            {
+                Result result = await dispatcher.SendAsync(new MarkErasureRequestOverdueCommand(id), ct);
 
-            if (result.IsFailure)
-                Refused(_log, id, result.Error.Code, null);
-            else
-                marked++;
+                if (result.IsFailure)
+                    Refused(_log, id, result.Error.Code, null);
+                else
+                    marked++;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                Refused(_log, id, exception.GetType().Name, exception);
+            }
         }
 
         return marked;
