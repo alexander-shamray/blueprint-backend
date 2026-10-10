@@ -70,8 +70,10 @@ def _is(world: harness.World, alert: str, wanted: str) -> tuple[bool, str]:
 def _restore(scenario: ModuleType, world: harness.World, clock, sleep) -> list[str]:
     try:
         scenario.restore(world)
-        # Settling is bounded by the same derivation: the gauge has to be exported and judged again.
-        harness.wait_until(lambda: scenario.settled(world), scenario.DEADLINE.seconds + 120,
+        # Settling is bounded by the cause's derivation: the gauge has to be exported and judged again. A rule
+        # that reads a window (an `increase` over 30m) names its own, as SETTLE, because it outlasts that sum.
+        bound = getattr(scenario, "SETTLE", scenario.DEADLINE).seconds + 120
+        harness.wait_until(lambda: scenario.settled(world), bound,
                            f"{scenario.ALERT} resolving after the restore", clock=clock, sleep=sleep)
     except Exception as error:  # noqa: BLE001 - a restore that fails for any reason is the finding
         return [f"the restore did not settle, so the next scenario starts poisoned: {error}"]
@@ -97,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.runbook:
         parser.error("name a runbook, or --list")
 
-    world = harness.World(harness.Compose(), harness.Alerts(), harness.Orders(), harness.Logs(), print)
+    world = harness.World(harness.Compose(), harness.Alerts(), harness.Orders(), harness.Logs(), print, realm=harness.Realm())
     findings = run(load(args.runbook), world)
     for finding in findings:
         print(f"FINDING: {finding}", file=sys.stderr)
