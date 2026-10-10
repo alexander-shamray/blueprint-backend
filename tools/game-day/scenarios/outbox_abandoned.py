@@ -1,15 +1,8 @@
-"""docs/runbooks/outbox-abandoned.md — a broker-lane row past §9.4's attempt cap.
-
-Alert:      OutboxAbandonedRows (max by (service_name, lane) (outbox_abandoned_count) > 0, no `for:`).
-Cause:      Forced through SQL: one row is inserted into ordering.OutboxMessages on the Broker lane with Attempts =
-            10, so the dispatcher's claim (`Attempts < @MaxAttempts`) skips it for ever and the gauge counts it.
-            The organic route is a stopped broker for about 64 minutes, which is ten attempts on the dispatcher's
-            2^min(Attempts, 8) × 5-second ladder. The row is the condition the rule reads, not the rule's history.
-First step: the runbook's "Read the rows before touching them" query, run as written through sqlcmd. It passes
-            when the result holds the planted row, found by its MessageId, on the Broker lane at Attempts 10.
-Restore:    delete the planted row, by its MessageId and nothing wider, then wait for the alert to resolve. The
-            runbook says never to delete rows to clear a backlog; this one is the harness's own and never was an
-            event.
+"""docs/runbooks/outbox-abandoned.md: a broker-lane row past §9.4's attempt cap.
+Alert:      OutboxAbandonedRows, no `for:`.
+Cause:      Forced through SQL: a Broker row planted at Attempts 10; the organic route is 64 minutes of a stopped broker.
+First step: the runbook's query as written, which must return the planted row by its MessageId.
+Restore:    delete that row by its MessageId and nothing wider, then wait for the alert to resolve.
 """
 
 from __future__ import annotations

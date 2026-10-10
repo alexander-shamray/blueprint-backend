@@ -2,8 +2,7 @@
 
     cd tools/game-day && py -3.12 -m unittest
 
-The subject is docs/runbooks/ as it is, so a runbook added there fails this until it is dealt with; the cases
-around it prove the test can fail, because a gate that cannot is this repository's most-repeated failure.
+The cases around the real tree prove it can fail, which a gate that cannot never does.
 """
 
 import importlib

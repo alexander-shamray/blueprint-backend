@@ -23,8 +23,8 @@ NOT_ON_COMPOSE: dict[str, str] = {
     "business-volume.md": "its rule compares against `offset 1w`, which needs a week of history",
 }
 
-# Runbooks whose script a later pull request of #430 delivers, each naming that pull request. A runbook that two
-# of them share names both. PR-4 empties this and then deletes it, with its case in test_coverage.py.
+# Runbooks whose script a later pull request of the series delivers, each named. A runbook two share names both.
+# The last of them empties this and deletes it, with its case in test_coverage.py.
 OWED_PULL_REQUESTS = {"PR-2", "PR-3", "PR-4"}
 OWED: dict[str, tuple[str, ...]] = {
     "address-refused.md": ("PR-2",),

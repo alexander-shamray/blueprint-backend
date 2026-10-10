@@ -1,17 +1,8 @@
-"""docs/runbooks/outbox-broker.md — the broker-down row of §9.8, which no suite had run.
-
-Alert:      OutboxBrokerLaneStalled (outbox_oldest_age_seconds{lane="Broker"} > 120, no `for:`).
-Cause:      `stop rabbitmq`, then place an order. The order commits and its OrderPlaced row waits on the
-            broker lane, so the oldest age climbs past two minutes.
-First step: the runbook's "Is the dispatcher running, or is the broker refusing?" log read. Translated: the
-            runbook's `kubectl -n <ns> logs deploy/ordering --since=10m | grep -i "Outbox claim failed"` reads a
-            container's stdout, and the hosts log through OpenTelemetry alone (§13.4), so stdout is empty and
-            the step as written finds nothing. The Compose equivalent reads the same lines from Loki, which is
-            where they exist. The step passes when "Outbox message … on lane Broker failed, attempt N of M"
-            appears and "Outbox claim failed" does not, which is the runbook's own reading of a broker that
-            refuses.
-Restore:    start rabbitmq, then wait for the alert to resolve, which is the runbook's "Recovering" claim that
-            the age gauge falls once the backlog drains.
+"""docs/runbooks/outbox-broker.md: §9.8's broker-down row.
+Alert:      OutboxBrokerLaneStalled, no `for:`.
+Cause:      `stop rabbitmq`, then place an order; its OrderPlaced row waits on the broker lane.
+First step: the log read, Translated from kubectl to Loki, as the hosts log through OpenTelemetry alone (§13.4).
+Restore:    start rabbitmq, then wait for the alert to resolve.
 """
 
 from __future__ import annotations
