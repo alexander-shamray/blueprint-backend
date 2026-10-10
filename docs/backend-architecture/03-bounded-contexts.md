@@ -298,7 +298,7 @@ table above gives Shipping two events to publish, and ADR-051's projection
 **Notifications** is the simplest possible service and the last one built,
 and those two facts are not in tension. It contains almost no domain logic,
 which is what makes it cheap; it also publishes nothing and subscribes to
-seven events owned by other services, which is what makes it impossible to
+eight events owned by other services, which is what makes it impossible to
 exercise before they exist
 ([Appendix C.1](appendix-c-delivery-plan.md#c1-service-build-order)). Simple to write is not the same as ready to build.
 
