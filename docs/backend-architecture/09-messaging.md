@@ -2808,7 +2808,7 @@ the messages a transition sends commit in the same transaction as the instance
 that sent them, which is
 [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
 and the reason this endpoint takes `UseEntityFrameworkOutbox<OrderingDbContext>`
-where the other three take `UseInMemoryOutbox` (§9.8). Without it the
+where the other endpoints take `UseInMemoryOutbox` (§9.8). Without it the
 instance commits and its `Send`s and `Schedule`s are still in a buffer — a
 dual write.
 
