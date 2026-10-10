@@ -229,9 +229,17 @@ class ThisRepository(unittest.TestCase):
 
     def test_every_row_reads_something_from_the_code(self) -> None:
         # A reader that silently found nothing would pass every comparison over a row that states nothing.
+        # A host freshly rendered builds nothing yet, so it reads nothing, and is let off only while every
+        # difference its row states is owed: a reader that failed would owe nothing and still fail here.
+        table = messaging_gate.read_table((messaging_gate.ROOT / messaging_gate.CHAPTER).read_text(encoding="utf-8"))
+        owed, _ = messaging_gate.read_owed(messaging_gate.OWED.read_text(encoding="utf-8"))
         for name, host in messaging_gate.read_code(messaging_gate.ROOT).items():
             with self.subTest(host=name):
-                self.assertTrue(host.publishes | host.consumes, name)
+                if host.publishes | host.consumes | host.accepts:
+                    continue
+                stated = {(name, column, item) for column in messaging_gate.COLUMNS
+                          for item in table[name].column(column)}
+                self.assertTrue(stated and stated <= owed, f"{name} reads nothing and its row owes less than it states")
 
     def test_this_repository_passes(self) -> None:
         self.assertEqual(messaging_gate.check(), [])
