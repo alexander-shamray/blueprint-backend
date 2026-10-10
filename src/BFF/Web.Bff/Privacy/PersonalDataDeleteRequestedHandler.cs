@@ -8,9 +8,8 @@ namespace Web.Bff.Privacy;
 
 /// <summary>Deletes the subject's order rows and lines, audits it, then tells Privacy once it commits (ADR-092).</summary>
 /// <remarks>
-/// Public, because §6.2's scan is public-only. One transaction holds the delete and the audit row, and the report
-/// follows the commit, since a send inside it would repeat when the execution strategy re-runs it (ADR-094). A request
-/// already seen repeats rather than fails, so a reissue reports again (§11.7).
+/// Public, because §6.2's scan is public-only. The report follows the commit, since a send inside the
+/// execution strategy's retry would repeat (ADR-094); a request already seen repeats rather than fails (§11.7).
 /// </remarks>
 public sealed class PersonalDataDeleteRequestedHandler(
     BffDbContext db,
