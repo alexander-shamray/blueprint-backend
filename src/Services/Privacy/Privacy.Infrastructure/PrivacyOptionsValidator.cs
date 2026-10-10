@@ -12,17 +12,9 @@ internal sealed class PrivacyOptionsValidator : IValidateOptions<PrivacyOptions>
     {
         List<string> failures = [];
 
-        if (options.Responders.Count == 0)
-            failures.Add("Privacy:Responders names no holder, so no request could ever close (ADR-092).");
-
-        foreach (string responder in options.Responders)
-        {
-            if (!ErasureRequest.IsResponderName(responder))
-                failures.Add($"Privacy:Responders holds '{responder}', which is not a lower-case holder name of letters, digits and hyphens.");
-        }
-
-        if (options.Responders.Distinct(StringComparer.Ordinal).Count() != options.Responders.Count)
-            failures.Add("Privacy:Responders names a holder twice.");
+        string? unfit = ErasureRequest.WhyNotAResponderSet(options.Responders);
+        if (unfit is not null)
+            failures.Add($"Privacy:Responders: {unfit} (ADR-092)");
 
         if (options.CompletionSlo <= TimeSpan.Zero)
             failures.Add("Privacy:CompletionSlo is missing or not positive; it is the adopter's reading of the law.");

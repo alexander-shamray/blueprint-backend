@@ -32,7 +32,7 @@ internal sealed class ErasureRequestConfiguration : IEntityTypeConfiguration<Era
         builder
             .Property<string>("_respondersCsv")
             .HasColumnName("RespondersCsv")
-            .HasMaxLength(400)
+            .HasMaxLength(ErasureRequest.MaxRespondersLength)
             .IsRequired();
 
         builder.Property(r => r.RaisedAt);

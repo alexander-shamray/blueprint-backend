@@ -10,8 +10,11 @@ namespace Privacy.Domain.ErasureRequests;
 /// </remarks>
 public sealed class ErasureRequest : AggregateRoot<Guid>
 {
-    /// <summary>The widest a responder's name may be, and the width its column is given.</summary>
+    /// <summary>The widest a responder's name may be.</summary>
     public const int MaxResponderLength = 32;
+
+    /// <summary>The width of the column the whole set is joined into, which the set may not outgrow.</summary>
+    public const int MaxRespondersLength = 400;
 
     private string _respondersCsv = "";
 
@@ -47,22 +50,9 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
         if (completionSlo <= TimeSpan.Zero)
             throw new DomainException("An erasure request needs a positive time to complete in.");
 
-        if (responders.Count == 0)
-            throw new DomainException("An erasure request needs at least one holder to answer it.");
-
-        HashSet<string> seen = new(StringComparer.Ordinal);
-        foreach (string responder in responders)
-        {
-            if (!IsResponderName(responder))
-            {
-                throw new DomainException(
-                    "A responder is a lower-case name of letters, digits and hyphens, " +
-                    $"at most {MaxResponderLength} long, and does not start with a hyphen.");
-            }
-
-            if (!seen.Add(responder))
-                throw new DomainException("A responder is named once.");
-        }
+        string? unfit = WhyNotAResponderSet(responders);
+        if (unfit is not null)
+            throw new DomainException(unfit);
 
         ErasureRequest request = new()
         {
@@ -75,6 +65,33 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
         };
         request.Raise(new ErasureRequestedDomainEvent(requestId, subjectId, now));
         return request;
+    }
+
+    /// <summary>
+    /// Why a set cannot be a request's, or null when it can. The aggregate and the options both ask, so the host
+    /// refuses at start what the first request would refuse.
+    /// </summary>
+    public static string? WhyNotAResponderSet(IReadOnlyCollection<string> responders)
+    {
+        if (responders.Count == 0)
+            return "An erasure request needs at least one holder to answer it.";
+
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        foreach (string responder in responders)
+        {
+            if (!IsResponderName(responder))
+            {
+                return $"'{responder}' is not a lower-case name of letters, digits and hyphens, " +
+                    $"at most {MaxResponderLength} long, not starting with a hyphen.";
+            }
+
+            if (!seen.Add(responder))
+                return $"'{responder}' is named twice.";
+        }
+
+        return string.Join(',', responders).Length > MaxRespondersLength
+            ? $"The holders together are over {MaxRespondersLength} characters, the width the set is stored in."
+            : null;
     }
 
     /// <summary>A name never holds a comma, which is what lets the set be stored as one delimited column.</summary>
