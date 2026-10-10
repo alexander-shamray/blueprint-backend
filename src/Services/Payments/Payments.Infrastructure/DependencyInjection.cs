@@ -1,5 +1,6 @@
 using Common.Infrastructure.Transport;
 using Payments.Application.Orders;
+using Payments.Application.Privacy;
 using Payments.Domain.Intents;
 using Payments.Domain.Refunds;
 using Payments.Infrastructure.Messaging;
@@ -47,6 +48,8 @@ public static class DependencyInjection
         // §5.6's repository registration for each aggregate.
         services.AddScoped<IPaymentIntentRepository, PaymentIntentRepository>();
         services.AddScoped<IRefundRepository, RefundRepository>();
+        services.AddScoped<IPersonalDataErasureRepository, PersonalDataErasureRepository>();   // §11.7
+        services.AddScoped<IErasureReporter, ErasureReporter>();                               // ADR-094
 
         // §8.5's durable half, in EfUnitOfWork's transaction through the alias above. A missing line fails the
         // first command, not startup: ValidateOnBuild never constructs TransactionBehavior's open generic.

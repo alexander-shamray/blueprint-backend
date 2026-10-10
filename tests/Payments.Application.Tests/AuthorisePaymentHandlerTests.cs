@@ -206,6 +206,9 @@ public class AuthorisePaymentHandlerTests
             LockCalls++;
             return Task.FromResult(Record);
         }
+
+        public Task<int> AnonymiseCustomerAsync(Guid subjectId, CancellationToken ct) =>
+            throw new NotSupportedException("Not exercised on the authorise path.");
     }
 
     // Holds a reference to the order store so a call made before the lock is

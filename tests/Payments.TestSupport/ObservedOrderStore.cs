@@ -55,5 +55,8 @@ public sealed class ObservedOrderStore
             Signal(observer._locked, id.Value).TrySetResult();
             return record;
         }
+
+        public Task<int> AnonymiseCustomerAsync(Guid subjectId, CancellationToken ct) =>
+            inner.AnonymiseCustomerAsync(subjectId, ct);
     }
 }

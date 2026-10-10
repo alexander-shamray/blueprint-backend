@@ -89,9 +89,9 @@
     {
       "user": "payments-svc",
       "vhost": "/",
-      "configure": "^(payments-|Common\\.Contracts(\\.(Ordering|Payments)\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "write": "^(payments-|Common\\.Contracts(\\.Payments\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(payments-|Common\\.Contracts\\.(Ordering|Payments)\\.V1:|Payments\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
+      "configure": "^(payments-|privacy-completions$|Common\\.Contracts(\\.(Ordering|Payments|Privacy)\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "write": "^(payments-|privacy-completions$|Common\\.Contracts(\\.Payments\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "read": "^(payments-|privacy-completions$|Common\\.Contracts\\.(Ordering|Payments|Privacy)\\.V1:|Payments\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "shipping-svc",

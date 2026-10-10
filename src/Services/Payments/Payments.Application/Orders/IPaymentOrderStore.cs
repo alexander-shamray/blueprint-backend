@@ -17,4 +17,7 @@ public interface IPaymentOrderStore
     Task RecordCancelledAsync(OrderId id, DateTimeOffset cancelledAt, CancellationToken ct);
 
     Task<PaymentOrderRecord?> LockAsync(OrderId id, CancellationToken ct);
+
+    /// <summary>Replaces the subject's payer id with the empty id on every record and returns how many (ADR-092).</summary>
+    Task<int> AnonymiseCustomerAsync(Guid subjectId, CancellationToken ct);
 }
