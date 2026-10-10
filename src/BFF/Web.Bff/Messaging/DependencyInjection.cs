@@ -14,7 +14,7 @@ using Web.Bff.Privacy;
 
 namespace Web.Bff.Messaging;
 
-/// <summary>ADR-051's bus: the projection's queue and erasure's, publishing nothing and sending one completion.</summary>
+/// <summary>The bus: the projection's queue and erasure's; it publishes nothing and sends one completion.</summary>
 public static class DependencyInjection
 {
     /// <summary>§3.2's BFF row: the projection's events, each of which writes rows here and calls nothing.</summary>
