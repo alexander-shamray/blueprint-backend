@@ -173,3 +173,8 @@ list of runbooks, so a new runbook fails it until it is dealt with.
 `.github/workflows/game-day.yml` runs the suite on the pull requests that touch
 what it reads. The game day itself is `workflow_dispatch` only, until PR-4
 decides from the measured runtimes.
+
+The dispatch job's `timeout-minutes` is 60 and runs its runbooks in turn, so
+one dispatch must name runbooks whose runtimes in *The scripts* sum to less:
+`address-refused` and `contact-refused` take over half an hour each and go in
+dispatches of their own. A job that times out still runs its teardown.
