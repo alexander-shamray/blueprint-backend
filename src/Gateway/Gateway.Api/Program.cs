@@ -104,7 +104,8 @@ builder.Services.AddRateLimiter(options =>
 builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(GatewayPermissions.InventoryAdmin, p => p.RequirePermission(GatewayPermissions.InventoryAdmin))
-    .AddPolicy(GatewayPermissions.PaymentsAdmin, p => p.RequirePermission(GatewayPermissions.PaymentsAdmin));
+    .AddPolicy(GatewayPermissions.PaymentsAdmin, p => p.RequirePermission(GatewayPermissions.PaymentsAdmin))
+    .AddPolicy(GatewayPermissions.PrivacyErase, p => p.RequirePermission(GatewayPermissions.PrivacyErase));
 
 // Each is optional, and required once switched on: "on but unconfigured" is a silent defect.
 bool behindProxy = builder.Configuration.GetValue<bool>("Ingress:Enabled");

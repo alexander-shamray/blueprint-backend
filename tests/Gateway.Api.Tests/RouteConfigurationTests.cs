@@ -25,6 +25,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
             ["ordering"] = "/v1/orders",
             ["inventory"] = "/v1/inventory",
             ["payments"] = "/v1/payments",
+            ["privacy"] = "/v1/privacy/erasure-requests",
 
             // A second namespace (§10.2), stripped whole; only the BFF's versioned API is routed.
             ["web-bff"] = "/v1"
