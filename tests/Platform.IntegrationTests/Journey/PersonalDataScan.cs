@@ -4,23 +4,14 @@ namespace Platform.IntegrationTests.Journey;
 
 /// <summary>Every column of every table of every database the platform runs, searched for a person (§11.7).</summary>
 /// <remarks>
-/// Text, not structure: the scan knows no table, so a store added later is searched without a line here (§11.7).
-/// A column is read as text however it is typed, so a key, an address and a payload are found by one needle.
+/// Text, not structure: the scan knows no table or database, so a store added later is searched without a line
+/// here (§11.7). A column is read as text however it is typed, so a key, an address and a payload share one needle.
 /// </remarks>
 internal static class PersonalDataScan
 {
-    /// <summary>The databases of §7.1, one per service and the BFF's.</summary>
-    public static readonly string[] Databases =
-    [
-        JourneyWorld.Catalog,
-        JourneyWorld.Ordering,
-        JourneyWorld.Inventory,
-        JourneyWorld.Payments,
-        JourneyWorld.Shipping,
-        JourneyWorld.Notifications,
-        JourneyWorld.Privacy,
-        JourneyWorld.Bff
-    ];
+    /// <summary>Every database on the server but the system's, which is one per service and the BFF's (§7.1).</summary>
+    public static Task<IReadOnlyList<string>> DatabasesAsync(this JourneyWorld world) =>
+        world.ColumnAsync("master", "SELECT name FROM sys.databases WHERE database_id > 4 ORDER BY name");
 
     /// <summary>Types a text comparison cannot be asked of, and which hold no payload a person is written in.</summary>
     private const string Unreadable = "'timestamp','image','geography','geometry','hierarchyid','sql_variant'";
@@ -30,7 +21,7 @@ internal static class PersonalDataScan
     {
         SortedSet<string> holding = [];
 
-        foreach (string database in Databases)
+        foreach (string database in await world.DatabasesAsync())
         {
             IReadOnlyList<string> tables = await world.ColumnAsync(
                 database,
