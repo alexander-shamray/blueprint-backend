@@ -86,10 +86,9 @@ it, 100 in 600 seconds is one for each route every 6 seconds, and two routes
 sent alternately make 3. It sends 20 a minute against the gateway's 100 per
 address and 300 per subject (§10.3), so the loop is never the 429s.
 `ErrorRate`'s 5-minute window holds 50 for a service, and the ratio crosses 1%
-at one failure in 50. A request a
-database holds runs on its own thread, bounded at 40 out, and the client waits
-45 seconds so that a request held for a SQL command's 30 ends as the server's
-answer and not as the loop hanging up.
+at one failure in 50. A request a database holds runs on its own thread,
+bounded at 40 out, and the client waits 45 seconds so that a request held for a
+SQL command's 30 ends as the server's answer and not as the loop hanging up.
 
 ## Waits are predicates with deadlines
 
@@ -181,8 +180,8 @@ not timed whole, and the deadline paragraph above has when they fired.
 
 The three runs above were measured on 2026-10-10, each alone on a stack that
 had just come up. `error-rate` is two runs in one, and its two phases fired
-after 445 and 412 seconds of a 480-second deadline. `latency` fired after 787 of 840, with
-nine services over a second, which is the runbook's *everything slow together*
+after 445 and 412 seconds of a 480-second deadline. `latency` fired after 787
+of 840, with nine services over a second, which is the runbook's *everything slow together*
 shape. `outbox-growth` fired after 738 of 780 and asserted
 `OutboxBrokerLaneStalled` beside it: with the broker stopped the age gauge is
 high too, so the runbook's own first check sends its reader to
@@ -224,4 +223,5 @@ The dispatch job's `timeout-minutes` is 60 and runs its runbooks in turn, so
 one dispatch must name runbooks whose runtimes in *The scripts* sum to less:
 `address-refused` and `contact-refused` take over half an hour each and go in
 dispatches of their own, and `error-rate` (27m36s) with `latency` (24m18s) is
-52 minutes, which fits only with nothing else beside it. A job that times out still runs its teardown.
+52 minutes, which fits only with nothing else beside it. A job that times out
+still runs its teardown.
