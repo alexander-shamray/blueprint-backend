@@ -2,6 +2,7 @@ using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
+using Privacy.Domain.ErasureRequests;
 
 namespace Privacy.Infrastructure.Persistence;
 
@@ -19,6 +20,9 @@ public sealed class PrivacyDbContext(DbContextOptions<PrivacyDbContext> options)
 
     /// <summary>§8.5's durable idempotency markers, declared on the same terms.</summary>
     public DbSet<IdempotencyMarker> IdempotencyMarkers => Set<IdempotencyMarker>();
+
+    /// <summary>ADR-092's one aggregate: a subject's request, and who has answered it.</summary>
+    public DbSet<ErasureRequest> ErasureRequests => Set<ErasureRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

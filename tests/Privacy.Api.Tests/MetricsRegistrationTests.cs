@@ -5,6 +5,7 @@ using Privacy.Infrastructure.Observability;
 using Common.Application;
 using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Configuration;
+using Privacy.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -238,6 +239,7 @@ public class MetricsRegistrationTests
                     ["ConnectionStrings:RedisCache"] = "privacy-redis.invalid:6379",
                     ["ConnectionStrings:RedisCoordination"] = "privacy-redis.invalid:6380"
                 })
+            .AddInMemoryCollection(PrivacyApiFactory.PrivacySettings)
             .Build();
 
         ServiceCollection services = new();

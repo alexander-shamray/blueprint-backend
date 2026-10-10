@@ -1,4 +1,6 @@
-using Privacy.Domain;
+using Microsoft.Extensions.Options;
+using Privacy.Application.ErasureRequests;
+using Privacy.Domain.ErasureRequests;
 using Privacy.Infrastructure.Messaging;
 using Privacy.Infrastructure.Observability;
 using Privacy.Infrastructure.Persistence;
@@ -43,7 +45,16 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
 
-        // §5.6's repository registrations join with the first aggregate.
+        // §5.6's repository for ADR-092's one aggregate.
+        services.AddScoped<IErasureRequestRepository, ErasureRequestRepository>();
+
+        // ADR-092's holders and service level, bound beside the handler that reads them (§15.4); a missing or
+        // impossible one refuses the host.
+        services
+            .AddOptions<PrivacyOptions>()
+            .BindConfiguration(PrivacyOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<PrivacyOptions>, PrivacyOptionsValidator>();
 
         // §8.5's durable half, on the DbContext alias above and so in EfUnitOfWork's transaction. Its loss
         // fails the first command, not startup: ValidateOnBuild never builds TransactionBehavior's open generic.
@@ -64,9 +75,9 @@ public static class DependencyInjection
 
         // The persisted type names (§9.4). The map is built lazily, so MessageTypeMapValidator is what fails
         // the host on a duplicate FullName rather than the first message.
-        // IIntegrationEvent and AssemblyMarker stand in for §9.4's two anchors until the service has its own.
+        // The contracts' assembly and this service's own, which holds its domain events (§9.4).
         services.AddSingleton(
-            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(AssemblyMarker).Assembly));
+            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(ErasureRequest).Assembly));
         services.AddSingleton(sp =>
         {
             MessageTypeSource source = sp.GetRequiredService<MessageTypeSource>();

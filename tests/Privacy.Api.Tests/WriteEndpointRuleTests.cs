@@ -32,13 +32,12 @@ public class WriteEndpointRuleTests(HostSmokeTests.UnreachableInfrastructureFact
     }
 
     [Fact]
-    public void This_host_maps_no_write_for_the_rule_above_to_look_at_yet()
+    public void This_host_maps_the_write_the_rule_above_looks_at()
     {
         // The floor: an offender list is as green over an empty selection.
-        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBeEmpty(
-            "This host maps no write endpoint yet, so the rule above is vacuous. The day it maps " +
-            "one, this test fails — replace it with the ShouldBe form naming that endpoint, " +
-            "which is what keeps a vacuous gate from quietly becoming a permanent one (§8.5).");
+        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(
+            ["RaiseErasureRequest"],
+            "the rule above would be vacuous if it looked at no write, which is as green as it is clean (§8.5)");
 
         // What the selection leaves out by shape, named, so a route this host maps that way is not left out too.
         Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe(["Health checks", "Health checks", "Health checks"]);

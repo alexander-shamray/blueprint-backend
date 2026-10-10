@@ -1,5 +1,7 @@
 using Common.Application;
+using Common.Contracts.Privacy.V1;
 using Common.Domain;
+using Privacy.Domain.ErasureRequests.Events;
 
 namespace Privacy.Application.Integration;
 
@@ -9,8 +11,11 @@ namespace Privacy.Application.Integration;
 /// </summary>
 internal sealed class PrivacyIntegrationEventMapper : IIntegrationEventMapper
 {
-    // Empty until this service publishes a contract: translation is opt-in (§9.3).
-    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];
+    // Translation is opt-in (§9.3); one event is the allow-list's whole content until the service grows more.
+    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
+    {
+        [typeof(ErasureRequestedDomainEvent)] = e => ToContract((ErasureRequestedDomainEvent)e)
+    };
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
     {
@@ -26,4 +31,14 @@ internal sealed class PrivacyIntegrationEventMapper : IIntegrationEventMapper
 
         return mapped;
     }
+
+    // The correlation is the request, so a holder's answer and the request it answers share one trace.
+    private static PersonalDataDeleteRequested ToContract(ErasureRequestedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.RequestId,
+        OccurredAt = e.OccurredAt,
+        RequestId = e.RequestId,
+        SubjectId = e.SubjectId
+    };
 }

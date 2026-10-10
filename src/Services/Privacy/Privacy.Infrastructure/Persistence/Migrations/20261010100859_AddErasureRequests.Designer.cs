@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Privacy.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using Privacy.Infrastructure.Persistence;
 namespace Privacy.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(PrivacyDbContext))]
-    partial class PrivacyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261010100859_AddErasureRequests")]
+    partial class AddErasureRequests
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

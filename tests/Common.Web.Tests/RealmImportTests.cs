@@ -315,7 +315,8 @@ public class RealmImportTests
                 .OfType<string>()
         ];
 
-        // The whole set: orders:admin is read by CancelOrderHandler, and no endpoint names it.
+        // The whole set: orders:admin is read by CancelOrderHandler, and no endpoint names it. privacy:erase is
+        // grantable and held by nobody, as that one is (ADR-092).
         roles.ShouldBe(
             [
                 "catalog:write",
@@ -324,7 +325,8 @@ public class RealmImportTests
                 "orders:write",
                 "orders:cancel",
                 "orders:admin",
-                "orders:delivery-address"
+                "orders:delivery-address",
+                "privacy:erase"
             ],
             ignoreOrder: true);
     }

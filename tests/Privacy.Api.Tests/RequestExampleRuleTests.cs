@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Privacy.Api;
 using Privacy.TestSupport;
 using Common.TestSupport;
 using Microsoft.AspNetCore.Http;
@@ -26,12 +27,11 @@ public class RequestExampleRuleTests(HostSmokeTests.UnreachableInfrastructureFac
     }
 
     [Fact]
-    public void This_host_binds_no_body_for_the_rule_above_to_look_at_yet()
+    public void This_host_binds_the_body_the_rule_above_looks_at()
     {
-        Names(RequestExampleRule.Bodied(Endpoints)).ShouldBeEmpty(
-            "This host binds no request body yet, so the rule above is vacuous. The day it binds " +
-            "one, this test fails — replace it with the ShouldBe form naming that endpoint, " +
-            "which is what keeps a vacuous gate from quietly becoming a permanent one.");
+        Names(RequestExampleRule.Bodied(Endpoints)).ShouldBe(
+            ["RaiseErasureRequest"],
+            "the rule above would be vacuous if it looked at no body, which is as green as it is clean");
     }
 
     [Fact]
@@ -58,6 +58,7 @@ public class RequestExampleRuleTests(HostSmokeTests.UnreachableInfrastructureFac
             request =>
             {
                 request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
+                request.Headers.Add(TestAuthHandler.PermissionsHeader, PrivacyPermissions.Erase);
             },
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken);

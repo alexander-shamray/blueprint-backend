@@ -1,5 +1,6 @@
 using System.Reflection;
 using Common.TestSupport;
+using Privacy.Application.ErasureRequests;
 using Shouldly;
 using Xunit;
 
@@ -8,13 +9,17 @@ namespace Privacy.Api.Tests;
 /// <summary>docs/personal-data.md names every retention window this host's types hold (§11.7).</summary>
 public class RetentionMapTests
 {
-    private static readonly Type[] Declared = [.. RetentionMapRule.BuildingBlocks];
+    private static readonly Type[] Declared = [.. RetentionMapRule.BuildingBlocks, typeof(PrivacyOptions)];
 
     private static readonly Assembly Host = typeof(RetentionMapTests).Assembly;
 
     private static readonly string[] Prefixes = ["Privacy.", "Common."];
 
-    private static readonly NotRetention[] Excluded = [.. RetentionMapRule.BuildingBlocksNotRetention];
+    private static readonly NotRetention[] Excluded =
+    [
+        .. RetentionMapRule.BuildingBlocksNotRetention,
+        new(typeof(PrivacyOptions), nameof(PrivacyOptions.CompletionSlo), "the time a request may stay open, not a retention")
+    ];
 
     [Fact]
     public void Every_retention_window_this_host_holds_is_named_in_the_map()

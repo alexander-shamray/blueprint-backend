@@ -54,6 +54,14 @@ services:
       # Redis's own port, and 6380 exists only on the host side.
       ConnectionStrings__RedisCache: "redis-cache:6379,user=privacy-svc,password=local-dev-privacy"
       ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=privacy-svc,password=local-dev-privacy"
+      # ADR-092's holders and service level (§15.4). The five §11.7 draws and a month are the local defaults; the
+      # periods are the adopter's reading of the law (ADR-053), so a deployment sets its own.
+      Privacy__Responders__0: "ordering"
+      Privacy__Responders__1: "payments"
+      Privacy__Responders__2: "shipping"
+      Privacy__Responders__3: "notifications"
+      Privacy__Responders__4: "bff"
+      Privacy__CompletionSlo: "30.00:00:00"
     ports: [ "127.0.0.1:5105:8080" ]
     # §13.5's readiness, asked by the host itself through HealthProbe, because
     # the image has no shell or HTTP client; the timeout outlasts the probe's.

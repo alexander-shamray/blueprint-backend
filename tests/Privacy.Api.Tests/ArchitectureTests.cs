@@ -1,5 +1,5 @@
 using System.Reflection;
-using Privacy.Domain;
+using Privacy.Domain.ErasureRequests;
 using Privacy.Infrastructure.Persistence;
 using Privacy.Migrator;
 using NetArchTest.Rules;
@@ -60,7 +60,7 @@ public class ArchitectureTests
     /// <remarks>Emitted references, narrower than §4.2's table: an unused ProjectReference emits nothing.</remarks>
     private static readonly Assembly[] ServiceAssemblies =
     [
-        typeof(AssemblyMarker).Assembly,
+        typeof(ErasureRequest).Assembly,
         typeof(Privacy.Application.DependencyInjection).Assembly,
         typeof(PrivacyDbContext).Assembly,
         typeof(MigratorHost).Assembly,
