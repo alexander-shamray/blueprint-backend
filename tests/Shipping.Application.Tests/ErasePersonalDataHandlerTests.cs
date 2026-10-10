@@ -65,6 +65,9 @@ public class ErasePersonalDataHandlerTests
 
         public List<Guid> Subjects { get; } = [];
 
+        public Task<IReadOnlyList<Guid>> AddressedOrdersAsync(Guid subjectId, CancellationToken ct) =>
+            throw new NotSupportedException("Reading the orders is the integration handler's step.");
+
         public Task<int> DeleteAddressesAsync(Guid subjectId, CancellationToken ct)
         {
             Subjects.Add(subjectId);
