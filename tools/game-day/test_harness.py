@@ -363,6 +363,7 @@ class Cli(unittest.TestCase):
 
     def test_the_matrix_keeps_named_runbooks_and_refuses_one_without_a_script(self):
         self.assertEqual(["error-queue", "latency"], game_day.matrix("error-queue  latency.md"))
+        self.assertEqual(["error-queue", "latency"], game_day.matrix("error-queue latency error-queue.md"))
         for names in ("error-queue stuck-saga", "  "):
             with self.subTest(names):
                 with self.assertRaises(harness.GameDayError):
