@@ -8,7 +8,7 @@ graph TB
     Admin([Back-office operator])
     Browser[Web / mobile client]
     Gateway[API Gateway<br/>YARP]
-    Platform[Commerce Platform<br/>6 domain services + BFF]
+    Platform[Commerce Platform<br/>7 domain services + BFF]
     PSP[(Payment provider)]
     Carrier[(Shipping carrier)]
     Email[(Email / SMS provider)]
