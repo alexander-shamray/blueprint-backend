@@ -6,13 +6,14 @@
 import contextlib
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import token_usage
-from token_usage import NO_COMMAND, Report
+from token_usage import MAIN, NO_COMMAND, SUBAGENT, Report
 
 
 def usage(read=0, write_5m=0, write_1h=0, output=0, fresh=0):
@@ -276,6 +277,92 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(report.results, {("/ship", "Bash"): [1, 40], ("/ship", "Read"): [1, 8]})
 
 
+def call(tool, at="2026-10-07T09:10:00.000Z", cwd="/r/repo", call_id=None, **given):
+    return {"type": "assistant", "timestamp": at, "cwd": cwd, "message": {
+        "id": call_id or tool + json.dumps(given), "content": [
+            {"type": "tool_use", "id": call_id or tool + json.dumps(given), "name": tool, "input": given}]}}
+
+
+class DocsTests(unittest.TestCase):
+    def test_read_and_the_shell_printers_are_reads_and_grep_is_not(self):
+        read = token_usage.markdown_read
+        self.assertEqual(read("Read", {"file_path": "/r/repo/docs/a.md"}), ["/r/repo/docs/a.md"])
+        self.assertEqual(read("Read", {"file_path": "/r/repo/src/A.cs"}), [])
+        self.assertEqual(read("Bash", {"command": "cd x && sed -n 1,5p docs/a.md | head -3; cat 'docs/b.md'"}),
+                         ["docs/a.md", "docs/b.md"])
+        self.assertEqual(read("Bash", {"command": "grep -n x docs/a.md"}), [])
+        self.assertEqual(read("PowerShell", {"command": "Get-Content docs\\c.md"}), ["docs\\c.md"])
+        self.assertEqual(read("Grep", {"path": "docs/a.md"}), [])
+
+    def test_a_read_is_placed_in_the_checkout_its_worktrees_and_forks_and_nowhere_else(self):
+        inside = token_usage.repo_relative
+        self.assertEqual(inside("/r/repo/docs/a.md", "/r/repo"), "docs/a.md")
+        self.assertEqual(inside("/r/repo/.claude/worktrees/feature/docs/a.md", "/r/repo"), "docs/a.md")
+        self.assertEqual(inside("/r/repo-fork/docs/a.md", "/r/repo"), "docs/a.md")
+        self.assertIsNone(inside("/r/other/docs/a.md", "/r/repo"))
+        self.assertEqual(inside(token_usage.absolute("Docs\\A.md", "c:\\Dev\\Repo"), "C:\\dev\\repo"), "Docs/A.md")
+        self.assertEqual(token_usage.absolute("../docs/a.md", "/r/repo/src"), "/r/repo/docs/a.md")
+
+    def test_a_document_is_named_by_path_by_a_relative_link_by_a_unique_name_or_by_a_template(self):
+        docs = dict.fromkeys(["docs/a.md", "docs/b.md", "docs/c/README.md", "README.md", "docs/commands/ship.md",
+                              "docs/commands/pr.md", "skill/references/x.md", "docs/unique.md", "skill/SKILL.md"], "")
+        named = token_usage.named_in
+        self.assertEqual(named("skill/SKILL.md", "see docs/a.md and references/x.md", docs),
+                         {"docs/a.md", "skill/references/x.md"})
+        self.assertEqual(named("x/s.md", "unique.md, but README.md is two files", docs), {"docs/unique.md"})
+        self.assertEqual(named("s.md", "docs/commands/<name>.md; <next-file>.md", docs),
+                         {"docs/commands/ship.md", "docs/commands/pr.md"})
+
+    def test_each_document_is_grouped_by_who_names_it_and_counted_by_who_opened_it(self):
+        docs = {"CLAUDE.md": "docs/claude.md", ".claude/commands/go.md": "read docs/named.md",
+                "docs/named.md": "", "docs/claude.md": "", "docs/orphan.md": "", ".claude/notes/x.md": ""}
+        reads = {("/r/repo/docs/named.md", MAIN): 2, ("/r/repo/docs/named.md", SUBAGENT): 3,
+                 ("/r/repo/CLAUDE.md", MAIN): 9, ("/r/other/docs/orphan.md", MAIN): 4}
+        rows = {r["doc"]: r for r in token_usage.doc_rows(docs, reads, "/r/repo")}
+        self.assertNotIn("CLAUDE.md", rows)
+        self.assertEqual(rows[".claude/commands/go.md"]["named_by"], "entry point")
+        self.assertEqual({k: rows["docs/named.md"][k] for k in ("named_by", "reads", "main", "subagents")},
+                         {"named_by": "named by entry", "reads": 5, "main": 2, "subagents": 3})
+        self.assertEqual(rows["docs/claude.md"]["named_by"], "CLAUDE.md only")
+        self.assertEqual((rows["docs/orphan.md"]["named_by"], rows["docs/orphan.md"]["reads"]), ("none", 0))
+        self.assertEqual(rows[".claude/notes/x.md"]["named_by"], "none")
+        self.assertIn("none: 2 files, 0.0 reads each, 2 never read", token_usage.link_summary(list(rows.values())))
+
+
+class DocReadTests(unittest.TestCase):
+    def test_reads_are_counted_once_per_call_across_main_sidechain_and_subagent_and_after_since(self):
+        with tempfile.TemporaryDirectory() as directory:
+            files = Transcripts(Path(directory))
+            sidechain = {**call("Read", call_id="c2", file_path="/r/repo/docs/a.md"), "isSidechain": True}
+            files.write("s.jsonl", [ship(), call("Read", file_path="/r/repo/docs/a.md"),
+                                    call("Bash", command="sed -n 1,9p docs/a.md", cwd="/r/repo/.claude"),
+                                    call("Read", at="2026-10-01T00:00:00.000Z", file_path="/r/repo/docs/a.md"),
+                                    sidechain])
+            files.write("s/subagents/agent-a.jsonl", [sidechain, call("Read", call_id="c3",
+                                                                      file_path="/r/repo/docs/a.md")])
+            report = Report("2026-10-07")
+            report.read_project(Path(directory))
+        self.assertEqual(report.reads, {("/r/repo/docs/a.md", MAIN): 1, ("/r/repo/.claude/docs/a.md", MAIN): 1,
+                                        ("/r/repo/docs/a.md", SUBAGENT): 2})
+
+    def test_docs_lists_every_tracked_markdown_file_of_the_checkout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            checkout, transcripts = base / "repo", base / "transcripts"
+            (checkout / "docs").mkdir(parents=True)
+            (checkout / "docs" / "read.md").write_text("", encoding="utf-8")
+            (checkout / "docs" / "unread.md").write_text("", encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
+            subprocess.run(["git", "add", "."], cwd=checkout, check=True)
+            Transcripts(transcripts).write("s.jsonl", [ship(), call("Read", file_path=str(checkout / "docs/read.md"))])
+            out = io.StringIO()
+            with mock.patch.object(token_usage.Path, "cwd", return_value=checkout), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(token_usage.main([str(transcripts), "--docs", "--json"]), 0)
+        rows = {r["doc"]: r["reads"] for r in json.loads(out.getvalue())}
+        self.assertEqual(rows, {"docs/read.md": 1, "docs/unread.md": 0})
+
+
 class CommandLineTests(unittest.TestCase):
     def test_a_project_is_named_by_its_path_with_dashes_on_either_platform(self):
         self.assertEqual(token_usage.project_name("/home/user/blueprint-backend"), "-home-user-blueprint-backend")
@@ -303,10 +390,11 @@ class CommandLineTests(unittest.TestCase):
                 self.assertEqual(token_usage.default_projects(checkout), expected)
                 self.assertEqual(token_usage.default_projects(worktree), expected)
 
-    def test_the_spawns_and_tools_views_cannot_be_asked_for_together(self):
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as refused:
-            token_usage.main(["--spawns", "5", "--tools", "5"])
-        self.assertEqual(refused.exception.code, 2)
+    def test_the_spawns_tools_and_docs_views_cannot_be_asked_for_together(self):
+        for views in (["--spawns", "5", "--tools", "5"], ["--tools", "5", "--docs"]):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as refused:
+                token_usage.main(views)
+            self.assertEqual(refused.exception.code, 2)
 
     def test_a_missing_directory_exits_2(self):
         with contextlib.redirect_stderr(io.StringIO()):

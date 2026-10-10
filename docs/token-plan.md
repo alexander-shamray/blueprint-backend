@@ -128,7 +128,8 @@ time.
 
 - `tools/token-usage/` reads Claude Code's transcripts and reports input,
   cache writes, cache reads and output per command and per subagent type,
-  with a suite. Landed.
+  with a suite. Landed. Its `--docs` view, which lists the markdown files a
+  run opens and who names them, landed after it.
 - `docs/token-usage.md` records the baseline. An all-history total and a
   three-week window landed, and one named `/ship` run; a second named run
   and one sweep are still owed.
