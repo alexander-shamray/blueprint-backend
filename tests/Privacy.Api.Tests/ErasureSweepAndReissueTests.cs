@@ -6,6 +6,7 @@ using Common.Infrastructure.Outbox;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Privacy.Api;
+using Privacy.Application.ErasureRequests.MarkOverdue;
 using Privacy.Infrastructure.Observability;
 using Privacy.Infrastructure.Sweep;
 using Privacy.TestSupport;
@@ -56,6 +57,44 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
 
         (await Sweep.RunOnceAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
         (await StatusAsync(notDue)).ShouldBe("Open");
+    }
+
+    [Fact]
+    public async Task A_pass_takes_one_batch_and_the_next_takes_the_rest()
+    {
+        for (int i = 0; i <= OverdueSweepService.BatchSize; i++)
+            await RaiseAsync(Guid.CreateVersion7());
+
+        await fixture.ExecuteAsync(
+            "UPDATE privacy.ErasureRequests SET DueAt = DATEADD(minute, -5, SYSDATETIMEOFFSET())");
+
+        (await Sweep.RunOnceAsync(TestContext.Current.CancellationToken)).ShouldBe(OverdueSweepService.BatchSize);
+        (await Sweep.RunOnceAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_request_whose_command_throws_does_not_stop_the_others()
+    {
+        Guid first = await RaiseAsync();
+        Guid second = await RaiseAsync(Guid.CreateVersion7());
+        await MakeDueAsync(first);
+        await fixture.ExecuteAsync(
+            "UPDATE privacy.ErasureRequests SET DueAt = DATEADD(minute, -1, SYSDATETIMEOFFSET()) WHERE RequestId = {0}",
+            second);
+
+        using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+        ServiceCollection services = new();
+        services.AddSingleton(scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>());
+        services.AddSingleton<IDispatcher>(new ThrowingFor(first, scope.ServiceProvider.GetRequiredService<IDispatcher>()));
+        using ServiceProvider provider = services.BuildServiceProvider();
+        OverdueSweepService sweep = new(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            TimeProvider.System,
+            NullLogger<OverdueSweepService>.Instance);
+
+        (await sweep.RunOnceAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+        (await StatusAsync(second)).ShouldBe("Overdue");
+        (await StatusAsync(first)).ShouldBe("Open");
     }
 
     [Fact]
@@ -272,6 +311,17 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
 
     private Task<string> StatusAsync(Guid request) =>
         fixture.ScalarAsync<string>("SELECT Value = Status FROM privacy.ErasureRequests WHERE RequestId = {0}", request);
+
+    private sealed class ThrowingFor(Guid request, IDispatcher inner) : IDispatcher
+    {
+        public Task<TResult> SendAsync<TResult>(ICommand<TResult> command, CancellationToken ct = default) =>
+            command is MarkErasureRequestOverdueCommand marking && marking.RequestId == request
+                ? throw new InvalidOperationException("The request's lock timed out.")
+                : inner.SendAsync(command, ct);
+
+        public Task<TResult> QueryAsync<TResult>(IQuery<TResult> query, CancellationToken ct = default) =>
+            inner.QueryAsync(query, ct);
+    }
 
     private sealed class FixedStats(int overdue, IReadOnlyDictionary<string, int> missing) : IErasureStats
     {
