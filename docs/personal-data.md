@@ -51,7 +51,7 @@ that carries it.
 | `bff.Orders` | The BFF | The customer's id, as the buyer an order is shown to, and a tracking number ([ADR-051](backend-architecture/adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) | No window | Delete (ADR-092); ADR-051's rebuild re-reads what the publishers' outboxes still hold, which this does not reach | The BFF's database |
 | Each service's `IdempotencyMarkers`, and the coordination Redis's claim keys | Every service with a keyed command | The authenticated caller's id, as the key's first segment (`IdempotencyBehavior`): a customer's for Ordering's `PlaceOrder`, a staff user's for Catalog's | A marker for `RetentionPolicy.IdempotencyWindow`; a claim key for `IdempotencyRetention.Window`, or until its release | Lifetime only | Each service's database; the coordination Redis |
 
-**Checked and holding none**: Payments' and Ordering's `PersonalDataErasures`,
+**Checked and holding none**: each holder's `PersonalDataErasures`,
 an audit row of a request id, a salted hash, a count and a time
 ([ADR-092](backend-architecture/adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
 Catalog's and Inventory's other tables, every
