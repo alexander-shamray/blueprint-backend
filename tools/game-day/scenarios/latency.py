@@ -1,6 +1,5 @@
 """docs/runbooks/latency.md. Alert: Latency, p99 over 1s on a 10-minute window, `for: 10m`, under the traffic loop.
-Cause:      `pause sql` under the loop, held past the `for:`; every request that reaches a database waits for its
-            command to time out, and the requests held complete as the slow ones the quantile reads.
+Cause:      `pause sql` under the loop, held past the `for:`; requests that reach a database wait out their command.
 First step: the runbook's per-route p99 query as written, and which of its two shapes the answer has.
 Restore:    unpause sql, then wait for the slow requests to leave the 10-minute window and the alert to resolve.
 """

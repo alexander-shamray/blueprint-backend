@@ -1,8 +1,7 @@
 """docs/runbooks/error-rate.md. Alerts: ErrorRateGateway then ErrorRateService, each `for: 5m`, under the traffic loop.
-Cause:      `stop ordering-api` behind the gateway for ErrorRateGateway; then `stop sql` under the services for
-            ErrorRateService, which the gateway also reports because it passes a service's 500 through.
+Cause:      `stop ordering-api` for ErrorRateGateway; then `stop sql` for ErrorRateService, which the gateway reports too.
 First step: the runbook's first PromQL, which says whether the 5xx is the edge's or a service's, read as written.
-Restore:    start ordering-api, and then sql and wait for it to accept a login; each waits for its alert to resolve.
+Restore:    start ordering-api, then sql once it accepts a login; each waits for its alert to resolve.
 """
 
 from __future__ import annotations
