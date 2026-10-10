@@ -400,6 +400,7 @@ jobs:
       payments: ${{ steps.changes.outputs.payments }}
       shipping: ${{ steps.changes.outputs.shipping }}
       notifications: ${{ steps.changes.outputs.notifications }}
+      privacy: ${{ steps.changes.outputs.privacy }}
       gateway: ${{ steps.changes.outputs.gateway }}
       bff: ${{ steps.changes.outputs.bff }}
       deploy: ${{ steps.changes.outputs.deploy }}
@@ -463,6 +464,10 @@ jobs:
               - *shared
               - 'src/Services/Notifications/**'
               - 'tests/Notifications.*/**'
+            privacy:
+              - *shared
+              - 'src/Services/Privacy/**'
+              - 'tests/Privacy.*/**'
             # The gateway is a deployable like any other — its own image
             # (§15.2), its own chart (§15.3), its own Program.cs and route
             # file. Left out of this list, a change to that route file is never
@@ -800,6 +805,12 @@ jobs:
           - filter: notifications
             image: notifications-migrator
             dockerfile: src/Services/Notifications/Notifications.Migrator/Dockerfile
+          - filter: privacy
+            image: privacy-api
+            dockerfile: src/Services/Privacy/Privacy.Api/Dockerfile
+          - filter: privacy
+            image: privacy-migrator
+            dockerfile: src/Services/Privacy/Privacy.Migrator/Dockerfile
           - filter: gateway
             image: gateway
             dockerfile: src/Gateway/Gateway.Api/Dockerfile
