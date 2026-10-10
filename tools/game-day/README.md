@@ -181,8 +181,8 @@ not timed whole, and the deadline paragraph above has when they fired.
 The three runs above were measured on 2026-10-10, each alone on a stack that
 had just come up. `error-rate` is two runs in one, and its two phases fired
 after 445 and 412 seconds of a 480-second deadline. `latency` fired after 787
-of 840, with nine services over a second, which is the runbook's *everything slow together*
-shape. `outbox-growth` fired after 738 of 780 and asserted
+of 840, with nine services over a second, which is the runbook's *everything
+slow together* shape. `outbox-growth` fired after 738 of 780 and asserted
 `OutboxBrokerLaneStalled` beside it: with the broker stopped the age gauge is
 high too, so the runbook's own first check sends its reader to
 `outbox-broker.md`, which is the right answer for this cause and says growth
