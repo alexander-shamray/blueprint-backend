@@ -8,10 +8,8 @@ namespace Platform.IntegrationTests.Journey;
 
 /// <summary>A customer erased and nothing personal left in any store but the ones the register names (§11.7).</summary>
 /// <remarks>
-/// The proof is the scan after the erasure, not the five holders' own suites: each of those shows its holder deletes
-/// what it knows of, and none shows that the choreography reaches a holder, that the set of holders is complete, or
-/// that no table nobody listed holds the person. The scan before it is the control: a search that finds nothing
-/// proves nothing until it is shown to find something.
+/// The proof is the scan after the erasure, not the holders' own suites, which cannot show the set complete (ADR-092).
+/// The scan before it is the control: a search that finds nothing proves nothing until it finds something.
 /// </remarks>
 [Collection(nameof(JourneyCollection))]
 public sealed class ErasureJourney(FirstJurisdictionWorld world)
