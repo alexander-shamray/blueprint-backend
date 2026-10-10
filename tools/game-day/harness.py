@@ -44,18 +44,13 @@ REPORT_LAG_SECONDS = EVALUATION_INTERVAL_SECONDS
 
 POLL_SECONDS = 2.0
 
-# The traffic loop's rate. A fixture and not a load test (deploy/observability/slo/slo.js is §13.7's). The rate is the
-# lowest that keeps the widest window of the three rules populated, which is Latency's: a p99 over fewer than 100
-# observations is its maximum, and one slow request would then be the quantile. 100 observations in 600 seconds is
-# one for each route every 6 seconds, and the loop sends its two routes alternately, so one request every 3 seconds.
-# Each service sees one route, so the 5-minute window of ErrorRate holds 50 of them and the ratio moves by one failure
-# in 50; README.md owns the argument.
+# The traffic loop's rate is the lowest that gives Latency's widest window a p99 over 100 observations, with the
+# loop's two routes sent alternately; README.md's *The traffic loop* owns the argument and the 429 headroom.
 LATENCY_WINDOW_SECONDS = 600
 WINDOW_OBSERVATIONS = 100
 TRAFFIC_ROUTES = 2
 TRAFFIC_TICK_SECONDS = LATENCY_WINDOW_SECONDS / WINDOW_OBSERVATIONS / TRAFFIC_ROUTES
-# A request held by a paused database runs on, so the loop bounds what it has out; §10.3's limiters admit 100 a
-# minute per address and 300 per subject, and this loop sends 20 a minute.
+# A request a paused database holds runs on, so the loop bounds what it has out.
 TRAFFIC_MAX_IN_FLIGHT = 40
 # The access token lives five minutes; a new one is fetched well inside that.
 TRAFFIC_TOKEN_SECONDS = 120
@@ -292,12 +287,9 @@ class Orders:
 class Traffic:
     """A bounded request generator through the gateway, so a rule over request counts has a window to read.
 
-    ErrorRate and Latency are a ratio and a quantile over what the gateway and the services served, and with no
-    traffic they have no series to fire on. Each tick sends one request, alternating an anonymous catalog read and an
-    authenticated cancel of an order that does not exist: neither changes state, and both reach the service's
-    database, so a stopped or paused SQL Server is felt on both. A request that outlives its tick runs on its own
-    thread, so a database that holds every request for 30 seconds does not slow the loop that is meant to outlast it.
-    The loop ends at `stop()` or at the bound it was started with, whichever is first.
+    Each tick sends one request, alternating an anonymous catalog read and an authenticated cancel of an order
+    that does not exist: neither writes, and both reach a database. Each request runs on its own thread, so a
+    database that holds them does not slow the loop. It ends at `stop()` or at its bound, whichever is first.
     """
 
     def __init__(self, send: Http = patient_http, token: Callable[[], str] | None = None,

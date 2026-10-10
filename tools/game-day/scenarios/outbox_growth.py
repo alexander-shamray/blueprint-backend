@@ -1,8 +1,7 @@
 """docs/runbooks/outbox-growth.md. Alert: OutboxGrowth, over 1000 pending and rising, `for: 10m`.
-Cause:      Forced through SQL: `stop rabbitmq`, then 1100 Broker rows planted and 20 more every 30 seconds.
-            The organic route is orders arriving faster than the broker drains for the whole `for:`, which the
-            loop's rate cannot reach. OutboxBrokerLaneStalled fires beside it and the script asserts that it does.
-First step: the runbook's age and count queries and its derivative as written, then its SQL for pending and processed.
+Cause:      Forced through SQL: `stop rabbitmq`, 1100 Broker rows planted, 20 more every 30s; the organic route is
+            orders arriving faster than the broker drains. OutboxBrokerLaneStalled fires too, and is asserted.
+First step: the runbook's age, count and derivative queries as written, then its SQL for pending and processed.
 Restore:    stop the top-up, delete the planted rows by their type, start rabbitmq, wait for both alerts to resolve.
 """
 
