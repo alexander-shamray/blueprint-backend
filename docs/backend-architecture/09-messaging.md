@@ -3338,8 +3338,8 @@ cfg.ReceiveEndpoint(
 > stories you get, which is why the order is written out with a reason at every
 > endpoint rather than left to the order somebody typed the lines in.
 >
-> **This governs the three endpoints that have an in-memory outbox**, and the
-> reason there are three rather than four is the same nesting one step on: a
+> **This governs every endpoint that has an in-memory outbox**, and the
+> reason the saga's has none is the same nesting one step on: a
 > consumer whose sends must survive its own commit wants a transactional
 > outbox rather than the in-memory one, because the in-memory outbox defers
 > and does not persist. The saga is that consumer, and
@@ -3427,10 +3427,12 @@ cfg.ReceiveEndpoint(
 > **The outbox is not the default, and this endpoint is the only one that
 > departs from it.**
 > [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
-> carries the argument. The short version is that the other three endpoints
+> carries the argument. The short version is that the other endpoints
 > buffer nothing that matters — their consumers publish through §9.4's
 > application outbox, whose row commits with the aggregate, so the in-memory
-> outbox there defers sends that are already durable. The saga is the one
+> outbox there defers sends that are already durable, or send a completion
+> that [ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)
+> allows to be lost to silence. The saga is the one
 > consumer that `Send`s and `Schedule`s on the bus directly, and an in-memory
 > buffer flushes *after* `EntityFrameworkRepository` has committed the
 > instance, which is a dual write.
