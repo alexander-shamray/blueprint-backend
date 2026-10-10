@@ -28,9 +28,9 @@ that carries it.
 - **Kept for** — the option that bounds it, or what ends it where no option
   does.
 - **Erasure** — *delete*, *anonymise* or *lifetime only*, as §11.7 sorts them.
-  §11.7's erasure is an extension, and its consumers are owed with it rather
-  than built, so every *delete* and *anonymise* below is the path the owner
-  has decided and not one that runs today.
+  Every *delete* and *anonymise* below runs: a journey test erases a customer
+  through Privacy and searches every column of every database for them, and
+  passes only for the holdings marked *lifetime only* here.
 - **Runs in** — the store, or for a third party the chart value naming it
   ([ADR-053](backend-architecture/adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)'s
   rule 3).

@@ -1483,15 +1483,16 @@ section's operational half, as `docs/secrets.md` is §15.4's.
 reaches it, and the ids it holds leave it when
 [§13.4](13-observability.md)'s lifetime for logs and traces runs out.
 
-> **The Privacy service is part of the extension, not of the baseline.** It
-> appears in no bounded-context table ([§3.2](03-bounded-contexts.md)), no solution tree (§4.1) and no PR
-> ([Appendix C](appendix-c-delivery-plan.md)), and enabling erasure means adding it — a context owning the
-> request aggregate, the expected-responder set as configuration, and a
-> completion SLO. Naming it in the diagram is what makes the seam checkable:
-> the alternative is discovering at enablement time that nothing was ever
-> designed to close the request. A service missing from the responder list is
-> the failure mode to design against, because it fails as *silence*, and
-> silence is the one outcome choreography cannot distinguish from success.
+> **The Privacy service owns the request.** It is a context with the request
+> aggregate, the expected-responder set as configuration and a completion SLO
+> ([§3.2](03-bounded-contexts.md)). Naming it in the diagram is what makes the
+> seam checkable: the alternative is discovering that nothing was ever designed
+> to close the request. A service missing from the responder list is the
+> failure mode to design against, because it fails as *silence*, and silence is
+> the one outcome choreography cannot distinguish from success. The journey
+> test in `tests/Platform.IntegrationTests` is what notices: it erases a
+> customer who ordered and was delivered to, then searches every column of
+> every database for them.
 >
 > **Decision — Privacy is a seventh service, and its responder set is fixed
 > when a request is raised.** See
