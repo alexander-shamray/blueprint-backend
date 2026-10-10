@@ -8,11 +8,16 @@ namespace Privacy.Infrastructure.Observability;
 public sealed class MetricsInitialiser : IHostedService
 {
     /// <summary>Resolving the parameters is the whole job; the guards are the read CS9113 asks for.</summary>
-    public MetricsInitialiser(OutboxMetrics outbox, MessagingMetrics messaging, RequestMetrics requests)
+    public MetricsInitialiser(
+        OutboxMetrics outbox,
+        MessagingMetrics messaging,
+        RequestMetrics requests,
+        ErasureMetrics erasures)
     {
         ArgumentNullException.ThrowIfNull(outbox);
         ArgumentNullException.ThrowIfNull(messaging);
         ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(erasures);
     }
 
     // `cancellationToken`, not `ct`: CA1725 matches the interface's parameter name, and ADR-019 makes it an error.

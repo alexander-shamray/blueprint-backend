@@ -45,7 +45,7 @@ public class RaiseErasureRequestHandlerTests
     public async Task A_subject_with_a_request_still_open_gets_that_request_and_nothing_is_added()
     {
         ErasureRequest open = ErasureRequest.Raise(Guid.CreateVersion7(), Subject, ["ordering"], Slo, Now.AddDays(-1));
-        _requests.Unclosed = open;
+        _requests.Hold(open);
 
         Result<Guid> result = await Handler().HandleAsync(
             new RaiseErasureRequestCommand(Subject),
@@ -64,18 +64,6 @@ public class RaiseErasureRequestHandlerTests
 
         _requests.Added.ShouldHaveSingleItem().Responders
             .ShouldBe(["ordering", "payments", "shipping", "notifications", "bff"]);
-    }
-
-    private sealed class FakeRequests : IErasureRequestRepository
-    {
-        public ErasureRequest? Unclosed { get; set; }
-
-        public List<ErasureRequest> Added { get; } = [];
-
-        public Task<ErasureRequest?> GetUnclosedForSubjectAsync(Guid subjectId, CancellationToken ct) =>
-            Task.FromResult(Unclosed);
-
-        public void Add(ErasureRequest request) => Added.Add(request);
     }
 
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider

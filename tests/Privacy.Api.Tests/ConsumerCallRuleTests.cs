@@ -42,13 +42,11 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
     }
 
     [Fact]
-    public void This_host_registers_no_consumer_for_the_rule_above_to_look_at_yet()
+    public void This_host_registers_the_consumer_the_rule_above_looks_at()
     {
         // The floor: an offender list is as green over an empty composition.
-        ConsumerCallRule.Consumers(factory.Composition, Host).ShouldBeEmpty(
-            "This host registers no consumer yet, so the rule above is vacuous. The day it does, " +
-            "this test fails — replace it with the ShouldNotBeEmpty form, which is what keeps a " +
-            "vacuous gate from quietly becoming a permanent one (ADR-017).");
+        ConsumerCallRule.Consumers(factory.Composition, Host).ShouldNotBeEmpty(
+            "the rule above would be vacuous if it looked at no consumer, which is as green as it is clean (ADR-017)");
 
         // Named, so a client this host gains is seen here before a consumer can reach it.
         Names(ConsumerCallRule.Clients(factory.Composition, Host)).ShouldBe([]);

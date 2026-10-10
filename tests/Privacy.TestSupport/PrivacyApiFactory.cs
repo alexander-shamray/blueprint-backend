@@ -1,4 +1,5 @@
 using Privacy.TestSupport.Outbox;
+using Privacy.Infrastructure.Sweep;
 using Common.Application;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
@@ -75,6 +76,14 @@ public class PrivacyApiFactory(
                 services.Remove(purge);
 
                 services.AddSingleton<RetentionPurgeService>();
+
+                // ADR-092's sweep, removed by the same match, so a test that a request goes overdue drives the pass.
+                ServiceDescriptor sweep = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(OverdueSweepService));
+                services.Remove(sweep);
+
+                services.AddSingleton<OverdueSweepService>();
 
                 // §9.4: added to rather than replaced, so a test cannot stage a type the real host would refuse.
                 services

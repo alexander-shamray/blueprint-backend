@@ -15,7 +15,8 @@ public class ArchitectureTests
     {
         // §4.2's second row as an allow-list: Dapper is §6.5's read side and brings System.Data.Common, and
         // Common.Domain is here because the mapper's IDomainEvent puts it among the references.
-        // Microsoft.Extensions.Options is the handler's IOptions<PrivacyOptions> (§15.4).
+        // Microsoft.Extensions.Options is the handler's IOptions<PrivacyOptions> (§15.4), and the Logging
+        // abstractions are the handlers' ILogger, which names no request's subject (§11.7).
         string[] allowed =
         [
             "Privacy.Domain",
@@ -26,6 +27,7 @@ public class ArchitectureTests
             "FluentValidation",
             "FluentValidation.DependencyInjectionExtensions",
             "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "Microsoft.Extensions.Logging.Abstractions",
             "Microsoft.Extensions.Options",
             "System.Collections",
             "System.Data.Common",

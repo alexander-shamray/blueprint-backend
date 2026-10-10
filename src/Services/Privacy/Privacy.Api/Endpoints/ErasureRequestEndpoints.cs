@@ -2,6 +2,7 @@ using Common.Application;
 using Common.Web;
 using Privacy.Application.ErasureRequests.GetErasureRequest;
 using Privacy.Application.ErasureRequests.RaiseErasureRequest;
+using Privacy.Application.ErasureRequests.ReissueErasureRequest;
 
 namespace Privacy.Api.Endpoints;
 
@@ -35,6 +36,26 @@ public static class ErasureRequestEndpoints
             .WithRequestExample(new RaiseErasureRequestCommand(Guid.Parse("0199b0c4-6f2e-7a31-8c5d-2e4f6a7b8c9d")))
             .WithName("RaiseErasureRequest");
 
+        // Asks the holders again under the same request (ADR-092). Keyed, since a repeat would broadcast again.
+        group
+            .MapPost(
+                "/{requestId:guid}/reissue",
+                async (Guid requestId, ReissueErasureRequestRequest request, IDispatcher dispatcher, CancellationToken ct) =>
+                {
+                    Result result = await dispatcher.SendAsync(
+                        new ReissueErasureRequestCommand(request.CommandId, requestId),
+                        ct);
+
+                    return result.ToHttpResult();
+                })
+            .RequireAuthorization(PrivacyPermissions.Erase)
+            // Built from the route and the body, so no parameter names the command (§8.5).
+            .Idempotent<ReissueErasureRequestCommand>()
+            .WithRequestExample(new ReissueErasureRequestRequest(Guid.Parse("0199b0c4-8b21-7c53-ae7f-4a6b8c9d0e1f")))
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("ReissueErasureRequest");
+
         group
             .MapGet(
                 "/{requestId:guid}",
@@ -51,3 +72,6 @@ public static class ErasureRequestEndpoints
             .WithName("GetErasureRequest");
     }
 }
+
+/// <summary>The body of a reissue; the request is the route's, so the body carries the key alone.</summary>
+public sealed record ReissueErasureRequestRequest(Guid CommandId);
