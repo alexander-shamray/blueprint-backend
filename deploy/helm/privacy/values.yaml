@@ -112,13 +112,10 @@ redis:
     cacheKey: cache-connection-string
     coordinationKey: coordination-connection-string
 
-# ADR-092's holders and service level (§15.4). Neither has a default a cluster
-# could use on purpose: the responders are the services that hold a person's
-# data in this deployment, and a set read at start decides when a request
-# closes, so a plausible one would be a guess; the service level is the
-# adopter's reading of the law (ADR-053). Refused rather than clamped, at
-# render and again at start. A name is a lower-case word of letters, digits and
-# hyphens, as Privacy__Responders__n is read.
+# ADR-092's holders and service level (§15.4), neither defaulted: the set
+# decides when a request closes, and the service level is the adopter's
+# reading of the law (ADR-053). Refused at render and again at start. A name
+# is lower-case letters, digits and hyphens, as the host reads it.
 privacy:
   enabled: true
   responders: []
