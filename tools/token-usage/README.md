@@ -8,6 +8,7 @@ py -3.12 tools/token-usage/token_usage.py                      # this checkout's
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --json
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --spawns 40   # the costliest subagents and their tasks
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --tools 30    # what tool results put into main sessions
+py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --docs        # every tracked .md, who names it, how often it was opened
 py -3.12 tools/token-usage/token_usage.py --session <id>      # one session and its subagents
 py -3.12 tools/token-usage/token_usage.py ~/.claude/projects/<dir> ...
 ```
@@ -52,6 +53,20 @@ in characters and about a quarter as many tokens: what a large context is
 made of, since a result stays in it for every later turn. A subagent's type
 comes from its `.meta.json`, else from the parent's tool result naming it,
 else it is `subagent`.
+
+`--docs` lists every markdown file `git ls-files` tracks in the checkout it
+runs from, with how often a main session and a subagent opened it — with
+`Read`, or with `cat`, `head`, `tail`, `sed` or `Get-Content` in a shell —
+and who names it: an `entry point` is a command, an agent or a skill's
+`SKILL.md`; `named by entry` is a file one of them names; `CLAUDE.md only`
+is one only `CLAUDE.md` names; `none` is the rest. A name is a path from
+the root or from the citing file, a base name no other tracked file has, or
+a template with a directory such as `docs/commands/<name>.md`. A read in a
+worktree or a sibling fork counts for the checkout's file. Each group's
+size, mean reads and never-read count go to stderr. It answers which
+documents a run never reaches, not which it needs: a file opened by `grep`
+or found through a link is not counted, and an unread file a person reads
+is not dead.
 
 The default directory is `~/.claude/projects/` plus the checkout's absolute
 path with every character that is not a letter or digit made a dash, which

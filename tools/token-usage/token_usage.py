@@ -11,7 +11,9 @@ import bisect
 import glob
 import io
 import json
+import posixpath
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,6 +27,15 @@ INJECTED = ("<bash-", "<local-command-", "[Request interrupted")
 CARRY_ON = {"/compact", "/autocompact", "/reload-plugins", "/context", "/cost", "/status", "/model", "/effort",
             "/fast", "/config", "/permissions", "/memory", "/mcp", "/hooks", "/agents", "/plugin", "/help"}
 WORKTREE = re.compile(r"[\\/]\.claude[\\/]worktrees[\\/].*$")
+# A shell command whose markdown arguments it prints: the reads that do not go through the Read tool.
+SHELL_READERS = {"cat", "head", "tail", "sed", "less", "more", "type", "gc", "get-content"}
+SHELL_SEGMENT = re.compile(r"&&|\|\||[;|\n]")
+SHELL_WORD = re.compile(r'"[^"]*"|\'[^\']*\'|\S+')
+# Where a run starts: what a command, an agent or a skill names, it is handed.
+ENTRY = re.compile(r"\.claude/(?:commands/[^/]+|agents/[^/]+|skills/[^/]+/SKILL)\.md")
+MENTION = re.compile(r"[\w./<>{}-]*[\w>}]\.md\b")
+PLACEHOLDER = re.compile(r"<[^<>/]+>|\{[^{}/]+\}")
+LINKS = ("entry point", "named by entry", "CLAUDE.md only", "none")
 
 # Anthropic's prompt-caching prices as multiples of the base input price.
 WRITE_5M = 1.25
@@ -83,6 +94,8 @@ class Report:
         self.span: list[str] = []
         self.spawns: list[dict] = []
         self.results: dict[tuple[str, str], list[int]] = {}
+        self.reads: dict[tuple[str, str], int] = {}
+        self.read_calls: set[str] = set()
 
     def add(self, command: str, agent: str, entry: dict, context: str, woken: bool = False) -> dict | None:
         """Count a response once, and return its usage when it was counted."""
@@ -133,6 +146,7 @@ class Report:
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
             if not entry.get("isSidechain"):
                 self.count_results(command, entry, tools)
+            self.count_reads(entry, SUBAGENT if entry.get("isSidechain") else MAIN)
             result = entry.get("toolUseResult")
             if isinstance(result, dict) and result.get("agentId") and result.get("agentType"):
                 types[result["agentId"]] = result["agentType"]
@@ -149,6 +163,7 @@ class Report:
             spawned_in, after_wake = command_at(boundaries, started)
             spawn = Usage()
             for entry in entries:
+                self.count_reads(entry, SUBAGENT)
                 if counted := self.add(spawned_in, agent, entry, f"{session}/{agent_id}", after_wake):
                     spawn.add(counted, agent_id, after_wake)
             if spawn.calls:
@@ -172,6 +187,25 @@ class Report:
                 counted = self.results.setdefault((command, tool), [0, 0])
                 counted[0] += 1
                 counted[1] += len(result_text(block.get("content")))
+
+    def count_reads(self, entry: dict, who: str) -> None:
+        """Count each markdown file a response opens, by its absolute path, with Read or a shell command."""
+        content = (entry.get("message") or {}).get("content") if entry.get("type") == "assistant" else None
+        if not isinstance(content, list):
+            return
+        if self.since and str(entry.get("timestamp", self.since))[:10] < self.since:
+            return
+        cwd = str(entry.get("cwd") or "")
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                # A subagent's call can be written both as a sidechain line and in its own transcript.
+                if (call := block.get("id")) in self.read_calls:
+                    continue
+                if call:
+                    self.read_calls.add(call)
+                for path in markdown_read(str(block.get("name")), block.get("input")):
+                    key = (absolute(path, cwd), who)
+                    self.reads[key] = self.reads.get(key, 0) + 1
 
     def entries(self, path: Path):
         with path.open(encoding="utf-8", errors="replace") as lines:
@@ -201,6 +235,115 @@ def result_text(content) -> str:
     if isinstance(content, list):
         return "".join(b.get("text", "") for b in content if isinstance(b, dict) and isinstance(b.get("text"), str))
     return ""
+
+
+def markdown_read(tool: str, given) -> list[str]:
+    """The markdown paths one tool call reads: Read's file, or what cat, head, tail, sed or Get-Content print."""
+    if not isinstance(given, dict):
+        return []
+    if tool == "Read":
+        path = given.get("file_path")
+        return [path] if isinstance(path, str) and path.lower().endswith(".md") else []
+    command = given.get("command")
+    if tool not in ("Bash", "PowerShell") or not isinstance(command, str):
+        return []
+    found = []
+    for segment in SHELL_SEGMENT.split(command):
+        words = [w.strip("\"'") for w in SHELL_WORD.findall(segment)]
+        if words and words[0].lower() in SHELL_READERS:
+            found += [w for w in words[1:] if w.lower().endswith(".md") and not w.startswith("-")]
+    return found
+
+
+def slashed(path: str) -> str:
+    return path.replace("\\", "/")
+
+
+def absolute(path: str, cwd: str) -> str:
+    """A path with forward slashes, made absolute against the call's working directory."""
+    path = slashed(path)
+    if not (path.startswith("/") or re.match(r"[A-Za-z]:/", path)):
+        path = slashed(cwd).rstrip("/") + "/" + path
+    return posixpath.normpath(path)
+
+
+def repo_relative(path: str, root: str) -> str | None:
+    """A read's path inside the checkout, a worktree under .claude/worktrees or a sibling fork, else None."""
+    root = posixpath.normpath(slashed(root))
+    windows = re.match(r"[A-Za-z]:/", root) is not None
+    inside = re.match(re.escape(root.lower() if windows else root) + r"(?:-[^/]+|/\.claude/worktrees/[^/]+)?/(.+)$",
+                      path.lower() if windows else path)
+    return path[len(path) - len(inside.group(1)):] if inside else None
+
+
+def tracked_docs(root: Path) -> dict[str, str]:
+    """Every markdown file git tracks in the checkout, with its text."""
+    listed = subprocess.run(["git", "-c", "core.quotePath=off", "ls-files", "-z", "*.md"], cwd=root,
+                            capture_output=True, text=True, encoding="utf-8", check=True).stdout
+    docs = {}
+    for doc in filter(None, listed.split("\0")):
+        try:
+            docs[doc] = (root / doc).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            docs[doc] = ""
+    return docs
+
+
+def named_in(source: str, text: str, docs: dict[str, str]) -> set[str]:
+    """The tracked documents a file's text names: by a path from the root or from the file, by a unique base
+    name, or by a template such as `docs/commands/<name>.md`, which names every file it fits."""
+    names: dict[str, list[str]] = {}
+    for doc in docs:
+        names.setdefault(posixpath.basename(doc), []).append(doc)
+    found = set()
+    for mention in set(MENTION.findall(text)):
+        if PLACEHOLDER.search(mention):
+            # A bare `<name>.md` fits every file, so only a template with a directory names any.
+            if "/" in mention:
+                parts = PLACEHOLDER.split(mention.lstrip("./"))
+                fits = re.compile(r"(?:^|/)" + "[^/]+".join(map(re.escape, parts)) + "$")
+                found |= {doc for doc in docs if fits.search(doc)}
+            continue
+        # A bare name is read beside the file citing it, never as the root's file of that name.
+        for candidate in (mention if "/" in mention else "", posixpath.join(posixpath.dirname(source), mention)):
+            candidate = posixpath.normpath(candidate)
+            if candidate in docs:
+                found.add(candidate)
+        if "/" not in mention and len(names.get(mention, [])) == 1:
+            found.add(names[mention][0])
+    found.discard(source)
+    return found
+
+
+def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int], root: str) -> list[dict]:
+    """One row per tracked document: who names it, and how often a main session and a subagent opened it."""
+    entry = {doc for doc in docs if ENTRY.fullmatch(doc)}
+    from_entry = set().union(*(named_in(doc, docs[doc], docs) for doc in entry))
+    from_claude_md = named_in("CLAUDE.md", docs.get("CLAUDE.md", ""), docs)
+    opened: dict[tuple[str, str], int] = {}
+    for (path, who), count in reads.items():
+        if (doc := repo_relative(path, root)) in docs:
+            opened[doc, who] = opened.get((doc, who), 0) + count
+    rows = []
+    for doc in docs:
+        if doc == "CLAUDE.md":
+            continue
+        link = LINKS[0] if doc in entry else LINKS[1] if doc in from_entry else \
+            LINKS[2] if doc in from_claude_md else LINKS[3]
+        main, agents = opened.get((doc, MAIN), 0), opened.get((doc, SUBAGENT), 0)
+        rows.append({"doc": doc, "named_by": link, "reads": main + agents, "main": main, "subagents": agents})
+    rows.sort(key=lambda r: (LINKS.index(r["named_by"]), -r["reads"], r["doc"]))
+    return rows
+
+
+def link_summary(rows: list[dict]) -> list[str]:
+    lines = []
+    for link in LINKS:
+        group = [r["reads"] for r in rows if r["named_by"] == link]
+        if group:
+            lines.append(f"{link}: {len(group)} files, {sum(group) / len(group):.1f} reads each, "
+                         f"{group.count(0)} never read")
+    return lines
 
 
 def is_prompt(entry: dict) -> bool:
@@ -288,6 +431,7 @@ def default_projects(cwd: Path) -> list[Path]:
 
 ROWS = ("command", "agent", "contexts", "calls", "input", "cache_write", "cache_read", "output", "input_equivalent",
         "woken_equivalent")
+DOCS = ("doc", "named_by", "reads", "main", "subagents")
 RESULTS = ("command", "tool", "results", "characters", "approx_tokens")
 SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
 
@@ -295,7 +439,7 @@ SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "descripti
 def render(rows: list[dict], columns: tuple[str, ...] = ROWS) -> str:
     cells = [list(columns)] + [[f"{r[c]:,}" if isinstance(r[c], int) else r[c] for c in columns] for r in rows]
     widths = [max(len(row[i]) for row in cells) for i in range(len(columns))]
-    left = {"command", "agent", "started", "description", "tool"}
+    left = {"command", "agent", "started", "description", "tool", "doc", "named_by"}
     lines = ["  ".join(cell.ljust(w) if c in left else cell.rjust(w) for c, cell, w in zip(columns, row, widths))
              for row in cells]
     return "\n".join(line.rstrip() for line in lines)
@@ -315,6 +459,8 @@ def main(argv: list[str] | None = None) -> int:
                        help="list the N costliest subagents, each with the task it was given, instead")
     views.add_argument("--tools", type=int, metavar="N",
                        help="list the N commands and tools whose results put the most text into main sessions")
+    views.add_argument("--docs", action="store_true",
+                       help="list every tracked markdown file with who names it and how often it was opened")
     parser.add_argument("--session", default="", metavar="ID",
                         help="only the session whose id starts with ID, with its subagents")
     args = parser.parse_args(argv)
@@ -329,7 +475,17 @@ def main(argv: list[str] | None = None) -> int:
     for project in projects:
         report.read_project(project)
     print(f"read {projects[0]}" + (f" and {len(projects) - 1} more" if len(projects) > 1 else ""), file=sys.stderr)
-    if args.tools is not None:
+    if args.docs:
+        root = Path(WORKTREE.sub("", str(Path.cwd().resolve())))
+        try:
+            docs = tracked_docs(root)
+        except (OSError, subprocess.CalledProcessError):
+            print(f"no git checkout at {root} to list the markdown files of", file=sys.stderr)
+            return 2
+        rows, columns = doc_rows(docs, report.reads, str(root)), DOCS
+        for line in link_summary(rows):
+            print(line, file=sys.stderr)
+    elif args.tools is not None:
         rows = [{"command": c, "tool": t, "results": n, "characters": size, "approx_tokens": size // 4}
                 for (c, t), (n, size) in report.results.items()]
         rows = sorted(rows, key=lambda r: r["characters"], reverse=True)[:args.tools]
