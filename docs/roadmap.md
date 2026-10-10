@@ -420,8 +420,8 @@ settled and now moves none.
 
 **The domain question is settled: the domain is a reference implementation**
 ([ADR-062](backend-architecture/adr/ADR-062-the-domain-is-a-reference-implementation.md)).
-The six services [§4.1](backend-architecture/04-solution-structure.md) and
-Appendix C name are the worked example an adopter replaces, so the 21 of the
+The services [§4.1](backend-architecture/04-solution-structure.md) names, six
+of them Appendix C's, are the worked example an adopter replaces, so the 21 of the
 99 days PR-10, PR-18, PR-19, PR-20 and PR-21 took are the example's cost, not a
 rework this plan owes. This item priced the question as open and the largest
 risk on the page; settled, it moves no total.
