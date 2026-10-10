@@ -301,6 +301,8 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(read("PowerShell", {"command": "Get-Content docs\\c.md"}), ["docs\\c.md"])
         self.assertEqual(read("Grep", {"path": "docs/a.md"}), [])
         self.assertEqual(read("Bash", {"command": "sed -i 's/a/b/' docs/a.md; sed --in-place s/a/b/ docs/a.md"}), [])
+        self.assertEqual(read("Bash", {"command": "sed -ni p docs/a.md; sed --in-place=.bak p docs/a.md"}), [])
+        self.assertEqual(read("Bash", {"command": "sed -n 1p docs/a.md"}), ["docs/a.md"])
         self.assertEqual(read("Bash", {"command": "cat docs/a.md > docs/b.md; cat > docs/c.md <<EOF"}), ["docs/a.md"])
 
     def test_a_read_is_placed_in_the_checkout_its_worktrees_and_forks_and_nowhere_else(self):
