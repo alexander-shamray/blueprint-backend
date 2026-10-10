@@ -1,5 +1,6 @@
-# The collector §14.1 mounts. OTLP in on both protocols, batch, OTLP out to
-# the LGTM container — which ingests OTLP directly on 4318.
+# The collector §14.1 mounts. OTLP in on both protocols, plus a scrape of the
+# broker, batch, OTLP out to the LGTM container — which ingests OTLP directly
+# on 4318.
 receivers:
   otlp:
     protocols:
@@ -7,6 +8,20 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
+
+  # The only receiver that pulls. The broker publishes Prometheus text, not
+  # OTLP, and the LGTM container's own Prometheus scrapes nothing but itself,
+  # so without this the three §13.6 queue alerts read a series nobody
+  # publishes (#800). Per-queue output is switched on in
+  # rabbitmq/Dockerfile. Port 15692 is the plugin's and is reachable
+  # on the Compose network only; infrastructure.yml publishes nothing for it.
+  prometheus/rabbitmq:
+    config:
+      scrape_configs:
+        - job_name: rabbitmq
+          scrape_interval: 15s
+          static_configs:
+            - targets: [ "rabbitmq:15692" ]
 
 processors:
   batch:
@@ -56,7 +71,7 @@ service:
       processors: [batch]
       exporters: [otlphttp]
     metrics:
-      receivers: [otlp]
+      receivers: [otlp, prometheus/rabbitmq]
       processors: [transform/canary-track, batch]
       exporters: [otlphttp]
     logs:
