@@ -171,7 +171,7 @@ class TrafficLoop(unittest.TestCase):
         traffic._headers()
         traffic._headers()
         self.assertEqual(1, len(fetched))
-        clock.now += harness.TRAFFIC_TOKEN_SECONDS
+        clock.now += harness.TRAFFIC_LOGIN_REFRESH_SECONDS
         traffic._headers()
         self.assertEqual(2, len(fetched))
 

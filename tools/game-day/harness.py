@@ -53,7 +53,7 @@ TRAFFIC_TICK_SECONDS = LATENCY_WINDOW_SECONDS / WINDOW_OBSERVATIONS / TRAFFIC_RO
 # A request a paused database holds runs on, so the loop bounds what it has out.
 TRAFFIC_MAX_IN_FLIGHT = 40
 # The access token lives five minutes; a new one is fetched well inside that.
-TRAFFIC_TOKEN_SECONDS = 120
+TRAFFIC_LOGIN_REFRESH_SECONDS = 120
 
 
 class GameDayError(Exception):
@@ -353,7 +353,7 @@ class Traffic:
     def _headers(self) -> dict[str, str]:
         with self._token_lock:
             now = self._clock()
-            if self._token is not None and now - self._bearer_at >= TRAFFIC_TOKEN_SECONDS:
+            if self._token is not None and now - self._bearer_at >= TRAFFIC_LOGIN_REFRESH_SECONDS:
                 try:
                     self._bearer = self._token()
                     self._bearer_at = now
