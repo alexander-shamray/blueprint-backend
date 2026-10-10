@@ -50,10 +50,12 @@ public class EndWaitingShipmentHandlerTests
         EndWaitingShipmentCommand command = new(waiting.OrderId.Value);
         await Handler().HandleAsync(command, TestContext.Current.CancellationToken);
 
-        Result again = await Handler().HandleAsync(command, TestContext.Current.CancellationToken);
+        EndWaitingShipmentHandler later = new(_shipments, new FixedClock(Now.AddHours(1)));
+        Result again = await later.HandleAsync(command, TestContext.Current.CancellationToken);
 
         again.IsSuccess.ShouldBeTrue();
-        waiting.TerminalAt.ShouldBe(Now);
+        waiting.TerminalAt.ShouldBe(Now, "a second pass at a later instant must not re-stamp the end");
+        waiting.UnfulfillableReason.ShouldBe(EndWaitingShipmentHandler.Reason);
     }
 
     [Fact]
