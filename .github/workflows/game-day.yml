@@ -11,6 +11,8 @@ on:
       - '.github/workflows/game-day.yml'
       - 'docs/runbooks/**'
       - 'deploy/observability/**'
+      - 'deploy/compose/**'
+      - 'deploy/helm/**'
       - 'deploy/compose/walk-an-order.sh'
       - 'src/**'
   push:
@@ -20,6 +22,8 @@ on:
       - '.github/workflows/game-day.yml'
       - 'docs/runbooks/**'
       - 'deploy/observability/**'
+      - 'deploy/compose/**'
+      - 'deploy/helm/**'
       - 'deploy/compose/walk-an-order.sh'
       - 'src/**'
   workflow_dispatch:
@@ -32,7 +36,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: game-day-${{ github.ref }}
+  group: game-day-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -68,9 +72,11 @@ jobs:
       # One process per runbook, so a scenario that dies leaves the next a stack
       # its own restore has already put back or reported.
       - name: Cause each alert and check the runbook's first step
+        env:
+          RUNBOOKS: ${{ inputs.runbooks }}
         run: |
           status=0
-          for runbook in ${{ inputs.runbooks }}; do
+          for runbook in $RUNBOOKS; do
             python tools/game-day/game_day.py "$runbook" || status=1
           done
           exit $status
