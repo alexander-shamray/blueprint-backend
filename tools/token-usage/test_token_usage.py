@@ -300,6 +300,8 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(read("Bash", {"command": "grep -n x docs/a.md"}), [])
         self.assertEqual(read("PowerShell", {"command": "Get-Content docs\\c.md"}), ["docs\\c.md"])
         self.assertEqual(read("Grep", {"path": "docs/a.md"}), [])
+        self.assertEqual(read("Bash", {"command": "sed -i 's/a/b/' docs/a.md; sed --in-place s/a/b/ docs/a.md"}), [])
+        self.assertEqual(read("Bash", {"command": "cat docs/a.md > docs/b.md; cat > docs/c.md <<EOF"}), ["docs/a.md"])
 
     def test_a_read_is_placed_in_the_checkout_its_worktrees_and_forks_and_nowhere_else(self):
         inside = token_usage.repo_relative
@@ -319,6 +321,9 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(named("x/s.md", "unique.md, but README.md is two files", docs), {"docs/unique.md"})
         self.assertEqual(named("s.md", "docs/commands/<name>.md; <next-file>.md", docs),
                          {"docs/commands/ship.md", "docs/commands/pr.md"})
+        dotted = dict.fromkeys([".claude/commands/go.md", ".claude/commands/stop.md", "docs/commands/ship.md"], "")
+        self.assertEqual(named("s.md", ".claude/commands/<name>.md", dotted),
+                         {".claude/commands/go.md", ".claude/commands/stop.md"})
 
     def test_each_document_is_grouped_by_who_names_it_and_counted_by_who_opened_it(self):
         docs = {"CLAUDE.md": "docs/claude.md", ".claude/commands/go.md": "read docs/named.md",
