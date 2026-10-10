@@ -56,7 +56,8 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │       ├── Inventory/                  (same five projects)
 │       ├── Payments/                   (same five projects)
 │       ├── Shipping/                   (Domain, Application, Infrastructure, Migrator, Worker)
-│       └── Notifications/              (Application, Infrastructure, Migrator, Worker)
+│       ├── Notifications/              (Application, Infrastructure, Migrator, Worker)
+│       └── Privacy/                    (same five projects)
 │
 ├── tests/
 │   ├── Common.Domain.Tests/            The building blocks, under the same
@@ -1158,7 +1159,7 @@ will fill it before writing the mapper, not after.
 `Common.Domain`, `Common.Application` and `Common.Infrastructure` are shared
 *mechanism*, not shared *model*: base classes, the dispatcher, the outbox. That
 is legitimate, but keep them small and treat every addition sceptically — a
-shared library used by six services and the BFF is a coordination point.
+shared library used by seven services and the BFF is a coordination point.
 
 `CurrencyMinorUnits` in `Common.Domain` is the one reference table among them
 ([ADR-067](adr/ADR-067-a-currencys-minor-unit-is-iso-4217s-held-once.md)):
@@ -1283,9 +1284,9 @@ the twentieth dependency.
 
 ## 4.5 Adding a service
 
-**All six** of §4.1's services share the shape below — Catalog, Ordering,
-Inventory and Payments as API hosts, Shipping as a worker and Notifications
-as a pure consumer — and writing one by hand is how it ends up subtly
+**All seven** of §4.1's services share the shape below — Catalog, Ordering,
+Inventory, Payments and Privacy as API hosts, Shipping as a worker and
+Notifications as a pure consumer — and writing one by hand is how it ends up subtly
 different from the rest. One command renders it instead:
 
 ```bash
