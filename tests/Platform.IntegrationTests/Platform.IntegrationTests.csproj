@@ -47,6 +47,7 @@
     <ProjectReference Include="..\Payments.TestSupport\Payments.TestSupport.csproj" />
     <ProjectReference Include="..\Shipping.TestSupport\Shipping.TestSupport.csproj" />
     <ProjectReference Include="..\Notifications.TestSupport\Notifications.TestSupport.csproj" />
+    <ProjectReference Include="..\Privacy.TestSupport\Privacy.TestSupport.csproj" />
   </ItemGroup>
 
   <ItemGroup>
