@@ -16,15 +16,16 @@ public sealed class ErasureJourney(FirstJurisdictionWorld world)
 {
     private const decimal UnitPrice = 19.90m;
 
-    /// <summary>The holdings docs/personal-data.md calls lifetime only, and why each keeps the id (§11.7).</summary>
-    private static readonly Dictionary<string, string> LifetimeOnly = new()
-    {
-        ["Ordering.ordering.OutboxMessages"] = "the id in the payloads of the order events, until the outbox window",
-        ["Privacy.privacy.OutboxMessages"] = "the id in the PersonalDataDeleteRequested it broadcast (ADR-092)"
-    };
-
-    /// <summary>Each service's markers key a command by its caller, a customer's for <c>PlaceOrder</c>; lifetime only too.</summary>
-    private const string MarkerTable = ".IdempotencyMarkers";
+    /// <summary>
+    /// The holdings docs/personal-data.md calls lifetime only: the id in the payloads of Ordering's order events, in
+    /// the request Privacy broadcast (ADR-092), and as the caller in the key of Ordering's <c>PlaceOrder</c> marker.
+    /// </summary>
+    private static readonly string[] LifetimeOnly =
+    [
+        "Ordering.ordering.OutboxMessages",
+        "Privacy.privacy.OutboxMessages",
+        "Ordering.ordering.IdempotencyMarkers"
+    ];
 
     /// <summary>What a customer who ordered and was delivered to is held in before anyone asks for erasure.</summary>
     private static readonly string[] HoldersOfACustomer =
@@ -34,6 +35,8 @@ public sealed class ErasureJourney(FirstJurisdictionWorld world)
         "Shipping.shipping.DeliveryAddresses",
         "Notifications.notifications.ContactRecords",
         "Notifications.notifications.NotificationLog",
+        "Notifications.notifications.OrderRecords",
+        "Ordering.ordering.OrderSummaries",
         "Bff.bff.Orders"
     ];
 
@@ -46,11 +49,18 @@ public sealed class ErasureJourney(FirstJurisdictionWorld world)
         JourneyOrder order = await world.PlaceAsync(product, 1, UnitPrice);
         await Convergence.UntilAsync(
             async () => (await world.NoticesAsync(order)).Count(n => n.EndsWith(":Sent", StringComparison.Ordinal)) == 4 &&
-                await world.AnyAsync(JourneyWorld.Bff, "SELECT 1 FROM bff.Orders WHERE CustomerId = @p0", order.Customer),
+                await world.AnyAsync(
+                    JourneyWorld.Bff,
+                    "SELECT 1 FROM bff.Orders WHERE CustomerId = @p0 AND DeliveredAt IS NOT NULL",
+                    order.Customer),
             Deadlines.Journey,
-            "the order delivered, its four notices sent and the buyer's list holding it");
+            "the order delivered, its four notices sent and the buyer's list showing it delivered");
 
         string[] needles = [order.Customer.ToString("D"), order.Customer.ToString("N")];
+
+        // A ninth database fails here until someone has decided what the choreography owes it.
+        (await world.DatabasesAsync()).ShouldBe(
+            ["Bff", "Catalog", "Inventory", "Notifications", "Ordering", "Payments", "Privacy", "Shipping"]);
 
         IReadOnlySet<string> before = await world.HoldingAsync(needles);
         HoldersOfACustomer.Except(before).ShouldBeEmpty("the scan must find a customer where one is held");
@@ -67,8 +77,7 @@ public sealed class ErasureJourney(FirstJurisdictionWorld world)
         IReadOnlySet<string> after = await world.HoldingAsync(needles);
         string[] unexpected =
         [
-            .. after.Where(table => !LifetimeOnly.ContainsKey(table) &&
-                !table.EndsWith(MarkerTable, StringComparison.Ordinal))
+            .. after.Except(LifetimeOnly)
         ];
         unexpected.ShouldBeEmpty("nothing but a holding the register names as lifetime only may still hold the customer");
 
