@@ -97,6 +97,39 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
     }
 
     [Fact]
+    public async Task An_ended_notice_is_found_by_either_of_its_two_links_and_a_bystanders_is_left_alone()
+    {
+        Guid viaOrder = Guid.CreateVersion7();
+        Guid viaCustomer = Guid.CreateVersion7();
+        Guid bystandersOrder = Guid.CreateVersion7();
+        await fixture.OrderAsync(viaOrder, Subject);
+        await fixture.OrderAsync(bystandersOrder, Bystander);
+
+        // Ended before its customer was assigned, so only the order record names the subject.
+        Notification orderOnly = await EndedAsync(viaOrder, customer: null, status: "Suppressed");
+
+        // Resolved, but its order record is already gone to retention, so only its own id names the subject.
+        Notification customerOnly = await EndedAsync(viaCustomer, Subject, status: "Undeliverable");
+        Notification bystanders = await EndedAsync(bystandersOrder, Bystander, status: "Sent");
+
+        await PublishRequestAsync(Guid.CreateVersion7());
+
+        Notification first = await fixture.NotificationAsync(orderOnly.NotificationId);
+        first.Parameters.ShouldBeEmpty("found through the order record, which the notices are erased before");
+        first.Status.ShouldBe(NotificationStatus.Suppressed);
+
+        Notification second = await fixture.NotificationAsync(customerOnly.NotificationId);
+        second.CustomerId.ShouldBeNull();
+        second.Parameters.ShouldBeEmpty();
+        second.Status.ShouldBe(NotificationStatus.Undeliverable);
+
+        Notification untouched = await fixture.NotificationAsync(bystanders.NotificationId);
+        untouched.CustomerId.ShouldBe(Bystander);
+        untouched.Languages.ShouldBe("en");
+        untouched.Parameters.ShouldNotBeEmpty();
+    }
+
+    [Fact]
     public async Task The_audit_row_holds_a_count_and_a_hash_and_never_the_subject()
     {
         Guid request = Guid.CreateVersion7();
@@ -195,6 +228,26 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
             "SELECT Value = COUNT(*) FROM notifications.PersonalDataErasures WHERE RequestId = {0}",
             request)).ShouldBe(1);
         await Eventually(CountCompletionsAsync, expected: 1, because: "the inbox dropped the second delivery");
+    }
+
+    private async Task<Notification> EndedAsync(Guid order, Guid? customer, string status)
+    {
+        Notification notice = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+        await fixture.ExecuteAsync(
+            "UPDATE notifications.NotificationLog SET Status = {1}, Languages = 'en', " +
+            "CompletedAt = SYSDATETIMEOFFSET() WHERE NotificationId = {0}",
+            notice.NotificationId,
+            status);
+
+        if (customer is not null)
+        {
+            await fixture.ExecuteAsync(
+                "UPDATE notifications.NotificationLog SET CustomerId = {1} WHERE NotificationId = {0}",
+                notice.NotificationId,
+                customer.Value);
+        }
+
+        return notice;
     }
 
     private static PersonalDataDeleteRequested Requested(Guid request, Guid messageId) => new()
