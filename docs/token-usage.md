@@ -261,7 +261,7 @@ to 154M input equivalent; output was 2.8M.
 **Most of it came after a wake**: 97.5M of the 154M, 63%, against 55% in
 the window of 2026-10-07. A wake re-sends the whole context the session
 had built, and a main session's call here sends 250–480k; the resident
-text step 6 cut is about 7k of a `/ship` call's 274k.
+text step 6 cuts is about 11k of a `/ship` call's 274k.
 
 **One audit was a quarter of the span.** Its two `validate-blueprint`
 sessions spent 40.6M, all of it after a wake, and the agents they spawned
