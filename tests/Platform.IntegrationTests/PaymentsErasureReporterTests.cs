@@ -9,14 +9,13 @@ namespace Platform.IntegrationTests;
 /// <summary>What Payments tells Privacy, and where, which the endpoint test cannot read back off the queue.</summary>
 public class PaymentsErasureReporterTests
 {
-    private static readonly DateTimeOffset Now = new(2026, 10, 10, 12, 0, 0, TimeSpan.Zero);
     private static readonly Guid Request = new("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
     [Fact]
     public async Task The_completion_names_payments_and_the_request_and_goes_to_privacys_queue()
     {
         RecordingProvider provider = new();
-        ErasureReporter reporter = new(provider, new FixedClock(Now));
+        ErasureReporter reporter = new(provider);
 
         await reporter.ReportAsync(Request, 3, TestContext.Current.CancellationToken);
 
@@ -24,12 +23,7 @@ public class PaymentsErasureReporterTests
         PersonalDataDeleteCompleted sent = provider.Sent
             .ShouldHaveSingleItem()
             .ShouldBeOfType<PersonalDataDeleteCompleted>();
-        sent.RequestId.ShouldBe(Request);
-        sent.CorrelationId.ShouldBe(Request);
-        sent.Responder.ShouldBe("payments");
-        sent.Count.ShouldBe(3);
-        sent.OccurredAt.ShouldBe(Now);
-        sent.MessageId.ShouldNotBe(Guid.Empty);
+        sent.ShouldBe(new PersonalDataDeleteCompleted(Request, "payments", 3));
     }
 
     private sealed class RecordingProvider : ISendEndpointProvider
@@ -95,10 +89,5 @@ public class PaymentsErasureReporterTests
 
         public ConnectHandle ConnectSendObserver(ISendObserver observer) =>
             throw new NotSupportedException("Not exercised.");
-    }
-
-    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => now;
     }
 }
