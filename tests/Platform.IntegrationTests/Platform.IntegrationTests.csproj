@@ -40,6 +40,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The BFF holds a buyer's orders, so the erasure journey (§11.7) runs it too. Aliased because its host is a
+         public Program, which every test-support project's own would make ambiguous in this one. -->
+    <ProjectReference Include="..\..\src\BFF\Web.Bff\Web.Bff.csproj" Aliases="WebBff" />
+    <ProjectReference Include="..\..\src\BFF\Web.Bff.Migrator\Web.Bff.Migrator.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- The journey (§12.1): every host that §3.2 puts on the fulfilment path, over the harness its own suite uses. -->
     <ProjectReference Include="..\Catalog.TestSupport\Catalog.TestSupport.csproj" />
     <ProjectReference Include="..\Ordering.TestSupport\Ordering.TestSupport.csproj" />

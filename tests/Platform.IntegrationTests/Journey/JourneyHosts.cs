@@ -10,6 +10,7 @@ using Notifications.TestSupport;
 using Ordering.TestSupport;
 using OrderingAuth = Ordering.TestSupport.TestAuthHandler;
 using Payments.TestSupport;
+using Privacy.TestSupport;
 using Shipping.Infrastructure.Addresses;
 using Shipping.Infrastructure.Fulfilment;
 using Shipping.Infrastructure.Tracking;
@@ -135,6 +136,22 @@ internal sealed class DeliveryAddressPrincipal : DelegatingHandler
         request.Headers.TryAddWithoutValidation(OrderingAuth.PermissionsHeader, "orders:delivery-address");
 
         return base.SendAsync(request, ct);
+    }
+}
+
+/// <summary>Privacy with its outbox running, so the request it raises reaches every holder (§11.7).</summary>
+internal sealed class JourneyPrivacyFactory(
+    string sql,
+    string broker,
+    string cache,
+    string coordination,
+    OutboxGate gate)
+    : PrivacyApiFactory(sql, broker, cache, coordination)
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureServices(services => services.RunsOutboxBehind(gate));
     }
 }
 
