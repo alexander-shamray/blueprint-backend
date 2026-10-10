@@ -33,8 +33,8 @@ PROMETHEUS_PROXY = "/api/datasources/proxy/uid/prometheus"
 # The OpenTelemetry SDK's periodic export default (OTEL_METRIC_EXPORT_INTERVAL). Nothing under src/ or
 # deploy/compose/ sets it, which test_harness.py asserts, so the constant is the platform's own value.
 EXPORT_INTERVAL_SECONDS = 60
-# Prometheus's default rule evaluation interval. The bundled LGTM image's configuration is not in this
-# repository, so this is its documented default and the first live run is what measures it (README.md).
+# Prometheus's default rule evaluation interval, which the bundled image's configuration leaves unset;
+# README.md's deadline paragraph owns how that was read and what the first runs measured.
 EVALUATION_INTERVAL_SECONDS = 60
 
 POLL_SECONDS = 2.0
