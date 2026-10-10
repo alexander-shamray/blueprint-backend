@@ -104,7 +104,7 @@ def matrix(names: str) -> list[str]:
     if names.strip() == "all":
         return sorted(name.removesuffix(".md") for name in coverage.runbooks()
                       if coverage.module_name(name) in coverage.scripts())
-    chosen = [name.removesuffix(".md") for name in names.split()]
+    chosen = list(dict.fromkeys(name.removesuffix(".md") for name in names.split()))
     for name in chosen:
         load(name)
     if not chosen:
