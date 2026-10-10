@@ -779,6 +779,12 @@ main checkout — so line 3 is the only thing that makes the pull mean `main`.
 Running line 6 anyway exits non-zero against a worktree that never existed
 and stops the chain on a helper failure with nothing behind it.
 
+**The `TODO.md` row `/branch` added is deleted once the session is back in
+the main checkout**, after the pull, never from the worktree, where the copy
+is refused (the contract's §6). Nothing else removes it: a row left behind
+reads as work still in progress after the PR has landed, which is what
+*In progress* exists not to say.
+
 The pull runs on both paths because skipping it leaves the main checkout a
 merge behind — precisely the state step 0 exists to stop the next run from
 starting in. The merged branch stays for step 0's teardown's reason.
