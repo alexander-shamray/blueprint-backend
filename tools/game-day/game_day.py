@@ -1,11 +1,13 @@
 """Cause a runbook's alert on the Compose stack and check the runbook's first step.
-Usage: py -3.12 tools/game-day/game_day.py outbox-broker (or --list). The stack must be up; README.md owns the rest.
+Usage: py -3.12 tools/game-day/game_day.py outbox-broker (or --list, or --matrix all for CI's plan). The stack must be
+up; README.md owns the rest.
 """
 
 from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import sys
 import time
 from pathlib import Path
@@ -96,12 +98,34 @@ def _restore(scenario: ModuleType, world: harness.World, clock, sleep) -> list[s
     return []
 
 
+def matrix(names: str) -> list[str]:
+    """The dispatch's runbooks, one job each: `all` is every script, and a named one without a script is refused
+    here, before a stack is started for it."""
+    if names.strip() == "all":
+        return sorted(name.removesuffix(".md") for name in coverage.runbooks()
+                      if coverage.module_name(name) in coverage.scripts())
+    chosen = [name.removesuffix(".md") for name in names.split()]
+    for name in chosen:
+        load(name)
+    if not chosen:
+        raise harness.GameDayError("no runbook named; give `all` or file names from docs/runbooks/")
+    return chosen
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("runbook", nargs="?", help="a file name from docs/runbooks/, with or without .md")
     parser.add_argument("--list", action="store_true", help="the runbooks that have a script, and why the rest do not")
+    parser.add_argument("--matrix", metavar="NAMES", help="print the workflow's matrix for `all` or named runbooks")
     args = parser.parse_args(argv)
 
+    if args.matrix is not None:
+        try:
+            print("runbooks=" + json.dumps(matrix(args.matrix)))
+        except harness.GameDayError as error:
+            print(f"game day: {error}", file=sys.stderr)
+            return 2
+        return 0
     if args.list:
         for message in coverage.check():
             print(f"coverage: {message}")
