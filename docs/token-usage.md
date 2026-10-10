@@ -241,3 +241,59 @@ states: this session's shell lacked `CBX_NO_SKILL_AUTO_UPDATE=1`, and one
 `.claude/skills/codebase-index/`, the stock `SKILL.md` widening
 `allowed-tools` from the pinned `cbx` wrapper calls to `Bash(cbx *)` and
 bare `Bash(codebase-index … *)`; they were restored from `HEAD`.
+
+## 2026-10-10 — after steps 4–6, and the costliest work since 2026-10-01
+
+Measured by the report on the owner's machine, before it had
+`mean_context`; the mean context below is that column computed by hand
+from the printed ones, fresh input plus cache writes plus cache reads over
+calls. Over 2026-10-09 to 2026-10-10, 5,721 responses in 306 contexts came
+to 154M input equivalent; output was 2.8M.
+
+| Who | Contexts | Calls | Mean context | Input equivalent | After a wake |
+|---|---|---|---|---|---|
+| Main, no command | 161 | 1,694 | 252k | 51.9M | 29.3M |
+| Main, `/ship` | 16 | 1,642 | 274k | 50.5M | 23.7M |
+| Main, `skill:validate-blueprint` | 2 | 405 | 477k | 20.3M | 20.3M |
+| `general-purpose` under `validate-blueprint` | 19 | 971 | 140k | 17.4M | 17.4M |
+| `branch-reviewer` under `/ship` | 43 | 309 | 41k | 3.2M | 1.9M |
+
+**Most of it came after a wake**: 97.5M of the 154M, 63%, against 55% in
+the window of 2026-10-07. A wake re-sends the whole context the session
+had built, and a main session's call here sends 250–480k; the resident
+text step 6 cut is about 7k of a `/ship` call's 274k.
+
+**One audit was a quarter of the span.** Its two `validate-blueprint`
+sessions spent 40.6M, all of it after a wake, and the agents they spawned
+include implementers — "Implement row 24: #706 and #707", 3.5M — so the
+fixes ran inside the audit's context.
+
+**What fills a main session**, from `--tools 30` since 2026-10-01: `Read`
+results under no command, 2,881 of them, about 3.2M tokens; `Bash` results
+under `/ship`, 6,235, about 2.1M. Each stays in the context for every later
+call.
+
+### The forty costliest subagents since 2026-10-01
+
+From `--spawns 40`, 2026-10-01 to 2026-10-10, grouped by the task each was
+given; most ran before steps 4–6 landed.
+
+| Task | Agents | Input equivalent | Each |
+|---|---|---|---|
+| Writing a plan — "Write Notifications PR-1 plan" and eight siblings | 9 | 58.1M | 2.5–12.2M |
+| A review round's `bug-auditor` slice — "Review round 9 slice A", rounds 1 to 11 | 14 | 57.3M | 2.5–6.4M |
+| Implementing — "Code track 1 implementer", "Implement row 24: #706 and #707" | 9 | 36.6M | 2.9–6.4M |
+| An audit of the blueprint — "Blueprint audit of branch topics" | 3 | 10.8M | 3.0–4.6M |
+| A pre-flight scan of a plan — "Preflight scan of PR-3 plan" | 3 | 9.1M | 3.0–3.1M |
+| Reviewing or fixing a pull request — "PR #412 review round 1" | 2 | 5.5M | 2.4–3.1M |
+
+**The plans they wrote are large.** Of the 21 files under
+`docs/superpowers/plans/` dated 2026-09-22 to 2026-10-03, 20 are over the
+planning rule's limit in `CLAUDE.md`, at 54–236 KB, and `--docs` over the
+month to 2026-10-10 counts 90–274 opens of each Shipping and Notifications
+plan, most of them by subagents. None has been written since the rule
+landed, so it has not yet been tested.
+
+**The review rounds predate the loop's ceiling.** They ran on 2026-10-02
+and reached round 11, before the ceiling landed in `/ship` step 5 with
+step 4.

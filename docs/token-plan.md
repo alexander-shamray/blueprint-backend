@@ -119,7 +119,7 @@ a run under 5M, measured.
 
 ## 3. The sequence
 
-Steps 4–6 edit `.claude/commands/`, `agents/` or `scripts/`, which
+Steps 4–7 edit `.claude/commands/`, `agents/` or `scripts/`, which
 `settings.json` denies, so each lifts the deny for its own PR with
 `settings.json` last, per `harness-boundaries.md`, and they land one at a
 time.
@@ -334,6 +334,40 @@ first cut dropped them, a rule kept being worth more than a byte saved.
 `test_command_runbooks.py` holds each runbook
 under a ceilings table and each citation to a heading that exists. The exit
 waits on the next real `/ship` run, measured with `tools/token-usage/`.
+
+### Step 7 — the context a session carries, and what it re-sends on a wake
+
+Steps 1–6 cut what a session is handed; this one cuts what it accumulates.
+The measurement of 2026-10-10 in [`token-usage.md`](token-usage.md) is the
+case for it: a main session's call sends between a quarter and half a
+million tokens, most of a span's spend comes after a wake, and plan writing
+and the plans it produces are the largest subagent cost the earlier steps
+left alone.
+
+- The report gains a `mean_context` column, so a step's exit reads the
+  context a call re-sends from the report rather than by hand. Landed with
+  this step's plan.
+- A session that is about to wait — on CI, a background agent or a
+  scheduled check-in — compacts first, or hands the wait to a fresh session
+  that holds only the pull request; a wake into a long context re-sends all
+  of it, and after the cache has expired it writes all of it again.
+  `CLAUDE.md`'s *Subagents, review rounds and plans* gains the rule, and
+  `/ship` applies it where its runbook waits.
+- `/validate-blueprint`'s main session dispatches its passes and holds only
+  what they return; it reads no chapter whole. A fix its findings call for
+  is a task of its own after `/clear`, never an implementer spawned inside
+  the audit's session.
+- The planning rule's size limit gets a check whose subject is every plan
+  file added after the rule landed, so the limit stops being prose alone.
+- A plan-writing agent is handed the spec and the symbols it cites and
+  writes the plan in one pass; reading back what it has written is the
+  re-sending `token-usage.md` measured at about 7M a plan.
+
+**Exit.** Measured again over a span at least as long as the one that set
+this step: step 2's exit for a main session's mean context holds, read from
+`mean_context`; less than 40% of the input equivalent comes after a wake; a
+`/validate-blueprint` run's main session averages under 150k a call; and
+every plan added since the check landed is under the planning rule's limit.
 
 ### Alongside — the comment budget
 
