@@ -14,10 +14,10 @@ using Web.Bff.Privacy;
 
 namespace Web.Bff.Messaging;
 
-/// <summary>ADR-051's bus: an endpoint for the projection's events and one for erasure, and nothing published.</summary>
+/// <summary>ADR-051's bus: the projection's queue and erasure's, publishing nothing and sending one completion.</summary>
 public static class DependencyInjection
 {
-    /// <summary>§3.2's BFF row; one queue, as every event writes rows here and calls nothing.</summary>
+    /// <summary>§3.2's BFF row: the projection's events, each of which writes rows here and calls nothing.</summary>
     public const string EventsQueue = "bff-order-events";
 
     /// <summary>§11.7's erasure request, on its own endpoint so no projection failure holds it.</summary>
