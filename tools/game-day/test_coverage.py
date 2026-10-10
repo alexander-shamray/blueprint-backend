@@ -23,8 +23,13 @@ class RealTree(unittest.TestCase):
         self.assertNotIn("README.md", names)
         self.assertEqual(len(list(coverage.RUNBOOKS.glob("*.md"))) - 1, len(names))
 
-    def test_this_pull_request_delivers_the_three_scripts(self):
-        self.assertTrue({"outbox_broker", "projection_lag", "outbox_abandoned"} <= coverage.scripts())
+    def test_the_series_so_far_delivers_these_scripts(self):
+        self.assertTrue({"outbox_broker", "projection_lag", "outbox_abandoned", "queue_backlog", "address_refused",
+                         "contact_refused", "unscanned_shipment", "unattributed_order"} <= coverage.scripts())
+
+    def test_queue_backlog_is_half_covered_and_owed_its_backlog_half_to_pr_4_alone(self):
+        self.assertEqual(("PR-4",), coverage.OWED["queue-backlog.md"])
+        self.assertIn("queue-backlog.md", coverage.shared_runbooks())
 
     def test_a_reason_is_never_empty_and_owed_names_a_real_pull_request(self):
         for name, reason in coverage.NOT_ON_COMPOSE.items():
@@ -133,15 +138,34 @@ class Scenarios(unittest.TestCase):
                     self.assertTrue(callable(getattr(module, call)), call)
                 self.assertGreater(module.DEADLINE.seconds, 0)
 
+    def block(self, module):
+        return LOADED_RULES.read_text(encoding="utf-8").split(f"alert: {module.ALERT}\n", 1)[1].split("- alert:", 1)[0]
+
     def test_a_deadline_covers_the_rules_own_threshold(self):
-        rules = LOADED_RULES.read_text(encoding="utf-8")
         for name, module in self.modules():
             with self.subTest(name):
-                block = rules.split(f"alert: {module.ALERT}\n", 1)[1].split("- alert:", 1)[0]
-                self.assertNotIn("for:", block, "a `for:` here must be in the deadline; update this scenario")
+                block = self.block(module)
                 threshold = re.search(r"\}\) > (\d+)\n", block + "\n")
                 if threshold and "outbox_oldest_age" in block:
                     self.assertGreaterEqual(module.DEADLINE.signal_seconds, int(threshold.group(1)))
+                age = re.search(r"max by \(service_name\) \(bff_orders_unattributed_seconds\) > (\d+)", block)
+                if age:
+                    self.assertGreaterEqual(module.DEADLINE.signal_seconds, int(age.group(1)))
+
+    def test_a_deadline_carries_the_rules_for_exactly(self):
+        for name, module in self.modules():
+            with self.subTest(name):
+                held = re.search(r"\n\s+for: (\d+)m\n", self.block(module))
+                self.assertEqual(int(held.group(1)) * 60 if held else 0, module.DEADLINE.for_seconds)
+
+    def test_a_rule_over_a_window_names_a_settle_as_long_as_the_window(self):
+        for name, module in self.modules():
+            with self.subTest(name):
+                window = re.search(r"increase\(\w+\[(\d+)m\]\)", self.block(module))
+                if window:
+                    self.assertGreaterEqual(module.SETTLE.signal_seconds, int(window.group(1)) * 60)
+                else:
+                    self.assertFalse(hasattr(module, "SETTLE"), "a SETTLE without a window to outlast")
 
 
 if __name__ == "__main__":
