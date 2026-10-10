@@ -1286,8 +1286,8 @@ the twentieth dependency.
 
 **All seven** of §4.1's services share the shape below — Catalog, Ordering,
 Inventory, Payments and Privacy as API hosts, Shipping as a worker and
-Notifications as a pure consumer — and writing one by hand is how it ends up subtly
-different from the rest. One command renders it instead:
+Notifications as a pure consumer — and writing one by hand is how it ends up
+subtly different from the rest. One command renders it instead:
 
 ```bash
 python tools/new-service/new_service.py Yankee --port 5199
