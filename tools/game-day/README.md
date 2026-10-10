@@ -7,7 +7,7 @@ what the harness does and what a pass proves.
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d --wait
-py -3.12 tools/game-day/game_day.py outbox-broker      # or projection-lag, outbox-abandoned
+py -3.12 tools/game-day/game_day.py outbox-broker      # or any runbook --list shows a script for
 py -3.12 tools/game-day/game_day.py --list             # a script, or why the runbook has none
 cd tools/game-day && py -3.12 -m unittest              # the suite; needs no Docker
 ```
@@ -31,11 +31,11 @@ not a failure.
 
 | File | Owns |
 |---|---|
-| `harness.py` | Compose control (`stop`, `start`, `restart`, `pause`, `exec_sql`, `exec_redis`, `logs`), a token and an order, alert state and PromQL (`Alerts`), Loki (`Logs`), a service account's Keycloak grants (`Realm`, `Grant`), `wait_until` and `Deadline` |
-| `game_day.py` | The runner: quiet start, cause, wait, first step, restore, in that order |
+| `harness.py` | Compose control (`stop`, `start`, `restart`, `pause`, `exec_sql`, `exec_redis`, `logs`), a token and an order, alert state and PromQL (`Alerts`), Loki (`Logs`), a service account's Keycloak grants (`Realm`, `Grant`), the request generator (`Traffic`), `wait_until` and `Deadline` |
+| `game_day.py` | The runner: quiet start, cause, wait, first step, restore, in that order, then the scenario's `NEXT` if it has one |
 | `scenarios/<runbook>.py` | One runbook, named for it with `-` as `_` |
 | `runbook_coverage.py` | `NOT_ON_COMPOSE` and `OWED`, and the rules that hold every runbook to a script or a reason |
-| `test_harness.py`, `test_refused_reads.py`, `test_coverage.py` | The suite, run in CI by `.github/workflows/game-day.yml` |
+| `test_harness.py`, `test_refused_reads.py`, `test_sustained_traffic.py`, `test_coverage.py` | The suite, run in CI by `.github/workflows/game-day.yml` |
 
 ## The shape of a script
 
@@ -60,6 +60,36 @@ for the restore instead. The coverage test holds `SETTLE` to the rule's window.
 A restore that takes a grant away from the stack gives it back and reads it
 back (`Grant.give_back`), because a restore assumed is the next scenario's
 poison.
+
+A runbook two rules share (`error-rate.md`) is one module with the second rule's
+phase as `NEXT`, an object with the same calls, and the coverage test holds it
+to the same rules. The runner runs it only after the first phase's restore
+settled, because a stack that did not settle would make it a finding about the
+first.
+
+## The traffic loop
+
+`ErrorRateGateway`, `ErrorRateService` and `Latency` are a ratio and a quantile
+over requests served, so with none they have no series and never fire. A script
+that needs them starts `world.traffic` in its `cause`, after which it waits for
+the loop's requests to reach Prometheus (the quiet start of a rule that reads
+requests), and the runner stops the loop after the settle and not before it:
+an empty window is a quiet rule whether or not the cause went. It is a
+fixture, not a load test; `deploy/observability/slo/slo.js` is §13.7's.
+
+Each tick sends one request, alternating an anonymous `GET` of the catalog and
+an authenticated cancel of an order id that does not exist (a 404 that reads
+Ordering's database and writes nothing). **The rate is one request every 3
+seconds, the lowest that keeps the widest window populated**: `Latency`'s p99
+over 10 minutes reads its maximum when fewer than 100 observations stand under
+it, 100 in 600 seconds is one for each route every 6 seconds, and two routes
+sent alternately make 3. It sends 20 a minute against the gateway's 100 per
+address and 300 per subject (§10.3), so the loop is never the 429s.
+`ErrorRate`'s 5-minute window holds 50 for a service, and the ratio crosses 1%
+at one failure in 50. A request a
+database holds runs on its own thread, bounded at 40 out, and the client waits
+45 seconds so that a request held for a SQL command's 30 ends as the server's
+answer and not as the loop hanging up.
 
 ## Waits are predicates with deadlines
 
@@ -145,6 +175,21 @@ not timed whole, and the deadline paragraph above has when they fired.
 | `unscanned-shipment` | `UnscannedShipments` | a four-day-old Booked shipment planted through SQL | 4m08s |
 | `unattributed-order` | `UnattributedOrders` | an unowned payment fact planted through SQL, held 900 seconds | 18m40s |
 | `erasure-overdue` | `ErasureRequestsOverdue` | an Open request due a day ago planted through SQL, which Privacy's sweep marks | not timed |
+| `error-rate` | `ErrorRateGateway`, then `ErrorRateService` | `stop ordering-api` behind the gateway; then `stop sql` under the services | 27m36s |
+| `latency` | `Latency` | `pause sql` under the loop, held past the 10-minute `for:` | 24m18s |
+| `outbox-growth` | `OutboxGrowth` | `stop rabbitmq`, 1100 Broker rows planted through SQL and 20 more every 30 seconds | 14m34s |
+
+The three runs above were measured on 2026-10-10, each alone on a stack that
+had just come up. `error-rate` is two runs in one, and its two phases fired
+after 445 and 412 seconds of a 480-second deadline. `latency` fired after 787 of 840, with
+nine services over a second, which is the runbook's *everything slow together*
+shape. `outbox-growth` fired after 738 of 780 and asserted
+`OutboxBrokerLaneStalled` beside it: with the broker stopped the age gauge is
+high too, so the runbook's own first check sends its reader to
+`outbox-broker.md`, which is the right answer for this cause and says growth
+alone cannot be told from a stall by the count. `stop sql` makes
+`ErrorRateGateway` fire as well, because the gateway passes a service's 500
+through, and the runbook's advice to work the backend first is that case.
 
 The two Keycloak causes restart the worker because it keeps the token it
 fetched until that expires. Their restore gives the grant back, reads the
@@ -178,4 +223,5 @@ decides from the measured runtimes.
 The dispatch job's `timeout-minutes` is 60 and runs its runbooks in turn, so
 one dispatch must name runbooks whose runtimes in *The scripts* sum to less:
 `address-refused` and `contact-refused` take over half an hour each and go in
-dispatches of their own. A job that times out still runs its teardown.
+dispatches of their own, and `error-rate` (27m36s) with `latency` (24m18s) is
+52 minutes, which fits only with nothing else beside it. A job that times out still runs its teardown.
