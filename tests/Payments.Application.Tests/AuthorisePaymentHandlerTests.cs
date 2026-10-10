@@ -48,6 +48,23 @@ public class AuthorisePaymentHandlerTests
     }
 
     [Fact]
+    public async Task A_placed_order_whose_payer_was_erased_is_authorised_under_the_empty_payer()
+    {
+        // ADR-092 anonymises the payer to the empty id and keeps the order; declining it would need a new reason,
+        // a closed-vocabulary addition that ships to consumers first (§9.2). Pinned so a change is a decision.
+        OrderId order = OrderId.New();
+        _orders.Record = Placed(order) with { CustomerId = Guid.Empty };
+        _provider.Answer = new AuthorisationResult.Authorised("psp_1");
+
+        Result result = await Handler().HandleAsync(
+            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"),
+            TestContext.Current.CancellationToken);
+
+        result.IsSuccess.ShouldBeTrue();
+        _provider.Requests.ShouldHaveSingleItem().PayerId.ShouldBe(Guid.Empty);
+    }
+
+    [Fact]
     public async Task A_provider_decline_is_recorded_as_a_declined_intent()
     {
         OrderId order = OrderId.New();
