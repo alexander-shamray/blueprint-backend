@@ -67,6 +67,17 @@ public class ErasureRequestLifecycleTests
     }
 
     [Fact]
+    public void A_name_outside_the_set_answering_again_is_unexpected_both_times()
+    {
+        ErasureRequest request = Raised("ordering", "payments");
+
+        request.RecordCompletion("catalog", 1, Now).ShouldBe(CompletionOutcome.Unexpected);
+        request.RecordCompletion("catalog", 1, Now.AddDays(1)).ShouldBe(CompletionOutcome.Unexpected);
+
+        request.Completions.Count(c => c.Counted).ShouldBe(0);
+    }
+
+    [Fact]
     public void A_name_outside_the_stored_set_is_recorded_flagged_and_never_counted()
     {
         ErasureRequest request = Raised("ordering", "payments");
