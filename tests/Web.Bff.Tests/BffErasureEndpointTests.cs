@@ -1,7 +1,9 @@
 using System.Diagnostics.Metrics;
+using Common.Application;
 using Common.Domain;
 using Common.Contracts.Privacy.V1;
 using Web.Bff.Persistence;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 using MessagingRegistration = Web.Bff.Messaging.DependencyInjection;
@@ -78,6 +80,37 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
         (await fixture.ScalarAsync<string>(
             "SELECT Value = SubjectHash FROM bff.PersonalDataErasures WHERE RequestId = {0}",
             request)).ShouldBe(PersonalDataErasure.HashSubject(request, Subject));
+    }
+
+    [Fact]
+    public async Task A_failed_audit_write_rolls_the_delete_back_and_reports_nothing()
+    {
+        Guid order = Guid.CreateVersion7();
+        await SeedOrderAsync(order, Subject);
+        await fixture.ExecuteAsync(
+            "CREATE TRIGGER bff.TR_PersonalDataErasures_Refuse ON bff.PersonalDataErasures AFTER INSERT AS " +
+            "THROW 50001, 'refused for the test', 1;");
+
+        try
+        {
+            await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+            IIntegrationEventHandler<PersonalDataDeleteRequested> handler = scope.ServiceProvider
+                .GetServices<IIntegrationEventHandler<PersonalDataDeleteRequested>>()
+                .Single();
+
+            await Should.ThrowAsync<Exception>(
+                () => handler.HandleAsync(
+                    Requested(Guid.CreateVersion7(), Guid.CreateVersion7()),
+                    TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            await fixture.ExecuteAsync("DROP TRIGGER bff.TR_PersonalDataErasures_Refuse;");
+        }
+
+        (await CountOrdersAsync(Subject)).ShouldBe(1, "the delete and the audit row commit together or not at all");
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        (await CountCompletionsAsync()).ShouldBe(0, "a failed erasure is not reported");
     }
 
     [Fact]
