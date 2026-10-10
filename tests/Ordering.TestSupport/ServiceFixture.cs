@@ -24,6 +24,18 @@ public sealed class ServiceFixture()
             migratorConnectionString,
             runtimeConnectionString);
 
+    /// <summary>Messages a queue holds, read from the broker, or zero when the queue does not exist yet.</summary>
+    public async Task<int> QueueDepthAsync(string queue)
+    {
+        foreach (string[] columns in await BrokerRowsAsync(["list_queues", "name", "messages"]))
+        {
+            if (columns.Length == 2 && columns[0] == queue)
+                return int.Parse(columns[1], System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return 0;
+    }
+
     protected override Task<int> MigrateAsync(string connectionString) => RunMigratorAsync(connectionString);
 
     // Real Redis rather than the factory's unreachable default, because §8.5 claims a key per protected command.
@@ -32,7 +44,7 @@ public sealed class ServiceFixture()
 
     /// <summary>Widens <c>ordering-svc</c>'s write to publish the saga's inbound events (ADR-036).</summary>
     protected override string? HarnessWrite(string granted) =>
-        "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts|" +
+        "^(ordering-|inventory-commands$|payments-commands$|privacy-completions$|Common\\.Contracts|" +
         "Ordering\\.Infrastructure\\.Messaging:|MassTransit:)";
 
     /// <summary>

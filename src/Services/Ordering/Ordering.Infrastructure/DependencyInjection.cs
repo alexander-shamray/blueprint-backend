@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Common.Infrastructure.Transport;
 using Ordering.Application.Orders;
+using Ordering.Application.Privacy;
 using Ordering.Domain.Orders;
 using Ordering.Infrastructure.Messaging;
 using Ordering.Infrastructure.Observability;
@@ -44,6 +45,9 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
         services.AddScoped<IOrderRepository, OrderRepository>();             // §5.6
+        services.AddScoped<IPersonalDataErasureRepository, PersonalDataErasureRepository>();   // §11.7
+        services.AddScoped<IOrderPersonalDataStore, SqlOrderPersonalDataStore>();               // §11.7
+        services.AddScoped<IErasureReporter, ErasureReporter>();                                // ADR-094
 
         // §6.4's price port, over the local projection, so the write transaction never waits on Catalog.
         services.AddScoped<IProductPriceReader, ProjectedPriceReader>();

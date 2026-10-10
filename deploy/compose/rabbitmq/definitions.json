@@ -75,9 +75,9 @@
     {
       "user": "ordering-svc",
       "vhost": "/",
-      "configure": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts(\\.(Catalog|Inventory|Ordering|Payments|Shipping)\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "write": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts(\\.Ordering\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts\\.(Catalog|Inventory|Ordering|Payments|Shipping)\\.V1:|Ordering\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
+      "configure": "^(ordering-|inventory-commands$|payments-commands$|privacy-completions$|Common\\.Contracts(\\.(Catalog|Inventory|Ordering|Payments|Privacy|Shipping)\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "write": "^(ordering-|inventory-commands$|payments-commands$|privacy-completions$|Common\\.Contracts(\\.Ordering\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "read": "^(ordering-|inventory-commands$|payments-commands$|privacy-completions$|Common\\.Contracts\\.(Catalog|Inventory|Ordering|Payments|Privacy|Shipping)\\.V1:|Ordering\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "inventory-svc",

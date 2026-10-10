@@ -48,7 +48,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "_IdempotencyMarkerCommittedAtDefault",
             "_AddIdempotencyMarkerRowVersion",
             "_AddOrderSummaries",
-            "_AddOutboxTraceContext"
+            "_AddOutboxTraceContext",
+            "_AddPersonalDataErasures"
         ];
 
         string[] applied = await fixture.AppliedMigrationsAsync();
