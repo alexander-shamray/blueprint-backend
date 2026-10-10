@@ -982,6 +982,7 @@ section "Privacy's chart declares its holders and service level, and both are re
 # PrivacyOptions is validated at start (ADR-092), so each state that renders
 # cleanly here is a pod that never starts. Config and not Secret: neither value
 # is a credential (§15.4).
+
 # The cases set the two keys, so the overlay is passed without them: Helm
 # applies every --set-string after every --set, so a whole overlay would win.
 privacy_overlay() {
