@@ -447,6 +447,9 @@ branch is.
    - Run the pull, the ancestry check and the prune on both paths; report
      containment, never equality: the HEAD `main` landed on, and that the
      merge is in its history.
+   - Back in the main checkout, delete this change's row from *In progress*
+     in `TODO.md`, never from the worktree (why: docs/commands/ship.md,
+     *Step 6: the teardown*).
    - Never delete the merged branch: `git branch -d` is denied; name it in
      the report.
 
