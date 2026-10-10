@@ -18,7 +18,7 @@ internal sealed class PrivacyOptionsValidator : IValidateOptions<PrivacyOptions>
         foreach (string responder in options.Responders)
         {
             if (!ErasureRequest.IsResponderName(responder))
-                failures.Add($"Privacy:Responders holds '{responder}', which is not a holder's name.");
+                failures.Add($"Privacy:Responders holds '{responder}', which is not a lower-case holder name of letters, digits and hyphens.");
         }
 
         if (options.Responders.Distinct(StringComparer.Ordinal).Count() != options.Responders.Count)
