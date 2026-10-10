@@ -5,8 +5,8 @@ namespace Payments.Application.Privacy.ErasePersonalData;
 
 /// <summary>Erases what Payments holds of the subject, then tells Privacy once the unit commits (ADR-094).</summary>
 /// <remarks>
-/// The report is made here and not in the command, because the unit's execution strategy re-runs a command whole
-/// and a send inside it would repeat; the consumer's in-memory outbox still holds it until this handler returns.
+/// Reported here and not in the command, because the execution strategy re-runs a command whole and a send inside
+/// it would repeat (ADR-094); the consumer's in-memory outbox holds it until this handler returns.
 /// </remarks>
 public sealed class PersonalDataDeleteRequestedHandler(IDispatcher dispatcher, IErasureReporter reporter)
     : IIntegrationEventHandler<PersonalDataDeleteRequested>
