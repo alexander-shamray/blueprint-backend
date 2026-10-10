@@ -25,10 +25,11 @@ derives it from the sender's `Endpoints`.
 **Consequences.** The holder's name in the message is its own claim. Nothing
 at the broker says who sent it, where a publish in the sender's own namespace
 would have said, so Privacy checks the name against the request's stored
-responder set and flags a name outside it or a second answer from the same
-holder. A send is not staged with the erasure's commit as an outbox row is, so
-the atomicity ADR-092 described for the three services with an outbox is given
-up for the sake of one mechanism for all five. `PersonalDataErasedDomainEvent`,
+responder set and flags a name outside it. A repeat answer from one holder is
+counted once, as a reissue makes every holder answer again. A send is not
+staged with the erasure's commit as an outbox row is, so the atomicity ADR-092
+described for the three services with an outbox is given up for the sake of
+one mechanism for all five. `PersonalDataErasedDomainEvent`,
 which Common.Domain's audit record raises for a mapper to publish, has no
 consumer and is removed with the first holder's pull request.
 
