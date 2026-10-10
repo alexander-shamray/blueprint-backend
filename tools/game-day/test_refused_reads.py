@@ -27,12 +27,14 @@ class Keycloak:
         self.token_status = token_status
         self.admin_status = admin_status or {}
         self.calls = []
+        # What the token route hands out, so a test can see it come back as the bearer.
+        self.issued = f"issued-{id(self)}"
         # A list shared with the compose double, so a test can say what happened before what.
         self.trace = trace if trace is not None else []
 
     def __call__(self, method, url, headers, body):
         if "/protocol/openid-connect/token" in url:
-            return self.token_status, json.dumps({"access_token": "admin-token"})
+            return self.token_status, json.dumps({"access_token": self.issued})
         path = url.split(ADMIN_ROUTE, 1)[1]
         payload = json.loads(body) if body else None
         self.calls.append((method, path, payload, headers.get("Authorization")))
@@ -58,9 +60,8 @@ class Keycloak:
 class RealmCalls(unittest.TestCase):
     def test_it_logs_in_as_the_admin_composes_keycloak_bootstraps(self):
         text = (harness.ROOT / "deploy" / "compose" / "infrastructure.yml").read_text(encoding="utf-8")
-        user = re.search(r"KC_BOOTSTRAP_ADMIN_USERNAME: (\S+)", text).group(1)
-        password = re.search(r"KC_BOOTSTRAP_ADMIN_PASSWORD: (\S+)", text).group(1)
-        self.assertEqual((user, password), harness.KEYCLOAK_ADMIN)
+        bootstrap = dict(re.findall(r"KC_BOOTSTRAP_ADMIN_(\w+): (\S+)", text))
+        self.assertEqual((bootstrap["USERNAME"], bootstrap["PASSWORD"]), harness.KEYCLOAK_ADMIN)
 
     def test_roles_are_the_names_of_the_clients_roles_the_account_holds_directly_sorted(self):
         realm = harness.Realm(Keycloak(["b:two", "a:one"]))
@@ -72,7 +73,7 @@ class RealmCalls(unittest.TestCase):
         method, path, payload, auth = keycloak.calls[-1]
         self.assertEqual(("DELETE", "/users/user-1/role-mappings/clients/client-1"), (method, path))
         self.assertEqual("orders:delivery-address", payload[0]["name"])
-        self.assertEqual("Bearer admin-token", auth)
+        self.assertEqual(f"Bearer {keycloak.issued}", auth)
         self.assertEqual([], keycloak.held)
 
     def test_grant_posts_the_mapping(self):
