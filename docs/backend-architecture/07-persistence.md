@@ -5,7 +5,7 @@
 Each service owns a SQL Server database. No shared tables, no cross-database
 joins, no views into another service's data, no shared read-only user.
 
-For smaller deployments, one SQL Server instance hosting six databases is
+For smaller deployments, one SQL Server instance hosting seven databases is
 acceptable — the isolation that matters is logical. Physical separation is a
 scaling and blast-radius decision that can be made later, because nothing in the
 code depends on it. Using *schemas* within one shared database instead is the
