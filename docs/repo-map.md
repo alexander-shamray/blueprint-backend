@@ -414,9 +414,10 @@ expectation nobody holds.
 Planned, per §4.1 — do not invent a different shape for it. `src/Services/`
 gains Inventory, Payments and Privacy with the same project set, Shipping
 with a Worker in place of the Api, and Notifications with one fewer (no
-Domain, and a Worker). `deploy/` still owes `k8s/`, and `helm/` and `k8s/` are not
-alternatives: §4.1 gives `k8s/` the raw manifests "where Helm is overkill",
-which is a decision no chapter has yet taken about any particular object.
+Domain, and a Worker). `deploy/` still owes `k8s/`, and `helm/` and `k8s/`
+are not alternatives: §4.1 gives `k8s/` the raw manifests "where Helm is
+overkill", which is a decision no chapter has yet taken about any particular
+object.
 
 Three things sit outside that tree because §4.1 does not draw them:
 `global.json`, whose SDK pin §4.1's prose relies on for the `.slnx` floor;
