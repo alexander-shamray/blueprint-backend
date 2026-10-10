@@ -103,9 +103,9 @@
     {
       "user": "notifications-svc",
       "vhost": "/",
-      "configure": "^(notifications-|Common\\.Contracts\\.(Ordering|Payments|Shipping)\\.V1:|MassTransit:)",
-      "write": "^(notifications-|MassTransit:)",
-      "read": "^(notifications-|Common\\.Contracts\\.(Ordering|Payments|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--))"
+      "configure": "^(notifications-|privacy-completions$|Common\\.Contracts\\.(Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:)",
+      "write": "^(notifications-|privacy-completions$|MassTransit:)",
+      "read": "^(notifications-|privacy-completions$|Common\\.Contracts\\.(Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "bff-svc",

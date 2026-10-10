@@ -4,5 +4,4 @@
 # being a difference fails the gate until it is deleted.
 Privacy publishes PersonalDataDeleteRequested #440
 Privacy accepts PersonalDataDeleteCompleted #440
-Notifications consumes PersonalDataDeleteRequested #440
 Web.Bff consumes PersonalDataDeleteRequested #440

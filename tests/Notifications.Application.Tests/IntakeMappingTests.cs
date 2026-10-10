@@ -223,11 +223,13 @@ public class IntakeMappingTests
     [Fact]
     public void Every_key_has_exactly_one_handler()
     {
-        // §3.2's seven, one each: a handler added without a key, or a key with none, fails here.
+        // §3.2's seven, one each: a handler added without a key, or a key with none, fails here. The erasure
+        // handler is outside Intake, since it writes no notice (§11.7).
         Type[] handlers =
         [
             .. typeof(OrderPlacedHandler).Assembly
                 .GetTypes()
+                .Where(t => t.Namespace == typeof(OrderPlacedHandler).Namespace)
                 .Where(t => t.GetInterfaces().Any(i =>
                     i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IIntegrationEventHandler<>)))
         ];

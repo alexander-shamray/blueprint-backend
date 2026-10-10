@@ -1,3 +1,4 @@
+using Common.Domain;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,9 @@ public sealed class NotificationsDbContext(DbContextOptions<NotificationsDbConte
 
     /// <summary>§8.5's durable idempotency markers.</summary>
     public DbSet<IdempotencyMarker> IdempotencyMarkers => Set<IdempotencyMarker>();
+
+    /// <summary>§11.7's audit rows: a hash, a count and a time per request, holding no personal data.</summary>
+    public DbSet<PersonalDataErasure> PersonalDataErasures => Set<PersonalDataErasure>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
