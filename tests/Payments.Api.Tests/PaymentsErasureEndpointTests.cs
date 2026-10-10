@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Common.Contracts;
 using Common.Contracts.Privacy.V1;
 using Common.Domain;
@@ -103,6 +104,66 @@ public sealed class PaymentsErasureEndpointTests(ServiceFixture fixture) : IAsyn
         await Eventually(CountCompletionsAsync, expected: 2, because: "a reissue makes the holder answer again");
     }
 
+    [Fact]
+    public async Task A_commit_that_fails_once_sends_one_completion_for_the_retry_and_none_for_the_failure()
+    {
+        Guid request = Guid.CreateVersion7();
+        await SeedOrderAsync(Guid.CreateVersion7(), Subject);
+
+        using CommitFault fault = fixture.FailNextCommit();
+        await PublishRequestAsync(request);
+
+        fault.Fired.ShouldBeTrue("the first attempt's commit was failed, so the erasure ran twice");
+        (await CountPayerAsync(Subject)).ShouldBe(0);
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM payments.PersonalDataErasures WHERE RequestId = {0}",
+            request)).ShouldBe(1);
+        await Eventually(CountCompletionsAsync, expected: 1, because: "the failed attempt's send was discarded");
+    }
+
+    [Fact]
+    public async Task The_same_request_message_delivered_twice_is_erased_and_reported_once()
+    {
+        Guid request = Guid.CreateVersion7();
+        PersonalDataDeleteRequested message = Requested(request);
+        await SeedOrderAsync(Guid.CreateVersion7(), Subject);
+
+        // The filter counts a drop before it returns, so waiting on the instrument proves the drop happened (§9.5).
+        using SemaphoreSlim suppressed = new(0);
+        using MeterListener listener = new();
+
+        listener.InstrumentPublished = (instrument, active) =>
+        {
+            if (instrument.Meter.Name == "Commerce.Messaging" &&
+                instrument.Name == "messaging.inbox.suppressed")
+            {
+                active.EnableMeasurementEvents(instrument);
+            }
+        };
+
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            if (TagValue(tags, "message") == nameof(PersonalDataDeleteRequested) &&
+                TagValue(tags, "endpoint") == Payments.Infrastructure.Messaging.DependencyInjection.PrivacyQueue)
+            {
+                suppressed.Release();
+            }
+        });
+
+        listener.Start();
+
+        await PublishRequestAsync(request, message);
+        await PublishRequestAsync(request, message, drain: false);
+
+        (await suppressed.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("the redelivery has to be counted as suppressed before the counts below are settled");
+
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM payments.PersonalDataErasures WHERE RequestId = {0}",
+            request)).ShouldBe(1);
+        await Eventually(CountCompletionsAsync, expected: 1, because: "the inbox dropped the second delivery");
+    }
+
     private async Task SeedOrderAsync(Guid order, Guid customer) =>
         await fixture.ExecuteAsync(
             "INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt) " +
@@ -110,16 +171,18 @@ public sealed class PaymentsErasureEndpointTests(ServiceFixture fixture) : IAsyn
             order,
             customer);
 
-    private async Task PublishRequestAsync(Guid request)
+    private static PersonalDataDeleteRequested Requested(Guid request) => new()
     {
-        PersonalDataDeleteRequested message = new()
-        {
-            MessageId = Guid.CreateVersion7(),
-            CorrelationId = request,
-            OccurredAt = DateTimeOffset.UtcNow,
-            RequestId = request,
-            SubjectId = Subject
-        };
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = request,
+        OccurredAt = DateTimeOffset.UtcNow,
+        RequestId = request,
+        SubjectId = Subject
+    };
+
+    private async Task PublishRequestAsync(Guid request, PersonalDataDeleteRequested? sent = null, bool drain = true)
+    {
+        PersonalDataDeleteRequested message = sent ?? Requested(request);
 
         await fixture.Factory.Services.GetRequiredService<IBus>().Publish(
             message,
@@ -130,10 +193,25 @@ public sealed class PaymentsErasureEndpointTests(ServiceFixture fixture) : IAsyn
             },
             TestContext.Current.CancellationToken);
 
-        await Eventually(
-            async () => (await fixture.InboxAsync(message.MessageId)).Count,
-            expected: 1,
-            because: "the inbox row is written after the erasure has committed (§9.5)");
+        if (drain)
+        {
+            await Eventually(
+                async () => (await fixture.InboxAsync(message.MessageId)).Count,
+                expected: 1,
+                because: "the inbox row is written after the erasure has committed (§9.5)");
+        }
+    }
+
+    /// <summary>One tag off a measurement, read inside the callback since a span cannot be captured.</summary>
+    private static string TagValue(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name)
+    {
+        foreach (KeyValuePair<string, object?> tag in tags)
+        {
+            if (tag.Key == name)
+                return tag.Value?.ToString() ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 
     private Task<int> CountPayerAsync(Guid customer) =>

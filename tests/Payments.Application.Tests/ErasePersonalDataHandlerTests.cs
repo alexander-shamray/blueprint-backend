@@ -1,3 +1,4 @@
+using Common.Application;
 using Common.Domain;
 using Payments.Application.Orders;
 using Payments.Application.Privacy;
@@ -19,23 +20,21 @@ public class ErasePersonalDataHandlerTests
     private readonly FakeOrders _orders = new();
     private readonly FakeErasures _erasures = new();
 
-    private readonly FakeReporter _reporter = new();
-
-    private ErasePersonalDataHandler Handler() => new(_orders, _erasures, _reporter, new FixedClock(Now));
+    private ErasePersonalDataHandler Handler() => new(_orders, _erasures, new FixedClock(Now));
 
     [Fact]
     public async Task The_subjects_orders_are_anonymised_and_the_audit_row_counts_them()
     {
         _orders.Anonymised = 2;
 
-        await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
+        Result<int> result = await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
 
+        result.Value.ShouldBe(2);
         _orders.Subjects.ShouldBe([Subject]);
         PersonalDataErasure row = _erasures.Added.ShouldHaveSingleItem();
         row.Id.ShouldBe(Request);
         row.Count.ShouldBe(2);
         row.SubjectHash.ShouldBe(PersonalDataErasure.HashSubject(Request, Subject));
-        _reporter.Reported.ShouldBe([(Request, 2)]);
     }
 
     [Fact]
@@ -43,10 +42,10 @@ public class ErasePersonalDataHandlerTests
     {
         _orders.Anonymised = 0;
 
-        await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
+        Result<int> result = await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
 
+        result.Value.ShouldBe(0);
         _erasures.Added.ShouldHaveSingleItem().Count.ShouldBe(0);
-        _reporter.Reported.ShouldBe([(Request, 0)], "silence cannot be told from success (§11.7)");
     }
 
     [Fact]
@@ -57,12 +56,12 @@ public class ErasePersonalDataHandlerTests
         _erasures.Existing[Request] = first;
         _orders.Anonymised = 0;
 
-        await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
+        Result<int> result = await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
 
+        result.Value.ShouldBe(0, "the answer is this pass's count, the row keeps the larger");
         _erasures.Added.ShouldBeEmpty("a second row for one request would break the key");
         first.Count.ShouldBe(2, "the first pass's count survives a pass that finds nothing");
         first.ErasedAt.ShouldBe(Now);
-        _reporter.Reported.ShouldBe([(Request, 0)], "the answer is this pass's count, the row keeps the larger");
     }
 
     private sealed class FakeOrders : IPaymentOrderStore
@@ -91,17 +90,6 @@ public class ErasePersonalDataHandlerTests
 
         public Task<PaymentOrderRecord?> LockAsync(OrderId id, CancellationToken ct) =>
             throw new NotSupportedException("Not exercised on the erasure path.");
-    }
-
-    private sealed class FakeReporter : IErasureReporter
-    {
-        public List<(Guid RequestId, int Count)> Reported { get; } = [];
-
-        public Task ReportAsync(Guid requestId, int count, CancellationToken ct)
-        {
-            Reported.Add((requestId, count));
-            return Task.CompletedTask;
-        }
     }
 
     private sealed class FakeErasures : IPersonalDataErasureRepository
