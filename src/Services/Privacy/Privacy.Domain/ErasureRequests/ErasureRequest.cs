@@ -100,7 +100,7 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
     /// <summary>
     /// Records a holder's answer, closing the request when every expected holder has been counted.
     /// </summary>
-    /// <remarks>A request that has closed ignores a late answer, since the subject is no longer here to match it to.</remarks>
+    /// <remarks>A closed request ignores a late answer, since the subject is no longer here to match it to (ADR-092).</remarks>
     public CompletionOutcome RecordCompletion(string responder, int count, DateTimeOffset now)
     {
         if (!IsResponderName(responder))

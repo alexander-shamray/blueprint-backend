@@ -9,7 +9,7 @@ using Privacy.Application.ErasureRequests.MarkOverdue;
 namespace Privacy.Infrastructure.Sweep;
 
 /// <summary>Finds the open requests that have outlived their due time and marks each overdue (ADR-092).</summary>
-/// <remarks>Nothing closes an overdue request: an operator reissues it. This only makes the silence visible.</remarks>
+/// <remarks>Nothing closes an overdue request: an operator reissues it (ADR-092). This only makes the silence visible.</remarks>
 public sealed class OverdueSweepService : BackgroundService
 {
     /// <summary>A due time is measured in days, so a minute is prompt and a pass costs one indexed read.</summary>
