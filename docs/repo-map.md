@@ -365,9 +365,9 @@ tests/                       per service: .Domain.Tests, .Application.Tests,
                              suite that references every service (§4.1),
                              where §12.1 homes Common.Contracts' shape tests
                              and the journey: it references the *.TestSupport
-                             of each service on §3.2's fulfilment path, so
-                             each host runs as itself over one shared SQL
-                             Server, broker and Redis pair
+                             of each of §3.2's six services, so each host
+                             runs as itself over one shared SQL Server,
+                             broker and Redis pair
 ```
 
 **A `.TestSupport` project is not a test project (§4.1), and it exists for a
