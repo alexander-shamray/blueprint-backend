@@ -1,11 +1,8 @@
 name: Game day
 
-# Two jobs with different triggers. `coverage` is the harness's suite and the
-# test that every runbook has a script or a stated reason not to; it reads text
-# and needs no Docker, so it runs on the pull requests that could break it.
-# `run` causes real alerts on the Compose stack, takes the better part of an
-# hour once a stack is built, and is `workflow_dispatch` only until the last of
-# #430's pull requests decides otherwise from the measured runtimes.
+# `coverage` is the harness's suite and the test that every runbook has a script
+# or a reason; it needs no Docker. `run` causes real alerts on the Compose stack
+# and is workflow_dispatch only until the series decides from measured runtimes.
 
 on:
   pull_request:

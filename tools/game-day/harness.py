@@ -50,12 +50,7 @@ class Timeout(GameDayError):
 
 @dataclass(frozen=True)
 class Deadline:
-    """How long a predicate may take, and the sum that says so, as tests/.../Journey/Deadlines.cs does.
-
-    The rule's own threshold is the time the signal needs to cross it (an age gauge needs that many seconds to
-    read above the line); `for:` is the rule's wait; the export interval is the longest a gauge goes unpublished;
-    the evaluation interval is the longest a published value goes unjudged. Each is a ceiling, so the sum is.
-    """
+    """How long a predicate may take: signal threshold, `for:`, export and evaluation, each a ceiling."""
 
     signal_seconds: int
     for_seconds: int = 0

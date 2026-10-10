@@ -1,5 +1,4 @@
-"""docs/runbooks/outbox-broker.md: §9.8's broker-down row.
-Alert:      OutboxBrokerLaneStalled, no `for:`.
+"""docs/runbooks/outbox-broker.md (§9.8's broker-down row). Alert: OutboxBrokerLaneStalled, no `for:`.
 Cause:      `stop rabbitmq`, then place an order; its OrderPlaced row waits on the broker lane.
 First step: the log read, Translated from kubectl to Loki, as the hosts log through OpenTelemetry alone (§13.4).
 Restore:    start rabbitmq, then wait for the alert to resolve.
