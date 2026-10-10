@@ -65,9 +65,9 @@ Then ask why the holder did not answer, in this order:
    parked in `_error` or `_skipped` is `error-queue.md` or `skipped-queue.md`.
 2. **It ran and its answer was lost.** A holder sends
    `PersonalDataDeleteCompleted` to `privacy-completions` after its unit
-   commits, so a crash between the two is silence (ADR-094). The holder's own audit table holds a row for the
-   request id's hash if it ran: the table is `PersonalDataErasures` in the
-   holder's own schema.
+   commits, so a crash between the two is silence (ADR-094). The holder's own
+   audit table holds a row for the request id's hash if it ran: the table is
+   `PersonalDataErasures` in the holder's own schema.
 3. **Privacy cannot read it.** A completion the broker refuses to deliver, or
    one that fails mapping, is in `privacy-completions_error`.
 
