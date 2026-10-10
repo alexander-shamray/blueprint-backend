@@ -1,0 +1,12 @@
+{{- /* Privacy binds PrivacyOptions unconditionally, so on this chart the capability
+is a fact about the code: switched off, with its settings cleared, the library
+chart's coherence guard has nothing to refuse and the pod does not start. So
+this chart refuses the switch, and the members the host binds (§15.4). */}}
+{{- if not (.Values.privacy).enabled }}
+{{- fail "privacy.enabled is false on the privacy chart. PrivacyOptions is bound and validated at start (ADR-092), so the host does not start without its responders and service level." }}
+{{- end }}
+{{- range $member := list "responders" "completionSlo" }}
+{{- if not (hasKey $.Values.privacy $member) }}
+{{- fail (printf "privacy.%s is required on the privacy chart: PrivacyOptions binds it at start (ADR-092), and a member removed outright renders no key at all." $member) }}
+{{- end }}
+{{- end }}

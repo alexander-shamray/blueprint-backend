@@ -30,6 +30,9 @@ dependencies:
   - name: notifications
     version: 0.1.0
     repository: file://../notifications
+  - name: privacy
+    version: 0.1.0
+    repository: file://../privacy
   - name: gateway
     version: 0.1.0
     repository: file://../gateway

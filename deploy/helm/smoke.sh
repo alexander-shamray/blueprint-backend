@@ -977,6 +977,57 @@ check 'a retention window in days-and-time form still renders' \
     $(overlay_for shipping) --set-string 'jurisdiction.addressRetention=1.12:30'
 
 # --------------------------------------------------------------------------
+section "Privacy's chart declares its holders and service level, and both are required"
+# --------------------------------------------------------------------------
+# PrivacyOptions is validated at start (ADR-092), so each state that renders
+# cleanly here is a pod that never starts. Config and not Secret: neither value
+# is a credential (§15.4).
+# The two keys are the cases' to set, so the descriptor's overlay is passed
+# without them: Helm applies every --set-string after every --set, and an overlay
+# left whole would win over each list a case sets.
+privacy_overlay() {
+    field privacy overlay | awk 'index($0, "privacy.responders=") != 1 && index($0, "privacy.completionSlo=") != 1' |
+        sed 's/^/--set-string /' | tr '
+' ' '
+}
+privacy_render() {
+    "$HELM" template privacy "$CHARTS_DIR/privacy" $NETPOL_OVERLAY --set-string image.tag="$TAG"         $(privacy_overlay) "$@"
+}
+privacy_refuses() {
+    # privacy_refuses <label> <needle> <helm args...>
+    local label="$1" needle="$2"
+    shift 2
+    if privacy_render "$@" >"$OUT/privacy-bad.txt" 2>&1; then
+        fail "$label — it rendered instead"
+    else
+        check "$label" grep -q "$needle" "$OUT/privacy-bad.txt"
+    fi
+}
+PRIVACY_SLO='--set-string privacy.completionSlo=30.00:00:00'
+privacy_render --set 'privacy.responders={ordering,payments,shipping,notifications,bff}' $PRIVACY_SLO     >"$OUT/privacy-capability.yaml"
+
+check 'privacy: all five holders are in the ConfigMap, one indexed key each'     awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *Privacy__Responders__[0-4]: "[a-z]+"$/ { n++ }
+         END { exit n == 5 ? 0 : 1 }' "$OUT/privacy-capability.yaml"
+check 'privacy: the service level is in the ConfigMap'     awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *Privacy__CompletionSlo: "30\.00:00:00"$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/privacy-capability.yaml"
+
+privacy_refuses 'no holder fails the render'     'privacy.responders must name at least one holder' --set-string 'privacy.responders=' $PRIVACY_SLO
+privacy_refuses 'a holder named with a capital fails the render'     'not a holder name the host will accept' --set 'privacy.responders={Ordering}' $PRIVACY_SLO
+privacy_refuses 'a holder named with a leading hyphen fails the render'     'not a holder name the host will accept' --set 'privacy.responders={-ordering}' $PRIVACY_SLO
+privacy_refuses 'a holder named twice fails the render'     'names "ordering" twice' --set 'privacy.responders={ordering,ordering}' $PRIVACY_SLO
+privacy_refuses 'holders that are not a list fail the render'     'is not a list' --set-string 'privacy.responders=ordering' $PRIVACY_SLO
+privacy_refuses 'a cleared service level fails the render'     'privacy.completionSlo is required' --set 'privacy.responders={ordering}'     --set-string 'privacy.completionSlo='
+privacy_refuses 'a service level that is not a TimeSpan fails the render'     'not a TimeSpan this chart will accept' --set 'privacy.responders={ordering}'     --set-string 'privacy.completionSlo=30 days'
+privacy_refuses 'a service level removed outright fails the render'     'privacy.completionSlo is required' --set 'privacy.responders={ordering}'     --set privacy.completionSlo=null
+privacy_refuses 'a privacy setting with the capability off fails the render'     'but a privacy setting is set' --set privacy.enabled=false     --set 'privacy.responders={ordering}' $PRIVACY_SLO
+privacy_refuses 'the privacy capability off and cleared fails the render'     'privacy.enabled is false on the privacy chart'     --set privacy.enabled=false --set-string 'privacy.responders=' --set-string 'privacy.completionSlo='
+refuses_foreign ordering 'the holder set is refused on a chart that is not Privacy'     'privacy.enabled is true on the ordering chart'     --set privacy.enabled=true --set 'privacy.responders={ordering}'     --set-string privacy.completionSlo=30.00:00:00
+
+# --------------------------------------------------------------------------
 section "Notifications' chart declares its capabilities, and each is required"
 # --------------------------------------------------------------------------
 # The worker reads every key below before it will start (§15.4), so each state

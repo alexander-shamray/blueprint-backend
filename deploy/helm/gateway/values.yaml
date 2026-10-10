@@ -171,6 +171,7 @@ networkPolicy:
     - { workload: ordering-api, port: http }
     - { workload: inventory-api, port: http }
     - { workload: payments-api, port: http }
+    - { workload: privacy-api, port: http }
     - { workload: web-bff, port: http }
   dns:
     to:

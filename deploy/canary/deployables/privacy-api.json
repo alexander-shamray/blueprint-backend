@@ -1,0 +1,16 @@
+{
+  "serviceName": "Privacy.Api",
+  "chart": "privacy",
+  "source": "src/Services/Privacy",
+  "signals": ["consume"],
+  "httpExemption": "Privacy's HTTP surface is a staff principal raising, reading or reissuing an erasure request, behind the privacy:erase policy, and that is a handful of calls a month that cannot be relied on to reach minimumRequests in a dwell, so a declared http signal would roll healthy releases back for quiet. Its completions arrive on the broker and are judged by consume, and a request that is not answered is what the overdue gauge and its alert exist to catch (docs/runbooks/erasure-overdue.md), outside the rollout.",
+  "smoke": {
+    "migrator": true,
+    "autoscaled": false,
+    "capabilities": [],
+    "overlay": [
+      "privacy.responders={ordering}",
+      "privacy.completionSlo=30.00:00:00"
+    ]
+  }
+}
