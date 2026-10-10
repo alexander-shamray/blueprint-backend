@@ -6,8 +6,8 @@ namespace Privacy.Infrastructure.Persistence;
 
 internal sealed class ErasureRequestRepository(PrivacyDbContext db) : IErasureRequestRepository
 {
-    // Owned by the transaction, so it is released at commit or rollback and a crashed holder strands nothing.
-    // A negative return is a lock not taken, which must stop the raise rather than let it race.
+    // Owned by the transaction, so it is released at commit or rollback and a crash strands nothing (§6.3).
+    // A negative return is a lock not taken, which must stop the raise rather than let it race (ADR-092).
     private const string TakeSubjectLockSql =
         """
         DECLARE @taken int;
