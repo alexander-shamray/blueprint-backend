@@ -25,8 +25,15 @@ class RealTree(unittest.TestCase):
 
     def test_the_series_so_far_delivers_these_scripts(self):
         self.assertTrue({"outbox_broker", "projection_lag", "outbox_abandoned", "queue_backlog", "address_refused",
-                         "contact_refused", "unscanned_shipment", "unattributed_order",
-                         "erasure_overdue"} <= coverage.scripts())
+                         "contact_refused", "unscanned_shipment", "unattributed_order", "erasure_overdue",
+                         "error_rate", "latency", "outbox_growth"} <= coverage.scripts())
+
+    def test_the_traffic_runbooks_are_no_longer_owed(self):
+        for name in ("error-rate.md", "latency.md", "outbox-growth.md"):
+            self.assertNotIn(name, coverage.OWED)
+
+    def test_what_is_still_owed_is_pr_4s(self):
+        self.assertEqual({"PR-4"}, {pull for pulls in coverage.OWED.values() for pull in pulls})
 
     def test_queue_backlog_is_half_covered_and_owed_its_backlog_half_to_pr_4_alone(self):
         self.assertEqual(("PR-4",), coverage.OWED["queue-backlog.md"])
@@ -103,7 +110,18 @@ class Scenarios(unittest.TestCase):
     """The module shape every later script follows, held by what the header promises."""
 
     def modules(self):
-        return [(name, importlib.import_module(f"scenarios.{name}")) for name in sorted(coverage.scripts())]
+        """Each script, and the second phase of one that has a NEXT, which is held to the same rules."""
+        found = []
+        for name in sorted(coverage.scripts()):
+            module = importlib.import_module(f"scenarios.{name}")
+            found.append((name, module))
+            if hasattr(module, "NEXT"):
+                found.append((f"{name}.NEXT", module.NEXT))
+        return found
+
+    def header(self, name):
+        """A second phase has no docstring of its own: its module's header names its alert."""
+        return importlib.import_module(f"scenarios.{name.split('.')[0]}").__doc__
 
     def test_there_are_scenarios_to_check(self):
         self.assertGreaterEqual(len(self.modules()), 3)
@@ -112,7 +130,7 @@ class Scenarios(unittest.TestCase):
         rules = LOADED_RULES.read_text(encoding="utf-8")
         for name, module in self.modules():
             with self.subTest(name):
-                self.assertEqual(name, coverage.module_name(module.RUNBOOK))
+                self.assertEqual(name.split(".")[0], coverage.module_name(module.RUNBOOK))
                 runbook = (coverage.RUNBOOKS / module.RUNBOOK).read_text(encoding="utf-8")
                 self.assertIn(f"`{module.ALERT}`", runbook, "the runbook does not name the alert")
                 self.assertIn(f"alert: {module.ALERT}\n", rules, "a rule the Compose Prometheus loads")
@@ -120,7 +138,7 @@ class Scenarios(unittest.TestCase):
     def test_each_header_names_the_alert_its_cause_its_first_step_and_its_restore(self):
         for name, module in self.modules():
             with self.subTest(name):
-                header = module.__doc__
+                header = self.header(name)
                 self.assertIn(module.ALERT, header)
                 for label in ("Cause:", "First step:", "Restore:"):
                     self.assertIn(label, header)
@@ -162,7 +180,7 @@ class Scenarios(unittest.TestCase):
     def test_a_rule_over_a_window_names_a_settle_as_long_as_the_window(self):
         for name, module in self.modules():
             with self.subTest(name):
-                window = re.search(r"increase\(\w+\[(\d+)m\]\)", self.block(module))
+                window = re.search(r"(?:increase|rate)\(\w+(?:\{[^}]*\})?\[(\d+)m\]\)", self.block(module))
                 if window:
                     self.assertGreaterEqual(module.SETTLE.signal_seconds, int(window.group(1)) * 60)
                 else:

@@ -18,6 +18,8 @@ LOG_SERVICE = "Web.Bff"
 # last evaluation before they leave the window is the only one short of it.
 FOR_SECONDS = 600
 DEADLINE = harness.Deadline(signal_seconds=0, for_seconds=FOR_SECONDS)
+# The late deliveries leave the rule's 10-minute `rate` window ten minutes after the last.
+SETTLE = harness.Deadline(signal_seconds=600)
 SUSTAIN_SECONDS = FOR_SECONDS + 120
 # A message waits this long on the paused consumer's queue: past the 2s target with room for the p95's bucket.
 HOLD_SECONDS = 20
