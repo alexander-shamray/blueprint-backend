@@ -601,7 +601,7 @@ because `Common.Web.Tests` is a building block's suite and cannot reference a
 host to read its constants. The check belongs to whichever suite owns the
 constant, which is where `GrantablePermissionTests` sits in
 `Gateway.Api.Tests`, `Catalog.Api.Tests`, `Ordering.Api.Tests`,
-`Inventory.Api.Tests` and `Payments.Api.Tests`.
+`Inventory.Api.Tests`, `Payments.Api.Tests` and `Privacy.Api.Tests`.
 
 > **A policy name is a reference, and nothing checks it.**
 > `RequireAuthorization("orders:cancel")` takes a string. Misspell it, or
