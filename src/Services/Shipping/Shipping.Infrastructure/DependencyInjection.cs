@@ -1,5 +1,6 @@
 using Common.Infrastructure.Transport;
 using Shipping.Application.Addresses;
+using Shipping.Application.Privacy;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Fulfilment;
@@ -153,6 +154,11 @@ public static class DependencyInjection
 
         // ADR-052's contact row, in a table of its own beside the shipment.
         services.AddScoped<IDeliveryAddressStore, SqlDeliveryAddressStore>();
+
+        // §11.7's erasure: the audit row, the delete in the unit's transaction and the report after it (ADR-094).
+        services.AddScoped<IPersonalDataErasureRepository, PersonalDataErasureRepository>();
+        services.AddScoped<IShippingPersonalDataStore, SqlShippingPersonalDataStore>();
+        services.AddScoped<IErasureReporter, ErasureReporter>();
 
         // Readiness lives here, not in Common.Web, because it needs the connection string (§13.5).
         services

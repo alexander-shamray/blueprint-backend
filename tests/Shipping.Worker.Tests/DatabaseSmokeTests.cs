@@ -31,7 +31,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // and _AddOutboxTraceContext are wiring every service with an outbox has; the rest are this service's
         // own (§3.2).
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(13);
+        applied.Length.ShouldBe(14);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -45,6 +45,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[10].ShouldEndWith("_SplitShipmentAttemptsAndIndexClaims");
         applied[11].ShouldEndWith("_AddOutboxTraceContext");
         applied[12].ShouldEndWith("_AddFulfilmentTraceContext");
+        applied[13].ShouldEndWith("_AddPersonalDataErasures");
     }
 
     [Fact]

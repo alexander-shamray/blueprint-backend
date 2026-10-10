@@ -96,9 +96,9 @@
     {
       "user": "shipping-svc",
       "vhost": "/",
-      "configure": "^(shipping-|Common\\.Contracts(\\.(Ordering|Shipping)\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "write": "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(shipping-|Common\\.Contracts\\.(Ordering|Shipping)\\.V1:|Shipping\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
+      "configure": "^(shipping-|privacy-completions$|Common\\.Contracts(\\.(Ordering|Privacy|Shipping)\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "write": "^(shipping-|privacy-completions$|Common\\.Contracts(\\.Shipping\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "read": "^(shipping-|privacy-completions$|Common\\.Contracts\\.(Ordering|Privacy|Shipping)\\.V1:|Shipping\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--))"
     },
     {
       "user": "notifications-svc",

@@ -1,5 +1,6 @@
 using Shipping.Infrastructure.Messaging;
 using Common.Contracts.Ordering.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Infrastructure.Messaging;
 using MassTransit;
 using MassTransit.Testing;
@@ -115,7 +116,10 @@ public class MessagingRegistrationTests
         Type[] consumers =
         [
             typeof(IntegrationEventConsumer<OrderConfirmed>),
-            typeof(IntegrationEventConsumer<OrderCancelled>)
+            typeof(IntegrationEventConsumer<OrderCancelled>),
+
+            // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
+            typeof(IntegrationEventConsumer<PersonalDataDeleteRequested>)
         ];
         foreach (Type consumer in consumers)
         {

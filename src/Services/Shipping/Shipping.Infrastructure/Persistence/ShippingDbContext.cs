@@ -1,3 +1,4 @@
+using Common.Domain;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
@@ -22,6 +23,9 @@ public sealed class ShippingDbContext(DbContextOptions<ShippingDbContext> option
 
     /// <summary>§3.2's aggregate; no <c>DbSet</c> of tracking events, which are reached only through it.</summary>
     public DbSet<Shipment> Shipments => Set<Shipment>();
+
+    /// <summary>§11.7's audit rows: a hash, a count and a time per request, holding no personal data.</summary>
+    public DbSet<PersonalDataErasure> PersonalDataErasures => Set<PersonalDataErasure>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

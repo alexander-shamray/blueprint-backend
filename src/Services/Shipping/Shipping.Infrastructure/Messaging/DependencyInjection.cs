@@ -1,5 +1,6 @@
 using System.Net.Security;
 using Common.Contracts.Ordering.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Transport;
@@ -14,6 +15,9 @@ public static class DependencyInjection
 {
     /// <summary>§3.2's Consumes column; one queue, as each event writes one row and makes no call.</summary>
     public const string EventsQueue = "shipping-events";
+
+    /// <summary>§11.7's erasure request, on its own endpoint so no other consumer's failure holds it.</summary>
+    public const string PrivacyQueue = "shipping-privacy";
 
     public static IServiceCollection AddMassTransitMessaging(
         this IServiceCollection services,
@@ -36,6 +40,9 @@ public static class DependencyInjection
             // are needed; a consumer registered and never bound receives nothing.
             x.AddConsumer<IntegrationEventConsumer<OrderConfirmed>>();
             x.AddConsumer<IntegrationEventConsumer<OrderCancelled>>();
+
+            // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
+            x.AddConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -61,6 +68,18 @@ public static class DependencyInjection
 
                         e.ConfigureConsumer<IntegrationEventConsumer<OrderConfirmed>>(context);
                         e.ConfigureConsumer<IntegrationEventConsumer<OrderCancelled>>(context);
+                    });
+
+                cfg.ReceiveEndpoint(
+                    PrivacyQueue,
+                    e =>
+                    {
+                        e.UseMessageRetry(RetryPolicy.Standard);
+
+                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                        e.UseInMemoryOutbox(context);
+
+                        e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>(context);
                     });
 
                 // No ConfigureEndpoints: it would bind an unbound consumer to a queue with no InboxFilter<>,
