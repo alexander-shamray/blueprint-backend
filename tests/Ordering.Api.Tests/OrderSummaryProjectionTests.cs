@@ -89,6 +89,25 @@ public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsync
         (await StatusAsync(order)).ShouldBe(nameof(OrderStatus.Shipped), "an older event never moves the status back");
     }
 
+    [Fact]
+    public async Task A_placement_projected_after_its_orders_erasure_does_not_bring_the_buyer_back()
+    {
+        OrderId order = new(Guid.CreateVersion7());
+        await fixture.ExecuteAsync(
+            "INSERT INTO ordering.Orders (Id, CustomerId, Status, PlacedAt, Currency, ShipToLine1, ShipToLine2, " +
+            "ShipToCity, ShipToPostalCode, ShipToCountry) " +
+            "VALUES ({0}, {1}, 'Placed', SYSDATETIMEOFFSET(), 'EUR', '', NULL, '', '', 'ZZ')",
+            order.Value,
+            Guid.Empty);
+
+        await ProjectAsync(order, PlacedEvent(order));
+
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM ordering.OrderSummaries WHERE OrderId = {0} AND CustomerId IS NULL " +
+            "AND PlacedAt IS NOT NULL",
+            order.Value)).ShouldBe(1, "the row is projected, and the erased order's buyer stays off it");
+    }
+
     private void Record(Instrument instrument, double value, ReadOnlySpan<KeyValuePair<string, object?>> tags)
     {
         string? tag = null;

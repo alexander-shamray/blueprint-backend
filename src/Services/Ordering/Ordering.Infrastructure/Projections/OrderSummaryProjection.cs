@@ -25,15 +25,21 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
     private const string PlacedSql =
         """
         MERGE ordering.OrderSummaries WITH (HOLDLOCK) AS target
-        USING (SELECT OrderId = @OrderId) AS source
+        -- An order already erased (the empty id) must not bring its buyer back through a late placement.
+        USING (
+            SELECT OrderId = @OrderId,
+                CustomerId = CASE
+                    WHEN EXISTS (SELECT 1 FROM ordering.Orders WHERE Id = @OrderId AND CustomerId = @Erased) THEN NULL
+                    ELSE @CustomerId
+                END) AS source
             ON target.OrderId = source.OrderId
         WHEN NOT MATCHED THEN
             INSERT (OrderId, CustomerId, Status, TotalAmount, Currency, LineCount, Products, PlacedAt, UpdatedAt)
-            VALUES (@OrderId, @CustomerId, @Status, @Total, @Currency, @LineCount, @Products, @OccurredAt, @OccurredAt)
+            VALUES (@OrderId, source.CustomerId, @Status, @Total, @Currency, @LineCount, @Products, @OccurredAt, @OccurredAt)
         -- PlacedAt IS NULL fires once: a redelivery finds it set and writes nothing.
         WHEN MATCHED AND target.PlacedAt IS NULL THEN
             UPDATE SET
-                CustomerId  = @CustomerId,
+                CustomerId  = source.CustomerId,
                 TotalAmount = @Total,
                 Currency    = @Currency,
                 LineCount   = @LineCount,
@@ -106,6 +112,7 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
                 {
                     OrderId = domainEvent.OrderId.Value,
                     CustomerId = domainEvent.CustomerId.Value,
+                    Erased = Guid.Empty,
                     Status = nameof(OrderStatus.AwaitingStock),
                     Total = domainEvent.Total.Amount,
                     domainEvent.Total.Currency,
