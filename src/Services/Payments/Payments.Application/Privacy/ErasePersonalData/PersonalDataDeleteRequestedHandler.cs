@@ -17,6 +17,10 @@ public sealed class PersonalDataDeleteRequestedHandler(IDispatcher dispatcher, I
             new ErasePersonalDataCommand(integrationEvent.RequestId, integrationEvent.SubjectId),
             ct);
 
+        // Thrown with its error, so the retry and the error queue name the cause and not "carries no value".
+        if (erased.IsFailure)
+            throw new InvalidOperationException($"The erasure failed: {erased.Error.Code}.");
+
         // Even a count of zero is reported: silence cannot be told from success (§11.7).
         await reporter.ReportAsync(integrationEvent.RequestId, erased.Value, ct);
     }
