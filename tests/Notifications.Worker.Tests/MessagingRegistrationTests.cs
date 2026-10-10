@@ -1,5 +1,6 @@
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Contracts.Shipping.V1;
 using Common.Infrastructure.Messaging;
 using Notifications.Infrastructure.Messaging;
@@ -122,7 +123,10 @@ public class MessagingRegistrationTests
             typeof(IntegrationEventConsumer<PaymentDeclined>),
             typeof(IntegrationEventConsumer<PaymentRefunded>),
             typeof(IntegrationEventConsumer<ShipmentDispatched>),
-            typeof(IntegrationEventConsumer<ShipmentDelivered>)
+            typeof(IntegrationEventConsumer<ShipmentDelivered>),
+
+            // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
+            typeof(IntegrationEventConsumer<PersonalDataDeleteRequested>)
         ];
         foreach (Type consumer in consumers)
         {

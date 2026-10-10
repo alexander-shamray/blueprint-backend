@@ -1,5 +1,6 @@
 using Common.Infrastructure.Transport;
 using Notifications.Application.Contacts;
+using Notifications.Application.Privacy;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 using Notifications.Infrastructure.Delivery;
@@ -49,6 +50,11 @@ public static class DependencyInjection
         // §5.6's repositories: the notices owed, and the order record four of them wait on for a customer.
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IOrderRecordRepository, OrderRecordRepository>();
+
+        // §11.7's erasure: the audit row, the deletes in the unit's transaction and the report after it (ADR-094).
+        services.AddScoped<IPersonalDataErasureRepository, PersonalDataErasureRepository>();
+        services.AddScoped<INotificationsPersonalDataStore, SqlNotificationsPersonalDataStore>();
+        services.AddScoped<IErasureReporter, ErasureReporter>();
 
         // §8.5's durable half, on the DbContext alias above and so in EfUnitOfWork's transaction. Its loss
         // fails the first command, not startup: ValidateOnBuild never builds TransactionBehavior's open generic.

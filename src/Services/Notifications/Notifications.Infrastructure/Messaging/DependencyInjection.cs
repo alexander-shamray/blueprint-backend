@@ -1,6 +1,7 @@
 using System.Net.Security;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
+using Common.Contracts.Privacy.V1;
 using Common.Contracts.Shipping.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
@@ -16,6 +17,9 @@ public static class DependencyInjection
 {
     /// <summary>§3.2's Consumes column; one queue, as every event writes rows here and calls nothing.</summary>
     public const string EventsQueue = "notifications-events";
+
+    /// <summary>§11.7's erasure request, on its own endpoint so no other consumer's failure holds it.</summary>
+    public const string PrivacyQueue = "notifications-privacy";
 
     public static IServiceCollection AddMassTransitMessaging(
         this IServiceCollection services,
@@ -43,6 +47,9 @@ public static class DependencyInjection
             x.AddConsumer<IntegrationEventConsumer<PaymentRefunded>>();
             x.AddConsumer<IntegrationEventConsumer<ShipmentDispatched>>();
             x.AddConsumer<IntegrationEventConsumer<ShipmentDelivered>>();
+
+            // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
+            x.AddConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -73,6 +80,18 @@ public static class DependencyInjection
                         e.ConfigureConsumer<IntegrationEventConsumer<PaymentRefunded>>(context);
                         e.ConfigureConsumer<IntegrationEventConsumer<ShipmentDispatched>>(context);
                         e.ConfigureConsumer<IntegrationEventConsumer<ShipmentDelivered>>(context);
+                    });
+
+                cfg.ReceiveEndpoint(
+                    PrivacyQueue,
+                    e =>
+                    {
+                        e.UseMessageRetry(RetryPolicy.Standard);
+
+                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                        e.UseInMemoryOutbox(context);
+
+                        e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>(context);
                     });
 
                 // No ConfigureEndpoints(context): it would give a consumer a queue with neither the inbox filter
