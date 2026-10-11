@@ -15,8 +15,9 @@ did every holder answer", and an answer that expires after a window is not
 evidence. The hash is salted by the request id, so two requests for one person
 do not link and the row names nobody; a retention period is the adopter's
 reading of a law about personal data, and there is none here to read. A window
-would also be a second clock beside the holders' audit rows, which are kept the
-same way, and the two could disagree about whether a request was ever made.
+would also be a second clock beside the holders' audit rows, which no register
+row or option gives a window either, and the two could disagree about whether
+a request was ever made.
 **Consequences.** `privacy.ErasureRequests` and `privacy.ErasureCompletions`
 grow by one request and a handful of completions for every erasure, with no
 ceiling; the volume is a staff-raised request per person erased, which a
