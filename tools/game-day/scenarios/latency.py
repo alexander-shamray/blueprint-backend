@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import harness
 
+# Not run: a cold cache, because no code path reads HybridCache, so pausing redis-cache could not slow a request
+# (latency.md, *A cold or missing cache*), and *Everything is slow*'s kubectl steps, where the first step stops.
+
 RUNBOOK = "latency.md"
 ALERT = "Latency"
 FOR_SECONDS = 600

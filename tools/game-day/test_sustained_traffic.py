@@ -8,6 +8,7 @@ import threading
 import time
 import types
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import game_day
@@ -368,6 +369,11 @@ class Latency(unittest.TestCase):
         module = self.module()
         self.assertIn(squash(module.FIRST_QUERY), squash(runbook("latency.md")))
         self.assertIn(squash(module.SERVICE_QUERY) + ">1", squash(RULES))
+
+    def test_the_cache_is_left_unrun_only_while_the_runbook_says_nothing_reads_it(self):
+        self.assertIn(squash("what no code path does is *read* one"), squash(runbook("latency.md")))
+        source = Path(self.module().__file__).read_text(encoding="utf-8")
+        self.assertIn("no code path reads HybridCache", source)
 
     def test_it_reads_a_quiet_quantile_before_it_pauses_sql(self):
         stack = self.stack(query=lambda expression: [{"metric": {"service_name": "Ordering.Api"}, "value": [1, "0.2"]}])
