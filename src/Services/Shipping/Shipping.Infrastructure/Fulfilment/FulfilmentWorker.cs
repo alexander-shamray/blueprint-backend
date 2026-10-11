@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shipping.Application.Addresses;
 using Shipping.Application.Carrier;
+using Shipping.Application.Privacy;
+using Shipping.Application.Privacy.EndWaitingShipment;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Carrier;
@@ -238,6 +240,19 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             }
 
             AddressLookup.Found found = (AddressLookup.Found)lookup;
+
+            // The owner may not have anonymised the order yet; a saved address would outlive an erasure reported done.
+            if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(found.CustomerId, ct))
+            {
+                CommitOutcome erased = await CommitPendingAsync(
+                    sp,
+                    id,
+                    (shipment, now) => shipment.MarkUnfulfillable(EndWaitingShipmentHandler.Reason, now),
+                    ct);
+
+                return erased.Moved;
+            }
+
             address = found.Address;
 
             // Committed before the booking, so a pass repeated after a crash does not read it twice (ADR-052).

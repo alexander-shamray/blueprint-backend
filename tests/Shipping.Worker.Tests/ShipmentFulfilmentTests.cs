@@ -8,6 +8,7 @@ using Shipping.Application.Carrier;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Fulfilment;
+using Shipping.OrderingStub;
 using Shipping.TestSupport;
 using Shouldly;
 using Xunit;
@@ -91,6 +92,35 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         await _steps.ClearBackoffAsync(order);
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "a terminal row is outside the claim");
+    }
+
+    [Fact]
+    public async Task An_address_is_not_saved_back_for_a_subject_Shipping_has_already_erased()
+    {
+        // The window of #823: the owner has not anonymised the order, so it still answers with the subject's address.
+        Guid customer = Guid.CreateVersion7();
+        Guid order = await ConfirmForAsync(customer);
+        await RecordErasureAsync(customer);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Unfulfillable");
+        (await _steps.ReasonAsync(order)).ShouldBe("personal_data_erased");
+        (await fixture.AddressCountAsync(new OrderId(order))).ShouldBe(0, "nothing of the subject's is saved back");
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(0, "the carrier is never given the address");
+    }
+
+    [Fact]
+    public async Task An_erasure_recorded_for_another_subject_leaves_the_address_to_be_saved_and_booked()
+    {
+        // The control for the case above: the same audit table holds a row, and it is not this customer's.
+        Guid order = await ConfirmForAsync(Guid.CreateVersion7());
+        await RecordErasureAsync(Guid.CreateVersion7());
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Booked");
+        (await fixture.AddressCountAsync(new OrderId(order))).ShouldBe(1);
     }
 
     [Fact]
@@ -366,5 +396,38 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
                 return moved;
             },
             TestContext.Current.CancellationToken);
+    }
+
+    private async Task<Guid> ConfirmForAsync(Guid customer)
+    {
+        Guid order = Guid.CreateVersion7();
+        DeliveryAddress address = FulfilmentSteps.Kazakh;
+
+        fixture.Ordering.Addresses[order] = new StubAddress(
+            customer,
+            address.Line1,
+            address.Line2,
+            address.City,
+            address.PostalCode,
+            address.Country);
+
+        await _steps.PublishAsync(FulfilmentSteps.Confirmed(order));
+        await fixture.WaitUntilAttemptDueAsync(order);
+
+        return order;
+    }
+
+    /// <summary>The audit row a holder writes: the request, the salted hash and a count, and nothing else.</summary>
+    private Task RecordErasureAsync(Guid subject)
+    {
+        Guid request = Guid.CreateVersion7();
+
+        return fixture.ExecuteAsync(
+            """
+            INSERT INTO shipping.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt)
+            VALUES ({0}, {1}, 0, SYSDATETIMEOFFSET());
+            """,
+            request,
+            Common.Domain.PersonalDataErasure.HashSubject(request, subject));
     }
 }
