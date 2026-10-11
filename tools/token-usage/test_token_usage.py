@@ -24,8 +24,11 @@ def usage(read=0, write_5m=0, write_1h=0, output=0, fresh=0):
     }
 
 
-def reply(message_id, at="2026-10-07T10:00:00.000Z", **tokens):
-    return {"type": "assistant", "timestamp": at, "message": {"id": message_id, "usage": usage(**tokens)}}
+def reply(message_id, at="2026-10-07T10:00:00.000Z", model=None, **tokens):
+    message = {"id": message_id, "usage": usage(**tokens)}
+    if model:
+        message["model"] = model
+    return {"type": "assistant", "timestamp": at, "message": message}
 
 
 def prompt(text, at="2026-10-07T09:00:00.000Z"):
@@ -64,6 +67,31 @@ class ReportTests(unittest.TestCase):
         report = Report(since)
         report.read_project(self.root)
         return {(r["command"], r["agent"]): r for r in report.rows()}, report
+
+    def test_each_row_splits_by_the_model_that_answered(self):
+        self.files.write("s.jsonl", [ship(), reply("m1", model="opus", read=100), reply("m2", model="opus", read=50),
+                                     reply("m3", model="sonnet", read=200), reply("m4", read=10)])
+        report = Report()
+        report.read_project(self.root)
+        split = {(r["agent"], r["model"]): r for r in report.rows(by_model=True)}
+        self.assertEqual(split[MAIN, "opus"]["calls"], 2)
+        self.assertEqual(split[MAIN, "opus"]["cache_read"], 150)
+        self.assertEqual(split[MAIN, "sonnet"]["cache_read"], 200)
+        self.assertEqual(split[MAIN, token_usage.UNKNOWN_MODEL]["calls"], 1)
+        self.assertEqual(split["", ""]["calls"], 4)
+        plain = {r["agent"]: r for r in report.rows()}
+        self.assertEqual(plain[MAIN]["calls"], 4)
+        self.assertNotIn("model", plain[MAIN])
+
+    def test_a_subagent_on_another_model_is_its_own_row(self):
+        self.files.write("s.jsonl", [ship(), reply("m1", model="opus", read=100)])
+        self.files.write("s/subagents/agent-a1.jsonl", [reply("a1", model="haiku", read=40)])
+        (self.root / "s/subagents/agent-a1.meta.json").write_text('{"agentType": "Explore"}')
+        report = Report()
+        report.read_project(self.root)
+        split = {(r["agent"], r["model"]): r["calls"] for r in report.rows(by_model=True)}
+        self.assertEqual(split["Explore", "haiku"], 1)
+        self.assertEqual(split[MAIN, "opus"], 1)
 
     def test_a_response_written_once_per_block_is_counted_once(self):
         self.files.write("s.jsonl", [ship(), reply("m1", read=100), reply("m1", read=100), reply("m2", read=50)])
@@ -421,6 +449,20 @@ class CommandLineTests(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as refused:
                 token_usage.main(views)
             self.assertEqual(refused.exception.code, 2)
+
+    def test_models_cannot_be_asked_for_with_another_view(self):
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as refused:
+            token_usage.main(["--models", "--spawns", "5"])
+        self.assertEqual(refused.exception.code, 2)
+
+    def test_models_prints_a_model_column(self):
+        with tempfile.TemporaryDirectory() as directory:
+            Transcripts(Path(directory)).write("s.jsonl", [ship(), reply("m1", model="opus", read=100)])
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(token_usage.main([directory, "--models"]), 0)
+        self.assertIn("model", out.getvalue().splitlines()[0])
+        self.assertIn("opus", out.getvalue())
 
     def test_a_missing_directory_exits_2(self):
         with contextlib.redirect_stderr(io.StringIO()):

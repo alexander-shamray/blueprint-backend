@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 NO_COMMAND = "(no command)"
+UNKNOWN_MODEL = "(unknown)"
 MAIN = "main"
 SUBAGENT = "subagent"
 COMMAND = re.compile(r"<command-name>/?([^<\s]+)</command-name>")
@@ -99,6 +100,7 @@ class Report:
         self.since = since
         self.session = session
         self.groups: dict[tuple[str, str], Usage] = {}
+        self.by_model: dict[tuple[str, str, str], Usage] = {}
         self.seen: set[str] = set()
         self.skipped = 0
         self.span: list[str] = []
@@ -124,6 +126,8 @@ class Report:
         if key:
             self.seen.add(key)
         self.groups.setdefault((command, agent), Usage()).add(usage, context, woken)
+        model = text_field(message, "model") or UNKNOWN_MODEL
+        self.by_model.setdefault((command, agent, model), Usage()).add(usage, context, woken)
         if day := str(entry.get("timestamp", ""))[:10]:
             self.span = [min(self.span[0], day), max(self.span[1], day)] if self.span else [day, day]
         return usage
@@ -228,15 +232,20 @@ class Report:
                 if isinstance(entry, dict):
                     yield entry
 
-    def rows(self) -> list[dict]:
-        rows = [{"command": c, "agent": a, **u.row()} for (c, a), u in self.groups.items()]
+    def rows(self, by_model: bool = False) -> list[dict]:
+        if by_model:
+            rows = [{"command": c, "agent": a, "model": m, **u.row()} for (c, a, m), u in self.by_model.items()]
+            usages = self.by_model.values()
+        else:
+            rows = [{"command": c, "agent": a, **u.row()} for (c, a), u in self.groups.items()]
+            usages = self.groups.values()
         rows.sort(key=lambda r: r["input_equivalent"], reverse=True)
         total = Usage()
-        for usage in self.groups.values():
+        for usage in usages:
             for name in ("calls", "input", "write_5m", "write_1h", "read", "output", "woken", "woken_write"):
                 setattr(total, name, getattr(total, name) + getattr(usage, name))
             total.contexts |= usage.contexts
-        return [*rows, {"command": "TOTAL", "agent": "", **total.row()}]
+        return [*rows, {"command": "TOTAL", "agent": "", **({"model": ""} if by_model else {}), **total.row()}]
 
 
 def result_text(content) -> str:
@@ -444,8 +453,9 @@ def default_projects(cwd: Path) -> list[Path]:
     return [main, *sorted(main.parent.glob(main.name + "-*"))]
 
 
-ROWS = ("command", "agent", "contexts", "calls", "mean_context", "input", "cache_write", "cache_read", "output",
+MODEL_ROWS = ("command", "agent", "model", "contexts", "calls", "mean_context", "input", "cache_write", "cache_read", "output",
         "input_equivalent", "woken_equivalent", "woken_write")
+ROWS = tuple(c for c in MODEL_ROWS if c != "model")
 DOCS = ("doc", "named_by", "reads", "main", "subagents")
 RESULTS = ("command", "tool", "results", "characters", "approx_tokens")
 SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
@@ -454,7 +464,7 @@ SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "descripti
 def render(rows: list[dict], columns: tuple[str, ...] = ROWS) -> str:
     cells = [list(columns)] + [[f"{r[c]:,}" if isinstance(r[c], int) else r[c] for c in columns] for r in rows]
     widths = [max(len(row[i]) for row in cells) for i in range(len(columns))]
-    left = {"command", "agent", "started", "description", "tool", "doc", "named_by"}
+    left = {"command", "agent", "model", "started", "description", "tool", "doc", "named_by"}
     lines = ["  ".join(cell.ljust(w) if c in left else cell.rjust(w) for c, cell, w in zip(columns, row, widths))
              for row in cells]
     return "\n".join(line.rstrip() for line in lines)
@@ -474,6 +484,8 @@ def main(argv: list[str] | None = None) -> int:
                        help="list the N costliest subagents, each with the task it was given, instead")
     views.add_argument("--tools", type=int, metavar="N",
                        help="list the N commands and tools whose results put the most text into main sessions")
+    views.add_argument("--models", action="store_true",
+                       help="split each command and agent row by the model that answered")
     views.add_argument("--docs", action="store_true",
                        help="list every tracked markdown file with who names it and how often it was opened")
     parser.add_argument("--session", default="", metavar="ID",
@@ -509,7 +521,7 @@ def main(argv: list[str] | None = None) -> int:
         rows = sorted(report.spawns, key=lambda r: r["input_equivalent"], reverse=True)[:args.spawns]
         columns = SPAWNS
     else:
-        rows, columns = report.rows(), ROWS
+        rows, columns = report.rows(args.models), MODEL_ROWS if args.models else ROWS
     print(json.dumps(rows, indent=2) if args.json else render(rows, columns))
     if report.span:
         print(f"responses from {report.span[0]} to {report.span[1]}", file=sys.stderr)
