@@ -205,6 +205,14 @@ class Stack:
             def unpause(self, service): outer.calls.append(("unpause", service))
             def running(self, service): return running
             def logs(self, service, since): return stdout
+            def stats(self): return [{"name": "sql", "cpu": "1.5%", "memory": "1GiB / 8GiB"},
+                                     {"name": "ordering-api", "cpu": "--", "memory": "0B / 0B"},
+                                     {"name": "catalog-api", "cpu": "42.0%", "memory": "200MiB / 8GiB"}]
+            def host(self): return 8, 8589934592
+
+            def limits(self, service):
+                outer.calls.append(("limits", service))
+                return 0, 0
 
             def exec_sql(self, sql, database="Ordering"):
                 outer.calls.append(("sql", database, " ".join(sql.split())))

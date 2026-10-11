@@ -405,6 +405,30 @@ class Latency(unittest.TestCase):
         self.assertTrue(ok, detail)
         self.assertIn("one service slow", detail)
 
+    def test_everything_slow_together_runs_the_runbooks_three_reads_in_its_order(self):
+        stack = self.stack(query=self.answers([("Ordering.Api", "/a", "29.0"), ("Catalog.Api", "/b", "12.0")]))
+        ok, detail = self.module().first_step(stack.world)
+        self.assertTrue(ok, detail)
+        self.assertIn("3 containers sampled, busiest catalog-api 42.0%", detail)
+        self.assertIn("host 8 CPUs", detail)
+        self.assertIn("ordering-api memory limit none, CPU limit none", detail)
+        self.assertEqual([("limits", "ordering-api")], stack.calls)
+
+    def test_one_service_slow_stops_at_the_query_as_the_runbook_does(self):
+        stack = self.stack(query=self.answers([("Ordering.Api", "/a", "29.0")]))
+        ok, detail = self.module().first_step(stack.world)
+        self.assertTrue(ok, detail)
+        self.assertNotIn("containers sampled", detail)
+        self.assertEqual([], stack.calls)
+
+    def test_the_translated_reads_are_the_ones_the_runbook_names(self):
+        text = squash(runbook("latency.md"))
+        for read in ("kubectl -n <ns> top pods", "kubectl -n <ns> top nodes",
+                     "get pod <pod> -o jsonpath='{.spec.containers[*].resources}'"):
+            self.assertIn(squash(read), text)
+        source = Path(self.module().__file__).read_text(encoding="utf-8")
+        self.assertIn("`kubectl top pods` is `docker stats`", source)
+
     def test_the_first_step_fails_when_no_route_reads_over_a_second(self):
         for slow in ([], [("Ordering.Api", "/a", "0.4")], [("Ordering.Api", "/a", "NaN")]):
             with self.subTest(slow):

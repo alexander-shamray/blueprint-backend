@@ -171,6 +171,46 @@ class ComposeArgv(unittest.TestCase):
         self.assertTrue(all(argv[:3] == ["docker", "compose", "-f"] and argv[3].endswith("docker-compose.yml")
                             for argv, _ in calls))
 
+    def scripted(self, *outputs):
+        calls = []
+        pending = list(outputs)
+
+        def run(argv, **kwargs):
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0, pending.pop(0), "")
+
+        return harness.Compose(run), calls
+
+    def test_stats_samples_every_running_container_with_one_docker_stats(self):
+        row = '{"Name":"ordering-api","CPUPerc":"3.5%","MemUsage":"90MiB / 8GiB"}'
+        compose, calls = self.scripted("abc\ndef\n", row + "\n")
+        self.assertEqual([{"name": "ordering-api", "cpu": "3.5%", "memory": "90MiB / 8GiB"}], compose.stats())
+        self.assertEqual(["ps", "-q"], calls[0][4:])
+        self.assertEqual(["docker", "stats", "--no-stream", "--format", "{{json .}}", "abc", "def"], calls[1])
+
+    def test_stats_of_a_stack_with_nothing_running_is_empty_and_asks_docker_nothing_more(self):
+        compose, calls = self.scripted("")
+        self.assertEqual([], compose.stats())
+        self.assertEqual(1, len(calls))
+
+    def test_host_is_the_engines_cpu_count_and_memory(self):
+        compose, calls = self.scripted("8 8589934592\n")
+        self.assertEqual((8, 8589934592), compose.host())
+        self.assertEqual(["docker", "info", "--format", "{{.NCPU}} {{.MemTotal}}"], calls[0])
+
+    def test_limits_are_the_containers_hostconfig_and_zero_means_none(self):
+        compose, calls = self.scripted("abc\n", '{"Memory":0,"NanoCpus":0}\n')
+        self.assertEqual((0, 0), compose.limits("ordering-api"))
+        self.assertEqual(["ps", "-q", "ordering-api"], calls[0][4:])
+        self.assertEqual(["docker", "inspect", "--format", "{{json .HostConfig}}", "abc"], calls[1])
+
+    def test_a_docker_failure_is_a_game_day_error_naming_the_verb(self):
+        def run(argv, **kwargs):
+            return subprocess.CompletedProcess(argv, 1, "", "no daemon")
+
+        with self.assertRaisesRegex(harness.GameDayError, "docker info .* exited 1: no daemon"):
+            harness.Compose(run).host()
+
     def test_output_is_decoded_as_utf8_and_never_the_ansi_page(self):
         compose, calls = self.compose()
         compose.logs("ordering-api")
