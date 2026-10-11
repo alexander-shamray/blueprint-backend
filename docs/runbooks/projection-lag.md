@@ -137,6 +137,10 @@ replays rows that were delivered successfully, and those carry a `ProcessedAt`
 — so a predicate of `ProcessedAt IS NULL` selects exactly the rows that do not
 need rebuilding and none of the ones that do.
 
+Both writes below need `sqlcmd -I`: the table carries filtered indexes, which
+refuse a write under `QUOTED_IDENTIFIER OFF` with Msg 1934. SSMS defaults to
+ON; `sqlcmd` does not.
+
 ```sql
 -- Retrying one stuck row: it is already claimable, so only the backoff moves.
 UPDATE ordering.OutboxMessages
