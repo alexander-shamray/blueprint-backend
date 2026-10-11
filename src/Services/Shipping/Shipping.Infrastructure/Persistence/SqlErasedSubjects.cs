@@ -13,17 +13,18 @@ internal sealed class SqlErasedSubjects(IDbConnectionFactory connections) : IEra
     private const string ErasuresSql =
         """
         SELECT RequestId, SubjectHash
-        FROM shipping.PersonalDataErasures;
+        FROM shipping.PersonalDataErasures
+        WHERE ErasedAt >= @Since;
         """;
 
     private sealed record Row(Guid RequestId, string SubjectHash);
 
-    public async Task<bool> IsErasedAsync(Guid subjectId, CancellationToken ct)
+    public async Task<bool> IsErasedAsync(Guid subjectId, DateTimeOffset since, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
 
         IEnumerable<Row> rows = await connection.QueryAsync<Row>(
-            new CommandDefinition(ErasuresSql, cancellationToken: ct));
+            new CommandDefinition(ErasuresSql, new { Since = since }, cancellationToken: ct));
 
         return rows.Any(r => PersonalDataErasure.HashSubject(r.RequestId, subjectId) == r.SubjectHash.Trim());
     }

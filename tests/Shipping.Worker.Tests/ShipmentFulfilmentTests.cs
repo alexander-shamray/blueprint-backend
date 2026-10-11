@@ -133,6 +133,20 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
+    public async Task An_erasure_recorded_before_the_shipment_was_created_is_not_read()
+    {
+        // The owner had anonymised the subject's orders by then, so the read is bound to what came after (ADR-092).
+        Guid customer = Guid.CreateVersion7();
+        await RecordErasureAsync(customer);
+        Guid order = await ConfirmForAsync(customer);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Booked");
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(1);
+    }
+
+    [Fact]
     public async Task An_erasure_recorded_for_another_subject_leaves_the_address_to_be_saved_and_booked()
     {
         // The control for the case above: the same audit table holds a row, and it is not this customer's.
