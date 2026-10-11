@@ -33,6 +33,12 @@ internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) 
         WHERE OrderId = @OrderId;
         """;
 
+    private const string DeleteSql =
+        """
+        DELETE FROM shipping.DeliveryAddresses
+        WHERE OrderId = @OrderId;
+        """;
+
     private sealed record Row(string Line1, string? Line2, string City, string PostalCode, string Country);
 
     public async Task SaveAsync(
@@ -59,6 +65,14 @@ internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) 
                     FetchedAt = fetchedAt
                 },
                 cancellationToken: ct));
+    }
+
+    public async Task DeleteAsync(OrderId orderId, CancellationToken ct)
+    {
+        using IDbConnection connection = connections.Create();
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(DeleteSql, new { OrderId = orderId.Value }, cancellationToken: ct));
     }
 
     public async Task<DeliveryAddress?> GetAsync(OrderId orderId, CancellationToken ct)

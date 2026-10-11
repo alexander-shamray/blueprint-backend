@@ -15,4 +15,7 @@ public interface IDeliveryAddressStore
         CancellationToken ct);
 
     Task<DeliveryAddress?> GetAsync(OrderId orderId, CancellationToken ct);
+
+    /// <summary>Removes the order's row; none is not a fault, since an erasure may have taken it first.</summary>
+    Task DeleteAsync(OrderId orderId, CancellationToken ct);
 }
