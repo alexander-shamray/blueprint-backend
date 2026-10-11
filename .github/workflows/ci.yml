@@ -666,9 +666,12 @@ jobs:
           - shard: shipping
             selects: >-
               FullyQualifiedName~Shipping.&FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.&FullyQualifiedName!~Notifications.
+          - shard: platform
+            selects: >-
+              FullyQualifiedName~Platform.IntegrationTests.&FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.&FullyQualifiedName!~Notifications.&FullyQualifiedName!~Shipping.
           - shard: rest
             selects: >-
-              FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.&FullyQualifiedName!~Notifications.&FullyQualifiedName!~Shipping.
+              FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.&FullyQualifiedName!~Notifications.&FullyQualifiedName!~Shipping.&FullyQualifiedName!~Platform.IntegrationTests.
     steps:
       - uses: actions/checkout@v4
 
