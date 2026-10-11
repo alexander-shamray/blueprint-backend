@@ -183,6 +183,62 @@ class Agents(unittest.TestCase):
             self.assertTrue(got["description"] and got["prompt"])
 
 
+class Runs(unittest.TestCase):
+    def test_a_sample_spreads_over_heads_with_enough_entries_and_is_deterministic(self):
+        entries = [{"pr": pr, "head": f"h{pr}"} for pr in range(1, 41) for _ in range(3 if pr % 2 else 1)]
+        got = qs.sample_heads(entries, 4)
+        self.assertEqual(got, qs.sample_heads(entries, 4))
+        self.assertEqual(len(got), 4)
+        self.assertTrue(all(pr % 2 for pr, _ in got))
+        self.assertEqual(len(qs.sample_heads(entries, 999)), 20)
+
+    def sweep(self, outcomes):
+        """sweep_findings over a fake worktree, slicer and auditor; outcomes is one list per ask call."""
+        with tempfile.TemporaryDirectory() as tmp:
+            def fake_run(*argv, **kwargs):
+                if argv[0] == qs.git_bash():
+                    slices = Path(f"{argv[3]}.slices")
+                    slices.mkdir()
+                    for n in (1, 2, 10):
+                        (slices / f"{n}.txt").write_text("a.py\n")
+                return mock.Mock(stdout="", returncode=0)
+            calls = iter(outcomes)
+
+            def fake_ask(claude, agent, prompt, cwd, add_dirs=()):
+                result = next(calls)
+                if isinstance(result, BaseException):
+                    raise result
+                if result is None:
+                    raise SystemExit("no json")
+                return result
+            with mock.patch.object(qs.tempfile, "gettempdir", return_value=tmp), \
+                    mock.patch.object(qs, "git"), mock.patch.object(qs, "run", fake_run), \
+                    mock.patch.object(qs, "ask", fake_ask), contextlib.redirect_stderr(io.StringIO()):
+                return qs.sweep_findings("claude", "bug", "c" * 40)
+
+    def test_slices_run_in_numeric_order_and_their_findings_are_gathered(self):
+        found, failed, slices = self.sweep([[{"file": "a"}], [], [{"file": "b"}]])
+        self.assertEqual(([f["file"] for f in found], failed, slices), (["a", "b"], [], 3))
+
+    def test_a_slice_is_retried_once_then_reported_failed_without_losing_the_rest(self):
+        found, failed, slices = self.sweep([[{"file": "a"}], None, None, [{"file": "b"}]])
+        self.assertEqual(([f["file"] for f in found], failed, slices), (["a", "b"], ["2.txt"], 3))
+
+    def test_a_usage_limit_notice_ends_the_run_instead_of_being_retried_as_a_failed_slice(self):
+        done = mock.Mock(stdout="Paused: the weekly usage limit is almost used up.", returncode=0)
+        with mock.patch.object(qs, "run", return_value=done), self.assertRaises(qs.UsageLimit):
+            qs.ask("claude", "bug-auditor", "p", "dir")
+        with self.assertRaises(qs.UsageLimit):
+            self.sweep([[{"file": "a"}], qs.UsageLimit("limit")])
+
+    def test_the_slice_directory_is_handed_to_the_auditor(self):
+        done = mock.Mock(stdout='{"findings": []}', returncode=0)
+        with mock.patch.object(qs, "run", return_value=done) as call:
+            qs.ask("claude", "bug-auditor", "p", "dir", ["/s"])
+        argv = list(call.call_args.args)
+        self.assertEqual(argv[argv.index("--add-dir") + 1], "/s")
+
+
 class TheCommittedSets(unittest.TestCase):
     def test_every_sweep_entry_with_a_commit_names_a_path_and_issues_are_unique(self):
         sweeps = qs.load(qs.SWEEPS)
