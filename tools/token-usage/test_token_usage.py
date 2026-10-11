@@ -113,6 +113,18 @@ class ReportTests(unittest.TestCase):
         self.assertEqual((plain["cache_read"], plain["woken_equivalent"]), (80, 0))
         self.assertEqual(rows["TOTAL", ""]["woken_equivalent"], 22)
 
+    def test_a_wakes_cache_writes_are_priced_by_their_ttl_apart_from_its_reads(self):
+        wake = {"type": "user", "timestamp": "2026-10-07T11:00:00.000Z", "origin": {"kind": "task-notification"},
+                "message": {"content": "<task-notification>pending</task-notification>"}}
+        self.files.write("s.jsonl", [
+            ship(), reply("m1", write_5m=1000),
+            wake, reply("m2", at="2026-10-07T11:01:00.000Z", write_5m=40, write_1h=10, read=100),
+            reply("m3", at="2026-10-07T11:02:00.000Z", read=100)])
+        rows, _ = self.rows()
+        ship_main = rows["/ship", "main"]
+        self.assertEqual((ship_main["woken_write"], ship_main["woken_equivalent"]), (70, 90))
+        self.assertEqual(rows["TOTAL", ""]["woken_write"], 70)
+
     def test_a_harness_command_typed_mid_run_leaves_the_run_its_command(self):
         compact = prompt("<command-name>/compact</command-name>", "2026-10-07T10:00:00.000Z")
         reload = prompt("<command-name>/reload-plugins</command-name>", "2026-10-07T10:30:00.000Z")
