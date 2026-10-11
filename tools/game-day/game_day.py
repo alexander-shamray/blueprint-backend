@@ -110,6 +110,12 @@ def _restore(scenario: ModuleType, world: harness.World, fired: bool, clock, sle
     return []
 
 
+def verdict(findings: list[str], seconds: float) -> str:
+    """The last line: the outcome and the whole run's wall clock, in the form README.md's Runtime column holds."""
+    minutes, rest = divmod(round(seconds), 60)
+    return f"game day: {'FAILED' if findings else 'OK'} in {minutes}m{rest:02d}s"
+
+
 def matrix(names: str) -> list[str]:
     """The dispatch's runbooks, one job each: `all` is every script, and a named one without a script is refused
     here, before a stack is started for it."""
@@ -153,10 +159,12 @@ def main(argv: list[str] | None = None) -> int:
     compose = harness.Compose()
     world = harness.World(compose, harness.Alerts(), orders, harness.Logs(), print, realm=harness.Realm(),
                           traffic=harness.Traffic(token=orders.token), broker=harness.Broker(compose))
+    started = time.monotonic()
     findings = run(load(args.runbook), world)
+    elapsed = time.monotonic() - started
     for finding in findings:
         print(f"FINDING: {finding}", file=sys.stderr)
-    print("game day: " + ("FAILED" if findings else "OK"))
+    print(verdict(findings, elapsed))
     return 1 if findings else 0
 
 

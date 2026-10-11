@@ -288,6 +288,15 @@ class Fake:
         return [entry for entry in self.log if not entry.startswith(("state", "say"))]
 
 
+class Verdict(unittest.TestCase):
+    def test_the_last_line_carries_the_whole_runs_wall_clock_in_the_readmes_form(self):
+        self.assertEqual("game day: OK in 23m16s", game_day.verdict([], 23 * 60 + 16))
+        self.assertEqual("game day: OK in 4m08s", game_day.verdict([], 248.4))
+
+    def test_a_failed_run_is_timed_too(self):
+        self.assertEqual("game day: FAILED in 0m05s", game_day.verdict(["the alert did not fire"], 5))
+
+
 class Runner(unittest.TestCase):
     def test_a_quiet_start_a_firing_alert_a_working_step_and_a_restore_is_a_pass(self):
         fake = Fake(["inactive", "inactive", "pending", "firing", "firing", "inactive"])
