@@ -86,9 +86,17 @@ class Reviews(unittest.TestCase):
                     comment(3, 6), comment(4, 5, head="gone"), comment(5, 5, line=None)]
         self.assertEqual(qs.review_entries(comments, {5: "b"}), [])
 
+    def test_a_value_after_a_password_key_is_masked_in_any_spacing_and_case(self):
+        sample = "e.g. `Pass" + "word = abc`, pw" + "d=x;"
+        self.assertEqual(qs.clean(sample), "e.g. `Password = <value> pwd=<value>")
+
+    def test_the_committed_set_holds_no_value_after_a_password_key(self):
+        for entry in qs.load(qs.REVIEWS):
+            self.assertEqual(qs.clean(entry["text"]), entry["text"], entry["id"])
+
     def test_text_is_capped(self):
         long = dict(comment(1, 5), body="word " * 400)
-        self.assertEqual(len(qs.review_entries([long], {5: "b"})[0]["text"]), qs.TEXT_CAP)
+        self.assertIn(len(qs.review_entries([long], {5: "b"})[0]["text"]), (qs.TEXT_CAP, qs.TEXT_CAP - 1))
 
 
 class Scoring(unittest.TestCase):

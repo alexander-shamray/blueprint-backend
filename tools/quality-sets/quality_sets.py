@@ -110,6 +110,16 @@ def build_sweeps(issues):
     return sorted(entries, key=lambda e: e["issue"])
 
 
+def clean(body):
+    """A comment's text on one line, capped, with any value after a password key masked.
+
+    A review about a connection-string guard quotes a sample password, and the secret scan
+    cannot tell a sample from a credential.
+    """
+    text = re.sub(r"(?i)\b(password|pwd)(\s*=\s*)\S+", r"\1\2<value>", " ".join(body.split()))
+    return text[:TEXT_CAP].rstrip()
+
+
 def review_entries(comments, base_of):
     """Entries from a repository's review comments: each top-level one by a reviewer in REVIEWERS.
 
@@ -128,7 +138,7 @@ def review_entries(comments, base_of):
         entries.append({
             "id": comment["id"], "pr": pr, "base": base_of[pr], "head": head,
             "reviewer": comment["user"]["login"], "path": comment["path"], "line": line,
-            "text": " ".join(comment["body"].split())[:TEXT_CAP],
+            "text": clean(comment["body"]),
         })
     return sorted(entries, key=lambda e: e["id"])
 
