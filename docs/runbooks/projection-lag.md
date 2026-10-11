@@ -53,10 +53,13 @@ For a stale `ProductPrices`, work [`outbox-broker.md`](outbox-broker.md) on the
 ## Find the throwing handler
 
 A local-lane stall is nearly always one projection handler throwing, and the
-dispatcher's own log names it.
+dispatcher's own log names it. Read it in Grafana's Explore, on the Loki data
+source, over the last fifteen minutes; the hosts log through OpenTelemetry alone
+([§13.4](../backend-architecture/13-observability.md)), so `kubectl logs` shows
+nothing.
 
-```bash
-kubectl -n <ns> logs deploy/ordering --since=15m | grep "Outbox message .* failed"
+```logql
+{service_name="Ordering.Api"} |~ "Outbox message .* failed"
 ```
 
 Then read the row's own record of it — `LastError` is the first 2000 characters

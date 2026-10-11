@@ -26,10 +26,14 @@ cap, which is [`outbox-abandoned.md`](outbox-abandoned.md).
 
 ## Is the dispatcher running, or is the broker refusing?
 
-These fail identically on the graph and need opposite responses.
+These fail identically on the graph and need opposite responses. Read the
+service's log in Grafana's Explore, on the Loki data source, over the last ten
+minutes. The hosts log through OpenTelemetry alone
+([§13.4](../backend-architecture/13-observability.md)), so `kubectl logs` shows
+nothing, and that silence is not the dispatcher's.
 
-```bash
-kubectl -n <ns> logs deploy/ordering --since=10m | grep -i "Outbox claim failed\|Outbox message\|Broker unreachable"
+```logql
+{service_name="Ordering.Api"} |~ "Outbox claim failed|Outbox message|Broker unreachable"
 ```
 
 - **`Outbox claim failed`** — the dispatcher cannot reach *SQL Server*. This is

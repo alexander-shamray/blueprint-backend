@@ -155,9 +155,10 @@ own issue; a script keeps reporting one it can reach until it is repaired, and
 names in its header one it has to work around.
 
 - **A container's stdout is empty.** The hosts log through OpenTelemetry alone
-  (§13.4), so the `kubectl logs … | grep` that opens `outbox-broker.md` and
-  `projection-lag.md` finds nothing on any deployment. The scripts read Loki
-  instead and say so in their headers.
+  (§13.4), so a `kubectl logs` read finds nothing on any deployment. The
+  runbooks that opened with one (`outbox-broker.md`, `projection-lag.md`,
+  `outbox-growth.md`, `queue-backlog.md`) now name the Loki query, which the
+  scripts run through Grafana's proxy.
 - **`sqlcmd` needs `-I`.** The runbooks' SQL is written for a client with
   `QUOTED_IDENTIFIER` on; `sqlcmd` leaves it off, and the outbox's filtered
   indexes refuse a write without it. The harness passes `-I`.

@@ -78,7 +78,15 @@ endpoint is counted by `messaging_masstransit_saga_ea_total` and
 
 ```bash
 kubectl -n <ns> get deploy <workload> -o jsonpath='{.spec.replicas}{"\n"}'
-kubectl -n <ns> logs deploy/<workload> --since=15m | grep -i retry | head
+```
+
+The retries are in Grafana's Explore, on the Loki data source, over the last
+fifteen minutes, with the workload's `service_name`; the hosts log through
+OpenTelemetry alone ([§13.4](../backend-architecture/13-observability.md)), so
+`kubectl logs` shows nothing.
+
+```logql
+{service_name="<service>"} |~ "(?i)retry"
 ```
 
 **The lookalike is a consumer that is not running at all.** A scaled-to-zero
