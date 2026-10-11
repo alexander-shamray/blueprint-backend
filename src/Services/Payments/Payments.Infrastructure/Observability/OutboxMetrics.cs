@@ -8,7 +8,7 @@ namespace Payments.Infrastructure.Observability;
 /// <remarks>Built by <see cref="MetricsInitialiser"/>, since an instance never built has no instruments.</remarks>
 public sealed class OutboxMetrics
 {
-    /// <summary>Must be the name §13.2's <c>AddMeter</c> registers, or nothing collects these instruments.</summary>
+    /// <summary>Must sit under the service prefix §13.2 registers, or nothing collects these instruments.</summary>
     public const string MeterName = "Payments.Outbox";
 
     /// <summary>What tells a contained failure from a quiet lane, both an absent series; CA1848 (ADR-019).</summary>

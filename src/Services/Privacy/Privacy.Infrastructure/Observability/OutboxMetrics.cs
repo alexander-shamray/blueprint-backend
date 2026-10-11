@@ -10,7 +10,7 @@ namespace Privacy.Infrastructure.Observability;
 /// </remarks>
 public sealed class OutboxMetrics
 {
-    /// <summary>Must equal the name §13.2's <c>AddMeter</c> registers, or nothing collects these gauges.</summary>
+    /// <summary>Must sit under the service prefix §13.2 registers, or nothing collects these gauges.</summary>
     public const string MeterName = "Privacy.Outbox";
 
     /// <summary>What tells a contained failure from a healthy quiet lane, since both are an absent series.</summary>
