@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shipping.Application.Addresses;
 using Shipping.Application.Carrier;
+using Shipping.Application.Privacy;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Fulfilment;
@@ -268,6 +269,7 @@ public sealed class SupersededBookingTests
         services.AddSingleton<IShipmentRepository>(new ScriptedRepository(loads));
         services.AddSingleton(store);
         services.AddSingleton<IDeliveryAddressSource>(new UnknownOrder());
+        services.AddSingleton<IErasedSubjects>(new NobodyErased());
         services.AddSingleton(TimeProvider.System);
         // Options.Create bypasses validation, so a far-off age keeps these
         // fixed-instant shipments inside it however long the suite runs.
@@ -373,6 +375,9 @@ public sealed class SupersededBookingTests
             CancellationToken ct) =>
             throw new NotSupportedException("a stored address is not fetched again");
 
+        public Task<Guid?> CustomerAsync(OrderId orderId, CancellationToken ct) =>
+            Task.FromResult<Guid?>(Guid.CreateVersion7());
+
         public Task DeleteAsync(OrderId orderId, CancellationToken ct) =>
             throw new NotSupportedException("a stored address is not saved, so none is taken back");
 
@@ -390,11 +395,19 @@ public sealed class SupersededBookingTests
             CancellationToken ct) =>
             throw new NotSupportedException("an order the owner does not know has no address to store");
 
+        public Task<Guid?> CustomerAsync(OrderId orderId, CancellationToken ct) =>
+            throw new NotSupportedException("an order the owner does not know is never booked");
+
         public Task DeleteAsync(OrderId orderId, CancellationToken ct) =>
             throw new NotSupportedException("an order the owner does not know has no address to take back");
 
         public Task<DeliveryAddress?> GetAsync(OrderId orderId, CancellationToken ct) =>
             Task.FromResult<DeliveryAddress?>(null);
+    }
+
+    private sealed class NobodyErased : IErasedSubjects
+    {
+        public Task<bool> IsErasedAsync(Guid subjectId, CancellationToken ct) => Task.FromResult(false);
     }
 
     private sealed class UnknownOrder : IDeliveryAddressSource
