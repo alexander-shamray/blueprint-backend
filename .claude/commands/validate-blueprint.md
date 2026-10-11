@@ -88,9 +88,10 @@ This session only dispatches. It spawns one `general-purpose` agent per pass
 *Method* bullets and told to edit nothing, and holds only the JSON each
 returns: `claim`, `sites` as `file:line`, `conflict`, `owner`, `resolved`
 and, for check 9, `verdict`. It reads no chapter whole, opens only a
-`file:line` a finding cites, and drops one that does not hold. One dispatch, not a loop: a fix is made by the caller — a
-separate task after `/clear`, or /ship's step 2 — never by an implementer
-spawned here. (why: docs/commands/validate-blueprint.md, *Dispatch*)
+`file:line` a finding cites, and drops one that does not hold. One dispatch,
+not a loop: a fix is made by the caller — a separate task after `/clear`, or
+/ship's step 2 — never by an implementer spawned here. (why:
+docs/commands/validate-blueprint.md, *Dispatch*)
 
 ## Report
 
