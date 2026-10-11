@@ -116,7 +116,7 @@ def clean(body):
     A review about a connection-string guard quotes a sample password, and the secret scan
     cannot tell a sample from a credential.
     """
-    text = re.sub(r"(?i)\b(password|pwd)(\s*=\s*)\S+", r"\1\2<value>", " ".join(body.split()))
+    text = re.sub(r"(?i)(password|pwd)(\s*=\s*)\S+", r"\1\2<value>", " ".join(body.split()))
     return text[:TEXT_CAP].rstrip()
 
 
