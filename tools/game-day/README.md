@@ -125,7 +125,8 @@ container, so the default applies. The first runs, on 2026-10-10, fired
 209 and 226 of 240. The last is close to its ceiling, which is what a sum of
 ceilings looks like when the cause lands on a bad phase of both intervals.
 `ErasureRequestsOverdue`, run on 2026-10-11, fired after 173 and 213 seconds of
-its deadline.
+its deadline. `ErrorQueueDepth` and `SkippedQueueDepth`, run on 2026-10-11,
+each fired after 177 seconds of 240, and `QueueBacklogGrowing` after 712 of 780.
 
 **Reporting is a second evaluation.** Prometheus shows an alert one evaluation
 after the one whose expression first read true: the rule's entry in
@@ -190,9 +191,9 @@ three, and the erasure-overdue run, fired.
 | `projection-lag` | `OutboxLocalLaneStalled` | a table renamed through SQL | not timed |
 | `outbox-abandoned` | `OutboxAbandonedRows` | a row planted at the ceiling | not timed |
 | `queue-backlog` (lag half) | `DeliveryLagHigh` | `web-bff` paused for 20 seconds in each round, for 12 minutes, to outlast the `for:` | 23m16s |
-| `error-queue` | `ErrorQueueDepth` | a `CancelOrder` with a reason no mapper knows, sent to `ordering-commands`, which faults to `_error` | not timed |
-| `skipped-queue` | `SkippedQueueDepth` | a message type nothing binds, sent to `ordering-stock-events` | not timed |
-| `queue-backlog` (backlog half) | `QueueBacklogGrowing` | `web-bff` stopped, 1100 messages sent to `bff-order-events` and more topped up | not timed |
+| `error-queue` | `ErrorQueueDepth` | a `CancelOrder` with a reason no mapper knows, sent to `ordering-commands`, which faults to `_error` | 5m11s |
+| `skipped-queue` | `SkippedQueueDepth` | a message type nothing binds, sent to `ordering-stock-events` | 5m13s |
+| `queue-backlog` (backlog half) | `QueueBacklogGrowing` | `web-bff` stopped, 1100 messages sent to `bff-order-events` and more topped up | 37m58s with the lag half |
 | `address-refused` | `AddressReadRefused` | `orders:delivery-address` taken from `shipping-worker`'s service account, the worker restarted | 34m45s |
 | `contact-refused` | `ContactReadRefused` | `view-users` taken from `notifications-worker`'s, the stored contacts dropped | 32m40s |
 | `unscanned-shipment` | `UnscannedShipments` | a four-day-old Booked shipment planted through SQL | 4m08s |
@@ -252,11 +253,9 @@ A dispatch plans its runbooks with `game_day.py --matrix` and gives each its
 own job and its own stack, so a scenario that dies cannot poison the next and
 the longest runbook bounds the dispatch, not the sum. The job's
 `timeout-minutes` is 60 and the longest timed run in *The scripts* is
-`address-refused` at 34m45s, so every timed runbook fits alone, but
-`queue-backlog` is one job that runs both its halves: the lag half's 23m16s
-and the backlog half's, which is not timed, plus its own `for:` of 10 minutes
-and the settle. That total is owed a run before it is claimed to fit. A job
-that times out still runs its teardown.
+`queue-backlog` at 37m58s, one job that runs both its halves, so every timed
+runbook fits alone with 22 minutes to spare. A job that times out still runs
+its teardown.
 
 Why it is not scheduled: the timed runbooks alone are about three hours of
 runner time, and the suite already runs on every pull request that changes
