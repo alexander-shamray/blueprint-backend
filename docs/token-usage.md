@@ -346,3 +346,39 @@ That is the noise a comparison has to beat, and one head is not a sample of
 the 546. **No sweep has been scored**: a full first round at either commit is
 41 slices, which this change did not spend. Step 4's and step 5's exits stay
 open until those runs are recorded.
+
+## 2026-10-12 — the first scored runs
+
+Run by `tools/quality-sets/` at 6ec49559 against the sets of the section
+above, on the owner's machine.
+
+| Run | Entries | Found | Recall |
+|---|---|---|---|
+| `branch-reviewer`, 15 heads, twice each | 170 | 6 | 3.5% |
+| Security sweep, round 1, at `5bea8b26`, 41 slices | 51 | 11 | 21.6% |
+| Bug sweep, round 1, at `2a15c639`, 42 slices | 34 | not scored | |
+
+**The reviewer.** The heads are spread evenly over the pull requests that
+hold at least three Copilot comments, PRs 3 to 250. Four of the 15 heads had
+any hit, and on four heads the two runs disagreed. The reviewer reported 2.4
+findings a run against 5.7 comments a head from Copilot.
+
+**The security sweep.** No slice failed and the auditors reported 33
+findings. A hit is any finding in one of the issue's files, so 21.6% is an
+upper bound for round 1.
+
+**The bug sweep is not a score.** The auditors began answering "the weekly
+usage limit is almost used up" and stopped; 7 of the 42 slices returned no
+findings after a retry, and the other slices that returned JSON may have
+stopped early too. The run reported 14 findings and 0 of 34 found, which
+measures the limit and not the sweep. The runner now ends a run on such a
+notice rather than retrying through it. Step 5's exit still lacks this half.
+
+**What the numbers do not say.** Both exits ask for "at least", and neither is
+met on this measure. The measure is a proxy that favours neither side: it asks
+for the file and, for a review, a line within ten. The earlier sweeps ran up to
+seven rounds and had a second auditor verify each issue, against one round here.
+Copilot raised small points, wording and link forms among them, which
+`branch-reviewer`'s bar leaves out ("incomplete but true" is not a finding).
+Reading 3.5% as the reviewer being worse by that factor would be wrong.
+Reading it as meeting the exit would be wrong too.
