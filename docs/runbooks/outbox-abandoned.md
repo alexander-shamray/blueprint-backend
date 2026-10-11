@@ -115,6 +115,10 @@ manual action taken outside the system is not covered by it.
 
 ## Replaying
 
+Both writes below, this one and the discard, need `sqlcmd -I`: the table
+carries filtered indexes, which refuse a write under `QUOTED_IDENTIFIER OFF`
+with Msg 1934. SSMS defaults to ON; `sqlcmd` does not.
+
 ```sql
 -- One row at a time. Named by MessageId, never by a bare predicate over the
 -- whole abandoned set: the set may hold rows in all three categories above.
