@@ -18,7 +18,7 @@ internal sealed class ErasureRequestConfiguration : IEntityTypeConfiguration<Era
         builder.Property(r => r.SubjectId);
 
         // One request carries a subject's id at a time. The repository's per-subject lock serialises a race, and
-        // this index is the backstop behind it (ADR-092).
+        // this index is the backstop behind it (TakeLockSql).
         builder
             .HasIndex(r => r.SubjectId)
             .IsUnique()
