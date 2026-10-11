@@ -442,6 +442,9 @@ class Scenarios(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIn("Broker unreachable: ordering-svc", detail)
         self.assertFalse(outbox_broker.first_step(self.world(loki=[line, "Outbox claim failed; retrying"])[0])[0])
+        self.assertIn("stdout is empty", detail)
+        attempt = "Outbox message 1 on lane Broker failed, attempt 3 of 10."
+        self.assertIn("attempt 3 of 10", outbox_broker.first_step(self.world(loki=[line, attempt])[0])[1])
         ok, detail = outbox_broker.first_step(self.world(loki=["nothing"])[0])
         self.assertFalse(ok)
         self.assertIn("neither", detail)
