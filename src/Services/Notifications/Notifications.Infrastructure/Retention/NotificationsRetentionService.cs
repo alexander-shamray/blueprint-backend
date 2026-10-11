@@ -53,9 +53,14 @@ public sealed class NotificationsRetentionService : BackgroundService
     // holds goes first (docs/personal-data.md, NotificationLog); a row with a customer stays findable by it.
     private const string BlankUnassignedNotices =
         """
-        UPDATE notifications.NotificationLog
+        UPDATE n
         SET Languages = NULL, Parameters = ''
-        WHERE OrderId IN @Keys AND CustomerId IS NULL AND Status <> 'Pending';
+        FROM notifications.NotificationLog n
+        WHERE n.OrderId IN @Keys AND n.CustomerId IS NULL AND n.Status <> 'Pending'
+            AND EXISTS (
+                SELECT 1 FROM notifications.OrderRecords r WHERE r.OrderId = n.OrderId AND r.RecordedAt < @Before)
+            AND NOT EXISTS (
+                SELECT 1 FROM notifications.NotificationLog p WHERE p.OrderId = n.OrderId AND p.Status = 'Pending');
         """;
 
     // Asked again, so a notice a consumer wrote since the select keeps the record it will wait on.
@@ -194,7 +199,7 @@ public sealed class NotificationsRetentionService : BackgroundService
             if (beforeDelete is not null)
             {
                 await connection.ExecuteAsync(
-                    new CommandDefinition(beforeDelete, new { Keys = keys }, cancellationToken: ct));
+                    new CommandDefinition(beforeDelete, new { Keys = keys, Before = before }, cancellationToken: ct));
             }
 
             total += await connection.ExecuteAsync(
