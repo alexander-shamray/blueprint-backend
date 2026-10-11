@@ -56,7 +56,9 @@ that carries it.
 **Checked and holding none**: each holder's `PersonalDataErasures`, an audit
 row of a request id, a salted hash, a count and a time
 ([ADR-092](backend-architecture/adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
-Privacy's `ErasureCompletions`, a holder's name, a count and a time per request (kept for ever, with its closed request, by ADR-095),
+Privacy's `ErasureCompletions`, a holder's name, a count and a time per
+request, kept for ever with its closed request
+([ADR-095](backend-architecture/adr/ADR-095-a-closed-erasure-request-is-kept-as-the-evidence-and-has-no-retention-window.md)),
 Catalog's and Inventory's other tables, every
 service's inbox — §9.5's `InboxMessage` keeps no payload, under
 `RetentionPolicy.InboxWindow` — Redis's locks, and its cache, which no read
