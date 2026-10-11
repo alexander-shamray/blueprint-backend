@@ -133,17 +133,18 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
-    public async Task An_erasure_recorded_before_the_shipment_was_created_is_not_read()
+    public async Task An_erasure_recorded_before_the_shipment_was_created_still_ends_it()
     {
-        // The owner had anonymised the subject's orders by then, so the read is bound to what came after (ADR-092).
+        // The owner answers on its own clock, so it may still name the subject: no age bound is safe (ADR-092).
         Guid customer = Guid.CreateVersion7();
         await RecordErasureAsync(customer);
         Guid order = await ConfirmForAsync(customer);
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
 
-        (await _steps.StatusAsync(order)).ShouldBe("Booked");
-        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(1);
+        (await _steps.StatusAsync(order)).ShouldBe("Unfulfillable");
+        (await _steps.ReasonAsync(order)).ShouldBe("personal_data_erased");
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(0);
     }
 
     [Fact]
