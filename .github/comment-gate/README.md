@@ -101,10 +101,11 @@ because rewording a comment adds comment and no code; and one labelled
 shorter, so what it adds is comment. CI hands the gate the title in
 `PR_TITLE` and the labels, a JSON list of names, in `PR_LABELS`, as the
 event that started the run carried them. CI's `pull_request` types include
-`labeled`, `unlabeled` and `edited`, so a label added or a title changed
-starts a run that reads it; re-running the failed job would not, as it
-replays the old event. A run without either, as a local one is, takes no
-exception, and a `PR_LABELS` that is not a list of names refuses the run.
+`labeled` and `unlabeled`, so a label added starts a run that reads it;
+re-running the failed job would not, as it replays the old event. A title
+changed counts from the next push. A run without either, as a local one is,
+takes no exception, and a `PR_LABELS` that is not a list of names refuses
+the run.
 
 **`--tree` judges every line of the tracked files under the paths it is
 given**, as the working tree holds them, instead of a diff, and prints the
