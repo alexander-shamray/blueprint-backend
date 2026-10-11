@@ -1,6 +1,6 @@
 """docs/runbooks/projection-lag.md (the local lane). Alert: OutboxLocalLaneStalled, no `for:`.
 Cause:      Forced through SQL: OrderSummaries is renamed so the projection throws; the organic route is a migration.
-First step: the log read, Translated from kubectl to Loki (§13.4), then the runbook's SQL as written.
+First step: the log read, which the runbook makes in Loki (§13.4), then the runbook's SQL as written.
 Restore:    rename the table back, safe twice, then wait for the alert to resolve.
 """
 
@@ -43,7 +43,7 @@ def first_step(world: harness.World) -> tuple[bool, str]:
     if "OrderSummaries" not in rows:
         return False, f"the runbook's query did not show an error naming the table: {rows[:300]}"
     stdout = world.compose.logs(SERVICE, "15m").strip()
-    note = "" if stdout else " (the container's stdout is empty, so the runbook's kubectl read finds nothing)"
+    note = "" if stdout else " (the container's stdout is empty, as §13.4 has it, and the runbook reads Loki)"
     return True, logged[0].strip() + note
 
 

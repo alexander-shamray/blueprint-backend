@@ -47,8 +47,16 @@ from the rule.
 
 ## Is the dispatcher alive and claiming?
 
+Count the dispatcher's lines over the last ten minutes in Grafana's Explore, on
+the Loki data source; the hosts log through OpenTelemetry alone
+([§13.4](../backend-architecture/13-observability.md)), so `kubectl logs` shows
+nothing.
+
+```logql
+count_over_time({service_name="Ordering.Api"} |~ "Outbox message" [10m])
+```
+
 ```bash
-kubectl -n <ns> logs deploy/ordering --since=10m | grep -c "Outbox message"
 kubectl -n <ns> get pods -l app=ordering
 ```
 
