@@ -453,8 +453,8 @@ def default_projects(cwd: Path) -> list[Path]:
     return [main, *sorted(main.parent.glob(main.name + "-*"))]
 
 
-MODEL_ROWS = ("command", "agent", "model", "contexts", "calls", "mean_context", "input", "cache_write", "cache_read", "output",
-        "input_equivalent", "woken_equivalent", "woken_write")
+MODEL_ROWS = ("command", "agent", "model", "contexts", "calls", "mean_context", "input", "cache_write", "cache_read",
+              "output", "input_equivalent", "woken_equivalent", "woken_write")
 ROWS = tuple(c for c in MODEL_ROWS if c != "model")
 DOCS = ("doc", "named_by", "reads", "main", "subagents")
 RESULTS = ("command", "tool", "results", "characters", "approx_tokens")
