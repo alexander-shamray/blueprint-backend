@@ -15,6 +15,9 @@ public static class ObservabilityExtensions
     {
         string serviceName = builder.Environment.ApplicationName;
 
+        // "Catalog.Api" and "Catalog.Worker" both own "Catalog.*"; a name with no dot owns itself.
+        string servicePrefix = serviceName.Split('.')[0];
+
         // The only provider, because the redactor sees records in this pipeline and nowhere else (§13.4).
         builder.Logging.ClearProviders();
 
@@ -42,19 +45,9 @@ public static class ObservabilityExtensions
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
-                // A condition whose meter is not registered here cannot fire (§13.6).
-                .AddMeter("Catalog.Outbox")                        // §13.6 per-lane
-                .AddMeter("Ordering.Orders")                       // §13.3, §13.6
-                .AddMeter("Ordering.Outbox")                       // §13.6 per-lane
-                .AddMeter("Inventory.Reservations")                // §13.3
-                .AddMeter("Inventory.Outbox")                      // §13.6 per-lane
-                .AddMeter("Payments.Provider")                     // §3.2's provider
-                .AddMeter("Payments.Outbox")                       // §13.6 per-lane
-                .AddMeter("Shipping.Outbound")                     // §3.2's carrier, and the address read
-                .AddMeter("Shipping.Outbox")                       // §13.6 per-lane
-                .AddMeter("Notifications.Outbound")                // Notifications' outbound calls (§3.2)
-                .AddMeter("Web.Bff.Projection")                    // ADR-051's projection
-                .AddMeter("Privacy.Outbox")                        // §13.6 per-lane
+                // A condition whose meter is not registered here cannot fire (§13.6). A host exports its own
+                // service's meters by prefix, so this block names no service (ADR-062).
+                .AddMeter($"{servicePrefix}.*")
 
                 // Shared names, not service-prefixed: the service.name resource attribute separates them.
                 .AddMeter("Commerce.Requests")                     // §13.3, §13.7

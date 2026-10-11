@@ -50,7 +50,6 @@ from scaffold.render import (
     COMPOSE_INDEX,
     COPY_ROOTS,
     MIGRATION_LABELS,
-    OBSERVABILITY,
     REDIS_USERS,
     TEMPLATE_TOKEN,
     compose_unit,
@@ -60,7 +59,6 @@ from scaffold.render import (
     update_compose,
     update_env_example,
     update_infra_only,
-    update_observability_meters,
     update_redis_users,
     update_solution,
 )
@@ -340,11 +338,6 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
             update_broker_definitions(repo_root, names),
         REDIS_USERS: update_redis_users(repo_root, names),
     }
-    # The outbox meter's line, which a pure consumer is owed no more than the
-    # gauges it would collect (§13.6).
-    if not names.pure_consumer:
-        updated[OBSERVABILITY] = update_observability_meters(repo_root, names)
-
     # Last, because it is the only update whose input is every other one. The
     # gate runs over the whole render — the generated tree AND the shared files
     # as they will stand — so it can only be asked once both maps are complete,

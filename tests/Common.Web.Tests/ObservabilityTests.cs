@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Text.RegularExpressions;
 using Common.Application;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
@@ -21,20 +22,10 @@ public class ObservabilityTests
     // The instrumentation's own source name, spelled out rather than shared, as the meter list is.
     private const string EfCoreActivitySource = "OpenTelemetry.Instrumentation.EntityFrameworkCore";
 
-    // §13.2's list, copied on purpose: a shared constant would delete a name from the assertion too.
+    // §13.2's shared names, copied on purpose: a shared constant would delete a name from the assertion too.
+    // A service's own meters are not here; Every_meter_a_service_creates_is_exported_by_its_host reads them.
     private static readonly string[] Required =
     [
-        "Catalog.Outbox",
-        "Ordering.Orders",
-        "Ordering.Outbox",
-        "Inventory.Reservations",
-        "Inventory.Outbox",
-        "Payments.Provider",
-        "Payments.Outbox",
-        "Shipping.Outbound",
-        "Shipping.Outbox",
-        "Notifications.Outbound",
-        "Web.Bff.Projection",
         "Commerce.Requests",
         "Commerce.Messaging",
         "MassTransit",
@@ -65,6 +56,64 @@ public class ObservabilityTests
 
         // A subset, since the runtime and HTTP instrumentation add .NET meters that are wanted too.
         Required.ShouldBeSubsetOf(exported.Select(m => m.MeterName).Distinct());
+    }
+
+    [Fact]
+    public void Every_meter_a_service_creates_is_exported_by_its_host()
+    {
+        // The names come from the services' own source, so a meter added tomorrow is judged without anyone
+        // editing this test; the host is named as the service's Api is, which §13.2 reads the service from.
+        Dictionary<string, List<string>> byService = ServiceMeterNames();
+
+        byService.ShouldNotBeEmpty("no service source was found, so nothing below was checked");
+
+        foreach ((string service, List<string> names) in byService)
+        {
+            List<Metric> exported = [];
+
+            HostApplicationBuilder builder = TelemetryHost.Builder(applicationName: $"{service}.Api");
+            builder.AddObservability();
+            builder.Services
+                .AddOpenTelemetry()
+                .WithMetrics(m => m.AddInMemoryExporter(exported));
+
+            using IHost host = builder.Build();
+
+            MeterProvider provider = host.Services.GetRequiredService<MeterProvider>();
+            IMeterFactory factory = host.Services.GetRequiredService<IMeterFactory>();
+
+            foreach (string name in names)
+                factory.Create(name).CreateCounter<long>("probe.counter").Add(1);
+
+            provider.ForceFlush();
+
+            names.ShouldBeSubsetOf(exported.Select(m => m.MeterName).Distinct(), $"{service}'s host");
+        }
+    }
+
+    [Fact]
+    public void A_host_exports_its_own_service_s_meters_and_no_other()
+    {
+        List<Metric> exported = [];
+
+        HostApplicationBuilder builder = TelemetryHost.Builder(applicationName: "Alpha.Api");
+        builder.AddObservability();
+        builder.Services
+            .AddOpenTelemetry()
+            .WithMetrics(m => m.AddInMemoryExporter(exported));
+
+        using IHost host = builder.Build();
+
+        MeterProvider provider = host.Services.GetRequiredService<MeterProvider>();
+        IMeterFactory factory = host.Services.GetRequiredService<IMeterFactory>();
+
+        factory.Create("Alpha.Outbox").CreateCounter<long>("probe.counter").Add(1);
+        factory.Create("Beta.Outbox").CreateCounter<long>("probe.counter").Add(1);
+        provider.ForceFlush();
+
+        List<string> meters = exported.Select(m => m.MeterName).Distinct().ToList();
+        meters.ShouldContain("Alpha.Outbox");
+        meters.ShouldNotContain("Beta.Outbox");
     }
 
     [Fact]
@@ -261,6 +310,63 @@ public class ObservabilityTests
 
         activity.ShouldNotBeNull($"nothing is listening to {sourceName}");
         exported.ShouldContain(a => a.Source.Name == sourceName);
+    }
+
+    /// <summary>
+    /// Every meter name a service project creates, by the service that owns it: the project directory's first
+    /// segment, as §13.2's prefix is the host's. A name outside its service's prefix fails here, because no host
+    /// would export it.
+    /// </summary>
+    private static Dictionary<string, List<string>> ServiceMeterNames()
+    {
+        DirectoryInfo? root = new(AppContext.BaseDirectory);
+
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "Platform.slnx")))
+            root = root.Parent;
+
+        root.ShouldNotBeNull($"No Platform.slnx above '{AppContext.BaseDirectory}'.");
+
+        // A factory's Create, a Meter's constructor, and the two constants that hold a name (MeterName, and
+        // OutboundMeter.Name, which only a file named for a meter may use).
+        Regex created = new("""\bfactory\.Create\("([^"]+)"\)|new Meter\("([^"]+)"|MeterName\s*=\s*"([^"]+)[\x22]""");
+        Regex meterConstant = new("""\bconst string Name = "([^"]+)";""");
+        Dictionary<string, List<string>> byService = [];
+
+        foreach (string area in new[] { "src/Services", "src/BFF" })
+        {
+            foreach (string file in Directory.EnumerateFiles(Path.Combine(root.FullName, area), "*.cs", SearchOption.AllDirectories))
+            {
+                string relative = Path.GetRelativePath(Path.Combine(root.FullName, area), file);
+                string[] segments = relative.Split(Path.DirectorySeparatorChar);
+
+                // src/Services/<Service>/<Project>/..., src/BFF/<Project>/...
+                string project = area == "src/Services" ? segments[1] : segments[0];
+
+                if (segments.Contains("obj") || segments.Contains("bin"))
+                    continue;
+
+                string service = project.Split('.')[0];
+                string text = File.ReadAllText(file);
+
+                IEnumerable<Match> matches = created.Matches(text);
+
+                if (Path.GetFileName(file).Contains("Meter", StringComparison.Ordinal))
+                    matches = matches.Concat(meterConstant.Matches(text));
+
+                foreach (Match match in matches)
+                {
+                    string name = match.Groups.Cast<Group>().Skip(1).First(g => g.Success).Value;
+
+                    name.StartsWith($"{service}.", StringComparison.Ordinal)
+                        .ShouldBeTrue($"{file} creates '{name}', which no {service} host exports");
+
+                    if (!byService.TryAdd(service, [name]) && !byService[service].Contains(name))
+                        byService[service].Add(name);
+                }
+            }
+        }
+
+        return byService;
     }
 
     private static DefaultHttpContext Request(string path)

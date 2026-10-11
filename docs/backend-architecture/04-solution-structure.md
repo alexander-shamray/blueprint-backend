@@ -1314,8 +1314,8 @@ patch can edit a file's text but not its path.
 `--pure-consumer` renders §4.1's third shape and implies `--worker`. §4.1
 gives such a service no Domain project and §3.2 nothing to publish, so the
 render is seven projects with none of §9.4's outbox or §9.3's mapper: no
-outbox table or its three migrations, no dispatcher, publisher or gauges and no
-`AddMeter` line, no collector and no mapper. §9.5's inbox and the purge over
+outbox table or its three migrations, no dispatcher, publisher or gauges, no
+collector and no mapper. §9.5's inbox and the purge over
 it, §8.5's marker table, the migrator, the probes and the bus stay. Its
 broker account writes its own endpoints and the fault exchanges and no
 contract exchange
@@ -1380,10 +1380,7 @@ excludes both halves of the pair, `.env.example`
 ([§14.1](14-local-development.md)), the broker definitions that grant the new
 service an account of its own — without which it renders a service that starts
 and cannot authenticate, since the broker holds no shared principal
-([ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md)) —
-the `AddMeter` line in `Common.Web` for a publishing service's outbox
-meter, without which §13.6's gauges are published and collected by nothing,
-since §13.2's export names meters one by one — and, under
+([ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md)) — and, under
 `.github/secret-scan/allowed/`, the file covering each
 entry's tree, one accepted-finding line per
 **distinct** finding the render produces — two lines carrying one value under
