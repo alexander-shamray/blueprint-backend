@@ -344,13 +344,16 @@ four files. The same head scored 0 of 12 on one run and 2 of 12 on the next,
 from 2 findings each time, both in `.claude/agents/review-adjudicator.md`.
 That is the noise a comparison has to beat, and one head is not a sample of
 the 546. **No sweep has been scored**: a full first round at either commit is
-41 slices, which this change did not spend. Step 4's and step 5's exits stay
+41 slices, which this change did not spend (scored in the 2026-10-12
+section). Step 4's and step 5's exits stay
 open until those runs are recorded.
 
 ## 2026-10-12 — the first scored runs
 
-Run by `tools/quality-sets/` at 6ec49559 against the sets of the section
-above, on the owner's machine.
+Run by `tools/quality-sets/` against the sets of the section above, on the
+owner's machine, from a checkout at 6ec49559 holding the runner changes that
+became 07376d0a. The usage-limit stop, in that commit, was added after these
+runs, because the bug sweep is what showed it was needed.
 
 | Run | Entries | Found | Recall |
 |---|---|---|---|
@@ -374,10 +377,12 @@ stopped early too. The run reported 14 findings and 0 of 34 found, which
 measures the limit and not the sweep. The runner now ends a run on such a
 notice rather than retrying through it. Step 5's exit still lacks this half.
 
-**What the numbers do not say.** Both exits ask for "at least", and neither is
-met on this measure. The measure is a proxy that favours neither side: it asks
-for the file and, for a review, a line within ten. The earlier sweeps ran up to
-seven rounds and had a second auditor verify each issue, against one round here.
+**What the numbers do not say.** Both exits ask for "at least". The reviewer's
+is not met on this measure, the security sweep's is not met, and the bug
+sweep's is untested. The measure is lenient for a sweep, which is hit by any
+finding in one of the issue's files, and stricter for a review, which also
+needs a line within ten. The earlier sweeps ran up to seven rounds and had a
+second auditor verify each issue, against one round here.
 Copilot raised small points, wording and link forms among them, which
 `branch-reviewer`'s bar leaves out ("incomplete but true" is not a finding).
 Reading 3.5% as the reviewer being worse by that factor would be wrong.
