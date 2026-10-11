@@ -13,7 +13,7 @@ python tools/new-service/new_service.py Yankee --port 5199
 | `name` | The service, PascalCase. It becomes the namespace root, the project names, the database, the SQL schema, both connection-string keys and both Compose service names |
 | `--port` | The host port the API publishes. **Required for an API render and refused for a worker** — a port is an allocation recorded in the service's own Compose unit, and a script that derived one would quietly disagree with a printed chapter. The run refuses a port another service already publishes |
 | `--worker` | Render §4.1's Worker host in place of an Api: `<Name>.Worker`, no OpenAPI document, no route group and no published port |
-| `--pure-consumer` | Render §4.1's pure consumer, and imply `--worker`: seven projects, no Domain project, no outbox, no mapper and no outbox meter line |
+| `--pure-consumer` | Render §4.1's pure consumer, and imply `--worker`: seven projects, no Domain project, no outbox and no mapper |
 | `--migration-id` | The `InitialCreate` id, and the base every later template migration is spaced from — one minute per entry in `TEMPLATE_MIGRATIONS`, in the order they apply. Defaults to the current UTC timestamp; the tests pass a fixed one |
 | `--repo-root` | Defaults to this script's repository |
 
@@ -33,7 +33,6 @@ table matches `plan()`.
 | `deploy/compose/.env.example` | the two §7.1 connection variables |
 | `deploy/compose/rabbitmq/definitions.json` | the broker account the service authenticates as, since #44 |
 | `deploy/compose/redis/users.conf` | the §8.1 Redis user the unit's connection strings name, its key pattern the host's `ApplicationName` |
-| `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` | the `AddMeter` line for the service's outbox meter, which §13.2's export names one by one; a pure consumer has no outbox and gets none |
 | `.github/secret-scan/allowed/<tree>.txt` | one accepted-finding entry per credential-shaped literal the render carries, in the file covering that entry's tree, since #161 |
 
 **The last one is the difference between a service that renders and a service
@@ -58,8 +57,7 @@ leaves it exactly where it was written:
 
 ```bash
 rm -rf src/Services/Yankee tests/Yankee.* deploy/compose/services/yankee.yml
-git checkout -- Platform.slnx deploy/compose/ .github/secret-scan/allowed/ \
-    src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs
+git checkout -- Platform.slnx deploy/compose/ .github/secret-scan/allowed/
 ```
 
 (`Yankee` rather than a `<Name>` placeholder because this is a `bash` fence and
@@ -213,7 +211,7 @@ it without a Service in front of it. **`Shipping` is refused without
 **`--pure-consumer` renders §4.1's third shape** and implies `--worker`: the
 seven projects without `<Name>.Domain` and `<Name>.Domain.Tests`, and nothing of
 §9.4's outbox or §9.3's mapper — no outbox table or its three migrations, no
-dispatcher, publisher, gauges or meter line, no collector and no mapper —
+dispatcher, publisher or gauges, no collector and no mapper —
 because §3.2 gives such a service nothing to publish. The inbox, the purge, the
 marker table, the migrator, the probes and the bus stay. The render writes a
 `NoDomainEventDispatcher` into the Application project, because §6.3's

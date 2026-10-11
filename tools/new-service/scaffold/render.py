@@ -1239,34 +1239,3 @@ def update_redis_users(repo_root: Path, names: Names) -> str:
             f"found {len(template)} (§8.1)")
 
     return restore(text.rstrip("\n") + "\n" + names.rename(template[0]) + "\n", newline)
-
-
-# §13.2's export names meters one by one, so a service's own meter is a line in
-# a building block rather than something its own tree can declare. The line is
-# written here for the reason the broker account is: without it the rendered
-# service publishes §13.6's gauges and the platform collects none of them, and
-# nothing else in the render would say so.
-OBSERVABILITY = "src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs"
-
-# The anchor is the shared block's first line rather than the template's own
-# meter, because a service's meters are listed in §4.1's order and the
-# template's sits at the top of that list. Read rather than assumed: a list
-# this script cannot find is a building block that has moved.
-SHARED_METERS = "                // Shared names, not service-prefixed: the service.name resource attribute separates them.\n"
-
-
-def update_observability_meters(repo_root: Path, names: Names) -> str:
-    """One `AddMeter` line for the rendered service's outbox meter (§13.2)."""
-    text, newline = read(repo_root, OBSERVABILITY)
-
-    line = f'                .AddMeter("{names.pascal}.Outbox")'
-    if line in text:
-        raise ScaffoldError(
-            f"{OBSERVABILITY} already registers {names.pascal}.Outbox; this script "
-            f"adds the line and never a second copy of it")
-
-    require_once(text, "\n" + SHARED_METERS, OBSERVABILITY)
-    padded = line.ljust(67) + "// §13.6 per-lane\n"
-    # Before the blank line, so the new meter joins the service-prefixed
-    # group instead of opening the shared one (§4.1's order, §13.2's export).
-    return restore(text.replace("\n" + SHARED_METERS, padded + "\n" + SHARED_METERS), newline)

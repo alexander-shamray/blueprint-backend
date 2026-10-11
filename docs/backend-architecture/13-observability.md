@@ -95,6 +95,9 @@ checks in §13.5 — belongs in `AddOrderingInfrastructure`, because
     {
         string serviceName = builder.Environment.ApplicationName;
 
+        // "Catalog.Api" and "Catalog.Worker" both own "Catalog.*"; a name with no dot owns itself.
+        string servicePrefix = serviceName.Split('.')[0];
+
         // The only provider, because the redactor sees records in this pipeline and nowhere else (§13.4).
         builder.Logging.ClearProviders();
 
@@ -122,18 +125,9 @@ checks in §13.5 — belongs in `AddOrderingInfrastructure`, because
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
-                // A condition whose meter is not registered here cannot fire (§13.6).
-                .AddMeter("Catalog.Outbox")                        // §13.6 per-lane
-                .AddMeter("Ordering.Orders")                       // §13.3, §13.6
-                .AddMeter("Ordering.Outbox")                       // §13.6 per-lane
-                .AddMeter("Inventory.Reservations")                // §13.3
-                .AddMeter("Inventory.Outbox")                      // §13.6 per-lane
-                .AddMeter("Payments.Provider")                     // §3.2's provider
-                .AddMeter("Payments.Outbox")                       // §13.6 per-lane
-                .AddMeter("Shipping.Outbound")                     // §3.2's carrier, and the address read
-                .AddMeter("Shipping.Outbox")                       // §13.6 per-lane
-                .AddMeter("Notifications.Outbound")                // Notifications' outbound calls (§3.2)
-                .AddMeter("Web.Bff.Projection")                    // ADR-051's projection
+                // A condition whose meter is not registered here cannot fire (§13.6). A host exports its own
+                // service's meters by prefix, so this block names no service (ADR-062).
+                .AddMeter($"{servicePrefix}.*")
 
                 // Shared names, not service-prefixed: the service.name resource attribute separates them.
                 .AddMeter("Commerce.Requests")                     // §13.3, §13.7
@@ -159,6 +153,14 @@ checks in §13.5 — belongs in `AddOrderingInfrastructure`, because
         return builder;
     }
 ```
+
+A service's own meters are not listed. Every host adds `<service>.*`, the
+service being the first segment of its `ApplicationName`, so `Catalog.Api`
+exports `Catalog.Outbox` and a service an adopter adds exports its own with no
+edit to `Common.Web` ([ADR-062](adr/ADR-062-the-domain-is-a-reference-implementation.md)).
+A meter named outside its service's prefix is collected by nothing, so a meter
+is named for the service that creates it, and a test reads every service's
+source for the names it creates and asks its host to export each.
 
 The shared meters are not service-prefixed. Every service emits the same
 `Commerce.Requests` and `Commerce.Messaging` instruments and the
@@ -1409,7 +1411,7 @@ read, from `OutboxMetrics.cs` in
 ```
 
 `MeterName`, declared above it in the same file, is the contract with §13.2's
-`AddMeter`: an instrument on an unregistered meter is collected by nothing and
+service prefix: an instrument on a meter outside it is collected by nothing and
 alerted on in vain. The `lane` tag is the enum's own name, as the `Lane`
 column stores it and §9.4's dispatcher compares against it, because a
 hand-written lowercase tag would give one value three spellings across SQL, C#
@@ -1771,7 +1773,7 @@ service missing from a series rather than through a metric nobody declared.
 so the gap closes one service at a time, by registering the type and paying
 for it with a copy. **The template closes it for every publishing service
 after it**: Catalog, which §4.5's scaffold renders, registers the gauges, and
-the scaffold copies them and writes the service's `AddMeter` line — so a
+the scaffold copies them and §13.2's prefix exports them — so a
 rendered publisher publishes them from its first boot, a pure consumer hosts
 no dispatcher to owe them, and the exemption list holds a service only when
 somebody writes its reason down.

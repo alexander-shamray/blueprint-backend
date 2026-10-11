@@ -119,7 +119,6 @@ def template_copy(destination: Path) -> Path:
         "deploy/compose/.env.example",
         "deploy/compose/rabbitmq/definitions.json",
         "deploy/compose/redis/users.conf",
-        "src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs",
     ):
         (destination / shared).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / shared, destination / shared)
@@ -992,17 +991,10 @@ class EditsTheSharedFiles(unittest.TestCase):
         self.assertIn('  zulu-migrator:\n    profiles: [ "excluded" ]', lines)
         self.assertIn('  zulu-api:\n    profiles: [ "excluded" ]', lines)
 
-    def test_the_outbox_meter_is_collected_in_the_service_prefixed_group(self):
-        # A gauge on a meter nobody registered is collected by nothing, so the
-        # line is asserted in place: after the template's own, before the
-        # shared block, and in the column its neighbours use (IDE0055).
-        text = self.rendered.updated["src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs"]
-        lines = text.replace("\r\n", "\n").split("\n")
-        mine = next(i for i, line in enumerate(lines) if '.AddMeter("Zulu.Outbox")' in line)
-        self.assertEqual(lines[mine + 1], "")
-        self.assertIn("// Shared names, not service-prefixed", lines[mine + 2])
-        self.assertEqual(lines[mine].index("//"), lines[mine - 1].index("//"))
-        self.assertEqual(text.count('.AddMeter("Zulu.Outbox")'), 1)
+    def test_no_building_block_is_written(self):
+        # ADR-062: an adopter keeps the building blocks, and the host's meter prefix
+        # (§13.2) is why a render no longer has a line to splice into one.
+        self.assertEqual([], [path for path in self.rendered.updated if path.startswith("src/BuildingBlocks/")])
 
     def test_everything_written_under_the_compose_directory_is_named(self):
         # The unit, and the shared files §14.1's model leaves shared. The
@@ -1546,10 +1538,6 @@ class RendersAWorker(unittest.TestCase):
             f'<Project Path="tests/{PROBE}.Worker.Tests/{PROBE}.Worker.Tests.csproj" />',
             solution)
 
-    def test_the_meter_line_names_the_worker_s_outbox(self):
-        extensions = self.rendered.updated[new_service.OBSERVABILITY]
-        self.assertIn(f'.AddMeter("{PROBE}.Outbox")', extensions)
-
 
 class EveryGateSeesTheWorkerRender(unittest.TestCase):
     """The worker render's projects are inside every gate's own selector."""
@@ -1743,8 +1731,8 @@ class RendersAPureConsumer(unittest.TestCase):
             self.assertEqual(f"^({PROBE.lower()}-|MassTransit:)", permission[verb])
         self.assertEqual(f"^({PROBE.lower()}-|MassTransit:(ReceiveFault$|Fault--))", permission["read"])
 
-    def test_no_outbox_meter_line_is_written(self):
-        self.assertNotIn(new_service.OBSERVABILITY, self.rendered.updated)
+    def test_no_building_block_is_written(self):
+        self.assertEqual([], [path for path in self.rendered.updated if path.startswith("src/BuildingBlocks/")])
 
     def test_the_compose_pair_is_migrator_and_worker_and_publishes_no_port(self):
         unit = self.created(UNIT)
@@ -2566,7 +2554,7 @@ class TheCommandLine(unittest.TestCase):
             # A count and not a list: a number a test pins fails when it is
             # wrong. Seven and not eight, because this root has no `.github/` and
             # §15.1's allow-list step degrades without it.
-            self.assertIn("83 files created, 7 updated", out)
+            self.assertIn("83 files created, 6 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 
