@@ -5,7 +5,10 @@ namespace Platform.IntegrationTests.Contracts;
 internal static class ContractSamples
 {
     private static readonly Dictionary<Type, Func<object>> Registry =
-        ContractContexts.All.SelectMany(c => c.Samples).ToDictionary(s => s.Key, s => s.Value);
+        ContractContexts.All
+            .SelectMany(c => c.Samples)
+            .GroupBy(s => s.Key)
+            .ToDictionary(g => g.Key, g => g.First().Value);
 
     /// <summary>The sample for one contract, or a failure naming it, never a null the suite could skip.</summary>
     public static object Create(Type contract) =>

@@ -43,6 +43,35 @@ public class ContractContextTests
     }
 
     [Fact]
+    public void No_contract_is_sampled_by_two_contexts()
+    {
+        // Apart from the registry, which keeps the first so this can name the pair instead of failing to load.
+        Type[] twice =
+        [
+            .. ContractContexts.All
+                .SelectMany(c => c.Samples.Keys)
+                .GroupBy(t => t)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+        ];
+
+        twice.ShouldBeEmpty($"a contract has one sample, in its own service's context: {string.Join(", ", twice)}");
+    }
+
+    [Fact]
+    public void Every_type_a_context_names_is_a_contract()
+    {
+        string[] notContracts =
+        [
+            .. ContractContexts.All.SelectMany(c => ClaimedBy(c)
+                .Except(ContractShapes.Contracts())
+                .Select(t => $"{c.Service} names {t.FullName}"))
+        ];
+
+        notContracts.ShouldBeEmpty("a root, payload, sample or approved member names a public contract or nothing");
+    }
+
+    [Fact]
     public void Every_context_names_only_its_own_services_contracts()
     {
         string[] foreign =
