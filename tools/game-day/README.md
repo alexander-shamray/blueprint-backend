@@ -258,9 +258,9 @@ runbook fits alone, with at most 22 minutes to spare before the stack's pull
 and start, which a runtime does not include. A job that times out still runs
 its teardown.
 
-Why it is not scheduled: the timed runbooks alone are about three hours of
-runner time, and the suite already runs on every pull request that changes
-what a script reads, which is where an alert rule and its script drift apart.
-A schedule would add a nightly cost to catch a stack that changed under an
-unchanged rule, and nothing has yet shown that happen. It is a new decision,
+Why it is not scheduled: the timed runbooks alone are about three and a half
+hours of runner time, and the suite already runs on every pull request that
+changes what a script reads, which is where an alert rule and its script drift
+apart. A schedule would add a nightly cost to catch a stack that changed under
+an unchanged rule, and nothing has yet shown that happen. It is a new decision,
 owed an issue, once a runbook goes stale between dispatches.
