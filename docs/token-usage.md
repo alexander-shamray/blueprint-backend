@@ -297,3 +297,26 @@ landed, so it has not yet been tested.
 **The review rounds predate the loop's ceiling.** They ran on 2026-10-02
 and reached round 11, before the ceiling landed in `/ship` step 5 with
 step 4.
+
+## 2026-10-11 — what a wake writes again
+
+Measured by the report's new `woken_write` column, the part of
+`woken_equivalent` that was cache writes, at 1.25× or 2× by their TTL. Over
+2026-10-09 to 2026-10-11, at 557ebcec, 8,569 responses came to 198M input
+equivalent, 106M of it after a wake.
+
+| Who | Woken | Of it, cache writes | Share |
+|---|---|---|---|
+| Main, `/ship` | 26.7M | 1.8M | 7% |
+| Main, no command | 34.6M | 2.0M | 6% |
+| Main, `skill:validate-blueprint` | 20.3M | 1.0M | 5% |
+| `general-purpose` under `validate-blueprint` | 17.4M | 4.1M | 24% |
+| `branch-reviewer`, all three labels | 7.3M | 4.5M | 62% |
+| Total | 106.3M | 13.4M | 13% |
+
+**A cold write is 13% of what a wake costs; the rest is the context read
+back.** A main session's wake finds its cache warm nearly every time, so
+what it pays for is the 200k it re-sends at 0.1×, and compacting cuts that
+in proportion to the context it sheds. A reviewer's wake is the reverse, and
+mostly a write, but a reviewer's context is 34k. So step 7a's rule is worth
+what a main session's mean context is worth, not what a cache miss is.
