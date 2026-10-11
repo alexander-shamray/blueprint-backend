@@ -74,6 +74,10 @@ public abstract class FulfilmentJourney(JourneyWorld world)
     }
 
     /// <summary>One authorisation, for the order's total in its currency's minor units, naming the customer.</summary>
+    /// <remarks>
+    /// One charge is one idempotency key, as the provider counts it: the adapter resends a request under the same key
+    /// when an attempt times out (§9.7), and the simulator, which logs both, would answer both alike.
+    /// </remarks>
     private void AssertPaymentWasAskedOnce(JourneyOrder order, Jurisdiction here)
     {
         ILogEntry[] asked =
@@ -82,7 +86,9 @@ public abstract class FulfilmentJourney(JourneyWorld world)
                 e.RequestMessage?.Body?.Contains(order.Customer.ToString("D"), StringComparison.Ordinal) == true)
         ];
 
-        if (asked.Length != 1)
+        string[] keys = [.. asked.Select(e => Header(e, "Idempotency-Key")).Distinct(StringComparer.Ordinal)];
+
+        if (asked.Length == 0 || keys.Length != 1 || keys[0] != $"authorise:{order.Id}")
             Assert.Fail(
                 "one order is one charge, however many times a message was delivered; " +
                 Describe(asked, world.Provider));
@@ -92,6 +98,9 @@ public abstract class FulfilmentJourney(JourneyWorld world)
         body.RootElement.GetProperty("amountMinor").GetInt64().ShouldBe((long)(order.Total * 100m));
     }
 
+    private static string Header(ILogEntry e, string name) =>
+        e.RequestMessage?.Headers?.TryGetValue(name, out var values) == true ? string.Join(",", values) : "-";
+
     /// <summary>
     /// What a failed count needs to tell a real duplicate from a read that came before a delivery settled: each
     /// matching call's time, path, answer, entry id, mapping and trace headers (one request logged twice from two
@@ -99,9 +108,6 @@ public abstract class FulfilmentJourney(JourneyWorld world)
     /// </summary>
     private static string Describe(ILogEntry[] matching, WireMockServer server)
     {
-        static string Header(ILogEntry e, string name) =>
-            e.RequestMessage?.Headers?.TryGetValue(name, out var values) == true ? string.Join(",", values) : "-";
-
         static string One(ILogEntry e) =>
             $"{e.RequestMessage?.DateTime:O} {e.RequestMessage?.Method} {e.RequestMessage?.Path} -> " +
             $"{e.ResponseMessage?.StatusCode} [entry {e.Guid}, mapping {e.MappingGuid}, " +
