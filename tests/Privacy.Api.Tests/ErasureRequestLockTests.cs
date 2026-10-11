@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Privacy.Application.ErasureRequests;
 using Privacy.Infrastructure.Persistence;
@@ -22,18 +23,30 @@ public sealed class ErasureRequestLockTests(ServiceFixture fixture) : IAsyncLife
         CancellationToken ct = TestContext.Current.CancellationToken;
         Guid requestId = Guid.CreateVersion7();
 
-        await using AsyncServiceScope holder = fixture.Factory.Services.CreateAsyncScope();
-        PrivacyDbContext holding = holder.ServiceProvider.GetRequiredService<PrivacyDbContext>();
-        await using var held = await holding.Database.BeginTransactionAsync(ct);
-        await new ErasureRequestRepository(holding).GetLockedAsync(requestId, ct);
+        // The holder is a bare connection: the production retry strategy refuses a transaction started outside it.
+        await using SqlConnection holder = new(fixture.ConnectionString);
+        await holder.OpenAsync(ct);
+        await using SqlTransaction held = holder.BeginTransaction();
+        await using (SqlCommand take = holder.CreateCommand())
+        {
+            take.Transaction = held;
+            take.CommandText =
+                "EXEC sp_getapplock @Resource = @r, @LockMode = 'Exclusive', " +
+                "@LockOwner = 'Transaction', @LockTimeout = 0";
+            take.Parameters.AddWithValue("@r", $"privacy.erasure.request.{requestId:N}");
+            await take.ExecuteNonQueryAsync(ct);
+        }
 
         await using AsyncServiceScope waiter = fixture.Factory.Services.CreateAsyncScope();
         PrivacyDbContext waiting = waiter.ServiceProvider.GetRequiredService<PrivacyDbContext>();
-        await using var waits = await waiting.Database.BeginTransactionAsync(ct);
 
         // Waits out the lock's ten seconds, which is the cost of proving the timeout rather than a stand-in for it.
         ErasureLockNotTakenException thrown = await Should.ThrowAsync<ErasureLockNotTakenException>(
-            () => new ErasureRequestRepository(waiting).GetLockedAsync(requestId, ct));
+            () => waiting.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+            {
+                await using var tx = await waiting.Database.BeginTransactionAsync(ct);
+                await new ErasureRequestRepository(waiting).GetLockedAsync(requestId, ct);
+            }));
 
         thrown.InnerException.ShouldBeOfType<SqlException>().Number
             .ShouldBe(ErasureRequestRepository.LockNotTakenNumber);
