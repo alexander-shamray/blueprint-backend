@@ -28,7 +28,7 @@ for a subagent.
 | `cache_write`, `cache_read` | the prompt cache's writes and reads |
 | `input_equivalent` | the input side priced as uncached input: writes at 1.25× (5-minute) or 2× (1-hour), reads at 0.1× |
 | `woken_equivalent` | the part of `input_equivalent` spent after a wake, before the next typed prompt |
-| `woken_write` | the part of `woken_equivalent` that was cache writes, priced 1.25× or 2× by their TTL: the context a wake wrote again because the cache had expired |
+| `woken_write` | the part of `woken_equivalent` that was cache writes, priced 1.25× or 2× by their TTL: every cache write after a wake, new content and re-written context alike |
 
 **A command owns everything until the next prompt a person types**, so a
 command `/ship` loads through the `Skill` tool is counted as `/ship`, and a

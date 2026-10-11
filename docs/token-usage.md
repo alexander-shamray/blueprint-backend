@@ -314,9 +314,11 @@ equivalent, 106M of it after a wake.
 | `branch-reviewer`, all three labels | 7.3M | 4.5M | 62% |
 | Total | 106.3M | 13.4M | 13% |
 
-**A cold write is 13% of what a wake costs; the rest is the context read
-back.** A main session's wake finds its cache warm nearly every time, so
-what it pays for is the 200k it re-sends at 0.1×, and compacting cuts that
-in proportion to the context it sheds. A reviewer's wake is the reverse, and
-mostly a write, but a reviewer's context is 34k. So step 7's rule is worth
-what a main session's mean context is worth, not what a cache miss is.
+**Cache writes are 13% of what a wake costs; the rest is the context read
+back.** A write here is any cache write after a wake, the new turn's content
+as well as context written again, and the column does not tell them apart.
+A main session's wake is 5-7% writes, so what it pays for is the context it
+re-sends at 0.1×, and compacting cuts that in proportion to the context it
+sheds. A reviewer's wake is mostly writes, but a reviewer's context is small
+(41k, in the 2026-10-10 section). So step 7's rule is worth what a main
+session's mean context is worth (274k for `/ship`, in that section).
