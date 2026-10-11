@@ -97,7 +97,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task An_address_is_not_saved_back_for_a_subject_Shipping_has_already_erased()
     {
-        // The window of #823: the owner has not anonymised the order, so it still answers with the subject's address.
+        // The owner has not anonymised the order yet, so it still answers with the subject's address (§11.7).
         Guid customer = Guid.CreateVersion7();
         Guid order = await ConfirmForAsync(customer);
         await RecordErasureAsync(customer);
