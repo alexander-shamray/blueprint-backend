@@ -119,6 +119,12 @@ whether the runbook's frontmatter denies reach a subagent is not something
 in `bug-auditor`, would make it the profile's guarantee; it is a harness
 change this command does not need to land first.
 
+The runbook grants no agent type. A command that grants one must deny every
+other profile (`test_command_grants.py`), and a frontmatter deny holds to the
+end of the turn (`docs/harness-boundaries.md`), so denying `branch-reviewer`
+here would stop `/ship`'s review after its step 2. `general-purpose` is
+spawned with no grant, as `/ship` step 6 spawns it.
+
 The exit is the report's `mean_context` for a run's main session, under 150k a
 call.
 
