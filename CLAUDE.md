@@ -105,7 +105,11 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   reviewing its own diff.
 - **Plans.** A change that fits one PR takes plan mode, not a plan file. A
   plan file cites code by path and symbol rather than pasting it and stays
-  under 50 KB; research for it goes to `Explore` with a brief. Small tasks
+  under 50 KB, which `.github/plan-size-gate/` holds for every plan added
+  since the rule landed; research for it goes to `Explore` with a brief,
+  and the plan-writing agent is handed the spec and the symbols the plan
+  cites and writes it in one pass, without reading back what it has
+  written. Small tasks
   run with `executing-plans`; under `subagent-driven-development`, each
   reviewer is handed its task's diff, not the tree.
 - **A comment sweep** hands each agent what `.github/comment-gate/` finds in
