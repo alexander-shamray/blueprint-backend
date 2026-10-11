@@ -80,6 +80,10 @@ decision above no longer holds. The cost is that a staff request and the
 sweep scale together, which the service's volume makes no difference to: its
 replicas all sweep, and a request marked twice is marked once.
 
+**Retention.** A closed request's row is kept for ever and has no window,
+as [ADR-095](ADR-095-a-closed-erasure-request-is-kept-as-the-evidence-and-has-no-retention-window.md)
+decides.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
