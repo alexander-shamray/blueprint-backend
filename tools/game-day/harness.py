@@ -146,6 +146,34 @@ class Compose:
     def logs(self, service: str, since: str = "10m") -> str:
         return self._call("logs", "--no-color", "--since", since, service, check=False)
 
+    def _docker(self, *args: str) -> str:
+        # The containers' own numbers are the engine's, not compose's, so this is the same runner without the file.
+        result = self._run(["docker", *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           check=False)
+        if result.returncode != 0:
+            raise GameDayError(f"docker {' '.join(args)} exited {result.returncode}: {result.stderr.strip()[:600]}")
+        return result.stdout
+
+    def stats(self) -> list[dict[str, str]]:
+        """`kubectl top pods`: each running container's name, CPU and memory, from one `docker stats` sample."""
+        ids = self._call("ps", "-q").split()
+        if not ids:
+            return []
+        lines = self._docker("stats", "--no-stream", "--format", "{{json .}}", *ids).splitlines()
+        return [{"name": row["Name"], "cpu": row["CPUPerc"], "memory": row["MemUsage"]}
+                for row in (json.loads(line) for line in lines if line.strip())]
+
+    def host(self) -> tuple[int, int]:
+        """`kubectl top nodes`: the one node's CPU count and memory in bytes, which every container shares."""
+        cpus, memory = self._docker("info", "--format", "{{.NCPU}} {{.MemTotal}}").split()
+        return int(cpus), int(memory)
+
+    def limits(self, service: str) -> tuple[int, int]:
+        """The `get pod -o jsonpath` read: a container's memory and CPU limits, in bytes and nano-CPUs, 0 for none."""
+        container = self._call("ps", "-q", service).strip()
+        found = json.loads(self._docker("inspect", "--format", "{{json .HostConfig}}", container))
+        return int(found["Memory"]), int(found["NanoCpus"])
+
     def exec_sql(self, sql: str, database: str = "Ordering") -> str:
         """Run T-SQL as sa through the container's own sqlcmd, and return its text with the padding trimmed."""
         # The password is the container's own environment's, as its healthcheck reads it, so it is on no argv;

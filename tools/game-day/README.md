@@ -31,7 +31,7 @@ not a failure.
 
 | File | Owns |
 |---|---|
-| `harness.py` | Compose control (`stop`, `start`, `restart`, `pause`, `exec_sql`, `exec_redis`, `rabbitmqctl`, `logs`), a token and an order, alert state, labels and PromQL (`Alerts`), Loki (`Logs`), a service account's Keycloak grants (`Realm`, `Grant`), the request generator (`Traffic`), the broker as `dead-letter-operator` (`Broker`), `wait_until` and `Deadline` |
+| `harness.py` | Compose control (`stop`, `start`, `restart`, `pause`, `exec_sql`, `exec_redis`, `rabbitmqctl`, `logs`, `stats`, `host`, `limits`), a token and an order, alert state, labels and PromQL (`Alerts`), Loki (`Logs`), a service account's Keycloak grants (`Realm`, `Grant`), the request generator (`Traffic`), the broker as `dead-letter-operator` (`Broker`), `wait_until` and `Deadline` |
 | `game_day.py` | The runner: quiet start, cause, wait, first step, restore, in that order, then the scenario's `NEXT` if it has one; and `--matrix`, the CI dispatch's plan |
 | `scenarios/<runbook>.py` | One runbook, named for it with `-` as `_` |
 | `runbook_coverage.py` | `NOT_ON_COMPOSE`, and the rules that hold every runbook to a script or a reason and every loaded rule to a script that causes it |
@@ -202,9 +202,10 @@ The three runs above were measured on 2026-10-10, each alone on a stack that
 had just come up. `error-rate` is two runs in one, and its two phases fired
 after 445 and 412 seconds of a 480-second deadline. `latency` fired after 787
 of 840, with nine services over a second, which is the runbook's *everything
-slow together* shape and where the script stops: its `kubectl` steps are not
-translated, and a cold cache is not caused, because nothing reads `HybridCache`
-yet for a paused `redis-cache` to slow. `outbox-growth` fired after 738 of 780
+slow together* shape, where the script's first step now goes on to that
+section's three reads as `docker stats`, the engine's CPU and memory, and the
+container's limits (that run predates them), and a cold cache is not caused,
+because nothing reads `HybridCache` yet for a paused `redis-cache` to slow. `outbox-growth` fired after 738 of 780
 and asserted `OutboxBrokerLaneStalled` beside it: with the broker stopped the
 age gauge is high too, so the runbook's own first check sends its reader to
 `outbox-broker.md`, which is the right answer for this cause and says growth
