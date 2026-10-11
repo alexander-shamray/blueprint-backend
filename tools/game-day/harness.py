@@ -265,7 +265,7 @@ class Logs:
     """What a service logged, read from Loki through Grafana's proxy.
 
     The hosts log through one OpenTelemetry provider and nothing else (§13.4), so a container's stdout is empty
-    and this is the only place a log line exists. The runbooks' `kubectl logs` steps are translated to it.
+    and this is the only place a log line exists. The runbooks name the Loki query; this runs it through Grafana.
     """
 
     def __init__(self, send: Http = http, base: str = GRAFANA, clock: Callable[[], float] = time.time) -> None:
