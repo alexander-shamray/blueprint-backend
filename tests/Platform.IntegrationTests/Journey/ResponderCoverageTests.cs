@@ -8,11 +8,13 @@ namespace Platform.IntegrationTests.Journey;
 
 /// <summary>Every service that erases is a holder in the set Compose ships and the factory raises with.</summary>
 /// <remarks>
-/// A holder missing from the set is silence read as success (ADR-092). Holders are read off the source.
+/// A holder missing from the set is silence read as success (ADR-092). Holders are read off the source. The
+/// chart ships no set, so the one the Helm smoke renders stands for a deployment's.
 /// </remarks>
 public sealed partial class ResponderCoverageTests
 {
     private const string ComposeFile = "deploy/compose/services/privacy.yml";
+    private const string HelmSmokeFile = "deploy/helm/smoke.sh";
 
     [Fact]
     public void Every_service_that_erases_has_a_table_and_a_reporter()
@@ -45,6 +47,12 @@ public sealed partial class ResponderCoverageTests
         factory.ShouldBe(ComposeResponders(), ignoreOrder: true, "PrivacyApiFactory.PrivacySettings drifted from Compose");
     }
 
+    [Fact]
+    public void The_set_the_helm_smoke_renders_is_the_set_of_holders()
+    {
+        Holders().ShouldBe(HelmResponders(), ignoreOrder: true, $"{HelmSmokeFile} must list exactly the holders");
+    }
+
     private static string[] Holders()
     {
         string[] holders = [.. Reporters().Select(r => r.Responder)];
@@ -62,6 +70,16 @@ public sealed partial class ResponderCoverageTests
         responders.ShouldNotBeEmpty($"{ComposeFile} declares no Privacy__Responders__n");
 
         return responders;
+    }
+
+    private static string[] HelmResponders()
+    {
+        string text = File.ReadAllText(Path.Combine(SimulatorMappings.RepositoryRoot(), HelmSmokeFile));
+        Match declared = HelmHolders().Match(text);
+
+        declared.Success.ShouldBeTrue($"{HelmSmokeFile} declares no PRIVACY_HOLDERS");
+
+        return declared.Groups[1].Value.Split(',');
     }
 
     /// <summary>The directory each file sits under, i.e. the service, which names a holder whatever its layout.</summary>
@@ -83,6 +101,9 @@ public sealed partial class ResponderCoverageTests
 
     [GeneratedRegex(@"Privacy__Responders__\d+:\s*""([^""]+)""")]
     private static partial Regex ComposeResponder();
+
+    [GeneratedRegex("""^PRIVACY_HOLDERS='([^']+)'\r?$""", RegexOptions.Multiline)]
+    private static partial Regex HelmHolders();
 
     [GeneratedRegex("""const string Responder = "([^"]+)";""")]
     private static partial Regex Responder();
