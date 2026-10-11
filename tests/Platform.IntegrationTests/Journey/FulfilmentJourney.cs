@@ -93,14 +93,19 @@ public abstract class FulfilmentJourney(JourneyWorld world)
     }
 
     /// <summary>
-    /// What a failed count needs to tell a real duplicate from a read that came before a delivery settled: the
-    /// time of each matching call, its path and the answer it got, then every call the server has taken.
+    /// What a failed count needs to tell a real duplicate from a read that came before a delivery settled: each
+    /// matching call's time, path, answer, entry id, mapping and trace headers (one request logged twice from two
+    /// sent), then every call the server has taken.
     /// </summary>
     private static string Describe(ILogEntry[] matching, WireMockServer server)
     {
+        static string Header(ILogEntry e, string name) =>
+            e.RequestMessage?.Headers?.TryGetValue(name, out var values) == true ? string.Join(",", values) : "-";
+
         static string One(ILogEntry e) =>
             $"{e.RequestMessage?.DateTime:O} {e.RequestMessage?.Method} {e.RequestMessage?.Path} -> " +
-            $"{e.ResponseMessage?.StatusCode}";
+            $"{e.ResponseMessage?.StatusCode} [entry {e.Guid}, mapping {e.MappingGuid}, " +
+            $"traceparent {Header(e, "traceparent")}, key {Header(e, "Idempotency-Key")}]";
 
         ILogEntry[] all = [.. server.LogEntries];
 
