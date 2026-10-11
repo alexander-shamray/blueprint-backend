@@ -135,8 +135,10 @@ time.
   and one sweep are still owed.
 - The quality sets: the issues earlier sweeps filed, with the commits they
   were found on; the findings earlier review rounds raised on merged PRs.
-  Still owed, and until they land no step whose exit test holds recall on
-  them can pass.
+  Landed in `tools/quality-sets/` with the script that runs
+  `branch-reviewer` or a first sweep at an entry's commit and scores recall;
+  `token-usage.md` records the first, pilot score. Still owed: the scored
+  runs, which step 4's and step 5's exits read.
 
 **Exit.** Attribution holds on a known session: for one named `/ship` run,
 every response between its command and the next prompt a person typed is
