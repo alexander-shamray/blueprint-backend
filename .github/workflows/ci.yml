@@ -2,7 +2,10 @@ name: CI
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    # A label starts a run so comment-gate reads one added after opening; the
+    # cost is a full run per label. No `edited`: locality-gate.yml's comment
+    # says why a body edit does not rebuild the solution.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   push:
     branches: [main]
 
