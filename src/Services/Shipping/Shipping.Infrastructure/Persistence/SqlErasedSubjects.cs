@@ -7,7 +7,7 @@ using Shipping.Application.Privacy;
 namespace Shipping.Infrastructure.Persistence;
 
 /// <summary>Answers from the audit rows alone: the hash is salted by its request, so each row is tried in turn.</summary>
-/// <remarks>On its own connection: the worker asks before it saves, outside any unit (ADR-052).</remarks>
+/// <remarks>On its own connection: the worker asks after it saves, outside any unit (ADR-052).</remarks>
 internal sealed class SqlErasedSubjects(IDbConnectionFactory connections) : IErasedSubjects
 {
     private const string ErasuresSql =
