@@ -559,11 +559,12 @@ discards its checkout.
 python tools/new-service/new_service.py Yankee --port 5199
 dotnet build tests/Yankee.Api.Tests/Yankee.Api.Tests.csproj
 rm -rf src/Services/Yankee tests/Yankee.* deploy/compose/services/yankee.yml
-git checkout -- Platform.slnx deploy/compose/ .github/secret-scan/allowed/
+git checkout -- Platform.slnx deploy/compose/ .github/secret-scan/allowed/ \
+    src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs
 ```
 
 **That `git checkout` reverts uncommitted work in `Platform.slnx`, in
-`deploy/compose/` and in the allow-list,
+`deploy/compose/`, in the allow-list and in `ObservabilityExtensions.cs`,
 including work you did *during* the dogfood.** A fix made because
 the render exposed something — the case that actually happens — is in that
 tree and is reverted by the cleanup, leaving a commit whose message describes
@@ -597,12 +598,12 @@ root — a degraded path that suite therefore cannot assert — and refuses a
 root that has `.github/` but no scanner in it.
 
 The scaffold edits tracked files as well as creating its own — the solution
-file, the compose tree and the allow-list, which is why the
-`git checkout` above names all three — so that
+file, the compose tree, the allow-list and the `AddMeter` line in
+`Common.Web`, which is why the `git checkout` above names all four — so that
 cleanup is part of the procedure rather than tidying after it.
 **Commit before dogfooding**, though, if the PR itself
-changes `Platform.slnx`, `deploy/compose/` or that allow-list —
-the cleanup reverts the tree's own changes.
+changes `Platform.slnx`, `deploy/compose/`, that allow-list or
+`ObservabilityExtensions.cs` — the cleanup reverts the tree's own changes.
 
 **The probe is `Yankee` at 5199, and must not be a real service's name.** The
 create refuses a taken name and port, and the `rm -rf`, followed literally
