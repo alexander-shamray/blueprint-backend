@@ -185,7 +185,7 @@ counted under `/ship`. Passed on the run `token-usage.md` names.
   handed the task's diff rather than the tree, through the plugin's own
   settings where it has them and the user's settings otherwise.
 - A cheaper model for `general-purpose` is tried only behind the quality
-  sets of step 1.
+  sets of step 1, except for the tasks step 7d's table names.
 
 **Exit.** Measured again over a comparable span: `general-purpose` under
 0.5M a context and a main session's mean context under 150k a call.
@@ -368,6 +368,41 @@ this step: step 2's exit for a main session's mean context holds, read from
 `mean_context`; less than 40% of the input equivalent comes after a wake; a
 `/validate-blueprint` run's main session averages under 150k a call; and
 every plan added since the check landed is under the planning rule's limit.
+
+### Step 7d — which model a subagent runs on
+
+No agent under `.claude/agents/` sets `model:`, so a subagent runs on its
+parent's model; the one exception is a sweep's re-verification (step 5).
+Step 2 deferred a cheaper model for `general-purpose` behind step 1's
+quality sets, and that is right where its error is a silent miss. It is not
+needed where someone else catches the error: the parent opens the
+`file:line` a search returned, and a gate, a build or a test checks a
+mechanical edit. `CLAUDE.md`'s *Subagents, review rounds and plans* owns the
+rule; this table owns which task takes which model.
+
+| Task | Model | When |
+|---|---|---|
+| `Explore`, search and locate | Haiku or Sonnet | now: the parent opens what it returns |
+| Mechanical edits: comment-gate flags, renames, formatting | Sonnet | now: the gate, the build and the tests check it |
+| A sweep's re-verification | Sonnet | already so |
+| A review recheck of a fix diff only | Sonnet | after #845 |
+| A plan task's implementer | Sonnet | after #845 |
+| `branch-reviewer`'s first pass, a sweep's fan-out, writing a plan | the parent's | until #845 shows otherwise |
+
+- For `general-purpose` and `Explore` the brief names the model at spawn.
+  `model:` goes in the frontmatter of a repository agent the table moves;
+  none moves yet, since the rows that are "now" name built-in agents.
+- The report's `--models` view splits each row by the model that answered,
+  read from each response's `message.model`, so what a built-in agent
+  actually ran on is read from the transcripts rather than assumed.
+
+**Exit.** Measured with `--models` over a span after the rule lands: the
+rows the table moves run on the named model; the input equivalent, priced
+per model, falls; and on #845's sets nothing kept on the parent's model
+loses recall.
+
+**Landed:** the report's `--models` view and the rule. **Owed:** the
+"after #845" rows, and the exit measurement.
 
 ### Alongside — the comment budget
 
