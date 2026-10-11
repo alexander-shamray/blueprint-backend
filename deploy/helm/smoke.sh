@@ -1003,13 +1003,18 @@ privacy_refuses() {
         check "$label" grep -q "$needle" "$OUT/privacy-bad.txt"
     fi
 }
+# The set a deployment passes is the services that erase, and nothing else.
+# ResponderCoverageTests holds this line to the source, so a holder added
+# there fails that test until it is added here.
+PRIVACY_HOLDERS='ordering,payments,shipping,notifications,bff'
+PRIVACY_HOLDER_COUNT=$(awk -F, '{ print NF }' <<<"$PRIVACY_HOLDERS")
 PRIVACY_SLO='--set-string privacy.completionSlo=30.00:00:00'
-privacy_render --set 'privacy.responders={ordering,payments,shipping,notifications,bff}' $PRIVACY_SLO     >"$OUT/privacy-capability.yaml"
+privacy_render --set "privacy.responders={$PRIVACY_HOLDERS}" $PRIVACY_SLO     >"$OUT/privacy-capability.yaml"
 
-check 'privacy: all five holders are in the ConfigMap, one indexed key each'     awk '/^kind: ConfigMap$/ { in_cm = 1 }
+check 'privacy: every holder is in the ConfigMap, one indexed key each'     awk -v want="$PRIVACY_HOLDER_COUNT" '/^kind: ConfigMap$/ { in_cm = 1 }
          /^---$/ { in_cm = 0 }
-         in_cm && /^ *Privacy__Responders__[0-4]: "[a-z]+"$/ { n++ }
-         END { exit n == 5 ? 0 : 1 }' "$OUT/privacy-capability.yaml"
+         in_cm && /^ *Privacy__Responders__[0-9]+: "[a-z]+"$/ { n++ }
+         END { exit n == want ? 0 : 1 }' "$OUT/privacy-capability.yaml"
 check 'privacy: the service level is in the ConfigMap'     awk '/^kind: ConfigMap$/ { in_cm = 1 }
          /^---$/ { in_cm = 0 }
          in_cm && /^ *Privacy__CompletionSlo: "30\.00:00:00"$/ { found = 1 }
