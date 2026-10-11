@@ -82,6 +82,10 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
         Guid kept = await AgedOrderAsync(TimeSpan.FromDays(70));
         Notification keptEnded = await fixture.PendingAsync(TemplateKeys.OrderPlaced, kept);
         await EndAsync(keptEnded, TimeSpan.FromDays(1));
+        Guid waitedOn = await AgedOrderAsync(TimeSpan.FromDays(72));
+        await fixture.PendingAsync(TemplateKeys.ShipmentDelivered, waitedOn);
+        Notification waitedEnded = await fixture.PendingAsync(TemplateKeys.OrderPlaced, waitedOn);
+        await EndAsync(waitedEnded, TimeSpan.FromDays(1));
 
         await fixture.PurgeNotificationsRetentionAsync();
 
@@ -89,6 +93,8 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
             .ShouldBeEmpty("nothing links the row to a customer once its record has gone");
         (await ParametersAsync(keptEnded.NotificationId))
             .ShouldNotBeEmpty("its order record is inside the window, so an erasure still finds it");
+        (await ParametersAsync(waitedEnded.NotificationId))
+            .ShouldNotBeEmpty("a pending notice keeps the record, so the row stays findable through it");
     }
 
     [Fact]
