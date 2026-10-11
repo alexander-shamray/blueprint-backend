@@ -261,6 +261,20 @@ class Runner(unittest.TestCase):
         self.assertIn("the alert did not fire", findings[0])
         self.assertEqual(["cause", "first_step", "restore"], fake.actions())
 
+    def test_an_alert_that_fires_after_the_deadline_is_waited_out_before_the_restore_counts_as_settled(self):
+        fake = Fake(["inactive"])
+        late = fake.scenario.DEADLINE.seconds + 40
+        fake.world.alerts.state = lambda name: "firing" if late <= fake.clock.now < late + 100 else "inactive"
+        findings = fake.run()
+        self.assertEqual(1, len(findings))
+        self.assertIn("the alert did not fire", findings[0])
+        self.assertGreaterEqual(fake.clock.now, late + 100)
+
+    def test_a_fired_alert_that_resolved_is_settled_without_waiting_a_reporting_lag(self):
+        fake = Fake(["inactive", "firing", "firing", "inactive"])
+        self.assertEqual([], fake.run())
+        self.assertLess(fake.clock.now, harness.REPORT_LAG_SECONDS)
+
     def test_a_first_step_that_fails_is_a_finding(self):
         fake = Fake(["inactive", "firing", "firing", "inactive"], step=(False, "no log line"))
         findings = fake.run()
