@@ -157,6 +157,7 @@ public static class DependencyInjection
 
         // §11.7's erasure: the audit row, the delete in the unit's transaction and the report after it (ADR-094).
         services.AddScoped<IPersonalDataErasureRepository, PersonalDataErasureRepository>();
+        services.AddScoped<IErasedSubjects, SqlErasedSubjects>();
         services.AddScoped<IShippingPersonalDataStore, SqlShippingPersonalDataStore>();
         services.AddScoped<IErasureReporter, ErasureReporter>();
 
