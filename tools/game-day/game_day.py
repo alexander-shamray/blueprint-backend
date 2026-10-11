@@ -35,6 +35,7 @@ def run(scenario: ModuleType, world: harness.World, *, clock=time.monotonic, sle
     findings: list[str] = []
     say = world.say
     alert = scenario.ALERT
+    fired = False
 
     # A rule nobody loaded is also quiet, and a quiet start is what makes "it fired" mean the cause did it.
     if not world.alerts.loaded(alert):
@@ -50,6 +51,7 @@ def run(scenario: ModuleType, world: harness.World, *, clock=time.monotonic, sle
             took = harness.wait_until(
                 lambda: _is(world, alert, "firing"), scenario.DEADLINE.seconds, f"{alert} firing",
                 clock=clock, sleep=sleep)
+            fired = True
             say(f"{alert} fired after {took:.0f}s")
         except harness.Timeout as error:
             findings.append(f"the alert did not fire: {error}")
@@ -60,7 +62,7 @@ def run(scenario: ModuleType, world: harness.World, *, clock=time.monotonic, sle
     except harness.GameDayError as error:
         findings.append(f"the cause or the step failed: {error}")
     finally:
-        restored = _restore(scenario, world, clock, sleep)
+        restored = _restore(scenario, world, fired, clock, sleep)
         findings.extend(restored)
         # After the settle and not before it: a ratio or a quantile over a window that has no requests in it is
         # empty, and an empty rule is quiet whether or not the cause went. The stop is the runner's, so a scenario
@@ -84,13 +86,23 @@ def _is(world: harness.World, alert: str, wanted: str) -> tuple[bool, str]:
     return state == wanted, f"{alert} is {state}"
 
 
-def _restore(scenario: ModuleType, world: harness.World, clock, sleep) -> list[str]:
+def _restore(scenario: ModuleType, world: harness.World, fired: bool, clock, sleep) -> list[str]:
     try:
         scenario.restore(world)
         # Settling is bounded by the cause's derivation: the gauge has to be exported and judged again. A rule
         # that reads a window (an `increase` over 30m) names its own, as SETTLE, because it outlasts that sum.
         bound = getattr(scenario, "SETTLE", scenario.DEADLINE).seconds + 120
-        harness.wait_until(lambda: scenario.settled(world), bound,
+        started = clock()
+
+        # An alert never seen firing reads `inactive` as one not yet reported does (README.md, *Reporting is a
+        # second evaluation*), so `settled` is believed only once a reporting lag has passed.
+        def quiet() -> tuple[bool, str]:
+            ok, observed = scenario.settled(world)
+            if ok and not fired and clock() - started < harness.REPORT_LAG_SECONDS:
+                return False, f"{observed}, but the alert was never seen firing and may not have reported yet"
+            return ok, observed
+
+        harness.wait_until(quiet, bound + (0 if fired else harness.REPORT_LAG_SECONDS),
                            f"{scenario.ALERT} resolving after the restore", clock=clock, sleep=sleep)
     except Exception as error:  # noqa: BLE001 - a restore that fails for any reason is the finding
         return [f"the restore did not settle, so the next scenario starts poisoned: {error}"]

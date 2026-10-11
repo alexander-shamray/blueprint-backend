@@ -134,6 +134,12 @@ and 181 seconds after its row was planted, where the export and one evaluation
 allow 125. The three terms above could not hold it, so `REPORT_LAG_SECONDS` is
 the fourth and every deadline carries it; the runs above fit under it too.
 
+The same lag is why `inactive` after the restore is not yet "resolved": an
+alert that had not reported when the deadline ran out reads `inactive` exactly
+as a resolved one does. When the runner never saw the alert firing, it believes
+`settled` only once `REPORT_LAG_SECONDS` have passed since the restore, so a
+late alert is waited out and the next scenario does not start on it.
+
 ## Alert state
 
 Prometheus's port is not published, so alerts are read through Grafana's
