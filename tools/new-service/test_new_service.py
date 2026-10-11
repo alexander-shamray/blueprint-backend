@@ -2552,7 +2552,7 @@ class TheCommandLine(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertEqual("", err)
             # A count and not a list: a number a test pins fails when it is
-            # wrong. Seven and not eight, because this root has no `.github/` and
+            # wrong. Six and not seven, because this root has no `.github/` and
             # §15.1's allow-list step degrades without it.
             self.assertIn("83 files created, 6 updated", out)
             self.assertIn(f"port {PORT}", out)
@@ -2601,7 +2601,7 @@ class TheCommandLine(unittest.TestCase):
 
             self.assertEqual(0, code)
             self.assertEqual("", err)
-            # Six shared files and not seven: no outbox meter line, and no `.github/` here.
+            # Six shared files and not seven, because this root has no `.github/` either.
             self.assertIn("63 files created, 6 updated, publishing no port.", out)
             self.assertFalse((root / "src/Services/Zulu/Zulu.Domain").exists())
 
