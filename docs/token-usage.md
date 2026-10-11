@@ -322,3 +322,27 @@ re-sends at 0.1×, and compacting cuts that in proportion to the context it
 sheds. A reviewer's wake is mostly writes, but a reviewer's context is small
 (41k, in the 2026-10-10 section). So step 7's rule is worth what a main
 session's mean context is worth (274k for `/ship`, in that section).
+
+## 2026-10-11 — the quality sets, and a first score
+
+Built by `tools/quality-sets/` at c294776d, from the issue tracker and the PR
+review comments of that day.
+
+| Set | Entries | Of which scorable | Pinned commits |
+|---|---|---|---|
+| `sweeps.json`, issues a sweep filed | 87 | 85 | 2: `5bea8b26` (51), `2a15c639` (34) |
+| `reviews.json`, Copilot's inline comments on merged PRs | 1,478 | 1,478 | 546 heads over 127 PRs |
+
+An issue is scorable when it names a commit this clone holds and a file
+that exists there; the two that do not are #181 and #184, filed before
+issues carried a commit. Two commits hold every scorable sweep entry, so
+two sweeps score the whole set.
+
+**The first score is a pilot, not a baseline.** `branch-reviewer` was run on
+the diff of PR 187 at `ef3b03bf`, which holds 12 of Copilot's comments across
+four files. The same head scored 0 of 12 on one run and 2 of 12 on the next,
+from 2 findings each time, both in `.claude/agents/review-adjudicator.md`.
+That is the noise a comparison has to beat, and one head is not a sample of
+the 546. **No sweep has been scored**: a full first round at either commit is
+41 slices, which this change did not spend. Step 4's and step 5's exits stay
+open until those runs are recorded.

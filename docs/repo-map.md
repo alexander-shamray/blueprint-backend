@@ -249,6 +249,9 @@ tools/game-day/              the runbooks' proof: causes each alert on the
                              One script per runbook, a coverage test that
                              holds every runbook to a script or a reason;
                              stdlib Python with a suite
+tools/quality-sets/          what earlier sweeps and reviewers found, and
+                             the recall of a run against it; stdlib Python
+                             with a suite, for docs/token-plan.md
 tools/token-usage/           Claude Code's recorded token usage per command
                              and agent type, from local transcripts; stdlib
                              Python with a suite, for docs/token-plan.md
