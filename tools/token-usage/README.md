@@ -9,6 +9,7 @@ py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --json
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --spawns 40   # the costliest subagents and their tasks
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --tools 30    # what tool results put into main sessions
 py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --docs        # every tracked .md, who names it, how often it was opened
+py -3.12 tools/token-usage/token_usage.py --since 2026-10-01 --models      # each row split by the model that answered
 py -3.12 tools/token-usage/token_usage.py --session <id>      # one session and its subagents
 py -3.12 tools/token-usage/token_usage.py ~/.claude/projects/<dir> ...
 ```
@@ -55,6 +56,12 @@ in characters and about a quarter as many tokens: what a large context is
 made of, since a result stays in it for every later turn. A subagent's type
 comes from its `.meta.json`, else from the parent's tool result naming it,
 else it is `subagent`.
+
+`--models` splits each command and agent row by the `message.model` of the
+responses it sums, adding a `model` column, so what a built-in agent such
+as `Explore` actually ran on is read rather than assumed; a response with
+no model is counted under `(unknown)`. It is a view of its own, like the
+others, and the total is the same as the default's.
 
 `--docs` lists every markdown file `git ls-files` tracks in the checkout it
 runs from, with how often a main session and a subagent opened it — with
