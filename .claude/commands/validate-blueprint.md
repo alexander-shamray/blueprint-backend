@@ -115,7 +115,8 @@ not round up.
   check a finding against it and `CLAUDE.md` *Style*.
 - Renumber ADRs or chapters.
 - Revise a roadmap estimate, days-per-week ratio or one-engineer assumption.
-- Edit anything, or spawn an implementer (report code findings), or touch `.remember/`.
+- Edit anything, or spawn an implementer (report code findings), or touch
+  `.remember/`.
 
 The frontmatter enforces the paths it lists. (why:
 docs/commands/validate-blueprint.md, *Do not*)
