@@ -1,10 +1,7 @@
 """The quality sets docs/token-plan.md step 1 owes, and the recall score against them.
 
-    python quality_sets.py build-sweeps | build-reviews
-    python quality_sets.py score --set sweeps.json --findings found.json
-    python quality_sets.py run review --pr 123 | run sweep --kind bug --commit <sha>
-
-Stdlib only. README.md owns what each set holds and what a score means.
+Subcommands: build-sweeps, build-reviews, score, run. README.md owns the invocations,
+what each set holds and what a score means.
 """
 
 import argparse
