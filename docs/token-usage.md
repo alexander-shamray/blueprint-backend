@@ -318,5 +318,5 @@ equivalent, 106M of it after a wake.
 back.** A main session's wake finds its cache warm nearly every time, so
 what it pays for is the 200k it re-sends at 0.1×, and compacting cuts that
 in proportion to the context it sheds. A reviewer's wake is the reverse, and
-mostly a write, but a reviewer's context is 34k. So step 7a's rule is worth
+mostly a write, but a reviewer's context is 34k. So step 7's rule is worth
 what a main session's mean context is worth, not what a cache miss is.
