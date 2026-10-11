@@ -205,13 +205,14 @@ of 840, with nine services over a second, which is the runbook's *everything
 slow together* shape, where the script's first step now goes on to that
 section's three reads as `docker stats`, the engine's CPU and memory, and the
 container's limits (that run predates them), and a cold cache is not caused,
-because nothing reads `HybridCache` yet for a paused `redis-cache` to slow. `outbox-growth` fired after 738 of 780
-and asserted `OutboxBrokerLaneStalled` beside it: with the broker stopped the
-age gauge is high too, so the runbook's own first check sends its reader to
-`outbox-broker.md`, which is the right answer for this cause and says growth
-alone cannot be told from a stall by the count. `stop sql` makes
-`ErrorRateGateway` fire as well, because the gateway passes a service's 500
-through, and the runbook's advice to work the backend first is that case.
+because nothing reads `HybridCache` yet for a paused `redis-cache` to slow.
+`outbox-growth` fired after 738 of 780  and asserted `OutboxBrokerLaneStalled`
+beside it: with the broker stopped the  age gauge is high too, so the runbook's
+own first check sends its reader to  `outbox-broker.md`, which is the right
+answer for this cause and says growth  alone cannot be told from a stall by the
+count. `stop sql` makes  `ErrorRateGateway` fire as well, because the gateway
+passes a service's 500  through, and the runbook's advice to work the backend
+first is that case.
 
 The two Keycloak causes restart the worker because it keeps the token it
 fetched until that expires. Their restore gives the grant back, reads the
