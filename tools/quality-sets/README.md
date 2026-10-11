@@ -9,6 +9,7 @@ holds them and the script that scores a run against them.
 py -3.12 tools/quality-sets/quality_sets.py build-sweeps    # rewrites sweeps.json from the issue tracker
 py -3.12 tools/quality-sets/quality_sets.py build-reviews   # rewrites reviews.json from the PR review comments
 py -3.12 tools/quality-sets/quality_sets.py run review --pr 187 [--head <sha>]
+py -3.12 tools/quality-sets/quality_sets.py run review --sample 15 --repeat 2   # heads spread over the set
 py -3.12 tools/quality-sets/quality_sets.py run sweep --kind bug --commit 5bea8b26
 py -3.12 tools/quality-sets/quality_sets.py score --set reviews.json --findings found.json
 ```
@@ -55,6 +56,10 @@ and the `missed` ids, scored over the entries pinned to the run's commit only.
 Recall is noisy: the same head scored 0 of 12 and 2 of 12 on two runs
 (`docs/token-usage.md`, 2026-10-11). Read a score as a sample, and run a head
 more than once before comparing two models.
+
+A slice whose auditor returns no JSON is retried once and then listed in
+`failed`; a usage-limit notice ends the run unscored, since every later slice
+would stop the same way and a score over the rest measures the limit.
 
 An auditor's run is long and the sweeps' ceiling is seven rounds; `run sweep` is
 round 1 only, which is what *a first sweep finds at least what the earlier

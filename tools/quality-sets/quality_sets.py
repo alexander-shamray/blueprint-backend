@@ -39,6 +39,16 @@ def git(*args, cwd=None, check=True):
     return run("git", *args, cwd=cwd, check=check)
 
 
+def git_bash():
+    """Git's own bash beside git.exe where there is one: a bare `bash` from Windows Python is the WSL relay."""
+    exe = shutil.which("git")
+    for parent in Path(exe).resolve().parents if exe else ():
+        for relative in ("bin/bash.exe", "usr/bin/bash.exe"):
+            if (parent / relative).exists():
+                return str(parent / relative)
+    return "bash"
+
+
 def tree_paths(commit, cache={}):
     """Every path at a commit, or None when the commit is not in this clone."""
     if commit not in cache:
@@ -209,12 +219,19 @@ def agent_definition(name):
                               "tools": [t.strip() for t in fields["tools"].split(",")]}})
 
 
-def ask(claude, agent, prompt, cwd):
+class UsageLimit(SystemExit):
+    """An agent stopped on a usage-limit notice: every later run would, so the run ends, unscored."""
+
+
+def ask(claude, agent, prompt, cwd, add_dirs=()):
     """One non-interactive agent run; its findings, or SystemExit when it returned no JSON."""
+    extra = [arg for d in add_dirs for arg in ("--add-dir", str(d))]
     done = run(claude, "-p", prompt, "--agents", agent_definition(agent), "--agent", agent,
-               "--output-format", "text", cwd=cwd)
+               "--output-format", "text", *extra, cwd=cwd)
     value = agent_json(done.stdout)
     if value is None:
+        if "usage limit" in done.stdout.lower():
+            raise UsageLimit(f"{agent} stopped on a usage-limit notice: {done.stdout.strip()[:200]}")
         raise SystemExit(f"{agent} returned no findings JSON: {done.stdout.strip()[:200]}")
     return value["findings"]
 
@@ -245,16 +262,39 @@ def sweep_findings(claude, kind, commit):
     git("worktree", "add", "--detach", str(root), commit)
     slices = Path(f"{root}.slices")
     try:
-        run("bash", str(REPO / ".claude" / "scripts" / "sweep-slices.sh"), kind, str(root), "full", cwd=root)
-        found = []
-        for listing in sorted(slices.glob("*.txt")):
+        run(git_bash(), str(REPO / ".claude" / "scripts" / "sweep-slices.sh"), kind, str(root), "full", cwd=root)
+        found, failed = [], []
+        listings = sorted(slices.glob("*.txt"), key=lambda p: int(p.stem))
+        for number, listing in enumerate(listings, 1):
             prompt = (f"Root path: {root}. Scope: the whole tree. Slice list: {listing}. "
                       "Round 1, nothing known. Return the JSON your profile declares.")
-            found += ask(claude, f"{kind}-auditor", prompt, root)
-        return found
+            for attempt in (1, 2):
+                try:
+                    found += ask(claude, f"{kind}-auditor", prompt, root, [slices])
+                    break
+                except SystemExit as error:
+                    if isinstance(error, UsageLimit):
+                        raise
+                    print(f"slice {listing.name} attempt {attempt}: {error}", file=sys.stderr)
+            else:
+                failed.append(listing.name)
+            print(f"slice {number}/{len(listings)}: {len(found)} findings so far", file=sys.stderr, flush=True)
+        return found, failed, len(listings)
     finally:
         git("worktree", "remove", "--force", str(root), check=False)
         shutil.rmtree(slices, ignore_errors=True)
+
+
+def sample_heads(entries, count, least=3):
+    """count heads spread evenly over the pull requests, from those holding at least `least` entries."""
+    per_head = {}
+    for entry in entries:
+        key = (entry["pr"], entry["head"])
+        per_head[key] = per_head.get(key, 0) + 1
+    heads = sorted(key for key, n in per_head.items() if n >= least)
+    if count >= len(heads):
+        return heads
+    return [heads[i * len(heads) // count] for i in range(count)]
 
 
 def load(path):
@@ -279,6 +319,8 @@ def main(argv=None):
     running.add_argument("what", choices=("review", "sweep"))
     running.add_argument("--pr", type=int)
     running.add_argument("--head", help="review: one of the pull request's heads in reviews.json; default every head")
+    running.add_argument("--sample", type=int, help="review: instead of --pr, this many heads spread over the set")
+    running.add_argument("--repeat", type=int, default=1, help="review: runs per head, since a score varies run to run")
     running.add_argument("--kind", choices=("bug", "security"))
     running.add_argument("--commit")
     running.add_argument("--claude", default="claude")
@@ -295,20 +337,26 @@ def main(argv=None):
         print(json.dumps(score(load(args.set), given["findings"], given["commit"])))
     elif args.what == "review":
         entries = load(REVIEWS)
-        heads = [args.head] if args.head else sorted({e["head"] for e in entries if e["pr"] == args.pr})
-        if not heads or not args.pr:
-            raise SystemExit("run review: --pr names a pull request with entries in reviews.json")
-        for head in heads:
-            found = review_findings(args.claude, entries, args.pr, head)
-            print(json.dumps(score(entries, [{"file": f["file"], "line": f.get("line", 0)} for f in found], head)))
+        if args.sample:
+            targets = sample_heads(entries, args.sample)
+        else:
+            heads = [args.head] if args.head else sorted({e["head"] for e in entries if e["pr"] == args.pr})
+            if not heads or not args.pr:
+                raise SystemExit("run review: --pr names a pull request with entries in reviews.json")
+            targets = [(args.pr, head) for head in heads]
+        for pr, head in targets:
+            for attempt in range(args.repeat):
+                found = review_findings(args.claude, entries, pr, head)
+                result = score(entries, [{"file": f["file"], "line": f.get("line", 0)} for f in found], head)
+                print(json.dumps({"pr": pr, "attempt": attempt + 1, **result}), flush=True)
     else:
         if not (args.kind and args.commit):
             raise SystemExit("run sweep: --kind and --commit are required")
         full = resolve_commit(args.commit)
         if full is None:
             raise SystemExit(f"{args.commit} is not a commit in this clone")
-        found = sweep_findings(args.claude, args.kind, full)
-        print(json.dumps(score(load(SWEEPS), found, full)))
+        found, failed, slices = sweep_findings(args.claude, args.kind, full)
+        print(json.dumps({"kind": args.kind, "slices": slices, "failed": failed, **score(load(SWEEPS), found, full)}))
     return 0
 
 
