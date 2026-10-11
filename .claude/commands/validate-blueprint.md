@@ -86,9 +86,9 @@ and `docs/testing.md`. (why: docs/commands/validate-blueprint.md, *Method*)
 This session only dispatches. It spawns one `general-purpose` agent per pass
 (checks 1–3, 4–6, 7–9, 10), each handed the scope, the three paths and the
 *Method* bullets and told to edit nothing, and holds only the JSON each
-returns: `claim`, `sites` as `file:line`, `conflict`, `owner`. It reads no
-chapter whole, opens only a `file:line` a finding cites, and drops one that
-does not hold. One dispatch, not a loop: a fix is made by the caller — a
+returns: `claim`, `sites` as `file:line`, `conflict`, `owner`, `resolved`
+and, for check 9, `verdict`. It reads no chapter whole, opens only a
+`file:line` a finding cites, and drops one that does not hold. One dispatch, not a loop: a fix is made by the caller — a
 separate task after `/clear`, or /ship's step 2 — never by an implementer
 spawned here. (why: docs/commands/validate-blueprint.md, *Dispatch*)
 
