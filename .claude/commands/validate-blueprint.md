@@ -1,7 +1,7 @@
 ---
 description: Multi-pass self-consistency audit of the blueprint, its roadmap and docs/testing.md, and of the code against them
 argument-hint: "[chapter file or topic to focus on — omit for a full sweep]"
-allowed-tools: Read, Grep, Glob, Edit, Bash(git diff:*), Bash(git log:*), Bash(wc:*), Bash(ls:*)
+allowed-tools: Read, Grep, Glob, Edit, Bash(git diff:*), Bash(git log:*), Bash(wc:*), Bash(ls:*), Agent(general-purpose)
 disallowed-tools: Edit(.git/**), Edit(./.git/**), Edit(.git), Edit(./.git), Edit(docs/superpowers/**), Edit(./docs/superpowers/**), Edit(docs/runbooks/**), Edit(./docs/runbooks/**), Edit(docs/commands/**), Edit(./docs/commands/**), Edit(docs/pr-decision-log.md), Edit(./docs/pr-decision-log.md), Edit(docs/secrets.md), Edit(./docs/secrets.md), Edit(docs/personal-data.md), Edit(./docs/personal-data.md), Edit(docs/personal-data-incident.md), Edit(./docs/personal-data-incident.md), Edit(docs/lessons.md), Edit(./docs/lessons.md), Edit(docs/harness-boundaries.md), Edit(./docs/harness-boundaries.md), Edit(docs/repo-map.md), Edit(./docs/repo-map.md), Edit(docs/style-guide.md), Edit(./docs/style-guide.md), Edit(docs/change-locality.md), Edit(./docs/change-locality.md), Edit(docs/change-locality-plan.md), Edit(./docs/change-locality-plan.md), Edit(docs/churn-plan.md), Edit(./docs/churn-plan.md), Edit(docs/churn-plan-2.md), Edit(./docs/churn-plan-2.md), Edit(docs/token-plan.md), Edit(./docs/token-plan.md), Edit(docs/token-usage.md), Edit(./docs/token-usage.md), Edit(.claude/**), Edit(./.claude/**), Edit(.config/**), Edit(./.config/**), Edit(.github/**), Edit(./.github/**), Edit(deploy/**), Edit(./deploy/**), Edit(src/**), Edit(./src/**), Edit(tests/**), Edit(./tests/**), Edit(tools/**), Edit(./tools/**), Edit(.dockerignore), Edit(./.dockerignore), Edit(.editorconfig), Edit(./.editorconfig), Edit(.gitattributes), Edit(./.gitattributes), Edit(.gitignore), Edit(./.gitignore), Edit(CLAUDE.md), Edit(./CLAUDE.md), Edit(Directory.Build.props), Edit(./Directory.Build.props), Edit(Directory.Build.targets), Edit(./Directory.Build.targets), Edit(Directory.Build.rsp), Edit(./Directory.Build.rsp), Edit(Directory.Solution.props), Edit(./Directory.Solution.props), Edit(Directory.Solution.targets), Edit(./Directory.Solution.targets), Edit(MSBuild.rsp), Edit(./MSBuild.rsp), Edit(nuget.config), Edit(./nuget.config), Edit(NuGet.config), Edit(./NuGet.config), Edit(NuGet.Config), Edit(./NuGet.Config), Edit(**/*.targets), Edit(**/*.props), Edit(**/*.rsp), Edit(**/*.csproj), Edit(**/*.sln), Edit(**/*.slnx), Edit(Directory.Packages.props), Edit(./Directory.Packages.props), Edit(Platform.slnx), Edit(./Platform.slnx), Edit(README.md), Edit(./README.md), Edit(coverage.runsettings), Edit(./coverage.runsettings), Edit(global.json), Edit(./global.json), Edit(.mcp.json), Edit(./.mcp.json), Edit(.codeindexignore), Edit(./.codeindexignore)
 ---
 
@@ -75,13 +75,22 @@ and `docs/testing.md`. (why: docs/commands/validate-blueprint.md, *Method*)
 - A value's owner wins (the code symbol, else the one section stating it)
   and other sites cite it; for a rule, the statement the rest depends on
   wins and the others are amended.
-- Fix every named site **inside the change's touch set** in one pass (Class
-  C: the new ADR and the section it amends; no class: the three paths, a
+- Name the fix for every site **inside the change's touch set** (Class C:
+  the new ADR and the section it amends; no class: the three paths, a
   restatement fixed by citing the owner); report one outside and leave it
-  (`docs/change-locality.md` §2). Never half-apply a reconciliation.
+  (`docs/change-locality.md` §2). Never propose half a reconciliation.
 - Genuine design ambiguity: never silently pick — surface it and ask.
 
-Keep going until a full pass produces no findings.
+## Dispatch
+
+This session only dispatches. It spawns one `general-purpose` agent per pass
+(checks 1–3, 4–6, 7–9, 10), each handed the scope, the three paths and the
+*Method* bullets and told to edit nothing, and holds only the JSON each
+returns: `claim`, `sites` as `file:line`, `conflict`, `owner`. It reads no
+chapter whole, opens only a `file:line` a finding cites, and drops one that
+does not hold. One dispatch, not a loop: a fix is made by the caller — a
+separate task after `/clear`, or /ship's step 2 — never by an implementer
+spawned here. (why: docs/commands/validate-blueprint.md, *Dispatch*)
 
 ## Report
 
@@ -91,12 +100,12 @@ One block per finding:
 FINDING — <one-line claim of the defect>
   Sites:    07-persistence.md:112, 09-messaging.md:340, appendix-c-delivery-plan.md:44
   Conflict: <A says X; B says Y>
-  Resolved: <what you changed and why that side won>
+  Resolved: <the edit to make and why that side wins>
 ```
 
 A code ↔ blueprint finding adds `Verdict:` (`code` or `blueprint`) before
 `Resolved:`. A roadmap finding takes none; its `Resolved:` names the figures
-recomputed. End with the pass count and whether the last pass was clean — do
+recomputed. End with the passes dispatched and the findings each returned — do
 not round up.
 
 ## Do not
@@ -106,7 +115,7 @@ not round up.
   check a finding against it and `CLAUDE.md` *Style*.
 - Renumber ADRs or chapters.
 - Revise a roadmap estimate, days-per-week ratio or one-engineer assumption.
-- Edit `src/` or `tests/` (report code findings), or touch `.remember/`.
+- Edit anything, or spawn an implementer (report code findings), or touch `.remember/`.
 
-The frontmatter enforces this. (why:
+The frontmatter enforces the paths it lists. (why:
 docs/commands/validate-blueprint.md, *Do not*)
