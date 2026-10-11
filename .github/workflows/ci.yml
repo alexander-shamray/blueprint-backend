@@ -251,6 +251,14 @@ jobs:
       - name: §3.2's table matches what every host publishes and consumes
         run: python .github/messaging-gate/messaging_gate.py check
 
+      # CLAUDE.md's planning rule, over the plans directory rather than a list.
+      - name: Test the plan-size gate
+        working-directory: .github/plan-size-gate
+        run: python -m unittest
+
+      - name: Every plan written after the planning rule is under its size
+        run: python .github/plan-size-gate/plan_size_gate.py
+
   # The scaffold has no template directory: it renders a new service from
   # src/Services/Catalog at run time, so there is one copy of the wiring rather
   # than two that drift. The risk that buys is that Catalog moves under the

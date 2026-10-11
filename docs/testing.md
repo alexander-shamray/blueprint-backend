@@ -211,6 +211,14 @@ which is how a sweep proves a tree is under the rule.
 
 What it reads and judges is [its README](../.github/comment-gate/README.md)'s.
 
+**The plan-size gate** reads a directory and needs no base:
+
+```bash
+py -3.12 .github/plan-size-gate/plan_size_gate.py
+```
+
+What it reads and claims is [its README](../.github/plan-size-gate/README.md)'s.
+
 **The Compose smoke is the one gate that needs a running daemon and the one
 whose run changes the machine it runs on**, so its teardown is part of what
 it asserts rather than tidying: RabbitMQ seeds its default user only on an
