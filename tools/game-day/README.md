@@ -123,7 +123,8 @@ container, so the default applies. The first runs, on 2026-10-10, fired
 `OutboxAbandonedRows` after 75 seconds of a 120-second deadline,
 `OutboxLocalLaneStalled` after 128 of 150, and `OutboxBrokerLaneStalled` after
 209 and 226 of 240. The last is close to its ceiling, which is what a sum of
-ceilings looks like when the cause lands on a bad phase of both intervals.
+ceilings looks like when the cause lands on a bad phase of both intervals. `ErasureRequestsOverdue` was run on 2026-10-11 and fired
+after 173 and 213 seconds of its deadline.
 
 **Reporting is a second evaluation.** Prometheus shows an alert one evaluation
 after the one whose expression first read true: the rule's entry in
@@ -179,7 +180,7 @@ names in its header one it has to work around.
 The runtime is the wall clock of one run on the Compose stack, from the quiet
 start to the restore settling, measured on 2026-10-10; a row marked not
 timed was not timed whole, and the deadline paragraph above has when the first
-three fired.
+three, and the erasure-overdue run, fired.
 
 | Runbook | Alert | Cause | Runtime |
 |---|---|---|---|
@@ -194,7 +195,7 @@ three fired.
 | `contact-refused` | `ContactReadRefused` | `view-users` taken from `notifications-worker`'s, the stored contacts dropped | 32m40s |
 | `unscanned-shipment` | `UnscannedShipments` | a four-day-old Booked shipment planted through SQL | 4m08s |
 | `unattributed-order` | `UnattributedOrders` | an unowned payment fact planted through SQL, held 900 seconds | 18m40s |
-| `erasure-overdue` | `ErasureRequestsOverdue` | an Open request due a day ago planted through SQL, which Privacy's sweep marks | not timed whole; fired after 173 and 213 seconds of 250 on 2026-10-11 |
+| `erasure-overdue` | `ErasureRequestsOverdue` | an Open request due a day ago planted through SQL, which Privacy's sweep marks | not timed |
 | `error-rate` | `ErrorRateGateway`, then `ErrorRateService` | `stop ordering-api` behind the gateway; then `stop sql` under the services | 27m36s |
 | `latency` | `Latency` | `pause sql` under the loop, held past the 10-minute `for:` | 24m18s |
 | `outbox-growth` | `OutboxGrowth` | `stop rabbitmq`, 1100 Broker rows planted through SQL and 20 more every 30 seconds | 14m34s |
