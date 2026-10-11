@@ -194,7 +194,7 @@ three fired.
 | `contact-refused` | `ContactReadRefused` | `view-users` taken from `notifications-worker`'s, the stored contacts dropped | 32m40s |
 | `unscanned-shipment` | `UnscannedShipments` | a four-day-old Booked shipment planted through SQL | 4m08s |
 | `unattributed-order` | `UnattributedOrders` | an unowned payment fact planted through SQL, held 900 seconds | 18m40s |
-| `erasure-overdue` | `ErasureRequestsOverdue` | an Open request due a day ago planted through SQL, which Privacy's sweep marks | not timed |
+| `erasure-overdue` | `ErasureRequestsOverdue` | an Open request due a day ago planted through SQL, which Privacy's sweep marks | not timed whole; fired after 173 and 213 seconds of 250 on 2026-10-11 |
 | `error-rate` | `ErrorRateGateway`, then `ErrorRateService` | `stop ordering-api` behind the gateway; then `stop sql` under the services | 27m36s |
 | `latency` | `Latency` | `pause sql` under the loop, held past the 10-minute `for:` | 24m18s |
 | `outbox-growth` | `OutboxGrowth` | `stop rabbitmq`, 1100 Broker rows planted through SQL and 20 more every 30 seconds | 14m34s |
