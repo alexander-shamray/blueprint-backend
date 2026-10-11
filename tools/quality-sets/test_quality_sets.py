@@ -90,6 +90,10 @@ class Reviews(unittest.TestCase):
         sample = "e.g. `Pass" + "word = abc`, pw" + "d=x;"
         self.assertEqual(qs.clean(sample), "e.g. `Password = <value> pwd=<value>")
 
+    def test_a_key_that_ends_in_the_word_is_masked_too(self):
+        sample = "DB_PASS" + "WORD=x and MyPass" + "word=y"
+        self.assertEqual(qs.clean(sample), "DB_PASSWORD=<value> and MyPassword=<value>")
+
     def test_the_committed_set_holds_no_value_after_a_password_key(self):
         for entry in qs.load(qs.REVIEWS):
             self.assertEqual(qs.clean(entry["text"]), entry["text"], entry["id"])
