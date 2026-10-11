@@ -13,6 +13,10 @@ docs/superpowers/
 docs/pr-decision-log.md
 docs/lessons.md
 
+# The quality sets are data a script reads, a thousand findings of other
+# commits that would answer a question about the present tree wrongly.
+tools/quality-sets/*.json
+
 # Generated EF Core migrations crowd out the code a question is about
 # (docs/token-usage.md, 2026-10-08); the filenames and `git log` are how a
 # schema change is found instead.

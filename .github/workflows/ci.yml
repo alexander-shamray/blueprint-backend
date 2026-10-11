@@ -380,6 +380,21 @@ jobs:
         working-directory: tools/token-usage
         run: python -m unittest
 
+  # It gates nothing: the sets are read by a person's runs, and a red job is
+  # the signal that a parser or the committed data drifted from the suite.
+  quality-sets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test the quality sets
+        working-directory: tools/quality-sets
+        run: python -m unittest
+
   # It gates nothing a build produces: the tool reaches a broker only when an
   # operator runs it, so a red job is the signal that its dry-run default, a
   # refusal or a replay's id and headers drifted from what the suite pins.
