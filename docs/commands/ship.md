@@ -689,8 +689,8 @@ rather than reading whichever finished last.
 sleeps holds its context across the wake.** `gh pr checks --watch` outlasts
 a tool call's ten-minute bound on a slow run, the harness moves it to the
 background, and each notification then re-sends the whole conversation. A
-`/ship` main session's call sends about 200k tokens
-(`docs/token-usage.md`, 2026-10-11), so a wait kept here is that sent again
+`/ship` main session's call sends about 274k tokens
+(`docs/token-usage.md`, 2026-10-10), so a wait kept here is that sent again
 at every wake.
 
 **The wait goes to a fresh `general-purpose` agent holding only the PR
