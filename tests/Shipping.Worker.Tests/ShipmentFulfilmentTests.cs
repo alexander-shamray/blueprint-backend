@@ -111,6 +111,28 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
+    public async Task A_pass_that_finds_an_erased_subjects_stored_address_deletes_it_and_books_nothing()
+    {
+        // A crash after the save and before the delete leaves this row; the retry finds it and must not book it.
+        Guid customer = Guid.CreateVersion7();
+        Guid order = await ConfirmForAsync(customer);
+        await fixture.ExecuteAsync(
+            """
+            INSERT INTO shipping.DeliveryAddresses (OrderId, CustomerId, Line1, City, PostalCode, Country, FetchedAt)
+            VALUES ({0}, {1}, '1 Abay Avenue', 'Almaty', '050000', 'KZ', SYSDATETIMEOFFSET());
+            """,
+            order,
+            customer);
+        await RecordErasureAsync(customer);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Unfulfillable");
+        (await fixture.AddressCountAsync(new OrderId(order))).ShouldBe(0);
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task An_erasure_recorded_for_another_subject_leaves_the_address_to_be_saved_and_booked()
     {
         // The control for the case above: the same audit table holds a row, and it is not this customer's.

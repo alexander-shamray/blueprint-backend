@@ -33,6 +33,13 @@ internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) 
         WHERE OrderId = @OrderId;
         """;
 
+    private const string CustomerSql =
+        """
+        SELECT CustomerId
+        FROM shipping.DeliveryAddresses
+        WHERE OrderId = @OrderId;
+        """;
+
     private const string DeleteSql =
         """
         DELETE FROM shipping.DeliveryAddresses
@@ -65,6 +72,14 @@ internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) 
                     FetchedAt = fetchedAt
                 },
                 cancellationToken: ct));
+    }
+
+    public async Task<Guid?> CustomerAsync(OrderId orderId, CancellationToken ct)
+    {
+        using IDbConnection connection = connections.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<Guid?>(
+            new CommandDefinition(CustomerSql, new { OrderId = orderId.Value }, cancellationToken: ct));
     }
 
     public async Task DeleteAsync(OrderId orderId, CancellationToken ct)

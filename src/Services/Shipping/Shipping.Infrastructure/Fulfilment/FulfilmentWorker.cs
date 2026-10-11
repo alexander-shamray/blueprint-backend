@@ -250,21 +250,28 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
                 address,
                 sp.GetRequiredService<TimeProvider>().GetUtcNow(),
                 ct);
+        }
 
-            // Asked after the save, so an erasure committing in between has deleted the row or is seen here; the owner
-            // may not have anonymised the order yet, and a row left would outlive an erasure reported done.
-            if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(found.CustomerId, ct))
-            {
-                await store.DeleteAsync(order, ct);
+        // Asked of the row, whichever pass saved it and after the save, so an erasure committing at any moment has
+        // deleted the row or is seen here; the owner may not have anonymised the order yet, and a row left would
+        // outlive an erasure reported done.
+        Guid? holder = await store.CustomerAsync(order, ct);
 
-                CommitOutcome erased = await CommitPendingAsync(
-                    sp,
-                    id,
-                    (shipment, now) => shipment.MarkUnfulfillable(EndWaitingShipmentHandler.Reason, now),
-                    ct);
+        // Taken by an erasure since it was read, which ends the shipment; the lease lapses and a later pass finds out.
+        if (holder is null)
+            return false;
 
-                return erased.Moved;
-            }
+        if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(holder.Value, ct))
+        {
+            await store.DeleteAsync(order, ct);
+
+            CommitOutcome erased = await CommitPendingAsync(
+                sp,
+                id,
+                (shipment, now) => shipment.MarkUnfulfillable(EndWaitingShipmentHandler.Reason, now),
+                ct);
+
+            return erased.Moved;
         }
 
         BookingResult booking = await carrier.BookAsync(new BookingRequest(id, address), ct);
