@@ -204,9 +204,9 @@ after 445 and 412 seconds of a 480-second deadline. `latency` fired after 787
 of 840, with nine services over a second, which is the runbook's *everything
 slow together* shape and where the script stops: its `kubectl` steps are not
 translated, and a cold cache is not caused, because nothing reads `HybridCache`
-yet for a paused `redis-cache` to slow. `outbox-growth` fired after 738 of 780 and asserted
-`OutboxBrokerLaneStalled` beside it: with the broker stopped the age gauge is
-high too, so the runbook's own first check sends its reader to
+yet for a paused `redis-cache` to slow. `outbox-growth` fired after 738 of 780
+and asserted `OutboxBrokerLaneStalled` beside it: with the broker stopped the
+age gauge is high too, so the runbook's own first check sends its reader to
 `outbox-broker.md`, which is the right answer for this cause and says growth
 alone cannot be told from a stall by the count. `stop sql` makes
 `ErrorRateGateway` fire as well, because the gateway passes a service's 500
