@@ -8,7 +8,7 @@ namespace Privacy.Api;
 /// <remarks>Not 500, because the fault is contention and the request took no effect (§10.5).</remarks>
 internal sealed class ErasureLockNotTakenExceptionHandler(IProblemDetailsService problemDetails) : IExceptionHandler
 {
-    // Seconds, a little over one request's own duration, since the lock's holder is a transaction in flight.
+    // Seconds, a judgement and not a measured figure: the holder is a transaction in flight.
     internal const string RetryAfterSeconds = "5";
 
     public async ValueTask<bool> TryHandleAsync(
