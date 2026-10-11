@@ -181,6 +181,10 @@ return only through a full `--reset` rebuild inside their publishers' window,
 which clears the inbox
 ([`tools/bff-replay/README.md`](../../tools/bff-replay/README.md)).
 
+The delete needs `sqlcmd -I`: the table carries filtered indexes, which refuse a
+write under `QUOTED_IDENTIFIER OFF` with Msg 1934. SSMS defaults to ON; `sqlcmd`
+does not.
+
 ```sql
 DELETE FROM bff.Orders
 WHERE OrderId = @OrderId
