@@ -6,7 +6,7 @@ using Shipping.Infrastructure.Carrier;
 namespace Shipping.Infrastructure.Observability;
 
 /// <summary>The workers' gauges, waiting, overdue (§15.3) and unscanned, on the carrier's meter.</summary>
-/// <remarks>On <see cref="CarrierMetrics.MeterName"/>, so §13.2's one <c>AddMeter</c> line covers them.</remarks>
+/// <remarks>On <see cref="CarrierMetrics.MeterName"/>, so §13.2's service prefix covers them.</remarks>
 public sealed class ShipmentMetrics
 {
     // CA1848 (ADR-019), as OutboxMetrics does.

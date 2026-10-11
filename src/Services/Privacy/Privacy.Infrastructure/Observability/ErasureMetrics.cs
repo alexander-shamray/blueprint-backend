@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 namespace Privacy.Infrastructure.Observability;
 
 /// <summary>The gauges that make a holder's silence visible: requests overdue, and who has not answered (ADR-092).</summary>
-/// <remarks>On <see cref="OutboxMetrics.MeterName"/>, so §13.2's one <c>AddMeter</c> line covers them.</remarks>
+/// <remarks>On <see cref="OutboxMetrics.MeterName"/>, so §13.2's service prefix covers them.</remarks>
 public sealed class ErasureMetrics
 {
     // CA1848 (ADR-019), as OutboxMetrics does.

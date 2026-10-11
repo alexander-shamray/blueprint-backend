@@ -5,7 +5,7 @@ namespace Web.Bff.Observability;
 /// <summary>The projection's own gauge, beside the delivery lag every consumer already records (§13.3).</summary>
 public sealed class ProjectionMetrics
 {
-    /// <summary>Must equal the name §13.2's <c>AddMeter</c> registers, or nothing collects the gauge.</summary>
+    /// <summary>Must sit under the service prefix §13.2 registers, or nothing collects the gauge.</summary>
     public const string MeterName = "Web.Bff.Projection";
 
     // CA1848 (ADR-019), as ShipmentMetrics does.

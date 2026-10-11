@@ -4,7 +4,7 @@ using Notifications.Infrastructure.Observability;
 namespace Notifications.Infrastructure.Contacts;
 
 /// <summary>Contact reads refused over this host's credential or its grant, the defect ADR-052 counts.</summary>
-/// <remarks>On <see cref="OutboundMeter.Name"/>, so §13.2's one <c>AddMeter</c> line covers it.</remarks>
+/// <remarks>On <see cref="OutboundMeter.Name"/>, so §13.2's service prefix covers it.</remarks>
 public sealed class ContactMetrics
 {
     private readonly Counter<long> _refused;
