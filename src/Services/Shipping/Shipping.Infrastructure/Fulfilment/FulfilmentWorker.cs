@@ -240,7 +240,6 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             }
 
             AddressLookup.Found found = (AddressLookup.Found)lookup;
-
             address = found.Address;
 
             // Committed before the booking, so a pass repeated after a crash does not read it twice (ADR-052).
