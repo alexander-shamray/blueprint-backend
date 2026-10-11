@@ -4,6 +4,7 @@ using Notifications.Application.Rendering;
 using Notifications.TestSupport;
 using Shouldly;
 using WireMock.Logging;
+using WireMock.Server;
 using Xunit;
 
 namespace Platform.IntegrationTests.Journey;
@@ -81,11 +82,31 @@ public abstract class FulfilmentJourney(JourneyWorld world)
                 e.RequestMessage?.Body?.Contains(order.Customer.ToString("D"), StringComparison.Ordinal) == true)
         ];
 
-        asked.Length.ShouldBe(1, "one order is one charge, however many times a message was delivered");
+        if (asked.Length != 1)
+            Assert.Fail(
+                "one order is one charge, however many times a message was delivered; " +
+                Describe(asked, world.Provider));
 
         using JsonDocument body = JsonDocument.Parse(asked[0].RequestMessage!.Body!);
         body.RootElement.GetProperty("currency").GetString().ShouldBe(here.Currency);
         body.RootElement.GetProperty("amountMinor").GetInt64().ShouldBe((long)(order.Total * 100m));
+    }
+
+    /// <summary>
+    /// What a failed count needs to tell a real duplicate from a read that came before a delivery settled: the
+    /// time of each matching call, its path and the answer it got, then every call the server has taken.
+    /// </summary>
+    private static string Describe(ILogEntry[] matching, WireMockServer server)
+    {
+        static string One(ILogEntry e) =>
+            $"{e.RequestMessage?.DateTime:O} {e.RequestMessage?.Method} {e.RequestMessage?.Path} -> " +
+            $"{e.ResponseMessage?.StatusCode}";
+
+        ILogEntry[] all = [.. server.LogEntries];
+
+        return $"read at {DateTime.UtcNow:O}; {matching.Length} matching call(s) " +
+               $"[{string.Join("; ", matching.Select(One))}]; {all.Length} call(s) on the server " +
+               $"[{string.Join("; ", all.Select(One))}]";
     }
 
     /// <summary>The carrier was booked once, at the address the customer gave, which Ordering alone held.</summary>
@@ -97,7 +118,8 @@ public abstract class FulfilmentJourney(JourneyWorld world)
                 e.RequestMessage?.Body?.Contains(order.Customer.ToString("N"), StringComparison.Ordinal) == true)
         ];
 
-        booked.Length.ShouldBe(1, "one shipment is one booking");
+        if (booked.Length != 1)
+            Assert.Fail($"one shipment is one booking; {Describe(booked, world.Carrier)}");
 
         using JsonDocument body = JsonDocument.Parse(booked[0].RequestMessage!.Body!);
         JsonElement address = body.RootElement.GetProperty("address");
