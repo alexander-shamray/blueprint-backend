@@ -1798,11 +1798,11 @@ changes no file of theirs. What is particular to a service is a
 judges — beside the `contract-shapes.json` that records it and the tests that
 are about its contracts alone. The contexts are found by reflection, as the
 contracts are. Retiring a service ([ADR-062](adr/ADR-062-the-domain-is-a-reference-implementation.md))
-deletes its folder and edits no file shared with another. Two assertions hold
-the folders to the assembly, so a context cannot be forgotten or outlive its
-service: every service that has a contract has a context, and every context is
-for a service that still has one; and a context may name only the contracts of
-its own service.
+deletes its folder and edits no file shared with another. The folders are
+held to the assembly, so a context cannot be forgotten or outlive its service:
+every service that has a contract has a context, every context is for a service
+that still has one, and a context may name only the contracts of its own
+service.
 
 **The third rule this suite claims — `required` members — needs an assertion of
 its own, because no serialisation test can see it.** Dropping `required` from a
