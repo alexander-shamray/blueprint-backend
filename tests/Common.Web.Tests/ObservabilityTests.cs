@@ -328,7 +328,7 @@ public class ObservabilityTests
 
         // A factory's Create, a Meter's constructor, and the two constants that hold a name (MeterName, and
         // OutboundMeter.Name, which only a file named for a meter may use).
-        Regex created = new("""\bfactory\.Create\("([^"]+)"\)|new Meter\("([^"]+)"|MeterName\s*=\s*"([^"]+)[\x22]""");
+        Regex created = new("""\w*[Ff]actory\.Create\("([^"]+)"\)|new Meter\("([^"]+)"|MeterName\s*=\s*"([^"]+)[\x22]""");
         Regex meterConstant = new("""\bconst string Name = "([^"]+)";""");
         Dictionary<string, List<string>> byService = [];
 
