@@ -53,10 +53,11 @@ class Usage:
     read: int = 0
     output: int = 0
     woken: float = 0.0
+    woken_write: float = 0.0
     contexts: set[str] = field(default_factory=set)
 
     def add(self, usage: dict, context: str, woken: bool = False) -> None:
-        before = self.equivalent
+        before, was = self.equivalent, (self.write_5m, self.write_1h)
         self.calls += 1
         self.input += usage.get("input_tokens") or 0
         self.read += usage.get("cache_read_input_tokens") or 0
@@ -70,6 +71,7 @@ class Usage:
         self.contexts.add(context)
         if woken:
             self.woken += self.equivalent - before
+            self.woken_write += WRITE_5M * (self.write_5m - was[0]) + WRITE_1H * (self.write_1h - was[1])
 
     @property
     def equivalent(self) -> float:
@@ -88,7 +90,7 @@ class Usage:
             "input": self.input,
             "cache_write": self.write_5m + self.write_1h, "cache_read": self.read,
             "output": self.output, "input_equivalent": round(self.equivalent),
-            "woken_equivalent": round(self.woken),
+            "woken_equivalent": round(self.woken), "woken_write": round(self.woken_write),
         }
 
 
@@ -231,7 +233,7 @@ class Report:
         rows.sort(key=lambda r: r["input_equivalent"], reverse=True)
         total = Usage()
         for usage in self.groups.values():
-            for name in ("calls", "input", "write_5m", "write_1h", "read", "output", "woken"):
+            for name in ("calls", "input", "write_5m", "write_1h", "read", "output", "woken", "woken_write"):
                 setattr(total, name, getattr(total, name) + getattr(usage, name))
             total.contexts |= usage.contexts
         return [*rows, {"command": "TOTAL", "agent": "", **total.row()}]
@@ -443,7 +445,7 @@ def default_projects(cwd: Path) -> list[Path]:
 
 
 ROWS = ("command", "agent", "contexts", "calls", "mean_context", "input", "cache_write", "cache_read", "output",
-        "input_equivalent", "woken_equivalent")
+        "input_equivalent", "woken_equivalent", "woken_write")
 DOCS = ("doc", "named_by", "reads", "main", "subagents")
 RESULTS = ("command", "tool", "results", "characters", "approx_tokens")
 SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
