@@ -179,8 +179,9 @@ names in its header one it has to work around.
 ## The scripts
 
 The runtime is the wall clock of one run on the Compose stack, from the quiet
-start to the restore settling, measured on 2026-10-10; a row marked not
-timed was not timed whole, and the deadline paragraph above has when the first
+start to the restore settling, which the runner prints on its last line
+(`game day: OK in 23m16s`); a row marked not timed was run before it did and
+was not timed whole, and the deadline paragraph above has when the first
 three, and the erasure-overdue run, fired.
 
 | Runbook | Alert | Cause | Runtime |
