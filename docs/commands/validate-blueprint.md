@@ -88,6 +88,40 @@ citation of the owner — the symbol, the section or the ADR — so the second
 copy stops existing rather than being refreshed. A half-applied
 reconciliation inside the set is worse than none.
 
+## Dispatch
+
+One audit across two sessions spent 40.6M of the 154M measured on 2026-10-09
+to 2026-10-10 (`docs/token-usage.md`): its main session averaged about 477k
+tokens a call, all of it after a wake, and its agents included implementers,
+so the fixes ran inside the audit's own context. Every turn re-sends that
+context, so what the main session reads, it pays for on every later turn
+(`docs/token-plan.md` step 7).
+
+The main session therefore dispatches the passes and holds only the JSON they
+return. A pass reads the chapters; the session reads a `file:line` a finding
+cites, to drop one that does not hold, and nothing larger. The passes group
+the checks by what they read, not by their number: 1–3 compare names and
+values, 4–6 follow order and citations, 7–9 read registers and the code, and
+10 is the roadmap's arithmetic.
+
+**A fix is not made here.** The audit ends at its report, and the report's
+`Resolved:` names the edit and the side that wins. The caller makes it as a
+separate task after `/clear`, or as `/ship` step 2 does, which fixes what the
+check finds and runs it again. That is why the audit is one dispatch rather
+than a loop: with nothing edited, a second pass would read the same text and
+return the same findings. An implementer spawned inside the audit session is
+the shape that cost 477k a call.
+
+The agent is `general-purpose`, told to edit nothing. That is the brief's
+word and not the tool list's: no read-only auditor for prose exists, and
+whether the runbook's frontmatter denies reach a subagent is not something
+`docs/harness-boundaries.md` states. A read-only profile, as the sweeps have
+in `bug-auditor`, would make it the profile's guarantee; it is a harness
+change this command does not need to land first.
+
+The exit is the report's `mean_context` for a run's main session, under 150k a
+call.
+
 ## Report
 
 A roadmap finding needs no `Verdict:` line because check 10 settles the
