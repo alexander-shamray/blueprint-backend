@@ -38,10 +38,13 @@ kubectl -n <ns> logs deploy/ordering --since=10m | grep -i "Outbox claim failed\
 - **`Outbox message … failed, attempt N of 10`** — the dispatcher is running and
   delivery is failing. Continue below.
 - **`Broker unreachable`**, from MassTransit's `Retrying hh:mm:ss: Broker
-  unreachable: <host>` — the dispatcher is running and the broker is down. The
-  retry happens inside the publish call, so while the broker is stopped the
-  dispatcher never reaches its own `attempt N of 10` line, and this one stands
-  in for it. Continue below.
+  unreachable: <host>` — the broker is down, and the dispatcher is probably
+  blocked in the publish. The retry happens inside the publish call, so while
+  the broker is stopped the dispatcher never reaches its own `attempt N of 10`
+  line, and this one stands in for it. The bus logs it whether or not the
+  dispatcher is running, so once the broker is back, if no `Outbox message`
+  line follows and the lane does not drain, check the pod and the registration
+  as under silence. Continue below.
 - **Silence**, none of the three — the dispatcher is not running at all. Check
   the pod is up and that `AddHostedService<OutboxDispatcher>()` survived the
   last change to `AddOrderingInfrastructure`; a registration nothing resolves
