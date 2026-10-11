@@ -47,10 +47,12 @@ from the rule.
 
 ## Is the dispatcher alive and claiming?
 
-Count the dispatcher's lines over the last ten minutes in Grafana's Explore, on
-the Loki data source; the hosts log through OpenTelemetry alone
+Count the dispatcher's delivery failures over the last ten minutes in Grafana's
+Explore, on the Loki data source; the hosts log through OpenTelemetry alone
 ([§13.4](../backend-architecture/13-observability.md)), so `kubectl logs` shows
-nothing.
+nothing. The dispatcher logs `Outbox message …` only when a delivery fails, so a
+count above zero says it is running and failing, and zero says nothing either
+way: a healthy dispatcher is silent, and so is a dead one.
 
 ```logql
 count_over_time({service_name="Ordering.Api"} |~ "Outbox message" [10m])
