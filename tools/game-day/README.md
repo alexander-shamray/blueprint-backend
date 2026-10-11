@@ -198,21 +198,20 @@ three fired.
 | `latency` | `Latency` | `pause sql` under the loop, held past the 10-minute `for:` | 24m18s |
 | `outbox-growth` | `OutboxGrowth` | `stop rabbitmq`, 1100 Broker rows planted through SQL and 20 more every 30 seconds | 14m34s |
 
-The three runs above were measured on 2026-10-10, each alone on a stack that
-had just come up. `error-rate` is two runs in one, and its two phases fired
-after 445 and 412 seconds of a 480-second deadline. `latency` fired after 787
-of 840, with nine services over a second, which is the runbook's *everything
-slow together* shape, where the script's first step now goes on to that
-section's three reads as `docker stats`, the engine's CPU and memory, and the
-container's limits (that run predates them), and a cold cache is not caused,
-because nothing reads `HybridCache` yet for a paused `redis-cache` to slow.
-`outbox-growth` fired after 738 of 780  and asserted `OutboxBrokerLaneStalled`
-beside it: with the broker stopped the  age gauge is high too, so the runbook's
-own first check sends its reader to  `outbox-broker.md`, which is the right
-answer for this cause and says growth  alone cannot be told from a stall by the
-count. `stop sql` makes  `ErrorRateGateway` fire as well, because the gateway
-passes a service's 500  through, and the runbook's advice to work the backend
-first is that case.
+The three runs above were measured on 2026-10-10, each alone on a stack that had
+just come up. `error-rate` is two runs in one, and its two phases fired after
+445 and 412 seconds of a 480-second deadline. `latency` fired after 787 of 840,
+with nine services over a second, which is the runbook's *everything slow
+together* shape, where the script's first step now goes on to that section's
+three reads as `docker stats`, the engine's CPU and memory, and the container's
+limits (that run predates them), and a cold cache is not caused, because nothing
+reads `HybridCache` yet for a paused `redis-cache` to slow. `outbox-growth`
+fired after 738 of 780 and asserted `OutboxBrokerLaneStalled` beside it: with
+the broker stopped the age gauge is high too, so the runbook's own first check
+sends its reader to `outbox-broker.md`, which is the right answer for this cause
+and says growth alone cannot be told from a stall by the count. `stop sql` makes
+`ErrorRateGateway` fire as well, because the gateway passes a service's 500
+through, and the runbook's advice to work the backend first is that case.
 
 The two Keycloak causes restart the worker because it keeps the token it
 fetched until that expires. Their restore gives the grant back, reads the
