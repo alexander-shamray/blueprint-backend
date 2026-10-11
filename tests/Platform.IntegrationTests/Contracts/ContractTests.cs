@@ -3,14 +3,10 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Common.Contracts;
-using Common.Contracts.Inventory.V1;
-using Common.Contracts.Ordering.V1;
-using Common.Contracts.Payments.V1;
-using Common.Contracts.Privacy.V1;
 using Shouldly;
 using Xunit;
 
-namespace Platform.IntegrationTests;
+namespace Platform.IntegrationTests.Contracts;
 
 /// <summary>§12.6's mechanical contract rules, ADR-028's subject rule among them, asserted by reflection.</summary>
 /// <remarks>The subject rule asserts an absence, so it ships with positive controls (ADR-028).</remarks>
@@ -19,7 +15,7 @@ public class ContractTests
     /// <summary>Concrete types only, as a static vocabulary compiles to <c>abstract sealed</c>.</summary>
     private static readonly Type[] Contracts =
     [
-        .. typeof(OrderPlaced).Assembly.GetTypes().Where(IsContract)
+        .. ContractContexts.Assembly.GetTypes().Where(IsContract)
     ];
 
     /// <summary>§9.2's shape: <c>Common.Contracts.&lt;Service&gt;.V&lt;n&gt;</c>.</summary>
@@ -36,7 +32,7 @@ public class ContractTests
     public void No_contract_names_a_domain_type()
     {
         // §9.1, on the assembly's references, so it holds for a contract not yet written.
-        typeof(OrderPlaced).Assembly
+        ContractContexts.Assembly
             .GetReferencedAssemblies()
             .Select(a => a.Name!)
             .ShouldNotContain(name => name.EndsWith(".Domain", StringComparison.Ordinal));
@@ -115,31 +111,7 @@ public class ContractTests
     }
 
     /// <summary>Members added to a live contract, optional for that version's life (§9.2).</summary>
-    private static readonly string[] AdditiveMembers =
-    [
-        // Absent means published before the field existed, which §9.6's saga discards.
-        "Common.Contracts.Ordering.V1.OrderCancelled.Origin"
-    ];
-
-    [Fact]
-    public void A_payload_predating_an_additive_member_still_deserialises()
-    {
-        // By hand, as a round-trip through today's contract cannot model a producer that never knew the member.
-        string beforeTheField = """
-            {"MessageId":"0199a1e0-0000-7000-8000-000000000001",
-             "CorrelationId":"0199a1e0-0000-7000-8000-000000000002",
-             "OccurredAt":"2026-08-25T12:00:00+00:00",
-             "OrderId":"0199a1e0-0000-7000-8000-000000000003",
-             "CustomerId":"0199a1e0-0000-7000-8000-000000000004",
-             "Reason":"customer_request"}
-            """;
-
-        OrderCancelled? deserialised = JsonSerializer.Deserialize<OrderCancelled>(beforeTheField);
-
-        deserialised.ShouldNotBeNull();
-        deserialised.Origin.ShouldBeNull("absent is what §9.6's discard branch reads");
-        deserialised.Reason.ShouldBe(CancelReasons.CustomerRequest);
-    }
+    private static readonly string[] AdditiveMembers = [.. ContractContexts.All.SelectMany(c => c.AdditiveMembers)];
 
     [Fact]
     public void Every_additive_member_is_still_additive()
@@ -245,25 +217,16 @@ public class ContractTests
 
     /// <summary>The command roots the subject rule judges, from §3.2's Accepts columns (ADR-028).</summary>
     /// <remarks>Declared, as an event carrying a command's type removes it from <see cref="RootsOf"/>.</remarks>
-    private static readonly Type[] DeclaredCommandRoots =
-    [
-        typeof(AuthorisePayment),
-        typeof(CancelOrder),
-        typeof(ConfirmOrder),
-        typeof(MarkOrderShipped),
-        typeof(FlagOrderForReview),
-        typeof(ReserveStock),
-        typeof(ReleaseStock),
-        typeof(PersonalDataDeleteCompleted)
-    ];
+    private static readonly Type[] DeclaredCommandRoots = [.. ContractContexts.All.SelectMany(c => c.CommandRoots)];
+
+    /// <summary>The payloads a command reaches, which are judged with it.</summary>
+    private static readonly Type[] JudgedPayloads = [.. ContractContexts.All.SelectMany(c => c.JudgedPayloads)];
+
+    /// <summary>The payloads only an event reaches, which are exempt with it.</summary>
+    private static readonly Type[] EventPayloads = [.. ContractContexts.All.SelectMany(c => c.EventPayloads)];
 
     /// <summary>The non-event contracts that are not command roots, so every contract is classified.</summary>
-    private static readonly Type[] DeclaredPayloads =
-    [
-        typeof(StockLine),          // ReserveStock — judged, a command reaches it
-        typeof(PlacedLine),         // OrderPlaced — exempt, only an event reaches it
-        typeof(ConfirmedLine)       // OrderConfirmed — the same
-    ];
+    private static readonly Type[] DeclaredPayloads = [.. JudgedPayloads, .. EventPayloads];
 
     private static readonly Type[] Commands = JudgedTypesOf(Contracts, DeclaredCommandRoots);
 
@@ -316,7 +279,7 @@ public class ContractTests
         }
     }
 
-    private static PropertyInfo[] SubjectMembers(Type type) =>
+    internal static PropertyInfo[] SubjectMembers(Type type) =>
     [
         .. type
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -344,27 +307,7 @@ public class ContractTests
 
     /// <summary>Every member judged commands may carry, so a new one is decided at a red build (ADR-028).</summary>
     private static readonly (Type Contract, string Member)[] ApprovedCommandMembers =
-    [
-        (typeof(AuthorisePayment), "OrderId"),
-        (typeof(AuthorisePayment), "Amount"),      // instruction, not authority
-        (typeof(AuthorisePayment), "Currency"),    // the same
-        (typeof(CancelOrder), "OrderId"),
-        (typeof(CancelOrder), "Reason"),
-        (typeof(ConfirmOrder), "OrderId"),
-        (typeof(ConfirmOrder), "PaymentReference"),
-        (typeof(MarkOrderShipped), "OrderId"),
-        (typeof(MarkOrderShipped), "TrackingNumber"),
-        (typeof(FlagOrderForReview), "OrderId"),
-        (typeof(FlagOrderForReview), "Reason"),
-        (typeof(ReserveStock), "OrderId"),
-        (typeof(ReserveStock), "Lines"),
-        (typeof(ReleaseStock), "OrderId"),
-        (typeof(StockLine), "ProductId"),
-        (typeof(StockLine), "Quantity"),
-        (typeof(PersonalDataDeleteCompleted), "RequestId"),
-        (typeof(PersonalDataDeleteCompleted), "Responder"),   // the holder's claim, checked by Privacy (ADR-094)
-        (typeof(PersonalDataDeleteCompleted), "Count")
-    ];
+        [.. ContractContexts.All.SelectMany(c => c.ApprovedCommandMembers)];
 
     [Fact]
     public void No_command_contract_carries_an_unapproved_member()
@@ -402,15 +345,6 @@ public class ContractTests
             "to take without review");
     }
 
-    [Fact]
-    public void A_subject_is_detectable_on_a_contract_that_carries_one()
-    {
-        // The positive control, on the CustomerId ADR-028 requires OrderPlaced to keep.
-        SubjectMembers(typeof(OrderPlaced))
-            .Select(p => p.Name)
-            .ShouldContain(nameof(OrderPlaced.CustomerId));
-    }
-
     /// <summary>The declared vocabulary as theory cases, so a spelling added cannot go unexercised.</summary>
     public static TheoryData<string> DeclaredSpellings => new(SubjectSpellings);
 
@@ -443,19 +377,25 @@ public class ContractTests
     public void The_set_the_subject_gate_reads_holds_the_real_commands()
     {
         // Every root by name, not merely a non-empty set, as Commands also holds a payload.
+        DeclaredCommandRoots.ShouldNotBeEmpty();
+
         foreach (Type root in DeclaredCommandRoots)
             Commands.ShouldContain(root);
 
         // A subject one level down reaches the same decision as a top-level one (ADR-028).
-        Commands.ShouldContain(typeof(StockLine));
+        foreach (Type payload in JudgedPayloads)
+            Commands.ShouldContain(payload);
 
         Commands.ShouldNotContain(
-            typeof(OrderPlaced),
-            "events are exempt, and OrderPlaced is the one ADR-028 requires to keep its CustomerId");
+            t => typeof(IIntegrationEvent).IsAssignableFrom(t),
+            "events are exempt, and an event is permitted the subject ADR-028 requires some to keep");
 
-        Commands.ShouldNotContain(
-            typeof(PlacedLine),
-            "a line type an event carries is part of that event, so it inherits the exemption");
+        foreach (Type payload in EventPayloads)
+        {
+            Commands.ShouldNotContain(
+                payload,
+                "a line type an event carries is part of that event, so it inherits the exemption");
+        }
     }
 
     [Fact]

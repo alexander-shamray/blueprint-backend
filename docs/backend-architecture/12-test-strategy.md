@@ -1701,13 +1701,13 @@ two services' timings held to each other where the blueprint couples them,
 as [§3.2](03-bounded-contexts.md)'s wait for a missing order is held to
 [§9.6](09-messaging.md)'s payment timeout, because §4.2 lets neither service
 read the other's assembly. The contract shape is
-`tests/Platform.IntegrationTests/ContractTests.cs`, and everything in it starts
-from discovery:
+`tests/Platform.IntegrationTests/Contracts/ContractTests.cs`, and everything in
+it starts from discovery:
 
 ```csharp
 private static readonly Type[] Contracts =
 [
-    .. typeof(OrderPlaced).Assembly.GetTypes().Where(IsContract)
+    .. ContractContexts.Assembly.GetTypes().Where(IsContract)
 ];
 
 /// <summary>A concrete, visible type under <c>Common.Contracts</c>, its root included (§9.2).</summary>
@@ -1790,6 +1790,20 @@ public contract fails too, which is the direction throwing cannot catch — that
 entry compiles until the type is deleted and is dead weight from the moment the
 contract was renamed.
 
+**What belongs to one service lives in that service's folder.** The rules
+above name no service: they read `Contracts`, so a service added or retired
+changes no file of theirs. What is particular to a service is a
+`ContractContext` in `Contracts/<Service>/` — its samples, the additive members
+§12.6 lists for it, and the command roots and payloads the subject rule below
+judges — beside the `contract-shapes.json` that records it and the tests that
+are about its contracts alone. The contexts are found by reflection, as the
+contracts are. Retiring a service ([ADR-062](adr/ADR-062-the-domain-is-a-reference-implementation.md))
+deletes its folder and edits no file shared with another. Two assertions hold
+the folders to the assembly, so a context cannot be forgotten or outlive its
+service: every service that has a contract has a context, and every context is
+for a service that still has one; and a context may name only the contracts of
+its own service.
+
 **The third rule this suite claims — `required` members — needs an assertion of
 its own, because no serialisation test can see it.** Dropping `required` from a
 contract property changes no JSON, so the round-trip and the wire-member check
@@ -1845,11 +1859,12 @@ public parameterless constructor must mark every settable property.
 None of the rules above holds a member to **its earlier type**, which is what
 [§9.2](09-messaging.md)'s breaking-change rule is about: a member retyped leaves
 them all green once its sample is edited to match. So the shape is recorded.
-`contract-shapes.json`, beside the suite, holds every public member of every
-contract — its type, its nullability and whether it is always supplied — and
-`ContractShapeTests` compares the assembly with it. The contracts are found by
-the discovery above, so a new service's are held from its first one, with no
-list to extend.
+`contract-shapes.json`, one in each service's folder, holds every public member
+of every contract of that service — its type, its nullability and whether it is
+always supplied — and `ContractShapeTests` compares the assembly with them. The
+contracts are found by the discovery above, so a new service's are held from
+its first one, with no list to extend; its record is the file that test names
+as missing.
 
 A change breaks when a consumer or a payload built against the record could fail
 on it: a contract or a member gone, a rename, which reads as one gone, any

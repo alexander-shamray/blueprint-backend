@@ -2,15 +2,17 @@ using System.Globalization;
 using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using Common.Contracts.Ordering.V1;
 using Shapes = System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, string>>;
 
-namespace Platform.IntegrationTests;
+namespace Platform.IntegrationTests.Contracts;
 
 /// <summary>Each contract's public members as declarations, and which changes break a consumer (§9.2).</summary>
 internal static class ContractShapes
 {
     internal const string FileName = "contract-shapes.json";
+
+    /// <summary>Where the record of each service sits: <c>Contracts/&lt;Service&gt;/contract-shapes.json</c>.</summary>
+    private const string Folder = "Contracts";
 
     private const string Required = "required ";
 
@@ -21,15 +23,41 @@ internal static class ContractShapes
         WriteIndented = true
     };
 
-    /// <summary>The live shape, written to the output directory for the record to be replaced from.</summary>
-    internal static string Received => Path.Combine(AppContext.BaseDirectory, "contract-shapes.received.json");
+    /// <summary>One service's live shape, written to the output directory for its record to be replaced from.</summary>
+    internal static string Received(string service) =>
+        Path.Combine(AppContext.BaseDirectory, $"contract-shapes.{service}.received.json");
 
-    internal static Type[] Contracts() => [.. typeof(OrderPlaced).Assembly.GetTypes().Where(ContractTests.IsContract)];
+    /// <summary>The record's path under the source tree, for a failure to name the file to replace.</summary>
+    internal static string RecordPath(string service) => $"tests/Platform.IntegrationTests/{Folder}/{service}/{FileName}";
+
+    internal static Type[] Contracts() => [.. ContractContexts.Assembly.GetTypes().Where(ContractTests.IsContract)];
 
     internal static Shapes Live() => Of(Contracts());
 
+    /// <summary>One service's live shape, empty where it has no contract.</summary>
+    internal static Shapes Live(string service) =>
+        Of(Contracts().Where(t => ContractContexts.ServiceOf(t) == service));
+
+    /// <summary>The services with a record, found from the files rather than from a list.</summary>
+    internal static string[] RecordedServices() =>
+    [
+        .. Directory
+            .GetFiles(Path.Combine(AppContext.BaseDirectory, Folder), FileName, SearchOption.AllDirectories)
+            .Select(f => Path.GetFileName(Path.GetDirectoryName(f))!)
+            .Order(StringComparer.Ordinal)
+    ];
+
+    /// <summary>One service's record, empty where it has none.</summary>
+    internal static Shapes Recorded(string service)
+    {
+        string file = Path.Combine(AppContext.BaseDirectory, Folder, service, FileName);
+
+        return File.Exists(file) ? JsonSerializer.Deserialize<Shapes>(File.ReadAllText(file))! : [];
+    }
+
+    /// <summary>Every service's record as one, which is what a consumer built against any of them reads.</summary>
     internal static Shapes Recorded() =>
-        JsonSerializer.Deserialize<Shapes>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, FileName)))!;
+        RecordedServices().SelectMany(s => Recorded(s)).ToDictionary(e => e.Key, e => e.Value);
 
     internal static Shapes Of(IEnumerable<Type> types)
     {
