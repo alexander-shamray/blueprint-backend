@@ -112,6 +112,11 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   written. Small tasks
   run with `executing-plans`; under `subagent-driven-development`, each
   reviewer is handed its task's diff, not the tree.
+- **Before a wait, shed the context.** A session about to wait on CI, a
+  background agent or a scheduled check-in compacts first, or hands the wait
+  to a fresh agent that holds only the pull request and returns the verdict;
+  a wake re-sends the whole context, and after the cache has expired writes
+  all of it again (`docs/token-plan.md` step 7).
 - **A comment sweep** hands each agent what `.github/comment-gate/` finds in
   its files with `--tree`, not whole suites to read.
 - **One task per session**: `/clear` between tasks.
