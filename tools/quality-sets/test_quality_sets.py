@@ -153,6 +153,17 @@ class Agents(unittest.TestCase):
         self.assertEqual(argv[argv.index("--agent") + 1], "bug-auditor")
         self.assertIn("bug-auditor", json.loads(argv[argv.index("--agents") + 1]))
 
+    def test_a_head_the_set_does_not_record_for_the_pr_is_refused_by_name(self):
+        entries = [{"pr": 5, "head": "h1", "base": "b"}]
+        with self.assertRaisesRegex(SystemExit, "no entry for PR 5 at h9"):
+            qs.review_findings("claude", entries, 5, "h9")
+
+    def test_git_runs_in_the_checkout_the_script_stands_in_unless_told_otherwise(self):
+        with mock.patch.object(qs.subprocess, "run", return_value=mock.Mock(returncode=0)) as call:
+            qs.run("git", "status")
+            qs.run("git", "status", cwd="elsewhere")
+        self.assertEqual([c.kwargs["cwd"] for c in call.call_args_list], [qs.REPO, "elsewhere"])
+
     def test_an_agents_definition_is_the_checkouts_own_with_its_tool_grant(self):
         for name, tools in (("branch-reviewer", ["Read", "Grep", "Glob"]), ("security-auditor", ["Read", "Grep", "Glob"])):
             got = json.loads(qs.agent_definition(name))[name]

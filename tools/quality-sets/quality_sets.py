@@ -29,7 +29,7 @@ PATH = re.compile(r"[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)*\.(?:cs|py|sh|ps1|md
 
 
 def run(*argv, cwd=None, check=True, stdin=None):
-    done = subprocess.run(argv, cwd=cwd, input=stdin, capture_output=True, encoding="utf-8", errors="replace")
+    done = subprocess.run(argv, cwd=cwd or REPO, input=stdin, capture_output=True, encoding="utf-8", errors="replace")
     if check and done.returncode:
         raise SystemExit(f"{' '.join(argv[:3])} exited {done.returncode}: {done.stderr.strip()[:300]}")
     return done
@@ -211,7 +211,9 @@ def ask(claude, agent, prompt, cwd):
 
 def review_findings(claude, entries, pr, head):
     """Run branch-reviewer once over a pull request's diff at one commit, in a detached worktree."""
-    base = next(e["base"] for e in entries if e["pr"] == pr and e["head"] == head)
+    base = next((e["base"] for e in entries if e["pr"] == pr and e["head"] == head), None)
+    if base is None:
+        raise SystemExit(f"reviews.json holds no entry for PR {pr} at {head}")
     work = Path(tempfile.mkdtemp(prefix="qs-review-"))
     git("worktree", "add", "--detach", str(work / "tree"), head)
     try:
