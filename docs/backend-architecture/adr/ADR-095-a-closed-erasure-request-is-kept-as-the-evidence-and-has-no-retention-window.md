@@ -22,7 +22,7 @@ grow by one request and a handful of completions for every erasure, with no
 ceiling; the volume is a staff-raised request per person erased, which a
 database absorbs for the life of the deployment. An adopter whose counsel
 reads a hash of a subject id as personal data has to supersede this ADR and
-build the purge, and the register row says so beside the hash. An overdue
+build the purge. An overdue
 request is untouched: it keeps the id until it closes, as
 [ADR-092](ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)
 says.
