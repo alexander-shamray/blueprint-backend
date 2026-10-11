@@ -254,7 +254,8 @@ own job and its own stack, so a scenario that dies cannot poison the next and
 the longest runbook bounds the dispatch, not the sum. The job's
 `timeout-minutes` is 60 and the longest timed run in *The scripts* is
 `queue-backlog` at 37m58s, one job that runs both its halves, so every timed
-runbook fits alone with 22 minutes to spare. A job that times out still runs
+runbook fits alone, with at most 22 minutes to spare before the stack's pull
+and start, which a runtime does not include. A job that times out still runs
 its teardown.
 
 Why it is not scheduled: the timed runbooks alone are about three hours of
