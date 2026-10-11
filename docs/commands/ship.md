@@ -683,6 +683,28 @@ reporting green for a commit that is no longer the head is a verdict on
 a commit the merge will not take. Wait for the run on the pushed head
 rather than reading whichever finished last.
 
+## Step 6: the wait
+
+**The CI wait is the one place this chain sleeps, and a session that
+sleeps holds its context across the wake.** `gh pr checks --watch` outlasts
+a tool call's ten-minute bound on a slow run, the harness moves it to the
+background, and each notification then re-sends the whole conversation. A
+`/ship` main session's call sends about 200k tokens
+(`docs/token-usage.md`, 2026-10-11), so a wait kept here is that sent again
+at every wake.
+
+**The wait goes to a fresh `general-purpose` agent holding only the PR
+number**: its context is a few thousand tokens, so its wakes cost almost
+nothing, and what returns is the exit and the names of the failing checks,
+which is all the gate reads. This is `docs/token-plan.md` step 7's rule in
+`CLAUDE.md`, applied where the runbook waits; the other option it names,
+compacting first, is the owner's command, which this chain cannot type.
+
+**The agent only waits.** It decides nothing: a red check is fixed here, in
+its own commit, as the gate above already says, and a verdict it cannot
+reach — the agent missing, or no exit in its reply — is the gate not
+having run, which stops the chain like any helper that did not.
+
 ## Step 6: the landing
 
 Then land the branch by rebase, which puts each of `/commit`'s commits on
