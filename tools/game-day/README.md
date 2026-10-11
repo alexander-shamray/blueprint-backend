@@ -123,8 +123,9 @@ container, so the default applies. The first runs, on 2026-10-10, fired
 `OutboxAbandonedRows` after 75 seconds of a 120-second deadline,
 `OutboxLocalLaneStalled` after 128 of 150, and `OutboxBrokerLaneStalled` after
 209 and 226 of 240. The last is close to its ceiling, which is what a sum of
-ceilings looks like when the cause lands on a bad phase of both intervals. `ErasureRequestsOverdue` was run on 2026-10-11 and fired
-after 173 and 213 seconds of its deadline.
+ceilings looks like when the cause lands on a bad phase of both intervals.
+`ErasureRequestsOverdue`, run on 2026-10-11, fired after 173 and 213 seconds of
+its deadline.
 
 **Reporting is a second evaluation.** Prometheus shows an alert one evaluation
 after the one whose expression first read true: the rule's entry in
