@@ -380,6 +380,10 @@ branch is.
    git fetch origin <branch>
    ```
 
+   - **Hand the CI wait to a fresh agent.** One `general-purpose` agent,
+     given the PR number only, runs the `gh pr checks` line and returns its
+     exit and the failing checks; this session never holds the wait itself.
+     (why: docs/commands/ship.md, *Step 6: the wait*)
    - **Read `state` on every pass of the poll, before `mergeable`.**
      `CLOSED` is the closed-unmerged stop. `MERGED` means another route got
      there first: skip the merge, verify it from `state` and `mergeCommit`,
