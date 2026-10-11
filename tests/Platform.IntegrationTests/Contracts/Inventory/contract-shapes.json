@@ -1,0 +1,39 @@
+{
+  "Common.Contracts.Inventory.V1.ReleaseStock": {
+    "OrderId": "required System.Guid"
+  },
+  "Common.Contracts.Inventory.V1.ReserveStock": {
+    "Lines": "required System.Collections.Generic.IReadOnlyList<Common.Contracts.Inventory.V1.StockLine>",
+    "OrderId": "required System.Guid"
+  },
+  "Common.Contracts.Inventory.V1.StockLevelChanged": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "ProductId": "required System.Guid",
+    "QuantityAvailable": "required System.Int32"
+  },
+  "Common.Contracts.Inventory.V1.StockLine": {
+    "ProductId": "required System.Guid",
+    "Quantity": "required System.Int32"
+  },
+  "Common.Contracts.Inventory.V1.StockReleased": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid"
+  },
+  "Common.Contracts.Inventory.V1.StockReservationFailed": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "UnavailableProductIds": "required System.Collections.Generic.IReadOnlyList<System.Guid>"
+  },
+  "Common.Contracts.Inventory.V1.StockReserved": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid"
+  }
+}

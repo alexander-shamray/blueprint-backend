@@ -1,0 +1,32 @@
+{
+  "Common.Contracts.Payments.V1.AuthorisePayment": {
+    "Amount": "required System.Decimal",
+    "Currency": "required System.String",
+    "OrderId": "required System.Guid"
+  },
+  "Common.Contracts.Payments.V1.PaymentAuthorised": {
+    "Amount": "required System.Decimal",
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "Reference": "required System.String"
+  },
+  "Common.Contracts.Payments.V1.PaymentDeclined": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "Reason": "required System.String"
+  },
+  "Common.Contracts.Payments.V1.PaymentRefunded": {
+    "Amount": "required System.Decimal",
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "Reference": "required System.String"
+  }
+}

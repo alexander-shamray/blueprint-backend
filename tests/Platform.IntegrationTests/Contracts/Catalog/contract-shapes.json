@@ -1,0 +1,26 @@
+{
+  "Common.Contracts.Catalog.V1.PriceChanged": {
+    "Amount": "required System.Decimal",
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "ProductId": "required System.Guid"
+  },
+  "Common.Contracts.Catalog.V1.ProductDiscontinued": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "ProductId": "required System.Guid"
+  },
+  "Common.Contracts.Catalog.V1.ProductPublished": {
+    "Amount": "required System.Decimal",
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "MessageId": "required System.Guid",
+    "Name": "required System.String",
+    "OccurredAt": "required System.DateTimeOffset",
+    "ProductId": "required System.Guid",
+    "ThumbnailUrl": "required System.String?"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "Common.Contracts.Privacy.V1.PersonalDataDeleteCompleted": {
+    "Count": "required System.Int32",
+    "RequestId": "required System.Guid",
+    "Responder": "required System.String"
+  },
+  "Common.Contracts.Privacy.V1.PersonalDataDeleteRequested": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "RequestId": "required System.Guid",
+    "SubjectId": "required System.Guid"
+  }
+}

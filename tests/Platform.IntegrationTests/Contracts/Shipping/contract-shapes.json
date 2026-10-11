@@ -1,0 +1,16 @@
+{
+  "Common.Contracts.Shipping.V1.ShipmentDelivered": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "TrackingNumber": "required System.String"
+  },
+  "Common.Contracts.Shipping.V1.ShipmentDispatched": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "TrackingNumber": "required System.String"
+  }
+}

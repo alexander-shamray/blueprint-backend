@@ -2,7 +2,7 @@ using Shouldly;
 using Xunit;
 using Shapes = System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, string>>;
 
-namespace Platform.IntegrationTests;
+namespace Platform.IntegrationTests.Contracts;
 
 /// <summary>§9.2's breaking-change rule, held against the shape each contract was recorded with.</summary>
 public class ContractShapeTests
@@ -19,15 +19,30 @@ public class ContractShapeTests
     }
 
     [Fact]
-    public void The_recorded_shapes_are_the_live_ones()
+    public void Each_services_recorded_shapes_are_its_live_ones()
     {
-        string live = ContractShapes.Serialise(ContractShapes.Live());
-        File.WriteAllText(ContractShapes.Received, live);
+        // Live services and recorded ones both, so a service with no record and a record with no service fail alike.
+        string[] services =
+        [
+            .. ContractShapes.RecordedServices()
+                .Union(ContractShapes.Contracts().Select(ContractContexts.ServiceOf))
+                .Order(StringComparer.Ordinal)
+        ];
 
-        ContractShapes.Serialise(ContractShapes.Recorded()).ShouldBe(
-            live,
-            $"{ContractShapes.FileName} is not the contracts' shape: replace it from {ContractShapes.Received} " +
-            "and commit it with the change");
+        List<string> stale = [];
+
+        foreach (string service in services)
+        {
+            string live = ContractShapes.Serialise(ContractShapes.Live(service));
+            File.WriteAllText(ContractShapes.Received(service), live);
+
+            if (ContractShapes.Serialise(ContractShapes.Recorded(service)) != live)
+                stale.Add($"{ContractShapes.RecordPath(service)} from {ContractShapes.Received(service)}");
+        }
+
+        stale.ShouldBeEmpty(
+            "a service's record is not its contracts' shape: replace each from the live shape written beside " +
+            "the test assembly and commit it with the change: " + string.Join("; ", stale));
     }
 
     [Fact]
@@ -36,7 +51,7 @@ public class ContractShapeTests
         // A new service's namespace is held from its first contract, with no list to extend.
         string[] exported =
         [
-            .. typeof(Common.Contracts.Ordering.V1.OrderPlaced).Assembly
+            .. ContractContexts.Assembly
                 .GetExportedTypes()
                 .Where(t => t is { IsInterface: false, IsAbstract: false })
                 .Select(t => t.FullName!)
@@ -62,8 +77,8 @@ public class ContractShapeTests
                 ["Labels"] = "required System.Collections.Generic.IReadOnlyList<System.String?>",
                 ["Map"] = "required System.Collections.Generic.Dictionary<System.String, System.Int32[]>",
                 ["Keys"] = "required System.Collections.Generic.Dictionary<System.String, System.Int32>+KeyCollection",
-                ["OuterGeneric"] = "Platform.IntegrationTests.ContractShapeTests+Outer<System.Int32>+Inner?",
-                ["InnerGeneric"] = "Platform.IntegrationTests.ContractShapeTests+Outer+Inner<System.Int32>?"
+                ["OuterGeneric"] = "Platform.IntegrationTests.Contracts.ContractShapeTests+Outer<System.Int32>+Inner?",
+                ["InnerGeneric"] = "Platform.IntegrationTests.Contracts.ContractShapeTests+Outer+Inner<System.Int32>?"
             },
             ignoreOrder: true);
     }
