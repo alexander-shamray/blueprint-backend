@@ -74,6 +74,24 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
     }
 
     [Fact]
+    public async Task An_ended_notice_with_no_customer_loses_its_parameters_as_its_order_record_goes()
+    {
+        Guid purged = await AgedOrderAsync(TimeSpan.FromDays(72));
+        Notification ended = await fixture.PendingAsync(TemplateKeys.OrderPlaced, purged);
+        await EndAsync(ended, TimeSpan.FromDays(1));
+        Guid kept = await AgedOrderAsync(TimeSpan.FromDays(70));
+        Notification keptEnded = await fixture.PendingAsync(TemplateKeys.OrderPlaced, kept);
+        await EndAsync(keptEnded, TimeSpan.FromDays(1));
+
+        await fixture.PurgeNotificationsRetentionAsync();
+
+        (await ParametersAsync(ended.NotificationId))
+            .ShouldBeEmpty("nothing links the row to a customer once its record has gone");
+        (await ParametersAsync(keptEnded.NotificationId))
+            .ShouldNotBeEmpty("its order record is inside the window, so an erasure still finds it");
+    }
+
+    [Fact]
     public async Task A_backlog_larger_than_one_batch_drains_within_the_pass()
     {
         const int backlog = NotificationsRetentionService.BatchSize + 100;
@@ -136,6 +154,11 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
 
         return order;
     }
+
+    private Task<string> ParametersAsync(Guid notificationId) =>
+        fixture.ScalarAsync<string>(
+            "SELECT Value = Parameters FROM notifications.NotificationLog WHERE NotificationId = {0}",
+            notificationId);
 
     private Task<int> CountAsync(string table, string key, Guid id) =>
         fixture.ScalarAsync<int>($"SELECT Value = COUNT(*) FROM notifications.{table} WHERE {key} = {{0}}", id);

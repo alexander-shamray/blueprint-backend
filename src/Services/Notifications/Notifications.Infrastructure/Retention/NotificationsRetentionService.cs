@@ -49,6 +49,15 @@ public sealed class NotificationsRetentionService : BackgroundService
         ORDER BY r.RecordedAt;
         """;
 
+    // An ended notice that never had its customer assigned is found by an erasure only through this record, so what it
+    // holds goes first (docs/personal-data.md, NotificationLog); a row with a customer stays findable by it.
+    private const string BlankUnassignedNotices =
+        """
+        UPDATE notifications.NotificationLog
+        SET Languages = NULL, Parameters = ''
+        WHERE OrderId IN @Keys AND CustomerId IS NULL AND Status <> 'Pending';
+        """;
+
     // Asked again, so a notice a consumer wrote since the select keeps the record it will wait on.
     private const string DeleteOrders =
         """
@@ -135,6 +144,7 @@ public sealed class NotificationsRetentionService : BackgroundService
             EndedNotices,
             DeleteNotices,
             now - _windows.LogRetention!.Value,
+            null,
             ct);
         Purged(_log, notifications, "the notification log", null);
 
@@ -143,6 +153,7 @@ public sealed class NotificationsRetentionService : BackgroundService
             ExpiredOrders,
             DeleteOrders,
             now - _windows.OrderRetention!.Value,
+            BlankUnassignedNotices,
             ct);
         Purged(_log, orders, "order records", null);
 
@@ -151,6 +162,7 @@ public sealed class NotificationsRetentionService : BackgroundService
             ExpiredContacts,
             DeleteContacts,
             now - _windows.ContactRetention!.Value,
+            null,
             ct);
         Purged(_log, contacts, "contact records", null);
 
@@ -163,6 +175,7 @@ public sealed class NotificationsRetentionService : BackgroundService
         string select,
         string delete,
         DateTimeOffset before,
+        string? beforeDelete,
         CancellationToken ct)
     {
         int total = 0;
@@ -177,6 +190,12 @@ public sealed class NotificationsRetentionService : BackgroundService
 
             if (keys.Length == 0)
                 break;
+
+            if (beforeDelete is not null)
+            {
+                await connection.ExecuteAsync(
+                    new CommandDefinition(beforeDelete, new { Keys = keys }, cancellationToken: ct));
+            }
 
             total += await connection.ExecuteAsync(
                 new CommandDefinition(delete, new { Keys = keys, Before = before }, cancellationToken: ct));
