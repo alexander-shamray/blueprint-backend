@@ -29,14 +29,14 @@ def first_step(world: harness.World) -> tuple[bool, str]:
     note = "" if stdout else " (the container's stdout is empty, so the runbook's kubectl read finds nothing)"
     if claim:
         return False, f"the log says the dispatcher cannot reach SQL Server: {claim[0].strip()}"
-    if not message:
-        # With the broker stopped MassTransit's publish retries inside the call, so the dispatcher never
-        # reaches its own failure log; the runbook reads that silence as a dispatcher that is not running.
-        unreachable = world.logs.search(LOG_SERVICE, "Broker unreachable", world.since_cause())
-        return False, (f"no `Outbox message … on lane Broker failed` line, which the runbook reads as a dispatcher "
-                       f"that is not running; Loki holds {len(unreachable)} `Broker unreachable` lines from "
-                       f"MassTransit instead")
-    return True, message[0].strip() + note
+    if message:
+        return True, message[0].strip() + note
+    # With the broker stopped MassTransit's publish retries inside the call, so the dispatcher never
+    # reaches its own failure log; the runbook's second branch for that is MassTransit's own line.
+    unreachable = world.logs.search(LOG_SERVICE, "Broker unreachable", world.since_cause())
+    if unreachable:
+        return True, unreachable[0].strip() + note
+    return False, "neither an `Outbox message … on lane Broker failed` line nor a `Broker unreachable` one"
 
 
 def restore(world: harness.World) -> None:

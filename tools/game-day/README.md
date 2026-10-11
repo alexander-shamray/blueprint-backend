@@ -158,11 +158,6 @@ names in its header one it has to work around.
   (§13.4), so the `kubectl logs … | grep` that opens `outbox-broker.md` and
   `projection-lag.md` finds nothing on any deployment. The scripts read Loki
   instead and say so in their headers.
-- **A stopped broker does not produce the runbook's second branch.** MassTransit
-  retries inside the publish, so the dispatcher never logs `Outbox message …
-  failed, attempt N of 10`; it logs nothing, and the runbook reads that silence
-  as a dispatcher that is not running. `outbox-broker.md`'s first step fails
-  on this.
 - **`sqlcmd` needs `-I`.** The runbooks' SQL is written for a client with
   `QUOTED_IDENTIFIER` on; `sqlcmd` leaves it off, and the outbox's filtered
   indexes refuse a write without it. The harness passes `-I`.

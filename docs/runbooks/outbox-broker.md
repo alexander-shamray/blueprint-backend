@@ -29,7 +29,7 @@ cap, which is [`outbox-abandoned.md`](outbox-abandoned.md).
 These fail identically on the graph and need opposite responses.
 
 ```bash
-kubectl -n <ns> logs deploy/ordering --since=10m | grep -i "Outbox claim failed\|Outbox message"
+kubectl -n <ns> logs deploy/ordering --since=10m | grep -i "Outbox claim failed\|Outbox message\|Broker unreachable"
 ```
 
 - **`Outbox claim failed`** — the dispatcher cannot reach *SQL Server*. This is
@@ -37,10 +37,15 @@ kubectl -n <ns> logs deploy/ordering --since=10m | grep -i "Outbox claim failed\
   ([§13.5](../backend-architecture/13-observability.md)).
 - **`Outbox message … failed, attempt N of 10`** — the dispatcher is running and
   delivery is failing. Continue below.
-- **Silence** — the dispatcher is not running at all. Check the pod is up and
-  that `AddHostedService<OutboxDispatcher>()` survived the last change to
-  `AddOrderingInfrastructure`; a registration nothing resolves at startup fails
-  quietly, and the service reports ready regardless.
+- **`Broker unreachable`**, from MassTransit's `Retrying hh:mm:ss: Broker
+  unreachable: <host>` — the dispatcher is running and the broker is down. The
+  retry happens inside the publish call, so while the broker is stopped the
+  dispatcher never reaches its own `attempt N of 10` line, and this one stands
+  in for it. Continue below.
+- **Silence**, none of the three — the dispatcher is not running at all. Check
+  the pod is up and that `AddHostedService<OutboxDispatcher>()` survived the
+  last change to `AddOrderingInfrastructure`; a registration nothing resolves
+  at startup fails quietly, and the service reports ready regardless.
 
 ## Check RabbitMQ, in this order
 

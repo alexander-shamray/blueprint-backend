@@ -449,12 +449,16 @@ class Scenarios(unittest.TestCase):
         self.assertFalse(outbox_broker.first_step(self.world(loki=["nothing"])[0])[0])
         self.assertNotIn("stdout is empty", outbox_broker.first_step(self.world(loki=[attempt], stdout="x")[0])[1])
 
-    def test_broker_first_step_is_a_finding_when_only_masstransit_speaks(self):
+    def test_broker_first_step_passes_when_only_masstransit_speaks_and_fails_on_silence(self):
         from scenarios import outbox_broker
-        ok, detail = outbox_broker.first_step(self.world(loki=["Retrying 00:00:34: Broker unreachable: ordering-svc"])[0])
+        line = "Retrying 00:00:34: Broker unreachable: ordering-svc"
+        ok, detail = outbox_broker.first_step(self.world(loki=[line])[0])
+        self.assertTrue(ok)
+        self.assertIn("Broker unreachable: ordering-svc", detail)
+        self.assertFalse(outbox_broker.first_step(self.world(loki=[line, "Outbox claim failed; retrying"])[0])[0])
+        ok, detail = outbox_broker.first_step(self.world(loki=["nothing"])[0])
         self.assertFalse(ok)
-        self.assertIn("not running", detail)
-        self.assertIn("1 `Broker unreachable` lines", detail)
+        self.assertIn("neither", detail)
 
     def test_projection_renames_the_table_and_restore_is_guarded_so_it_is_safe_twice(self):
         from scenarios import projection_lag
