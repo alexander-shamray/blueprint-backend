@@ -373,6 +373,9 @@ public sealed class SupersededBookingTests
             CancellationToken ct) =>
             throw new NotSupportedException("a stored address is not fetched again");
 
+        public Task DeleteAsync(OrderId orderId, CancellationToken ct) =>
+            throw new NotSupportedException("a stored address is not saved, so none is taken back");
+
         public Task<DeliveryAddress?> GetAsync(OrderId orderId, CancellationToken ct) =>
             Task.FromResult<DeliveryAddress?>(new DeliveryAddress("1 Abay Avenue", null, "Almaty", "050000", "KZ"));
     }
@@ -386,6 +389,9 @@ public sealed class SupersededBookingTests
             DateTimeOffset fetchedAt,
             CancellationToken ct) =>
             throw new NotSupportedException("an order the owner does not know has no address to store");
+
+        public Task DeleteAsync(OrderId orderId, CancellationToken ct) =>
+            throw new NotSupportedException("an order the owner does not know has no address to take back");
 
         public Task<DeliveryAddress?> GetAsync(OrderId orderId, CancellationToken ct) =>
             Task.FromResult<DeliveryAddress?>(null);

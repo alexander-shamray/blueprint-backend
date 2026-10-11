@@ -241,18 +241,6 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
             AddressLookup.Found found = (AddressLookup.Found)lookup;
 
-            // The owner may not have anonymised the order yet; a saved address would outlive an erasure reported done.
-            if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(found.CustomerId, ct))
-            {
-                CommitOutcome erased = await CommitPendingAsync(
-                    sp,
-                    id,
-                    (shipment, now) => shipment.MarkUnfulfillable(EndWaitingShipmentHandler.Reason, now),
-                    ct);
-
-                return erased.Moved;
-            }
-
             address = found.Address;
 
             // Committed before the booking, so a pass repeated after a crash does not read it twice (ADR-052).
@@ -262,6 +250,21 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
                 address,
                 sp.GetRequiredService<TimeProvider>().GetUtcNow(),
                 ct);
+
+            // Asked after the save, so an erasure committing in between has deleted the row or is seen here; the owner
+            // may not have anonymised the order yet, and a row left would outlive an erasure reported done.
+            if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(found.CustomerId, ct))
+            {
+                await store.DeleteAsync(order, ct);
+
+                CommitOutcome erased = await CommitPendingAsync(
+                    sp,
+                    id,
+                    (shipment, now) => shipment.MarkUnfulfillable(EndWaitingShipmentHandler.Reason, now),
+                    ct);
+
+                return erased.Moved;
+            }
         }
 
         BookingResult booking = await carrier.BookAsync(new BookingRequest(id, address), ct);

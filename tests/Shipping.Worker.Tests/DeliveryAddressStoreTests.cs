@@ -77,6 +77,19 @@ public sealed class DeliveryAddressStoreTests(ServiceFixture fixture) : IAsyncLi
     }
 
     [Fact]
+    public async Task A_delete_removes_the_row_and_one_for_an_order_with_none_is_not_a_fault()
+    {
+        OrderId order = new(Guid.CreateVersion7());
+        await SaveAsync(order, Guid.CreateVersion7(), Kazakh);
+
+        await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+        await Store(scope).DeleteAsync(order, TestContext.Current.CancellationToken);
+        await Store(scope).DeleteAsync(order, TestContext.Current.CancellationToken);
+
+        (await ReadAsync(order)).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task An_order_with_no_row_reads_as_null()
     {
         (await ReadAsync(new OrderId(Guid.CreateVersion7()))).ShouldBeNull();

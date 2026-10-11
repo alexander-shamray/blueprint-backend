@@ -277,8 +277,8 @@ because Keycloak clears it when a user changes their own address.
 **Amended by
 [ADR-092](ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)**,
 which keeps §11.7's broadcast simultaneous, so a reader is not erased after its
-owner. Shipping closes the window that leaves itself, by refusing to save an
-address for a subject whose erasure it has recorded.
+owner. Shipping closes the window that leaves itself, by deleting an address
+it has saved for a subject whose erasure it has recorded.
 
 ---
 

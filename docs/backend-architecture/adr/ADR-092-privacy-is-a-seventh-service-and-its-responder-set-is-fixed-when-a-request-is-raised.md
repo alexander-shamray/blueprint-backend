@@ -89,11 +89,13 @@ on its own clock, and [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-wo
 had sequenced a reader after its owner for one reason: until Ordering has
 anonymised an order it still gives the fulfilment worker the subject's address,
 and a worker that saves it back does so after Shipping has reported done. Here
-the sequence is not drawn, so Shipping asks its own audit rows before it saves.
+the sequence is not drawn, so Shipping asks its own audit rows after it saves.
 `IErasedSubjects` recomputes each row's hash for the customer the owner named,
 under that row's own request id as `PersonalDataErasure.HashSubject` salts it,
-and a match ends the shipment as `personal_data_erased` with nothing saved and
-nothing booked. The audit row keeps no customer id, and the cost is a scan of
+and a match deletes the row again and ends the shipment as
+`personal_data_erased`, nothing booked. Asked after the save, an erasure that
+commits at any moment either finds the row to delete or is seen by the check.
+The audit row keeps no customer id, and the cost is a scan of
 a table that has no window ([ADR-095](ADR-095-a-closed-erasure-request-is-kept-as-the-evidence-and-has-no-retention-window.md)).
 
 ---
