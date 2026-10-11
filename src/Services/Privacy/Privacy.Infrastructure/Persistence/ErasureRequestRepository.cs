@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Privacy.Application.ErasureRequests;
 using Privacy.Domain.ErasureRequests;
@@ -15,6 +16,9 @@ internal sealed class ErasureRequestRepository(PrivacyDbContext db) : IErasureRe
             @Resource = {0}, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
         IF @taken < 0 THROW 50001, 'The erasure lock was not taken.', 1;
         """;
+
+    // The number TakeLockSql throws with, so a lock not taken is told from any other fault.
+    internal const int LockNotTakenNumber = 50001;
 
     /// <summary>
     /// Serialised per subject: a second raise waits for the first to commit and then finds its request, instead of
@@ -40,6 +44,15 @@ internal sealed class ErasureRequestRepository(PrivacyDbContext db) : IErasureRe
 
     public void Add(ErasureRequest request) => db.ErasureRequests.Add(request);
 
-    private Task<int> TakeLockAsync(string resource, CancellationToken ct) =>
-        db.Database.ExecuteSqlRawAsync(TakeLockSql, [resource], ct);
+    private async Task TakeLockAsync(string resource, CancellationToken ct)
+    {
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(TakeLockSql, [resource], ct);
+        }
+        catch (SqlException e) when (e.Number == LockNotTakenNumber)
+        {
+            throw new ErasureLockNotTakenException(resource, e);
+        }
+    }
 }

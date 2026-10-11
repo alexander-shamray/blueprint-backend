@@ -18,6 +18,7 @@ builder.Host.UseDefaultServiceProvider(o =>
 builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddPrivacyApplication();       // §6.2
 builder.Services.AddPrivacyInfrastructure(builder.Configuration);   // §4.2, §7.1
+builder.Services.AddExceptionHandler<ErasureLockNotTakenExceptionHandler>();   // §10.5's 503 for a held lock
 
 // Appendix C's OpenAPI deliverable: document only, no UI.
 builder.Services.AddCommonOpenApi();
