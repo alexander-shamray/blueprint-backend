@@ -139,7 +139,7 @@ time.
   `branch-reviewer` or a first sweep at an entry's commit and scores recall;
   `token-usage.md` records the first scores: the reviewer on 15 heads and
   a first security sweep. Still owed: a bug sweep at `2a15c639`, the one run
-  a usage limit cut short, and a reading of the other scores against the exits.
+  a usage limit cut short.
 
 **Exit.** Attribution holds on a known session: for one named `/ship` run,
 every response between its command and the next prompt a person typed is
