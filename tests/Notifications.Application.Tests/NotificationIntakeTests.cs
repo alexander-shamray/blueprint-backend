@@ -82,6 +82,21 @@ public class NotificationIntakeTests
     }
 
     [Fact]
+    public async Task The_order_record_keeps_the_requests_its_first_event_names()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid request = Guid.CreateVersion7();
+        RecordNotificationCommand command = Placed(order, Guid.CreateVersion7()) with
+        {
+            Order = new OrderFact(Guid.CreateVersion7(), Cancellation: null, ErasedUnder: [request])
+        };
+
+        await Handler().HandleAsync(command, TestContext.Current.CancellationToken);
+
+        _orders.Added.ShouldHaveSingleItem().ErasedUnder.ShouldBe([request]);
+    }
+
+    [Fact]
     public async Task A_redelivery_past_the_inbox_records_no_second_notice()
     {
         RecordNotificationCommand command = Placed(Guid.CreateVersion7(), Guid.CreateVersion7());

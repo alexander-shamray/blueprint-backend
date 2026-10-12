@@ -27,6 +27,26 @@ public class OrderRecordTests
     }
 
     [Fact]
+    public void A_record_keeps_the_requests_its_order_was_placed_under_once_each()
+    {
+        Guid request = Guid.CreateVersion7();
+
+        OrderRecord record = OrderRecord.For(
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            Now,
+            erasedUnder: [request, request]);
+
+        record.ErasedUnder.ShouldBe([request]);
+    }
+
+    [Fact]
+    public void A_record_from_a_publisher_that_names_no_request_keeps_none()
+    {
+        OrderRecord.For(Guid.CreateVersion7(), Guid.CreateVersion7(), Now).ErasedUnder.ShouldBeEmpty();
+    }
+
+    [Fact]
     public void A_cancellation_records_its_reason_origin_and_instant()
     {
         OrderRecord record = OrderRecord.For(Guid.CreateVersion7(), Guid.CreateVersion7(), Now);

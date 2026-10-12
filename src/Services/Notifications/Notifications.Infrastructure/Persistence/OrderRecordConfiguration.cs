@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Notifications.Application.Records;
 
@@ -17,6 +19,19 @@ internal sealed class OrderRecordConfiguration : IEntityTypeConfiguration<OrderR
 
         builder.Property(r => r.CancelReason).HasMaxLength(OrderRecordLimits.MaxCodeLength);
         builder.Property(r => r.CancelOrigin).HasMaxLength(OrderRecordLimits.MaxCodeLength);
+
+        // Request ids, kept as Ordering keeps them (ADR-099): a JSON column, since nothing queries by them (ADR-101).
+        builder
+            .Property(r => r.ErasedUnder)
+            .HasConversion(
+                ids => JsonSerializer.Serialize(ids, (JsonSerializerOptions?)null),
+                json => JsonSerializer.Deserialize<List<Guid>>(json, (JsonSerializerOptions?)null)!,
+                new ValueComparer<IReadOnlyList<Guid>>(
+                    (a, b) => a!.SequenceEqual(b!),
+                    v => v.Aggregate(0, (h, id) => HashCode.Combine(h, id)),
+                    v => v.ToList()))
+            .HasColumnType("nvarchar(max)")
+            .HasDefaultValueSql("N'[]'");
 
         // OrderRetention's purge, by the instant this service first heard of the order.
         builder.HasIndex(r => r.RecordedAt);

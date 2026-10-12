@@ -24,18 +24,30 @@ public sealed class OrderRecord
     /// <summary>When this service first heard of the order, the instant <c>OrderRetention</c> ages it from.</summary>
     public DateTimeOffset RecordedAt { get; private set; }
 
+    /// <summary>
+    /// The erasure requests the customer was already under when the order was placed, as the first event named them
+    /// (ADR-099); empty from a publisher that does not say, so the worker's question is then unbounded (ADR-101).
+    /// </summary>
+    public IReadOnlyList<Guid> ErasedUnder { get; private set; } = [];
+
     // EF Core materialisation only (§5.4).
     private OrderRecord() { }
 
-    private OrderRecord(Guid orderId, Guid customerId, DateTimeOffset now)
+    private OrderRecord(Guid orderId, Guid customerId, IReadOnlyList<Guid> erasedUnder, DateTimeOffset now)
     {
         OrderId = orderId;
         CustomerId = customerId;
+        ErasedUnder = erasedUnder;
         RecordedAt = now;
     }
 
-    /// <summary>The first of Ordering's events for an order names its customer.</summary>
-    public static OrderRecord For(Guid orderId, Guid customerId, DateTimeOffset now) => new(orderId, customerId, now);
+    /// <summary>The first of Ordering's events for an order names its customer and the requests it was placed after.</summary>
+    public static OrderRecord For(
+        Guid orderId,
+        Guid customerId,
+        DateTimeOffset now,
+        IReadOnlyList<Guid>? erasedUnder = null) =>
+        new(orderId, customerId, [.. (erasedUnder ?? []).Distinct()], now);
 
     /// <summary>Records the cancellation once; a second one keeps the first and returns false.</summary>
     public bool Cancel(string? reason, string? origin, DateTimeOffset at)
