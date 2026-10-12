@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BLUEPRINT = Path("docs/backend-architecture")
 SERVICES = Path("src/Services")
 
-# ADR-096 part 5's closed list, named here and nowhere else: the ADRs and Appendices A to E. A file
+# The gate's copy of ADR-096 part 5's closed list, which the suite pins: the ADRs and Appendices A to E. A file
 # that is not on it is scanned, so a new chapter, and an Appendix F, are covered by default.
 EXEMPT = frozenset({
     "adr",
