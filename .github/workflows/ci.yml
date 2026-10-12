@@ -285,6 +285,12 @@ jobs:
         working-directory: tools/new-service
         run: python -m unittest
 
+      # The scaffold's inverse renders into a copy and removes what it
+      # rendered, so a splice added to the scaffold fails here until it is undone.
+      - name: Test the remove-service tool against this repository
+        working-directory: tools/remove-service
+        run: python -m unittest
+
   # The job above renders a service and reads the text of it. It never compiles
   # one, and a whole class of breakage is invisible to a text check: anything
   # the scaffold removes. A Catalog test using a helper the scaffold strips
