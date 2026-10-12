@@ -9,7 +9,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Used directly, so referenced directly: §4.2's assembly-scan registration. -->
+    <!-- Used directly, so referenced directly: E.2.6's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <!-- VoidShipmentHandler's LoggerMessage.Define, which CA1848 requires under ADR-019. -->

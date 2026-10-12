@@ -109,7 +109,7 @@ public static class DependencyInjection
         // §9.4's, §9.5's and §8.5's retention. Last, so first stopped: an interrupted purge loses nothing.
         services.AddHostedService<RetentionPurgeService>();
 
-        // §6.5's read side, singleton as §4.2's sample has it, on the runtime key rather than the migrator's (§7.1).
+        // §6.5's read side, singleton as E.2.6's sample has it, on the runtime key rather than the migrator's (§7.1).
         services.AddSingleton<IDbConnectionFactory>(
             new SqlConnectionFactory(configuration.GetConnectionString("Inventory")!));
 

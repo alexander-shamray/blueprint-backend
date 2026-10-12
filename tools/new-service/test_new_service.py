@@ -355,7 +355,7 @@ class OmitsTheSlice(unittest.TestCase):
         self.assertIn("This service maps no endpoint of its own yet.", program)
 
     def test_the_validator_scan_re_anchors_on_the_assembly(self):
-        # §4.2's line still scans this assembly; it just cannot name a type
+        # E.2.6's line still scans this assembly; it just cannot name a type
         # inside it, there being no validator yet and DependencyInjection
         # being static — CS0718, found by compiling the scaffolded service.
         application = self.rendered.created[

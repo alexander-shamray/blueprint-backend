@@ -15,7 +15,7 @@
     <!-- The read side of §6.5: query handlers use Dapper directly, never EF —
          the architecture gate in Catalog.Application.Tests holds that line. -->
     <PackageReference Include="Dapper" />
-    <!-- Referenced directly because used directly, for §4.2's assembly-scan registration. -->
+    <!-- Referenced directly because used directly, for E.2.6's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
   </ItemGroup>

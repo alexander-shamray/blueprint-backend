@@ -24,12 +24,12 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "src/Services/Catalog/Catalog.Application/DependencyInjection.cs": (
         ("using Catalog.Application.Products.PublishProduct;\n", ""),
         (
-            "        // §4.2's sample line. IValidator<T> is not in PluggableInterfaces.All\n"
+            "        // E.2.6's sample line. IValidator<T> is not in PluggableInterfaces.All\n"
             "        // because it is FluentValidation's contract, not one of ours — its own\n"
             "        // scanner knows its own conventions (Include* filters, internal\n"
             "        // validators) and a second scan would drift from it.\n"
             "        services.AddValidatorsFromAssemblyContaining<PublishProductValidator>();\n",
-            "        // §4.2's sample line, over the assembly until the first validator gives it a type.\n"
+            "        // E.2.6's sample line, over the assembly until the first validator gives it a type.\n"
             "        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);\n",
         ),
     ),
@@ -861,7 +861,7 @@ PURE_CONSUMER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ("using Catalog.Application.Integration;\n", ""),
         (
             "        // Explicit rather than scanned, beside the dispatcher it serves —\n"
-            "        // §4.2's registration sample is the shape. §7.5's real dispatcher,\n"
+            "        // E.2.6's registration sample is the shape. §7.5's real dispatcher,\n"
             "        // and no null one beside it: a dispatcher that drops every domain\n"
             "        // event is deleted rather than disabled, so nothing can register it\n"
             "        // back by accident.\n"
