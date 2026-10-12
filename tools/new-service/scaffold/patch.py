@@ -401,7 +401,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "\n"
             "        services.ShouldContain(\n"
             "            d => d.ServiceType == typeof(FluentValidation.IValidator<PublishProductCommand>),\n"
-            "            \"AddValidatorsFromAssemblyContaining is §4.2's line, and losing it fails silently\");\n"
+            "            \"AddValidatorsFromAssemblyContaining is E.2.6's line, and losing it fails silently\");\n"
             "\n"
             "        // A query's validator too, since ValidationBehavior is unconstrained (§6.3) and this is GetPrices' bound.\n"
             "        services.ShouldContain(\n"
