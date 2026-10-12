@@ -48,6 +48,12 @@ replaced side.
 [ADR-096](ADR-096-a-chapter-names-a-reference-service-only-as-evidence.md):
 what becomes of the chapters that describe the replaced part.
 
+**Amended by
+[ADR-092](ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)**,
+which adds Privacy as a seventh service. This record's "six services" was the
+count when it was written; the services an adopter replaces are the ones
+[§4.1](../04-solution-structure.md) names now.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
