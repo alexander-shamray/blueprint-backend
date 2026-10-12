@@ -164,6 +164,16 @@ TRX and looks for those three directory names, so a bare `dotnet test` runs
 the stages and leaves it nothing to read. What it asserts over them is
 [its README](../.github/pipeline-gate/README.md)'s.
 
+**The domain-name gate needs nothing in front of it**, and its suite reads
+this checkout's chapters as well as a fixture tree:
+
+```bash
+py -3.12 -m unittest discover -s .github/domain-name-gate
+py -3.12 .github/domain-name-gate/domain_name_gate.py check
+```
+
+What it refuses is [its README](../.github/domain-name-gate/README.md)'s.
+
 **The output gate needs a build in front of it**, and its step does not say
 so because the build is the line above it in the same job. Run on its own it
 reads a tree, so what it reports is about whichever build ran last — or, on a

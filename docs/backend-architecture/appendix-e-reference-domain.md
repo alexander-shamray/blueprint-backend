@@ -7,6 +7,8 @@ worked examples. A chapter states a rule abstractly and cites a section here
 by link, never a value; an adopter replaces this appendix wholesale
 ([ADR-096](adr/ADR-096-a-chapter-names-a-reference-service-only-as-evidence.md),
 [ADR-062](adr/ADR-062-the-domain-is-a-reference-implementation.md)).
+The [domain-name gate](../../.github/domain-name-gate/README.md) fails a chapter
+block that names a service without ADR-096's marker.
 
 Each section below is a skeleton, one per chapter pass, so that a pass fills
 the section it cites, replacing its "Filled by" line, and creates none.

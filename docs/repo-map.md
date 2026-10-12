@@ -217,7 +217,8 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
 .github/<gate>/              one directory per gate — licence-gate,
                              secret-scan, closure-gate, locality-gate,
                              pipeline-gate, output-gate, comment-gate,
-                             messaging-gate, plan-size-gate —
+                             messaging-gate, plan-size-gate,
+                             domain-name-gate —
                              holding the gate,
                              its suite and a README. The README is the ONE
                              owner of what the gate reads and what it claims,
