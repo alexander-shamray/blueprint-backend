@@ -110,6 +110,7 @@ decision looks wrong.
 | **ADR-101** | [An order record keeps the requests its order was placed under, and the send pass asks them before the owner](adr/ADR-101-an-order-record-keeps-the-requests-its-order-was-placed-under-and-the-send-pass-asks-them-before-the-owner.md) |
 | **ADR-102** | [Remove-service lists what still names a removed service and edits no document](adr/ADR-102-remove-service-lists-what-still-names-a-removed-service-and-edits-no-document.md) |
 | **ADR-103** | [Shipping keeps the erasure requests an order was placed under on its shipment](adr/ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md) |
+| **ADR-104** | [An operator may switch off Notifications, Shipping and Privacy for a bound, and no other service](adr/ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md) |
 
 ---
 
