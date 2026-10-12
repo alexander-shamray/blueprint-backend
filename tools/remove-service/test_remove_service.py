@@ -263,10 +263,9 @@ class RefusalTests(unittest.TestCase):
         (self.root / "src" / "Services" / "Yankee").mkdir(parents=True)
         (self.root / "src" / "Services" / "Catalog").mkdir()
 
-    def test_the_template_is_refused_under_every_casing(self):
-        for name in ("Catalog",):
-            with self.subTest(name=name), self.assertRaisesRegex(ScaffoldError, "scaffold's template"):
-                remove_service.plan(self.root, name)
+    def test_the_template_is_refused(self):
+        with self.assertRaisesRegex(ScaffoldError, "scaffold's template"):
+            remove_service.plan(self.root, "Catalog")
 
     def test_a_service_that_is_not_there_is_refused(self):
         with self.assertRaisesRegex(ScaffoldError, "does not exist"):
