@@ -26,6 +26,9 @@ host allow-list to this validator or an image proxy in front of the listing,
 and this ADR is what that change supersedes. A name using a zero-width joiner
 legitimately, as some emoji sequences and scripts do, is refused; a seller
 spells it without one.
+**Narrowed by [ADR-106](ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)**,
+which replaces "a host the seller chooses" for the thumbnail with the host
+the platform's own store issues, once the upload path is built.
 
 ---
 

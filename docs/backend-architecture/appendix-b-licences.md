@@ -94,6 +94,7 @@ Adding a dependency means adding its identity here, not just its name.
 | Duende IdentityServer | Free below a revenue threshold; commercial above it |
 | Redis | Redis 7.4+ is under RSALv2/SSPLv1. Valkey (BSD) is a drop-in fork if the terms are a problem |
 | Grafana OTel-LGTM (`grafana/otel-lgtm` image) | AGPL 3.0 for Grafana, Loki, Tempo and Mimir (the Prometheus-compatible store inside the image). Development and CI only ([§14.1](14-local-development.md)); never deployed, so no distribution or network-service obligation arises |
+| MinIO (the local object store [ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md) plans for Compose) | AGPL 3.0. Development and CI only, run as an unmodified container and never deployed or linked, so no distribution or network-service obligation arises. A deployment supplies its own S3-compatible store ([ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)) |
 
 The first table is enforced by
 [`.github/licence-gate/`](../../.github/licence-gate/README.md), whose README

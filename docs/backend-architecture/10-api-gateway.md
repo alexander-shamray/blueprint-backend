@@ -1305,6 +1305,87 @@ alone.
 > that it is not, and §3.2, §4.1, §13 and §15 all describe a Shipping that has
 > none.
 
+## 10.8 The product image upload
+
+[ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)
+decides that the bytes of an image go from the client to an S3-compatible store
+and through no service. What follows is the wire contract and the rules that
+make a client-supplied file safe to publish; the consumer builds against it.
+
+| | Path |
+|---|---|
+| Client calls | `POST /bff/v1/product-images` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
+| Service receives | `/v1/product-images` |
+
+Like §10.7, it needs no gateway change: §10.2's `web-bff` route already
+matches the BFF's whole `/bff/v1` API. The caller is an authenticated seller,
+holding the permission that publishing a product already requires
+([§11.4](11-identity-authorization.md)); the seller is bound from the
+principal, and the request names none.
+
+**The request carries two values and the server chooses everything else.**
+`contentType` is one of `image/jpeg`, `image/png` and `image/webp`, a closed
+list in which SVG is deliberately absent: an SVG is a document that can carry
+script, and nothing here argues it back in. `sizeBytes` is at most 5 MiB. A
+value outside either answers 400 in §10.5's `Error` vocabulary.
+
+**The response is the URL and what the client must send with it:**
+
+| Field | Meaning |
+|---|---|
+| `uploadUrl` | A pre-signed `PUT` for one key, expiring after five minutes |
+| `headers` | The `Content-Type` and `Content-Length` the signature covers, which the store refuses a request without |
+| `key` | The key the server chose, `uploads/{sellerId}/{guid}.{ext}` with the extension taken from the allowed type |
+| `expiresAt` | When `uploadUrl` stops working |
+
+The key is minted by the BFF and the client never supplies a path segment. The
+signature covers the method, the key, the content type and the length, so the
+URL cannot be reused for a different object or a larger body. Pre-signed `PUT`
+cannot make the store inspect what arrives, which is why the next paragraph
+exists.
+
+**Publishing attaches the image; the request does not send a URL.**
+`PublishProduct` carries the `key` the upload returned. `Catalog` checks that
+the key sits under the caller's own `uploads/{sellerId}/` prefix, reads the
+object's first bytes and refuses one whose signature does not match its stored
+content type, then copies it inside the store to
+`products/{sellerId}/{guid}.{ext}` with a fixed `Content-Type`,
+`Cache-Control: public, max-age=31536000, immutable` and the client's object
+metadata discarded, and stores the public URL it builds from the configured
+base and the destination key. The destination key is derived from the source
+key, so a retried publish copies to the same place. A URL from the client is
+not accepted: the request's `ThumbnailUrl` is replaced by the `key`, and a
+product published without one has no image, as a null `ThumbnailUrl` already
+means. [ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)'s `https`
+rule becomes a rule about the configured base, which is an absolute `https` URL
+short enough that the base and the longest destination key (87 characters) fit
+`ThumbnailUrl`'s 400, both checked when the host starts. Trust in the key is
+the trust in the BFF's issue of it, and the prefix check is what stops a seller
+attaching another seller's upload.
+
+**An upload that is never attached is expired, not swept.** The `uploads/`
+prefix carries a lifecycle rule that deletes objects after one day, set by the
+deployment and stated in the chart's values. `products/` has none. A copy whose
+publish transaction then fails leaves one object nothing names, which the
+retry reuses ([ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)).
+
+**The store has two credential pairs and neither is the other's.** The BFF's
+can write under `uploads/` and nothing else; `Catalog`'s can read `uploads/`
+and write `products/`. Neither can list a bucket or delete. Compose's local
+store, its credentials and the chart's store values follow
+[§14.1](14-local-development.md), [§15.4](15-cicd-deployment.md) and
+`docs/secrets.md`'s exception table; those documents state them in the PR that
+implements this, and this section owns only the permissions above.
+
+**The image is served by the store, or a CDN in front of it, from `products/`
+alone.** It is not served through the gateway, because the gateway would then
+carry the bytes ADR-106 keeps out of every service. The fronting layer sets
+`X-Content-Type-Options: nosniff` ([§10.6](#106-response-security-headers)),
+as that section's reasoning requires of whoever serves content a caller
+supplied; a repository can state this and cannot enforce it, so the
+implementing PR carries a test against the local store that reads the header.
+
 ---
 
 [← §9 Messaging](09-messaging.md) · [Index](README.md) · [§11 Identity →](11-identity-authorization.md)
