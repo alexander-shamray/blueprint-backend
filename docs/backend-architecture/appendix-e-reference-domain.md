@@ -966,7 +966,215 @@ as a child of the trace that stamped it at intake. All three read
 
 ## E.6 §10 and §11: the gateway routes and the identity realms
 
-Filled by #911.
+### E.6.1 The gateway routes
+
+The route file is the `ReverseProxy` section of
+`src/Gateway/Gateway.Api/appsettings.json`, and it is the owner of the list;
+this section says only what the chapter's rules were drawn from. Its eight
+routes, by cluster and policy:
+
+| Route | Cluster | Policy | Matches |
+|---|---|---|---|
+| `catalog-public` | `catalog` | `anonymous` | `GET /api/v1/catalog/{**catch-all}` |
+| `catalog-write` | `catalog` | `authenticated` | `POST` and `PUT` on the same path |
+| `catalog-own` | `catalog` | `authenticated` | `GET /api/v1/catalog/products/mine` |
+| `ordering` | `ordering` | `authenticated` | `/api/v1/orders/{**catch-all}` |
+| `inventory-admin` | `inventory` | `inventory:admin` | `/api/v1/inventory/{**catch-all}` |
+| `payments-admin` | `payments` | `payments:admin` | `/api/v1/payments/{**catch-all}` |
+| `privacy-erase` | `privacy` | `privacy:erase` | `/api/v1/privacy/{**catch-all}` |
+| `web-bff` | `web-bff` | `authenticated` | `/bff/v1/{**catch-all}` |
+
+**Catalog's one-product read is served by the public catch-all**, under
+`anonymous`, so a product's deep link needs no route of its own. The one Catalog
+`GET` it must not serve is a seller's own list, which names a caller:
+`catalog-own` matches that literal path and holds it to `authenticated`
+([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)).
+**Catalog's write side is `catalog-write`**: the endpoint still requires
+`catalog:write`, and the route's `authenticated` is the edge's coarser check.
+
+**The BFF makes one synchronous call, to Catalog**
+([§2.2](02-architecture-at-a-glance.md), [§9.7](09-messaging.md),
+[ADR-017](adr/ADR-017-one-synchronous-hop.md)), so that hop is the one
+`CorrelationIdHandler` is registered on.
+
+### E.6.2 Error catalogue and refusals
+
+**Ordering's error catalogue** is
+`src/Services/Ordering/Ordering.Application/Orders/OrderErrors.cs`, one static
+class in which every `Error` the service returns is built. Excerpted:
+
+```csharp
+namespace Ordering.Application.Orders;
+
+/// <summary>Every <see cref="Error"/> the service returns is built here, so <c>Code</c> is a closed set.</summary>
+/// <remarks><c>Code</c> is a metric dimension, so no id or count goes in one (§10.5).</remarks>
+public static class OrderErrors
+{
+    public static readonly Error NotFound =
+        Error.NotFound("order.not_found", "No order with that id.");
+
+    /// <summary>For <c>Delivered</c> as well as <c>Shipped</c>; one code, being a §9.8 dimension.</summary>
+    public static readonly Error AlreadyShipped =
+        Error.Rule(
+            "order.already_shipped",
+            "An order that has already shipped cannot be cancelled; raise a return instead.");
+
+    // 422, not 400: the request was well-formed and the validator passed it.
+    // The products are unpriceable, which is a fact about this service's state
+    // and not something the caller phrased wrongly.
+    public static Error ProductsUnavailable(IReadOnlyList<ProductId> missing) =>
+        Error.Rule("order.products_unavailable", $"No price for {missing.Count} product(s).");
+}
+```
+
+`ProductsUnavailable` is the shape to copy: one code, a description that
+varies. `AlreadyShipped` answers a delivered order as well as a shipped one, so
+its description is worded to be true of both.
+
+**Privacy's lock refusal** is `ErasureLockNotTakenException`, thrown by
+`ErasureRequestRepository.TakeLockAsync`, answered 503 with `Retry-After` and
+`code` `erasure_request.busy` by `ErasureLockNotTakenExceptionHandler`. It is
+the only service that takes such a lock.
+
+### E.6.3 Notice mail correlation
+
+Notifications' send worker puts the originating event's `CorrelationId` on
+every message it hands the relay, as `SmtpMailChannel.CorrelationIdHeader` in
+`Notifications.Infrastructure`, `X-Correlation-Id`. A test holds it equal to
+`CorrelationIdExtensions.Header`, because the project that speaks SMTP does not
+reference `Common.Web`.
+
+### E.6.4 The buyer order read
+
+The chapters name services by role. In the reference domain **the order
+service is Ordering, the product service is Catalog, the payment service is
+Payments, the stock service is Inventory, the shipping service is Shipping,
+the notification service is Notifications and the privacy service is
+Privacy**.
+
+Shipping's spec, written against §10's contract, is
+`docs/superpowers/specs/2026-09-22-shipping-service-design.md`; the events it
+publishes are those of [E.5.1](#e51-the-contracts), and §10 states what that
+settles for the buyer's read.
+
+### E.6.5 Permissions and policies
+
+Each service's permission constants are one class at its composition root; the
+code is the owner of the strings, and this section the owner of the reasons.
+
+| Service | Constants | Why this set |
+|---|---|---|
+| Ordering | `orders:write`, `orders:cancel`, `orders:delivery-address` | There is no `orders:read`, because nothing in Ordering requires it |
+| Catalog | `catalog:write` | Its listing is anonymous (§10.2), so there is no `catalog:read` |
+| Inventory | `inventory:admin` | Registered at the gateway as well (§10.2) |
+| Payments | `payments:admin` | Registered at the gateway as well (§10.2) |
+| Privacy | `privacy:erase` | Registered at the gateway as well (§10.2) |
+
+The gateway's own three are `GatewayPermissions` in `Gateway.Api`, and its
+`Program.cs` registers one policy for each.
+
+Ordering's registration, in `src/Services/Ordering/Ordering.Api/Program.cs`:
+
+```csharp
+// RequirePermission, so the claim type is PermissionClaim.Type's alone (§11.4). No orders:admin policy: that string
+// is a claim CancelOrderHandler checks against a loaded aggregate.
+builder.Services
+    .AddAuthorizationBuilder()
+    .AddPolicy(OrderingPermissions.Write, p => p.RequirePermission(OrderingPermissions.Write))
+    .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel))
+    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress));
+```
+
+Ordering's constants are
+`src/Services/Ordering/Ordering.Api/OrderingPermissions.cs`:
+
+```csharp
+public static class OrderingPermissions
+{
+    public const string Write = "orders:write";
+    public const string Cancel = "orders:cancel";
+    public const string DeliveryAddress = "orders:delivery-address";
+}
+```
+
+`orders:admin` is in neither: it is a claim `CancelOrderHandler` checks against
+a loaded aggregate. `GrantablePermissionTests` sits in `Gateway.Api.Tests`,
+`Catalog.Api.Tests`, `Ordering.Api.Tests`, `Inventory.Api.Tests`,
+`Payments.Api.Tests` and `Privacy.Api.Tests`.
+
+### E.6.6 The cancel walk-through
+
+§11.4 quotes four samples, all Ordering's:
+
+| Sample | File |
+|---|---|
+| The cancel endpoint, and `CancelOrderRequest` at the foot of the same file | `src/Services/Ordering/Ordering.Api/Endpoints/OrderEndpoints.cs` |
+| `CancelOrderCommand` and `CommandOrigin` | `src/Services/Ordering/Ordering.Application/Orders/CancelOrder/CancelOrderCommand.cs` |
+| `CancellationReasons`, and `CancellationOrigins` beside it | `src/Services/Ordering/Ordering.Application/Orders/CancellationReasons.cs` |
+| The body of `CancelOrderHandler.HandleAsync` | `src/Services/Ordering/Ordering.Application/Orders/CancelOrder/CancelOrderHandler.cs` |
+
+A sibling service sending a cancel code Ordering does not know is a deployment
+problem: the message mapper throws `ContractMappingException`, which §9.4's
+retry policy ignores.
+
+### E.6.7 Payer resolution
+
+[ADR-028](adr/ADR-028-a-money-movement-command-carries-no-subject.md) in the
+reference domain:
+
+- **Payments resolves the payer from the `OrderPlaced` it consumes**
+  ([§3.2](03-bounded-contexts.md)), so §9.6's `AuthorisePayment` carries no
+  `CustomerId`. Its record holds the payer as well as the total.
+- **Publishing the command is scoped**: `payments-commands` is writable by the
+  services whose own source addresses it
+  ([ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md)).
+- **Forging the seeding `OrderPlaced`** needs `write` on
+  `Common.Contracts.Ordering.V1:OrderPlaced`, which only Ordering's account
+  holds. The event is one Ordering's own saga and Notifications both consume.
+
+### E.6.8 The worker clients
+
+Two workers hold a client of their own
+([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)):
+Shipping's worker, whose `shipping-worker` client holds one role on
+`commerce-api` because the address owner serves its read as a method, and
+Notifications' worker, whose `notifications-worker` client holds `view-users` on
+`realm-management` because the mailbox's owner is the realm itself. Their rows
+in §11.5's table are the realm's settings.
+
+The suite proving the BFF's and `shipping-worker`'s grants is
+`Web.Bff.Tests`; `Shipping.Worker.Tests` does not start a Keycloak, and
+`notifications-worker`'s grant is proved in `Notifications.Worker.Tests`
+against a Keycloak of its own. The minimal host those tests call runs
+`AddJwtAuthentication` and is not Catalog.
+
+### E.6.9 Personal data erasure
+
+The holders in the reference domain are Ordering, Notifications, Shipping,
+Payments and the BFF, and Privacy owns the request; the diagram in §11.7 is
+this case, and its edges are:
+
+| Holder | Erases | Reports as |
+|---|---|---|
+| Ordering | `Orders.CustomerId` anonymised, address purged, `OrderSummaries.CustomerId` cleared | `ordering` |
+| Notifications | ended `NotificationLog` rows anonymised, contacts, waiting notices and `OrderRecords` deleted | `notifications` |
+| Shipping | `DeliveryAddresses` rows deleted (ADR-052), `Shipments.ErasedUnder` emptied (ADR-103) | `shipping` |
+| Payments | `PaymentOrders.CustomerId` anonymised | `payments` |
+| The BFF | order ids recorded, the subject's `bff.Orders` rows deleted (ADR-098) | `bff` |
+
+`PersonalDataDeleteRequested` and `PersonalDataDeleteCompleted` are both in
+`Common.Contracts.Privacy.V1`. Privacy publishes the request and accepts the
+completion as a command **sent** to its queue by each holder
+([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)).
+The holders that write from an event feed and so ask their own audit rows after
+they write are the BFF's projection, Notifications' intake and Shipping's
+fulfilment worker
+([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md)).
+Privacy is a seventh service and its responder set is fixed when a request is
+raised
+([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md));
+`OrderConfirmed` carries no postal address although Shipping cannot act without
+one, which Shipping reads from its owner instead (ADR-052).
 
 ## E.7 §12: the test strategy
 
