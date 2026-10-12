@@ -176,8 +176,8 @@ SQL, and Notifications' is §9.5's inbox and the unique key on its record.
 
 **The external parties (§2.1).** The context view's carrier is the Shipping
 service's, and its label there reads "Shipping carrier"; the chapter says
-"Delivery carrier". The platform it draws is six of the seven domain services
-and the BFF.
+"Delivery carrier". Its platform node reads "7 domain services + BFF"; the
+container view above is the one that draws six.
 
 ## E.2 §4: the solution tree and the scaffold
 
