@@ -17,10 +17,11 @@ Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-a
 does not call and block. The return edges drawn in the map are what the fulfilment saga
 ([§9.6](09-messaging.md)) transitions on, and drawing only the outbound half
 would depict the request/response topology ADR-002 and ADR-017 exist to reject.
-The saga has a fourth round trip the map does not draw, because both of its
-ends are Ordering: `ConfirmOrder` out to the aggregate and `OrderConfirmed`
-back. It is asynchronous on exactly these terms, and the Consumes cell in [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) is where it is
-recorded.
+The saga has a fourth round trip the map does not draw, because both of its ends
+are Ordering: `ConfirmOrder` out to the aggregate and `OrderConfirmed` back. It
+is asynchronous on exactly these terms, and the Consumes cell in
+[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+is where it is recorded.
 
 Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), ADR-052's reads are of another kind, and the
 map leaves them undrawn because it draws messages: a Shipping worker reads a delivery address from Ordering
@@ -46,11 +47,12 @@ listens to. The table is the contract summary for the whole platform.
 
 Events are published to anyone interested; commands are sent to exactly one
 owner (§9.6). The table's columns are separated because that distinction
-determines whether a message uses `Publish` or `Send`, and getting it wrong means a second
-subscriber silently executing your business commands.
+determines whether a message uses `Publish` or `Send`, and getting it wrong
+means a second subscriber silently executing your business commands.
 
-In the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), the table has a row for each service
-and one for the BFF.
+In the reference domain
+([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)),
+the table has a row for each service and one for the BFF.
 
 Every cell enumerates. "All customer-relevant events" would be shorter and is
 not a contract: it cannot be versioned, reviewed, or checked against what
