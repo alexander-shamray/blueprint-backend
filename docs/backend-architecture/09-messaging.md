@@ -3041,7 +3041,7 @@ gives it, and Notifications' worker the contact read the same record gives it,
 both off every request path, and `ContactHop` sits inside the band because
 Keycloak is the deployment's own and no third party. The outbound clients of the
 other kind call third parties — Payments' `ProviderHop`, behind the
-anti-corruption layer §3.1 gives Payments, Shipping's `CarrierHop`, to the
+anti-corruption layer that, in the reference domain, [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map) gives Payments, Shipping's `CarrierHop`, to the
 carrier, and Notifications' `MailHop`, to its relay — and each is registered by
 the service that makes the call. `PricingHop`, beside the BFF's registration,
 names the client and Catalog's address once: `http`, not `https`, because TLS
