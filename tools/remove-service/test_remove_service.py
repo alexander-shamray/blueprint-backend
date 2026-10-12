@@ -370,6 +370,13 @@ class AllowListTests(unittest.TestCase):
 
         self.assertEqual(self.edited("Yankee"), self.HEAD + zulu)
 
+    def test_an_entry_written_by_hand_after_the_last_block_stays(self):
+        yankee = self.block("Yankee", ["tests/Yankee.Api.Tests/B.cs | rule | f01 | r"])
+        later = "\ntests/Other.Api.Tests/E.cs | rule | f04 | added by hand later\n"
+        self.write(self.HEAD + yankee + later)
+
+        self.assertEqual(self.edited("Yankee"), self.HEAD + later)
+
     def test_hand_written_entries_for_the_services_trees_go_and_others_stay(self):
         self.write(
             self.HEAD

@@ -190,6 +190,17 @@ def lead(lines: list[str], index: int) -> int:
     return start
 
 
+def block_end(lines: list[str], heading: int) -> int:
+    """Past the block's last entry: the preamble, a blank line, then entries up to the next blank."""
+    index = heading
+    while index < len(lines) and lines[index] != "":
+        index += 1
+    index += 1
+    while index < len(lines) and lines[index] != "":
+        index += 1
+    return min(index, len(lines))
+
+
 def without_allowed_entries(repo_root: Path, names: Names) -> dict[str, str]:
     """Each allow-list file with the service's block and entries out of it.
 
@@ -208,11 +219,7 @@ def without_allowed_entries(repo_root: Path, names: Names) -> dict[str, str]:
         for at in reversed(headings):
             if RENDERED_HEADING.fullmatch(lines[at]).group(1) != names.pascal:
                 continue
-            following = next((i for i in headings if i > at), None)
-            if following is None:
-                lines = lines[:lead(lines, at)] + [""]
-            else:
-                lines = lines[:lead(lines, at)] + lines[lead(lines, following):]
+            lines = lines[:lead(lines, at)] + lines[block_end(lines, at):]
             headings = [i for i, line in enumerate(lines) if RENDERED_HEADING.fullmatch(line)]
 
         lines = [
