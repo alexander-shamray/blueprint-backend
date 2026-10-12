@@ -1,4 +1,4 @@
-# ADR-098 — A send pass asks its erasure rows before and after it reads a contact
+# ADR-100 — A send pass asks its erasure rows before and after it reads a contact
 
 **Decision.** Notifications' send pass asks its own `IErasedSubjects`
 ([ADR-097](ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md))

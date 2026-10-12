@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Notifications.Worker.Tests;
 
-/// <summary>ADR-098: a send pass never keeps or mails an erased customer's mailbox, and once the erasure is visible
+/// <summary>ADR-100: a send pass never keeps or mails an erased customer's mailbox, and once the erasure is visible
 /// never fetches it.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
@@ -57,7 +57,7 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
 
         Task<SendPass> pass = fixture.RunSendPassAsync();
 
-        // The row is leased, then the pre-check passes and the owner stalls: the erasure lands in the window ADR-098
+        // The row is leased, then the pre-check passes and the owner stalls: the erasure lands in the window ADR-100
         // names. An erasure recorded earlier is caught by the pre-check, so only a late one can fail the case.
         await ServiceFixture.WaitUntilAsync(async () =>
             await fixture.ScalarAsync<int>(
