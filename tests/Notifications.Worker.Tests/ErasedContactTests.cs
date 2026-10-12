@@ -7,7 +7,8 @@ using Xunit;
 
 namespace Notifications.Worker.Tests;
 
-/// <summary>ADR-097: a send pass never fetches, keeps or mails an erased customer's mailbox.</summary>
+/// <summary>ADR-098: a send pass never keeps or mails an erased customer's mailbox, and once the erasure is visible
+/// never fetches it.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -71,5 +72,33 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.ContactAsync(customer)).ShouldBeNull("the save is followed by a check that deletes it");
         (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Undeliverable);
         (await fixture.Relay.MessagesAsync(Ct)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_erasure_landing_while_a_stale_contact_waits_out_a_failing_owner_is_not_served()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        await fixture.StageContactAsync(customer, Mailbox, "en", TimeSpan.FromHours(1));
+        fixture.ContactAnswers(customer, 503, delay: TimeSpan.FromMilliseconds(150));
+        await fixture.OrderAsync(order, customer);
+        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+
+        Task<SendPass> pass = fixture.RunSendPassAsync();
+
+        // Leased, then the pre-check passes and the owner fails through its retries: the stale row would be served.
+        await ServiceFixture.WaitUntilAsync(async () =>
+            await fixture.ScalarAsync<int>(
+                "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE NotificationId = {0} " +
+                "AND Status = 'Pending' AND LockedUntil > SYSDATETIMEOFFSET()",
+                owed.NotificationId) == 1);
+        await Task.Delay(TimeSpan.FromMilliseconds(250), Ct);
+        await ErasedSubjectIntakeTests.RecordErasureAsync(fixture, customer, At);
+
+        (await pass).ShouldBe(new SendPass(1, 1));
+
+        (await fixture.ContactAsync(customer)).ShouldBeNull();
+        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Undeliverable);
+        (await fixture.Relay.MessagesAsync(Ct)).ShouldBeEmpty("a stale mailbox is not served for an erased customer");
     }
 }
