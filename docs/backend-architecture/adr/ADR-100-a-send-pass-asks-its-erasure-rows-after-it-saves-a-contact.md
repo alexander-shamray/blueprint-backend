@@ -28,8 +28,8 @@ owner, where [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-
 would have served the stored one. That is the whole cost of asking without the
 bound. The fetch stays open, as ADR-097 says, and so does the one send it
 leads to: closing them needs the order's `ErasedUnder` stored on Notifications'
-order record, which is its own decision. A stale row served for an owner that could not answer writes nothing
-and is not asked about.
+order record, which is its own decision. A stale row served for an owner that
+could not answer writes nothing and is not asked about.
 
 ---
 
