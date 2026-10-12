@@ -786,9 +786,10 @@ events, and `ProductPriceProjection` implements `IIntegrationEventHandler<T>`,
 for Catalog's. They are
 `Ordering.Infrastructure/Projections/OrderSummaryProjection.cs` and
 `Ordering.Infrastructure/Projections/ProductPriceProjection.cs`.
-`OrderStockConfirmed` is absent from [§9.3](09-messaging.md)'s publish
-allow-list because `AwaitingPayment` is a state only the customer's own
-history shows.
+`OrderStockConfirmedDomainEvent` is absent from [§9.3](09-messaging.md)'s
+publish allow-list as internal bookkeeping no service subscribes to
+([§3.2](03-bounded-contexts.md)); `AwaitingPayment` is a state only the
+customer's own history shows.
 
 ### E.4.6 The price projection's rebuild
 
