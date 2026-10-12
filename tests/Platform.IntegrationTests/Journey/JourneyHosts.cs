@@ -101,6 +101,14 @@ internal sealed class JourneyPaymentsFactory(string sql, string broker, string p
                 .AddHttpMessageHandler(() => new ProviderSendRecorder(Sends));
         });
     }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+            Sends.Dispose();
+
+        base.Dispose(disposing);
+    }
 }
 
 /// <summary>Shipping, whose address read meets Ordering's own service in process, not a stand-in for it.</summary>
