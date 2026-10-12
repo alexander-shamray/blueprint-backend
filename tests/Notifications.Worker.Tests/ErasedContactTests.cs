@@ -51,6 +51,6 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.ContactAsync(customer)).ShouldBeNull("the save is followed by a check that deletes it");
         (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(
             NotificationStatus.Sent,
-            "the one send stands: an order placed after an earlier erasure is kept (ADR-099)");
+            "the pass still sends the answer it holds (ADR-100)");
     }
 }
