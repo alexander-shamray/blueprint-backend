@@ -91,7 +91,12 @@ public abstract class FulfilmentJourney(JourneyWorld world)
         if (asked.Length == 0 || keys.Length != 1 || keys[0] != $"authorise:{order.Id}")
             Assert.Fail(
                 "one order is one charge, however many times a message was delivered; " +
-                Describe(asked, world.Provider));
+                Describe(asked, world.Provider) + "; " + world.PaymentsHost.Sends.Describe());
+
+        // A log that saw nothing would make the next failure's message say nothing, so a recorder not wired in fails.
+        world.PaymentsHost.Sends.Count.ShouldBeGreaterThanOrEqualTo(
+            asked.Length,
+            "the client's send log holds every request the provider logged");
 
         using JsonDocument body = JsonDocument.Parse(asked[0].RequestMessage!.Body!);
         body.RootElement.GetProperty("currency").GetString().ShouldBe(here.Currency);
