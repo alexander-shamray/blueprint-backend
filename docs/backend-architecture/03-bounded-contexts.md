@@ -2,37 +2,19 @@
 
 ## 3.1 The context map
 
-A bounded context is a boundary within which a term has one unambiguous meaning.
-"Product" in Catalog is a rich marketing object with descriptions, images and
-categories. "Product" in Inventory is a SKU and a number. These are not the same
-concept and must not share a class.
+A bounded context is a boundary within which a term has one unambiguous
+meaning. The same word can name a rich marketing object, with descriptions,
+images and categories, in one context and a SKU and a number in another.
+These are not the same concept and must not share a class.
 
-```mermaid
-graph LR
-    CAT[Catalog<br/><i>Supplier</i>]
-    ORD[Ordering<br/><i>Core domain</i>]
-    INV[Inventory<br/><i>Supplier</i>]
-    PAY[Payments<br/><i>ACL over PSP</i>]
-    SHP[Shipping<br/><i>ACL over carrier</i>]
-    NOT[Notifications<br/><i>Generic</i>]
-
-    CAT -->|product + price events| ORD
-    ORD -->|ReserveStock<br/>ReleaseStock| INV
-    INV -->|StockReserved / Failed<br/>StockReleased| ORD
-    ORD -->|AuthorisePayment<br/>OrderPlaced| PAY
-    PAY -->|PaymentAuthorised / Declined| ORD
-    ORD -->|OrderConfirmed<br/>OrderCancelled| SHP
-    SHP -->|ShipmentDispatched| ORD
-    ORD -->|order events| NOT
-    PAY -->|payment events| NOT
-    INV -->|StockLevelChanged| CAT
-    SHP -->|shipment events| NOT
-```
+The context map is a graph of contexts, each with its type, and the messages
+that pass between them. The reference domain's is in [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map), with the
+one-word example worked through.
 
 **Every collaboration the saga has with another service is a round trip, and
 the return leg is an event.**
-Ordering sends a command and then waits — it does not call and block. The
-return edges drawn above are what the fulfilment saga
+Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Ordering sends a command and then waits — it
+does not call and block. The return edges drawn in the map are what the fulfilment saga
 ([§9.6](09-messaging.md)) transitions on, and drawing only the outbound half
 would depict the request/response topology ADR-002 and ADR-017 exist to reject.
 The saga has a fourth round trip the map does not draw, because both of its
@@ -40,22 +22,17 @@ ends are Ordering: `ConfirmOrder` out to the aggregate and `OrderConfirmed`
 back. It is asynchronous on exactly these terms, and the Consumes cell below is
 where it is recorded.
 
-ADR-052's reads are of another kind, and the map leaves them undrawn because
-it draws messages: a Shipping worker reads a delivery address from Ordering
+Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), ADR-052's reads are of another kind, and the
+map leaves them undrawn because it draws messages: a Shipping worker reads a delivery address from Ordering
 over gRPC, and a Notifications worker reads a mailbox from Keycloak's admin
 API, each off every request path
 ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
 Each is the departure [§2.3](02-architecture-at-a-glance.md)'s callout
 records, not a round trip whose return leg is an event.
 
-| Context | Type | Why it is separate |
-|---|---|---|
-| **Ordering** | Core domain | This is where the business logic actually lives. Invest here. |
-| **Catalog** | Supporting | Different read/write ratio (1000:1), different scaling, different team cadence. |
-| **Inventory** | Supporting | Different consistency requirements — stock is the one place contention is real. |
-| **Payments** | Supporting | Isolates a volatile third-party API behind an anti-corruption layer. Compliance boundary. |
-| **Shipping** | Supporting | Isolates the carrier's API behind an anti-corruption layer, `ICarrierGateway`: a carrier's change lands in its adapter on the carrier's schedule, and never in the domain. |
-| **Notifications** | Generic | Not a differentiator. Would be replaced by an off-the-shelf product without regret. |
+Each context is typed core, supporting or generic, and the reason it is a
+separate service is recorded beside its type in [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)'s table for the
+reference domain.
 
 Each anti-corruption layer holds the strings its third party supplies to a
 character set before it records one, and the tracking number, which a customer
@@ -74,19 +51,19 @@ subscriber silently executing your business commands.
 
 | Service | Owns | Publishes (events) | Consumes (events) | Accepts (commands) |
 |---|---|---|---|---|
-| **Catalog** | Product, its Price | `ProductPublished`, `PriceChanged`, `ProductDiscontinued` | `StockLevelChanged` | — |
-| **Ordering** | Order, OrderLine, the fulfilment saga | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | `OrderPlaced` (its own — the saga starts on it), `OrderCancelled` (its own — the saga stops on it), `OrderConfirmed` (its own — the saga waits on it), `ProductPublished`, `PriceChanged`, `ProductDiscontinued`, `StockReserved`, `StockReservationFailed`, `StockReleased`, `PaymentAuthorised`, `PaymentDeclined`, `ShipmentDispatched`, `PersonalDataDeleteRequested` | `CancelOrder`, `ConfirmOrder`, `MarkOrderShipped`, `FlagOrderForReview` |
-| **Inventory** | StockItem, Reservation | `StockReserved`, `StockReservationFailed`, `StockReleased`, `StockLevelChanged` | `OrderCancelled`, `ShipmentDispatched` | `ReserveStock`, `ReleaseStock` |
-| **Payments** | PaymentIntent, Refund | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled`, `PersonalDataDeleteRequested` | `AuthorisePayment` |
-| **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled`, `PersonalDataDeleteRequested` | — |
-| **Notifications** | NotificationLog | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
-| **Privacy** | ErasureRequest | `PersonalDataDeleteRequested` | — | `PersonalDataDeleteCompleted` |
+| **Catalog** | Product, its Price (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `ProductPublished`, `PriceChanged`, `ProductDiscontinued` | `StockLevelChanged` | — |
+| **Ordering** | Order, OrderLine, the fulfilment saga (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | `OrderPlaced` (its own — the saga starts on it), `OrderCancelled` (its own — the saga stops on it), `OrderConfirmed` (its own — the saga waits on it), `ProductPublished`, `PriceChanged`, `ProductDiscontinued`, `StockReserved`, `StockReservationFailed`, `StockReleased`, `PaymentAuthorised`, `PaymentDeclined`, `ShipmentDispatched`, `PersonalDataDeleteRequested` | `CancelOrder`, `ConfirmOrder`, `MarkOrderShipped`, `FlagOrderForReview` |
+| **Inventory** | StockItem, Reservation (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `StockReserved`, `StockReservationFailed`, `StockReleased`, `StockLevelChanged` | `OrderCancelled`, `ShipmentDispatched` | `ReserveStock`, `ReleaseStock` |
+| **Payments** | PaymentIntent, Refund (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled`, `PersonalDataDeleteRequested` | `AuthorisePayment` |
+| **Shipping** | Shipment, TrackingEvent (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled`, `PersonalDataDeleteRequested` | — |
+| **Notifications** | NotificationLog (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
+| **Privacy** | ErasureRequest (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `PersonalDataDeleteRequested` | — | `PersonalDataDeleteCompleted` |
 | **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model owning no fact ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested` | — |
 
 Every cell enumerates. "All customer-relevant events" would be shorter and is
 not a contract: it cannot be versioned, reviewed, or checked against what
-publishers actually emit. Notifications is the clearest case: it publishes
-nothing, so this row is the whole of its contract, and the delivery plan builds
+publishers actually emit. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Notifications is the
+clearest case: it publishes nothing, so this row is the whole of its contract, and the delivery plan builds
 it last for that reason ([Appendix C.1](appendix-c-delivery-plan.md#c1-service-build-order)) — every name in it belongs to a
 service that has to exist first. A subscription list that grows silently is how
 a consumer ends up bound to a type nobody meant to give it.
@@ -97,20 +74,23 @@ nobody emits is a consumer waiting for ever. Less obviously, every name in a
 Publishes cell appears in at least one Consumes cell: a published event with no
 reader is a contract the platform is committed to versioning and nobody is
 asking for, and it looks identical to the case where its consumer was
-forgotten. `PaymentRefunded` was that row until Notifications claimed it. Both
+forgotten. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), `PaymentRefunded` was that row until
+Notifications claimed it. Both
 directions are two set comparisons over this table, automated precisely
 because neither failure produces a symptom: the
 [messaging gate](../../.github/messaging-gate/README.md) makes them, and holds
 every row to what its host's code publishes, consumes and accepts, bar a name
 the gate's `owed.txt` lists as owed: stated here and not built yet.
 
-The command column is entirely the saga's doing: Ordering's `OrderFulfilmentSaga`
+Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), the command column is entirely the saga's
+doing: Ordering's `OrderFulfilmentSaga`
 is the only thing that sends commands, and each one lands on the queue of the
 service that owns the decision. `CancelOrder` and `ConfirmOrder` route back to
 Ordering itself — the saga coordinates, the aggregate decides (§9.6).
 
 **Ordering subscribes to three of its own events, and every entry is the saga
-rather than a duplication.** `OrderPlaced` starts the workflow. `OrderCancelled`
+rather than a duplication.** Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)),
+`OrderPlaced` starts the workflow. `OrderCancelled`
 stops it, and it is in this cell because the *other* origin of a cancellation is
 not a command at all: [§11.4](11-identity-authorization.md)'s customer endpoint
 cancels the aggregate directly, which the saga can only learn about by
@@ -129,13 +109,13 @@ for its effect is what that assumption looked like in the machine
 `AwaitingConfirmation` and this cell entry are one change.
 
 **A round trip whose two ends are the same service is still a round trip**, and
-this is the platform's only one. The context map above draws no Ordering
-self-edge, which is a simplification rather than a claim: the collaboration is
+this is the platform's only one. Concretely, in the reference domain, the context map
+([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) draws no Ordering self-edge, which is a simplification rather than a claim: the collaboration is
 real, it is asynchronous like every one drawn here, and it obeys the same rule
 that the return leg is an event.
 
-**Payments subscribes to `OrderPlaced` to build its own record of the order —
-the payer, the total and the currency.** The payer is the one it cannot do
+**Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Payments subscribes to `OrderPlaced` to build
+its own record of the order — the payer, the total and the currency.** The payer is the one it cannot do
 without, and
 [ADR-028](adr/ADR-028-a-money-movement-command-carries-no-subject.md)
 forbids `AuthorisePayment` from carrying one: the subject of a money-movement
@@ -148,7 +128,7 @@ arrival is what makes it look the payer up.
 **The other two fields are not incidental, which is why the record is of the
 order rather than of the payer.** `OrderPlaced` carries `TotalAmount` and
 `Currency` — §9.6's saga reads both off it — and holding them is what lets
-Payments *disagree* with the `AuthorisePayment` it is handed rather than merely
+Payments, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), *disagree* with the `AuthorisePayment` it is handed rather than merely
 obey it.
 
 **That record also settles why the subject is omitted and the other two are
@@ -161,7 +141,8 @@ on whose behalf, and a transported authority is a second source for a decision
 that must have exactly one.
 
 **The platform already does this twice, and the closer of the two is the price
-projection.** [§6.4](06-cqrs.md)'s `PlaceOrder` reads
+projection.** Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)),
+[§6.4](06-cqrs.md)'s `PlaceOrder` reads
 `ordering.ProductPrices` — a local projection of Catalog's price events, and
 `IProductPriceReader` is documented as *never a remote call* — so a command
 handler that needs another service's fact looks it up in a table Ordering owns.
@@ -177,7 +158,8 @@ here, an assertion nobody could verify replaced by a record the service owns.
 
 > **The subscription is a precondition, not a decoration, and the ordering
 > between the two messages is not guaranteed.** §9.4 orders nothing between two
-> deliveries, so an `AuthorisePayment` can arrive at Payments before the
+> deliveries, so, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), an
+> `AuthorisePayment` can arrive at Payments before the
 > `OrderPlaced` it would be resolved against — the same race the
 > `ReleaseStock` bullet below records, one service over. **A missing
 > record is a wait, not a decline.** Payments must not publish
@@ -189,14 +171,15 @@ here, an assertion nobody could verify replaced by a record the service owns.
 > exponential in-memory retries capped at a minute; a reorder outlasting that
 > reaches the error queue [§13.6](13-observability.md) pages on, turning a
 > routine race into an operational fault in about a minute. **A wait needs a
-> mechanism that lasts as long as the wait.** Payments' command endpoint
+> mechanism that lasts as long as the wait.** Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)),
+> Payments' command endpoint
 > therefore needs **delayed redelivery** — ADR-021's delayed exchange is
 > already on this broker — with a window reaching §9.6's fifteen-minute payment
 > timeout, so an order whose `OrderPlaced` never arrives compensates on that
 > timeout rather than paging long before it.
 
 **A cancellation can reach Payments ahead of the `AuthorisePayment` it
-follows, too**, and Payments records it rather than racing it: the
+follows, too**, and in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) Payments records it rather than racing it: the
 authorisation that arrives after it is declined with a reason Payments owns
 and charges nothing, and `PaymentRefunded` is published only when an
 authorisation is voided or money is returned. That decline is a verdict on the
@@ -206,8 +189,8 @@ Payments has no record of the order at all —
 
 **A cell names a message; it does not say what the message means when there is
 nothing to do.** `ReleaseStock` is where that gap was load-bearing, and it is
-now closed here rather than assumed in the saga that sends it. Inventory owes
-two guarantees, both recorded in
+now closed here rather than assumed in the saga that sends it. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Inventory
+owes two guarantees, both recorded in
 [ADR-024](adr/ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md):
 
 - **A `ReleaseStock` always publishes `StockReleased`**, including for a
@@ -219,8 +202,8 @@ two guarantees, both recorded in
   `StockReleased`, the same postcondition, rather than with
   `StockReservationFailed`, which means an out-of-stock decision and requires
   `UnavailableProductIds` a refusal of this kind does not have.
-  [§9.4](09-messaging.md) orders nothing between two deliveries, so a
-  cancellation can reach Inventory before the reservation it undoes; without
+  [§9.4](09-messaging.md) orders nothing between two deliveries,
+  so in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) a cancellation can reach Inventory before the reservation it undoes; without
   this the reserve creates a hold for an order that is already cancelled and
   nobody is left waiting to notice.
 
@@ -231,7 +214,8 @@ row's
 ([ADR-048](adr/ADR-048-a-reservation-row-is-kept-for-as-long-as-its-order.md)).
 
 **A pair of cells does not state a derivation either, and that is the same gap
-one message over.** `OrderCancelled` sits in Inventory's Consumes column and
+one message over.** Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)),
+`OrderCancelled` sits in Inventory's Consumes column and
 `StockReleased` in its Publishes column, and every reader has been joining the
 two by hand. The join is now written down, because [§9.6](09-messaging.md)
 stands every absorption of an early `StockReleased` on it, and one of those
@@ -249,15 +233,16 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
   terms above and returns nothing to the level, because the stock has left.
 
 > **The second producer is what the saga's absorption is for**, and citing this
-> section for it was a mis-citation until this bullet existed. Payments'
-> `OrderCancelled` → void is argued in prose in §9.6 for the same reason: a
+> section for it was a mis-citation until this bullet existed. Concretely, in the reference domain
+> ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Payments' `OrderCancelled` → void is argued in prose in §9.6 for the same reason: a
 > table can say which messages cross a boundary and cannot say that one causes
 > another. Where such a derivation becomes load-bearing — and a pager path is
 > as load-bearing as it gets — it belongs in a sentence rather than in the
 > reader's head.
 
-> **Decision — Inventory keeps `OrderCancelled`, and the second route is held
-> deliberately rather than tolerated.** See
+> **Decision — in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Inventory keeps
+> `OrderCancelled`, and the second route is held deliberately rather than
+> tolerated.** See
 > [ADR-029](adr/ADR-029-inventory-releases-on-the-cancellation-not-on-the-sagas-word.md).
 > Routing every release through `ReleaseStock` would tidy this cell and pay for
 > it with a cancellation that releases nothing whenever no saga instance
@@ -268,7 +253,8 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
 > it **record** that on the instance rather than discarding it, and guard their
 > forward transitions on what they recorded.
 >
-> **The absence beside it is deliberate too.** Inventory has no
+> **The absence beside it is deliberate too.** Concretely, in the reference domain
+> ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Inventory has no
 > `OrderConfirmed` subscription, so it cannot decline a release for an order it
 > has seen confirmed, and a reservation already being picked is released like
 > any other — §9.6 raises `cancelled_after_confirmation` and
@@ -288,7 +274,8 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
 > exist. This is a rule about a service nobody has written, which is exactly
 > when it is cheapest to write down.
 
-Note the shapes this produces. **Shipping** and **Notifications** expose no
+Note the shapes this produces. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), **Shipping**
+and **Notifications** expose no
 public API at all — they are reached only through the broker, and
 [ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
 settles the one read that would otherwise have asked Shipping for one.
