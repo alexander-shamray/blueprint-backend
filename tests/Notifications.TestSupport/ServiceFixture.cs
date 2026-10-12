@@ -291,11 +291,11 @@ public sealed class ServiceFixture()
     }
 
     /// <summary>Ordering's record of an order, as its first event writes it.</summary>
-    public async Task OrderAsync(Guid order, Guid customer)
+    public async Task OrderAsync(Guid order, Guid customer, IReadOnlyList<Guid>? erasedUnder = null)
     {
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         NotificationsDbContext db = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
-        db.OrderRecords.Add(OrderRecord.For(order, customer, DateTimeOffset.UtcNow));
+        db.OrderRecords.Add(OrderRecord.For(order, customer, DateTimeOffset.UtcNow, erasedUnder));
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
 

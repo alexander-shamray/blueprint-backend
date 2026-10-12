@@ -145,6 +145,13 @@ public sealed class SendWorker(
             "Backoff for notification {NotificationId} on order {OrderId} failed; its lease lapses and a later pass " +
             "reclaims it.");
 
+    private static readonly Action<ILogger, Guid, Guid, Exception?> ErasedCustomer =
+        LoggerMessage.Define<Guid, Guid>(
+            LogLevel.Information,
+            new EventId(17, nameof(ErasedCustomer)),
+            "Notification {NotificationId} on order {OrderId} names an erased customer; nothing is fetched or sent, " +
+            "and the erasure deletes the row (ADR-101).");
+
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -294,6 +301,14 @@ public sealed class SendWorker(
                 Suppressed(log, work.NotificationId, work.OrderId, customer, null);
 
             return suppressed;
+        }
+
+        // Before the owner is asked, so no mailbox is fetched for an erased customer; the intake's own check, or the
+        // erasure, deletes this row, so it is left to them (ADR-101).
+        if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(customer, order.ErasedUnder, ct))
+        {
+            ErasedCustomer(log, work.NotificationId, work.OrderId, null);
+            return false;
         }
 
         // Copied once, so every later step and §11.7's erasure find the customer on the row.

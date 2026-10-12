@@ -53,4 +53,39 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
             NotificationStatus.Sent,
             "the pass still sends the answer it holds (ADR-100)");
     }
+
+    [Fact]
+    public async Task A_customer_already_erased_is_not_asked_of_the_owner_and_nothing_is_sent()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        fixture.ContactAnswers(customer, Mailbox, "en");
+        await fixture.OrderAsync(order, customer);
+        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+        await ErasedSubjectIntakeTests.RecordErasureAsync(fixture, customer, At);
+
+        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 0));
+
+        fixture.ContactCalls(customer).ShouldBe(0, "the question comes before the owner call (ADR-101)");
+        (await fixture.ContactAsync(customer)).ShouldBeNull();
+        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Pending);
+    }
+
+    [Fact]
+    public async Task An_order_placed_under_the_request_is_still_sent()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        fixture.ContactAnswers(customer, Mailbox, "en");
+        Guid request = await ErasedSubjectIntakeTests.RecordErasureAsync(fixture, customer, At);
+        await fixture.OrderAsync(order, customer, erasedUnder: [request]);
+        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+
+        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1));
+
+        fixture.ContactCalls(customer).ShouldBe(1);
+        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(
+            NotificationStatus.Sent,
+            "the request names an earlier erasure, which ADR-099 does not count against this order");
+    }
 }

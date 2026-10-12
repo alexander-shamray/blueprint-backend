@@ -75,7 +75,7 @@ public sealed class RecordNotificationHandler(
 
         if (record is null)
         {
-            record = OrderRecord.For(orderId, order.CustomerId, now);
+            record = OrderRecord.For(orderId, order.CustomerId, now, order.ErasedUnder);
             orders.Add(record);
         }
 
