@@ -73,8 +73,8 @@ graph TB
     WRK --> SQL
     BFF --> SQL
 
-    API --> RC
-    API --> RK
+    API -->|where it caches| RC
+    API -->|HTTP write commands, locks| RK
 
     API <--> MQ
     WRK <--> MQ
