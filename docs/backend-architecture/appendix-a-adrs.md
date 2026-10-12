@@ -105,6 +105,7 @@ decision looks wrong.
 | **ADR-096** | [A chapter names a reference service only as evidence](adr/ADR-096-a-chapter-names-a-reference-service-only-as-evidence.md) |
 | **ADR-097** | [A holder that writes from a feed asks its own erasure rows after it writes](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md) |
 | **ADR-098** | [The BFF remembers the id of an order it erased](adr/ADR-098-the-bff-remembers-the-id-of-an-order-it-erased.md) |
+| **ADR-099** | [An order carries the erasure requests its customer was already under when it was placed](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md) |
 
 ---
 

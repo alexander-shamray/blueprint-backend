@@ -34,6 +34,9 @@ nothing says whose it was. An order placed after its customer's erasure is
 dropped by ADR-097's check and so recorded here, and its shipment events are
 dropped with it.
 
+**Superseded in part by ADR-099**: that last sentence. The BFF keeps such an
+order, so it records nothing and its shipment events are kept.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
