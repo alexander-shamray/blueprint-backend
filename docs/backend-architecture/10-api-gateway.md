@@ -93,7 +93,7 @@ graph LR
 The shape of the pattern, not this platform's topology: a second BFF per client
 type is what the pattern looks like at scale, and the fan-out to two services is
 what [§9.7](09-messaging.md) permits. What is actually built here is one `Web.Bff` making one call
-to Catalog ([§2.2](02-architecture-at-a-glance.md), §9.7) — the diagram is the ceiling, not the inventory.
+to Catalog ([§2.2](02-architecture-at-a-glance.md), in the reference domain [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map), §9.7) — the diagram is the ceiling, not the inventory.
 
 **Aggregation is shaped for the screen, and the screen's question is the whole
 of the request.** A BFF that computes a figure the client cannot render has
