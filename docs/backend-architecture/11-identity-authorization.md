@@ -1437,7 +1437,7 @@ sequenceDiagram
     B->>F: consume (inbox)
     O->>O: anonymise Orders.CustomerId, purge address, clear OrderSummaries.CustomerId
     N->>N: anonymise ended NotificationLog rows, delete contacts, waiting notices, OrderRecords
-    S->>S: delete DeliveryAddresses rows (ADR-052)
+    S->>S: delete DeliveryAddresses rows (ADR-052), empty Shipments.ErasedUnder (ADR-103)
     Y->>Y: anonymise PaymentOrders.CustomerId
     F->>F: record the order ids, delete the subject's bff.Orders rows (ADR-098)
     O->>P: PersonalDataDeleteCompleted {RequestId, "ordering"}
@@ -1474,11 +1474,13 @@ Rules for each service's consumer:
   of already-erased data must succeed silently.
 - **A writer asks its own audit rows after it writes.** A holder fed by
   events that name a customer — the BFF's projection, whose rebuild replays
-  them, and Notifications' intake — checks the audit rows above once its write
-  has committed, and deletes what it wrote for an erased customer, unless the
-  order names the request as one it was placed after
+  them, Notifications' intake and Shipping's fulfilment worker — checks the
+  audit rows above once its write has committed, and deletes what it wrote for
+  an erased customer, unless the order names the request as one it was placed
+  after
   ([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md),
-  [ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md)).
+  [ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md),
+  [ADR-103](adr/ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md)).
 - **Report completion.** The privacy service tracks which services have
   responded and escalates on timeout. Silence is not success.
 
