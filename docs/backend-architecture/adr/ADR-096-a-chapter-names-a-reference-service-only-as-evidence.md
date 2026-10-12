@@ -40,24 +40,26 @@ says what is kept and replaced; this says what becomes of the
 specification that describes the replaced part).
 (5) *The gate.* A gate fails a block in a scanned file that names a reference
 service without the marker. The service names are read from the directories
-under `src/Services/`, not typed into the gate. The scanned set is every
-`*.md` under `docs/backend-architecture/` except a closed list, named in the
-gate: the ADRs and Appendices A to E. A file not on the list is scanned, so a
-new chapter is covered by default, and the gate's test takes the scanned set
-as its subject, not only the hits it finds. The gate is its own Class D issue.
-**Why.** On `c7ef8e84` the chapters hold 744 whole-word mentions across 634
-lines, and the ADRs 333 more. Of the 634 chapter lines, 213 are evidence, 243
-are illustrations, 162 are rosters and 16 are mechanism names, so about two
-thirds are not evidence. Under the one rule every fact has one owner, so
-removing or renaming a service in a fork would edit those lines in a dozen
-chapters, or leave the blueprint contradicting its own code. Option 1,
-freezing the blueprint, splits a fork's specification in two. Option 2, moving
-every mention, would turn the saga chapter into an abstraction with no case
-to argue from, and the reader loses what shows the rule is true. The ADRs are
-out of scope because they are superseded, never rewritten. Appendix C is the
-closed delivery record, so it is frozen. Appendix B is licence identity,
-which the licence gate makes load-bearing, and its role cells are left
-alone. Appendix D is the type inventory and moves with the code.
+under `src/Services/`, not typed into the gate, and matched as whole words,
+case-sensitive, in their capitalised directory spelling. A removed service
+leaves that set, so `tools/remove-service` lists its remaining mentions when it
+removes it. The scanned set is every `*.md` under `docs/backend-architecture/`
+except a closed list, named in the gate: the ADRs and Appendices A to E. A file
+not on the list is scanned, so a new chapter is covered by default, and the
+gate's test takes the scanned set as its subject, not only the hits it finds.
+The gate is its own Class D issue. **Why.** On `c7ef8e84` the chapters hold 744
+whole-word mentions across 634 lines, and the ADRs 333 more. Of the 634 chapter
+lines, 213 are evidence, 243 are illustrations, 162 are rosters and 16 are
+mechanism names, so about two thirds are not evidence. Under the one rule every
+fact has one owner, so removing or renaming a service in a fork would edit those
+lines in a dozen chapters, or leave the blueprint contradicting its own code.
+Option 1, freezing the blueprint, splits a fork's specification in two. Option
+2, moving every mention, would turn the saga chapter into an abstraction with no
+case to argue from, and the reader loses what shows the rule is true. The ADRs
+are out of scope because they are superseded, never rewritten. Appendix C is the
+closed delivery record, so it is frozen. Appendix B is licence identity, which
+the licence gate makes load-bearing, and its role cells are left alone. Appendix
+D is the type inventory and moves with the code.
 **Consequences.** The pass is large: nine chapter issues and a skeleton, about
 405 lines edited across fourteen chapters, in parallel PRs (an inventory
 sized it; the chapters with the most illustration and roster lines are §15,
