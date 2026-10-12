@@ -350,9 +350,11 @@ scores both.
 ## 2026-10-12 — the first scored runs
 
 Run by `tools/quality-sets/` against the sets of the section above, on the
-owner's machine, from a checkout at 6ec49559 holding the runner changes that
-became 07376d0a. The usage-limit stop, in that commit, was added after these
-runs, because the bug sweep is what showed it was needed.
+owner's machine. The reviewer sample, the security sweep and the first bug
+sweep attempt ran from a checkout at 6ec49559 holding the runner changes that
+became 07376d0a; the usage-limit stop, in that commit, was added after them,
+because the bug sweep is what showed it was needed. The scored bug sweep ran
+from c7ef8e84, which holds it.
 
 | Run | Entries | Found | Recall |
 |---|---|---|---|
@@ -373,17 +375,18 @@ upper bound for round 1.
 answering "the weekly usage limit is almost used up" and stopped; 7 of the 42
 slices returned no findings after a retry, and the run's 0 of 34 measured the
 limit. The runner now ends a run on such a notice rather than retrying
-through it. The run was repeated once the limit had reset, from the checkout
-at c7ef8e84 that holds that stop. No slice failed, the auditors reported 38
-findings, and 6 of the 34 entries were found. As for the security sweep, a
-hit is any finding in one of the issue's files, so 17.6% is an upper bound
-for round 1.
+through it. The run was repeated once the limit had reset. No slice failed,
+the auditors reported 38 findings, and 6 of the 34 entries were found. As for
+the security sweep, a hit is any finding in one of the issue's files, so
+17.6% is an upper bound for round 1. Its 42 slices are the runner's cut of
+the tree at its own commit; `token-plan.md`'s 41 is dated to c86e6ec.
 
-**What the numbers do not say.** Both exits ask for "at least". None of the
-three is met on this measure. The measure is lenient for a sweep, which is hit by any
-finding in one of the issue's files, and stricter for a review, which also
-needs a line within ten. The earlier sweeps ran up to seven rounds and had a
-second auditor verify each issue, against one round here.
+**What the numbers do not say.** Both exits ask for "at least". Neither is
+met by any of the three runs on this measure. The measure is lenient for a
+sweep, which is hit by any finding in one of the issue's files, and stricter
+for a review, which also needs a line within ten. The earlier sweeps ran up
+to seven rounds and had a second auditor verify each issue, against one round
+here.
 Copilot raised small points, wording and link forms among them, which
 `branch-reviewer`'s bar leaves out ("incomplete but true" is not a finding).
 Reading 3.5% as the reviewer being worse by that factor would be wrong.
