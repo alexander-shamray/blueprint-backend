@@ -6,9 +6,7 @@ namespace Notifications.Application.Intake;
 
 /// <summary>Records an event's notice, then deletes it again when its customer was already erased (ADR-097).</summary>
 /// <remarks>
-/// Asked after the record's unit has committed, so an erasure that commits at any moment either finds the rows to
-/// delete or is seen by the check. Only an event naming a customer can be asked about: the others wait on an order
-/// record, which the erasure has already deleted.
+/// Asked after the record's unit commits, so an erasure at any moment finds the rows or is seen (ADR-097).
 /// </remarks>
 public sealed class ErasedIntake(IDispatcher dispatcher, IErasedSubjects erased)
 {
