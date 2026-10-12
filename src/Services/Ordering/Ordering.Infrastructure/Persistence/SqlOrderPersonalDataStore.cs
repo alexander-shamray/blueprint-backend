@@ -9,12 +9,15 @@ namespace Ordering.Infrastructure.Persistence;
 internal sealed class SqlOrderPersonalDataStore(OrderingDbContext db) : IOrderPersonalDataStore
 {
     // The empty id names nobody; the address columns are required, so they are emptied and not nulled, and the
-    // country keeps the two-letter shape (ZZ constructs, as Address allows). The order and its money stay.
+    // country keeps the two-letter shape (ZZ constructs, as Address allows). The order and its money stay. The
+    // requests it was placed under go with the id, since a request id joined to an open request names the buyer
+    // (ADR-095, ADR-099).
     private const string AnonymiseOrdersSql =
         """
         UPDATE ordering.Orders
         SET CustomerId = '00000000-0000-0000-0000-000000000000',
-            ShipToLine1 = '', ShipToLine2 = NULL, ShipToCity = '', ShipToPostalCode = '', ShipToCountry = 'ZZ'
+            ShipToLine1 = '', ShipToLine2 = NULL, ShipToCity = '', ShipToPostalCode = '', ShipToCountry = 'ZZ',
+            ErasedUnder = N'[]'
         WHERE CustomerId = @SubjectId;
         """;
 
