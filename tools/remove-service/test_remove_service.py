@@ -1,9 +1,7 @@
-"""The remove tool's own tests, run against the real repository.
+"""The remove tool's tests, run against the real repository.
 
-The subject is the README table in tools/new-service, which owns which shared
-files a render edits. A render followed by a removal must leave every file
-as it found it, so a path the table names and this tool does not know fails
-here. Run: cd tools/remove-service && python -m unittest
+The subject is the scaffold README's table of shared files: render then remove
+must leave every file as it was. Run: cd tools/remove-service && python -m unittest
 """
 
 import contextlib
@@ -76,8 +74,7 @@ def template_root(destination: Path) -> Path:
     """The template, every shared file the README names, and §15.1's secret scan.
 
     Copied from the real repository, because a fixture tree cannot drift from
-    what the table says. The directory the allow-list lives in goes whole, and so
-    does every unit the Compose index includes, which the port check reads.
+    the table; the Compose index's units come too, which the port check reads.
     """
     for root in new_service.COPY_ROOTS:
         shutil.copytree(REPO_ROOT / root, destination / root, ignore=shutil.ignore_patterns("bin", "obj"))
