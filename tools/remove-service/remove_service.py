@@ -162,9 +162,10 @@ def without_broker_account(repo_root: Path, names: Names, plan: Plan) -> str | N
     user = f"{names.lower}-svc"
     accounts = [entry for entry in definitions["users"] if entry["name"] == user]
     grants = [entry for entry in definitions["permissions"] if entry["user"] == user]
-    if not once(accounts, f"broker user {user}", BROKER_DEFINITIONS, required=False, plan=plan):
+    found_user = once(accounts, f"broker user {user}", BROKER_DEFINITIONS, required=False, plan=plan)
+    found_grant = once(grants, f"permissions entry for {user}", BROKER_DEFINITIONS, required=False, plan=plan)
+    if not (found_user or found_grant):
         return None
-    once(grants, f"permissions entry for {user}", BROKER_DEFINITIONS, required=False, plan=plan)
     definitions["users"] = [entry for entry in definitions["users"] if entry["name"] != user]
     definitions["permissions"] = [entry for entry in definitions["permissions"] if entry["user"] != user]
     return restore(json.dumps(definitions, indent=2) + "\n", newline)
