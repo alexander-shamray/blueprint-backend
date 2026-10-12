@@ -21,20 +21,22 @@
 | Host building block | One middleware or host extension | `TestServer` — no containers, no entry point | < 50 ms | Tens | `Common.Web.Tests` |
 | Infrastructure building block | One §8, §9 or §11.5 mechanism — a consumer wrapper, the outbox's table and type map, the idempotency store, the lock, the retention policy, the client-credentials token source | Recording fakes for most; a stub OpenID provider on loopback for the token source; a real Redis (container) for the classes in its `Integration` collection, where the mechanism under test is Redis's | < 10 ms, and < 500 ms against the stub provider or Redis | One suite | `Common.Infrastructure.Tests` |
 | Edge configuration | The route file of §10.2 against the host that loaded it, and §10.1's edge behaviours — compression and the body ceiling | `WebApplicationFactory` + a stub destination on loopback — no containers, and `UseKestrel` where the property under test is the server's own | < 1 s | One suite | `Gateway.Api.Tests` |
-| Outbound hop | One of §9.7's synchronous calls, from its caller's host: the timeout hierarchy, the credential handler's position inside the resilience pipeline, and §11.5's realm for a caller whose grant is proved there | `WebApplicationFactory` + the callee on loopback — a real gRPC server or a stub HTTP one; a class in a suite proving a grant also runs a real Keycloak | < 1 s, and seconds for a Keycloak class | One suite per caller | `Web.Bff.Tests`, `Shipping.Worker.Tests`, `Notifications.Worker.Tests` |
+| Outbound hop | One of §9.7's synchronous calls, from its caller's host: the timeout hierarchy, the credential handler's position inside the resilience pipeline, and §11.5's realm for a caller whose grant is proved there | `WebApplicationFactory` + the callee on loopback — a real gRPC server or a stub HTTP one; a class in a suite proving a grant also runs a real Keycloak | < 1 s, and seconds for a Keycloak class | One suite per caller | `Web.Bff.Tests`, and a worker's `*.Worker.Tests` ([E.7.1](appendix-e-reference-domain.md#e71-the-journey-and-the-outbound-hops)) |
 | Host projection | The BFF's own schema and the consumers that write it (ADR-051): the migrator's run, each handler against every row shape another leaves, the broker binding under its account | Real SQL Server and RabbitMQ (containers), `WebApplicationFactory` | < 1 s | One suite | `Web.Bff.Tests` |
 | Pipeline behaviour | One §6.3 behaviour against recording fakes — the branches its handler-level tests cannot reach | None | < 10 ms | One suite per behaviour | `Common.Application.Tests` |
 | Saga | One whole saga, coordination only | MassTransit in-memory harness — no infrastructure | < 100 ms per positive assertion (§12.5) | A few | `*.Application.Tests` |
 | Contract shape | Every published contract against the rules it must obey and the shape it was recorded with | Both assemblies by reflection, and the recorded shape | < 1 s | One suite | `Platform.IntegrationTests` |
-| Journey | One order across Catalog, Ordering, Inventory, Payments, Shipping and Notifications, and each transition of the order saga that a service can cause (ADR-093) | Every host as itself under its own broker account, over one SQL Server, one broker and one Redis pair (containers), with §14.1's simulators at the edges | Seconds to a minute per scenario, and a minute to start | A few | `Platform.IntegrationTests` |
+| Journey | One order across every service on its path ([E.7.1](appendix-e-reference-domain.md#e71-the-journey-and-the-outbound-hops)), and each transition of the order saga that a service can cause (ADR-093) | Every host as itself under its own broker account, over one SQL Server, one broker and one Redis pair (containers), with §14.1's simulators at the edges | Seconds to a minute per scenario, and a minute to start | A few | `Platform.IntegrationTests` |
 
 **There is no E2E level, and the level of all the services is narrow.** The
 first is a row that gets written into a strategy and never built: it needs a
 client the backend does not own and data that survives between runs. The second
 is built, for one thing only. The journey of
 [ADR-093](adr/ADR-093-the-journey-test-walks-one-order-across-the-services-and-asserts-that-they-converge.md)
-walks one order across Catalog, Ordering, Inventory, Payments, Shipping and
-Notifications, each the real host under its own broker account. The objection
+walks one order across every service on its path (`src/Services/` is the
+roster;
+[E.7.1](appendix-e-reference-domain.md#e71-the-journey-and-the-outbound-hops)),
+each the real host under its own broker account. The objection
 to it was that a Compose environment in a test-runner's costume fails in ways
 nobody can attribute, and the journey answers that by what it asserts: a
 predicate with a deadline derived from §13.7, never a sleep, and the states the
@@ -104,11 +106,12 @@ about the pyramid. Where they disagree, this chapter wins.
 
 Red, green, refactor — with a worked example, because the discipline is easier
 to describe than to follow. The example and §12.3's samples are illustrative:
-`OrderBuilder` is not in the tree, and
-`tests/Ordering.Domain.Tests/OrderTests.cs` builds its orders with its own
-`AnOrder` helper under other test names. `Order.Place` and the cancelled
-event carry `ErasedUnder` as §5.4 and §5.5 specify, and the samples pass an
-empty list.
+`OrderBuilder` is not in the tree, and the reference domain's own domain
+tests build their orders another way
+([E.7.2](appendix-e-reference-domain.md#e72-the-fixture-and-the-suites-it-serves)).
+`Order.Place` and the
+cancelled event carry `ErasedUnder` as §5.4 and §5.5 specify, and the samples
+pass an empty list.
 
 **Requirement:** an order cannot be cancelled once it has shipped.
 
@@ -322,10 +325,11 @@ it.
 `ServiceFixture` is one shared body,
 `tests/Common.TestSupport/ServiceFixture.cs`, from which each service's fixture
 derives with its own names, migrator and stubs
-([ADR-056](adr/ADR-056-a-services-fixture-derives-from-one-shared-body-under-tests.md));
-Ordering's is `tests/Ordering.TestSupport/ServiceFixture.cs`, and the host it
-starts is `OrderingApiFactory` beside it. The excerpts below are the parts that
-carry a rule.
+([ADR-056](adr/ADR-056-a-services-fixture-derives-from-one-shared-body-under-tests.md)),
+and the host it starts is a factory beside it
+([E.7.2](appendix-e-reference-domain.md#e72-the-fixture-and-the-suites-it-serves)
+names the
+reference domain's). The excerpts below are the parts that carry a rule.
 
 **The containers run the engines the Compose baseline runs.** Each tag is read
 from §14.1's files through `ComposeImage` rather than copied, so a suite and a
@@ -366,8 +370,11 @@ deliberately unreachable: `.invalid` never resolves, so a test that dials the
 authority fails loudly rather than reaching a real identity provider. It is not
 `ValidateOnStart`, because the authority is read rather than bound and there is
 no options class to validate. The factory supplies only what its host reads:
-Ordering calls no peer and never binds `ServiceIdentityOptions` (§9.7), so it
-is given no `Identity:Client`, since config the host ignores is how a fixture
+a service that calls no peer never binds `ServiceIdentityOptions` (§9.7), so
+its factory is given no `Identity:Client`
+([E.7.2](appendix-e-reference-domain.md#e72-the-fixture-and-the-suites-it-serves)
+names the one in the
+reference domain), since config the host ignores is how a fixture
 ends up disagreeing with the deployment about what a service requires, in the
 direction that hides a missing secret.
 
@@ -446,8 +453,10 @@ tell "backed off" from "abandoned" without sleeping.
 > a claim about an API as well as a licence. Pinning a major you have not
 > compiled against buys the licence guarantee and none of the correctness.
 
-The test scheme itself is `tests/Ordering.TestSupport/TestAuthHandler.cs`. Tests
-state who they are in headers, so authorization runs against a real principal
+The test scheme itself is `TestAuthHandler`, in the service's `*.TestSupport`
+([E.7.2](appendix-e-reference-domain.md#e72-the-fixture-and-the-suites-it-serves)).
+Tests state who they are in headers, so authorization runs against a real
+principal
 rather than being switched off, and no header means anonymous rather than
 authenticated as nobody, because otherwise every 401 test silently passes:
 
@@ -489,10 +498,13 @@ protected override Task<AuthenticateResult> HandleAuthenticateAsync()
 > that test's user should have, and keep at least one test per policy that
 > grants nothing and expects the rejection.
 
-The handler suite is `tests/Ordering.Api.Tests/PlaceOrderTests.cs`, over HTTP
-because the handler binds a subject. Prices are seeded straight into
-`ordering.ProductPrices`, which has no aggregate a raw INSERT could drift from,
-and a test that places an order seeds one first: the write path reads prices
+The handler suite for the place-order command, `PlaceOrderTests`, runs over
+HTTP because the handler binds a subject
+([E.7.2](appendix-e-reference-domain.md#e72-the-fixture-and-the-suites-it-serves)
+has its path). Prices
+are seeded straight into the service's local price table, which has no
+aggregate a raw INSERT could drift from, and a test that places an order seeds
+one first: the write path reads prices
 locally (§6.4), so an unseeded projection refuses the order as unavailable,
 which reads as a domain assertion failing rather than as missing fixture data.
 
@@ -589,7 +601,9 @@ public async Task A_local_row_with_no_registered_handler_fails_loudly()
 }
 ```
 
-The suite is `tests/Ordering.Api.Tests/OutboxDispatcherTests.cs`, and it holds
+The suite is `OutboxDispatcherTests`
+([E.7.2](appendix-e-reference-domain.md#e72-the-fixture-and-the-suites-it-serves)),
+and it holds
 per-row isolation beside these: a poison row staged ahead of healthy ones is
 backed off with its attempt counted and its error recorded, and the healthy
 rows are delivered in the same pass. The second test above is the one worth
@@ -599,7 +613,9 @@ a projection that never runs while every dashboard stays green.
 Contract messages come from a builder rather than inline object initialisers.
 `required` members make partial construction a compile error, so every test
 would otherwise repeat eight assignments to vary one. The saga suite's is
-`tests/Ordering.Application.Tests/SagaContracts.cs`, and its instant is fixed,
+`SagaContracts.cs`
+([E.7.2](appendix-e-reference-domain.md#e72-the-fixture-and-the-suites-it-serves)),
+and its instant is fixed,
 as every builder's here is: `OccurredAt` is what §13.3's lag is measured from
 and what the saga copies onto its own state, and a builder reaching for the
 system clock would have every test assert against a value it had just made.
@@ -619,8 +635,9 @@ internal static OrderPlaced OrderPlaced(Guid orderId, Guid customerId) => new()
 ```
 
 The builders the dispatcher tests use are ordinary factories over
-`OutboxMessage`, in `tests/Ordering.TestSupport/Outbox/OutboxRows.cs`: one
-class rather than one per case, since they differ only in which event they
+`OutboxMessage`, in `Outbox/OutboxRows.cs` of the service's `*.TestSupport`
+([E.7.2](appendix-e-reference-domain.md#e72-the-fixture-and-the-suites-it-serves)):
+one class rather than one per case, since they differ only in which event they
 stage. The map and the payload format are the real ones, resolved from the
 fixture's provider (§9.4), because a double for either would let a test stage a
 row the running host cannot read back, which is the one thing these builders
@@ -733,7 +750,9 @@ test exists for.
 > can explain later.
 
 The second is the `Local` lane's payload contract (§9.4), in
-`tests/Ordering.Application.Tests/OutboxSerialisationTests.cs`. It needs no
+`OutboxSerialisationTests`
+([E.7.2](appendix-e-reference-domain.md#e72-the-fixture-and-the-suites-it-serves)).
+It needs no
 containers, and it lives here rather than in §12.6 because the set it iterates
 comes from the service's registered `MessageTypeMap`, and §12.6 selects on the
 contracts namespace, which no domain event is in. The options are the
@@ -774,20 +793,21 @@ Respawn between tests keeps them isolated at a fraction of the cost.
 > `*.Application.Tests` (handler tests) and its `*.Api.Tests` (the contract
 > tests below), and those cannot reference each other — so both live in
 > `*.TestSupport` ([§4.1](04-solution-structure.md)), a library rather than a test project.
-> Catalog is where that shape is realised: both its suites take the fixture,
-> which is exactly why the library exists.
+> The shape is realised wherever both suites take the fixture, which is exactly
+> why the library exists.
 >
-> **Ordering is the exception, and it is the code's rather than this
-> section's.** Its handler tests live in `Ordering.Api.Tests`, because
-> `ICurrentUser` is `HttpContextCurrentUser` and a handler resolved in a bare
-> scope has no principal to bind a subject from — so
-> `Ordering.Application.Tests` references no `Ordering.TestSupport`, declares no
-> fixture collection, and holds §12.5's saga suite instead, which needs no
-> infrastructure at all; its one collection, `OrderFulfilmentSagaCollection`,
-> carries no fixture and keeps that suite's buses from running side by side.
-> The library is still right for the reason above; it simply has one consumer
-> there rather than two. `docs/testing.md` says the same thing from the other
-> side.
+> **A service whose handler tests need a principal departs from it, for a
+> reason that is the code's rather than this section's.** Its handler tests live in its
+> `*.Api.Tests`, because `ICurrentUser` is `HttpContextCurrentUser` and a
+> handler resolved in a bare scope has no principal to bind a subject from — so
+> its `*.Application.Tests` references no `*.TestSupport`, declares no fixture
+> collection, and holds §12.5's saga suite instead, which needs no
+> infrastructure at all. The library is still right for the reason above; it
+> simply has one consumer there rather than two.
+> [E.7.3](appendix-e-reference-domain.md#e73-where-the-handler-tests-live)
+> names the
+> service and its collection, and `docs/testing.md` says the same thing from
+> the other side.
 >
 > The `[CollectionDefinition]` does **not** move there. xUnit resolves
 > collections within an assembly, so each test project declares its own, naming
@@ -862,7 +882,7 @@ below locates precisely.
 
 | | |
 |---|---|
-| **The ordinary flow** | Publish **three** products with distinct non-null thumbnails, place one order naming all three, read the history. Each resolved `SummaryProduct` carries Catalog's name *and* its thumbnail, and the three arrive **in the order the lines were placed** |
+| **The ordinary flow** | Publish **three** products with distinct non-null thumbnails, place one order naming all three, read the history. Each resolved `SummaryProduct` carries the name *and* the thumbnail its owner published ([E.7.4](appendix-e-reference-domain.md#e74-the-order-summary-cases)), and the three arrive **in the order the lines were placed** |
 | **The late arrival** | Let a product with a **null** thumbnail reach `ordering.ProductPrices` through `PriceChanged` alone, place an order, then deliver `ProductPublished`. Both facts appear on a summary written before them — retroactively, with no rebuild — and the null survives as null |
 
 **Three products rather than one, and both columns rather than the name.** A
@@ -875,7 +895,8 @@ one-product assertion. `ThumbnailUrl` is the same gap one column over:
 ADR-027 moves *both* display facts, and a suite that pins one of them accepts
 an implementation that drops the other. The null case belongs to the late
 arrival because `ProductPublished.ThumbnailUrl` is `string?` and nullable is
-the shape Catalog actually promises.
+the shape its owner actually promises
+([E.7.4](appendix-e-reference-domain.md#e74-the-order-summary-cases)).
 
 **Neither case subsumes the other, and working out which design each one
 refutes is what shows why both are owed.** Three designs are in play: the
@@ -928,14 +949,17 @@ indistinguishable from this one — which is §12.4's rule about negatives appli
 to a design rather than to an assertion: a case that two candidates both
 satisfy is not evidence about which is present.
 
-**Every case above is a §12.4-level test and all of them belong in
-`Ordering.Api.Tests`, which is not a contradiction.** The level is about what
-they touch — the projection writes through Dapper against a real schema, so an
-in-memory double would assert on the double — and the project is about where
-the fixture lives. `Ordering.Application.Tests` deliberately carries no
-`Ordering.TestSupport` reference and says so in its csproj, so Ordering's
-real-schema tests are homed one project over; `ProductPriceProjectionTests` is
-already there for exactly this reason. Read the pyramid's levels as a statement
+**Every case above is a §12.4-level test and all of them belong in the
+`*.Api.Tests` of the service that owns the summary, which is not a
+contradiction.** The level is about what they touch — the projection writes
+through Dapper against a real schema, so an in-memory double would assert on
+the double — and the project is about where the fixture lives. Where that
+service's `*.Application.Tests` deliberately carries no `*.TestSupport`
+reference and says so in its csproj, its real-schema tests are homed one
+project over, and
+[E.7.4](appendix-e-reference-domain.md#e74-the-order-summary-cases)
+names the test that is already there for
+exactly this reason. Read the pyramid's levels as a statement
 about what a test exercises, never as a mapping onto assembly names.
 
 
@@ -947,7 +971,9 @@ status codes, and its serialisation. A handler test proves the decision; only
 this proves the decision reaches the wire intact.
 
 The cancel endpoint's suite is
-`tests/Ordering.Api.Tests/OrderOwnershipTests.cs`, and each case asserts a
+`OrderOwnershipTests`
+([E.7.5](appendix-e-reference-domain.md#e75-the-ownership-and-subject-suites)),
+and each case asserts a
 status and, where the request was refused, that the order is unchanged:
 
 ```csharp
@@ -1015,7 +1041,7 @@ instead.
 They are split by what can produce the state each one needs. Two are about a
 caller a request carries, and run over HTTP, where the principal comes from
 `TestAuthHandler`'s headers through `HttpContextCurrentUser` exactly as
-production resolves it; a third has no Ordering test yet:
+production resolves it; a third is asserted where the history is served:
 
 - **An order is attributed to the caller** —
   `The_order_is_attributed_to_the_caller_and_not_to_anything_in_the_request`
@@ -1024,11 +1050,13 @@ production resolves it; a third has no Ordering test yet:
 - **An owner cancels their own order** — `The_owner_can_cancel_their_own_order`
   in `OrderOwnershipTests`. The control for the 404-not-403 refusal beside it,
   which would otherwise pass on a handler that answers 404 to everybody.
-- **A customer reads only their own orders** has no Ordering test, because
-  Ordering's own history query, §6.5's as §6.6 escalates it, is not built. The
+- **A customer reads only their own orders** — asserted by the suite of
+  whatever serves the history, where a stranger's page must be empty. The
   buyer's history the BFF serves is under the same rule
-  ([§10.7](10-api-gateway.md)), and `Web.Bff.Tests`' `OrderEndpointTests`
-  asserts a stranger's page is empty.
+  ([§10.7](10-api-gateway.md));
+  [E.7.5](appendix-e-reference-domain.md#e75-the-ownership-and-subject-suites)
+  names the suite that holds it in
+  the reference domain, and why the service that owns the orders has none.
 
 Two more are a pair, and run below HTTP in `SagaCommandHandlerTests`, which
 dispatches in a bare scope — no request, so no principal:
@@ -1092,7 +1120,9 @@ and it leaves the only production code that assigns it, `CancelOrderMapper`
 (§9.4), unasserted. A mapper stamping `User` would pass the pair and reject
 every real compensation — the failure the pair was written to catch, arriving
 by the one route the pair cannot see. Two short tests in
-`tests/Ordering.Application.Tests/CommandMapperTests.cs` close it — the stamp,
+`CommandMapperTests`
+([E.7.5](appendix-e-reference-domain.md#e75-the-ownership-and-subject-suites))
+close it — the stamp,
 and the parse that stands in front of it:
 
 ```csharp
@@ -1212,13 +1242,13 @@ public async Task The_service_receives_the_path_with_the_namespace_prefix_remove
 The pyramid's outbound-hop row is each caller's own suite. `Web.Bff.Tests`
 holds §9.7's pricing hop, whose three properties no suite outside this row
 can reach: a timeout hierarchy, a credential handler's *position*, and a
-realm that nothing compiles against.
-`Shipping.Worker.Tests` holds the first two for the address read
+realm that nothing compiles against. A worker's `*.Worker.Tests` holds them for
+the reads
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
-adds, against a stub Ordering on loopback. `Notifications.Worker.Tests` holds
-all three for the contact read the same record adds: the first two against a
-stub Keycloak on loopback, and the realm against a real one, which is also the
-owner the read asks.
+adds, and
+[E.7.1](appendix-e-reference-domain.md#e71-the-journey-and-the-outbound-hops)
+says which of the three each worker suite holds and
+against which stub.
 
 The hierarchy is read off the **built host** rather than recomputed from the
 numbers a helper returns — which is what makes it a test of the registration:
@@ -1269,10 +1299,12 @@ compiles differently when the realm is wrong.
 ## 12.5 Testing the saga
 
 Saga logic is where cross-service bugs live, and MassTransit's in-memory test
-harness makes it testable without any infrastructure at all. The suite is the
-`OrderFulfilmentSaga*Tests` classes in `tests/Ordering.Application.Tests/`,
-mostly one per state, over the registration they share in
-`OrderFulfilmentSagaHarness.cs`:
+harness makes it testable without any infrastructure at all. In the reference
+domain the suite is the `OrderFulfilmentSaga*Tests` classes in
+`tests/Ordering.Application.Tests/`
+([E.7.6](appendix-e-reference-domain.md#e76-the-saga-suite)),
+mostly one per state,
+over the registration they share in `OrderFulfilmentSagaHarness.cs`:
 
 ```csharp
 new ServiceCollection()
@@ -1746,8 +1778,12 @@ about a probe the test assembly declares.
 
 Over that set, `No_contract_names_a_domain_type` checks §9.1's rule at the
 assembly level, because a contract cannot reference a domain type without the
-reference, and the reference silently drags `Ordering.Domain` into every
-consuming service. `Every_contract_lives_in_a_versioned_namespace` holds
+reference, and the reference silently drags the publisher's domain assembly into
+every
+consuming service
+([E.7.7](appendix-e-reference-domain.md#e77-the-contract-discovery)
+names the one the order contracts would
+drag). `Every_contract_lives_in_a_versioned_namespace` holds
 §9.2's `Common.Contracts.<Service>.V<n>`, since a contract that lands one
 namespace short is a v1 that can never be superseded. And the round-trip
 catches the member type `System.Text.Json` cannot handle — the failure that
@@ -1906,17 +1942,20 @@ that a reply's currency is the amount's own label. `pricing.proto` says all
 three, in comments, and a comment holds nothing across the boundary.
 
 **A stub is a second specification nobody verifies.** `Web.Bff.Tests` drives
-its endpoint against `StubCatalog`, a hand-written gRPC server modelling
-Catalog, and a stub drifts from the service it models in exactly the details a
-consumer leans on: filtering currency case-sensitively where Catalog does not,
-echoing the request's spelling of the currency rather than its own stored one,
+its endpoint against a hand-written gRPC server modelling the pricing
+service
+([E.7.8](appendix-e-reference-domain.md#e78-the-pricing-hop-and-the-address-read)),
+and a stub drifts from the service it models in
+exactly the details a consumer leans on: filtering currency case-sensitively
+where the real service does not, echoing the request's spelling of the currency
+rather than its own stored one,
 formatting amounts at the test's scale rather than the column's
 `decimal(19,4)`, enforcing no request ceiling at all.
 
 > **A stub that echoes the request leaves the consumer's guard against that
 > drift unguarded.** `CheckoutEndpoints` compares a reply's currency to the
-> request's with `OrdinalIgnoreCase`, precisely because Catalog answers `GBP`
-> to a request for `gbp`. A stub echoing the request never hands that
+> request's with `OrdinalIgnoreCase`, precisely because the real service answers
+> `GBP` to a request for `gbp`. A stub echoing the request never hands that
 > comparison two spellings, so tightening it to `Ordinal` leaves every
 > stub-driven test green over a change that would answer 500 to every
 > lower-case currency a customer typed.
@@ -1924,7 +1963,8 @@ formatting amounts at the test's scale rather than the column's
 So the consumer writes down what it needs, and the provider is verified against
 it. The expectations are **one file** — `PricingContract.cs`, in the consumer's
 own test-support project — compiled into `Web.Bff.Tests` and **linked** into
-`Catalog.Api.Tests`, exactly as `pricing.proto` is linked into `Web.Bff`. The
+the provider's `*.Api.Tests`, exactly as `pricing.proto` is linked into
+`Web.Bff`. The
 syntactic contract and the semantic one are then shared the same way, and
 neither is an assembly, so [§4.3](04-solution-structure.md) keeps
 `Common.Contracts` as its one exception.
@@ -1958,11 +1998,11 @@ The per-field tolerance is stated once and applied to every answered
 interaction, on both sides. It is the **consumer's** tolerance and not the
 provider's behaviour, which is what keeps a contract from over-specifying: the
 amount is parsed and compared numerically, never matched as text, because
-Catalog's column scale reaches the wire as `49.9900` and a migration that
+the provider's column scale reaches the wire as `49.9900` and a migration that
 changed it would change nothing a customer can see.
 
 > **A consumer-driven contract carries only what the consumer needs, and the
-> discipline is what makes it worth verifying.** Catalog also refuses a
+> discipline is what makes it worth verifying.** The provider also refuses a
 > malformed product id, a non-canonical GUID and an anonymous caller. None is an
 > interaction: the BFF always sends canonical ids and always presents a token,
 > so an expectation about any of them would be a promise nobody is relying on.
@@ -1977,23 +2017,27 @@ it must be refused with `InvalidArgument` — the status
 alone is satisfiable by a provider that has quietly moved the limit, so the pair
 is what pins it, and a change in either direction fails verification on purpose.
 `CheckoutEndpoints` holds no copy of *that* number: production code with one
-would refuse requests Catalog would have served, where a contract with one is
+would refuse requests the provider would have served, where a contract with one
+is
 the consumer saying which number it is relying on.
 
 > **The consumer cannot drive the refusal half, and the interaction stays
 > anyway** ([ADR-045](adr/ADR-045-the-checkout-quote-takes-quantities.md)). The
 > quote bounds its own line count at `OrderLimits.MaxLines` — the bound the
-> *order* insists on, not a copy of Catalog's — so a basket past the ceiling
-> fails validation before the hop and Catalog is never asked. The consumer
+> *order* insists on, not a copy of the provider's — so a basket past the
+> ceiling fails validation before the hop and the provider is never asked. The
+> consumer
 > suite asserts that instead, and the `InvalidArgument` mapping keeps its
 > coverage in `QuoteEndpointTests`, which stubs the status rather than
 > provoking it with a size.
 >
 > **An expectation the consumer cannot drive is still an expectation it
-> needs**: the provider verification holds Catalog to the refusal either way,
+> needs**: the provider verification holds the provider to the refusal either
+> way,
 > and the two bounds agree only by coincidence of value. The day one of them
 > moves, this is the interaction that says which — deleted as unreachable, the
-> first symptom would be a quote refusing baskets Catalog would have priced, or
+> first symptom would be a quote refusing baskets the provider would have
+> priced, or
 > accepting ones it would not.
 
 **It is not Pact, and the mechanism was a decision rather than a
@@ -2006,7 +2050,7 @@ monorepo and that boundary is not there.
 
 **Two things it does not do.** It does not cover the address read
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
-gives Shipping's worker, the second relationship
+gives a worker, the second relationship
 [ADR-023](adr/ADR-023-the-consumer-driven-contract-is-a-linked-file-not-pact.md)
 left to the same conditional judgement, and the judgement is that the read
 earns no consumer-authored file. What made the pricing hop contentious was
@@ -2015,9 +2059,13 @@ a currency's spelling compared with the request's, an amount's scale, a
 basket's ceiling. The worker depends on less: it compares nothing in the reply
 with anything it sent, checks each field's shape itself as §9.7's sixth rule
 asks, and tells only `NotFound` and a refusal (`Unauthenticated`,
-`PermissionDenied`) apart from everything else — and Ordering's API suite pins
-each of those statuses against the real provider. `StubOrdering` is still a
-hand-written stub, so a worker that comes to depend on more of the reply is
+`PermissionDenied`) apart from everything else — and the provider's API suite
+pins
+each of those statuses against the real provider
+([E.7.8](appendix-e-reference-domain.md#e78-the-pricing-hop-and-the-address-read)).
+The worker's
+stub is still a hand-written one, so a worker that comes to depend on more of
+the reply is
 where the contract becomes owed. And it does not cross a repository boundary —
 extract the BFF and this file becomes something that has to be published, at
 which point Pact is the answer after all.
@@ -2115,9 +2163,10 @@ thing it is named after.
 
 Three things about that filter are deliberate:
 
-- **It is a pattern, not a list.** `Catalog.Domain`, `Ordering.Domain` and
-  `Common.Domain` match it today, and every later service's Domain matches it
-  the day it exists. A list would have to be edited by whoever adds a service,
+- **It is a pattern, not a list.** `Common.Domain` and the Domain of every
+  service under `src/Services/` match it today, and every later service's
+  matches it the day it exists. A list would have to be edited by whoever adds a
+  service,
   which is exactly the edit that gets missed.
 - **It measures the domain assemblies over the whole run**, not the domain test
   projects. Domain types are exercised by application and API tests too, and a
