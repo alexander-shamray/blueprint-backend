@@ -344,7 +344,8 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
     {
         JourneyOrder order = await PlaceAsync(UnitPrice, Quantity, Stocked);
         await using OrderTrace trace = OrderTrace.Start(world, order, Stocked);
-        await trace.UntilAsync(s => s.SagaState == "AwaitingStock", Deadlines.Legs(1), "the saga started");
+        // Any state: Inventory is not held, so AwaitingStock lasts less than a sample and may never be seen (§9.6).
+        await trace.UntilAsync(s => s.SagaState != OrderSnapshot.None, Deadlines.Legs(1), "the saga started");
 
         // OrderPlaced is out; everything Ordering says from here is held, the acknowledgement among it.
         using IDisposable orderingHeld = await world.OutboxOf(JourneyWorld.Ordering).HoldAsync(Ct);
