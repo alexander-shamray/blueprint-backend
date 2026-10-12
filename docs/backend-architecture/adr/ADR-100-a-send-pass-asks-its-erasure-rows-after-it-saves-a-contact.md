@@ -22,11 +22,13 @@ not keep it on its order record, so a worker asking about the customer cannot
 tell them apart, and would end the notice of an order that decision kept.
 **Consequences.** A pass that reads a contact from the owner pays the scan of
 the audit table once more, and the audit row keeps no customer id, so it is not
-a seek. The row deleted for an order ADR-099 kept is fetched again by the next
-read, which is the whole cost of asking without the bound. The fetch and the
-one send in the window stay open, as ADR-097 says: closing them needs the
-order's `ErasedUnder` stored on Notifications' order record, which is its own
-decision. A stale row served for an owner that could not answer writes nothing
+a seek. For a customer whose erasure ADR-099 does not count against an order,
+the row never holds: each read, and each pass repeated after a crash, calls the
+owner, where [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+would have served the stored one. That is the whole cost of asking without the
+bound. The fetch stays open, as ADR-097 says, and so does the one send it
+leads to: closing them needs the order's `ErasedUnder` stored on Notifications'
+order record, which is its own decision. A stale row served for an owner that could not answer writes nothing
 and is not asked about.
 
 ---
