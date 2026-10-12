@@ -32,6 +32,14 @@ So, in order of preference:
 3. **Restore** — when what is wrong is older than the window, restore the
    BFF's database instead.
 
+**A rebuild skips an erased subject.** An outbox row inside the window still
+names a customer whose data was erased, so the tool sends it as it sends any
+other; the BFF's consumer then writes the order and, finding the customer in
+`bff.PersonalDataErasures`, deletes it again
+([ADR-097](../../docs/backend-architecture/adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md)).
+`--reset` leaves that table alone, and the tool itself needs no list of erased
+subjects. An order the customer placed after their own erasure is dropped too.
+
 **`--reset` keeps `bff.Products`.** A product's name is published once,
 usually long before any outbox window, so deleting the names would blank
 every product Catalog's window no longer holds. When the names themselves are
