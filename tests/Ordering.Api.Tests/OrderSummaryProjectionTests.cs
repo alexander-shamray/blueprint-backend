@@ -144,10 +144,11 @@ public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsync
             Customer(order),
             Money.Of(19.99m, "EUR"),
             [new OrderLineSnapshot(ProductId.New(), 1, Money.Of(19.99m, "EUR"))],
+            [],
             Placed);
 
     private static OrderCancelledDomainEvent CancelledEvent(OrderId order, DateTimeOffset at) =>
-        new(order, Customer(order), CancellationReason.PaymentTimeout, CancellationOrigin.Workflow, at);
+        new(order, Customer(order), CancellationReason.PaymentTimeout, CancellationOrigin.Workflow, [], at);
 
     private static OrderConfirmedDomainEvent ConfirmedEvent(OrderId order, DateTimeOffset at) =>
         new(
@@ -157,5 +158,6 @@ public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsync
             Address.Of("1 Test Street", null, "Almaty", "050000", "KZ"),
             Money.Of(19.99m, "EUR"),
             [new OrderLineSnapshot(ProductId.New(), 1, Money.Of(19.99m, "EUR"))],
+            [],
             at);
 }

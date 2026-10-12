@@ -61,6 +61,7 @@ public sealed class ServiceFixture()
             Address.Of("1 Test Street", null, "Almaty", "050000", "KZ"),
             [(ProductId.New(), 1, Money.Of(19.99m, "EUR"))],
             "EUR",
+            [],
             DateTimeOffset.UtcNow);
         order.ClearDomainEvents();
 

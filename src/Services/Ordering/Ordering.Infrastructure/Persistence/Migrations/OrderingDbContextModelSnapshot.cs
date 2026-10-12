@@ -353,6 +353,12 @@ namespace Ordering.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ErasedUnder")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValueSql("N'[]'");
+
                     b.Property<DateTimeOffset>("PlacedAt")
                         .HasColumnType("datetimeoffset(7)");
 

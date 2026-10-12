@@ -111,7 +111,7 @@ public class OutboxSerialisationTests
         private static readonly Dictionary<Type, object> Samples = new()
         {
             [typeof(OrderPlacedDomainEvent)] =
-                new OrderPlacedDomainEvent(Order, Customer, Total, Lines, Raised),
+                new OrderPlacedDomainEvent(Order, Customer, Total, Lines, [], Raised),
             [typeof(OrderStockConfirmedDomainEvent)] =
                 new OrderStockConfirmedDomainEvent(Order, Total, Raised),
             [typeof(OrderConfirmedDomainEvent)] = new OrderConfirmedDomainEvent(
@@ -121,6 +121,7 @@ public class OutboxSerialisationTests
                 Address.Of("1 Test Street", "Flat 4", "Almaty", "050000", "KZ"),
                 Total,
                 Lines,
+                [],
                 Raised),
             [typeof(OrderShippedDomainEvent)] =
                 new OrderShippedDomainEvent(Order, Customer, TrackingNumber.Of("TRK-1"), Raised),
@@ -130,6 +131,7 @@ public class OutboxSerialisationTests
                     Customer,
                     CancellationReason.CustomerRequest,
                     CancellationOrigin.User,
+                    [],
                     Raised)
         };
 

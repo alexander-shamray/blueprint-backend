@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Ordering.Domain.Orders;
 
@@ -35,6 +37,20 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
             .Property<string>("_currency")
             .HasColumnName("Currency")
             .HasMaxLength(3);
+
+        // Request ids, which name nobody, so erasure leaves them be. A JSON column rather than a table: nothing
+        // queries by them, and the order's events carry them unchanged (ADR-099).
+        builder
+            .Property(o => o.ErasedUnder)
+            .HasConversion(
+                ids => JsonSerializer.Serialize(ids, (JsonSerializerOptions?)null),
+                json => JsonSerializer.Deserialize<List<Guid>>(json, (JsonSerializerOptions?)null)!,
+                new ValueComparer<IReadOnlyList<Guid>>(
+                    (a, b) => a!.SequenceEqual(b!),
+                    v => v.Aggregate(0, (h, id) => HashCode.Combine(h, id)),
+                    v => v.ToList()))
+            .HasColumnType("nvarchar(max)")
+            .HasDefaultValueSql("N'[]'");
 
         builder.ComplexProperty(
             o => o.ShippingAddress,

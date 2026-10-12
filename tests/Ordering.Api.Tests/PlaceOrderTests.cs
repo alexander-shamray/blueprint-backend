@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Common.Application;
 using Common.Contracts.Ordering.V1;
+using Common.Domain;
 using Common.Infrastructure.Outbox;
 using Ordering.Application;
 using Ordering.Application.Orders;
@@ -107,6 +108,59 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.ScalarAsync<Guid>("SELECT Value = CustomerId FROM ordering.Orders WHERE Id = {0}", id))
             .ShouldBe(Caller);
     }
+
+    [Fact]
+    public async Task An_order_placed_after_an_erasure_keeps_the_request_and_publishes_it_with_the_fact()
+    {
+        // ADR-099: the holders cannot tell this order from the one the erasure was for, so the order says so.
+        Guid product = Guid.CreateVersion7();
+        await SeedPriceAsync(product, 5m, "EUR");
+        Guid request = Guid.CreateVersion7();
+        Guid otherRequest = Guid.CreateVersion7();
+        await fixture.ExecuteAsync("DELETE FROM ordering.PersonalDataErasures;");
+        await RecordErasureAsync(request, Caller);
+        await RecordErasureAsync(otherRequest, Guid.CreateVersion7());
+
+        Guid id = await IdOfAsync(await PlaceAsync(product));
+
+        (await fixture.ScalarAsync<string>("SELECT Value = ErasedUnder FROM ordering.Orders WHERE Id = {0}", id))
+            .ShouldBe($"[\"{request}\"]");
+
+        OutboxMessage placed = (await fixture.OutboxAsync())
+            .Where(r => r.Lane == OutboxLane.Broker)
+            .ShouldHaveSingleItem();
+        using JsonDocument payload = JsonDocument.Parse(placed.Payload);
+        payload.RootElement.GetProperty(nameof(OrderPlaced.ErasedUnder))
+            .EnumerateArray()
+            .Select(e => e.GetGuid())
+            .ShouldBe([request]);
+
+        await fixture.ExecuteAsync("DELETE FROM ordering.PersonalDataErasures;");
+    }
+
+    [Fact]
+    public async Task An_order_by_a_customer_nobody_erased_carries_no_request()
+    {
+        Guid product = Guid.CreateVersion7();
+        await SeedPriceAsync(product, 5m, "EUR");
+        await fixture.ExecuteAsync("DELETE FROM ordering.PersonalDataErasures;");
+        await RecordErasureAsync(Guid.CreateVersion7(), Guid.CreateVersion7());
+
+        Guid id = await IdOfAsync(await PlaceAsync(product));
+
+        (await fixture.ScalarAsync<string>("SELECT Value = ErasedUnder FROM ordering.Orders WHERE Id = {0}", id))
+            .ShouldBe("[]");
+
+        await fixture.ExecuteAsync("DELETE FROM ordering.PersonalDataErasures;");
+    }
+
+    private async Task RecordErasureAsync(Guid request, Guid subject) =>
+        await fixture.ExecuteAsync(
+            "INSERT INTO ordering.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt) " +
+            "VALUES ({0}, {1}, 0, {2})",
+            request,
+            PersonalDataErasure.HashSubject(request, subject),
+            DateTimeOffset.UtcNow);
 
     [Fact]
     public async Task A_price_in_another_currency_does_not_satisfy_the_order()
