@@ -23,8 +23,9 @@ a fork (a building block, a tool, a gate, a namespace pattern) is unchanged.
 (2) *The marker.* An evidence block carries one form: it contains a link whose
 target begins `appendix-e-reference-domain.md#`, which names the Appendix E
 section holding the case's facts, and its prose says "in the reference
-domain". The block is a paragraph, a table row or a code fence. This is the
-only statement of the form; the style guide does not repeat it.
+domain". The block is a paragraph or a table row; a code fence belongs to the
+paragraph before it. This is the only statement of the form; the style guide
+does not repeat it.
 (3) *The owner.* Appendix E owns every domain fact the chapters no longer
 state: the services and what each is, their contracts, queues, ports, realms,
 Compose units and CI filters where no other file holds them, and the worked
