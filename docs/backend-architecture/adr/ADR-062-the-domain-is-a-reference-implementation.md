@@ -44,6 +44,9 @@ deployable's unit, chart and canary file, and every alert over one service's
 own meter, go with the service they deploy or watch. An adopter sorts those
 file by file, and a kept file that starts to name a service has moved to the
 replaced side.
+**Extended by**
+[ADR-096](ADR-096-a-chapter-names-a-reference-service-only-as-evidence.md):
+what becomes of the chapters that describe the replaced part.
 
 ---
 
