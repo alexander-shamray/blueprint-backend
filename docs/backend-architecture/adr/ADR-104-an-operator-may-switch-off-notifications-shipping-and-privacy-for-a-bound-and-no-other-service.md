@@ -25,9 +25,9 @@ advance, and [§9.8](../09-messaging.md)'s *Consumer down* row says only that
 messages wait. Which services may be stopped on purpose, and for how long, was
 readable only from the saga's timeouts and each service's code, and an operator
 would have worked it out in the incident. The classes are not a preference:
-Notifications publishes no event and has no caller, so late mail is the whole
-cost to an order, and its one other duty is the erasure completion it owes
-Privacy, as a responder
+Notifications publishes no event an order waits on and has no caller, so late
+mail is the whole cost to an order, and its one other duty is the erasure
+completion it owes Privacy, as a responder
 ([ADR-092](ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
 which Shipping owes too. Each bound cites the
 deadline another component already owns rather than restating it, and the other
