@@ -421,6 +421,13 @@ public sealed class SendWorker(
         catch (Exception ex) when (
             ex is not ContactSourceRefusedException && age == ContactAge.Stale && !ct.IsCancellationRequested)
         {
+            // The pre-check is older than this call, which may have run through retries; an erasure since is seen here.
+            if (await erased.IsErasedAsync(customer, ct))
+            {
+                await store.DeleteAsync(customer, ct);
+                return (new ContactLookup.NoSuchCustomer(), null);
+            }
+
             return (new ContactLookup.Found(stored!.Email, stored.Locale), ex);
         }
 
