@@ -13,6 +13,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import remove_service  # first: it puts tools/new-service on sys.path
 import new_service
@@ -333,7 +334,7 @@ class MentionTests(unittest.TestCase):
         (self.root / "docs" / "image.bin").write_bytes(b"\xff\xfeZulu")
         rendered = remove_service.Plan(deleted=["src/Services/Zulu"], updated={"docs/ch.md": "no mention\n"})
 
-        found = remove_service.mentions(self.root, Names("Zulu"), rendered)
+        found = remove_service.mentions(self.root, Names("Zulu"), rendered, [])
 
         self.assertEqual(
             found,
@@ -346,9 +347,26 @@ class MentionTests(unittest.TestCase):
         self.write("src/Services/Zulu2/Notes.md", "Zulu\n")
         rendered = remove_service.Plan(deleted=["src/Services/Zulu"])
 
-        found = remove_service.mentions(self.root, Names("Zulu"), rendered)
+        found = remove_service.mentions(self.root, Names("Zulu"), rendered, [])
 
         self.assertEqual(list(found), ["src/Services/Zulu2/Notes.md"])
+
+    def test_a_file_that_cannot_be_read_is_reported_and_does_not_stop_the_search(self):
+        self.write("docs/locked.md", "Zulu\n")
+        self.write("docs/open.md", "Zulu\n")
+        read_bytes = Path.read_bytes
+
+        def refuse_one(path: Path) -> bytes:
+            if path.name == "locked.md":
+                raise PermissionError("locked")
+            return read_bytes(path)
+
+        unread: list[str] = []
+        with mock.patch.object(Path, "read_bytes", refuse_one):
+            found = remove_service.mentions(self.root, Names("Zulu"), remove_service.Plan(), unread)
+
+        self.assertEqual(unread, ["docs/locked.md"])
+        self.assertEqual(list(found), ["docs/open.md"])
 
 
 class AllowListTests(unittest.TestCase):

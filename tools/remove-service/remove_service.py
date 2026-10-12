@@ -279,8 +279,12 @@ def apply(repo_root: Path, rendered: Plan) -> None:
             target.unlink()
 
 
-def mentions(repo_root: Path, names: Names, rendered: Plan) -> dict[str, list[int]]:
-    """Files still naming the service once the plan is applied, with their line numbers."""
+def mentions(repo_root: Path, names: Names, rendered: Plan, unread: list[str]) -> dict[str, list[int]]:
+    """Files still naming the service once the plan is applied, with their line numbers.
+
+    A file that cannot be read is added to `unread`: it is not a mention, and the
+    deletion has already happened by the time this runs.
+    """
     needle = re.compile("|".join(re.escape(token) for token in (names.pascal, names.lower, names.upper)))
     doomed = tuple(f"{path}/" for path in rendered.deleted)
     found: dict[str, list[int]] = {}
@@ -297,11 +301,14 @@ def mentions(repo_root: Path, names: Names, rendered: Plan) -> dict[str, list[in
                 body = rendered.updated[relative]
             else:
                 path = repo_root / relative
-                if path.stat().st_size > MAX_MENTION_BYTES:
-                    continue
                 try:
+                    if path.stat().st_size > MAX_MENTION_BYTES:
+                        continue
                     body = path.read_bytes().decode("utf-8")
                 except UnicodeDecodeError:
+                    continue
+                except OSError:
+                    unread.append(relative)
                     continue
             hits = [n for n, line in enumerate(body.splitlines(), start=1) if needle.search(line)]
             if hits:
@@ -339,13 +346,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  skipped: {note}")
 
     # Read over the plan's own texts, so a dry run names what the real run leaves.
-    left = mentions(args.repo_root, Names(args.name), rendered)
+    unread: list[str] = []
+    left = mentions(args.repo_root, Names(args.name), rendered, unread)
+    for relative in unread:
+        print(f"  could not read {relative}; it may still name {args.name}")
     if left:
         print(f"Still naming {args.name} in {len(left)} files, yours to decide:")
         for relative, lines in sorted(left.items()):
             shown = ", ".join(str(n) for n in lines[:5]) + (", ..." if len(lines) > 5 else "")
             print(f"  {relative}: {len(lines)} line(s), at {shown}")
-    else:
+    elif not unread:
         print(f"Nothing else names {args.name}.")
     return 0
 
