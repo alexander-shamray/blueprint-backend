@@ -343,8 +343,8 @@ the diff of PR 187 at `ef3b03bf`, which holds 12 of Copilot's comments across
 four files. The same head scored 0 of 12 on one run and 2 of 12 on the next,
 from 2 findings each time, both in `.claude/agents/review-adjudicator.md`.
 That is the noise a comparison has to beat, and one head is not a sample of
-the 546. **No sweep was scored in this section**: a full first round at either
-commit is 41 slices, which this change did not spend. The 2026-10-12 section
+the 546. **No sweep was scored in this section**: a full first round was 41
+slices as of c86e6ec, which this change did not spend. The 2026-10-12 section
 scores both.
 
 ## 2026-10-12 — the first scored runs
