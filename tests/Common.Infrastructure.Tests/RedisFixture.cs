@@ -11,15 +11,18 @@ namespace Common.Infrastructure.Tests;
 /// <summary>Two real Redis containers (ADR-010), for §8.1's split, so role routing is assertable (§12.4).</summary>
 public sealed class RedisFixture : IAsyncLifetime
 {
-    private readonly RedisContainer _cache = new RedisBuilder()
-        .WithImage(ComposeImage.Of("redis-cache"))
-        .WithCommand("--maxmemory-policy", "allkeys-lru")
-        .Build();
+    private readonly RedisContainer _cache = Build("redis-cache", "allkeys-lru");
 
-    private readonly RedisContainer _coordination = new RedisBuilder()
-        .WithImage(ComposeImage.Of("redis-coordination"))
-        .WithCommand("--maxmemory-policy", "noeviction")
-        .Build();
+    private readonly RedisContainer _coordination = Build("redis-coordination", "noeviction");
+
+    private static RedisContainer Build(string service, string evictionPolicy)
+    {
+        TestcontainersWarmUp.Ensure();
+        return new RedisBuilder()
+            .WithImage(ComposeImage.Of(service))
+            .WithCommand("--maxmemory-policy", evictionPolicy)
+            .Build();
+    }
 
     public string CacheConnectionString => _cache.GetConnectionString();
 
