@@ -596,8 +596,9 @@ nor the closed-set realm test sees a breach of it: the constant makes a
 provider has never heard of, and the realm test compares against a literal
 because `Common.Web.Tests` is a building block's suite and cannot reference a
 host to read its constants. The check belongs to whichever suite owns the
-constant, which is where `GrantablePermissionTests` sits: in `Gateway.Api.Tests` and in
-each service's `Api.Tests` project under `tests/`.
+constant, which is where `GrantablePermissionTests` sits: in `Gateway.Api.Tests`
+and in the `Api.Tests` project under `tests/` of each service that has an `Api`
+host.
 
 > **A policy name is a reference, and nothing checks it.**
 > `RequireAuthorization("orders:cancel")` takes a string. Misspell it, or
