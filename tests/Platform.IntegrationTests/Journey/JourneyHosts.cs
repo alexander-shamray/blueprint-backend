@@ -86,7 +86,7 @@ internal sealed class JourneyInventoryFactory(
 internal sealed class JourneyPaymentsFactory(string sql, string broker, string provider, OutboxGate gate)
     : PaymentsApiFactory(sql, broker, provider)
 {
-    /// <summary>What the provider client sent, to tell two sends from one logged twice (#824).</summary>
+    /// <summary>What the provider client sent, to tell two sends from one logged twice.</summary>
     internal ProviderSendLog Sends { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
