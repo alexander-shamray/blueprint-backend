@@ -9,6 +9,7 @@ using Notifications.Infrastructure.Delivery;
 using Notifications.TestSupport;
 using Ordering.TestSupport;
 using OrderingAuth = Ordering.TestSupport.TestAuthHandler;
+using Payments.Application.Provider;
 using Payments.TestSupport;
 using Privacy.TestSupport;
 using Shipping.Infrastructure.Addresses;
@@ -85,10 +86,20 @@ internal sealed class JourneyInventoryFactory(
 internal sealed class JourneyPaymentsFactory(string sql, string broker, string provider, OutboxGate gate)
     : PaymentsApiFactory(sql, broker, provider)
 {
+    /// <summary>What the provider client sent, to tell two sends from one logged twice (#824).</summary>
+    internal ProviderSendLog Sends { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         base.ConfigureWebHost(builder);
-        builder.ConfigureServices(services => services.RunsOutboxBehind(gate));
+        builder.ConfigureServices(services =>
+        {
+            services.RunsOutboxBehind(gate);
+
+            // Named as the typed client is, and added last, so the recorder is inside the retry.
+            services.AddHttpClient(nameof(IPaymentProvider))
+                .AddHttpMessageHandler(() => new ProviderSendRecorder(Sends));
+        });
     }
 }
 
