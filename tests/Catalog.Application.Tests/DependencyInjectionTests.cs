@@ -145,7 +145,7 @@ public class DependencyInjectionTests
 
         services.ShouldContain(
             d => d.ServiceType == typeof(FluentValidation.IValidator<PublishProductCommand>),
-            "AddValidatorsFromAssemblyContaining is §4.2's line, and losing it fails silently");
+            "AddValidatorsFromAssemblyContaining is E.2.6's line, and losing it fails silently");
 
         // A query's validator too, since ValidationBehavior is unconstrained (§6.3) and this is GetPrices' bound.
         services.ShouldContain(
