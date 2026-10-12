@@ -36,9 +36,14 @@ public sealed class OrderingErasureEndpointTests(ServiceFixture fixture) : IAsyn
     {
         await SeedOrderAsync(Guid.CreateVersion7(), Subject);
         await SeedOrderAsync(Guid.CreateVersion7(), Bystander);
+        string placedUnder = $"[\"{Guid.CreateVersion7()}\"]";
+        await fixture.ExecuteAsync("UPDATE ordering.Orders SET ErasedUnder = {0}", placedUnder);
 
         await PublishRequestAsync(Guid.CreateVersion7());
 
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM ordering.Orders WHERE ErasedUnder = '[]'")).ShouldBe(1,
+            "the anonymised order loses its requests with its id, and a bystander's keeps them");
         (await CountOrdersAsync(Subject)).ShouldBe(0);
         (await CountOrdersAsync(Guid.Empty)).ShouldBe(1, "the order stays, under the id that names nobody");
         (await CountOrdersAsync(Bystander)).ShouldBe(1);

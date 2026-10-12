@@ -38,7 +38,7 @@ internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
             .HasColumnName("Currency")
             .HasMaxLength(3);
 
-        // Request ids, which name nobody, so erasure leaves them be. A JSON column rather than a table: nothing
+        // Request ids, which erasure empties with the customer's id. A JSON column rather than a table: nothing
         // queries by them, and the order's events carry them unchanged (ADR-099).
         builder
             .Property(o => o.ErasedUnder)
