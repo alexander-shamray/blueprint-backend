@@ -20,6 +20,6 @@ public sealed class OrderConfirmedHandler(ErasedIntake intake) : IIntegrationEve
                     Amount = integrationEvent.TotalAmount,
                     Currency = integrationEvent.Currency
                 },
-                new OrderFact(integrationEvent.CustomerId, Cancellation: null)),
+                new OrderFact(integrationEvent.CustomerId, Cancellation: null, integrationEvent.ErasedUnder)),
             ct);
 }

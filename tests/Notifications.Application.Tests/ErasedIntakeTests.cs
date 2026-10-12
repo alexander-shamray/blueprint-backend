@@ -38,6 +38,29 @@ public class ErasedIntakeTests
     }
 
     [Fact]
+    public async Task The_requests_the_order_was_placed_under_are_handed_to_the_check()
+    {
+        Answers answers = new(erased: false);
+        Guid request = Guid.CreateVersion7();
+        RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null, [request]));
+
+        await new ErasedIntake(_dispatcher, answers).RecordAsync(command, TestContext.Current.CancellationToken);
+
+        answers.PlacedAfter.ShouldHaveSingleItem().ShouldBe([request]);
+    }
+
+    [Fact]
+    public async Task An_event_from_an_older_publisher_hands_the_check_no_requests()
+    {
+        Answers answers = new(erased: false);
+        RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null));
+
+        await new ErasedIntake(_dispatcher, answers).RecordAsync(command, TestContext.Current.CancellationToken);
+
+        answers.PlacedAfter.ShouldHaveSingleItem().ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task An_event_that_names_no_customer_is_not_asked_about()
     {
         Answers answers = new(erased: true);
@@ -73,11 +96,14 @@ public class ErasedIntakeTests
     {
         public List<Guid> Asked { get; } = [];
 
+        public List<IReadOnlyCollection<Guid>> PlacedAfter { get; } = [];
+
         public Action? OnAsked { get; set; }
 
-        public Task<bool> IsErasedAsync(Guid subjectId, CancellationToken ct)
+        public Task<bool> IsErasedAsync(Guid subjectId, IReadOnlyCollection<Guid> placedAfter, CancellationToken ct)
         {
             Asked.Add(subjectId);
+            PlacedAfter.Add(placedAfter);
             OnAsked?.Invoke();
 
             return Task.FromResult(erased);

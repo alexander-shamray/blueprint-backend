@@ -242,7 +242,8 @@ public class IntakeMappingTests
 
     private sealed class NobodyErased : IErasedSubjects
     {
-        public Task<bool> IsErasedAsync(Guid subjectId, CancellationToken ct) => Task.FromResult(false);
+        public Task<bool> IsErasedAsync(Guid subjectId, IReadOnlyCollection<Guid> placedAfter, CancellationToken ct) =>
+            Task.FromResult(false);
     }
 
     private sealed class RecordingDispatcher : IDispatcher

@@ -51,6 +51,37 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         (await fixture.NotificationsAsync(bystandersOrder)).ShouldHaveSingleItem();
     }
 
+    [Theory]
+    [InlineData("Placed")]
+    [InlineData("Confirmed")]
+    [InlineData("Cancelled")]
+    public async Task An_order_placed_after_the_erasure_is_kept_with_its_notice_by_whichever_event_arrives(string name)
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid request = await RecordErasureAsync(fixture, _subject, At.AddDays(-1));
+
+        await ApplyAsync(name, order, _subject, [request]);
+
+        (await fixture.OrderRecordAsync(order)).ShouldNotBeNull();
+        (await fixture.NotificationsAsync(order)).ShouldHaveSingleItem();
+    }
+
+    [Theory]
+    [InlineData("Placed")]
+    [InlineData("Confirmed")]
+    [InlineData("Cancelled")]
+    public async Task An_order_placed_after_one_erasure_is_ended_by_a_later_one(string name)
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid earlier = await RecordErasureAsync(fixture, _subject, At.AddDays(-2));
+        await RecordErasureAsync(fixture, _subject, At.AddDays(-1));
+
+        await ApplyAsync(name, order, _subject, [earlier]);
+
+        (await fixture.OrderRecordAsync(order)).ShouldBeNull("the second request names the order the first did not");
+        (await fixture.NotificationsAsync(order)).ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task An_erasure_committing_between_the_record_and_the_check_still_ends_with_nothing_held()
     {
@@ -73,7 +104,7 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         (await fixture.NotificationsAsync(order)).ShouldBeEmpty();
     }
 
-    private static async Task RecordErasureAsync(ServiceFixture fixture, Guid subject, DateTimeOffset erasedAt)
+    private static async Task<Guid> RecordErasureAsync(ServiceFixture fixture, Guid subject, DateTimeOffset erasedAt)
     {
         Guid request = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
@@ -82,9 +113,11 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
             request,
             PersonalDataErasure.HashSubject(request, subject),
             erasedAt);
+
+        return request;
     }
 
-    private async Task ApplyAsync(string name, Guid order, Guid customer)
+    private async Task ApplyAsync(string name, Guid order, Guid customer, IReadOnlyList<Guid>? erasedUnder = null)
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         IServiceProvider services = scope.ServiceProvider;
@@ -93,14 +126,14 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         switch (name)
         {
             case "Placed":
-                await Handler<OrderPlaced>(services).HandleAsync(OrderEvents.Placed(order, customer, At), ct);
+                await Handler<OrderPlaced>(services).HandleAsync(OrderEvents.Placed(order, customer, At, erasedUnder), ct);
                 break;
             case "Confirmed":
-                await Handler<OrderConfirmed>(services).HandleAsync(OrderEvents.Confirmed(order, customer, At), ct);
+                await Handler<OrderConfirmed>(services).HandleAsync(OrderEvents.Confirmed(order, customer, At, erasedUnder), ct);
                 break;
             default:
                 await Handler<OrderCancelled>(services)
-                    .HandleAsync(OrderEvents.Cancelled(order, customer, At, CancelReasons.OutOfStock, null), ct);
+                    .HandleAsync(OrderEvents.Cancelled(order, customer, At, CancelReasons.OutOfStock, null, erasedUnder), ct);
                 break;
         }
     }
@@ -118,12 +151,12 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
     {
         public bool RecordWasThereWhenAsked { get; private set; }
 
-        public async Task<bool> IsErasedAsync(Guid subjectId, CancellationToken ct)
+        public async Task<bool> IsErasedAsync(Guid subjectId, IReadOnlyCollection<Guid> placedAfter, CancellationToken ct)
         {
             RecordWasThereWhenAsked = await fixture.OrderRecordAsync(order) is not null;
             await RecordErasureAsync(fixture, subject, At);
 
-            return await real.IsErasedAsync(subjectId, ct);
+            return await real.IsErasedAsync(subjectId, placedAfter, ct);
         }
     }
 }
