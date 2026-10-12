@@ -645,7 +645,7 @@ The reference domain's names behind the samples and the cases of §7:
 
 | Where in §7 | The chapter writes | The reference domain has |
 |---|---|---|
-| §7.1, the Compose and CI provisioning sample | `USE [{service}];`, where `{service}` is the service's name | `USE [Ordering];`; the logins `ordering-runtime` and `ordering-migrator`, the schema `ordering` and the connection strings `ConnectionStrings__Ordering` and `ConnectionStrings__OrderingMigrator` stay in the sample as that service's spelling |
+| §7.1, the Compose and CI provisioning sample | `USE [<Service>];`, `[<service>-runtime]`, `[<service>-migrator]`, `$(<Service>RuntimePassword)`, `$(<Service>MigratorPassword)` and `SCHEMA::[<service>]` | `USE [Ordering];`, `ordering-runtime`, `ordering-migrator`, `OrderingRuntimePassword`, `OrderingMigratorPassword` and the schema `ordering`; the connection strings `ConnectionStrings__Ordering` and `ConnectionStrings__OrderingMigrator` stay in the sample as that service's spelling |
 | §7.2, the `AddTransactionalOutboxEntities` paragraph | "an `IEntityTypeConfiguration<InboxState>` written in the service's Infrastructure project" | "written in `Ordering.Infrastructure`" |
 | §7.2, the mapping excerpt | "`OrderConfiguration`, which holds the whole mapping" | `OrderConfiguration.cs` in `Ordering.Infrastructure/Persistence` holds the whole mapping |
 | §7.4, the library's technical tables row | "A service has any of them only if it holds a saga" | Ordering is the only service with any of them, because it holds the only saga ([§9.6](09-messaging.md)) |
