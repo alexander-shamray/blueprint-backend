@@ -700,6 +700,14 @@ which is all the gate reads. This is `docs/token-plan.md` step 7's rule in
 `CLAUDE.md`, applied where the runbook waits; the other option it names,
 compacting first, is the owner's command, which this chain cannot type.
 
+**An exit of 0 is not a pass on its own.** On a pull request whose
+`mergeable` reads `CONFLICTING`, GitHub starts none of the `pull_request`
+workflows, so the list holds only the CodeQL checks and `--fail-fast` exits 0
+with nothing failing (#936, found shipping PR 934). The wait therefore
+passes only when the list names the `changes`, `build`, `closure-gate` and
+`locality-gate` checks and `mergeable` reads `MERGEABLE`; an absent check is
+a failure of the wait, reported as what it is.
+
 **The agent only waits.** It decides nothing: a red check is fixed here, in
 its own commit, as the gate above already says, and a verdict it cannot
 reach — the agent missing, or no exit in its reply — is the gate not
