@@ -43,6 +43,9 @@ public interface IIntegrationEvent
 > more useful across a saga than an ambient request id, and a second value
 > assigned at staging time would quietly replace that choice.
 
+`OrderConfirmed`, in the reference domain, is a contract of this shape
+([Appendix E.5.1](appendix-e-reference-domain.md#e51-the-contracts)):
+
 ```csharp
 namespace Common.Contracts.Ordering.V1;
 
@@ -67,8 +70,9 @@ public sealed record ConfirmedLine(Guid ProductId, int Quantity, decimal UnitPri
 
 `OrderPlaced` — the event the fulfilment saga starts on (§9.6) and what
 `ReserveStock` draws its lines from — has the same shape with its own
-`PlacedLine`, and Catalog's three (`ProductPublished`, `PriceChanged`,
-`ProductDiscontinued`) repeat the three envelope members and add their own.
+`PlacedLine`, and every other contract of the reference domain
+([Appendix E.5.1](appendix-e-reference-domain.md#e51-the-contracts)) repeats
+the three envelope members and adds its own.
 `OrderCancelled` carries the same `ErasedUnder` as the two order events above
 ([ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md)).
 All of them live under `Common.Contracts`, one file per contract, where §6.6's
@@ -122,8 +126,10 @@ bought to avoid.
 > where its own projection, read model or log put one. The broker and the
 > abandoned outbox row are enough on their own.
 >
-> **So `OrderConfirmed` carries no shipping address**, even though Shipping
-> cannot function without one and should not call back to get it. The first
+> **So `OrderConfirmed` carries no shipping address**, even though,
+> in the reference domain, Shipping cannot function without one
+> ([Appendix E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops))
+> and should not call back to get it. The first
 > half is true and a field on the event is the wrong remedy:
 > [ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
 > records the rule and leaves the delivery mechanism to Shipping's own PR,
@@ -134,11 +140,13 @@ bought to avoid.
 > **Shipping does call back, and not from a consumer.**
 > [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 > has a worker read the address from Ordering over a row of its own, so no
-> message waits on the call that sentence warned against.
+> message waits on the call that sentence warned against;
+> in the reference domain the two sides are in
+> [Appendix E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops).
 
 ## 9.2 Versioning
 
-Contracts live in a versioned namespace: `Common.Contracts.Ordering.V1`.
+Contracts live in a versioned namespace: `Common.Contracts.<Service>.V1`.
 
 **Additive changes** — new optional fields — do not require a version bump.
 Consumers deserialising an unknown field ignore it.
@@ -242,9 +250,11 @@ architecture exists to avoid.
 >
 > **A service that consumes its own contract is not an independent deployable
 > with respect to itself**, and the condition has to be read that way or it
-> refuses every edit to an event a saga binds. §9.6's saga binds
-> `Event<OrderConfirmed>`, which makes Ordering a registered consumer of a
-> contract Ordering also produces — and a bound consumer deserialises the whole
+> refuses every edit to an event a saga binds. Here,
+> in the reference domain, §9.6's saga ([Appendix E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga))
+> binds `Event<OrderConfirmed>`, which makes Ordering a registered consumer of
+> a contract Ordering also produces — and a bound consumer deserialises the
+> whole
 > payload, so a `required` member's removal faults it whatever the transition
 > reads. Producer and consumer ship in the same build, so no deployable is
 > stranded; what the change costs instead is the overlap within that one
@@ -296,8 +306,10 @@ public interface IIntegrationEventMapper
 }
 ```
 
-Ordering's implementation is `OrderingIntegrationEventMapper` in
-`Ordering.Application/Integration`, and the allow-list is the whole of it:
+Ordering's implementation, in the reference domain, is
+`OrderingIntegrationEventMapper` in `Ordering.Application/Integration`
+([Appendix E.5.1](appendix-e-reference-domain.md#e51-the-contracts)), and the
+allow-list is the whole of it:
 
 ```csharp
 // The allow-list. A domain event absent from this dictionary never
@@ -579,7 +591,9 @@ reads 55 years.
 
 `MessageType` is written by one deployment and read by another. That makes the
 obvious implementation — `AssemblyQualifiedName` out, `Type.GetType` back —
-wrong in a way that only shows in production:
+wrong in a way that only shows in production. A
+persisted name, in the reference domain, reads as follows
+([Appendix E.5.1](appendix-e-reference-domain.md#e51-the-contracts)):
 
 ```
 Ordering.Domain.Orders.Events.OrderPlacedDomainEvent, Ordering.Domain,
@@ -654,7 +668,9 @@ rather than the first message.
 >
 > So `WriteAs` pairs with `Alias`, and **both calls name the old name** — the
 > renamed type's current name is derived, and aliasing a name the map already
-> derives is what the collision guard exists to refuse:
+> derives is what the collision guard exists to refuse. The sample is,
+> in the reference domain, the rename of `OrderPlaced`
+> ([Appendix E.5.1](appendix-e-reference-domain.md#e51-the-contracts)):
 >
 > ```csharp
 > // Release 1 — the type is now OrderPlacedDomainEvent; rows in flight say
@@ -790,7 +806,8 @@ succeeds or fails on its own.
 
 The dispatcher lives in `Common.Infrastructure`, so its three statements
 cannot name a schema — `ordering.` above is what the sample would be in
-Ordering's assembly, and there is no such assembly. The schema is a registered
+a service's own assembly, and there is no such assembly. The schema is a
+registered
 value instead:
 
 ```csharp
@@ -979,7 +996,9 @@ reachable only by joining logs on the correlation id.
 **A worker that claims its own rows in a later pass is the same hop, and
 takes the same columns.** `StagedTraceColumns` maps them as shadow properties
 on a row whose type is the domain's, and its pass starts on
-`StagedTrace.ClaimSourceName`. Shipping stamps a shipment when it is recorded
+`StagedTrace.ClaimSourceName`. Here, in the reference domain
+([Appendix E.5.6](appendix-e-reference-domain.md#e56-the-workers-that-claim-their-own-rows)),
+Shipping stamps a shipment when it is recorded
 and again when its cancellation is requested, the two writes that ask the
 fulfilment worker for a pass, and that pass runs as their child, so the
 booking or the carrier's cancellation sits in the confirming or cancelling
@@ -1235,10 +1254,12 @@ This is the last place that can tell a rejection from a fault. An exception
 from the dispatcher propagates and MassTransit retries it, which is correct:
 that is a fault. Everything below the dispatch is the other case.
 
-One mapper per command contract, in Ordering's
-`Ordering.Infrastructure/Messaging/CommandMappers.cs`. This is the whole of
-the `CancelOrder` one, and it does two things the consumer above deliberately
-does not: it parses the wire vocabulary, and it declares the origin.
+One mapper per command contract; in the reference domain they are in
+Ordering's `Ordering.Infrastructure/Messaging/CommandMappers.cs`
+([Appendix E.5.1](appendix-e-reference-domain.md#e51-the-contracts)). This is
+the whole of the `CancelOrder` one, and it does two things the consumer above
+deliberately does not: it parses the wire vocabulary, and it declares the
+origin.
 
 ```csharp
 public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, CancelOrderCommand>
@@ -1273,9 +1294,10 @@ public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, Cance
 >
 > **So each service authenticates as itself, and `write` is scoped to what its
 > own code addresses** ([ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md)).
-> `catalog-svc` has no `write` matching `ordering-commands` or
-> `Common.Contracts.Ordering.V1:*`, so a compromised Catalog can neither send
-> `ConfirmOrder` nor forge an `OrderPlaced` — and
+> Here, in the reference domain, `catalog-svc` has no `write` matching
+> `ordering-commands` or `Common.Contracts.Ordering.V1:*`, so a compromised
+> Catalog can neither send `ConfirmOrder` nor forge an `OrderPlaced`
+> ([Appendix E.5.2](appendix-e-reference-domain.md#e52-the-queues-and-broker-identities)) — and
 > `deploy/compose/rabbitmq/check_permissions.py` asserts, from each service's
 > own source, that no service's `write` covers another's command endpoint or
 > contracts, so the property is gated rather than remembered.
@@ -1289,8 +1311,8 @@ public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, Cance
 >
 > **What it does not buy is `configure` exclusivity**, and that is structural
 > rather than an omission. A consumer declares the exchange it binds, so
-> Ordering's `configure` reaches `Common.Contracts.*` including Catalog's, and
-> it could delete an exchange it does not own. Closing that needs a topology
+> a service's `configure` reaches `Common.Contracts.*` including its peers',
+> and it could delete an exchange it does not own. Closing that needs a topology
 > where producers pre-declare and consumers only bind, which MassTransit does
 > not offer. **Nor is `read` on a peer's command endpoint avoidable**: a send
 > to `queue:inventory-commands` declares and binds it, `queue.bind` takes
@@ -1310,10 +1332,11 @@ the handler for a consumed event that dispatches a command. An origin read
 from a message, a header or a request body is the case that re-opens the
 failure §11.4 describes, because it moves the choice to the caller.
 
-The command endpoint is declared in Ordering's `AddMassTransitMessaging`
-(`Ordering.Infrastructure/Messaging/DependencyInjection.cs`), which holds
-each queue name once as a constant, and the consumers it binds are §3.2's
-"Accepts" column, one line each:
+The command endpoint is declared in the service's `AddMassTransitMessaging`,
+which holds each queue name once as a constant, and the consumers it binds are
+§3.2's "Accepts" column, one line each. Here, in the reference domain, this is
+Ordering's (`Ordering.Infrastructure/Messaging/DependencyInjection.cs`,
+[Appendix E.5.2](appendix-e-reference-domain.md#e52-the-queues-and-broker-identities)):
 
 ```csharp
 // The queue name must match Endpoints.OrderingQueue in §9.6, or the saga
@@ -1349,9 +1372,12 @@ cfg.ReceiveEndpoint(
     });
 ```
 
-Inventory and Payments declare `inventory-commands` and `payments-commands` the
-same way, for `ReserveStock`/`ReleaseStock` and `AuthorisePayment`
-respectively. **Three queues are addressed by the saga (§9.6) and each needs a
+Here, in the reference domain, Inventory and Payments declare
+`inventory-commands` and
+`payments-commands` the same way, for `ReserveStock`/`ReleaseStock` and
+`AuthorisePayment` respectively
+([Appendix E.5.2](appendix-e-reference-domain.md#e52-the-queues-and-broker-identities)).
+**Three queues are addressed by the saga (§9.6) and each needs a
 receive endpoint in its owning service** — a command sent to an undeclared queue
 is not an error, it is silence.
 
@@ -1450,9 +1476,10 @@ looks meaningful and distinguishes nothing.
 It is also not the *handler*. `IntegrationEventConsumer<T>` (§9.4) runs every
 registered `IIntegrationEventHandler<T>` for the message, and one inbox row
 covers them all — which is correct, because they succeed or fail together and
-are retried together. Ordering's `ProductPriceProjection` and the
-`ProductPublished` handler §6.6 specifies beside it for `ordering.Products`
-will both handle it, and share one row.
+are retried together. Two handlers of one event, such as the pair §6.6
+specifies for a product's publication
+([Appendix E.5.1](appendix-e-reference-domain.md#e51-the-contracts)), will
+both handle it, and share one row.
 
 Retention is the same story as the outbox, and needs the same purge — an inbox
 nobody prunes grows for the life of the service and its composite-key index
@@ -1478,7 +1505,9 @@ to accept.
 
 **The purges — inbox, outbox (§9.4) and §8.5's idempotency markers — run from
 the same hosted service, and they are not every messaging table in the
-database.** Ordering's saga endpoint takes MassTransit's own outbox
+database.** Here, in the reference domain, Ordering's saga endpoint
+([Appendix E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga))
+takes MassTransit's own outbox
 ([ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)),
 whose three tables are kept in three different ways and not one of them is
 this service's.
@@ -1697,7 +1726,7 @@ public async Task Send(ConsumeContext<T> context, IPipe<ConsumeContext<T>> next)
         return;
     }
 
-    // Ordering matters: the handler runs FIRST, and the inbox row is only
+    // Order matters: the handler runs FIRST, and the inbox row is only
     // written if it succeeded. Recording before would mark a message
     // handled that never was, losing it permanently on the next delivery.
     await next.Send(context);
@@ -1779,7 +1808,7 @@ services.AddScoped<DbContext>(sp => sp.GetRequiredService<OrderingDbContext>());
 > the set of principals that may publish to the endpoint. A junk message
 > carrying the id a legitimate one will use pre-claims the slot, and the real
 > message is dropped when it arrives: a `CancelOrder`, a `PriceChanged`, or any
-> of the events Notifications consumes, gone for good on §9.4's own terms.
+> of the events a notifier consumes, gone for good on §9.4's own terms.
 >
 > **This is why the drop is counted and logged rather than silent.** A
 > suppression cannot be told from a redelivery *inside* the filter — both are
@@ -1855,9 +1884,9 @@ would multiply inside the drawing:
 
 | Wait | Delay | Bounds |
 |---|---|---|
-| `StockTimeout` | `StockTimeoutDelay` | Inventory answering `ReserveStock` |
-| `PaymentTimeout` | `PaymentTimeoutDelay` | Payments returning a verdict — longer, because a PSP retry is normal |
-| `ConfirmationTimeout` | `ConfirmationTimeoutDelay` | Ordering acknowledging its own `ConfirmOrder` — the one wait whose far end is this same service |
+| `StockTimeout` | `StockTimeoutDelay` | The stock service answering `ReserveStock` |
+| `PaymentTimeout` | `PaymentTimeoutDelay` | The payment service returning a verdict — longer, because a PSP retry is normal |
+| `ConfirmationTimeout` | `ConfirmationTimeoutDelay` | The saga's own service acknowledging its own `ConfirmOrder` — the one wait whose far end is this same service |
 | `ReleaseTimeout` | `ReleaseTimeoutDelay` | A `ReleaseStock` this saga sent while compensating |
 | `DespatchTimeout` | `DespatchTimeoutDelay` | Despatch, once the order is confirmed — days, because the far end is a warehouse |
 
@@ -1871,14 +1900,18 @@ below and at the schedule that arms it.
 > event**, which is why the diagram gives it a single unlabelled arrow to
 > `[*]` and a self-loop for every arrival. It is reached from
 > `AwaitingPayment` with `AuthorisePayment` already sent and unanswered, so
-> two services owe it an answer — Inventory for the reservation, Payments for
-> the verdict — and §9.4 orders nothing between them. Each arrival records
+> two services owe it an answer — in the reference domain Inventory for the
+> reservation, Payments for the verdict
+> ([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)) — and §9.4
+> orders nothing between them. Each arrival records
 > what it settles; the instance ends when both halves are settled, whichever
 > lands last
 > ([ADR-025](adr/ADR-025-a-saga-state-that-waits-on-two-services-finalises-on-neither-alone.md)).
 >
-> **Finalising on the stock half alone loses the money.** Inventory answering
-> promptly while a PSP is slow is the expected interleaving, not the
+> **Finalising on the stock half alone loses the money.** Here,
+> in the reference domain ([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)),
+> Inventory answering promptly while a PSP is slow is the expected
+> interleaving, not the
 > degenerate one; an unconditional exit on `StockReleased` deletes the
 > instance, and the authorisation still in flight then correlates to nothing —
 > consumed cleanly, with no `payment_authorised_during_compensation` row and
@@ -1894,8 +1927,8 @@ below and at the schedule that arms it.
 > `payment_authorised_during_compensation` row at once.
 
 `OrderPlaced`, `OrderCancelled` and `OrderConfirmed` are all arrows coming from
-this service — [§3.2](03-bounded-contexts.md) lists all three in Ordering's
-own Consumes column, for the same reason: a fact Ordering publishes is also a
+this service — [§3.2](03-bounded-contexts.md) lists all three in its own
+Consumes column, for the same reason: a fact the service publishes is also a
 fact its workflow has to react to. `Compensating` writes each of them out, so
 the machine has a branch for them in every state it can reach one in. They
 are named rather than counted, because the property the sentence is about is
@@ -1913,7 +1946,8 @@ meet.
 > *sends* `ConfirmOrder`; `AwaitingConfirmation` is the state between. Entered
 > on the send, `Confirmed` would mean "a command is in flight" while the
 > diagram, the review vocabulary and every branch read it as "the aggregate
-> confirmed and Shipping has been told" — and those diverge for exactly as
+> confirmed and its consumers have been told" — and those diverge for exactly
+> as
 > long as one local command takes. A cancellation arriving inside that window
 > would take the `Confirmed` branch: withhold `ReleaseStock` on the argument
 > that a reservation being picked must not be dropped, for a picking nobody
@@ -1932,7 +1966,9 @@ meet.
 
 Commands are contracts too, owned by the service that accepts them ([§3.2](03-bounded-contexts.md)), and
 each owns its payload types. They live under `Common.Contracts`, one file per
-owning service:
+owning service; these are, in the reference domain, the saga's two outbound
+commands to its peers
+([E.5.1](appendix-e-reference-domain.md#e51-the-contracts)):
 
 ```csharp
 namespace Common.Contracts.Inventory.V1;
@@ -1957,13 +1993,17 @@ public sealed record AuthorisePayment(Guid OrderId, decimal Amount, string Curre
 > contract narrowed rather than emptied.**
 > [ADR-028](adr/ADR-028-a-money-movement-command-carries-no-subject.md)
 > carries the argument. `Amount` and `Currency` say *what to do*: the sender
-> decides them, so they travel, and Payments may refuse a mismatch against its
-> own record as a consistency check. A subject says *on whose behalf*, which is
+> decides them, so they travel, and in the reference domain Payments may refuse
+> a mismatch against its own record as a consistency check
+> ([E.5.1](appendix-e-reference-domain.md#e51-the-contracts)). A subject says
+> *on whose behalf*, which is
 > the deciding service's to derive.
 >
-> **It is not that only one of them is checkable.** Payments holds the order —
-> payer included — so a supplied `CustomerId` would be as checkable as the
-> amount. What decides it is stronger: a transported authority is a second
+> **It is not that only one of them is checkable.** Here, in the reference domain
+> ([E.5.1](appendix-e-reference-domain.md#e51-the-contracts)) Payments holds
+> the order — payer included — so a supplied `CustomerId` would be as
+> checkable as the amount. What decides it is stronger: a transported
+> authority is a second
 > source for a decision that must have exactly one, a check that exists is not
 > a check that is performed, and the field that is absent cannot be the one a
 > later code path reads instead of the record.
@@ -2036,7 +2076,8 @@ public sealed record ConfirmOrder(Guid OrderId, string PaymentReference);
 > most common offender — they look like primitives and are not.
 
 Endpoint addresses are declared once so the saga reads as intent rather than as
-string handling:
+string handling; in the reference domain they are
+([E.5.2](appendix-e-reference-domain.md#e52-the-queues-and-broker-identities)):
 
 ```csharp
 namespace Ordering.Infrastructure.Messaging;
@@ -2057,9 +2098,11 @@ internal static class Endpoints
 > activities call `.Send(ctx => ...)` with no address; it reads more cleanly
 > and fails at runtime rather than compile time if a mapping is missed.
 
-The machine is `OrderFulfilmentSaga` in
-`Ordering.Infrastructure/Messaging`, and the diagram above is its
-specification: every state, event and schedule the file declares is an arrow
+Here, in the reference domain, the machine is `OrderFulfilmentSaga` in
+`Ordering.Infrastructure/Messaging`
+([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)), and the
+diagram above is its specification: every state, event and schedule the file
+declares is an arrow
 there, and every arrow is a transition in the file. What the excerpts below
 carry is the rules the file is built on rather than its transitions, which
 the diagram already states.
@@ -2068,7 +2111,8 @@ the diagram already states.
 must be able to express, not a habit to remember at each transition, so each
 of the five waits — stock, payment, confirmation, despatch, release — declares
 a `Schedule<OrderFulfilmentState, T>` with its own expiry message type. The
-expiry types are Ordering's own and deliberately not contracts: they are sent
+expiry types are the saga service's own and deliberately not contracts: they
+are sent
 by this saga to itself, carry no envelope, and no peer may bind them. One
 record per wait rather than one carrying a discriminator, because MassTransit
 correlates a schedule by message *type*. The confirmation wait is the only one
@@ -2087,7 +2131,9 @@ instead, because a wait with no compensating action still needs a bound.
 **Nothing catches an unhandled event, and the missing-instance policy is
 per event.** The machine keeps MassTransit's default for an event reaching a
 state with no transition for it — the trap below says why — and states, for
-each event, what a missing instance means:
+each event, what a missing instance means; these are, in the reference domain,
+the two events whose policy differs
+([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)):
 
 ```csharp
 // The one event whose missing instance always faults: Payments produces it,
@@ -2133,7 +2179,9 @@ private static Task NoInstanceForCancellation(ConsumeContext<OrderCancelled> con
 
 **Commands are sent, mapped rather than forwarded.** The initial transition
 is the shape every forward step takes: record what the instance needs, arm
-the next wait in the same activity that begins it, send to one owner:
+the next wait in the same activity that begins it, send to one owner;
+in the reference domain it is
+([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)):
 
 ```csharp
 Initially(
@@ -2163,7 +2211,9 @@ sends `AuthorisePayment` and cleared by the first `PaymentAuthorised` or
 `PaymentDeclined` to arrive in any state, and by a timeout only in
 `Compensating`, where an authorisation abandoned on a cancelled order is the
 ordinary end; elsewhere a timeout ends the wait rather than the obligation.
-`Compensating`'s stock exits then finalise conditionally:
+`Compensating`'s stock exits then finalise conditionally;
+in the reference domain
+([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)) the first is:
 
 ```csharp
 // The first of Compensating's two stock exits; ReleaseTimeout.Received is
@@ -2190,11 +2240,15 @@ the authorisation it may still complete is what
 than an unbounded number — the `Compensating` branch that receives the
 second expiry stops asking for good. And a customer's cancellation out of
 `AwaitingPayment` does **not** unschedule the payment wait: it cancels while
-Payments still owes an answer, so the wait armed with `AuthorisePayment` runs
-on into `Compensating`, which receives it.
+the payment side, in the reference domain Payments
+([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)), still owes
+an answer, so the wait armed with `AuthorisePayment` runs on into
+`Compensating`, which receives it.
 
 **A cancellation in flight is recorded before its own copy arrives, and every
-forward transition asks.** Inventory consumes `OrderCancelled` directly
+forward transition asks.** Here, in the reference domain
+([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)) Inventory
+consumes `OrderCancelled` directly
 ([ADR-029](adr/ADR-029-inventory-releases-on-the-cancellation-not-on-the-sagas-word.md)),
 so a `StockReleased` arriving in a state that sent no release proves a
 cancellation reached Inventory before the saga's own copy landed. The four
@@ -2300,8 +2354,9 @@ decline and timeout branches keep their literals because those transitions
 > settled, the echo can equally land on a live instance and be absorbed
 > there. Either way the order is cancelled. ADR-024 has `StockReleased`
 > answered for every release including a no-op one, so it keeps the default
-> outright. `PaymentAuthorised` cannot make the claim at all — Payments
-> produces it — so it takes `OnMissingInstance(m => m.Fault())` and reaches
+> outright. `PaymentAuthorised` cannot make the claim at all — the payment
+> service produces it — so it takes `OnMissingInstance(m => m.Fault())` and
+> reaches
 > the error queue instead. `OrderCancelled` is the one in between: **some** of
 > its arrivals are the echo and some are not, so it takes neither and asks.
 >
@@ -2378,15 +2433,16 @@ decline and timeout branches keep their literals because those transitions
 > |---|---|---|
 > | `AwaitingStock` | A reservation that may or may not exist yet | Release it and wait — `Compensating`, recording `OrderCancelled.Reason` |
 > | `AwaitingPayment` | Stock held, **authorisation already sent** | The decline branch's compensation, recording `OrderCancelled.Reason` — this does not stop the charge |
-> | `AwaitingConfirmation` | The card is authorised, and **nothing downstream has been told** — `ConfirmOrder` is in flight, so no `OrderConfirmed` has been published and Shipping has no despatch to prepare | `AwaitingPayment`'s compensation unchanged, one state later: release, wait, cancel. It escalates nothing, because Payments voids off `OrderCancelled` itself and there is no despatch to stop. **What it cannot see is whether the aggregate confirmed a moment before the customer cancelled** — that is caught in `Compensating` below, on the confirmation's arrival |
-> | `Confirmed` | The card is authorised **and Shipping has been told** | Escalate — `cancelled_after_confirmation`, because a despatch may still be moving — and finalise. A second `OrderConfirmed` is absorbed here rather than faulted: it is either §9.5's unrecorded redelivery or a rollout handing this replica an instance the previous release advanced |
-> | `Compensating` | A cancellation is already the outcome — but the money, the reservation and the **confirmation** may still land | Every arrival written out, none left to the catch-all: `Ignore` for `OrderCancelled`, `StockReserved` and `StockReservationFailed`, since the exits cancel the order anyway; `When(PaymentAuthorised)` escalates `payment_authorised_during_compensation`; `When(OrderConfirmed)` escalates `cancelled_after_confirmation`; `When(PaymentDeclined)` and `When(PaymentTimeout.Received)` escalate nothing and simply record that the verdict is in or given up on. **This state waits on two halves and finalises on neither alone** (ADR-025). **`Ignore(StockReserved)` absorbs the event and does not release the reservation**, and it is [ADR-024](adr/ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md) rather than this machine that makes that safe: §9.4 orders nothing, so a release handled before its reserve would otherwise strand the reservation that follows it. Inventory owes the tombstone |
+> | `AwaitingConfirmation` | The card is authorised, and **nothing downstream has been told** — `ConfirmOrder` is in flight, so no `OrderConfirmed` has been published and the shipping service has nothing to prepare | `AwaitingPayment`'s compensation unchanged, one state later: release, wait, cancel. It escalates nothing, because the payment service voids off `OrderCancelled` itself and there is no despatch to stop. **What it cannot see is whether the aggregate confirmed a moment before the customer cancelled** — that is caught in `Compensating` below, on the confirmation's arrival |
+> | `Confirmed` | The card is authorised **and the shipping service has been told** | Escalate — `cancelled_after_confirmation`, because a despatch may still be moving — and finalise. A second `OrderConfirmed` is absorbed here rather than faulted: it is either §9.5's unrecorded redelivery or a rollout handing this replica an instance the previous release advanced |
+> | `Compensating` | A cancellation is already the outcome — but the money, the reservation and the **confirmation** may still land | Every arrival written out, none left to the catch-all: `Ignore` for `OrderCancelled`, `StockReserved` and `StockReservationFailed`, since the exits cancel the order anyway; `When(PaymentAuthorised)` escalates `payment_authorised_during_compensation`; `When(OrderConfirmed)` escalates `cancelled_after_confirmation`; `When(PaymentDeclined)` and `When(PaymentTimeout.Received)` escalate nothing and simply record that the verdict is in or given up on. **This state waits on two halves and finalises on neither alone** (ADR-025). **`Ignore(StockReserved)` absorbs the event and does not release the reservation**, and it is [ADR-024](adr/ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md) rather than this machine that makes that safe: §9.4 orders nothing, so a release handled before its reserve would otherwise strand the reservation that follows it. The stock service owes the tombstone |
 >
 > **Every row above is what happens when the cancellation ARRIVES, and the
 > harder case is the interval before it does.** Each of those transitions
 > needs this machine's own copy of `OrderCancelled`; until it lands, every
 > other event keeps its ordinary transition, so a forward step could run after
-> the customer has cancelled and after Inventory has already acted on it — an
+> the customer has cancelled and after the stock service has already acted on
+> it — an
 > `AuthorisePayment` sent for an order being cancelled, a `ConfirmOrder` sent
 > and the escalation's own event consumed by the success branch, and two
 > terminal despatches finalising the instance the cancellation would have
@@ -2394,8 +2450,9 @@ decline and timeout branches keep their literals because those transitions
 >
 > **The money is a gap the last three rows state rather than close.** Undoing
 > an authorisation is a refund, and in [§3.2](03-bounded-contexts.md)
-> `AuthorisePayment` is the only command in **Payments'** Accepts column and
-> Ordering's holds no money command at all — no service accepts a refund
+> `AuthorisePayment` is the only command in the **payment service's** Accepts
+> column and the saga's own service holds no money command at all — no
+> service accepts a refund
 > command, so the saga has none to send. Inventing one inside a state machine
 > would be a §3.2 decision taken in the wrong place, so the saga escalates and
 > the review row is what carries it. Which of the two money codes a refund
@@ -2406,11 +2463,14 @@ decline and timeout branches keep their literals because those transitions
 > **`AwaitingConfirmation` is the one row with the money at stake that does
 > NOT escalate, and the omission is the argument.** What a review row buys is a
 > person doing something the machine cannot: stopping a despatch. There is no
-> despatch to stop from that state, and the refund reaches Payments on the
+> despatch to stop from that state, and the refund reaches the payment
+> service on the
 > `OrderCancelled` the customer's cancellation already published. A row raised
 > there would page someone to confirm that two automatic mechanisms ran.
 >
-> One consequence follows: the **saga** leaves the reservation on a confirmed
+> One consequence follows, in the reference domain
+> ([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)): the
+> **saga** leaves the reservation on a confirmed
 > order alone, because one being picked is not Inventory's to drop on a state
 > machine's word. **What that does not do is leave the reservation held.**
 > §3.2 has Inventory consuming `OrderCancelled` directly, so the cancellation
@@ -2430,7 +2490,8 @@ decline and timeout branches keep their literals because those transitions
 >
 > **On the `Compensating` raising a `ReleaseStock` has gone out as well** —
 > the state was entered on the premise that no confirmation had happened — and
-> nothing can recall either one, because §3.2 gives Inventory no way to be told
+> nothing can recall either one, because §3.2 gives the stock service no way
+> to be told
 > to keep a reservation after all. So the two raisings differ in what the saga
 > sent and not in where the stock ends up. The row is what carries it, as it
 > does for the money.
@@ -2448,7 +2509,8 @@ decline and timeout branches keep their literals because those transitions
 > cancel has sent `ReleaseStock`, which the machine waits on in
 > `Compensating` — so this is not the `StockTimeout` shape, where the branch
 > cancels and finalises with no release at all. What that does not establish
-> is that the reservation was released: §9.4 orders nothing, so Inventory may
+> is that the reservation was released: §9.4 orders nothing, so the stock
+> service may
 > handle the release before the reserve it undoes, the release finds nothing,
 > the reserve then creates a reservation, and the `StockReserved` that follows
 > is ignored with nothing sent after it — and neither path writes an
@@ -2458,7 +2520,8 @@ decline and timeout branches keep their literals because those transitions
 > **It is closed in [§3.2](03-bounded-contexts.md), not here, and the reason
 > is worth carrying.**
 > [ADR-024](adr/ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md)
-> has Inventory remember a release for an order whose `ReserveStock` has not
+> has the stock service remember a release for an order whose `ReserveStock`
+> has not
 > arrived and refuse the reserve that follows, answering with `StockReleased`
 > — the same postcondition, and not `StockReservationFailed`, which reports
 > unavailable products this refusal does not have.
@@ -2470,7 +2533,8 @@ decline and timeout branches keep their literals because those transitions
 > them.
 
 > **One cancellation starts two races to this queue, and only one of them is
-> a transition.** [§3.2](03-bounded-contexts.md) has Inventory consuming
+> a transition.** [§3.2](03-bounded-contexts.md) has the stock service
+> consuming
 > `OrderCancelled` **directly** and publishing `StockReleased` off it,
 > independently of the `ReleaseStock` the saga sends — so a release derived
 > from that very event can reach the saga before the saga has consumed its own
@@ -2498,7 +2562,8 @@ decline and timeout branches keep their literals because those transitions
 > and is not correct without it.** Recording the arrival still consumes it
 > rather than answering with it, so `Compensating`'s exit has to come from
 > somewhere else — and it does: the cancellation branch sends its own
-> `ReleaseStock`, which the ADR has Inventory answer whether or not it already
+> `ReleaseStock`, which the ADR has the stock service answer whether or not it
+> already
 > released on the event. **`Confirmed` is outside this paragraph**: it sends
 > no release, so it has no exit to lose and nothing to make sound.
 >
@@ -2516,7 +2581,7 @@ handler writes an operations row and stops, and no aggregate is loaded — but
 narrower: a human now has work **this workflow cannot finish itself**, which
 is a fact about operations rather than about the order — and not "work this
 platform has no contract to do", which holds for the waits and not for
-the money codes, where Payments has both a `Refund` aggregate and
+the money codes, where the payment service has both a `Refund` aggregate and
 `OrderCancelled` to act on.
 
 The vocabulary splits in two. `not_despatched`, `stock_not_released` and
@@ -2524,12 +2589,14 @@ The vocabulary splits in two. `not_despatched`, `stock_not_released` and
 genuinely has not moved. `cancelled_after_confirmation` and
 `payment_authorised_during_compensation` are the opposite — they exist because
 **money is authorised and cancellation is the workflow's outcome**, and §3.2
-gives Ordering no refund command to answer that with. A single "the process
+gives the saga's service no refund command to answer that with. A single
+"the process
 stalled" would describe the second pair backwards.
 
 `not_confirmed` joins the first group and is the only one of the three whose
-far end is **this service**: the other two wait on Inventory and Shipping,
-where that one waits on Ordering's own `ConfirmOrder` to be consumed. So a
+far end is **this service**: the other two wait on the stock and despatch
+services, where that one waits on this service's own `ConfirmOrder` to be
+consumed. So a
 spike in it is not a peer being slow — it is this service's outbox, queue or
 rollout, which is the one place in this vocabulary where the diagnosis starts
 at home. It reads "the acknowledgement is missing", not "the order was
@@ -2538,12 +2605,15 @@ refused": an aggregate that refuses `ConfirmOrder` returns a `Rule` failure
 own event.
 
 **The shared condition of the money pair is the money, not the outcome for
-the goods.** `cancelled_after_confirmation` exists *because* Shipping may
-still despatch, and stopping that is the first step of its procedure — so
+the goods.** `cancelled_after_confirmation` exists *because* the despatch
+service may still despatch, and stopping that is the first step of its
+procedure — so
 delivery is exactly what is still open on it.
 
-**Nor is the money the thing that tells the two apart.** Payments consumes
-`OrderCancelled` and voids an authorisation already taken (§3.2), so a refund
+**Nor is the money the thing that tells the two apart.** Here,
+in the reference domain ([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)),
+Payments consumes `OrderCancelled` and voids an authorisation already taken
+(§3.2), so a refund
 may arrive on either code with nobody acting — and §9.4 orders nothing between
 that consumer and this saga, so neither code predicts whether it has; the
 runbook checks on both rather than expecting an answer on either.
@@ -2555,7 +2625,8 @@ what separates them.
 **That distinction is between the codes and not between the states.**
 `cancelled_after_confirmation` is raised from `Confirmed` and from
 `Compensating` alike — the latter on an `OrderConfirmed` arriving after that
-state was entered, which is the evidence Shipping was told, so the code means
+state was entered, which is the evidence the shipping service was told, so
+the code means
 one thing both times. What does not follow from it is where the saga is, or
 whether there is one: the `Compensating` raising does not finalise, and on
 the decline and payment-timeout doors the row precedes the cancellation it is
@@ -2592,7 +2663,9 @@ CREATE INDEX IX_OrderReviews_RaisedAt ON ordering.OrderReviews (RaisedAt);
 > the flag, which this document does not have and does not need for the
 > escalation to work.
 
-`FlagOrderForReviewHandler` in `Ordering.Application/Orders/FlagOrderForReview`
+Here, in the reference domain, `FlagOrderForReviewHandler` in
+`Ordering.Application/Orders/FlagOrderForReview`
+([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga))
 is one statement, and the shape of the statement is the decision. The
 `UPDLOCK, HOLDLOCK` hints make its `NOT EXISTS` read a range lock, so a
 second delivery waits for the first to commit and then sees the row; an
@@ -2645,8 +2718,9 @@ Saga design rules:
   arrive is an order stuck in limbo and a support ticket.
 - **A state may wait on more than one thing, and then it needs the count of
   what is outstanding on the instance rather than in the state's name.**
-  `Compensating` waits on Inventory and, when it was reached with an
-  authorisation unanswered, on Payments — two services with no ordering
+  `Compensating` waits on the stock service and, when it was reached with an
+  authorisation unanswered, on the payment service — two services with no
+  ordering
   between them, so either may answer first. A state that finalises on the
   first answer loses the second one silently
   ([ADR-025](adr/ADR-025-a-saga-state-that-waits-on-two-services-finalises-on-neither-alone.md)).
@@ -2756,7 +2830,7 @@ CREATE TABLE ordering.OrderFulfilmentStates
     -- whose saga writes it on every OrderPlaced. NOT NULL with a default is
     -- the one shape that survives both directions, and the empty GUID is the
     -- conservative value — it is nobody, where any other default would name a
-    -- real subject that was never this order's. With a live Payments this
+    -- real subject that was never this order's. With a live payment service this
     -- removal takes three releases, §7.4's sequence including the "stop
     -- writing the old one" step.
     CustomerId                 UNIQUEIDENTIFIER NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
@@ -2853,14 +2927,16 @@ cannot arrive. The ADR carries the measurement.
 
 ### Who moves the order while the saga coordinates it
 
-The saga sends Ordering four commands and §3.2's Accepts column lists exactly
-those four — none of which advances the order out of `AwaitingStock`. §5.4's
+The saga sends its own service four commands and §3.2's Accepts column lists
+exactly those four — none of which advances the order out of `AwaitingStock`.
+§5.4's
 `Order.ConfirmStock` is that transition: `ConfirmOrder` arrives after payment,
 `Order.ConfirmPayment` requires `AwaitingPayment`, and something in between
 has to put the order there.
 
 **That piece is a consumer, not a contract.** §3.2 already lists
-`StockReserved` in Ordering's Consumes column, so Ordering binds it twice — once
+`StockReserved` in the service's own Consumes column, so it binds it twice —
+once
 for the saga, which reads it to decide what to ask for next, and once for an
 `IIntegrationEventHandler<StockReserved>` that records it on the aggregate. That
 handler **dispatches a command** rather than mutating the order itself, and the
@@ -2901,7 +2977,9 @@ than HTTP+JSON: it is faster, and the generated client and contract-first
 `.proto` remove a category of drift.
 
 Note which caller this is. The example below belongs to the **BFF**, rendering
-a form: if Catalog is slow the user sees a spinner. The *command* path never
+a form (in the reference domain,
+[E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)): if Catalog
+is slow the user sees a spinner. The *command* path never
 calls Catalog — it reads a local price projection (§6.4), because a write that
 depends on another service being up is a write that inherits its downtime.
 "Needs an answer now" is a property of a screen, not of a transaction.
@@ -2921,8 +2999,10 @@ concurrent fan-out costs only the slowest call. That is the rule; [§10.1](10-ap
 two-BFF diagram illustrates it, and is a picture of the pattern rather than of
 this platform.
 
-`Web.Bff`'s pricing hop to Catalog (below) is the platform's one synchronous
-call on a request path, and Catalog calls nobody, so the deepest chain is
+`Web.Bff`'s pricing hop to Catalog (below) is, in the reference domain
+([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)), the
+platform's one synchronous call on a request path, and Catalog calls nobody,
+so the deepest chain is
 `Client → Gateway → BFF → Catalog`. There is a second synchronous call between
 services and it is on no request path at all:
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
@@ -2951,7 +3031,8 @@ having failed its own SLO.
 > `ConsumerCallRule` fails a host whose consumer reaches an outbound client
 > with no declared exception, and stops at consumers: a worker loop calling
 > out over a row it leases is the shape ADR-052 chose, not a consumer.
-> Payments' provider call is the one consumer call granted, by
+> The one consumer call granted in the reference domain is Payments' provider
+> call ([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)), by
 > [ADR-070](adr/ADR-070-payments-calls-its-provider-inside-its-consumers.md).
 
 If you find yourself needing a second hop, the answer is almost always that the
@@ -3009,7 +3090,9 @@ configuration-validation test at startup.
    orders never reaches the library default's minimum throughput, so its own
    is one the hop reaches inside one sampling window at its slowest pace.
    Called from a consumer, a breaker spares the endpoint's slot but not the
-   message, so Payments' receive endpoints, whose consumers make the call
+   message, so in the reference domain
+   ([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops))
+   Payments' receive endpoints, whose consumers make the call
    [ADR-070](adr/ADR-070-payments-calls-its-provider-inside-its-consumers.md)
    grants, also take `ProviderKillSwitch`, tripped by the provider's
    unavailability alone, which stops the endpoint and leaves the rest of an
@@ -3022,7 +3105,9 @@ configuration-validation test at startup.
 6. **Validate the reply.** A peer is not a library call: what comes back is
    input from another process with its own deploys and its own bugs, and every
    invariant the producer holds is the producer's until this side checks it.
-   Catalog's own `Money` refuses a negative amount, so a negative price is a
+   Take, in the reference domain
+   ([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)),
+   Catalog's own `Money`: it refuses a negative amount, so a negative price is a
    contract violation rather than a price — but a consumer that relies on that
    is depending on the producer's implementation, which is a coupling nothing
    in the contract carries and no deploy of Catalog is obliged to preserve.
@@ -3034,7 +3119,9 @@ configuration-validation test at startup.
 
 For a synchronous call under a grant of its own, the caller's own `Program.cs`
 (§4.1) registers it and §4.2's helper deliberately registers none of it, so a
-host that holds client credentials is a host that makes one (§11.5). `Web.Bff`
+host that holds client credentials is a host that makes one (§11.5);
+in the reference domain
+([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)) `Web.Bff`
 registers the pricing hop; Shipping's worker registers the address read
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 gives it, and Notifications' worker the contact read the same record gives it,
@@ -3130,7 +3217,7 @@ test a check on the registration and not a restatement of it.
 > raises travels in `grpc-status` — a trailer on an HTTP **200**, or a header
 > on a trailers-only response, still a 200 — so `AddStandardResilienceHandler`,
 > which decides on the HTTP status line and on `HttpRequestException`, sees a
-> successful response and hands it straight back. A Catalog that answers
+> successful response and hands it straight back. A service that answers
 > `Unavailable` is asked **once**, whatever `MaxRetryAttempts` says. What the
 > retries do cover is a transport fault — a refused connection, a reset, a DNS
 > failure, a 502 from an intermediary — which is the shape a service that is
@@ -3207,8 +3294,10 @@ attempt timeout sits inside the band the table names, and that
 
 ### What the `.proto` cannot say
 
-Catalog's `pricing.proto` removes a category of drift and not the category
-that matters most here. It pins the *shape* — one file, two generated halves,
+Catalog's `pricing.proto`, in the reference domain
+([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)), removes a
+category of drift and not the category that matters most here. It pins the
+*shape* — one file, two generated halves,
 so a field cannot be renamed on one side only. It cannot pin what the fields
 **mean**, and every load-bearing thing about this reply is meaning: an
 unpriced product is absent rather than zero, the amount is text to be
@@ -3218,17 +3307,20 @@ the question. All three are stated in `pricing.proto` — in comments.
 
 So this hop is the one relationship in the platform carrying a **consumer-driven
 contract**: `Web.Bff` writes down what it needs, its own suite drives every
-expectation through the screen that needs it, and Catalog's suite verifies the
+expectation through the screen that needs it, and the producer's suite
+verifies the
 same list against the real service.
 [§12.6](12-test-strategy.md) has the shape and
 [ADR-023](adr/ADR-023-the-consumer-driven-contract-is-a-linked-file-not-pact.md)
 has the mechanism, which is a linked file rather than Pact.
 
 > **A stub is a second specification, and the contract is what verifies it.**
-> The BFF's suite drives a hand-written gRPC server standing in for Catalog,
+> The BFF's suite drives a hand-written gRPC server standing in for the
+> producer,
 > and a stub that drifts from the service it models lets the consumer's
 > checks pass against behaviour the producer does not have — a currency
-> echoed in the request's spelling where Catalog projects its own stored one,
+> echoed in the request's spelling where the producer projects its own stored
+> one,
 > say, so a comparison that should be ordinal is never handed two spellings
 > to reconcile. **A synchronous hop is the one place a peer's behaviour is
 > load-bearing rather than eventual**, which is why this is where the
@@ -3244,14 +3336,17 @@ has the mechanism, which is a linked file rather than Pact.
 | Consumer down | Messages queue in the broker; monitor queue depth |
 | Broker down | Outbox holds messages; they flush on reconnect |
 
-Retry and idempotency are configured per receive endpoint, and Ordering has
-**four**, each declaring for itself which policy it applies, in
-`Ordering.Infrastructure/Messaging/DependencyInjection.cs`. The fourth is
-the stock-events endpoint, which §9.6 argues where the transition it serves
+Retry and idempotency are configured per receive endpoint, and
+in the reference domain ([E.5.5](appendix-e-reference-domain.md#e55-the-retry-ladders))
+Ordering has **five**, each declaring for itself which policy it applies, in
+`Ordering.Infrastructure/Messaging/DependencyInjection.cs`. One is the
+stock-events endpoint, which §9.6 argues where the transition it serves
 lives.
 
 **The ladder is a `RetryPolicy` in each service's own
-`*.Infrastructure/Messaging`** — Ordering's for the endpoints above,
+`*.Infrastructure/Messaging`** — in the reference domain
+([E.5.5](appendix-e-reference-domain.md#e55-the-retry-ladders)), Ordering's
+for the endpoints above,
 Inventory's for every endpoint its own `DependencyInjection` declares, under
 [§3.2](03-bounded-contexts.md)'s Accepts column and under its Consumes alike,
 and Catalog's for `catalog-inventory-events` — which holds `RetryLimit`,
@@ -3278,8 +3373,9 @@ saga persists them instead, because its sends must survive its own commit,
 which is
 [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
 and the callout under that block.
-The **projection** endpoint from §9.4, carrying Catalog's events into local read
-models:
+The **projection** endpoint from §9.4 carries, in the reference domain
+([E.5.2](appendix-e-reference-domain.md#e52-the-queues-and-broker-identities)),
+Catalog's events into local read models:
 
 ```csharp
 cfg.ReceiveEndpoint(
@@ -3337,7 +3433,7 @@ cfg.ReceiveEndpoint(
 > acknowledged, its effects lost, and nothing in either mechanism able to
 > notice.
 >
-> Ordering the inbox first fixes it by construction. A failed flush then throws
+> Putting the inbox first fixes it by construction. A failed flush then throws
 > *through* the filter, which has not saved yet, so no row is written and the
 > redelivery does the work again — at-least-once, as designed. Both mechanisms
 > are correct on their own and only their nesting decides which of the two
@@ -3357,8 +3453,10 @@ cfg.ReceiveEndpoint(
 > a failure there costs — the messages are already committed, so the delivery
 > resumes instead of being lost — not which filter wraps which.
 
-The **stock-events** endpoint is the fourth, and it takes the projection
-endpoint's policy unchanged — it is an ordinary consumer, and the only reason it
+The **stock-events** endpoint is one of those five in the reference domain
+([E.5.2](appendix-e-reference-domain.md#e52-the-queues-and-broker-identities)),
+and it takes the projection endpoint's policy unchanged — it is an ordinary
+consumer, and the only reason it
 is a separate queue is what it must *not* share:
 
 ```csharp
@@ -3604,7 +3702,8 @@ Rejections get their own instrument instead. `MessagingMetrics.Rejected`
 `Error.Code` (§10.5) — a closed vocabulary, so the tag cannot explode. It
 belongs on a dashboard rather than on a pager: a spike in
 `order.already_shipped` is usually a saga bug, and a spike in
-`order.products_unavailable` means Catalog stopped publishing (§6.6). Neither
+`order.products_unavailable` means the catalogue service stopped publishing
+(§6.6). Neither
 is an incident at 3am, and both are invisible without the counter.
 
 > **The tag is an `Error.Code` and nothing else.** It is tempting to reach for a

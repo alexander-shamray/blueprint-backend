@@ -805,7 +805,164 @@ absent from Ordering, because the broker drops what no queue is bound for.
 
 ## E.5 §9: messaging and the sagas
 
-Filled by #909.
+[§9](09-messaging.md) states the rules; this section holds the reference
+domain's cases that its evidence blocks and its one saga argue from. A queue
+name, a contract's members and a retry ladder's numbers are the code's
+([ADR-096](adr/ADR-096-a-chapter-names-a-reference-service-only-as-evidence.md)
+part 3), so each subsection names the file that holds them and does not copy
+them.
+
+### E.5.1 The contracts
+
+Contracts live under `src/BuildingBlocks/Common.Contracts/<Service>/V1`, one
+namespace per owning service, and every event is an `IIntegrationEvent`.
+
+| Owner | Events it publishes | Commands it accepts |
+|---|---|---|
+| Ordering | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | `CancelOrder`, `ConfirmOrder`, `MarkOrderShipped`, `FlagOrderForReview` |
+| Inventory | `StockReserved`, `StockReservationFailed`, `StockReleased`, `StockLevelChanged` | `ReserveStock`, `ReleaseStock` |
+| Payments | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `AuthorisePayment` |
+| Shipping | `ShipmentDispatched`, `ShipmentDelivered` | |
+| Catalog | `ProductPublished`, `PriceChanged`, `ProductDiscontinued` | |
+| Privacy | `PersonalDataDeleteRequested` | `PersonalDataDeleteCompleted` |
+
+[§3.2](03-bounded-contexts.md)'s Accepts and Consumes columns are the owner of
+who binds what. `OrderPlaced`, `OrderConfirmed` and `OrderCancelled` each carry
+`ErasedUnder`, optional on all three
+([ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md)).
+`PlacedLine` and `ConfirmedLine` are each their own record, and `StockLine` is
+the stock command's, so that versioning an order event does not version a
+command. `AuthorisePayment` carries an amount and a currency and no subject
+([ADR-028](adr/ADR-028-a-money-movement-command-carries-no-subject.md));
+Payments holds the order, payer included, and derives the subject from it.
+
+The allow-list that turns Ordering's domain events into contracts is
+`OrderingIntegrationEventMapper` in `Ordering.Application/Integration`; its
+command mappers, one per accepted command, are
+`Ordering.Infrastructure/Messaging/CommandMappers.cs`.
+`OrderStockConfirmedDomainEvent` is kept off the allow-list on purpose, and the
+mapper argues why.
+
+A persisted `MessageType` is written from the domain event's name, for example
+`Ordering.Domain.Orders.Events.OrderPlacedDomainEvent`. The rename sample in
+§9.4 is that event's, from `OrderPlaced` to `OrderPlacedDomainEvent`, with
+`Ordering.Domain.Orders.Events.OrderPlaced` as the old name the alias resolves.
+Two handlers of one event under one inbox row are, in §9.5, Ordering's price
+projection and its handler for `ProductPublished` ([§6.6](06-cqrs.md)).
+
+### E.5.2 The queues and broker identities
+
+Each queue name is held once, as a constant, in the owning service's
+`DependencyInjection.cs` under `*.Infrastructure/Messaging`; the saga's
+addresses for them are `Endpoints` in `Ordering.Infrastructure/Messaging`.
+
+| Service | Command queue | Event queues it declares |
+|---|---|---|
+| Ordering | `ordering-commands` | `ordering-catalog-events`, `ordering-stock-events`, `ordering-fulfilment-saga`, `ordering-privacy` |
+| Inventory | `inventory-commands` | `inventory-events` |
+| Payments | `payments-commands` | `payments-events`, `payments-privacy` |
+| Shipping | | `shipping-events`, `shipping-privacy` |
+| Notifications | | `notifications-events`, `notifications-privacy` |
+| Catalog | | `catalog-inventory-events` |
+| Privacy | `privacy-completions` | |
+
+The three queues the saga addresses are `inventory-commands`,
+`payments-commands` and `ordering-commands`: `ReserveStock` and `ReleaseStock`
+go to the first, `AuthorisePayment` to the second, and the four Ordering
+commands, which the saga sends to its own service, to the third. The
+projection endpoint carries Catalog's three events into Ordering's price
+projection; the stock-events endpoint carries `StockReserved` to the consumer
+that records it on the aggregate, and the saga's queue carries it to the
+machine.
+
+Each service authenticates to the broker as `<service>-svc`, with `bff-svc`
+and `dead-letter-operator` beside them, in
+`deploy/compose/rabbitmq/definitions.json`
+([ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md),
+[ADR-072](adr/ADR-072-a-person-replays-dead-letters-as-a-broker-account-of-its-own.md)).
+`catalog-svc` therefore has no `write` matching `ordering-commands` or the
+Ordering contracts' exchanges, and `deploy/compose/rabbitmq/check_permissions.py`
+asserts that no service's `write` covers another's command endpoint.
+
+### E.5.3 The fulfilment saga
+
+`OrderFulfilmentSaga` and `OrderFulfilmentState` are in
+`Ordering.Infrastructure/Messaging`, with the five scheduled expiry messages in
+`FulfilmentTimeouts.cs`. The machine starts on `OrderPlaced` and sends
+`ReserveStock`, then `AuthorisePayment`, then `ConfirmOrder` to Ordering's own
+queue, and ends on `ShipmentDispatched` with `MarkOrderShipped`. Its waits are
+on Inventory (`StockTimeout`), Payments (`PaymentTimeout`), Ordering itself
+(`ConfirmationTimeout`), Shipping's despatch (`DespatchTimeout`) and a
+`ReleaseStock` it sent (`ReleaseTimeout`).
+
+Two services owe `Compensating` an answer, Inventory for the reservation and
+Payments for the verdict, which is why it joins on both
+([ADR-025](adr/ADR-025-a-saga-state-that-waits-on-two-services-finalises-on-neither-alone.md)).
+Inventory consumes `OrderCancelled` directly and answers every release,
+including a no-op one
+([ADR-024](adr/ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md),
+[ADR-029](adr/ADR-029-inventory-releases-on-the-cancellation-not-on-the-sagas-word.md)).
+Payments consumes `OrderCancelled` too and voids an authorisation already
+taken; no service accepts a refund command, so the saga escalates through
+`FlagOrderForReview` instead. `PaymentAuthorised` is produced by Payments, so
+a missing instance for it always faults. The saga's endpoint takes
+MassTransit's own outbox on `OrderingDbContext`
+([ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)),
+and `FlagOrderForReviewHandler` writes `ordering.OrderReviews` from
+`Ordering.Application/Orders/FlagOrderForReview`.
+
+An order's consumer for `StockReserved` records it on the aggregate by
+dispatching a command, and `Order.ConfirmStock` is the transition it asks for.
+`OrderStockConfirmedDomainEvent` is local-only, so its one row is the Local
+one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
+
+### E.5.4 The synchronous hops
+
+| Hop | Caller | Callee | Registered and sized in |
+|---|---|---|---|
+| Pricing | `Web.Bff` | Catalog, `pricing.proto` | `src/BFF/Web.Bff/PricingHop.cs` |
+| Delivery address | Shipping's worker | Ordering | `Shipping.Infrastructure/Addresses/AddressHop.cs` |
+| Contact | Notifications' worker | Keycloak's admin API | `Notifications.Infrastructure/Contacts/ContactHop.cs` |
+| Payment provider | Payments' consumers | the provider | `Payments.Infrastructure/Provider/ProviderHop.cs` |
+| Carrier | Shipping's worker | the carrier | `Shipping.Infrastructure/Carrier/CarrierHop.cs` |
+| Mail relay | Notifications' worker | the relay | `Notifications.Infrastructure/Mail/MailHop.cs` |
+
+Catalog owns `pricing.proto` in `Catalog.Api/Protos`, and `Web.Bff` links it.
+The command path never calls Catalog: it reads Ordering's price projection.
+The deepest chain on a request path is `Client → Gateway → BFF → Catalog`, and
+Catalog calls nobody. The two worker reads of the address and the contact are
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s,
+the contact only for a verified email
+([ADR-086](adr/ADR-086-an-unverified-email-is-no-contact.md)), and they spend
+no hop of the budget. Shipping cannot function without a delivery address, and
+`OrderConfirmed` carries none
+([ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)),
+which is why the worker reads it from Ordering. The one consumer call granted
+is Payments' provider call
+([ADR-070](adr/ADR-070-payments-calls-its-provider-inside-its-consumers.md)),
+and `ProviderKillSwitch` in `Payments.Infrastructure/Messaging` stops its
+receive endpoints when the provider is unavailable. Catalog's `Money` refuses a
+negative amount, which the BFF's quote does not rely on. The consumer-driven
+contract's two suites are `tests/Web.Bff.Tests` (`UpstreamRetryTests`,
+`ResilienceHierarchyTests`) and Catalog's own.
+
+### E.5.5 The retry ladders
+
+Every service has a `RetryPolicy` in `*.Infrastructure/Messaging`; the values
+are each file's. In Ordering the ladder applies to the receive endpoints that §9.8 prints,
+`ordering-commands` adding the `ContractMappingException` exclusion and
+`ordering-fulfilment-saga` swapping the in-memory outbox for MassTransit's. Inventory's applies to every endpoint its own
+`DependencyInjection` declares, and Catalog's to `catalog-inventory-events`.
+§9.6's confirmation wait has to clear Ordering's ladder and no other.
+
+### E.5.6 The workers that claim their own rows
+
+Shipping's `FulfilmentWorker` starts its pass as a child of the trace that
+stamped the shipment, when it is recorded and again when its cancellation is
+requested; its `TrackingWorker` links instead of parenting, because it repeats
+for the shipment's whole life. Notifications' `SendWorker` runs a notice's send
+as a child of the trace that stamped it at intake. All three read
+`StagedTrace` and map `StagedTraceColumns` in `Common.Infrastructure/Tracing`.
 
 ## E.6 §10 and §11: the gateway routes and the identity realms
 
