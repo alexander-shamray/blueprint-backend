@@ -6,45 +6,29 @@ namespace Platform.IntegrationTests.Journey;
 public sealed class SightingsTests
 {
     [Fact]
-    public void A_sighting_is_written_to_the_directory_the_variable_names()
+    public void A_sighting_is_written_to_the_directory_it_is_given()
     {
         string directory = Path.Combine(Path.GetTempPath(), "sightings-" + Guid.NewGuid().ToString("N"));
-        string? before = Environment.GetEnvironmentVariable(Sightings.DirectoryVariable);
 
         try
         {
-            Environment.SetEnvironmentVariable(Sightings.DirectoryVariable, directory);
-
-            string path = Sightings.Record("payment-double-send-x", "two sends under one key");
+            string path = Sightings.Record("payment-double-send-x", "two sends under one key", directory);
 
             Path.GetDirectoryName(path).ShouldBe(directory);
             File.ReadAllText(path).ShouldBe("two sends under one key");
         }
         finally
         {
-            Environment.SetEnvironmentVariable(Sightings.DirectoryVariable, before);
             if (Directory.Exists(directory))
                 Directory.Delete(directory, recursive: true);
         }
     }
 
     [Fact]
-    public void A_sighting_without_a_named_directory_still_becomes_a_file()
+    public void A_named_directory_wins_and_none_falls_back_to_the_temp_path()
     {
-        string? before = Environment.GetEnvironmentVariable(Sightings.DirectoryVariable);
-
-        try
-        {
-            Environment.SetEnvironmentVariable(Sightings.DirectoryVariable, null);
-
-            string path = Sightings.Record("payment-double-send-unnamed", "text");
-
-            File.Exists(path).ShouldBeTrue();
-            File.Delete(path);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable(Sightings.DirectoryVariable, before);
-        }
+        Sightings.Resolve("/ci/sightings").ShouldBe("/ci/sightings");
+        Sightings.Resolve(null).ShouldBe(Path.Combine(Path.GetTempPath(), "platform-sightings"));
+        Sightings.Resolve("  ").ShouldBe(Sightings.Resolve(null));
     }
 }
