@@ -4,11 +4,10 @@ using System.Globalization;
 
 namespace Platform.IntegrationTests.Journey;
 
-/// <summary>Every request Payments' client puts on the wire to the provider, held in memory (#824).</summary>
+/// <summary>Every request Payments' client puts on the wire to the provider, held in memory.</summary>
 /// <remarks>
-/// A line written to disk per call changes the timing the flake depends on, so a send is one append to a
-/// collection and the failure message reads it back. It sits inside the resilience pipeline, so a retry is a
-/// second entry, with the thread-pool state the send was made under.
+/// A disk write per call changes the timing a double send depends on, so a send is one queue append (§9.7).
+/// Inside the retry, a resend is a second entry beside the thread-pool state it was made under.
 /// </remarks>
 internal sealed class ProviderSendLog
 {
