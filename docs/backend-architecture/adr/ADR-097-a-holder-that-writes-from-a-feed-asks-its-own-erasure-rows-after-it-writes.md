@@ -11,9 +11,9 @@ each row's hash is recomputed for the customer under that row's own request id,
 and the read is not bounded by the order's age. Each holder carries its own port
 and its own SQL implementation, and none is lifted into `Common`. On a match the
 BFF deletes the order row, whose lines follow by the foreign key's cascade;
-Notifications deletes the customer's waiting notices, order records and contact,
-in the erasure's order, so no notice is left for the worker to send. The events
-that carry an order id and no customer write no customer, and are left alone.
+Notifications erases the customer's notices, order records and contact, in the
+erasure's order, so no notice is left for the worker to send. The events that
+carry an order id and no customer write no customer, and are left alone.
 **Why.**
 [ADR-051](ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)'s rebuild
 re-reads the publishers' outbox rows, which still name the customer until
@@ -43,9 +43,13 @@ the holder can compute tells it from the order the erasure was for, and keeping
 it would need Privacy's view of when every holder has answered, which no holder
 has. Between the commit and the delete the row exists for the length of one
 query, and a Notifications worker that claims the notice in that interval can
-fetch the mailbox once, which this decision does not close. Two ports named
-`IErasedSubjects` now sit beside Shipping's, which is the price of keeping each
-holder's audit table to its own service; a shared form is its own decision.
+fetch the mailbox once, which this decision does not close. A shipment or
+payment event for an erased order names no customer, so a replay of one leaves a
+row with no owner and a tracking number, as an erasure leaves one no event ever
+attributed; the number identifies a parcel and nobody until it is joined to the
+order. Two ports named `IErasedSubjects` now sit beside Shipping's, which is the
+price of keeping each holder's audit table to its own service; a shared form is
+its own decision.
 
 ---
 
