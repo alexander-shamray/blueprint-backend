@@ -230,6 +230,18 @@ class RoundTripTests(unittest.TestCase):
         self.assertEqual(
             rendered.absent, ["deploy/compose/redis/users.conf: no Redis user zulu-svc"])
 
+    def test_a_duplicated_migrator_key_is_not_a_pair(self):
+        root = self.fresh_root()
+        render_into(root, PROBE, SHAPES["api"])
+        override = root / "deploy" / "compose" / "docker-compose.infra-only.yml"
+        text = override.read_bytes().decode("utf-8")
+        override.write_bytes(re.sub(
+            r'(?m)^  zulu-api:(\r?\n)    profiles: \[ "excluded" \]',
+            lambda m: f'  zulu-migrator:{m.group(1)}    profiles: [ "excluded" ]', text).encode("utf-8"))
+
+        with self.assertRaisesRegex(ScaffoldError, "will not remove half of one"):
+            remove_service.plan(root, PROBE)
+
     def test_a_permissions_entry_left_without_its_user_goes_and_is_reported(self):
         root = self.fresh_root()
         render_into(root, PROBE, SHAPES["api"])
