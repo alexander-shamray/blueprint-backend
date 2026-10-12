@@ -37,7 +37,136 @@ Filled by #911.
 
 ## E.7 §12: the test strategy
 
-Filled by #905.
+This section holds what [§12](12-test-strategy.md) no longer states: which
+suites the reference domain keeps its cases in, and the cases the chapter
+compares a rule against. The chapter owns the rules and the shape of each
+sample; every project, file and test below is one service's, in the reference
+domain, and an adopter replaces it with their own.
+
+### E.7.1 The journey and the outbound hops
+
+`src/Services/` is the roster of what the journey walks. The journey of
+[ADR-093](adr/ADR-093-the-journey-test-walks-one-order-across-the-services-and-asserts-that-they-converge.md)
+walks one order across Catalog, Ordering, Inventory, Payments, Shipping and
+Notifications, each the real host under its own broker account.
+
+The outbound-hop row of §12.1 has three suites in the reference domain:
+
+| Suite | What it holds |
+|---|---|
+| `Web.Bff.Tests` | §9.7's pricing hop: the timeout hierarchy, the credential handler's position and the realm |
+| `Shipping.Worker.Tests` | The first two properties, for the address read of [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md), against a stub Ordering on loopback |
+| `Notifications.Worker.Tests` | All three, for the contact read the same record adds: the first two against a stub Keycloak on loopback, and the realm against a real one, which is also the owner the read asks |
+
+### E.7.2 The fixture and the suites it serves
+
+Ordering's domain tests are in `tests/Ordering.Domain.Tests/OrderTests.cs`,
+which builds its orders with its own `AnOrder` helper under other test names
+than §12.2's and §12.3's samples use; `OrderBuilder` is not in the tree.
+
+Ordering's fixture is `tests/Ordering.TestSupport/ServiceFixture.cs`, derived
+from the shared body, and the host it starts is `OrderingApiFactory` beside
+it. Ordering calls no peer and never binds `ServiceIdentityOptions` (§9.7), so
+its factory is given no `Identity:Client`. Its test scheme is
+`tests/Ordering.TestSupport/TestAuthHandler.cs`.
+
+The suites that use them, all under `tests/`:
+
+| Project | File | Holds |
+|---|---|---|
+| `Ordering.Api.Tests` | `PlaceOrderTests.cs` | The place-order handler suite, over HTTP because the handler binds a subject; prices are seeded straight into `ordering.ProductPrices` |
+| `Ordering.Api.Tests` | `OutboxDispatcherTests.cs` | The dispatcher's per-row isolation and its attempt cap, beside the unhandled-row test |
+| `Ordering.Application.Tests` | `SagaContracts.cs` | The contract builders of the saga suite |
+| `Ordering.Application.Tests` | `OutboxSerialisationTests.cs` | The `Local` lane's payload contract (§9.4) |
+| `Ordering.TestSupport` | `Outbox/OutboxRows.cs` | The builders the dispatcher tests use |
+
+### E.7.3 Where the handler tests live
+
+Catalog is the only service whose two suites share §12.4's fixture: both take
+it, which is why `*.TestSupport` exists. The other services' Application suites
+reference `Common.TestSupport` alone.
+
+Ordering departs from it for a reason that is the code's rather than the
+chapter's.
+Its handler tests live in `Ordering.Api.Tests`, because `ICurrentUser` is
+`HttpContextCurrentUser` and a handler resolved in a bare scope has no
+principal to bind a subject from. So `Ordering.Application.Tests` references
+no `Ordering.TestSupport`, declares no fixture collection, and holds §12.5's
+saga suite instead, which needs no infrastructure at all; its one collection,
+`OrderFulfilmentSagaCollection`, carries no fixture and keeps that suite's
+buses from running side by side. `Ordering.TestSupport` has one consumer there
+rather than two. `docs/testing.md` says the same thing from the other side.
+
+### E.7.4 The order summary cases
+
+The cases of §12.4's order summary section are owed by Ordering's escalated
+history query, over the `ordering.ProductPrices` and `ordering.Products`
+tables, and the products they resolve are Catalog's: each resolved
+`SummaryProduct` carries Catalog's name and its thumbnail. `ordering.Products`
+and that query are not built ([§6.6](06-cqrs.md)); only the price half exists. `ProductPublished.ThumbnailUrl` is `string?`, which is the
+nullable shape Catalog promises, and the late-arrival case rests on it.
+
+All of the cases will belong in `Ordering.Api.Tests`. `Ordering.Application.Tests`
+deliberately carries no `Ordering.TestSupport` reference and says so in its
+csproj, so Ordering's real-schema tests are homed one project over;
+`ProductPriceProjectionTests` is already there for exactly this reason.
+
+### E.7.5 The ownership and subject suites
+
+The cancel endpoint's suite is `tests/Ordering.Api.Tests/OrderOwnershipTests.cs`.
+
+The subject rule's tests are in `PlaceOrderTests` (the attributed order) and
+`OrderOwnershipTests` (the owner cancelling their own order), and the dispatcher
+pair is in `SagaCommandHandlerTests`. A customer reads only their own orders
+has no Ordering test, because Ordering's own history query, §6.5's as §6.6
+escalates it, is not built. The buyer's history the BFF serves is under the
+same rule ([§10.7](10-api-gateway.md)), and `Web.Bff.Tests`' `OrderEndpointTests`
+asserts a stranger's page is empty.
+
+The mapper tests are in `tests/Ordering.Application.Tests/CommandMapperTests.cs`.
+
+### E.7.6 The saga suite
+
+The suite is the `OrderFulfilmentSaga*Tests` classes in
+`tests/Ordering.Application.Tests/`, mostly one per state, over the
+registration they share in `OrderFulfilmentSagaHarness.cs`.
+
+### E.7.7 The contract discovery
+
+The domain assembly that §12.6's `No_contract_names_a_domain_type` keeps out
+of a consumer is, for the order contracts, `Ordering.Domain`.
+
+### E.7.8 The pricing hop and the address read
+
+The pricing hop of §9.7 is the BFF's call to Catalog. The BFF's
+`Web.Bff.Tests` drive its endpoint against `StubCatalog`, a hand-written gRPC
+server modelling Catalog, whose drift from the real service is of four
+kinds: filtering currency case-sensitively where Catalog does not, echoing
+the request's spelling of the currency, formatting amounts at the test's
+scale rather than the column's `decimal(19,4)`, and enforcing no request
+ceiling at all.
+
+- **The consumer's guard.** `CheckoutEndpoints` compares a reply's currency to
+  the request's with `OrdinalIgnoreCase`, because Catalog answers `GBP` to a
+  request for `gbp`.
+- **The provider's side.** `PricingContract.cs` is linked into
+  `Catalog.Api.Tests`, exactly as `pricing.proto` is linked into `Web.Bff`.
+- **The amount's scale.** Catalog's column scale reaches the wire as
+  `49.9900`.
+- **What the contract leaves to the provider.** Catalog also refuses a
+  malformed product id, a non-canonical GUID and an anonymous caller, which
+  stay `PricingServiceTests`'.
+- **The request ceiling.** `CheckoutEndpoints` holds no copy of Catalog's
+  `MaxProductIds`. The quote bounds its own line count at
+  `OrderLimits.MaxLines`, not a copy of Catalog's, so a basket past the
+  ceiling fails validation before the hop and Catalog is never asked; the
+  provider verification holds Catalog to the refusal either way, and the
+  failure to watch for is a quote that refuses baskets Catalog would have
+  priced, or accepts ones it would not.
+
+The address read of ADR-052 is Shipping's worker asking Ordering, and
+Ordering's API suite pins each of the statuses the worker tells apart against
+the real provider. `StubOrdering` is still a hand-written stub.
 
 ## E.8 §13 and §14: observability and local development
 
