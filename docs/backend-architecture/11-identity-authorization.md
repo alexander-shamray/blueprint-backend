@@ -1472,6 +1472,11 @@ Rules for each service's consumer:
   its own schema.
 - **Idempotent.** The message is delivered at least once, and a second erasure
   of already-erased data must succeed silently.
+- **A writer asks its own audit rows after it writes.** A holder fed by
+  events that name a customer — the BFF's projection, whose rebuild replays
+  them, and Notifications' intake — checks the audit rows above once its write
+  has committed, and deletes what it wrote for an erased customer
+  ([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md)).
 - **Report completion.** The privacy service tracks which services have
   responded and escalates on timeout. Silence is not success.
 
