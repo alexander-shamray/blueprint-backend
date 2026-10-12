@@ -16,23 +16,11 @@ internal static class OrderEvents
 
     public static readonly Guid Lamp = Guid.Parse("0192f1b0-0000-7000-8000-00000000a1a1");
 
-    public static OrderPlaced Placed(Guid order, Guid customer, DateTimeOffset at) => new()
-    {
-        MessageId = Guid.CreateVersion7(),
-        CorrelationId = order,
-        OccurredAt = at,
-        OrderId = order,
-        CustomerId = customer,
-        TotalAmount = Total,
-        Currency = Currency,
-        Lines = [new PlacedLine(Lamp, 3, 19.99m)]
-    };
-
-    public static OrderConfirmed Confirmed(
+    public static OrderPlaced Placed(
         Guid order,
         Guid customer,
         DateTimeOffset at,
-        IReadOnlyList<ConfirmedLine>? lines = null) =>
+        IReadOnlyList<Guid>? erasedUnder = null) =>
         new()
         {
             MessageId = Guid.CreateVersion7(),
@@ -42,7 +30,27 @@ internal static class OrderEvents
             CustomerId = customer,
             TotalAmount = Total,
             Currency = Currency,
-            Lines = lines ?? [new ConfirmedLine(Lamp, 3, 19.99m)]
+            Lines = [new PlacedLine(Lamp, 3, 19.99m)],
+            ErasedUnder = erasedUnder
+        };
+
+    public static OrderConfirmed Confirmed(
+        Guid order,
+        Guid customer,
+        DateTimeOffset at,
+        IReadOnlyList<ConfirmedLine>? lines = null,
+        IReadOnlyList<Guid>? erasedUnder = null) =>
+        new()
+        {
+            MessageId = Guid.CreateVersion7(),
+            CorrelationId = order,
+            OccurredAt = at,
+            OrderId = order,
+            CustomerId = customer,
+            TotalAmount = Total,
+            Currency = Currency,
+            Lines = lines ?? [new ConfirmedLine(Lamp, 3, 19.99m)],
+            ErasedUnder = erasedUnder
         };
 
     public static OrderCancelled Cancelled(
@@ -50,7 +58,8 @@ internal static class OrderEvents
         Guid customer,
         DateTimeOffset at,
         string reason = CancelReasons.CustomerRequest,
-        string? origin = CancelOrigins.User) =>
+        string? origin = CancelOrigins.User,
+        IReadOnlyList<Guid>? erasedUnder = null) =>
         new()
         {
             MessageId = Guid.CreateVersion7(),
@@ -59,7 +68,8 @@ internal static class OrderEvents
             OrderId = order,
             CustomerId = customer,
             Reason = reason,
-            Origin = origin
+            Origin = origin,
+            ErasedUnder = erasedUnder
         };
 
     public static PaymentAuthorised Authorised(Guid order, DateTimeOffset at) => new()

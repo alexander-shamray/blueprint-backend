@@ -246,6 +246,7 @@ public sealed class OrderProjection(
             PlacedSql,
             integrationEvent.OrderId,
             integrationEvent.CustomerId,
+            integrationEvent.ErasedUnder,
             new
             {
                 integrationEvent.OrderId,
@@ -268,6 +269,7 @@ public sealed class OrderProjection(
             ConfirmedSql,
             integrationEvent.OrderId,
             integrationEvent.CustomerId,
+            integrationEvent.ErasedUnder,
             new
             {
                 integrationEvent.OrderId,
@@ -286,6 +288,7 @@ public sealed class OrderProjection(
             CancelledSql,
             integrationEvent.OrderId,
             integrationEvent.CustomerId,
+            integrationEvent.ErasedUnder,
             new
             {
                 integrationEvent.OrderId,
@@ -343,6 +346,7 @@ public sealed class OrderProjection(
         string sql,
         Guid orderId,
         Guid customerId,
+        IReadOnlyList<Guid>? erasedUnder,
         object parameters,
         CancellationToken ct)
     {
@@ -353,7 +357,7 @@ public sealed class OrderProjection(
 
         // Asked after the write has committed, so an erasure that commits at any moment either finds the row to
         // delete or is seen here (ADR-097).
-        if (await erased.IsErasedAsync(customerId, ct))
+        if (await erased.IsErasedAsync(customerId, erasedUnder ?? [], ct))
         {
             await connection.ExecuteAsync(
                 new CommandDefinition(

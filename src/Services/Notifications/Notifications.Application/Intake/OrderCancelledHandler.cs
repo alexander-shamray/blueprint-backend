@@ -24,6 +24,7 @@ public sealed class OrderCancelledHandler(ErasedIntake intake) : IIntegrationEve
                     new OrderCancellation(
                         integrationEvent.Reason,
                         integrationEvent.Origin,
-                        integrationEvent.OccurredAt))),
+                        integrationEvent.OccurredAt),
+                    integrationEvent.ErasedUnder)),
             ct);
 }

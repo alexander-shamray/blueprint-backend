@@ -18,7 +18,7 @@ public sealed class ErasedIntake(IDispatcher dispatcher, IErasedSubjects erased)
         if (recorded.IsFailure)
             throw new InvalidOperationException($"The notice was not recorded: {recorded.Error.Code}.");
 
-        if (command.Order is OrderFact order && await erased.IsErasedAsync(order.CustomerId, ct))
+        if (command.Order is OrderFact order && await erased.IsErasedAsync(order.CustomerId, order.ErasedUnder ?? [], ct))
             await dispatcher.SendAsync(new EndErasedSubjectCommand(order.CustomerId), ct);
     }
 }

@@ -50,6 +50,35 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
         (await fixture.OrderAsync(bystandersOrder)).ShouldNotBeNull().CustomerId.ShouldBe(_bystander);
     }
 
+    [Theory]
+    [InlineData("Placed")]
+    [InlineData("Confirmed")]
+    [InlineData("Cancelled")]
+    public async Task An_order_placed_after_the_erasure_is_kept_by_whichever_event_arrives(string name)
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid request = await RecordErasureAsync(_subject, At.AddDays(-1));
+
+        await ApplyAsync(name, order, _subject, [request]);
+
+        (await fixture.OrderAsync(order)).ShouldNotBeNull().CustomerId.ShouldBe(_subject);
+    }
+
+    [Theory]
+    [InlineData("Placed")]
+    [InlineData("Confirmed")]
+    [InlineData("Cancelled")]
+    public async Task An_order_placed_after_one_erasure_is_deleted_by_a_later_one(string name)
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid earlier = await RecordErasureAsync(_subject, At.AddDays(-2));
+        await RecordErasureAsync(_subject, At.AddDays(-1));
+
+        await ApplyAsync(name, order, _subject, [earlier]);
+
+        (await fixture.OrderAsync(order)).ShouldBeNull("the second request names the order the first did not");
+    }
+
     [Fact]
     public async Task An_erasure_committing_between_the_write_and_the_check_still_ends_with_no_row()
     {
@@ -112,7 +141,7 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
 
     private IDbConnectionFactory Connections() => fixture.Factory.Services.GetRequiredService<IDbConnectionFactory>();
 
-    private static async Task RecordErasureAsync(BffServiceFixture fixture, Guid subject, DateTimeOffset erasedAt)
+    private static async Task<Guid> RecordErasureAsync(BffServiceFixture fixture, Guid subject, DateTimeOffset erasedAt)
     {
         Guid request = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
@@ -120,12 +149,18 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
             request,
             PersonalDataErasure.HashSubject(request, subject),
             erasedAt);
+
+        return request;
     }
 
-    private Task RecordErasureAsync(Guid subject, DateTimeOffset erasedAt) =>
+    private Task<Guid> RecordErasureAsync(Guid subject, DateTimeOffset erasedAt) =>
         RecordErasureAsync(fixture, subject, erasedAt);
 
-    private async Task ApplyAsync(string name, Guid order, Guid customer)
+    private async Task ApplyAsync(
+        string name,
+        Guid order,
+        Guid customer,
+        IReadOnlyList<Guid>? erasedUnder = null)
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         IServiceProvider services = scope.ServiceProvider;
@@ -135,11 +170,11 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
         {
             case "Placed":
                 await Handler<OrderPlaced>(services)
-                    .HandleAsync(OrderEvents.Placed(order, customer, At), ct);
+                    .HandleAsync(OrderEvents.Placed(order, customer, At, erasedUnder), ct);
                 break;
             case "Confirmed":
                 await Handler<OrderConfirmed>(services)
-                    .HandleAsync(OrderEvents.Confirmed(order, customer, At), ct);
+                    .HandleAsync(OrderEvents.Confirmed(order, customer, At, erasedUnder: erasedUnder), ct);
                 break;
             case "Dispatched":
                 await Handler<ShipmentDispatched>(services).HandleAsync(OrderEvents.Dispatched(order, At), ct);
@@ -156,7 +191,13 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
             default:
                 await Handler<OrderCancelled>(services)
                     .HandleAsync(
-                        OrderEvents.Cancelled(order, customer, At, CancelReasons.OutOfStock, CancelOrigins.Workflow),
+                        OrderEvents.Cancelled(
+                            order,
+                            customer,
+                            At,
+                            CancelReasons.OutOfStock,
+                            CancelOrigins.Workflow,
+                            erasedUnder),
                         ct);
                 break;
         }
@@ -175,12 +216,12 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
     {
         public bool RowWasThereWhenAsked { get; private set; }
 
-        public async Task<bool> IsErasedAsync(Guid subjectId, CancellationToken ct)
+        public async Task<bool> IsErasedAsync(Guid subjectId, IReadOnlyCollection<Guid> placedAfter, CancellationToken ct)
         {
             RowWasThereWhenAsked = await fixture.OrderAsync(order) is not null;
             await RecordErasureAsync(fixture, subject, At);
 
-            return await real.IsErasedAsync(subjectId, ct);
+            return await real.IsErasedAsync(subjectId, placedAfter, ct);
         }
     }
 }

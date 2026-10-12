@@ -7,36 +7,49 @@ namespace Notifications.Worker.Tests;
 /// <summary>§3.2's seven events for one order, each with a fresh message id, as their publishers write them.</summary>
 internal static class OrderEvents
 {
-    public static OrderPlaced Placed(Guid order, Guid customer, DateTimeOffset at) => new()
-    {
-        MessageId = Guid.CreateVersion7(),
-        CorrelationId = order,
-        OccurredAt = at,
-        OrderId = order,
-        CustomerId = customer,
-        TotalAmount = 12345.60m,
-        Currency = "KZT",
-        Lines = [new PlacedLine(Guid.CreateVersion7(), 1, 12345.60m)]
-    };
+    public static OrderPlaced Placed(
+        Guid order,
+        Guid customer,
+        DateTimeOffset at,
+        IReadOnlyList<Guid>? erasedUnder = null) =>
+        new()
+        {
+            MessageId = Guid.CreateVersion7(),
+            CorrelationId = order,
+            OccurredAt = at,
+            OrderId = order,
+            CustomerId = customer,
+            TotalAmount = 12345.60m,
+            Currency = "KZT",
+            Lines = [new PlacedLine(Guid.CreateVersion7(), 1, 12345.60m)],
+            ErasedUnder = erasedUnder
+        };
 
-    public static OrderConfirmed Confirmed(Guid order, Guid customer, DateTimeOffset at) => new()
-    {
-        MessageId = Guid.CreateVersion7(),
-        CorrelationId = order,
-        OccurredAt = at,
-        OrderId = order,
-        CustomerId = customer,
-        TotalAmount = 12345.60m,
-        Currency = "KZT",
-        Lines = [new ConfirmedLine(Guid.CreateVersion7(), 1, 12345.60m)]
-    };
+    public static OrderConfirmed Confirmed(
+        Guid order,
+        Guid customer,
+        DateTimeOffset at,
+        IReadOnlyList<Guid>? erasedUnder = null) =>
+        new()
+        {
+            MessageId = Guid.CreateVersion7(),
+            CorrelationId = order,
+            OccurredAt = at,
+            OrderId = order,
+            CustomerId = customer,
+            TotalAmount = 12345.60m,
+            Currency = "KZT",
+            Lines = [new ConfirmedLine(Guid.CreateVersion7(), 1, 12345.60m)],
+            ErasedUnder = erasedUnder
+        };
 
     public static OrderCancelled Cancelled(
         Guid order,
         Guid customer,
         DateTimeOffset at,
         string reason,
-        string? origin) =>
+        string? origin,
+        IReadOnlyList<Guid>? erasedUnder = null) =>
         new()
         {
             MessageId = Guid.CreateVersion7(),
@@ -45,7 +58,8 @@ internal static class OrderEvents
             OrderId = order,
             CustomerId = customer,
             Reason = reason,
-            Origin = origin
+            Origin = origin,
+            ErasedUnder = erasedUnder
         };
 
     public static PaymentDeclined Declined(Guid order, DateTimeOffset at) => new()
