@@ -7,8 +7,7 @@ using Xunit;
 
 namespace Notifications.Worker.Tests;
 
-/// <summary>ADR-100: a send pass never keeps or mails an erased customer's mailbox, and once the erasure is visible
-/// never fetches it.</summary>
+/// <summary>ADR-100: a mailbox the owner returns after the customer's erasure is not written back to the table.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -28,26 +27,7 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.ExecuteAsync("DELETE FROM notifications.PersonalDataErasures;");
 
     [Fact]
-    public async Task A_notice_claimed_after_the_erasure_asks_the_owner_for_nothing_and_sends_nothing()
-    {
-        Guid order = Guid.CreateVersion7();
-        Guid customer = Guid.CreateVersion7();
-        await fixture.StageContactAsync(customer, Mailbox, "en", TimeSpan.FromDays(1));
-        fixture.ContactAnswers(customer, Mailbox, "en");
-        await fixture.OrderAsync(order, customer);
-        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
-        await ErasedSubjectIntakeTests.RecordErasureAsync(fixture, customer, At);
-
-        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1));
-
-        fixture.ContactCalls(customer).ShouldBe(0, "the owner is not asked for an erased customer's mailbox");
-        (await fixture.ContactAsync(customer)).ShouldBeNull("the stale row the erasure's delete missed goes too");
-        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Undeliverable);
-        (await fixture.Relay.MessagesAsync(Ct)).ShouldBeEmpty();
-    }
-
-    [Fact]
-    public async Task An_erasure_landing_while_the_owner_answers_leaves_no_contact_row_and_no_mail()
+    public async Task An_erasure_landing_while_the_owner_answers_leaves_no_contact_row()
     {
         Guid order = Guid.CreateVersion7();
         Guid customer = Guid.CreateVersion7();
@@ -57,8 +37,7 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
 
         Task<SendPass> pass = fixture.RunSendPassAsync();
 
-        // The row is leased, then the pre-check passes and the owner stalls: the erasure lands in the window ADR-100
-        // names. An erasure recorded earlier is caught by the pre-check, so only a late one can fail the case.
+        // The row is leased and the owner stalls: the erasure lands in the window ADR-097 names, before the save.
         await ServiceFixture.WaitUntilAsync(async () =>
             await fixture.ScalarAsync<int>(
                 "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE NotificationId = {0} " +
@@ -70,7 +49,8 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
         (await pass).ShouldBe(new SendPass(1, 1));
 
         (await fixture.ContactAsync(customer)).ShouldBeNull("the save is followed by a check that deletes it");
-        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Undeliverable);
-        (await fixture.Relay.MessagesAsync(Ct)).ShouldBeEmpty();
+        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(
+            NotificationStatus.Sent,
+            "the one send stands: an order placed after an earlier erasure is kept (ADR-099)");
     }
 }

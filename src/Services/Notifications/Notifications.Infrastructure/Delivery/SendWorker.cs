@@ -401,16 +401,6 @@ public sealed class SendWorker(
         if (age == ContactAge.Fresh)
             return (new ContactLookup.Found(stored!.Email, stored.Locale), null);
 
-        IErasedSubjects erased = sp.GetRequiredService<IErasedSubjects>();
-
-        // Asked before the owner is, so an erased customer's mailbox is never fetched, and again after the save, so
-        // an erasure landing between the two finds the row or is seen here (ADR-100).
-        if (await erased.IsErasedAsync(customer, ct))
-        {
-            await store.DeleteAsync(customer, ct);
-            return (new ContactLookup.NoSuchCustomer(), null);
-        }
-
         ContactLookup answer;
 
         try
@@ -421,13 +411,6 @@ public sealed class SendWorker(
         catch (Exception ex) when (
             ex is not ContactSourceRefusedException && age == ContactAge.Stale && !ct.IsCancellationRequested)
         {
-            // The pre-check is older than this call, which may have run through retries; an erasure since is seen here.
-            if (await erased.IsErasedAsync(customer, ct))
-            {
-                await store.DeleteAsync(customer, ct);
-                return (new ContactLookup.NoSuchCustomer(), null);
-            }
-
             return (new ContactLookup.Found(stored!.Email, stored.Locale), ex);
         }
 
@@ -436,11 +419,11 @@ public sealed class SendWorker(
         {
             await store.SaveAsync(customer, found, clock.GetUtcNow(), ct);
 
-            if (await erased.IsErasedAsync(customer, ct))
-            {
+            // An erasure since the intake's check finds this row or is seen here, so it is not written back (ADR-100).
+            // Asked without the order's requests, which this service does not keep, so an order ADR-099 kept loses
+            // only a row the next read fetches again; the pass still sends.
+            if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(customer, [], ct))
                 await store.DeleteAsync(customer, ct);
-                return (new ContactLookup.NoSuchCustomer(), null);
-            }
         }
         else
         {
