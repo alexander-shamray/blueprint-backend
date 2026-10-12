@@ -19,8 +19,8 @@ does not call and block. The return edges drawn in the map are what the fulfilme
 would depict the request/response topology ADR-002 and ADR-017 exist to reject.
 The saga has a fourth round trip the map does not draw, because both of its
 ends are Ordering: `ConfirmOrder` out to the aggregate and `OrderConfirmed`
-back. It is asynchronous on exactly these terms, and the Consumes cell below is
-where it is recorded.
+back. It is asynchronous on exactly these terms, and the Consumes cell in [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) is where it is
+recorded.
 
 Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), ADR-052's reads are of another kind, and the
 map leaves them undrawn because it draws messages: a Shipping worker reads a delivery address from Ordering
@@ -252,7 +252,7 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
 > any other — §9.6 raises `cancelled_after_confirmation` and
 > [`order-review.md`](../runbooks/order-review.md) has an operator reinstate it
 > by hand. Closing that properly means adding a name to that row, which is
-> Inventory's decision to take against a real picking process rather than this
+> Inventory's decision to take against a real picking process rather than that
 > table's to anticipate.
 
 > **Both guarantees exist because the saga's only alternative to an answer is a
@@ -272,7 +272,7 @@ public API at all — they are reached only through the broker, and
 [ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
 settles the one read that would otherwise have asked Shipping for one.
 Only Notifications is a *pure* consumer among the services, though: the
-table above gives Shipping two events to publish, and ADR-051's projection
+table in [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) gives Shipping two events to publish, and ADR-051's projection
 — the BFF's row, a host's rather than a service's — is built on them.
 **Notifications** is the simplest possible service and the last one built,
 and those two facts are not in tension. It contains almost no domain logic,
