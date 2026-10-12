@@ -448,12 +448,15 @@ class ActionTests(unittest.TestCase):
 
     def test_the_reader_sees_every_uses_line_in_this_repositorys_workflows(self) -> None:
         """The subject is coverage: a reference the reader skips is one never checked."""
+        total = 0
         for path in (pipeline_gate.ROOT / ".github" / "workflows").glob("*.y*ml"):
             text = path.read_text(encoding="utf-8")
             lines = [line for line in text.splitlines() if "uses:" in line and not line.lstrip().startswith("#")]
+            total += len(lines)
             with self.subTest(workflow=path.name):
-                self.assertGreater(len(lines), 0)
                 self.assertEqual(len(pipeline_gate.read_uses(text)), len(lines))
+        # A workflow that runs no action has none to read; none anywhere is a reader or a directory broken.
+        self.assertGreater(total, 0)
 
 
 # The integration matrix at ci.yml's indentation, one value in the folded form.
