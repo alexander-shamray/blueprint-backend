@@ -32,10 +32,11 @@ Compose units and CI filters where no other file holds them, and the worked
 examples. A chapter cites a section, never a value.
 (4) *What a fork does.* It replaces Appendix E wholesale. An evidence block it
 leaves is read as the reference implementation's case, which stays true of
-the upstream platform; where a fork's domain contradicts one, a fork ADR
-supersedes it, and the chapter is not edited. ADRs are inherited as history
-and never edited ([ADR-062](ADR-062-the-domain-is-a-reference-implementation.md)
-already says what is kept and replaced; this says what becomes of the
+the upstream platform; where a fork's domain contradicts one, this ADR makes it
+history of the upstream case, the fork records its departure in an ADR of its
+own, and the chapter is not edited. ADRs are inherited as history and never
+edited ([ADR-062](ADR-062-the-domain-is-a-reference-implementation.md) already
+says what is kept and replaced; this says what becomes of the
 specification that describes the replaced part).
 (5) *The gate.* A gate fails a block in a scanned file that names a reference
 service without the marker. The service names are read from the directories
