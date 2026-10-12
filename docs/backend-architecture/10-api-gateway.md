@@ -1346,8 +1346,9 @@ cannot make the store inspect what arrives, which is why the next paragraph
 exists.
 
 **Publishing attaches the image; the request does not send a URL.**
-`PublishProduct` carries the `key` the upload returned. `Catalog` checks that
-the key sits under the caller's own `uploads/{sellerId}/` prefix, reads the
+`PublishProduct` carries the `key` the upload returned. The service that owns
+products checks that the key sits under the caller's own `uploads/{sellerId}/`
+prefix, reads the
 object's first bytes and refuses one whose signature does not match its stored
 content type, then copies it inside the store to
 `products/{sellerId}/{guid}.{ext}` with a fixed `Content-Type`,
@@ -1371,8 +1372,9 @@ publish transaction then fails leaves one object nothing names, which the
 retry reuses ([ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)).
 
 **The store has two credential pairs and neither is the other's.** The BFF's
-can write under `uploads/` and nothing else; `Catalog`'s can read `uploads/`
-and write `products/`. Neither can list a bucket or delete. Compose's local
+can write under `uploads/` and nothing else; the product service's can read
+`uploads/` and write `products/`. Neither can list a bucket or delete.
+Compose's local
 store, its credentials and the chart's store values follow
 [§14.1](14-local-development.md), [§15.4](15-cicd-deployment.md) and
 `docs/secrets.md`'s exception table; those documents state them in the PR that
