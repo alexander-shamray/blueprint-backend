@@ -77,6 +77,12 @@ files rather than the directory it is standing in. `git status` after a run
 shows exactly the tracked files above and the new directories, and that list
 is what the pathspec has to cover.
 
+**A service that has been committed is taken out by
+[`tools/remove-service`](../remove-service/README.md)**, which reverts the
+edits in the table above and deletes the tree. Its suite renders a service
+into a copy, removes it and compares the copy, with this table as the list of
+files, so a row added here is a row it has to learn.
+
 ## What you get
 
 [§4.1](../../docs/backend-architecture/04-solution-structure.md)'s five

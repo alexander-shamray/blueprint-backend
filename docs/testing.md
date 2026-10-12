@@ -366,3 +366,12 @@ scaffold removes renders into a service that does not compile with every test
 green. A change touching `tests/Catalog.*` is not verified until a scaffolded
 service has been built; `docs/repo-map.md` carries the four commands and the
 cleanup.
+
+`tools/remove-service/` is the scaffold's inverse, and its suite is the other
+half of the scaffold's table: it renders a service into a copy, removes it and
+compares every file, so a shared file `new_service.py` learns to edit fails
+there until `remove_service.py` reverts it. It runs without a daemon or an SDK:
+
+```bash
+cd tools/remove-service && py -3.12 -m unittest
+```
