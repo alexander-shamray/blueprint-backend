@@ -37,8 +37,11 @@ names a customer whose data was erased, so the tool sends it as it sends any
 other; the BFF's consumer then writes the order and, finding the customer in
 `bff.PersonalDataErasures`, deletes it again
 ([ADR-097](../../docs/backend-architecture/adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md)).
-`--reset` leaves that table alone, and the tool itself needs no list of erased
-subjects. An order the customer placed after their own erasure is dropped too.
+`--reset` leaves that table and `bff.ErasedOrders` alone, and the tool itself
+needs no list of erased subjects. An order the customer placed after their own
+erasure is dropped too, and so are the shipment and payment events that name
+only its id, which the second table answers
+([ADR-098](../../docs/backend-architecture/adr/ADR-098-the-bff-remembers-the-id-of-an-order-it-erased.md)).
 
 **`--reset` keeps `bff.Products`.** A product's name is published once,
 usually long before any outbox window, so deleting the names would blank
