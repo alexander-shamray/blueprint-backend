@@ -411,6 +411,22 @@ never looked, which is the state
 filed about — and disabling the schedule to quiet the issue is the same
 conversion, arranged by hand.
 
+### A notification credential
+
+`TELEGRAM_BOT_TOKEN` is a repository secret that only
+`.github/workflows/merge-notify.yml` reads, to tell the owner's chat that a
+pull request merged; the chat is `TELEGRAM_CHAT_ID`, a repository variable,
+because a chat id grants nothing on its own. Both are set under the
+repository's *Settings → Secrets and variables → Actions*. The token is
+issued by Telegram's @BotFather, which holds one at a time, so rotation is
+`/revoke` there and the new token saved over the secret; a merge in between
+sends nothing.
+
+**Nothing in the platform reads it**, so a wrong or missing token costs a
+message, never a build: the workflow posts a notice and passes when either
+value is unset, and a refused send fails only that workflow's run. After a
+leak, revoke first: the token lets anyone post as the bot.
+
 ## Local development is a deliberate exception
 
 §14.1's Compose file carries real-looking values, and they are **not** a defect
