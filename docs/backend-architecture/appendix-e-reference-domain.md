@@ -13,7 +13,171 @@ the section it cites, replacing its "Filled by" line, and creates none.
 
 ## E.1 §2 and §3: the service roster and the context map
 
-Filled by #907.
+This section holds what [§2](02-architecture-at-a-glance.md) and
+[§3](03-bounded-contexts.md) no longer state about the reference domain's
+services. [§3.2](03-bounded-contexts.md)'s table of what each service owns,
+publishes, consumes and accepts stays in the chapter: the
+[messaging gate](../../.github/messaging-gate/README.md) reads it there, so it
+is its own owner and is not copied here.
+
+**The one-word example (§3.1).** "Product" in Catalog is a rich marketing
+object with descriptions, images and categories. "Product" in Inventory is a
+SKU and a number. These are not the same concept and must not share a class.
+
+**The context map (§3.1).** One node per context with its type, one edge per
+message.
+
+```mermaid
+graph LR
+    CAT[Catalog<br/><i>Supplier</i>]
+    ORD[Ordering<br/><i>Core domain</i>]
+    INV[Inventory<br/><i>Supplier</i>]
+    PAY[Payments<br/><i>ACL over PSP</i>]
+    SHP[Shipping<br/><i>ACL over carrier</i>]
+    NOT[Notifications<br/><i>Generic</i>]
+
+    CAT -->|product + price events| ORD
+    ORD -->|ReserveStock<br/>ReleaseStock| INV
+    INV -->|StockReserved / Failed<br/>StockReleased| ORD
+    ORD -->|AuthorisePayment<br/>OrderPlaced| PAY
+    PAY -->|PaymentAuthorised / Declined| ORD
+    ORD -->|OrderConfirmed<br/>OrderCancelled| SHP
+    SHP -->|ShipmentDispatched| ORD
+    ORD -->|order events| NOT
+    PAY -->|payment events| NOT
+    INV -->|StockLevelChanged| CAT
+    SHP -->|shipment events| NOT
+```
+
+**Each context's type and why it is separate (§3.1).**
+
+| Context | Type | Why it is separate |
+|---|---|---|
+| **Ordering** | Core domain | This is where the business logic actually lives. Invest here. |
+| **Catalog** | Supporting | Different read/write ratio (1000:1), different scaling, different team cadence. |
+| **Inventory** | Supporting | Different consistency requirements — stock is the one place contention is real. |
+| **Payments** | Supporting | Isolates a volatile third-party API behind an anti-corruption layer. Compliance boundary. |
+| **Shipping** | Supporting | Isolates the carrier's API behind an anti-corruption layer, `ICarrierGateway`: a carrier's change lands in its adapter on the carrier's schedule, and never in the domain. |
+| **Notifications** | Generic | Not a differentiator. Would be replaced by an off-the-shelf product without regret. |
+
+**What the map leaves out (§3.1).**
+
+- The saga has a fourth round trip the map does not draw, because both of its
+  ends are Ordering: `ConfirmOrder` out to the aggregate and `OrderConfirmed`
+  back. It is asynchronous on exactly the terms of the edges drawn, and the
+  Consumes cell of §3.2's table records it.
+- ADR-052's reads are of another kind and are undrawn because the map draws
+  messages: a Shipping worker reads a delivery address from Ordering over
+  gRPC, and a Notifications worker reads a mailbox from Keycloak's admin API,
+  each off every request path
+  ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
+
+**The container view (§2.2).** A node per service but Privacy, which the
+diagram does not yet draw (its SQL, RabbitMQ, Redis and OTel edges are
+missing too); the chapter draws the
+same picture with a node per kind of service.
+
+```mermaid
+graph TB
+    subgraph Edge
+        GW[API Gateway<br/>YARP]
+        BFF[Web BFF<br/>aggregation and the order projection]
+        IDP[Keycloak<br/>OIDC provider]
+    end
+
+    subgraph Services
+        CAT[Catalog API]
+        ORD[Ordering API]
+        INV[Inventory API]
+        PAY[Payments API]
+        SHP[Shipping worker]
+        NOT[Notifications worker]
+    end
+
+    subgraph Data
+        SQL[(SQL Server<br/>database per service)]
+        RC[(Redis cache<br/>allkeys-lru)]
+        RK[(Redis coordination<br/>noeviction)]
+        MQ[[RabbitMQ]]
+    end
+
+    subgraph Telemetry
+        OTEL[OTel Collector]
+        GRAF[Grafana / Tempo / Prometheus]
+    end
+
+    subgraph External
+        PSP[Payment provider]
+        CAR[Shipping carrier]
+    end
+
+    GW --> CAT
+    GW --> ORD
+    GW --> INV
+    GW --> PAY
+    GW --> BFF
+
+    BFF -->|gRPC, pricing| CAT
+
+    SHP -->|gRPC, the address read| ORD
+    SHP -.->|client credentials| IDP
+    NOT -->|HTTPS, the contact read| IDP
+    NOT -.->|client credentials| IDP
+
+    PAY -->|HTTPS, authorise and void| PSP
+    SHP -->|HTTPS, book and cancel| CAR
+
+    GW -.->|validate| IDP
+    BFF -.->|client credentials| IDP
+    CAT -.-> IDP
+    ORD -.-> IDP
+    INV -.-> IDP
+    PAY -.-> IDP
+
+    CAT --> SQL
+    ORD --> SQL
+    INV --> SQL
+    PAY --> SQL
+    SHP --> SQL
+    NOT --> SQL
+    BFF --> SQL
+
+    CAT --> RC
+    ORD --> RC
+    INV --> RC
+    CAT --> RK
+    ORD --> RK
+    INV --> RK
+
+    CAT <--> MQ
+    ORD <--> MQ
+    INV <--> MQ
+    PAY <--> MQ
+    SHP <--> MQ
+    NOT <--> MQ
+    MQ --> BFF
+
+    CAT --> OTEL
+    ORD --> OTEL
+    INV --> OTEL
+    PAY --> OTEL
+    SHP --> OTEL
+    NOT --> OTEL
+    GW  --> OTEL
+    BFF --> OTEL
+    OTEL --> GRAF
+```
+
+**Which services reach neither Redis instance (§2.2).** Payments, Shipping and
+Notifications reach neither: none caches anything, and §8.5's keys belong to
+HTTP write commands, which none has. Payments' idempotency is the payment
+provider's key and its own rows, Shipping's is the lease its workers take in
+SQL, and Notifications' is §9.5's inbox and the unique key on its record.
+
+**The external parties (§2.1).** The context view's carrier is the Shipping
+service's, and its label there reads "Shipping carrier"; the chapter says
+"Delivery carrier". The platform it draws is six of the seven domain services
+and the BFF.
 
 ## E.2 §4: the solution tree and the scaffold
 

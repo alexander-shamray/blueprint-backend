@@ -10,7 +10,7 @@ graph TB
     Gateway[API Gateway<br/>YARP]
     Platform[Commerce Platform<br/>7 domain services + BFF]
     PSP[(Payment provider)]
-    Carrier[(Shipping carrier)]
+    Carrier[(Delivery carrier)]
     Email[(Email / SMS provider)]
 
     Customer --> Browser
@@ -33,12 +33,8 @@ graph TB
     end
 
     subgraph Services
-        CAT[Catalog API]
-        ORD[Ordering API]
-        INV[Inventory API]
-        PAY[Payments API]
-        SHP[Shipping worker]
-        NOT[Notifications worker]
+        API[Service APIs<br/>one per context with a public API]
+        WRK[Service workers<br/>no public API]
     end
 
     subgraph Data
@@ -54,76 +50,54 @@ graph TB
     end
 
     subgraph External
-        PSP[Payment provider]
-        CAR[Shipping carrier]
+        PSP[Third-party providers]
     end
 
-    GW --> CAT
-    GW --> ORD
-    GW --> INV
-    GW --> PAY
+    GW --> API
     GW --> BFF
 
-    BFF -->|gRPC, pricing| CAT
+    BFF -->|gRPC, a read| API
 
-    SHP -->|gRPC, the address read| ORD
-    SHP -.->|client credentials| IDP
-    NOT -->|HTTPS, the contact read| IDP
-    NOT -.->|client credentials| IDP
+    WRK -->|gRPC, a read| API
+    WRK -.->|client credentials| IDP
+    WRK -->|HTTPS, a read| IDP
 
-    PAY -->|HTTPS, authorise and void| PSP
-    SHP -->|HTTPS, book and cancel| CAR
+    API -->|HTTPS| PSP
+    WRK -->|HTTPS| PSP
 
     GW -.->|validate| IDP
     BFF -.->|client credentials| IDP
-    CAT -.-> IDP
-    ORD -.-> IDP
-    INV -.-> IDP
-    PAY -.-> IDP
+    API -.-> IDP
 
-    CAT --> SQL
-    ORD --> SQL
-    INV --> SQL
-    PAY --> SQL
-    SHP --> SQL
-    NOT --> SQL
+    API --> SQL
+    WRK --> SQL
     BFF --> SQL
 
-    CAT --> RC
-    ORD --> RC
-    INV --> RC
-    CAT --> RK
-    ORD --> RK
-    INV --> RK
+    API --> RC
+    API --> RK
 
-    CAT <--> MQ
-    ORD <--> MQ
-    INV <--> MQ
-    PAY <--> MQ
-    SHP <--> MQ
-    NOT <--> MQ
+    API <--> MQ
+    WRK <--> MQ
     MQ --> BFF
 
-    CAT --> OTEL
-    ORD --> OTEL
-    INV --> OTEL
-    PAY --> OTEL
-    SHP --> OTEL
-    NOT --> OTEL
+    API --> OTEL
+    WRK --> OTEL
     GW  --> OTEL
     BFF --> OTEL
     OTEL --> GRAF
 ```
 
+The reference domain's container view, one node per service, is in [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map).
+
 Three details in this picture are decisions, not layout:
 
 - **Two Redis instances, not one.** Their eviction policies are incompatible
   ([§8.1](08-caching-redis.md)) — a shared instance under `allkeys-lru` will drop a held lock or a
-  revoked token with no error. Payments, Shipping and Notifications reach
-  neither: none caches anything, and §8.5's keys belong to HTTP write commands,
-  which none has — Payments' idempotency is the payment provider's key and its
-  own rows, Shipping's is the lease its workers take in SQL, and Notifications'
-  is §9.5's inbox and the unique key on its record.
+  revoked token with no error. A service that caches nothing and has no HTTP
+  write commands, which §8.5's keys belong to, reaches neither; its
+  idempotency is its provider's key and its own rows, a lease its workers take
+  in SQL, or §9.5's inbox and a unique key, as the reference domain's three
+  show ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)).
 - **Every service validates its own token**, not just the gateway. [§11.2](11-identity-authorization.md) treats
   the network as hostile, so a request arriving by any other path is still
   authenticated. A diagram showing only `GW -.-> IDP` would depict exactly the
