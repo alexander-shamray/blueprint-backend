@@ -75,6 +75,19 @@ namespace Web.Bff.Persistence.Migrations
                     b.ToTable("InboxMessages", "bff");
                 });
 
+            modelBuilder.Entity("Web.Bff.Persistence.ErasedOrderRow", b =>
+                {
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("ErasedAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.HasKey("OrderId");
+
+                    b.ToTable("ErasedOrders", "bff");
+                });
+
             modelBuilder.Entity("Web.Bff.Persistence.OrderLineRow", b =>
                 {
                     b.Property<Guid>("OrderId")

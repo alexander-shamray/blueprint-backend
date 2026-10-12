@@ -27,6 +27,19 @@ public sealed class PersonalDataDeleteRequestedHandler(
 
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
+                // The ids are kept first, so a shipment or payment event that names no customer cannot give the
+                // deleted order a new row (ADR-098).
+                DateTimeOffset erasedAt = clock.GetUtcNow();
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"""
+                    INSERT INTO bff.ErasedOrders (OrderId, ErasedAt)
+                    SELECT o.OrderId, {erasedAt}
+                    FROM bff.Orders AS o
+                    WHERE o.CustomerId = {integrationEvent.SubjectId}
+                        AND NOT EXISTS (SELECT 1 FROM bff.ErasedOrders AS e WHERE e.OrderId = o.OrderId)
+                    """,
+                    ct);
+
                 // The lines go with their order, by the foreign key's cascade (ADR-051).
                 int deleted = await db.Database.ExecuteSqlInterpolatedAsync(
                     $"DELETE FROM bff.Orders WHERE CustomerId = {integrationEvent.SubjectId}",
@@ -35,15 +48,18 @@ public sealed class PersonalDataDeleteRequestedHandler(
                 PersonalDataErasure? seen = await db.PersonalDataErasures
                     .FirstOrDefaultAsync(e => e.Id == integrationEvent.RequestId, ct);
 
-                DateTimeOffset now = clock.GetUtcNow();
                 if (seen is null)
                 {
                     db.PersonalDataErasures.Add(
-                        PersonalDataErasure.Record(integrationEvent.RequestId, integrationEvent.SubjectId, deleted, now));
+                        PersonalDataErasure.Record(
+                            integrationEvent.RequestId,
+                            integrationEvent.SubjectId,
+                            deleted,
+                            erasedAt));
                 }
                 else
                 {
-                    seen.Repeat(deleted, now);
+                    seen.Repeat(deleted, erasedAt);
                 }
 
                 await db.SaveChangesAsync(ct);

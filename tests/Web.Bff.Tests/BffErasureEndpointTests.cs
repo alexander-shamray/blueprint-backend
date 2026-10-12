@@ -83,6 +83,27 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
     }
 
     [Fact]
+    public async Task The_ids_of_the_deleted_orders_are_kept_and_a_bystanders_are_not()
+    {
+        Guid subjectsOrder = Guid.CreateVersion7();
+        Guid secondOrder = Guid.CreateVersion7();
+        Guid bystandersOrder = Guid.CreateVersion7();
+        await SeedOrderAsync(subjectsOrder, Subject);
+        await SeedOrderAsync(secondOrder, Subject);
+        await SeedOrderAsync(bystandersOrder, Bystander);
+
+        await PublishRequestAsync(Guid.CreateVersion7());
+
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM bff.ErasedOrders WHERE OrderId IN ({0}, {1})",
+            subjectsOrder,
+            secondOrder)).ShouldBe(2, "a later event that names no customer is checked against these (ADR-098)");
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM bff.ErasedOrders WHERE OrderId = {0}",
+            bystandersOrder)).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task A_failed_audit_write_rolls_the_delete_back_and_reports_nothing()
     {
         Guid order = Guid.CreateVersion7();
