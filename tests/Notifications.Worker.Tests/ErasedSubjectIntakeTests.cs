@@ -104,7 +104,7 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         (await fixture.NotificationsAsync(order)).ShouldBeEmpty();
     }
 
-    private static async Task<Guid> RecordErasureAsync(ServiceFixture fixture, Guid subject, DateTimeOffset erasedAt)
+    internal static async Task<Guid> RecordErasureAsync(ServiceFixture fixture, Guid subject, DateTimeOffset erasedAt)
     {
         Guid request = Guid.CreateVersion7();
         await fixture.ExecuteAsync(

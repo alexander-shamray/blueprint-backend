@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Notifications.Application.Contacts;
 using Notifications.Application.Delivery;
 using Notifications.Application.Mail;
+using Notifications.Application.Privacy;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 using Notifications.Infrastructure.Mail;
@@ -400,6 +401,16 @@ public sealed class SendWorker(
         if (age == ContactAge.Fresh)
             return (new ContactLookup.Found(stored!.Email, stored.Locale), null);
 
+        IErasedSubjects erased = sp.GetRequiredService<IErasedSubjects>();
+
+        // Asked before the owner is, so an erased customer's mailbox is never fetched, and again after the save, so
+        // an erasure landing between the two finds the row or is seen here (ADR-098).
+        if (await erased.IsErasedAsync(customer, ct))
+        {
+            await store.DeleteAsync(customer, ct);
+            return (new ContactLookup.NoSuchCustomer(), null);
+        }
+
         ContactLookup answer;
 
         try
@@ -415,9 +426,19 @@ public sealed class SendWorker(
 
         // Kept before the send, so a pass repeated after a crash reads it from the row and not the owner (ADR-052).
         if (answer is ContactLookup.Found found)
+        {
             await store.SaveAsync(customer, found, clock.GetUtcNow(), ct);
+
+            if (await erased.IsErasedAsync(customer, ct))
+            {
+                await store.DeleteAsync(customer, ct);
+                return (new ContactLookup.NoSuchCustomer(), null);
+            }
+        }
         else
+        {
             await store.DeleteAsync(customer, ct);
+        }
 
         return (answer, null);
     }
