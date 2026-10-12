@@ -72,9 +72,7 @@ graph LR
   each off every request path
   ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
 
-**The container view (§2.2).** A node per service but Privacy, which the
-diagram does not yet draw (its SQL, RabbitMQ, Redis and OTel edges are
-missing too); the chapter draws the
+**The container view (§2.2).** A node per service; the chapter draws the
 same picture with a node per kind of service.
 
 ```mermaid
@@ -92,6 +90,7 @@ graph TB
         PAY[Payments API]
         SHP[Shipping worker]
         NOT[Notifications worker]
+        PRV[Privacy API]
     end
 
     subgraph Data
@@ -115,6 +114,7 @@ graph TB
     GW --> ORD
     GW --> INV
     GW --> PAY
+    GW --> PRV
     GW --> BFF
 
     BFF -->|gRPC, pricing| CAT
@@ -133,6 +133,7 @@ graph TB
     ORD -.-> IDP
     INV -.-> IDP
     PAY -.-> IDP
+    PRV -.-> IDP
 
     CAT --> SQL
     ORD --> SQL
@@ -140,6 +141,7 @@ graph TB
     PAY --> SQL
     SHP --> SQL
     NOT --> SQL
+    PRV --> SQL
     BFF --> SQL
 
     CAT --> RC
@@ -148,6 +150,7 @@ graph TB
     CAT --> RK
     ORD --> RK
     INV --> RK
+    PRV --> RK
 
     CAT <--> MQ
     ORD <--> MQ
@@ -155,6 +158,7 @@ graph TB
     PAY <--> MQ
     SHP <--> MQ
     NOT <--> MQ
+    PRV <--> MQ
     MQ --> BFF
 
     CAT --> OTEL
@@ -163,6 +167,7 @@ graph TB
     PAY --> OTEL
     SHP --> OTEL
     NOT --> OTEL
+    PRV --> OTEL
     GW  --> OTEL
     BFF --> OTEL
     OTEL --> GRAF
@@ -174,10 +179,18 @@ HTTP write commands, which none has. Payments' idempotency is the payment
 provider's key and its own rows, Shipping's is the lease its workers take in
 SQL, and Notifications' is §9.5's inbox and the unique key on its record.
 
+Privacy is the fourth that reaches Redis, and only the coordination
+instance: its reissue endpoint is an HTTP write command, so §8.5's key
+belongs there, and it caches nothing. The host still registers both
+connections and probes both in readiness, because `AddRedisConnections` reads
+both (§8.2), so the cache instance is registered and carries nothing, and has
+no edge. Its erasure locks are SQL application locks (`sp_getapplock`), not
+Redis ones; E.6.2 owns their refusal.
+
 **The external parties (§2.1).** The context view's carrier is the Shipping
 service's, and its label there reads "Shipping carrier"; the chapter says
 "Delivery carrier". Its platform node reads "7 domain services + BFF"; the
-container view above is the one that draws six.
+container view above is the one that draws all seven.
 
 ### E.1.1 §3.2: the service responsibilities table
 
