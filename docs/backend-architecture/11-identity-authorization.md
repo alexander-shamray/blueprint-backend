@@ -41,7 +41,7 @@ sequenceDiagram
     participant W as Web app
     participant K as Keycloak
     participant G as Gateway
-    participant O as Ordering
+    participant O as Service
 
     U->>W: Sign in
     W->>K: Authorization code + PKCE
@@ -530,18 +530,18 @@ become unmaintainable once roles multiply. Authorize on **permissions**, and map
 roles to permissions in one place.
 
 The permission strings are the contract with the realm's claim mapper (§11.5);
-the policies registered from them are how ASP.NET Core checks them. Ordering's
-registration is in `src/Services/Ordering/Ordering.Api/Program.cs`:
+the policies registered from them are how ASP.NET Core checks them. A service
+registers one in its `Program.cs`, per constant:
 
 ```csharp
-// RequirePermission, so the claim type is PermissionClaim.Type's alone (§11.4). No orders:admin policy: that string
-// is a claim CancelOrderHandler checks against a loaded aggregate.
+// RequirePermission, so the claim type is PermissionClaim.Type's alone (§11.4).
 builder.Services
     .AddAuthorizationBuilder()
-    .AddPolicy(OrderingPermissions.Write, p => p.RequirePermission(OrderingPermissions.Write))
-    .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel))
-    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress));
+    .AddPolicy(ServicePermissions.Write, p => p.RequirePermission(ServicePermissions.Write));
 ```
+
+The reference domain's registration, with the policy it deliberately lacks, is
+in [Appendix E.6.5](appendix-e-reference-domain.md#e65-permissions-and-policies).
 
 One policy per constant and no more: a policy registered before an endpoint
 names it is an unused registration, which is the mirror of the unregistered
@@ -562,30 +562,27 @@ constant. The fourth is asserted against the other three instead (§11.5).
 
 The permission strings are a per-service constant class rather than literals,
 for the reason the next callout gives: a name written twice is a name that can
-be misspelt once. It lives at the composition root, beside the policies —
-`Ordering.Api`, and `Gateway.Api` for the gateway's own `inventory:admin`
-(§10.2). Ordering's is
-`src/Services/Ordering/Ordering.Api/OrderingPermissions.cs`:
+be misspelt once. It lives at the composition root, beside the policies — the
+service's `Api` project, and `Gateway.Api` for the gateway's own route
+permissions (§10.2):
 
 ```csharp
-public static class OrderingPermissions
+public static class ServicePermissions
 {
-    public const string Write = "orders:write";
-    public const string Cancel = "orders:cancel";
-    public const string DeliveryAddress = "orders:delivery-address";
+    public const string Write = "service:write";
 }
 ```
 
 **A service's vocabulary holds what its endpoints require, and nothing else.**
-There is no `orders:read`, because nothing in Ordering requires it; the
-constant follows the endpoint, and arrives with whichever change gives
-Ordering an endpoint that names it. A permission printed here ahead of the
-endpoint that names it would be the first half of the rule below.
-Catalog's is one entry — `catalog:write` — because its listing is anonymous
-([§10.2](10-api-gateway.md)); there is no `catalog:read`, because a permission
-nothing requires is a name in the realm nobody can act on. `orders:admin` is
-not here either, and for a different reason given below: it is a **claim** a
-handler checks, not a policy an endpoint names.
+There is no read permission where nothing requires one; the constant follows
+the endpoint, and arrives with whichever change gives the service an endpoint
+that names it. A permission printed here ahead of the endpoint that names it
+would be the first half of the rule below. A service whose listing is
+anonymous ([§10.2](10-api-gateway.md)) has no read permission at all, because
+a permission nothing requires is a name in the realm nobody can act on. A
+permission can also be not a policy but a **claim** a handler checks against a
+loaded aggregate, as given below. The reference domain's vocabularies are in
+[Appendix E.6.5](appendix-e-reference-domain.md#e65-permissions-and-policies).
 
 **The rule runs both ways, and the second direction is the one that gets
 missed.** A permission nothing requires is a dead name in the realm; a
@@ -599,9 +596,8 @@ nor the closed-set realm test sees a breach of it: the constant makes a
 provider has never heard of, and the realm test compares against a literal
 because `Common.Web.Tests` is a building block's suite and cannot reference a
 host to read its constants. The check belongs to whichever suite owns the
-constant, which is where `GrantablePermissionTests` sits in
-`Gateway.Api.Tests`, `Catalog.Api.Tests`, `Ordering.Api.Tests`,
-`Inventory.Api.Tests`, `Payments.Api.Tests` and `Privacy.Api.Tests`.
+constant, which is where `GrantablePermissionTests` sits: in `Gateway.Api.Tests` and in
+each service's `Api.Tests` project under `tests/`.
 
 > **A policy name is a reference, and nothing checks it.**
 > `RequireAuthorization("orders:cancel")` takes a string. Misspell it, or
@@ -684,10 +680,11 @@ service §4.5's scaffold renders.
 > pipeline that already exists. Minimal APIs express the same thing with less
 > ceremony, and endpoint groups give the same route and policy grouping.
 
-The cancel endpoint is in
-`src/Services/Ordering/Ordering.Api/Endpoints/OrderEndpoints.cs`, whose route
-group calls `RequireAuthorization()`, so a later endpoint inherits
-authentication rather than arriving open. `CustomerReason` is the wire code
+The cancel endpoint's route group calls `RequireAuthorization()`, so a later
+endpoint inherits authentication rather than arriving open; the files this
+walk-through quotes are listed in
+[Appendix E.6.6](appendix-e-reference-domain.md#e66-the-cancel-walk-through).
+`CustomerReason` is the wire code
 `CancellationReasons.ToCode` gives `CancellationReason.CustomerRequest`:
 
 ```csharp
@@ -748,16 +745,14 @@ Binding `CancellationReason` straight from JSON would publish the enum's
 member names as API surface, and an unknown value would surface as a
 model-binding error rather than a 400 naming the field.
 
-`CancelOrderRequest(string Reason)` is declared at the foot of
-`OrderEndpoints.cs`, beside the endpoint that binds it, not in the slice, and
-the reason is
+`CancelOrderRequest(string Reason)` is declared at the foot of the endpoint
+file, beside the endpoint that binds it, not in the slice, and the reason is
 that this handler has **two** entry paths with two wire shapes. The message
 path's shape is `CancelOrder` in `Common.Contracts` (§9.4); if the HTTP path's
-shape sat in `Ordering.Application`, the slice would own one transport's
-request type while the other's lived in a different assembly, for no reason
-either side could state. Each transport owns its own wire type, and the slice
-owns only the `CancelOrderCommand` both converge on, in
-`src/Services/Ordering/Ordering.Application/Orders/CancelOrder/CancelOrderCommand.cs`:
+shape sat in the service's `Application` project, the slice would own one
+transport's request type while the other's lived in a different assembly, for
+no reason either side could state. Each transport owns its own wire type, and
+the slice owns only the `CancelOrderCommand` both converge on:
 
 ```csharp
 public sealed record CancelOrderCommand(
@@ -789,10 +784,8 @@ the endpoint `CommandOrigin.User`, the message mapper `CommandOrigin.System`
 (§9.4). A field a caller could set would be the fail-open the origin exists to
 close, wearing a different name.
 
-`CancellationReasons`, in
-`src/Services/Ordering/Ordering.Application/Orders/CancellationReasons.cs`, is
-the one place a wire code becomes the domain enum, and both entry points call
-it:
+`CancellationReasons` is the one place a wire code becomes the domain enum, and
+both entry points call it:
 
 ```csharp
 private static readonly FrozenDictionary<string, CancellationReason> ByCode =
@@ -816,7 +809,7 @@ unknown code, differently, because their callers differ. The endpoint returns
 400 naming the field, because a person can fix a request. The message mapper
 throws `ContractMappingException`, which §9.4's retry policy ignores so the
 message reaches the error queue on the first attempt — a sibling service
-sending a code Ordering does not know is a deployment problem, and no amount of
+sending a code this service does not know is a deployment problem, and no amount of
 backoff resolves it. `ToCode` inverts the same map rather than writing a second
 table. `CancellationOrigins`, beside it, maps one way only: nothing parses an
 origin, because no ingress accepts one, and a `TryParse` there would be the
@@ -824,9 +817,8 @@ first door onto a value a caller could claim.
 
 Coarse permission checks live at the endpoint. **Resource-level checks — "is
 this the customer's own order?" — belong in the handler**, where the data is
-available. The body of `HandleAsync` in
-`src/Services/Ordering/Ordering.Application/Orders/CancelOrder/CancelOrderHandler.cs`,
-up to the commit that `TransactionBehavior` owns (§6.3):
+available. The body of `CancelOrderHandler.HandleAsync`, up to the commit that
+`TransactionBehavior` owns (§6.3):
 
 ```csharp
 Order? order = await orders.GetAsync(new OrderId(command.OrderId), ct);
@@ -1036,19 +1028,21 @@ vocabulary either way.
 > settles is that this does not license carrying the subject as a field
 > instead: **the service that owns the decision resolves the subject from its
 > own record**, built from an event whose subject *was* bound from a principal.
-> §9.6's `AuthorisePayment` accordingly carries no `CustomerId` at all, and
-> Payments resolves the payer from the `OrderPlaced` it consumes ([§3.2](03-bounded-contexts.md)).
+> §9.6's `AuthorisePayment` accordingly carries no `CustomerId` at all, and in
+> the reference domain Payments resolves the payer from the `OrderPlaced` it
+> consumes ([§3.2](03-bounded-contexts.md),
+> [Appendix E.6.7](appendix-e-reference-domain.md#e67-payer-resolution)).
 >
 > **What decides which fields may stay is instruction versus authority.**
 > `Amount` and `Currency` remain on that command because they are what to do:
-> the sender decides them, and Payments may refuse a mismatch against its
-> record as a consistency check. The subject is on whose behalf, and that is
+> the sender decides them, and the payment service may refuse a mismatch
+> against its record as a consistency check. The subject is on whose behalf, and that is
 > the deciding service's to derive — a transported authority is a second source
 > for a decision that must have exactly one, and a check that exists is not a
 > check that is performed.
 >
-> **The distinction is not checkability.** Payments' record holds the payer as
-> well as the total, so a supplied `CustomerId` would be as checkable as the
+> **The distinction is not checkability.** The payment service's record holds
+> the payer as well as the total, so a supplied `CustomerId` would be as checkable as the
 > amount; the record §3.2 requires is what refutes that reading. The argument
 > that stands is the stronger one: the field that is absent cannot be the one a
 > later code path reads instead of the record.
@@ -1063,7 +1057,9 @@ vocabulary either way.
 > it, and by nobody else.
 >
 > **Payer selection is not gone, and saying it was is the overclaim this
-> callout has to avoid.** A principal able to publish both could forge the
+> callout has to avoid.** In the reference domain
+> ([Appendix E.6.7](appendix-e-reference-domain.md#e67-payer-resolution)) a
+> principal able to publish both could forge the
 > `OrderPlaced` that seeds Payments' record and then send the command, which
 > selects a payer in two messages rather than one. The gain is cost and
 > visibility rather than capability — the added message is an event
@@ -1125,7 +1121,7 @@ otherwise identical is a claim check on the same one.
 **`orders:admin` is a claim, and the admin command's endpoint policy is a
 separate thing that happens to require it.** The two are easy to collapse
 because this chapter's policy names read like claim names — the
-`OrderingPermissions` constants above — but a policy is a registered rule and a
+permission constants above — but a policy is a registered rule and a
 claim is what the token carries, and only the second is what `HasPermission`
 reads. Nothing forbids registering another policy that requires the
 `orders:admin` claim when the admin command lands; what the paragraph above
@@ -1159,9 +1155,11 @@ the wrong one; so is reading this section and concluding the services talk to
 each other.
 
 > **Each host ADR-052 decides holds a client of its own, sized by what it
-> reads.** Shipping's holds one role on `commerce-api`, because the address
-> owner serves its read as a method; Notifications' holds `view-users` on
-> `realm-management`, because the mailbox's owner is the realm itself.
+> reads.** One holds a single role on `commerce-api`, because the address
+> owner serves its read as a method; the other holds `view-users` on
+> `realm-management`, because the mailbox's owner is the realm itself
+> ([Appendix E.6.8](appendix-e-reference-domain.md#e68-the-worker-clients)
+> names the two workers).
 > [ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
 > left neither value a way to arrive by event. The argument above is why each
 > took a record rather than a registration: the count of hosts holding a
@@ -1258,16 +1256,17 @@ For a host that calls a service, `ServiceIdentityOptions.Scope` is
 `commerce-api` ([§14.1](14-local-development.md), [§15.4](15-cicd-deployment.md)) and §11.3
 validates `Audience = "commerce-api"`. Those are **not** the same claim, and
 nothing so far makes one imply the other: a client-credentials token carries
-`scope: commerce-api` and, by default, an `aud` of `account`. Catalog would
+`scope: commerce-api` and, by default, an `aud` of `account`. A service would
 reject a synchronous hop the platform does permit, at the one moment there is
 no user to blame it on.
 
 The realm has to close the gap. In Keycloak the client scope `commerce-api`
 needs an **audience mapper** adding `commerce-api` to `aud`, and the BFF's
-service-account client needs that scope assigned as default, and so does
-Shipping's, for the same reason and by the same mapper (ADR-052).
-Notifications' takes neither the scope nor the audience, because the one thing
-it calls is the realm's own admin API:
+service-account client needs that scope assigned as default, and so does the
+client of a worker that calls a service (`shipping-worker` below), for the same
+reason and by the same mapper (ADR-052). The client of a worker that calls the
+realm's admin API (`notifications-worker`) takes neither the scope nor the
+audience, because the one thing it calls is the realm's own admin API:
 
 | Realm object | Setting | Why |
 |---|---|---|
@@ -1357,15 +1356,15 @@ public async Task A_client_without_the_scope_is_refused_by_that_service()
 ```
 
 **The service those tests call is a minimal host running the platform's own
-`AddJwtAuthentication`, not Catalog**, and the substitution is deliberate: what
-is under test is the registration plus the realm, and neither of those is
-Catalog's. Driving a real service would add a SQL container and a migrator run
-to a suite whose subject is a token, and it would still be asserting exactly
-this. The suite lives in `Web.Bff.Tests`, which already runs Keycloak, and
-asserts the BFF's and `shipping-worker`'s grants there rather than buying
-`Shipping.Worker.Tests` a second Keycloak container.
+`AddJwtAuthentication`, not a real service**, and the substitution is
+deliberate: what is under test is the registration plus the realm, and neither
+of those is a service's. Driving a real service would add a SQL container and a
+migrator run to a suite whose subject is a token, and it would still be
+asserting exactly this. The suite lives in `Web.Bff.Tests`, which already runs
+Keycloak, and asserts the BFF's and `shipping-worker`'s grants there rather
+than buying that worker's own suite a second Keycloak container.
 `notifications-worker`'s grant is the exception that reason does not reach,
-and it is proved in `Notifications.Worker.Tests` against a Keycloak of that
+and it is proved in its own worker's suite against a Keycloak of that
 suite's own: the contact read *is* the realm's admin API, so the owner its
 adapter is tested against and the realm its grant is proved in are one
 container, and the container is what the read costs rather than what the
@@ -1400,7 +1399,7 @@ defines the seams and the rules that apply *if* the extension is enabled.
 | Extension | Seam | Baseline rule |
 |---|---|---|
 | **Multi-tenancy** | `TenantId` on the integration event metadata envelope; a logging enrichment hook; an ambient `ITenantContext` resolved from token claims | No tenant is required. **If** tenancy is enabled, `TenantId` must appear in every Redis key — `{service}:cache:{tenant}:...`, after the keyspace segment rather than before it, so [§8.1](08-caching-redis.md)'s eviction split still reads off position two (§8.3) — plus every query predicate and every log scope |
-| **Personal data erasure** | `PersonalDataDeleteRequested` in `Common.Contracts.Privacy.V1` | Defined; Privacy publishes it ([§3.2](03-bounded-contexts.md)) and raises none until a request is made. The consumer shape is defined below so services are built ready for it |
+| **Personal data erasure** | `PersonalDataDeleteRequested` in `Common.Contracts.Privacy.V1` | Defined; in the reference domain Privacy publishes it ([§3.2](03-bounded-contexts.md), [Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure)) and raises none until a request is made. The consumer shape is defined below so services are built ready for it |
 | **PCI / HIPAA / SOC 2** | — | Decide before handling regulated data, not after. Record the constraints as an ADR |
 
 > **Decision — a jurisdiction is a value the deployment is given.** See
@@ -1417,7 +1416,10 @@ The wrong answer is a central "user data service" that owns the deletion — it
 would need read access to every database, which destroys the ownership model.
 
 The right answer is choreography. The request is broadcast; each service deletes
-what it owns and reports back:
+what it owns and reports back. In the reference domain the holders and what
+each erases are those of
+[Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure),
+and the diagram is that case:
 
 ```mermaid
 sequenceDiagram
@@ -1448,8 +1450,11 @@ sequenceDiagram
     P->>P: all services reported → close request
 ```
 
-> **Both messages are in `Common.Contracts.Privacy.V1`, which is where the
-> version lives** ([§9.2](09-messaging.md)); the names above carry none.
+> **In the reference domain both messages are in
+> `Common.Contracts.Privacy.V1`, which is where the version lives**
+> ([§9.2](09-messaging.md),
+> [Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure));
+> the names above carry none.
 > `PersonalDataDeleteCompleted` is a command Privacy accepts, **sent** to its
 > queue by each holder and not published, which the broker's accounts leave no
 > other way for a service with no Domain project ([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)).
@@ -1473,8 +1478,10 @@ Rules for each service's consumer:
 - **Idempotent.** The message is delivered at least once, and a second erasure
   of already-erased data must succeed silently.
 - **A writer asks its own audit rows after it writes.** A holder fed by
-  events that name a customer — the BFF's projection, whose rebuild replays
-  them, Notifications' intake and Shipping's fulfilment worker — checks the
+  events that name a customer — in the reference domain the BFF's projection,
+  whose rebuild replays them, Notifications' intake and Shipping's fulfilment
+  worker ([Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure))
+  — checks the
   audit rows above once its write has committed, and deletes what it wrote for
   an erased customer, unless the order names the request as one it was placed
   after
@@ -1492,9 +1499,10 @@ section's operational half, as `docs/secrets.md` is §15.4's.
 reaches it, and the ids it holds leave it when
 [§13.4](13-observability.md)'s lifetime for logs and traces runs out.
 
-> **The Privacy service owns the request.** It is a context with the request
-> aggregate, the expected-responder set as configuration and a completion SLO
-> ([§3.2](03-bounded-contexts.md)). Naming it in the diagram is what makes the
+> **In the reference domain the Privacy service owns the request.** It is a
+> context with the request aggregate, the expected-responder set as
+> configuration and a completion SLO ([§3.2](03-bounded-contexts.md),
+> [Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure)). Naming it in the diagram is what makes the
 > seam checkable: the alternative is discovering that nothing was ever designed
 > to close the request. A service missing from the responder list is the
 > failure mode to design against, because it fails as *silence*, and silence is
@@ -1504,8 +1512,9 @@ reaches it, and the ids it holds leave it when
 > every database for them.
 >
 > **Decision — Privacy is a seventh service, and its responder set is fixed
-> when a request is raised.** See
-> [ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md).
+> when a request is raised.** In the reference domain
+> ([Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure)),
+> see [ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md).
 > The request carries the subject's id and no other fact about the subject,
 > so the identifiers-only rule below holds for it as for every other event.
 
@@ -1523,8 +1532,9 @@ which is the only place it can be reliably erased.
 > projection, read model or log put it. The broker and the abandoned outbox
 > row are each sufficient on their own.
 
-> **`OrderConfirmed` carries no postal address, though Shipping cannot act
-> without one**
+> **`OrderConfirmed` carries no postal address, though in the reference domain
+> ([Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure))
+> Shipping cannot act without one**
 > ([ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md));
 > Shipping reads the address from its owner instead
 > ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
@@ -1533,7 +1543,7 @@ which is the only place it can be reliably erased.
 > whose purge deliberately spares abandoned rows so §13.6's alert can see
 > them; it sits in the broker, for which no chapter sets a retention bound;
 > and it reaches whatever each consumer persists from it, with §3.2 giving the
-> event to Notifications, which has no use for an address at all. The erasure
+> event to the notification service, which has no use for an address at all. The erasure
 > choreography above reaches none of those, and §13.4's redactor matches key
 > names, none of which cover an address.
 >

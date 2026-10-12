@@ -81,19 +81,24 @@ graph LR
 
     GW --> BFFW[Web BFF]
     GW --> BFFM[Mobile BFF]
-    GW --> CAT[Catalog]
-    GW --> ORD[Ordering]
+    GW --> SA[Service A]
+    GW --> SB[Service B]
 
-    BFFW --> CAT
-    BFFW --> ORD
-    BFFM --> CAT
-    BFFM --> ORD
+    BFFW --> SA
+    BFFW --> SB
+    BFFM --> SA
+    BFFM --> SB
 ```
 
 The shape of the pattern, not this platform's topology: a second BFF per client
 type is what the pattern looks like at scale, and the fan-out to two services is
-what [§9.7](09-messaging.md) permits. What is actually built here is one `Web.Bff` making one call
-to Catalog ([§2.2](02-architecture-at-a-glance.md), in the reference domain [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map), §9.7) — the diagram is the ceiling, not the inventory.
+what [§9.7](09-messaging.md) permits. What is actually built here is one
+`Web.Bff` making one call to one service
+([§2.2](02-architecture-at-a-glance.md), §9.7; in the reference domain
+[E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)
+is the roster and
+[E.6.1](appendix-e-reference-domain.md#e61-the-gateway-routes) names the
+call) — the diagram is the ceiling, not the inventory.
 
 **Aggregation is shaped for the screen, and the screen's question is the whole
 of the request.** A BFF that computes a figure the client cannot render has
@@ -181,19 +186,20 @@ different things: YARP's reserved `AllowAnonymous` in one key and §10.3's
 per-IP window in the other. That is the two-registries point above arriving on
 one route rather than across two, and it is the same point — not a second one.
 
-**The catch-all serves Catalog's one-product read as well as the listing**
-([§6.5](06-cqrs.md)), under the same pair, so a product's deep link needs no
-route of its own and is metered by §10.3's per-IP window like the page that
-linked to it. The one Catalog GET it must not serve is a seller's own list
+**The catch-all serves a resource's one-item read as well as the listing**
+([§6.5](06-cqrs.md)), under the same pair, so a deep link needs no route of
+its own and is metered by §10.3's per-IP window like the page that linked to
+it. The one GET it must not serve is a caller's own list
 ([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)),
-which names a caller: `catalog-own` matches that literal path, which routing
-ranks above the catch-all, and holds it to `authenticated`.
+which names a caller: a route matching that literal path, which routing ranks
+above the catch-all, holds it to `authenticated`.
 
-**Catalog's write side is a route of its own.** `catalog-write` matches the
-same path for `POST` and `PUT` under `authenticated`, so the public GET cannot
-become a public publish by widening one line. The endpoint still requires
-`catalog:write` (§11.4); the route's `authenticated` is the edge's coarser
-check.
+**A public resource's write side is a route of its own.** It matches the same
+path for `POST` and `PUT` under `authenticated`, so the public GET cannot
+become a public publish by widening one line. The endpoint still requires its
+write permission (§11.4); the route's `authenticated` is the edge's coarser
+check. The reference domain's two routes, `catalog-own` and `catalog-write`,
+are in [Appendix E.6.1](appendix-e-reference-domain.md#e61-the-gateway-routes).
 
 > **A name it cannot resolve stops the gateway.**
 > `ProxyConfigManager.InitialLoadAsync` throws out of `MapReverseProxy()` with
@@ -261,7 +267,7 @@ omission fails closed (§11.4). It is worth asserting for the thing the
 fallback cannot do: answer, in this file, the question the person reading it
 came with.
 
-Every cluster in the file has the same shape, Catalog's here:
+Every cluster in the file has the same shape, the `catalog` cluster's here:
 
 ```json
 "catalog": {
@@ -680,8 +686,9 @@ and nothing that crosses a process boundary.
 Asynchronously that is enough: [§9.1](09-messaging.md)'s envelope carries
 `CorrelationId` as a member, so a message takes the ID with it by construction.
 Synchronously there is nothing to carry it, and the one synchronous call with
-an inbound request behind it is the BFF's hop to Catalog
-([§9.7](09-messaging.md), [ADR-017](adr/ADR-017-one-synchronous-hop.md)).
+an inbound request behind it is the BFF's hop to the one service it calls
+([§9.7](09-messaging.md), [ADR-017](adr/ADR-017-one-synchronous-hop.md),
+[Appendix E.6.1](appendix-e-reference-domain.md#e61-the-gateway-routes)).
 Without a header on it the callee mints an ID from its own trace, and one
 incident has two of them.
 
@@ -734,11 +741,12 @@ public sealed class CorrelationIdHandler(IHttpContextAccessor context) : Delegat
 > the shortest of them, and mints anyway.
 
 **A notice's mail is the one message that leaves the platform, and it carries
-a correlation under this section's header name.** Notifications' send worker
+a correlation under this section's header name.** The worker that sends it
 puts the originating event's `CorrelationId` on every message it hands the
-relay, as `SmtpMailChannel.CorrelationIdHeader`, held equal to
-`CorrelationIdExtensions.Header` by a test, because the project that speaks
-SMTP does not reference `Common.Web`. The value is the event's business
+relay, under a header name held equal to `CorrelationIdExtensions.Header` by a
+test, because the project that speaks SMTP does not reference `Common.Web`
+([Appendix E.6.3](appendix-e-reference-domain.md#e63-notice-mail-correlation)
+names it). The value is the event's business
 correlation, which [§9.3](09-messaging.md) sets to the order, not the request's
 ID this section propagates: a message in a sink joins the order behind it, and
 a send repeated after a crash is two messages under one value. It is a GUID
@@ -809,7 +817,7 @@ no host can take the one without the others.
 | Request body past the edge's ceiling | **413** | The gateway only (§10.1). Kestrel's `BadHttpRequestException` is answered inside the forwarder, which sets this status and writes no body, so it never reaches `UseExceptionHandler` and `UseStatusCodePages` writes the shape. `ExceptionHandlerMiddleware` reads no status off an exception — one that escapes is the unreadable-request row's, at its own status |
 | Domain rule violated | 422 | The request was well-formed but not allowed |
 | Downstream dependency unavailable | 503 | With `Retry-After` where known. Never 500 — the fault is not in this service |
-| A lock the request needed was not taken, because it stayed held or the wait ended as a deadlock victim | 503 | Privacy only: `ErasureLockNotTakenException`, thrown by `ErasureRequestRepository.TakeLockAsync`, with `Retry-After`, `code` `erasure_request.busy`. Contention inside this service, so not the row above, and 503 because the lock is taken before any work, so nothing took effect. A consumer meets the same exception and its retry stands |
+| A lock the request needed was not taken, because it stayed held or the wait ended as a deadlock victim | 503 | An exception thrown by the repository method that takes the lock, with `Retry-After` and a `code`. Contention inside this service, so not the row above, and 503 because the lock is taken before any work, so nothing took effect. A consumer meets the same exception and its retry stands. In the reference domain only one service takes such a lock, and [Appendix E.6.2](appendix-e-reference-domain.md#e62-error-catalogue-and-refusals) names its exception, method and `code` |
 | The request outlived its host's deadline | **504** | From the request-timeout middleware every host registers ([§9.7](09-messaging.md), [ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)), `code` `request.timed_out`. Not 503, which says nothing was done: the deadline can fall after a commit, so whether the request took effect is unknown, and a write is retried under its own command identifier rather than a new one |
 | Rate limited | 429 | With `Retry-After` |
 | Unhandled | 500 | **Never** include the exception message or stack trace |
@@ -842,32 +850,11 @@ public sealed record Error(string Code, string Description, ErrorType Type)
 public enum ErrorType { NotFound, Rule, Unavailable }
 ```
 
-A service's catalogue is one static class, Ordering's in
-`src/Services/Ordering/Ordering.Application/Orders/OrderErrors.cs`:
-
-```csharp
-namespace Ordering.Application.Orders;
-
-/// <summary>Every <see cref="Error"/> the service returns is built here, so <c>Code</c> is a closed set.</summary>
-/// <remarks><c>Code</c> is a metric dimension, so no id or count goes in one (§10.5).</remarks>
-public static class OrderErrors
-{
-    public static readonly Error NotFound =
-        Error.NotFound("order.not_found", "No order with that id.");
-
-    /// <summary>For <c>Delivered</c> as well as <c>Shipped</c>; one code, being a §9.8 dimension.</summary>
-    public static readonly Error AlreadyShipped =
-        Error.Rule(
-            "order.already_shipped",
-            "An order that has already shipped cannot be cancelled; raise a return instead.");
-
-    // 422, not 400: the request was well-formed and the validator passed it.
-    // The products are unpriceable, which is a fact about this service's state
-    // and not something the caller phrased wrongly.
-    public static Error ProductsUnavailable(IReadOnlyList<ProductId> missing) =>
-        Error.Rule("order.products_unavailable", $"No price for {missing.Count} product(s).");
-}
-```
+A service's catalogue is one static class of `static readonly Error` fields,
+and of factory methods where a description varies, in which every `Error` the
+service returns is built. The reference domain's is excerpted, with the reason
+each member is shaped as it is, in
+[Appendix E.6.2](appendix-e-reference-domain.md#e62-error-catalogue-and-refusals).
 
 **`Code` is a metric dimension, so it has to be closed.** §9.8 tags
 `command.domain_rejected` with it, and a tag whose value set is unbounded is a
@@ -879,10 +866,10 @@ set is enumerable by reflection and reviewable by reading one file.
 
 Note what is *not* in the code: no order id, no customer id, no count. Those
 belong in `Description`, which is written for a person and never tagged onto an
-instrument. `ProductsUnavailable` above is the shape to copy — one code, a
-description that varies. The converse holds for `AlreadyShipped`: it answers a
-delivered order as well as a shipped one, and since its code cannot be split,
-its description is worded to be true of both.
+instrument. A factory method with one code and a description that varies is
+the shape to copy. The converse holds for a code that answers two states: since
+it cannot be split, its description is worded to be true of both (the case is
+in Appendix E.6.2).
 
 **`Type` selects the status**, in one place, so the mapping in the table above
 is executed rather than remembered. It is `ResultExtensions`, in
@@ -1138,7 +1125,7 @@ rule is that the screen's question is the whole of the request:
 
 The detail route is that group's `/{id:guid}`. Neither needs a gateway change:
 §10.2's `web-bff` route already matches the BFF's whole `/bff/v1` API. The path
-repeats Ordering's `/v1/orders` deliberately — §10.2 strips a different prefix
+repeats the service's own `/v1/orders` deliberately — §10.2 strips a different prefix
 to reach each, and `/api` and `/bff` are the two namespaces that distinction
 exists to keep apart.
 
@@ -1177,7 +1164,7 @@ orders nothing between consumers, so `ShipmentDispatched` arriving before
 ordinary too. Ranking rather than overwriting is what makes both harmless.
 §6.6 buys the same property for `ordering.OrderSummaries` with
 `UpdatedAt < @OccurredAt`, and **that guard cannot be copied here**: its
-timestamps are minted by Ordering's one clock, while these are minted by four
+timestamps are minted by the order service's one clock, while these are minted by four
 hosts. A rank is monotonic without a clock, which is why this projection uses
 one.
 
@@ -1217,22 +1204,23 @@ inventing a refusal is the harmful direction of a wrong guess.
 The two collapses are the platform's distinctions rather than the buyer's:
 stock that was never there and stock that did not answer in time are both
 `out_of_stock`, and an authorisation declined and one that timed out are both
-`declined`. Payments' own decline reasons never travel — they are the
-provider's codes and an open set (ADR-049) — so they stop at the service that
-owns them.
+`declined`. A payment provider's own decline reasons never travel — they are
+its codes and an open set (ADR-049) — so they stop at the service that owns
+them.
 
 **Neither the saga's states nor `OrderStatus` reaches the client**, and the
 two do not agree with one another in any case (§9.6, §5.4). `AwaitingStock`
 and `AwaitingPayment` are both `placed` to a buyer, which is also forced:
-`OrderStockConfirmedDomainEvent` is not on Ordering's publish allow-list, so
+`OrderStockConfirmedDomainEvent` is not on the order service's publish allow-list, so
 no consumer can tell them apart. `Compensating` has no buyer meaning at all —
 what the buyer is owed is the outcome it works towards, and that arrives as
 `OrderCancelled`.
 
-> **`dispatched` and `delivered` are Shipping's.** §3.2 assigns
-> `ShipmentDispatched` and `ShipmentDelivered` to Shipping, which publishes
-> both through its outbox, and Shipping's spec is written against this
-> contract.
+> **`dispatched` and `delivered` are the shipping service's.** In the
+> reference domain §3.2 assigns `ShipmentDispatched` and `ShipmentDelivered` to
+> Shipping, which publishes both through its outbox, and Shipping's spec is
+> written against this contract
+> ([Appendix E.6.4](appendix-e-reference-domain.md#e64-the-buyer-order-read)).
 
 ### The fields both routes carry
 
@@ -1247,7 +1235,7 @@ what the buyer is owed is the outcome it works towards, and that arrives as
   `OrderCancelled`, and it runs only where an authorisation exists — so every
   refund follows a cancellation, and a refund as a status would overwrite the
   `out_of_stock` and `declined` distinction the table above exists to draw.
-- **`cancellable`**, **a hint and not an authority.** Only Ordering knows:
+- **`cancellable`**, **a hint and not an authority.** Only the order service knows:
   the rule is `Order.Cancel`'s, the field is computed from a projection that
   lags it, and during the window between a despatch reaching the saga and
   reaching this queue the hint reads `true` while the command would answer
@@ -1271,12 +1259,14 @@ refund. A declined payment has none: `PaymentDeclined` carries only a reason
 that may not travel, so the order's own status is what says so.
 
 **`productName` is nullable, and the null is not an edge case.** The name is
-resolved on read from Catalog's stream, not snapshotted with the line, so a
-product published before this projection's queue was declared has no name to
-resolve — the broker drops what no queue is bound for. §6.6 documents the
-same gap for `ordering.Products`, including that the rebuild procedure does
-not exist yet and that `PriceChanged` is no back door because it carries no
-name. Here the consequence is softer than Ordering's 422 and quieter for it:
+resolved on read from the product service's stream, not snapshotted with the
+line, so a product published before this projection's queue was declared has
+no name to resolve — the broker drops what no queue is bound for. §6.6
+documents the same gap for `ordering.Products`, including its rebuild, which
+in the reference domain is the product service's republish
+([Appendix E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild)),
+and that `PriceChanged` is no back door because it carries no name. Here the
+consequence is softer than the order service's 422 and quieter for it:
 a blank line in order history with no error anywhere, which is why the
 contract names it rather than leaving a client to meet it.
 
@@ -1284,14 +1274,14 @@ contract names it rather than leaving a client to meet it.
 
 Both shipment events and the payment events ADR-051 lists carry an order id
 and no customer, the payments by ADR-028's decision that a money movement
-carries no subject. They are attributed by joining to a row one of Ordering's
-three events created, and §9.4 does not promise that one did.
+carries no subject. They are attributed by joining to a row one of the order
+service's three events created, and §9.4 does not promise that one did.
 
 **So the projection inserts on a missing row rather than dropping the event**
 — §6.6's own remedy, whose absence it names as a defect that leaves an order
 reading one status for ever with no error anywhere — **and a row with no
 owner is never returned by either route.** It is invisible to everyone until
-an Ordering event supplies the customer, and if none ever arrives it stays
+an order-service event supplies the customer, and if none ever arrives it stays
 invisible. That is the correct failure: an unattributable order shown to the
 wrong buyer is the one outcome this contract must not produce, and §11.4's
 subject rule is not satisfied by a best guess. ADR-051's rebuild replays
@@ -1302,9 +1292,11 @@ its publisher's processed outbox row, kept for `RetentionPolicy.OutboxWindow`
 (§9.4), and `tools/bff-replay` replays those rows to this projection's queue
 alone.
 
-> **What Shipping settled, and what it was not asked for.** The shipment
-> half of the detail route is as rich as Shipping's published events, and
-> §3.2 gives it two that carry an order id and a tracking number between them.
+> **What Shipping settled, and what it was not asked for.** In the reference
+> domain ([Appendix E.6.4](appendix-e-reference-domain.md#e64-the-buyer-order-read))
+> the shipment half of the detail route is as rich as Shipping's published
+> events, and §3.2 gives it two that carry an order id and a tracking number
+> between them.
 > So a buyer sees despatch, delivery and a number to take to the carrier, and
 > **no tracking feed**: Shipping publishes no tracking event, and the two
 > milestones are the timeline
