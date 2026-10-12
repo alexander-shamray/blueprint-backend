@@ -4,8 +4,8 @@ namespace Notifications.Application.Privacy.EndErasedSubject;
 
 /// <summary>Deletes the subject's waiting notices, order records and contact, as the erasure does (ADR-097).</summary>
 /// <remarks>
-/// In the erasure's order, since the notices are found through the order records. It writes no audit row: the
-/// erasure that made the subject erased already did.
+/// In the erasure's order, since the notices are found through the order records (ADR-097); no audit row, as
+/// the erasure that made the subject erased wrote it.
 /// </remarks>
 public sealed class EndErasedSubjectHandler(INotificationsPersonalDataStore store)
     : ICommandHandler<EndErasedSubjectCommand, Result>
