@@ -46,7 +46,8 @@ internal sealed class OrderingIntegrationEventMapper : IIntegrationEventMapper
         CustomerId = e.CustomerId.Value,
         TotalAmount = e.Total.Amount,
         Currency = e.Total.Currency,
-        Lines = [.. e.Lines.Select(l => new PlacedLine(l.ProductId.Value, l.Quantity, l.UnitPrice.Amount))]
+        Lines = [.. e.Lines.Select(l => new PlacedLine(l.ProductId.Value, l.Quantity, l.UnitPrice.Amount))],
+        ErasedUnder = e.ErasedUnder
     };
 
     private static OrderConfirmed ToContract(OrderConfirmedDomainEvent e) => new()
@@ -59,7 +60,8 @@ internal sealed class OrderingIntegrationEventMapper : IIntegrationEventMapper
         TotalAmount = e.Total.Amount,
         Currency = e.Total.Currency,
         // No shipping address, which stays inside the service that owns it (§11.7, ADR-035).
-        Lines = [.. e.Lines.Select(l => new ConfirmedLine(l.ProductId.Value, l.Quantity, l.UnitPrice.Amount))]
+        Lines = [.. e.Lines.Select(l => new ConfirmedLine(l.ProductId.Value, l.Quantity, l.UnitPrice.Amount))],
+        ErasedUnder = e.ErasedUnder
     };
 
     private static OrderCancelled ToContract(OrderCancelledDomainEvent e) => new()
@@ -72,6 +74,7 @@ internal sealed class OrderingIntegrationEventMapper : IIntegrationEventMapper
         // The wire vocabulary through the one map that owns it, never the enum's member names (§9.6).
         Reason = CancellationReasons.ToCode(e.Reason),
         // An absent origin is §9.6's tolerance for payloads older than the field, not an identification.
-        Origin = CancellationOrigins.ToCode(e.Origin)
+        Origin = CancellationOrigins.ToCode(e.Origin),
+        ErasedUnder = e.ErasedUnder
     };
 }

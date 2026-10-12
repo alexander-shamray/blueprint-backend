@@ -23,6 +23,7 @@
   "Common.Contracts.Ordering.V1.OrderCancelled": {
     "CorrelationId": "required System.Guid",
     "CustomerId": "required System.Guid",
+    "ErasedUnder": "System.Collections.Generic.IReadOnlyList<System.Guid>?",
     "MessageId": "required System.Guid",
     "OccurredAt": "required System.DateTimeOffset",
     "OrderId": "required System.Guid",
@@ -33,6 +34,7 @@
     "CorrelationId": "required System.Guid",
     "Currency": "required System.String",
     "CustomerId": "required System.Guid",
+    "ErasedUnder": "System.Collections.Generic.IReadOnlyList<System.Guid>?",
     "Lines": "required System.Collections.Generic.IReadOnlyList<Common.Contracts.Ordering.V1.ConfirmedLine>",
     "MessageId": "required System.Guid",
     "OccurredAt": "required System.DateTimeOffset",
@@ -43,6 +45,7 @@
     "CorrelationId": "required System.Guid",
     "Currency": "required System.String",
     "CustomerId": "required System.Guid",
+    "ErasedUnder": "System.Collections.Generic.IReadOnlyList<System.Guid>?",
     "Lines": "required System.Collections.Generic.IReadOnlyList<Common.Contracts.Ordering.V1.PlacedLine>",
     "MessageId": "required System.Guid",
     "OccurredAt": "required System.DateTimeOffset",

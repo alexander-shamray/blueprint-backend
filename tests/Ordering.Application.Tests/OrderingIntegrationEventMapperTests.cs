@@ -42,7 +42,7 @@ public class OrderingIntegrationEventMapperTests
     public void A_placed_order_becomes_its_contract()
     {
         IReadOnlyList<object> mapped = Mapper().Map(
-            [new OrderPlacedDomainEvent(Order, Customer, Money.Of(129.98m, "EUR"), Lines(), Raised)]);
+            [new OrderPlacedDomainEvent(Order, Customer, Money.Of(129.98m, "EUR"), Lines(), [], Raised)]);
 
         OrderPlaced placed = mapped.ShouldHaveSingleItem().ShouldBeOfType<OrderPlaced>();
 
@@ -78,6 +78,7 @@ public class OrderingIntegrationEventMapperTests
                     address,
                     Money.Of(129.98m, "EUR"),
                     Lines(),
+                    [],
                     Raised)
             ]);
 
@@ -110,6 +111,37 @@ public class OrderingIntegrationEventMapperTests
     }
 
     [Fact]
+    public void Each_of_the_three_events_carries_the_requests_the_order_was_placed_under()
+    {
+        Guid[] requests = [Guid.CreateVersion7(), Guid.CreateVersion7()];
+
+        IReadOnlyList<object> mapped = Mapper().Map(
+        [
+            new OrderPlacedDomainEvent(Order, Customer, Money.Of(129.98m, "EUR"), Lines(), requests, Raised),
+            new OrderConfirmedDomainEvent(
+                Order,
+                Customer,
+                PaymentReference.Of("psp-ref-1"),
+                Address.Of("1 Test Street", null, "Almaty", "050000", "KZ"),
+                Money.Of(129.98m, "EUR"),
+                Lines(),
+                requests,
+                Raised),
+            new OrderCancelledDomainEvent(
+                Order,
+                Customer,
+                CancellationReason.PaymentTimeout,
+                CancellationOrigin.Workflow,
+                requests,
+                Raised)
+        ]);
+
+        mapped.OfType<OrderPlaced>().Single().ErasedUnder.ShouldBe(requests);
+        mapped.OfType<OrderConfirmed>().Single().ErasedUnder.ShouldBe(requests);
+        mapped.OfType<OrderCancelled>().Single().ErasedUnder.ShouldBe(requests);
+    }
+
+    [Fact]
     public void A_cancellation_carries_the_wire_code_and_not_the_enum_name()
     {
         // CancellationReason's member names are not the contract, so a rename cannot break a consumer.
@@ -119,6 +151,7 @@ public class OrderingIntegrationEventMapperTests
                 Customer,
                 CancellationReason.PaymentTimeout,
                 CancellationOrigin.Workflow,
+                [],
                 Raised)]);
 
         OrderCancelled cancelled = mapped.ShouldHaveSingleItem().ShouldBeOfType<OrderCancelled>();
@@ -145,6 +178,7 @@ public class OrderingIntegrationEventMapperTests
                     Customer,
                     CancellationReason.CustomerRequest,
                     origin,
+                    [],
                     Raised)
             ]);
 
@@ -173,12 +207,13 @@ public class OrderingIntegrationEventMapperTests
         // The id is the outbox key, the header and the inbox key at once (§9.1), so a shared one drops the second.
         IReadOnlyList<object> mapped = Mapper().Map(
             [
-                new OrderPlacedDomainEvent(Order, Customer, Money.Of(129.98m, "EUR"), Lines(), Raised),
+                new OrderPlacedDomainEvent(Order, Customer, Money.Of(129.98m, "EUR"), Lines(), [], Raised),
                 new OrderCancelledDomainEvent(
                     Order,
                     Customer,
                     CancellationReason.OutOfStock,
                     CancellationOrigin.Workflow,
+                    [],
                     Raised)
             ]);
 

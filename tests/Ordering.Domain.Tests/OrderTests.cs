@@ -26,6 +26,7 @@ public class OrderTests
             AnAddress(),
             items.Length == 0 ? [AnItem()] : items,
             "EUR",
+            [],
             Now);
 
     [Fact]
@@ -33,7 +34,7 @@ public class OrderTests
     {
         var customer = new CustomerId(Guid.CreateVersion7());
 
-        Order order = Order.Place(customer, AnAddress(), [AnItem(10m, 2)], "EUR", Now);
+        Order order = Order.Place(customer, AnAddress(), [AnItem(10m, 2)], "EUR", [], Now);
 
         order.Status.ShouldBe(OrderStatus.AwaitingStock, "Draft is the constructor's state, not Place's");
         order.CustomerId.ShouldBe(customer);
@@ -52,7 +53,7 @@ public class OrderTests
     public void Place_refuses_an_order_with_no_lines()
     {
         Should.Throw<DomainException>(() =>
-            Order.Place(new CustomerId(Guid.CreateVersion7()), AnAddress(), [], "EUR", Now));
+            Order.Place(new CustomerId(Guid.CreateVersion7()), AnAddress(), [], "EUR", [], Now));
     }
 
     [Fact]
@@ -86,7 +87,41 @@ public class OrderTests
                 AnAddress(),
                 [(ProductId.New(), 1, Money.Of(1m, "USD"))],
                 "EUR",
+                [],
                 Now));
+    }
+
+    [Fact]
+    public void Place_keeps_the_requests_its_customer_was_erased_under_and_every_later_event_carries_them()
+    {
+        Guid first = Guid.CreateVersion7();
+        Guid second = Guid.CreateVersion7();
+
+        Order order = Order.Place(
+            new CustomerId(Guid.CreateVersion7()),
+            AnAddress(),
+            [AnItem()],
+            "EUR",
+            [first, second, first],
+            Now);
+        order.ConfirmStock(Now);
+        order.ConfirmPayment(PaymentReference.Of("pay-1"), Now);
+
+        order.ErasedUnder.ShouldBe([first, second]);
+        order.DomainEvents.OfType<OrderPlacedDomainEvent>().Single().ErasedUnder.ShouldBe([first, second]);
+        order.DomainEvents.OfType<OrderConfirmedDomainEvent>().Single().ErasedUnder.ShouldBe([first, second]);
+    }
+
+    [Fact]
+    public void Cancel_carries_the_requests_the_order_was_placed_under()
+    {
+        Guid request = Guid.CreateVersion7();
+        Order order = Order.Place(
+            new CustomerId(Guid.CreateVersion7()), AnAddress(), [AnItem()], "EUR", [request], Now);
+
+        order.Cancel(CancellationReason.CustomerRequest, CancellationOrigin.User, Now);
+
+        order.DomainEvents.OfType<OrderCancelledDomainEvent>().Single().ErasedUnder.ShouldBe([request]);
     }
 
     [Theory]

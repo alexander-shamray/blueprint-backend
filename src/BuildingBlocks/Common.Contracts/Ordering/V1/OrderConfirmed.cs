@@ -18,6 +18,10 @@ public sealed record OrderConfirmed : IIntegrationEvent
     public required string Currency { get; init; }
 
     public required IReadOnlyList<ConfirmedLine> Lines { get; init; }
+
+    /// <summary>The requests the customer was already erased under when the order was placed (ADR-099).</summary>
+    /// <remarks>Optional, so absent means an older publisher and an empty list alike (§9.2).</remarks>
+    public IReadOnlyList<Guid>? ErasedUnder { get; init; }
 }
 
 public sealed record ConfirmedLine(Guid ProductId, int Quantity, decimal UnitPrice);

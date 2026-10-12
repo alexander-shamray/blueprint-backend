@@ -11,6 +11,7 @@ public sealed record OrderPlacedDomainEvent(
     CustomerId CustomerId,
     Money Total,
     IReadOnlyList<OrderLineSnapshot> Lines,
+    IReadOnlyList<Guid> ErasedUnder,
     DateTimeOffset OccurredAt) : IDomainEvent;
 
 public sealed record OrderConfirmedDomainEvent(
@@ -20,6 +21,7 @@ public sealed record OrderConfirmedDomainEvent(
     Address ShippingAddress,
     Money Total,
     IReadOnlyList<OrderLineSnapshot> Lines,
+    IReadOnlyList<Guid> ErasedUnder,
     DateTimeOffset OccurredAt) : IDomainEvent;
 
 public sealed record OrderStockConfirmedDomainEvent(
@@ -38,4 +40,5 @@ public sealed record OrderCancelledDomainEvent(
     CustomerId CustomerId,
     CancellationReason Reason,
     CancellationOrigin Origin,
+    IReadOnlyList<Guid> ErasedUnder,
     DateTimeOffset OccurredAt) : IDomainEvent;

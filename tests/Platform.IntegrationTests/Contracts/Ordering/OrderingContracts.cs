@@ -3,7 +3,7 @@ using static Platform.IntegrationTests.Contracts.SampleValues;
 
 namespace Platform.IntegrationTests.Contracts.Ordering;
 
-/// <summary>Ordering's samples, the commands it accepts, and the one member added to a live contract (ADR-028).</summary>
+/// <summary>Ordering's samples, the commands it accepts, and the members added to live contracts (ADR-028, ADR-099).</summary>
 internal sealed class OrderingContracts : ContractContext
 {
     public override string Service => "Ordering";
@@ -19,7 +19,8 @@ internal sealed class OrderingContracts : ContractContext
             CustomerId = Customer,
             TotalAmount = 999.98m,
             Currency = "EUR",
-            Lines = [new PlacedLine(Product, 2, 499.99m)]
+            Lines = [new PlacedLine(Product, 2, 499.99m)],
+            ErasedUnder = [Request]
         },
         [typeof(PlacedLine)] = () => new PlacedLine(Product, 2, 499.99m),
         [typeof(OrderConfirmed)] = () => new OrderConfirmed
@@ -31,7 +32,8 @@ internal sealed class OrderingContracts : ContractContext
             CustomerId = Customer,
             TotalAmount = 999.98m,
             Currency = "EUR",
-            Lines = [new ConfirmedLine(Product, 2, 499.99m)]
+            Lines = [new ConfirmedLine(Product, 2, 499.99m)],
+            ErasedUnder = [Request]
         },
         [typeof(ConfirmedLine)] = () => new ConfirmedLine(Product, 2, 499.99m),
         [typeof(OrderCancelled)] = () => new OrderCancelled
@@ -42,7 +44,8 @@ internal sealed class OrderingContracts : ContractContext
             OrderId = Order,
             CustomerId = Customer,
             Reason = CancelReasons.PaymentTimeout,
-            Origin = CancelOrigins.Workflow
+            Origin = CancelOrigins.Workflow,
+            ErasedUnder = [Request]
         },
         [typeof(CancelOrder)] = () => new CancelOrder(Order, CancelReasons.OutOfStock),
         [typeof(ConfirmOrder)] = () => new ConfirmOrder(Order, "psp_ref_9f21"),
@@ -54,7 +57,12 @@ internal sealed class OrderingContracts : ContractContext
     public override string[] AdditiveMembers =>
     [
         // Absent means published before the field existed, which §9.6's saga discards.
-        "Common.Contracts.Ordering.V1.OrderCancelled.Origin"
+        "Common.Contracts.Ordering.V1.OrderCancelled.Origin",
+
+        // Absent means published before the field existed, which a holder reads as erased under none (ADR-099).
+        "Common.Contracts.Ordering.V1.OrderPlaced.ErasedUnder",
+        "Common.Contracts.Ordering.V1.OrderConfirmed.ErasedUnder",
+        "Common.Contracts.Ordering.V1.OrderCancelled.ErasedUnder"
     ];
 
     public override Type[] CommandRoots =>
