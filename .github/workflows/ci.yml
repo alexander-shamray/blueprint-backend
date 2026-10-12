@@ -674,6 +674,10 @@ jobs:
     runs-on: ubuntu-latest
     # Sized with the build job's, above.
     timeout-minutes: 30
+    # The one job that comments: it posts a sighting on its issue.
+    permissions:
+      contents: read
+      issues: write
     strategy:
       # Each shard's failures are its own to report, so one red shard cancels none.
       fail-fast: false
@@ -710,6 +714,8 @@ jobs:
       # is not a skip: selected out, a test is not reported as passing;
       # selected in, it needs the daemon exactly as before. The runner has one.
       - name: Integration stage, ${{ matrix.shard }}
+        env:
+          PLATFORM_SIGHTINGS_DIR: ${{ github.workspace }}/TestResults/sightings
         run: >
           dotnet test Platform.slnx --no-build -c Release
           --filter "Category=Integration&${{ matrix.selects }}"
@@ -724,6 +730,36 @@ jobs:
           name: stages-integration-${{ matrix.shard }}
           path: TestResults/integration
           if-no-files-found: error
+
+      # A test that passed on something rare writes it here (Sightings.cs). Kept
+      # and posted on the issue that tracks it, so a recurrence is read without
+      # anyone opening this log. Not the stage gate's: it counts TestResults/integration.
+      - name: Keep the sightings
+        if: always() && hashFiles('TestResults/sightings/*.txt') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: sightings-${{ matrix.shard }}
+          path: TestResults/sightings
+
+      # A fork's token cannot comment, and a missed comment must not fail a shard
+      # that passed. The artifact above is the record.
+      - name: Post the sightings on #824
+        if: always() && hashFiles('TestResults/sightings/*.txt') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for f in TestResults/sightings/*.txt; do
+            {
+              echo "A passing run saw a double send. Run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}, shard ${{ matrix.shard }}, ref ${{ github.ref_name }}."
+              echo
+              echo '```'
+              head -c 60000 "$f"
+              echo
+              echo '```'
+            } > body.md
+            gh issue comment 824 --body-file body.md
+          done
 
   # Every stage's results in one place, the only place both readers below can
   # judge the run whole. Not `if: always()`: after a failed stage there is
