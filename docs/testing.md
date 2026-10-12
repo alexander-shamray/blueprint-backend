@@ -74,6 +74,14 @@ in `Common.TestSupport`, which tries a refused one again a bounded number of
 times and then lets the last refusal through, so a machine with no daemon still
 fails rather than skips.
 
+A retry cannot reach one failure: Testcontainers' `ResourceReaper` initialiser
+parses an image tag under a one-second regex timeout, and a type initialiser
+that threw never runs again in the process, so every fixture after it fails
+alike. `TestcontainersWarmUp` in `Common.TestSupport` runs it before a
+fixture builds its first container and names that failure, and only a new
+process recovers. `RedisFixture` calls it; a fixture that does not is exposed
+to the same fault.
+
 **They are not skipped when the daemon is absent, and that is a decision.** A
 skip on a missing daemon **fails open**: CI goes green on a runner whose Docker
 broke, and nobody finds out until the thing those tests were guarding breaks in
