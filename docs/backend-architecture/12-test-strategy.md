@@ -106,7 +106,9 @@ Red, green, refactor — with a worked example, because the discipline is easier
 to describe than to follow. The example and §12.3's samples are illustrative:
 `OrderBuilder` is not in the tree, and
 `tests/Ordering.Domain.Tests/OrderTests.cs` builds its orders with its own
-`AnOrder` helper under other test names.
+`AnOrder` helper under other test names. `Order.Place` and the cancelled
+event carry `ErasedUnder` as §5.4 and §5.5 specify, and the samples pass an
+empty list.
 
 **Requirement:** an order cannot be cancelled once it has shipped.
 
@@ -152,7 +154,7 @@ public void Cancel(CancellationReason reason, CancellationOrigin origin, DateTim
         throw new DomainException($"A {Status} order cannot be cancelled.");
 
     Status = OrderStatus.Cancelled;
-    Raise(new OrderCancelledDomainEvent(Id, CustomerId, reason, origin, now));
+    Raise(new OrderCancelledDomainEvent(Id, CustomerId, reason, origin, ErasedUnder, now));
 }
 ```
 
@@ -199,6 +201,7 @@ public class OrderTests
                 (ProductId.New(), 1, Money.Of(5.50m, "EUR"))
             ],
             "EUR",
+            [],
             Now);
 
         order.Total.ShouldBe(Money.Of(25.50m, "EUR"));
@@ -220,7 +223,8 @@ public class OrderTests
     [Fact]
     public void An_order_must_have_at_least_one_line()
     {
-        Action act = () => Order.Place(new CustomerId(Guid.CreateVersion7()), AddressBuilder.Valid(), [], "EUR", Now);
+        Action act = () =>
+            Order.Place(new CustomerId(Guid.CreateVersion7()), AddressBuilder.Valid(), [], "EUR", [], Now);
 
         act.ShouldThrow<DomainException>();
     }
@@ -238,6 +242,7 @@ public class OrderTests
                 (product, 3, Money.Of(10m, "EUR"))
             ],
             "EUR",
+            [],
             Now);
 
         OrderLine line = order.Lines.ShouldHaveSingleItem();
@@ -254,6 +259,7 @@ public class OrderTests
                 (ProductId.New(), 1, Money.Of(10m, "USD"))
             ],
             "EUR",
+            [],
             Now);
 
         act
@@ -282,6 +288,7 @@ internal static class OrderBuilder
                 .Range(0, lines)
                 .Select(_ => (ProductId.New(), 1, Money.Of(10m, currency))),
             currency,
+            [],
             DefaultNow);
 
     public static Order AwaitingPayment()
