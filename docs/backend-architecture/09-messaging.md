@@ -3333,7 +3333,7 @@ has the mechanism, which is a linked file rather than Pact.
 | Transient (network, deadlock, timeout) | Retry with exponential backoff and jitter, `RetryPolicy.RetryLimit` retries per service (below) |
 | Persistent (bad data, bug) | Move to the error queue after retries; alert |
 | Poison message | Never redeliver indefinitely; cap attempts and quarantine |
-| Consumer down | Messages queue in the broker; monitor queue depth |
+| Consumer down | Messages queue in the broker; monitor queue depth. Which service an operator may stop on purpose, and for how long, is [ADR-104](adr/ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md) |
 | Broker down | Outbox holds messages; they flush on reconnect |
 
 Retry and idempotency are configured per receive endpoint, and
