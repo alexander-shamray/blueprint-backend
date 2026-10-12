@@ -50,4 +50,4 @@ a test file holding §4.2's gates aliases the one it means —
 
 ---
 
-[← Appendix C](appendix-c-delivery-plan.md) · [Index](README.md)
+[← Appendix C](appendix-c-delivery-plan.md) · [Index](README.md) · [Appendix E →](appendix-e-reference-domain.md)
