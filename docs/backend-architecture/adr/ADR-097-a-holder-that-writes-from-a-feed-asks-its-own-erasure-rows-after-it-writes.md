@@ -51,9 +51,9 @@ order. Two ports named `IErasedSubjects` now sit beside Shipping's, which is the
 price of keeping each holder's audit table to its own service; a shared form is
 its own decision.
 **Superseded in part by
-[ADR-100](ADR-100-a-send-pass-asks-its-erasure-rows-before-and-after-it-reads-a-contact.md):**
-the mailbox a worker fetches between the commit and the delete is no longer
-kept or sent.
+[ADR-100](ADR-100-a-send-pass-asks-its-erasure-rows-after-it-saves-a-contact.md):**
+a mailbox a worker saves between the commit and the delete is deleted again.
+The fetch and the send stand.
 
 **Superseded in part by ADR-098**: the Decision's last sentence and the
 Consequences' last residual. A shipment or payment event now has its row

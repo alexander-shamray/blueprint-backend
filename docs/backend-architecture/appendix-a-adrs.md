@@ -106,7 +106,7 @@ decision looks wrong.
 | **ADR-097** | [A holder that writes from a feed asks its own erasure rows after it writes](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md) |
 | **ADR-098** | [The BFF remembers the id of an order it erased](adr/ADR-098-the-bff-remembers-the-id-of-an-order-it-erased.md) |
 | **ADR-099** | [An order carries the erasure requests its customer was already under when it was placed](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md) |
-| **ADR-100** | [A send pass asks its erasure rows before and after it reads a contact](adr/ADR-100-a-send-pass-asks-its-erasure-rows-before-and-after-it-reads-a-contact.md) |
+| **ADR-100** | [A send pass asks its erasure rows after it saves a contact](adr/ADR-100-a-send-pass-asks-its-erasure-rows-after-it-saves-a-contact.md) |
 
 ---
 
