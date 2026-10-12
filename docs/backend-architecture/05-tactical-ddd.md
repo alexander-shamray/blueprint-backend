@@ -18,8 +18,13 @@ Primitive `Guid` identifiers allow `GetOrder(customerId)` to compile. Typed IDs
 make that a compile error, which over the lifetime of a system prevents a
 recurring class of bug at essentially zero cost.
 
+Every `Service` in this chapter's samples and names stands for the service
+that owns the aggregate; in the reference domain it is spelled out, and
+[E.3.1](appendix-e-reference-domain.md#e31-5-the-order-samples)
+holds each spelling.
+
 ```csharp
-namespace Ordering.Domain.Orders;
+namespace Service.Domain.Orders;
 
 public readonly record struct OrderId(Guid Value)
 {
@@ -52,7 +57,7 @@ public readonly record struct OrderId(Guid Value)
 ## 5.3 Value objects
 
 ```csharp
-namespace Ordering.Domain.Common;
+namespace Service.Domain.Common;
 
 public readonly record struct Money
 {
@@ -134,7 +139,7 @@ public setters, a parameterless public constructor, references to other
 aggregates by object, or any knowledge of persistence.
 
 ```csharp
-namespace Ordering.Domain.Orders;
+namespace Service.Domain.Orders;
 
 public sealed class Order : AggregateRoot<OrderId>
 {
@@ -204,7 +209,7 @@ public sealed class Order : AggregateRoot<OrderId>
 
         order.Status = OrderStatus.AwaitingStock;
         // Lines travel with the event: the integration contract needs them so
-        // Inventory can reserve stock (§9.6), and a handler must not have to
+        // the stock owner can reserve stock (§9.6), and a handler must not have to
         // reload the aggregate to find out what was ordered.
         order.Raise(
             new OrderPlacedDomainEvent(
@@ -384,7 +389,7 @@ The events themselves are records in the Domain project, free to carry domain
 types — that freedom is the point of keeping them separate from contracts:
 
 ```csharp
-namespace Ordering.Domain.Orders.Events;
+namespace Service.Domain.Orders.Events;
 
 /// <summary>Immutable copy of a line as it stood when the event was raised.</summary>
 public sealed record OrderLineSnapshot(ProductId ProductId, int Quantity, Money UnitPrice);
@@ -490,14 +495,14 @@ them is one of the most consequential mistakes in this architecture:
 | Content | Rich domain types | Primitives and simple DTOs only |
 | Delivery | In-process after commit, via the outbox's `Local` lane (§7.5) | Message broker, via the outbox's `Broker` lane |
 | Naming | `*DomainEvent` suffix | Bare name, in a versioned namespace (§9.2) |
-| Example | `OrderConfirmedDomainEvent` | `Common.Contracts.Ordering.V1.OrderConfirmed` |
+| Example | `OrderConfirmedDomainEvent` | `Common.Contracts.Service.V1.OrderConfirmed` |
 
 A domain event may be translated into an integration event. Never publish a
 domain event directly onto the bus — it exposes your internal model as a public
 contract and you will not be able to refactor afterwards.
 
 **They must not share a type name.** `OrderPlacedDomainEvent` and
-`Common.Contracts.Ordering.V1.OrderPlaced` describe the same business fact in
+`Common.Contracts.Service.V1.OrderPlaced` describe the same business fact in
 two shapes — one carries `Money`, the other a `decimal` and a currency code —
 and a single name for both makes the mapper in §9.3 read as an identity
 function. Namespace versioning (ADR-012) distinguishes contract *versions*, not
@@ -508,7 +513,7 @@ contracts from domain events; the suffix does that.
 Defined in Domain, implemented in Infrastructure. One per aggregate root.
 
 ```csharp
-namespace Ordering.Domain.Orders;
+namespace Service.Domain.Orders;
 
 public interface IOrderRepository
 {

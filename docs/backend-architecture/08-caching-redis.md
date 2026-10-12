@@ -75,8 +75,10 @@ share is the eviction policy.
 **verbatim**: `RedisKeys` (§8.3) writes it into every key, and the ACL below
 is provisioned from the same value, so the two cannot disagree. The examples
 here show hosts whose `ApplicationName` is the bare lowercase service name —
-a host deployed as `Ordering.Api` takes `~Ordering.Api:*`, and provisioning
-any other spelling is the silent-ACL failure §8.2 describes.
+a host deployed as `Service.Api` takes `~Service.Api:*` (the reference domain's
+is in
+[E.3.3](appendix-e-reference-domain.md#e33-8-caching)),
+and provisioning any other spelling is the silent-ACL failure §8.2 describes.
 
 ```
 user ordering-svc on >REDACTED ~ordering:* +@read +@write +@keyspace +@connection +eval -@dangerous -scan -randomkey -dbsize +client|setname +client|setinfo
@@ -193,13 +195,13 @@ public sealed class GetProductDetailHandler(HybridCache cache, IDbConnectionFact
 The `static` lambda with the state parameter avoids allocating a closure per
 call — a small thing that matters on a hot path.
 
-**Catalog's real one-product read is not this handler, and it caches
-nothing.** `GetProductHandler` ([§6.5](06-cqrs.md)) returns the listing's row,
-and that row carries Inventory's stock level, which `StockLevelProjection`
-writes and nothing stages a `Local` invalidation for (§8.4). A cached copy
-would serve a level no event removes, so the read stays where the listing is:
-Dapper over the tables, at level 1. This sample is the shape the first cached
-read takes once its invalidation exists.
+**A real one-product read may not be this handler, and may cache nothing.** A
+read whose row carries a value that a projection writes, and for which nothing
+stages a `Local` invalidation (§8.4), would serve from a cached copy a value
+no event removes, so it stays where the listing is: Dapper over the tables, at
+level 1. This sample is the shape the first cached read takes once its
+invalidation exists. The case in the reference domain is in
+[E.3.3](appendix-e-reference-domain.md#e33-8-caching).
 
 ## 8.3 Key naming
 
@@ -259,11 +261,11 @@ Cache invalidation is driven by events, never by timers alone.
 ```mermaid
 sequenceDiagram
     participant A as Admin
-    participant C as Catalog API
+    participant C as Owning API
     participant DB as SQL Server
     participant R as Redis
     participant MQ as RabbitMQ
-    participant O as Ordering
+    participant O as Consuming service
 
     A->>C: PUT /v1/catalog/products/{id}/price
     rect rgb(240, 245, 250)
@@ -282,7 +284,7 @@ sequenceDiagram
     O->>R: RemoveByTag("product:{id}")
 ```
 
-**Catalog's own invalidation goes through the local outbox lane, not an inline
+**The owner's own invalidation goes through the local outbox lane, not an inline
 call after commit.** That is ADR-018: a `RemoveByTag` issued directly by the
 handler is unretryable, so a process that dies between commit and the call
 leaves a stale cache with nothing to fix it. Staged as a `Local` row, it gets
@@ -294,17 +296,20 @@ event. Both are needed — the local row keeps the writing service consistent
 with itself, the event keeps every other service consistent shortly after — and
 both are the same mechanism.
 
-**Catalog caches nothing, so its price change stages the `Broker` row alone.**
-A `Local` row is staged only for an event a handler is registered for
-([§7.5](07-persistence.md)), so the `Local` half arrives with Catalog's first
-cached read, beside its handler.
+**A service that caches nothing stages the `Broker` row alone for a price
+change.** A `Local` row is staged only for an event a handler is registered for
+([§7.5](07-persistence.md)), so the `Local` half arrives with its first cached
+read, beside its handler. The reference domain's case is in
+[E.3.3](appendix-e-reference-domain.md#e33-8-caching).
 
-The consumer's side is **Ordering's**, and it is a shape rather than a
-registration: Ordering caches nothing through `HybridCache`, so its one
-`PriceChanged` handler is `ProductPriceProjection` (§6.6), which updates the
-price table the write path reads. The first cached projection of Catalog data
-brings the second handler with it — in `Ordering.Infrastructure` beside the
-projection, registered by the same §6.2 scan, and run through the same
+The consumer's side is a shape rather than a registration: a consumer that
+caches nothing through `HybridCache` has one `PriceChanged` handler, a
+projection (`ProductPriceProjection`, §6.6) that updates the price table the
+write path reads; the reference domain's consumer is in
+[E.3.3](appendix-e-reference-domain.md#e33-8-caching).
+The first cached projection of the owner's data brings the second handler with
+it — in `Service.Infrastructure` beside the projection, registered by the same
+§6.2 scan, and run through the same
 `IntegrationEventConsumer<PriceChanged>` ([§9.4](09-messaging.md)). The scan
 pins no order between the two, and the consumer runs handlers in registration
 order, so whether the cache is emptied before or after the table is updated is
@@ -312,7 +317,7 @@ a decision that reader takes with its handler, not one this chapter can
 promise. This is that handler:
 
 ```csharp
-namespace Ordering.Infrastructure.Caching;
+namespace Service.Infrastructure.Caching;
 
 public sealed class PriceChangedCacheInvalidator(HybridCache cache)
     : IIntegrationEventHandler<PriceChanged>
@@ -1294,7 +1299,8 @@ prefix the ACL requires, and the **coordination** connection rather than the
 cache connection, because idempotency keys must never be evicted.
 
 **It is `Common.Infrastructure`'s and not a service's.** The obvious home is
-`Ordering.Infrastructure.Idempotency`, beside the service that uses it; what
+a service's own `Infrastructure.Idempotency` namespace, beside the service that
+uses it; what
 argues the other way is `RedisDistributedLockFactory`, which sits one file over
 on the same connection with the same keying and the same `[FromKeyedServices]`
 attribute. Two per-service copies of one Redis interaction drift the first time
@@ -1454,9 +1460,9 @@ command rather than trusting the author to have opted in:
     }
 ```
 
-That is Ordering's, in
-`tests/Ordering.Application.Tests/IdempotencyOptInTests.cs`; every service's
-`Application.Tests` project carries its own, with the gates below beside it.
+That is `IdempotencyOptInTests.cs`; every service's `Application.Tests` project
+carries its own, with the gates below beside it (the reference domain's path is
+in [E.3.3](appendix-e-reference-domain.md#e33-8-caching)).
 
 **The constraint on `TResult` is a second way to fail open, and it needs its own
 test for the reason the first one does.** A container drops an open generic
@@ -1532,8 +1538,8 @@ owed if this list ever grows past the primitives §6.4 uses.
 
 **Neither reflection test reaches the behaviour, and the integration tests
 reach only part of it.** A third one crosses the replay path end to end —
-`Catalog.Api.Tests` posts the same `CommandId` twice through a real Redis and
-asserts one product and one identical response — but every integration
+a service's `Api.Tests` posts the same `CommandId` twice through a real Redis
+and asserts one resource and one identical response — but every integration
 assertion here is still about the **success** path: the release decisions are
 unobserved. Moving `CompleteAsync` back inside the `try` — undoing this
 section's answer to the release question — leaves all of them green. So the
@@ -1600,7 +1606,8 @@ references no service. `RecordingIdempotencyStore`, in
 log each member appends to, the `Tokens` map, and a `CompleteFault` that throws
 from `CompleteAsync` for the hold case; `StubCurrentUser.Authenticated(id)` and
 `StubCurrentUser.Anonymous()` are the callers the subject segment
-distinguishes. Ordering's callers, stated through its `TestAuthHandler`, cannot
+distinguishes. A service's callers, stated through its own
+`TestAuthHandler`, cannot
 be reached from here — §4.3 permits one assembly across a service boundary and
 a test helper is not it.
 
