@@ -906,6 +906,7 @@ the prices and the order:
 public sealed class PlaceOrderHandler(
     IOrderRepository orders,
     IProductPriceReader prices,
+    IPersonalDataErasureRepository erasures,
     ICurrentUser currentUser,
     TimeProvider clock)
     : ICommandHandler<PlaceOrderCommand, Result<Guid>>
@@ -927,11 +928,16 @@ public sealed class PlaceOrderHandler(
                 return (id, i.Quantity, priceList[id]);
             });
 
+        // Read in the unit that inserts the order, so a holder can tell an order placed after an erasure from the
+        // one the erasure was for (ADR-099).
+        IReadOnlyList<Guid> erasedUnder = await erasures.RequestsErasingAsync(currentUser.Id, ct);
+
         var order = Order.Place(
             new CustomerId(currentUser.Id),
             command.ShippingAddress.ToDomain(),
             items,
             command.Currency,
+            erasedUnder,
             clock.GetUtcNow());
 
         orders.Add(order);

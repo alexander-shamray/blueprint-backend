@@ -57,6 +57,9 @@ public sealed record OrderConfirmed : IIntegrationEvent
     public required decimal TotalAmount { get; init; }
     public required string Currency { get; init; }
     public required IReadOnlyList<ConfirmedLine> Lines { get; init; }
+
+    // Optional, so absent means an older publisher and an empty list alike (ADR-099).
+    public IReadOnlyList<Guid>? ErasedUnder { get; init; }
 }
 
 public sealed record ConfirmedLine(Guid ProductId, int Quantity, decimal UnitPrice);
@@ -66,6 +69,8 @@ public sealed record ConfirmedLine(Guid ProductId, int Quantity, decimal UnitPri
 `ReserveStock` draws its lines from — has the same shape with its own
 `PlacedLine`, and Catalog's three (`ProductPublished`, `PriceChanged`,
 `ProductDiscontinued`) repeat the three envelope members and add their own.
+`OrderCancelled` carries the same `ErasedUnder` as the two order events above
+([ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md)).
 All of them live under `Common.Contracts`, one file per contract, where §6.6's
 projections read them and the compiler answers for every member a sample
 names. The envelope is written out on every contract rather than inherited
@@ -320,7 +325,8 @@ private static V1.OrderPlaced ToContract(OrderPlacedDomainEvent e) => new()
     Currency = e.Total.Currency,
     // PlacedLine, not ConfirmedLine — OrderPlaced owns its own line type
     // so the two contracts can version independently (§9.1).
-    Lines = [.. e.Lines.Select(l => new V1.PlacedLine(l.ProductId.Value, l.Quantity, l.UnitPrice.Amount))]
+    Lines = [.. e.Lines.Select(l => new V1.PlacedLine(l.ProductId.Value, l.Quantity, l.UnitPrice.Amount))],
+    ErasedUnder = e.ErasedUnder
 };
 ```
 
