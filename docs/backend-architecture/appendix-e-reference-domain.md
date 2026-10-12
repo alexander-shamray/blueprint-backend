@@ -707,8 +707,8 @@ environment ever sets.
 ### E.9.5 The host-specific keys
 
 §15.4's inventory holds the keys every host shares, the gateway's own and the
-identity grant of a host that calls out. These are the keys one service's code reads and
-§15.4 does not list, in the same columns. A key joins a chart when its host's
+identity grant of a host that calls out. These are the keys one service's code
+reads and §15.4 does not list, in the same columns. A key joins a chart when its host's
 code reads it, and the host refuses to start without a required one.
 
 | Key | Kind | Source | Required |
