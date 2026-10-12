@@ -17,7 +17,438 @@ Filled by #907.
 
 ## E.2 §4: the solution tree and the scaffold
 
-Filled by #904.
+This section holds what [§4](04-solution-structure.md) no longer states: the
+services that have each host shape, the worked samples of its gates and its
+composition root, and the cases it compares a rule against. The chapter owns
+the rules; each sample below is one service's, in the reference domain, and
+an adopter replaces it with their own.
+
+### E.2.1 The services and their host shapes
+
+`src/Services/` is the roster, one directory per service, and
+`deploy/compose/` holds each service's Compose unit; this table adds only
+what neither says, which host shape each service has. Each service's tests
+are `<Service>.Domain.Tests`, `<Service>.Application.Tests` and
+`<Service>.Api.Tests` (`<Service>.Worker.Tests` for a worker, and no
+`<Service>.Domain.Tests` for a pure consumer, which has no Domain project),
+with a `<Service>.TestSupport`, under `tests/`.
+
+| Service | Host shape | Projects under `src/Services/<Service>/` |
+|---|---|---|
+| Catalog | API host | Domain, Application, Infrastructure, Migrator, Api |
+| Ordering | API host | Domain, Application, Infrastructure, Migrator, Api |
+| Inventory | API host | Domain, Application, Infrastructure, Migrator, Api |
+| Payments | API host | Domain, Application, Infrastructure, Migrator, Api |
+| Privacy | API host | Domain, Application, Infrastructure, Migrator, Api |
+| Shipping | worker | Domain, Application, Infrastructure, Migrator, Worker |
+| Notifications | pure consumer | Application, Infrastructure, Migrator, Worker |
+
+Ordering's tree is the one §4.1 draws generically: its Application project
+holds a `DependencyInjection.cs` with `AddOrderingApplication()`, its
+Infrastructure project one with `AddOrderingInfrastructure(config)`, and
+`Ordering.Api/Program.cs` is its only composition root.
+
+Shipping and Notifications expose no public API but still own schemas:
+`Shipment` and `TrackingEvent`, and `NotificationLog`, respectively
+([§3.2](03-bounded-contexts.md)). `tools/new-service` refuses Shipping
+without `--worker` and Notifications without `--pure-consumer`, so that it
+does not render either in a shape §4.1 does not give it.
+
+### E.2.2 The domain gate
+
+Ordering's, in `tests/Ordering.Domain.Tests/ArchitectureTests.cs`, enforces
+§4.2's `*.Domain` row as an exact allow-list:
+
+```csharp
+    [Fact]
+    public void Domain_references_only_common_domain_and_the_framework()
+    {
+        // An exact allow-list, as §4.2's table is: a System.* prefix would pass System.Data.SqlClient.
+        // System.Collections is the records' generated equality; System.Linq is the value objects'
+        // letter scans and Order's Aggregate over its lines.
+        string[] allowed = ["Common.Domain", "System.Runtime", "System.Collections", "System.Linq"];
+
+        IEnumerable<string> referenced = typeof(Order).Assembly
+            .GetReferencedAssemblies()
+            .Select(a => a.Name!);
+
+        referenced.ShouldAllBe(name => allowed.Contains(name));
+    }
+```
+
+### E.2.3 The composition-root gate
+
+Ordering's, in `tests/Ordering.Api.Tests/ArchitectureTests.cs`, judges the
+assembly whole and subtracts the root from the failures afterwards, where
+full names are available to subtract it by and there is no candidate set to
+be narrow:
+
+```csharp
+    private static readonly string[] Forbidden =
+    [
+        "Ordering.Infrastructure",
+        "Microsoft.EntityFrameworkCore",
+        "MassTransit",
+        "StackExchange.Redis"
+    ];
+
+    /// <summary>Program or its global-namespace generated helpers, the one exemption §4.2 grants.</summary>
+    private static bool IsCompositionRoot(string fullName) =>
+        fullName == "Program" || (!fullName.Contains('.') && fullName.StartsWith('<'));
+
+    [Fact]
+    public void Nothing_but_the_composition_root_depends_on_infrastructure()
+    {
+        // Every banned package, not the Infrastructure namespace alone: DbContext and the like arrive transitively.
+        TestResult result = Types
+            .InAssembly(typeof(Program).Assembly)
+            .ShouldNot().HaveDependencyOnAny(Forbidden)
+            .GetResult();
+
+        string[] leaked = [.. (result.FailingTypeNames ?? []).Where(name => !IsCompositionRoot(name))];
+
+        leaked.ShouldBeEmpty($"leaked: {string.Join(", ", leaked)}");
+    }
+```
+
+### E.2.4 The MassTransit gate
+
+Ordering's, in `tests/Ordering.Application.Tests/ArchitectureTests.cs`,
+holds the boundary [§9.3](09-messaging.md) states in prose:
+
+```csharp
+    [Fact]
+    public void Application_and_domain_do_not_reference_masstransit()
+    {
+        // §9.3's must-not list, whose one exemption is a saga's receive endpoint and its outbox (ADR-032).
+        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(Order).Assembly];
+        foreach (Assembly assembly in assemblies)
+        {
+            Types
+                .InAssembly(assembly)
+                .ShouldNot().HaveDependencyOn("MassTransit")
+                .GetResult().IsSuccessful
+                .ShouldBeTrue(assembly.GetName().Name);
+        }
+    }
+```
+
+### E.2.5 The cross-service gate
+
+Ordering's, in `tests/Ordering.Api.Tests/ArchitectureTests.cs`, is the list
+of building blocks, the service's own projects read off the five
+assemblies, and the helper its test calls once for each of them; the
+excerpt leaves out the lines between the first two:
+
+```csharp
+    /// <summary>§4.1's building blocks by name, because Common.TestSupport is named like one and is not.</summary>
+    private static readonly string[] BuildingBlocks =
+        ["Common.Application", "Common.Contracts", "Common.Domain", "Common.Infrastructure", "Common.Web"];
+
+    /// <summary>The service's own projects by name, never its prefix, which Ordering.TestSupport shares.</summary>
+    private static readonly string[] OwnProjects = [.. ServiceAssemblies.Select(assembly => assembly.GetName().Name!)];
+
+    private static void ShouldStayInsideThisService(string subject, AssemblyName[] references)
+    {
+        string[] foreign =
+        [
+            .. references
+                .Where(IsFirstParty)
+                .Select(reference => reference.Name!)
+                .Where(name => !BuildingBlocks.Contains(name) && !OwnProjects.Contains(name))
+                .Order()
+        ];
+
+        foreign.ShouldBeEmpty($"{subject} reaches across a service boundary: {string.Join(", ", foreign)}");
+    }
+```
+
+### E.2.6 The composition root
+
+Ordering's three, each with the comments that name the line's owner.
+
+`AddOrderingApplication`, in
+`src/Services/Ordering/Ordering.Application/DependencyInjection.cs`:
+
+```csharp
+    public static IServiceCollection AddOrderingApplication(this IServiceCollection services)
+    {
+        services.AddPluggableFrom(typeof(DependencyInjection).Assembly);   // §6.2
+        services.AddDispatcher();
+
+        // Explicit rather than scanned, beside the dispatcher it serves, as §4.2's sample has it (§7.5).
+        services.AddDomainEventDispatcher();
+
+        // §9.3's allow-list, explicit so that what this service publishes is a decision, not a scan's finding.
+        services.AddScoped<IIntegrationEventMapper, OrderingIntegrationEventMapper>();
+
+        // The clock (§5.4) and the request histogram (§13.3), which LoggingBehavior injects.
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<RequestMetrics>();
+
+        // §13.3's business instruments; Infrastructure's projection is the only caller (§6.6).
+        services.AddSingleton<OrderMetrics>();
+
+        // Registration order is pipeline order; idempotency sits inside validation and outside the transaction (§6.3).
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
+
+        // Scoped, as a command is; only open generics inject it, so a missing one fails the first command.
+        services.AddScoped<IdempotencyContext>();
+
+        // §4.2's sample line, anchored on a validator: losing the last one fails the build, not silently.
+        services.AddValidatorsFromAssemblyContaining<PlaceOrderValidator>();
+        return services;
+    }
+```
+
+Most comments name their line's owner, and three reasons live here alone.
+`TimeProvider.System` is registered here so that Application's registration
+stands on its own, rather than on whatever a host's other building blocks happen
+to `TryAdd`. `AddDispatcher` and `AddDomainEventDispatcher` stand in for
+`AddScoped` lines this assembly cannot write, because `Dispatcher`,
+`DomainEventDispatcher` and `ProjectionRegistry` are internal to
+`Common.Application` (§6.2, §7.5). And the mapper is not an open generic, so
+§6.2's scan cannot find it; `DomainEventDispatcher` injects it, so a missing
+line fails `ValidateOnBuild` rather than failing silently.
+
+`AddOrderingInfrastructure`, in
+`src/Services/Ordering/Ordering.Infrastructure/DependencyInjection.cs`:
+
+```csharp
+    public static IServiceCollection AddOrderingInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        // ADR-079, before any connection below is opened.
+        services.AddTransportSecurity();
+
+        // §7.1's runtime identity, no DDL; EnableRetryOnFailure makes §6.3's CreateExecutionStrategy a real retry.
+        services.AddDbContext<OrderingDbContext>(o =>
+            o.UseSqlServer(
+                configuration.GetConnectionString("Ordering"),
+                sql => sql.EnableRetryOnFailure()));
+
+        // §9.5's inbox filter names DbContext. One instance, not AddScoped<DbContext, OrderingDbContext>(), which
+        // would commit the inbox row in a second context's own transaction.
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<OrderingDbContext>());
+
+        // Each layer scans itself (§6.2); scanning only Application would skip this layer's projections and mappers.
+        services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
+
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
+        services.AddScoped<IOrderRepository, OrderRepository>();             // §5.6
+
+        // §6.4's price port, over the local projection, so the write transaction never waits on Catalog.
+        services.AddScoped<IProductPriceReader, ProjectedPriceReader>();
+
+        // §8.5's durable half, in EfUnitOfWork's transaction through the alias above. A missing line fails the
+        // first command, not startup: ValidateOnBuild never constructs TransactionBehavior's open generic.
+        services.AddScoped<IIdempotencyMarkerStore, EfIdempotencyMarkerStore>();
+
+        // §7.5's two halves, scoped because the context is.
+        services.AddScoped<IDomainEventCollector, EfDomainEventCollector>();
+        services.AddScoped<IIntegrationEventPublisher, OutboxPublisher>();
+
+        // Values, since Common.Infrastructure is every service's; one local, so no two tables name different schemas.
+        const string schema = "ordering";
+        services.AddSingleton(new OutboxTable(schema));
+        services.AddSingleton(new InboxTable(schema));
+        services.AddSingleton(new IdempotencyMarkerTable(schema));
+
+        // §9.4's, §9.5's and §8.5's retention windows, registered rather than const so the service can change them.
+        services.AddSingleton(new RetentionPolicy());
+
+        // §9.4's persisted type names; the source is separate so a test host can add its own assembly.
+        // The map is lazy, so MessageTypeMapValidator is what fails the host, not the first message, on a duplicate.
+        services.AddSingleton(
+            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(Order).Assembly));
+        services.AddSingleton(sp =>
+        {
+            MessageTypeSource source = sp.GetRequiredService<MessageTypeSource>();
+            return new MessageTypeMap(source.Assemblies, source.Aliases, source.WrittenNames);
+        });
+        services.AddHostedService<MessageTypeMapValidator>();
+
+        // §9.4's payload format. A value object on a domain event needs a converter here: most deserialise to
+        // their default rather than failing, which §12.4's round trip catches.
+        services.AddSingleton<JsonConverter, MoneyJsonConverter>();
+        services.AddSingleton<JsonConverter, AddressJsonConverter>();
+        services.AddSingleton<JsonConverter, PaymentReferenceJsonConverter>();
+        services.AddSingleton<JsonConverter, TrackingNumberJsonConverter>();
+        services.AddSingleton<OutboxJson>();
+
+        // §13.3's messaging instruments.
+        services.AddSingleton<MessagingMetrics>();
+
+        // §13.6's outbox gauges. OutboxStats reads the runtime key's data plane (§7.1), and runs in gauge callbacks,
+        // so it gets its own bounded connect timeout, which no query inherits.
+        string metricsConnectionString =
+            new SqlConnectionStringBuilder(configuration.GetConnectionString("Ordering"))
+            {
+                ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
+            }.ConnectionString;
+
+        services.AddSingleton<IOutboxStats>(sp =>
+            new OutboxStats(new SqlConnectionFactory(metricsConnectionString), sp.GetRequiredService<OutboxTable>()));
+        services.AddSingleton<OutboxMetrics>();
+
+        // Constructs the metrics singletons at start, before the bus, so they exist for the first message (§13.6).
+        services.AddHostedService<MetricsInitialiser>();
+
+        // §8's two connections, read eagerly, so a missing key stops the host.
+        services.AddRedisConnections(configuration);
+
+        // The bus (§9); AddMassTransit registers its own readiness check.
+        services.AddMassTransitMessaging(configuration);
+
+        // §9.4's poll loop. The generic overload records the ImplementationType §12.4's fixture removes it by.
+        // After the bus, since hosted services stop in reverse and the dispatcher drains into a live transport.
+        services.AddHostedService<OutboxDispatcher>();
+
+        // §9.4's, §9.5's and §8.5's retention. Last, so first stopped: an interrupted purge loses nothing.
+        services.AddHostedService<RetentionPurgeService>();
+
+        // §6.5's read side, singleton as §4.2's sample has it, on the runtime key rather than the migrator's (§7.1).
+        services.AddSingleton<IDbConnectionFactory>(
+            new SqlConnectionFactory(configuration.GetConnectionString("Ordering")!));
+
+        // Readiness lives here, not in Common.Web, because it needs the connection strings (§13.5). Both Redis
+        // instances, since AbortOnConnectFail is false and §8.1 gives them different servers.
+        services
+            .AddHealthChecks()
+            .AddSqlServer(configuration.GetConnectionString("Ordering")!, name: "sql", tags: ["ready"])
+            .AddRedis(
+                configuration.GetConnectionString(RedisConnections.Cache)!,
+                name: "redis-cache",
+                tags: ["ready"])
+            .AddRedis(
+                configuration.GetConnectionString(RedisConnections.Coordination)!,
+                name: "redis-coordination",
+                tags: ["ready"]);
+
+        return services;
+    }
+```
+
+Three reasons live here alone, and so do three absences.
+`SqlConnectionFactory` is registered as an instance because it takes the
+connection string, so a type registration leaves the container no constructor
+to satisfy and `ValidateOnBuild` refuses the host; a singleton is safe because
+the connections it hands out are the caller's to dispose.
+`MessageTypeMapValidator` is registered before the dispatcher because hosted
+services start in order. `Money` has a private constructor, so without its
+converter it deserialises to a zero amount and a null currency and nothing
+says so (§9.4).
+
+The absences are registrations made elsewhere. `ICurrentUser` and
+`AddHttpContextAccessor` belong to `AddCommonWebDefaults` (§11.4, §13.2):
+neither names a service, and the implementation reads `IHttpContextAccessor`,
+which arrives with a `FrameworkReference` that among the building blocks only
+`Common.Web` has. `IIdempotencyStore` arrives with `AddRedisConnections`, which
+registers `RedisIdempotencyStore` (§8.5), because a service either has Redis or
+does not (§8.2). And there is no `ITokenCache`, `ClientCredentialsHandler` or
+`ServiceIdentityOptions`, because Ordering makes no synchronous outbound call
+and so holds no outbound identity of its own (§9.7, §11.5).
+
+And `src/Services/Ordering/Ordering.Api/Program.cs`, from its builder on:
+
+```csharp
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+// Refuse to start on an unsatisfiable dependency or a captured scope, rather than on the first request.
+builder.Host.UseDefaultServiceProvider(o =>
+{
+    o.ValidateOnBuild = true;
+    o.ValidateScopes = true;
+});
+
+builder.AddCommonWebDefaults();                 // §13.2
+builder.Services.AddOrderingApplication();       // §6.2
+builder.Services.AddOrderingInfrastructure(builder.Configuration);   // §4.2, §7.1
+
+// Appendix C's OpenAPI deliverable: document only, no UI.
+builder.Services.AddCommonOpenApi();
+
+// ADR-052's server half; no interceptor, as the only caller-supplied value is parsed before the dispatcher.
+builder.Services.AddGrpc();
+
+// RequirePermission, so the claim type is PermissionClaim.Type's alone (§11.4). No orders:admin policy: that string
+// is a claim CancelOrderHandler checks against a loaded aggregate.
+builder.Services
+    .AddAuthorizationBuilder()
+    .AddPolicy(OrderingPermissions.Write, p => p.RequirePermission(OrderingPermissions.Write))
+    .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel))
+    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress));
+
+WebApplication app = builder.Build();
+
+// Middleware order is behaviour, not formatting (§4.2).
+// §10.6's nosniff, above everything, so every response carries it, the handler's 500 included.
+app.UseSecurityHeaders();
+app.UseExceptionHandler();        // §10.5 — catches every fault below it
+app.UseCorrelationId();           // §10.4 — above everything else that logs
+app.UseRequestTimeouts();         // §9.7 — below the exception handler, which would answer 499
+
+// §10.5's error shape for the bodiless challenge and forbid the middleware below writes.
+app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
+app.UseAuthentication();          // §11.3 — populates HttpContext.User
+app.UseAuthorization();           // §11.4 — evaluates the permission policies
+
+app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
+app.MapOpenApi();
+
+app.MapOrderEndpoints();          // §11.4 — the group fails closed
+
+// ADR-052, on the Http2 endpoint appsettings.json declares; [Authorize] travels on the service class.
+app.MapGrpcService<DeliveryAddressService>().RetrySafe(RetrySafety.ReadOnly);   // ADR-052 — Get reads one address
+
+app.Run();
+
+// Top-level statements compile to an internal Program, which WebApplicationFactory cannot see (§12.4).
+public partial class Program;
+```
+
+Ordering's permission policies are registered here rather than inside either
+helper, because Application knows nothing about HTTP and `Common.Web` must not
+know Ordering's names; a policy an endpoint names and nothing registers throws
+on the first request that reaches it, never at startup. A constant names each
+one, so the compiler compares the name written here with the one at the
+endpoint. `public partial class Program` is one line rather than
+`InternalsVisibleTo` because it does not have to name the assemblies that
+consume it, `Ordering.TestSupport` and `Ordering.Api.Tests` among them, each of
+which `InternalsVisibleTo` would have to list.
+
+### E.2.7 The cases the chapter compares against
+
+- **A gRPC service in its own namespace.** Ordering's `DeliveryAddressService`
+  is in `.Grpc` (ADR-052), outside `.Endpoints`, which is why a namespace
+  selector would miss it.
+- **The callee of the BFF's hop.** The stub that `Web.Bff.TestSupport` holds
+  is Catalog's, with the server half of `pricing.proto`, and the
+  `PricingContract` is linked into `Catalog.Api.Tests`.
+- **A bound only one service enforces.** Catalog's id ceiling, which
+  `GetPricesValidator` holds, is the case to compare against
+  [ADR-045](adr/ADR-045-the-checkout-quote-takes-quantities.md)'s shared
+  `OrderLimits`, which the BFF's quote and Ordering's command both enforce.
+- **A host with no synchronous outbound call.** Ordering makes none, so it
+  holds no `ITokenCache`, `ClientCredentialsHandler` or
+  `ServiceIdentityOptions` (§9.7, §11.5).
+- **A readiness check the BFF leaves out.** The BFF's readiness set does
+  not include Catalog's hop (§13.5).
+
+### E.2.8 The scaffold template
+
+`tools/new-service` has no template directory. It reads
+`src/Services/Catalog` at run time, so Catalog is the template: its wiring
+is copied and its domain is not. Catalog's `Product`, its command, its
+query and its endpoints are excluded by name, and any file under
+`src/Services/Catalog` the script cannot classify as template or slice
+stops the run. The script renames every casing of `Catalog` after it
+applies its patches, which is why a gate that named `Catalog` in a list
+would reach the new service with the name replaced.
 
 ## E.3 §5, §7 and §8: aggregates, persistence and caching
 
