@@ -9,7 +9,7 @@ by link, never a value; an adopter replaces this appendix wholesale
 [ADR-062](adr/ADR-062-the-domain-is-a-reference-implementation.md)).
 
 Each section below is a skeleton, one per chapter pass, so that a pass fills
-the section it cites and does not have to create it.
+the section it cites, replacing its "Filled by" line, and creates none.
 
 ## E.1 §2 and §3: the service roster and the context map
 
