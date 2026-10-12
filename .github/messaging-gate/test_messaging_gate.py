@@ -11,10 +11,10 @@ from pathlib import Path
 
 import messaging_gate
 
-CHAPTER = """\
-# 3. Bounded contexts
+TABLE_TEXT = """\
+# Appendix E — The reference domain
 
-## 3.2 Service responsibilities
+### E.1.1 §3.2: the service responsibilities table
 
 | Service | Owns | Publishes (events) | Consumes (events) | Accepts (commands) |
 |---|---|---|---|---|
@@ -58,7 +58,7 @@ class Fixture(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         self.owed = self.root / "owed.txt"
-        self.write(str(messaging_gate.CHAPTER), CHAPTER)
+        self.write(str(messaging_gate.TABLE_FILE), TABLE_TEXT)
         for path, text in FILES.items():
             self.write(path, text)
 
@@ -120,7 +120,7 @@ class TableAgainstCode(Fixture):
 
     def test_a_service_without_a_row_and_a_row_without_a_service_are_both_caught(self) -> None:
         self.write("src/Services/Shipping/Shipping.Worker/Program.cs", "// a new service")
-        self.edit(str(messaging_gate.CHAPTER), "| **Inventory** |", "| **Stock** |")
+        self.edit(str(messaging_gate.TABLE_FILE), "| **Inventory** |", "| **Stock** |")
 
         problems = self.check()
         self.assertIn("Shipping is a host under src/ and has no row in §3.2's table", problems)
@@ -176,7 +176,7 @@ class Closure(Fixture):
     BFF_ROW = "| **Web.Bff** — a host, not a service | A projection | — | `OrderPlaced` | — |"
 
     def test_a_consumed_event_no_row_publishes_is_caught(self) -> None:
-        self.edit(str(messaging_gate.CHAPTER), self.BFF_ROW, self.BFF_ROW.replace("OrderPlaced", "OrderShipped"))
+        self.edit(str(messaging_gate.TABLE_FILE), self.BFF_ROW, self.BFF_ROW.replace("OrderPlaced", "OrderShipped"))
         self.write("src/BFF/Web.Bff/Messaging/DependencyInjection.cs",
                    "e.ConfigureConsumer<IntegrationEventConsumer<OrderShipped>>(context);")
 
@@ -184,11 +184,11 @@ class Closure(Fixture):
             "§3.2 has OrderShipped consumed and published by [], not exactly one row"])
 
     def test_a_published_event_no_row_consumes_is_caught(self) -> None:
-        chapter = str(messaging_gate.CHAPTER)
-        self.edit(chapter, "`OrderPlaced` (its own — the saga starts on it), ", "")
-        self.edit(chapter, "| **Inventory** | StockItem | `StockLevelChanged` | `OrderPlaced` |",
+        appendix = str(messaging_gate.TABLE_FILE)
+        self.edit(appendix, "`OrderPlaced` (its own — the saga starts on it), ", "")
+        self.edit(appendix, "| **Inventory** | StockItem | `StockLevelChanged` | `OrderPlaced` |",
                   "| **Inventory** | StockItem | `StockLevelChanged` | — |")
-        self.edit(chapter, self.BFF_ROW, self.BFF_ROW.replace("`OrderPlaced`", "—"))
+        self.edit(appendix, self.BFF_ROW, self.BFF_ROW.replace("`OrderPlaced`", "—"))
         for path in ("src/Services/Inventory/Inventory.Infrastructure/Messaging/DependencyInjection.cs",
                      "src/BFF/Web.Bff/Messaging/DependencyInjection.cs",
                      "src/Services/Ordering/Ordering.Infrastructure/Messaging/OrderFulfilmentSaga.cs"):
@@ -199,19 +199,19 @@ class Closure(Fixture):
 
 class Parser(Fixture):
     def test_no_table_fails_rather_than_passing_empty(self) -> None:
-        self.write(str(messaging_gate.CHAPTER), "## 3.2 Service responsibilities\n\nNo table.\n")
+        self.write(str(messaging_gate.TABLE_FILE), "### E.1.1 §3.2: the service responsibilities table\n\nNo table.\n")
 
         self.assertIn("found no rows", self.check()[0])
 
     def test_no_host_fails_rather_than_passing_empty(self) -> None:
         empty = Path(self.directory.name) / "empty"
-        (empty / messaging_gate.CHAPTER).parent.mkdir(parents=True)
-        (empty / messaging_gate.CHAPTER).write_text(CHAPTER, encoding="utf-8")
+        (empty / messaging_gate.TABLE_FILE).parent.mkdir(parents=True)
+        (empty / messaging_gate.TABLE_FILE).write_text(TABLE_TEXT, encoding="utf-8")
 
         self.assertIn("found no host", messaging_gate.check(empty, self.owed)[0])
 
     def test_a_consumes_cell_reads_its_names_and_not_its_glosses(self) -> None:
-        table = messaging_gate.read_table(CHAPTER)
+        table = messaging_gate.read_table(TABLE_TEXT)
 
         self.assertEqual(table["Ordering"].consumes, {"OrderPlaced", "ProductPublished"})
         self.assertEqual(table["Web.Bff"].publishes, set())
@@ -222,7 +222,7 @@ class ThisRepository(unittest.TestCase):
 
     def test_every_host_under_src_has_a_row_and_every_row_a_host(self) -> None:
         hosts = set(messaging_gate.host_directories(messaging_gate.ROOT))
-        table = messaging_gate.read_table((messaging_gate.ROOT / messaging_gate.CHAPTER).read_text(encoding="utf-8"))
+        table = messaging_gate.read_table((messaging_gate.ROOT / messaging_gate.TABLE_FILE).read_text(encoding="utf-8"))
 
         self.assertIn("Web.Bff", hosts)
         self.assertEqual(hosts, set(table))
@@ -231,7 +231,7 @@ class ThisRepository(unittest.TestCase):
         # A reader that silently found nothing would pass every comparison over a row that states nothing.
         # A host freshly rendered builds nothing yet, so it reads nothing, and is let off only while every
         # difference its row states is owed: a reader that failed would owe nothing and still fail here.
-        table = messaging_gate.read_table((messaging_gate.ROOT / messaging_gate.CHAPTER).read_text(encoding="utf-8"))
+        table = messaging_gate.read_table((messaging_gate.ROOT / messaging_gate.TABLE_FILE).read_text(encoding="utf-8"))
         owed, _ = messaging_gate.read_owed(messaging_gate.OWED.read_text(encoding="utf-8"))
         for name, host in messaging_gate.read_code(messaging_gate.ROOT).items():
             with self.subTest(host=name):

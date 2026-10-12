@@ -42,28 +42,20 @@ reads, to an alphabet no mail client can make a link of
 ## 3.2 Service responsibilities
 
 Each service is described by what it owns, what it publishes, and what it
-listens to. This table is the contract summary for the whole platform.
+listens to. The table is the contract summary for the whole platform.
 
 Events are published to anyone interested; commands are sent to exactly one
-owner (§9.6). The columns are separated because that distinction determines
+owner (§9.6). The table's columns are separated because that distinction determines
 whether a message uses `Publish` or `Send`, and getting it wrong means a second
 subscriber silently executing your business commands.
 
-| Service | Owns | Publishes (events) | Consumes (events) | Accepts (commands) |
-|---|---|---|---|---|
-| **Catalog** | Product, its Price (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `ProductPublished`, `PriceChanged`, `ProductDiscontinued` | `StockLevelChanged` | — |
-| **Ordering** | Order, OrderLine, the fulfilment saga (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | `OrderPlaced` (its own — the saga starts on it), `OrderCancelled` (its own — the saga stops on it), `OrderConfirmed` (its own — the saga waits on it), `ProductPublished`, `PriceChanged`, `ProductDiscontinued`, `StockReserved`, `StockReservationFailed`, `StockReleased`, `PaymentAuthorised`, `PaymentDeclined`, `ShipmentDispatched`, `PersonalDataDeleteRequested` | `CancelOrder`, `ConfirmOrder`, `MarkOrderShipped`, `FlagOrderForReview` |
-| **Inventory** | StockItem, Reservation (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `StockReserved`, `StockReservationFailed`, `StockReleased`, `StockLevelChanged` | `OrderCancelled`, `ShipmentDispatched` | `ReserveStock`, `ReleaseStock` |
-| **Payments** | PaymentIntent, Refund (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled`, `PersonalDataDeleteRequested` | `AuthorisePayment` |
-| **Shipping** | Shipment, TrackingEvent (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled`, `PersonalDataDeleteRequested` | — |
-| **Notifications** | NotificationLog (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
-| **Privacy** | ErasureRequest (in the reference domain: [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) | `PersonalDataDeleteRequested` | — | `PersonalDataDeleteCompleted` |
-| **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model owning no fact ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested` | — |
+In the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), the table has a row for each service
+and one for the BFF.
 
 Every cell enumerates. "All customer-relevant events" would be shorter and is
 not a contract: it cannot be versioned, reviewed, or checked against what
-publishers actually emit. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Notifications is the
-clearest case: it publishes nothing, so this row is the whole of its contract, and the delivery plan builds
+publishers actually emit. Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), Notifications is the
+clearest case: it publishes nothing, so its row is the whole of its contract, and the delivery plan builds
 it last for that reason ([Appendix C.1](appendix-c-delivery-plan.md#c1-service-build-order)) — every name in it belongs to a
 service that has to exist first. A subscription list that grows silently is how
 a consumer ends up bound to a type nobody meant to give it.
@@ -74,24 +66,24 @@ nobody emits is a consumer waiting for ever. Less obviously, every name in a
 Publishes cell appears in at least one Consumes cell: a published event with no
 reader is a contract the platform is committed to versioning and nobody is
 asking for, and it looks identical to the case where its consumer was
-forgotten. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), `PaymentRefunded` was that row until
+forgotten. Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), `PaymentRefunded` was that row until
 Notifications claimed it. Both
-directions are two set comparisons over this table, automated precisely
+directions are two set comparisons over that table, automated precisely
 because neither failure produces a symptom: the
 [messaging gate](../../.github/messaging-gate/README.md) makes them, and holds
 every row to what its host's code publishes, consumes and accepts, bar a name
-the gate's `owed.txt` lists as owed: stated here and not built yet.
+the gate's `owed.txt` lists as owed: stated in the table and not built yet.
 
-Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), the command column is entirely the saga's
+Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), the command column is entirely the saga's
 doing: Ordering's `OrderFulfilmentSaga`
 is the only thing that sends commands, and each one lands on the queue of the
 service that owns the decision. `CancelOrder` and `ConfirmOrder` route back to
 Ordering itself — the saga coordinates, the aggregate decides (§9.6).
 
 **Ordering subscribes to three of its own events, and every entry is the saga
-rather than a duplication.** Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)),
+rather than a duplication.** Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)),
 `OrderPlaced` starts the workflow. `OrderCancelled`
-stops it, and it is in this cell because the *other* origin of a cancellation is
+stops it, and it is in that cell because the *other* origin of a cancellation is
 not a command at all: [§11.4](11-identity-authorization.md)'s customer endpoint
 cancels the aggregate directly, which the saga can only learn about by
 subscribing to the fact the aggregate publishes. Its absence here was the same
@@ -106,7 +98,7 @@ committed — so without this subscription the saga could only assume, which is
 exactly what it used to do. A state named for a command's intent rather than
 for its effect is what that assumption looked like in the machine
 ([#126](https://github.com/alexander-shamray/blueprint-backend/issues/126));
-`AwaitingConfirmation` and this cell entry are one change.
+`AwaitingConfirmation` and that cell entry are one change.
 
 **A round trip whose two ends are the same service is still a round trip**, and
 this is the platform's only one. Concretely, in the reference domain, the context map
@@ -244,7 +236,7 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
 > `OrderCancelled`, and the second route is held deliberately rather than
 > tolerated.** See
 > [ADR-029](adr/ADR-029-inventory-releases-on-the-cancellation-not-on-the-sagas-word.md).
-> Routing every release through `ReleaseStock` would tidy this cell and pay for
+> Routing every release through `ReleaseStock` would tidy that cell and pay for
 > it with a cancellation that releases nothing whenever no saga instance
 > survives to send the command — §9.6 finalises down several branches before
 > any despatch, and the reservation would then be held until a person noticed.
@@ -259,7 +251,7 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
 > has seen confirmed, and a reservation already being picked is released like
 > any other — §9.6 raises `cancelled_after_confirmation` and
 > [`order-review.md`](../runbooks/order-review.md) has an operator reinstate it
-> by hand. Closing that properly means adding a name to this row, which is
+> by hand. Closing that properly means adding a name to that row, which is
 > Inventory's decision to take against a real picking process rather than this
 > table's to anticipate.
 

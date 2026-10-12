@@ -1,9 +1,11 @@
 # The messaging gate
 
 **The claim: [§3.2](../../docs/backend-architecture/03-bounded-contexts.md)'s
-table says what each host publishes, consumes and accepts, and the code does
-exactly that.** The chapter stays the owner of the facts; this gate is the
-check, and it fails naming the row and the name that differ.
+table, which [Appendix
+E.1.1](../../docs/backend-architecture/appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+holds, says what each host publishes, consumes and accepts, and the code does
+exactly that.** The appendix is the owner of the facts; this gate is the check,
+and it fails naming the row and the name that differ.
 
 | Subcommand | Refuses | Reads |
 |---|---|---|
@@ -23,7 +25,7 @@ until it is deleted, so the list empties itself as the work lands.
 
 **Nothing is committed but the check.** The generated table is printed, never
 written to the tree: a committed copy would be a second owner of §3.2's facts,
-and the diff against the chapter is what the gate is for.
+and the diff against the appendix is what the gate is for.
 
 ## How it runs
 
