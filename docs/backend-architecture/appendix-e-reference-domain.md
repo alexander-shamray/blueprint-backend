@@ -683,7 +683,125 @@ The reference domain's names behind §8's rules and samples:
 
 ## E.4 §6: CQRS and its projections
 
-Filled by #910.
+### E.4.1 The level each service reads at
+
+[§6.1](06-cqrs.md)'s two levels are used as follows. Catalog, Inventory,
+Payments and Shipping read at level 1. Ordering is the service that escalates
+to level 2, and [E.4.5](#e45-the-ordering-escalation) is its case. The one
+level 2 read outside Ordering is the stock level a Catalog product read joins:
+a local projection, `StockLevelProjection` in
+`Catalog.Infrastructure/Projections/`, of Inventory's stock events
+([§3.2](03-bounded-contexts.md)). Payments' order record and Shipping's
+`DeliveryAddresses` are not read models that serve a query, so they are not
+level 2.
+
+### E.4.2 The registration scan and its test
+
+Every service's two registration methods call `AddPluggableFrom` on their own
+assembly: `<Service>.Application/DependencyInjection.cs` and its
+`Infrastructure` sibling. Ordering's are `Ordering.Application/DependencyInjection.cs` and
+`Ordering.Infrastructure/DependencyInjection.cs`.
+
+The registration test of [§6.2](06-cqrs.md) is Ordering's,
+`tests/Ordering.Api.Tests/RegistrationTests.cs`. It resolves from the host the
+integration fixture starts, which runs `AddOrderingApplication` and
+`AddOrderingInfrastructure`, derives its assemblies from the host's references
+that begin `Ordering.`, and carries a companion,
+`The_scan_reaches_both_layers_that_hold_handlers`, asserting that the derived
+set holds `Ordering.Application` and `Ordering.Infrastructure`.
+
+The three guards' worked examples: `IProductPriceReader` unregistered fails
+`ValidateOnBuild`, because `PlaceOrderHandler` needs it;
+`ProductPriceProjection` unregistered fails only the registration test; and
+`ServiceIdentityOptions` unbound fails only `ValidateOnStart`. The queue
+`ordering-catalog-events` binds Catalog's product events
+([§9.8](09-messaging.md)), so an unregistered `ProductPriceProjection` is also
+a message on the error queue.
+
+The EF implementation of `IUnitOfWork` is
+`<Service>.Infrastructure/Persistence/EfUnitOfWork.cs` in every service. The
+test that a handler which writes raw and then fails leaves no row,
+`The_behaviour_leaves_no_row_when_a_handler_writes_raw_and_then_fails`, is in
+each service's `DatabaseSmokeTests.cs`, Ordering's in
+`tests/Ordering.Api.Tests/`. The transaction behaviour's reason for forbidding
+a network call is the dependency Ordering would otherwise take on Catalog: a
+slow Catalog would make Ordering look down.
+
+### E.4.3 PlaceOrder and where its prices come from
+
+`PlaceOrderCommand`, its validator and its handler are in
+`Ordering.Application/Orders/PlaceOrder/`. Its operation name is
+`ordering.order.place`, and the bounds its validator shares with `Web.Bff` are
+`OrderLimits`. A product with no available price fails with
+`order.products_unavailable`, an `Error.Rule` answered as a 422.
+
+Prices are Catalog's. `IProductPriceReader` is implemented by
+`ProjectedPriceReader`, in `Ordering.Infrastructure/Persistence/`, over
+`ordering.ProductPrices`, which Catalog's `ProductPublished`, `PriceChanged`
+and `ProductDiscontinued` keep current. The gRPC pricing client of
+[§9.7](09-messaging.md) is a different caller, the BFF's.
+`PublishProductValidator` and its rules for a name and a thumbnail are
+[ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)'s.
+
+### E.4.4 The queries of Ordering and Catalog
+
+Ordering's one query in `src/` is `GetDeliveryAddressQuery`. The order-history
+query of [§6.5](06-cqrs.md), `GetOrderSummariesQuery` with
+`Ordering.Application.Orders.GetOrderSummaries`, is specified and not built:
+the buyer's order history is the BFF's
+([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)).
+Its level 1 form sums a total from `ordering.OrderLines` because
+`ordering.Orders` has no `TotalAmount` column.
+
+Catalog's `GetPrices` is the one enumerating query exempt from pagination; its
+ceiling is `GetPricesValidator.MaxProductIds`. Catalog's one-product read,
+`GET /v1/catalog/products/{id}`, is `GetProductQuery` and answers with
+`ProductSummaryDto`, whose `QuantityAvailable` is `null` for a level Inventory
+has never reported. Its listing, `GetProductsQuery`, adds `Q` and `Sort` (one
+of `ProductSort`'s values), and `ProductCursor` carries both through
+`Cursor.Wrap` ([ADR-073](adr/ADR-073-the-product-listing-takes-a-search-and-a-closed-sort-and-its-cursor-carries-both.md),
+[ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)).
+
+### E.4.5 The Ordering escalation
+
+The trigger is the customer order history screen, which needs product names and
+images that live in Catalog. The escalation is Ordering's and its lifecycle
+half is built: `OrderSummaryProjection` keeps `ordering.OrderSummaries` from
+five lifecycle events, `OrderPlacedDomainEvent`,
+`OrderStockConfirmedDomainEvent`, `OrderConfirmedDomainEvent`,
+`OrderShippedDomainEvent` and `OrderCancelledDomainEvent`, is
+`OrderMetrics`' only call site, and gives Ordering's `projection.lag` its first
+writer. Not built: `ordering.Products`, its `ProductPublished` handler, and the
+history query at either level.
+
+| Table | Fed by | Read by |
+|---|---|---|
+| `ordering.OrderSummaries` | The five lifecycle events above, on the local lane | The escalated history query, which replaces the level 1 one |
+| `ordering.Products` | Catalog's `ProductPublished`, from the broker | The same query, to resolve the ids a summary stores |
+| `ordering.ProductPrices` | Catalog's `PriceChanged`, `ProductPublished` and `ProductDiscontinued` | `IProductPriceReader`, on the write path |
+| `ordering.ProductWithdrawals` | Catalog's `ProductDiscontinued` | The price upsert, which consults it and nothing else reads |
+
+`OrderSummaryProjection` implements `IProjectionHandler<T>`, for Ordering's own
+events, and `ProductPriceProjection` implements `IIntegrationEventHandler<T>`,
+for Catalog's. They are
+`Ordering.Infrastructure/Projections/OrderSummaryProjection.cs` and
+`Ordering.Infrastructure/Projections/ProductPriceProjection.cs`.
+`OrderStockConfirmed` is absent from [§9.3](09-messaging.md)'s publish
+allow-list because `AwaitingPayment` is a state only the customer's own
+history shows.
+
+### E.4.6 The price projection's rebuild
+
+Catalog republishes the facts it still holds from its migrator image, with
+their original stamps
+([ADR-090](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)),
+which is the rebuild procedure for both `ordering.ProductPrices` and
+`ordering.Products`, because Ordering has no source of truth for either. The
+stamps are `PublishedAt`, `LastEventAt` and `WithdrawnAt`, and Catalog orders a
+product's events by its row version
+([ADR-075](adr/ADR-075-a-products-events-are-stamped-in-the-order-its-writes-committed.md)).
+Everything published before `ordering-catalog-events` was first declared is
+absent from Ordering, because the broker drops what no queue is bound for.
 
 ## E.5 §9: messaging and the sagas
 

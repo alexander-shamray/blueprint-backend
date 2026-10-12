@@ -16,7 +16,7 @@ The blueprint uses two levels and shows how to move between them:
 | Store | One database | Write DB + read store |
 | Sync | None needed | Projections from events |
 | Consistency | Strong | Eventual |
-| Used by | Catalog, Inventory, Payments, Shipping | Ordering (section 6.6); the stock level Catalog's product reads join ([§3.2](03-bounded-contexts.md)) |
+| Used by | A service whose reads stay on its own tables | A service that projects another's events (section 6.6, and [§3.2](03-bounded-contexts.md)'s joined reads); the roster is [E.4.1](appendix-e-reference-domain.md#e41-the-level-each-service-reads-at) |
 
 **Start at level 1.** It gives most of the benefit — the write model stays
 clean, queries stay fast — at none of the operational cost. Escalate only where
@@ -194,10 +194,10 @@ registers some handlers and silently skips the rest, which is the §6.2 trap
 with a wider blast radius — so both registration methods call it:
 
 ```csharp
-// Ordering.Application/DependencyInjection.cs
+// <Service>.Application/DependencyInjection.cs
 services.AddPluggableFrom(typeof(DependencyInjection).Assembly);   // §6.2
 
-// Ordering.Infrastructure/DependencyInjection.cs
+// <Service>.Infrastructure/DependencyInjection.cs
 services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
 ```
 
@@ -235,10 +235,12 @@ starts as happily as ever. `ServiceIdentityOptions` unbound fails only
 back an empty instance.
 
 **What "fails only the test" does *not* mean is that nothing notices at
-runtime.** `ordering-catalog-events` binds Catalog's product events
-([§9.8](09-messaging.md)), so `IntegrationEventConsumer<T>` resolves the
-handler list on every delivery and **throws** on an empty one — §9.4's "the
-endpoint binds this type, so something should handle it". An unregistered
+runtime.** Here, in the reference domain, `ordering-catalog-events` binds
+Catalog's product events ([§9.8](09-messaging.md);
+[E.4.2](appendix-e-reference-domain.md#e42-the-registration-scan-and-its-test)),
+so `IntegrationEventConsumer<T>` resolves the handler list on every delivery
+and **throws** on an empty one — §9.4's "the endpoint binds this type, so
+something should handle it". An unregistered
 `ProductPriceProjection` is therefore a message on the error queue, and the
 registration test is still the only one of the three *startup* guards that
 fires, which is what the row is about. A guard's value is what it catches
@@ -247,15 +249,16 @@ separate axis.
 
 The test resolves from the real host the integration fixture starts
 ([§12.4](12-test-strategy.md)), the registration path rather than a test-only
-container, and §6.3's two tests do the same. The host runs both
-`AddOrderingApplication` and `AddOrderingInfrastructure`, which is the property
-the test depends on: a version that ran only the Application half would report
-every Infrastructure handler as unregistered. The test derives the assemblies
-from the host's own references rather than listing them, so a new layer is
-covered without editing the test and a test library named like the service is
-not; it reads the same `PluggableInterfaces.All` the scan does, so a new
-interface is covered the moment it is added there. From
-`tests/Ordering.Api.Tests/RegistrationTests.cs`:
+container, and §6.3's two tests do the same. The host runs both layers'
+registration methods, which is the property the test depends on: a version that
+ran only the Application half would report every Infrastructure handler as
+unregistered. The test derives the assemblies from the host's own references
+rather than listing them, so a new layer is covered without editing the test
+and a test library named like the service is not; it reads the same
+`PluggableInterfaces.All` the scan does, so a new interface is covered the
+moment it is added there. Here, in the reference domain it is Ordering's, from
+`tests/Ordering.Api.Tests/RegistrationTests.cs`
+([E.4.2](appendix-e-reference-domain.md#e42-the-registration-scan-and-its-test)):
 
 ```csharp
 /// <summary>The host and every Ordering assembly it reaches.</summary>
@@ -307,10 +310,11 @@ public void Every_handler_implementation_is_registered()
 }
 ```
 
-A companion test, `The_scan_reaches_both_layers_that_hold_handlers`, asserts
-that the derived set holds `Ordering.Application` and `Ordering.Infrastructure`,
-because a set that lost a layer would pass the test above without checking
-that layer's handlers.
+A companion test asserts that the derived set holds both the Application and
+the Infrastructure assembly, because a set that lost a layer would pass the
+test above without checking that layer's handlers
+([E.4.2](appendix-e-reference-domain.md#e42-the-registration-scan-and-its-test)
+names it in the reference domain).
 
 > **Decision — no mediator library.** See [ADR-004](adr/ADR-004-no-mediator-library.md).
 
@@ -607,7 +611,7 @@ and are not miscounted.
 > breaking it cost a discarded write rather than a committed lie — but a rule
 > whose enforcement is two checks in two types is a rule worth testing, and
 > both are tested: `TransactionBehaviorTests` asserts `SaveChanges` once on
-> success and never on failure, and Ordering's
+> success and never on failure, and each service's
 > `The_behaviour_leaves_no_row_when_a_handler_writes_raw_and_then_fails` that
 > a handler that calls `ExecuteRawAsync` and then returns `Result.Failure`
 > leaves no row behind.
@@ -653,8 +657,8 @@ and are not miscounted.
 > makes is held open across the wire. With §9.7's 5-second client budget, a
 > single slow peer can pin a SQL Server transaction — and its pooled connection
 > — for five seconds per request. Under load that is connection-pool exhaustion
-> and lock contention, and it converts "Catalog is slow" into "Ordering is
-> down", which is precisely what ADR-002 exists to prevent.
+> and lock contention, and it converts "a peer is slow" into "this service
+> is down", which is precisely what ADR-002 exists to prevent.
 >
 > A command handler may therefore read only its **own** database. Data owned by
 > another service must already be present locally, projected from that service's
@@ -707,8 +711,8 @@ Query handlers must never resolve `IUnitOfWork`. The behaviour is constrained to
 `ICommand<TResult>` precisely so the read path cannot open a write transaction
 or touch the outbox.
 
-The EF Core implementation lives in Infrastructure, one per service; Ordering's
-is `Ordering.Infrastructure/Persistence/EfUnitOfWork.cs`. Its `ExecuteAsync`
+The EF Core implementation lives in Infrastructure, one per service, as
+`<Service>.Infrastructure/Persistence/EfUnitOfWork.cs`. Its `ExecuteAsync`
 is where the retry, the reset and the commit decision meet:
 
 ```csharp
@@ -818,8 +822,9 @@ repositories; the transaction through `IUnitOfWork`; nothing else.
 ## 6.4 A command
 
 Commands are imperative, named for the business intent, and immutable.
-`PlaceOrderCommand`, its validator and its handler are in
-`Ordering.Application/Orders/PlaceOrder/`:
+Here, in the reference domain, `PlaceOrderCommand`, its validator and its
+handler are in `Ordering.Application/Orders/PlaceOrder/`
+([E.4.3](appendix-e-reference-domain.md#e43-placeorder-and-where-its-prices-come-from)):
 
 ```csharp
 namespace Ordering.Application.Orders.PlaceOrder;
@@ -977,12 +982,15 @@ that. And note `TimeProvider` — the .NET abstraction for the clock, which make
 `IProductPriceReader` is the one part of this handler worth dwelling on, because
 the obvious implementation is wrong.
 
-Prices are owned by **Catalog**. The tempting implementation calls Catalog over
-gRPC — and it would run inside the write transaction (§6.3), holding a database
-transaction open across a network call to another service.
+Here, in the reference domain, prices are owned by **Catalog**
+([E.4.3](appendix-e-reference-domain.md#e43-placeorder-and-where-its-prices-come-from)).
+The tempting implementation calls Catalog over gRPC — and it would run inside
+the write transaction (§6.3), holding a database transaction open across a
+network call to another service.
 
-Instead, `IProductPriceReader` reads a **local projection** in Ordering's own
-database, kept current by all three of Catalog's product events —
+Instead, in the reference domain, `IProductPriceReader` reads a **local
+projection** in Ordering's own
+database ([E.4.3](appendix-e-reference-domain.md#e43-placeorder-and-where-its-prices-come-from)), kept current by all three of Catalog's product events —
 `ProductPublished`, `PriceChanged` and `ProductDiscontinued` (§6.6). The third
 is easy to leave off a list like this one and is what stops a withdrawn product
 staying orderable. `ProjectedPriceReader`, in
@@ -1026,8 +1034,11 @@ Three consequences, and the middle one is the point:
   `order.products_unavailable` (§10.5). Not a *validation* failure: the
   request was well-formed and the validator passed it, and §5.7 reserves that
   word for the 400 `ValidationBehavior` produces.
-- **Catalog can be down and orders still get placed.** Availability stops
-  multiplying, which is the whole argument of §2.3 principle 4 and ADR-002.
+- **The owner of the prices can be down and orders still get placed**, which
+  in the reference domain is Catalog
+  ([E.4.3](appendix-e-reference-domain.md#e43-placeorder-and-where-its-prices-come-from)).
+  Availability stops multiplying, which is the whole argument of §2.3
+  principle 4 and ADR-002.
 - **Prices can be stale by the projection's lag** — typically milliseconds.
   Where that is unacceptable, the order captures the price it used and payment
   reconciles against it; that is a business rule, not a reason to make the
@@ -1049,8 +1060,10 @@ Queries bypass the domain model entirely. There is no benefit to loading an
 aggregate, enforcing its invariants, and mapping it to a DTO in order to display
 a list.
 
-The query below is specified and not built, as §6.6's callout says of its
-escalation: Ordering's one query in `src/` is `GetDeliveryAddressQuery`.
+Here, in the reference domain the query below is specified and not built, as
+§6.6's callout says of its escalation: Ordering's one query in `src/` is
+`GetDeliveryAddressQuery`
+([E.4.4](appendix-e-reference-domain.md#e44-the-queries-of-ordering-and-catalog)).
 
 ```csharp
 namespace Ordering.Application.Orders.GetOrderSummaries;
@@ -1178,8 +1191,11 @@ Rules for the read side:
   default. There is no such thing as a small table in production.
 
   The exception is narrow and has exactly one instance: a query the caller
-  bounds by *enumerating* what it wants — Catalog's `GetPrices`, which takes a
-  list of product ids and returns at most one row each — none for an unknown,
+  bounds by *enumerating* what it wants — in the reference domain, Catalog's
+  `GetPrices`
+  ([E.4.4](appendix-e-reference-domain.md#e44-the-queries-of-ordering-and-catalog)),
+  which takes a list of product ids and returns at most one row each — none
+  for an unknown,
   other-currency or withdrawn id
   ([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md))
   — and is reached over the one
@@ -1196,7 +1212,8 @@ Rules for the read side:
 - Query handlers never mutate anything and never run inside the transaction
   behaviour.
 
-**Catalog's one-product read returns the listing's row.**
+**Here, in the reference domain, Catalog's one-product read returns the
+listing's row** ([E.4.4](appendix-e-reference-domain.md#e44-the-queries-of-ordering-and-catalog)).
 `GET /v1/catalog/products/{id}` is `GetProductQuery`, and it answers with
 `ProductSummaryDto` because the aggregate holds nothing a buyer needs that row
 leaves out — its seller and its withdrawal are the seller's own list's:
@@ -1211,8 +1228,10 @@ reads hide one, and only its seller's own list still shows it
 It is uncached, as the listing is, for the reason
 [§8.2](08-caching-redis.md) gives.
 
-**Catalog's listing takes a search and a closed sort, and its cursor carries
-both** ([ADR-073](adr/ADR-073-the-product-listing-takes-a-search-and-a-closed-sort-and-its-cursor-carries-both.md)).
+**Here, in the reference domain, Catalog's listing takes a search and a
+closed sort, and its cursor carries both**
+([ADR-073](adr/ADR-073-the-product-listing-takes-a-search-and-a-closed-sort-and-its-cursor-carries-both.md);
+[E.4.4](appendix-e-reference-domain.md#e44-the-queries-of-ordering-and-catalog)).
 `GetProductsQuery` adds `Q`, a contains-match on the name in which the
 caller's text is never a pattern, and `Sort`, one of `ProductSort`'s values.
 A sort key that is not one instant does not fit `Cursor.Encode`, so
@@ -1224,7 +1243,7 @@ decision above says. What it does not imply is a single ordering: there is
 one per sort, each with its keyset index, and none by price, since each
 product keeps its own currency.
 
-## 6.6 The progression — escalating Ordering to a physical split
+## 6.6 The progression — escalating to a physical split
 
 Level 1 stops working when one of these becomes true, and not before:
 
@@ -1233,19 +1252,24 @@ Level 1 stops working when one of these becomes true, and not before:
 - The query joins across so many tables that it cannot be made fast.
 - Reads and writes need to scale independently.
 
-For **Ordering**, the trigger is the customer order history screen: it needs
-product names and images, which live in Catalog and are not in the Ordering
-database at all. Joining across services is impossible; calling Catalog per row
-is an N+1 over the network.
+Here, in the reference domain, **Ordering** is the service that escalates
+([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)). The
+trigger is the customer order history screen: it needs product names and
+images, which live in Catalog and are not in the Ordering database at all.
+Joining across services is impossible; calling Catalog per row is an N+1 over
+the network.
 
-> **The buyer's half of that screen is served from the BFF.**
+> **Here, in the reference domain the buyer's half of that screen is served
+> from the BFF** ([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)).
 > [ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
 > puts the buyer's own order history in a projection `Web.Bff` owns, because
 > that screen also needs payment and shipment facts Ordering does not hold. It
 > meets this same trigger for this same reason one host out, with Catalog's
 > stream feeding the names.
 >
-> **The escalation below is Ordering's, and its lifecycle half is built.**
+> **Here, in the reference domain the escalation below is Ordering's, and its
+> lifecycle half is built**
+> ([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)).
 > `OrderSummaryProjection` keeps `ordering.OrderSummaries` from the five
 > lifecycle events, is §13.3's `OrderMetrics`' only call site, and gives
 > Ordering's `projection.lag` its first writer. `ordering.Products`, its
@@ -1254,20 +1278,24 @@ is an N+1 over the network.
 > the screen they serve is the BFF's. ADR-051 takes one screen, not the
 > progression this section exists to demonstrate.
 
-The upgrade adds denormalised tables inside Ordering's own database, kept
+Here, in the reference domain
+([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)) the
+upgrade adds denormalised tables inside Ordering's own database, kept
 current by projections. Two of them serve the history query, one serves
 `PlaceOrder`, and a fourth — `ordering.ProductWithdrawals` — is a watermark
 the upsert below consults and nothing reads:
 
 | Table | Fed by | Read by |
 |---|---|---|
-| `ordering.OrderSummaries` | Ordering's five lifecycle events on the local lane — `OrderPlacedDomainEvent`, `OrderStockConfirmedDomainEvent`, `OrderConfirmedDomainEvent`, `OrderShippedDomainEvent`, `OrderCancelledDomainEvent` | The escalated history query, below, which replaces §6.5's |
-| `ordering.Products` | Catalog's `ProductPublished` from the broker | The same query, to resolve the ids a summary stores |
-| `ordering.ProductPrices` | Catalog's `PriceChanged`, `ProductPublished`, `ProductDiscontinued` | `IProductPriceReader`, on the **write** path (§6.4) |
+| `ordering.OrderSummaries` | The service's own five lifecycle events on the local lane — `OrderPlacedDomainEvent`, `OrderStockConfirmedDomainEvent`, `OrderConfirmedDomainEvent`, `OrderShippedDomainEvent`, `OrderCancelledDomainEvent` | The escalated history query, below, which replaces §6.5's |
+| `ordering.Products` | The owning service's `ProductPublished` from the broker | The same query, to resolve the ids a summary stores |
+| `ordering.ProductPrices` | The owning service's `PriceChanged`, `ProductPublished`, `ProductDiscontinued` | `IProductPriceReader`, on the **write** path (§6.4) |
 
-`ordering.ProductPrices` is the consequential one. A read model that only backs
-a screen can be stale with mild consequences; one that backs a command handler
-is what keeps that handler from making a network call inside a transaction.
+Here, in the reference domain `ordering.ProductPrices` is the consequential one
+([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)). A read
+model that only backs a screen can be stale with mild consequences; one that
+backs a command handler is what keeps that handler from making a network call
+inside a transaction.
 
 ```mermaid
 graph LR
@@ -1292,8 +1320,10 @@ side. It is the only read model in this design that a write path depends on,
 which is why §6.4 treats its staleness as a business question
 rather than a display one.
 
-The summary table carries the order's own facts, and an id per line for the
-facts that are Catalog's:
+Here, in the reference domain
+([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)) the
+summary table carries the order's own facts, and an id per line for the facts
+that are Catalog's:
 
 ```sql
 -- Only the three columns every event carries are NOT NULL. The rest arrive
@@ -1341,9 +1371,11 @@ CREATE INDEX IX_OrderSummaries_Customer_PlacedAt
     INCLUDE (Status, TotalAmount, Currency, LineCount);
 ```
 
-The names and images that query needs are Catalog's, and they are facts about a
-product rather than about an order — so they get a table keyed the way the fact
-is keyed, on the same precedent as `ProductWithdrawals` below:
+Here, in the reference domain
+([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)) the names
+and images that query needs are Catalog's, and they are facts about a product
+rather than about an order — so they get a table keyed the way the fact is
+keyed, on the same precedent as `ProductWithdrawals` below:
 
 ```sql
 CREATE TABLE ordering.Products
@@ -1409,7 +1441,9 @@ price history with it.
 > nothing else to consult.
 >
 > **The tie rule only covers the pair that has a business answer, and Catalog
-> is what keeps the other pair from arising.** A withdrawal and a price
+> is what keeps the other pair from arising.** Here, in the reference domain
+> ([E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild))
+> a withdrawal and a price
 > sharing a timestamp settle deterministically because there is a rule to
 > appeal to — only a *later* price re-lists, so a tie is not later and the
 > withdrawal wins. Two *prices* sharing one would be a different matter:
@@ -1426,7 +1460,10 @@ price history with it.
 >
 > A **watermark** rather than a flag, for the reason `UpdatedAt` is a
 > comparison: delivery is unordered, so what the projection must refuse is a
-> price *older* than the withdrawal, arriving after it. A newer one would still
+> price *older* than the withdrawal, arriving after it.
+> Here, in the reference domain
+> ([E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild))
+> a newer one would still
 > re-list the product, in currencies that have rows and in currencies that do
 > not, and Catalog makes no price change after a withdrawal: one is final
 > there, and a price change after it is refused at the source
@@ -1446,8 +1483,9 @@ price history with it.
 > order, so the upsert takes them in that order as well, which is the whole of
 > the deadlock argument.
 
-The projection is
-`Ordering.Infrastructure/Projections/ProductPriceProjection.cs`. It lives in
+Here, in the reference domain the projection is
+`Ordering.Infrastructure/Projections/ProductPriceProjection.cs`
+([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)). It lives in
 Infrastructure, not Application — raw SQL and a connection factory — so
 `AddOrderingInfrastructure`'s scan (§6.2) registers it, and Application's scan
 would not see it. It is public because that scan is public-only: an internal
@@ -1528,7 +1566,7 @@ not, and `XACT_ABORT` is what rolls the first statement back when the second
 fails.
 
 The currency is upper-cased in the projection, and in the reader (§6.4) as
-well. Nothing between Catalog's `Money` and this statement normalises
+well. Nothing between the publisher's `Money` and this statement normalises
 anything: `Currency` crosses the wire as a string like any other, so what
 arrives is whatever the publisher put in the contract. Under a case-sensitive
 collation an unnormalised one writes a row the reader cannot find, and a
@@ -1542,8 +1580,10 @@ Note which condition that is: **not** a product whose `ProductPublished` never
 arrived, since `PriceChanged` reaches the same insert branch and lists it.
 
 > **A projection with no publisher is worse than a remote call.** If this
-> service has applied neither of the two events that write a price row — the
-> `ProductPublished` Catalog necessarily emitted, because `Product.Publish`
+> service has applied neither of the two events that write a price row — and
+> here, in the reference domain
+> ([E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild))
+> the `ProductPublished` Catalog necessarily emitted, because `Product.Publish`
 > is its factory, nor any later `PriceChanged`, which is optional — this
 > table has no row for the product and every order containing it fails,
 > silently, with a 422 `order.products_unavailable` and no error in any log. Silently is the
@@ -1555,17 +1595,20 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > and the [§13.6](13-observability.md) alert on business volume, which catches
 > the case where orders stop for a reason no technical metric shows.
 
-> **This projection's rebuild procedure is Catalog's republish
-> ([ADR-090](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)),
-> for `ordering.Products` exactly as for `ordering.ProductPrices`.**
+> **Here, in the reference domain this projection's rebuild procedure is
+> Catalog's republish** ([E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild);
+> [ADR-090](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)),
+> for `ordering.Products` exactly as for `ordering.ProductPrices`.
 > The trap at the end of this chapter says to keep a rebuild script in source
 > control from day one, and Ordering cannot hold one: it has no source of truth
 > for either a price or a name to rebuild *from*. Both tables guard on
 > `OccurredAt`, so the constraint below binds both of them equally.
 >
-> Everything published before `ordering-catalog-events` was first declared is
-> simply absent — the broker drops what no queue is bound for — so a product
-> Catalog listed last year is unorderable until Catalog speaks about it again.
+> Here, in the reference domain everything published before
+> `ordering-catalog-events` was first declared is simply absent — the broker
+> drops what no queue is bound for — so a product Catalog listed last year is
+> unorderable until Catalog speaks about it again
+> ([E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild)).
 > That is the same silence the callout above describes, with a cause nobody can
 > see from Ordering.
 >
@@ -1584,7 +1627,9 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > the part that is easy to get wrong.** A loop that re-emits `ProductPublished`
 > stamped `now` would sail past every guard the projection has: the withdrawal
 > watermark compares against the event's own timestamp, so a fresh one re-lists
-> every product Catalog has ever discontinued. Rebuilding a read model is
+> every product Catalog has ever discontinued (in the reference domain,
+> [E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild)).
+> Rebuilding a read model is
 > therefore not "replay the current state" but "replay the facts with the times
 > they happened", which means Catalog has to have kept them: it has
 > (`PublishedAt`, `LastEventAt` and `WithdrawnAt`, [ADR-075](adr/ADR-075-a-products-events-are-stamped-in-the-order-its-writes-committed.md)),
@@ -1592,11 +1637,13 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > a product held between its first and last change is kept nowhere, and is not
 > replayed.
 
-Ordering's read models react to two different sources through two different
-interfaces (§9.4): `OrderSummaryProjection` implements `IProjectionHandler<T>`
-for this service's own events, arriving after commit through the local outbox
-lane, and `ProductPriceProjection` implements `IIntegrationEventHandler<T>` for
-Catalog's events, arriving from the broker.
+A service's read models react to two different sources through two different
+interfaces (§9.4): in the reference domain
+([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)),
+Ordering's `OrderSummaryProjection` implements `IProjectionHandler<T>` for this
+service's own events, arriving after commit through the local outbox lane, and
+`ProductPriceProjection` implements `IIntegrationEventHandler<T>` for Catalog's
+events, arriving from the broker.
 
 Both run **after** the originating transaction has committed, on their own
 connection. That is deliberate — a projection must never run inside the write
@@ -1605,8 +1652,9 @@ transaction still holds and would turn a read-model bug into a write-path
 failure. The cost is a few milliseconds of lag; the benefit is that a broken
 projection can be fixed and replayed without touching the write path.
 
-Both must therefore be idempotent. The lifecycle half is
-`Ordering.Infrastructure/Projections/OrderSummaryProjection.cs`. It handles
+Both must therefore be idempotent. The lifecycle half, in the reference domain,
+is `Ordering.Infrastructure/Projections/OrderSummaryProjection.cs`
+([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)). It handles
 every lifecycle event, not just the first: a projection that handles only
 creation shows a status frozen at whatever the aggregate was when it was
 born — and the SQL still looks correct, because the `UPDATE` branch exists and
@@ -1647,9 +1695,9 @@ redelivery finds `PlacedAt` set and does nothing, which is what keeps the
 counter below honest. The descriptive facts are immutable and always safe to
 write; `Status` is not, because something later already set it and this event
 is the older one. `Products` is written as a bare `Guid` array of the lines'
-product ids, and only ids: what the screen shows beside each one is Catalog's
-fact about the product, resolved on read from `ordering.Products`, so nothing
-is left blank for a later event to fill
+product ids, and only ids: what the screen shows beside each one is the
+product owner's fact about the product, resolved on read from
+`ordering.Products`, so nothing is left blank for a later event to fill
 ([ADR-027](adr/ADR-027-the-order-summary-stores-product-ids-and-resolves-the-name-locally.md)).
 With no member names on the wire there is nothing for the two sides to
 disagree about.
@@ -1733,15 +1781,17 @@ three in one statement. They stay in one statement: a split that set
 non-nullable `TotalAmount` has nowhere to put it. The cancellation claim takes
 `PlacedCounted = 1` in its predicate, not merely `PlacedAt IS NOT NULL`: a
 cancellation must never be counted before the placement it belongs to.
-Ordering is not guaranteed on the lane (§9.4), and `cancelled` exceeding
+Delivery order is not guaranteed on the lane (§9.4), and `cancelled` exceeding
 `placed` is a state the write model cannot reach — a reconciliation that finds
 it should be finding a real defect. The placed total reaches the metric
 through `Money.Of`, not `new Money`, because the constructor is private
 (§5.3); the column only ever holds `Money`'s own three letters, so `CHAR(3)`
 returns it unpadded.
 
-The escalation adds Catalog's `ProductPublished` to the same class, as an
-`IIntegrationEventHandler<ProductPublished>` writing `ordering.Products`:
+The escalation adds Catalog's `ProductPublished`, in the reference domain
+([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)), to the
+same class, as an `IIntegrationEventHandler<ProductPublished>` writing
+`ordering.Products`:
 
 ```csharp
 public async Task HandleAsync(ProductPublished e, CancellationToken ct)
@@ -1779,7 +1829,9 @@ public async Task HandleAsync(ProductPublished e, CancellationToken ct)
 ```
 
 > **A watermark belongs to a sequence, not to a row, and that is what the
-> table split is really for.** `UpdatedAt` on `OrderSummaries` is a position in
+> table split is really for.** Here, in the reference domain
+> ([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)),
+> `UpdatedAt` on `OrderSummaries` is a position in
 > Ordering's own lifecycle sequence, stamped by the five domain events above
 > from Ordering's clock. `ProductPublished` is Catalog's, stamped from
 > Catalog's, and holds no position in that sequence at all. Advancing one
@@ -1808,7 +1860,9 @@ Three details that are easy to miss and expensive to discover later:
 - **The `MERGE` is idempotent.** Redelivery of `OrderPlacedDomainEvent` inserts
   nothing new.
 - **`UpdatedAt < @OccurredAt` guards against out-of-order delivery — of
-  Ordering's lifecycle events, and of nothing else.** Messages can and do
+  Ordering's lifecycle events, and of nothing else**, in the reference domain
+  ([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)).
+  Messages can and do
   arrive out of sequence, especially after a retry. Without this check a
   redelivered `AwaitingPayment` overwrites a `Confirmed` that already followed
   it — and because all five lifecycle events feed this table (above), that
@@ -1879,7 +1933,8 @@ behind it, and nothing double-counts because every flag is already set.
 
 A projection nothing queries is cost without benefit. §6.5's handler is the
 level-1 version — it joins the write tables and returns no product data,
-because it has none to return. Escalating replaces it:
+because it has none to return. Escalating replaces it,
+here in the reference domain ([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)):
 
 ```csharp
 // EDITS the types in §6.5 — same namespace, same names. Escalating a query is
