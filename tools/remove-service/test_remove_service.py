@@ -7,6 +7,7 @@ must leave every file as it was. Run: cd tools/remove-service && python -m unitt
 import contextlib
 import hashlib
 import io
+import json
 import re
 import shutil
 import tempfile
@@ -227,6 +228,20 @@ class RoundTripTests(unittest.TestCase):
         self.assertNotIn("deploy/compose/redis/users.conf", rendered.updated)
         self.assertEqual(
             rendered.absent, ["deploy/compose/redis/users.conf: no Redis user zulu-svc"])
+
+    def test_a_permissions_entry_left_without_its_user_goes_and_is_reported(self):
+        root = self.fresh_root()
+        render_into(root, PROBE, SHAPES["api"])
+        definitions = root / "deploy" / "compose" / "rabbitmq" / "definitions.json"
+        data = json.loads(definitions.read_text(encoding="utf-8"))
+        data["users"] = [entry for entry in data["users"] if entry["name"] != "zulu-svc"]
+        definitions.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8", newline="")
+
+        rendered = remove_service.plan(root, PROBE)
+
+        remaining = json.loads(rendered.updated["deploy/compose/rabbitmq/definitions.json"])
+        self.assertEqual([entry for entry in remaining["permissions"] if entry["user"] == "zulu-svc"], [])
+        self.assertIn("deploy/compose/rabbitmq/definitions.json: no broker user zulu-svc", rendered.absent)
 
     def test_half_a_compose_pair_is_refused(self):
         root = self.fresh_root()
