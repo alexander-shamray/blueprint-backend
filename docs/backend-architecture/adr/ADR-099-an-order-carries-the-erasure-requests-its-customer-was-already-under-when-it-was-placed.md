@@ -47,6 +47,12 @@ claim, which is its own decision. Where a holder already deleted such an order
 before this decision, nothing brings it back: the rebuild reads the outbox,
 whose rows lack the field.
 
+**Superseded in part by
+[ADR-103](ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md)**:
+the Decision's last sentence and the Consequences' sentence on Shipping.
+Shipping keeps the shipment of such an order, because the shipment stores the
+list and the fulfilment claim returns it.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

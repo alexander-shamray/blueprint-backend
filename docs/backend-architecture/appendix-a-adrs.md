@@ -109,6 +109,7 @@ decision looks wrong.
 | **ADR-100** | [A send pass asks its erasure rows after it saves a contact](adr/ADR-100-a-send-pass-asks-its-erasure-rows-after-it-saves-a-contact.md) |
 | **ADR-101** | [An order record keeps the requests its order was placed under, and the send pass asks them before the owner](adr/ADR-101-an-order-record-keeps-the-requests-its-order-was-placed-under-and-the-send-pass-asks-them-before-the-owner.md) |
 | **ADR-102** | [Remove-service lists what still names a removed service and edits no document](adr/ADR-102-remove-service-lists-what-still-names-a-removed-service-and-edits-no-document.md) |
+| **ADR-103** | [Shipping keeps the erasure requests an order was placed under on its shipment](adr/ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md) |
 
 ---
 
