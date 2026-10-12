@@ -62,8 +62,9 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
     public static StubAddress Stub(DeliveryAddress address) =>
         new(Guid.CreateVersion7(), address.Line1, address.Line2, address.City, address.PostalCode, address.Country);
 
-    public static OrderConfirmed Confirmed(Guid order) => new()
+    public static OrderConfirmed Confirmed(Guid order, IReadOnlyList<Guid>? erasedUnder = null) => new()
     {
+        ErasedUnder = erasedUnder,
         MessageId = Guid.CreateVersion7(),
         CorrelationId = order,
         OccurredAt = DateTimeOffset.UtcNow,

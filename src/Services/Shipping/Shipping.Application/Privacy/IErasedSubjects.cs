@@ -4,5 +4,6 @@ namespace Shipping.Application.Privacy;
 public interface IErasedSubjects
 {
     /// <summary>True when an audit row's hash is the subject's under that row's own request id.</summary>
-    Task<bool> IsErasedAsync(Guid subjectId, CancellationToken ct);
+    /// <param name="placedAfter">The requests the order was placed under, whose rows do not count (ADR-099).</param>
+    Task<bool> IsErasedAsync(Guid subjectId, IReadOnlyCollection<Guid> placedAfter, CancellationToken ct);
 }

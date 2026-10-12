@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Common.Infrastructure.Tracing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shipping.Domain.Shipments;
 
@@ -34,6 +36,20 @@ internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         // Defaulted although the aggregate sets it: the version still running inserts without it (§7.4). On rows
         // already there it can only let a wait run longer, where a guess too old would end a live shipment.
         builder.Property(s => s.CreatedAt).HasDefaultValueSql("SYSDATETIMEOFFSET()");
+
+        // Request ids, kept as Ordering and Notifications keep them (ADR-099, ADR-103): a JSON column, since nothing
+        // queries by them. Defaulted for CreatedAt's reason (§7.4).
+        builder
+            .Property(s => s.ErasedUnder)
+            .HasConversion(
+                ids => JsonSerializer.Serialize(ids, (JsonSerializerOptions?)null),
+                json => JsonSerializer.Deserialize<List<Guid>>(json, (JsonSerializerOptions?)null)!,
+                new ValueComparer<IReadOnlyList<Guid>>(
+                    (a, b) => a!.SequenceEqual(b!),
+                    v => v.Aggregate(0, (h, id) => HashCode.Combine(h, id)),
+                    v => v.ToList()))
+            .HasColumnType("nvarchar(max)")
+            .HasDefaultValueSql("N'[]'");
 
         // The two workers' bookkeeping, mapped here because the columns are this row's.
         builder.Property(s => s.Attempts);

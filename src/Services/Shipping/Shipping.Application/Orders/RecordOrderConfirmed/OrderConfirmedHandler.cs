@@ -8,5 +8,5 @@ namespace Shipping.Application.Orders.RecordOrderConfirmed;
 public sealed class OrderConfirmedHandler(IDispatcher dispatcher) : IIntegrationEventHandler<OrderConfirmed>
 {
     public async Task HandleAsync(OrderConfirmed integrationEvent, CancellationToken ct) =>
-        await dispatcher.SendAsync(new CreateShipmentCommand(integrationEvent.OrderId), ct);
+        await dispatcher.SendAsync(new CreateShipmentCommand(integrationEvent.OrderId, integrationEvent.ErasedUnder), ct);
 }

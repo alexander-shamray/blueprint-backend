@@ -18,6 +18,17 @@ internal sealed class SqlShippingPersonalDataStore(ShippingDbContext db, IDbConn
         WHERE CustomerId = @SubjectId;
         """;
 
+    // Run first, while the address row still names the order's customer: the list names the buyer to whoever can
+    // join it to an open request (ADR-103), and the shipment beside it stays whole.
+    private const string EmptyErasedUnderSql =
+        """
+        UPDATE s
+        SET ErasedUnder = N'[]'
+        FROM shipping.Shipments AS s
+        JOIN shipping.DeliveryAddresses AS a ON a.OrderId = s.OrderId
+        WHERE a.CustomerId = @SubjectId;
+        """;
+
     // Deleted, not anonymised: the row is the address and nothing else, and the shipment beside it stays whole.
     private const string DeleteAddressesSql =
         """
@@ -48,6 +59,13 @@ internal sealed class SqlShippingPersonalDataStore(ShippingDbContext db, IDbConn
         }
 
         DbConnection connection = db.Database.GetDbConnection();
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(
+                EmptyErasedUnderSql,
+                new { SubjectId = subjectId },
+                current.GetDbTransaction(),
+                cancellationToken: ct));
 
         return await connection.ExecuteAsync(
             new CommandDefinition(

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Shipping.Infrastructure.Fulfilment;
 
 /// <summary>One leased row, with the two instants the give-up age is measured from (ADR-054).</summary>
@@ -11,4 +13,9 @@ public sealed record FulfilmentWork(
     DateTimeOffset? CancellationRequestedAt,
     string? TraceParent,
     string? TraceState,
-    DateTimeOffset LockedUntil);
+    DateTimeOffset LockedUntil,
+    string ErasedUnder = "[]")
+{
+    /// <summary>The requests the order was placed under, read from the column's JSON (ADR-103).</summary>
+    public IReadOnlyList<Guid> PlacedAfter => JsonSerializer.Deserialize<List<Guid>>(ErasedUnder) ?? [];
+}

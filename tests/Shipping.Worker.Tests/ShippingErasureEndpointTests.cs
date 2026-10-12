@@ -73,6 +73,27 @@ public sealed class ShippingErasureEndpointTests(ServiceFixture fixture) : IAsyn
     }
 
     [Fact]
+    public async Task The_requests_a_subjects_shipment_was_placed_under_are_emptied_and_a_bystanders_are_kept()
+    {
+        Guid earlier = Guid.CreateVersion7();
+        Guid waiting = Guid.CreateVersion7();
+        Guid bystanders = Guid.CreateVersion7();
+        await SeedAddressAsync(waiting, Subject);
+        await SeedAddressAsync(bystanders, Bystander);
+        await SeedPendingShipmentAsync(waiting, earlier);
+        await SeedPendingShipmentAsync(bystanders, earlier);
+
+        await PublishRequestAsync(Guid.CreateVersion7());
+
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM shipping.Shipments WHERE OrderId = {0}",
+            waiting)).ShouldBe("[]", "the list names the buyer to whoever can join it to an open request (ADR-103)");
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM shipping.Shipments WHERE OrderId = {0}",
+            bystanders)).ShouldContain(earlier.ToString());
+    }
+
+    [Fact]
     public async Task The_audit_row_holds_a_count_and_a_hash_and_never_the_subject()
     {
         Guid request = Guid.CreateVersion7();
@@ -172,12 +193,13 @@ public sealed class ShippingErasureEndpointTests(ServiceFixture fixture) : IAsyn
         await Eventually(CountCompletionsAsync, expected: 1, because: "the inbox dropped the second delivery");
     }
 
-    private async Task SeedPendingShipmentAsync(Guid order) =>
+    private async Task SeedPendingShipmentAsync(Guid order, Guid? placedUnder = null) =>
         await fixture.ExecuteAsync(
-            "INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt, CreatedAt) " +
-            "VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            "INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt, CreatedAt, ErasedUnder) " +
+            "VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), {2})",
             Guid.CreateVersion7(),
-            order);
+            order,
+            placedUnder is null ? "[]" : $"[\"{placedUnder}\"]");
 
     private async Task SeedAddressAsync(Guid order, Guid customer) =>
         await fixture.ExecuteAsync(

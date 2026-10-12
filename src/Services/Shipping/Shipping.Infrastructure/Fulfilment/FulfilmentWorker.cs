@@ -260,7 +260,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         if (holder is null)
             return false;
 
-        if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(holder.Value, ct))
+        if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(holder.Value, work.PlacedAfter, ct))
         {
             await store.DeleteAsync(order, ct);
 
