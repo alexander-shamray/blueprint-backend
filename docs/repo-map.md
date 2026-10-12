@@ -252,6 +252,10 @@ tools/game-day/              the runbooks' proof: causes each alert on the
 tools/quality-sets/          what earlier sweeps and reviewers found, and
                              the recall of a run against it; stdlib Python
                              with a suite, for docs/token-plan.md
+tools/remove-service/        the scaffold's inverse: deletes a service and
+                             reverts the splices tools/new-service made, then
+                             lists what still names it; its suite renders a
+                             service, removes it and compares the tree
 tools/token-usage/           Claude Code's recorded token usage per command
                              and agent type, from local transcripts; stdlib
                              Python with a suite, for docs/token-plan.md
