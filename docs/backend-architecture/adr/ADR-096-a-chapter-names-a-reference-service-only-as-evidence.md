@@ -75,6 +75,10 @@ takes Appendix E as its one documentation edit point: it removes the
 service's section, then lists the marked blocks that still name it, which are
 the fork's to supersede by ADR.
 
+
+**Superseded in part by ADR-102**: the Consequences' last sentence.
+The tool lists what still names a removed service and edits no document.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
