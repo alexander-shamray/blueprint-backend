@@ -31,6 +31,13 @@ leads to: closing them needs the order's `ErasedUnder` stored on Notifications'
 order record, which is its own decision. A stale row served for an owner that
 could not answer writes nothing and is not asked about.
 
+**Superseded in part by
+[ADR-101](ADR-101-an-order-record-keeps-the-requests-its-order-was-placed-under-and-the-send-pass-asks-them-before-the-owner.md):**
+the fetch and the send this Consequences leaves open are closed, by the order
+record's stored `ErasedUnder` and a question before the owner call. The Why's
+rejection of that question, and its saying that Notifications keeps no
+`ErasedUnder`, no longer hold; the question after the save stands.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

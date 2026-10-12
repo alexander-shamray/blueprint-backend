@@ -54,6 +54,9 @@ its own decision.
 [ADR-100](ADR-100-a-send-pass-asks-its-erasure-rows-after-it-saves-a-contact.md):**
 a mailbox a worker saves between the commit and the delete is deleted again.
 The fetch this paragraph names stands, and so does the send it leads to.
+**Superseded in part by
+[ADR-101](ADR-101-an-order-record-keeps-the-requests-its-order-was-placed-under-and-the-send-pass-asks-them-before-the-owner.md):**
+that fetch and send are closed.
 
 **Superseded in part by ADR-098**: the Decision's last sentence and the
 Consequences' last residual. A shipment or payment event now has its row
