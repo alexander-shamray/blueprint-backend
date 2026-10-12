@@ -13,7 +13,10 @@ internal static class Sightings
     internal static string Resolve(string? named) =>
         string.IsNullOrWhiteSpace(named) ? Path.Combine(Path.GetTempPath(), "platform-sightings") : named;
 
-    /// <summary>Writes the text to <c>name.txt</c> and returns the path; a test passes <paramref name="directory"/>.</summary>
+    /// <summary>Writes the text to <c>name.txt</c> and returns the path.</summary>
+    /// <param name="name">The file's name without its extension.</param>
+    /// <param name="text">What the file holds.</param>
+    /// <param name="directory">Where to write; a test passes one, a journey takes the variable's.</param>
     internal static string Record(string name, string text, string? directory = null)
     {
         string target = directory ?? Resolve(Environment.GetEnvironmentVariable(DirectoryVariable));
