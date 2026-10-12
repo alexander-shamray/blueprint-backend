@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Remove a service, the mirror of tools/new-service (ADR-062, ADR-101).
+"""Remove a service, the mirror of tools/new-service (ADR-062, ADR-102).
 
 README.md owns what it deletes, reverts, skips and refuses.
 """
