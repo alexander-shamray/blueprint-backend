@@ -197,6 +197,12 @@ namespace Shipping.Infrastructure.Persistence.Migrations
                         .HasColumnType("datetimeoffset(7)")
                         .HasDefaultValueSql("SYSDATETIMEOFFSET()");
 
+                    b.Property<string>("ErasedUnder")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValueSql("N'[]'");
+
                     b.Property<DateTimeOffset?>("LockedUntil")
                         .HasColumnType("datetimeoffset(7)");
 

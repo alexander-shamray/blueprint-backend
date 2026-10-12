@@ -15,7 +15,7 @@ public sealed class CreateShipmentHandler(IShipmentRepository shipments, TimePro
         if (await shipments.GetByOrderAsync(order, ct) is not null)
             return Result.Success();
 
-        shipments.Add(Shipment.For(ShipmentId.New(), order, clock.GetUtcNow()));
+        shipments.Add(Shipment.For(ShipmentId.New(), order, clock.GetUtcNow(), command.ErasedUnder));
 
         return Result.Success();
     }

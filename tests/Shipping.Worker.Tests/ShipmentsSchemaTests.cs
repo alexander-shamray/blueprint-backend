@@ -30,6 +30,7 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
                 "CancellationRequestedAt",
                 "CarrierReference",
                 "CreatedAt",
+                "ErasedUnder",
                 "Id",
                 "LockedUntil",
                 "NextAttemptAt",

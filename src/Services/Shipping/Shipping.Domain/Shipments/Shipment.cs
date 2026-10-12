@@ -28,6 +28,9 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     /// <summary>The clock ADR-052's give-up age is measured from.</summary>
     public DateTimeOffset CreatedAt { get; private set; }
 
+    /// <summary>The erasure requests the order's customer was already under when it was placed (ADR-099, ADR-103).</summary>
+    public IReadOnlyList<Guid> ErasedUnder { get; private set; } = [];
+
     /// <summary>The fulfilment pass's failed passes on this row (ADR-054).</summary>
     public int Attempts { get; private set; }
 
@@ -45,16 +48,21 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     // EF Core materialisation only (§5.4).
     private Shipment() { }
 
-    private Shipment(ShipmentId id, OrderId orderId, DateTimeOffset now)
+    private Shipment(ShipmentId id, OrderId orderId, IReadOnlyList<Guid> erasedUnder, DateTimeOffset now)
     {
         Id = id;
         OrderId = orderId;
+        ErasedUnder = [.. erasedUnder.Distinct()];
         Status = ShipmentStatus.Pending;
         CreatedAt = now;
         NextAttemptAt = now;
     }
 
-    public static Shipment For(ShipmentId id, OrderId orderId, DateTimeOffset now) => new(id, orderId, now);
+    public static Shipment For(
+        ShipmentId id,
+        OrderId orderId,
+        DateTimeOffset now,
+        IReadOnlyList<Guid>? erasedUnder = null) => new(id, orderId, erasedUnder ?? [], now);
 
     public bool Book(string carrierReference, string trackingNumber, DateTimeOffset now)
     {

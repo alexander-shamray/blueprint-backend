@@ -148,6 +148,37 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
+    public async Task An_order_placed_under_the_erasure_that_names_its_customer_is_booked()
+    {
+        // The customer erased themselves, then ordered again: Ordering stamped the order with the request (ADR-099).
+        Guid customer = Guid.CreateVersion7();
+        Guid request = await RecordErasureAsync(customer);
+        Guid order = await ConfirmForAsync(customer, [request]);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Booked");
+        (await fixture.AddressCountAsync(new OrderId(order))).ShouldBe(1);
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task An_erasure_the_order_was_not_placed_under_still_ends_it()
+    {
+        // The list skips only the requests it names: a later request for the same customer deletes the shipment.
+        Guid customer = Guid.CreateVersion7();
+        Guid earlier = await RecordErasureAsync(customer);
+        Guid order = await ConfirmForAsync(customer, [earlier]);
+        await RecordErasureAsync(customer);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Unfulfillable");
+        (await _steps.ReasonAsync(order)).ShouldBe("personal_data_erased");
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task An_erasure_recorded_for_another_subject_leaves_the_address_to_be_saved_and_booked()
     {
         // The control for the case above: the same audit table holds a row, and it is not this customer's.
@@ -435,7 +466,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
             TestContext.Current.CancellationToken);
     }
 
-    private async Task<Guid> ConfirmForAsync(Guid customer)
+    private async Task<Guid> ConfirmForAsync(Guid customer, IReadOnlyList<Guid>? erasedUnder = null)
     {
         Guid order = Guid.CreateVersion7();
         DeliveryAddress address = FulfilmentSteps.Kazakh;
@@ -448,23 +479,25 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
             address.PostalCode,
             address.Country);
 
-        await _steps.PublishAsync(FulfilmentSteps.Confirmed(order));
+        await _steps.PublishAsync(FulfilmentSteps.Confirmed(order, erasedUnder));
         await fixture.WaitUntilAttemptDueAsync(order);
 
         return order;
     }
 
     /// <summary>The audit row a holder writes: the request, the salted hash and a count, and nothing else.</summary>
-    private Task RecordErasureAsync(Guid subject)
+    private async Task<Guid> RecordErasureAsync(Guid subject)
     {
         Guid request = Guid.CreateVersion7();
 
-        return fixture.ExecuteAsync(
+        await fixture.ExecuteAsync(
             """
             INSERT INTO shipping.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt)
             VALUES ({0}, {1}, 0, SYSDATETIMEOFFSET());
             """,
             request,
             Common.Domain.PersonalDataErasure.HashSubject(request, subject));
+
+        return request;
     }
 }

@@ -39,6 +39,26 @@ public class ShipmentConsumerTests
     }
 
     [Fact]
+    public async Task A_confirmation_that_names_requests_keeps_them_once_on_the_shipment()
+    {
+        Guid request = Guid.CreateVersion7();
+
+        await Confirm().HandleAsync(
+            new CreateShipmentCommand(Order(), [request, request]),
+            TestContext.Current.CancellationToken);
+
+        _shipments.Added.ShouldHaveSingleItem().ErasedUnder.ShouldBe([request]);
+    }
+
+    [Fact]
+    public async Task A_confirmation_from_a_publisher_older_than_the_field_names_no_request()
+    {
+        await Confirm().HandleAsync(new CreateShipmentCommand(Order()), TestContext.Current.CancellationToken);
+
+        _shipments.Added.ShouldHaveSingleItem().ErasedUnder.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task A_redelivered_confirmation_writes_no_second_shipment()
     {
         Guid order = Order();
@@ -151,6 +171,27 @@ public class ShipmentConsumerTests
             .HandleAsync(confirmed, TestContext.Current.CancellationToken);
 
         confirmedDispatcher.Sent.ShouldHaveSingleItem().ShouldBe(new CreateShipmentCommand(confirmed.OrderId));
+
+        Guid request = Guid.CreateVersion7();
+        OrderConfirmed stamped = new()
+        {
+            MessageId = Guid.CreateVersion7(),
+            CorrelationId = Guid.CreateVersion7(),
+            OccurredAt = Now,
+            OrderId = Order(),
+            CustomerId = Guid.CreateVersion7(),
+            TotalAmount = 42.10m,
+            Currency = "EUR",
+            Lines = [],
+            ErasedUnder = [request]
+        };
+
+        RecordingDispatcher stampedDispatcher = new();
+        await new OrderConfirmedHandler(stampedDispatcher)
+            .HandleAsync(stamped, TestContext.Current.CancellationToken);
+
+        stampedDispatcher.Sent.ShouldHaveSingleItem()
+            .ShouldBeOfType<CreateShipmentCommand>().ErasedUnder.ShouldBe([request]);
 
         OrderCancelled cancelled = new()
         {
