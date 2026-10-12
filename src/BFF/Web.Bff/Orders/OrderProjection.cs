@@ -6,6 +6,7 @@ using Common.Contracts.Payments.V1;
 using Common.Contracts.Shipping.V1;
 using Dapper;
 using Web.Bff.Persistence;
+using Web.Bff.Privacy;
 
 namespace Web.Bff.Orders;
 
@@ -16,6 +17,7 @@ namespace Web.Bff.Orders;
 /// </remarks>
 public sealed class OrderProjection(
     IDbConnectionFactory connections,
+    IErasedSubjects erased,
     TimeProvider clock,
     ILogger<OrderProjection> log)
     : IIntegrationEventHandler<OrderPlaced>,
@@ -47,6 +49,13 @@ public sealed class OrderProjection(
         SELECT CustomerId
         FROM bff.Orders
         WHERE OrderId = @OrderId;
+        """;
+
+    /// <summary>The row just written for an erased subject, which the lines follow by the foreign key's cascade.</summary>
+    private const string DeleteErasedSql =
+        """
+        DELETE FROM bff.Orders
+        WHERE OrderId = @OrderId AND CustomerId = @CustomerId;
         """;
 
     private const string PlacedSql =
@@ -308,6 +317,18 @@ public sealed class OrderProjection(
 
         Guid? kept = await connection.ExecuteScalarAsync<Guid?>(
             new CommandDefinition(sql, parameters, cancellationToken: ct));
+
+        // Asked after the write has committed, so an erasure that commits at any moment either finds the row to
+        // delete or is seen here (ADR-097).
+        if (await erased.IsErasedAsync(customerId, ct))
+        {
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    DeleteErasedSql,
+                    new { OrderId = orderId, CustomerId = customerId },
+                    cancellationToken: ct));
+            return;
+        }
 
         // A publisher defect if it ever differs; moving the order would show it to the wrong buyer (§10.7, §11.4).
         if (kept != customerId)

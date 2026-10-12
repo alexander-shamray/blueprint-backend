@@ -1,6 +1,7 @@
 using Common.Application;
 using Common.Infrastructure.Messaging;
 using Web.Bff.Observability;
+using Web.Bff.Privacy;
 
 namespace Web.Bff.Orders;
 
@@ -11,6 +12,9 @@ public static class DependencyInjection
     {
         // §6.2's scan, which reaches only public types, so every handler here is one.
         services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
+
+        // The projection asks its own audit rows after each write that names a customer (ADR-097).
+        services.AddSingleton<IErasedSubjects, SqlErasedSubjects>();
 
         // The inbox filter's and the consumer's instruments (§13.3).
         services.AddSingleton<MessagingMetrics>();
