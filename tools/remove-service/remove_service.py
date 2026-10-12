@@ -1,26 +1,7 @@
 #!/usr/bin/env python3
-"""Remove a service from the tree, the mirror of tools/new-service (ADR-062).
+"""Remove a service, the mirror of tools/new-service (ADR-062, ADR-101).
 
-    python tools/remove-service/remove_service.py Yankee
-
-ADR-062 tells an adopter to replace the reference services, and the scaffold
-only adds them. This undoes what `new_service.py` wrote: it deletes
-`src/Services/<Name>`, `tests/<Name>.*` and the service's Compose unit, and
-reverts each splice in the shared files that tools/new-service/README.md lists.
-It then names every file still mentioning the service (contracts, the gateway,
-the BFF, chapters), because those are the adopter's to decide.
-
-The shared files are not listed here. The README's table is their owner and
-`test_remove_service.py` reads it: rendering and then removing a service must
-leave every file the render touched as it found it, so a shared file added to
-`new_service.py` fails that test until this script learns it too.
-
-A splice the service no longer carries (a Redis user dropped by hand, say) is
-reported and skipped, because the reference services have diverged from their
-render. A splice found twice, or the solution folder or the Compose include
-missing altogether, is a refusal that writes nothing.
-
-Stdlib only and Python 3.12, like the scaffold it shares `scaffold/` with.
+README.md owns what it deletes, reverts, skips and refuses.
 """
 
 from __future__ import annotations
@@ -212,10 +193,8 @@ def lead(lines: list[str], index: int) -> int:
 def without_allowed_entries(repo_root: Path, names: Names) -> dict[str, str]:
     """Each allow-list file with the service's block and entries out of it.
 
-    The block the scaffold headed goes whole, including entries it wrote for
-    the shared files. Entries for the service's own trees go wherever they are,
-    which is what a hand-built service has. A comment above one of those stays,
-    and the mention search finds it.
+    The scaffold's headed block goes whole; entries for the service's own trees
+    go wherever they are, and a comment above one stays for the mention search.
     """
     owned = (f"src/Services/{names.pascal}/", f"tests/{names.pascal}.", compose_unit(names))
     written: dict[str, str] = {}
