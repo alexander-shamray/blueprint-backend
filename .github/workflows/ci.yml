@@ -252,6 +252,15 @@ jobs:
       - name: §3.2's table matches what every host publishes and consumes
         run: python .github/messaging-gate/messaging_gate.py check
 
+      # ADR-096's marker over the chapters, stdlib Python over text like the
+      # messaging gate above.
+      - name: Test the domain-name gate
+        working-directory: .github/domain-name-gate
+        run: python -m unittest
+
+      - name: A chapter names a reference service only as evidence
+        run: python .github/domain-name-gate/domain_name_gate.py check
+
       # CLAUDE.md's planning rule, over the plans directory rather than a list.
       - name: Test the plan-size gate
         working-directory: .github/plan-size-gate
