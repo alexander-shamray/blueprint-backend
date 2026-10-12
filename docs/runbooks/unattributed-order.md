@@ -194,8 +194,8 @@ WHERE OrderId = @OrderId
 The `CustomerId IS NULL` guard makes the statement refuse an order that was
 attributed while you were reading. Record the order id and the answer from 1
 to 4 in the incident. A row deleted here is not recorded in
-`bff.ErasedOrders`, which only an erasure's delete writes, so a replay of
-the order's events brings it back.
+`bff.ErasedOrders`, which is written only when the BFF deletes an order for
+an erased customer, so a replay of the order's events brings it back.
 
 **After a rebuild with `--reset`, expect a few of these.** An order whose
 payment or shipment events are inside the outbox window and whose `OrderPlaced`
