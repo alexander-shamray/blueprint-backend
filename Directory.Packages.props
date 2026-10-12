@@ -98,7 +98,7 @@
     <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.3" />
     <PackageVersion Include="StackExchange.Redis" Version="2.9.11" />
     <PackageVersion Include="FluentValidation" Version="12.0.0" />
-    <!-- AddValidatorsFromAssemblyContaining (E.2.6's registration sample) lives
+    <!-- AddValidatorsFromAssemblyContaining (§4.2's registration sample) lives
          in this separate package, not in FluentValidation itself. Same
          version, same licence, same publisher — pinned together. -->
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.0.0" />
