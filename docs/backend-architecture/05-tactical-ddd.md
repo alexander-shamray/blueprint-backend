@@ -144,6 +144,9 @@ public sealed class Order : AggregateRoot<OrderId>
     public OrderStatus Status { get; private set; }
     public Address ShippingAddress { get; private set; }
     public DateTimeOffset PlacedAt { get; private set; }
+
+    // The erasure requests the customer was already under when the order was placed (ADR-099).
+    public IReadOnlyList<Guid> ErasedUnder { get; private set; } = [];
     public IReadOnlyList<OrderLine> Lines => _lines.AsReadOnly();
 
     public Money Total => _lines.Aggregate(Money.Zero(_currency), (sum, line) => sum + line.LineTotal);
@@ -177,6 +180,7 @@ public sealed class Order : AggregateRoot<OrderId>
         Address shippingAddress,
         IEnumerable<(ProductId Product, int Quantity, Money UnitPrice)> items,
         string currency,
+        IReadOnlyList<Guid> erasedUnder,
         DateTimeOffset now)
     {
         // Of rather than a bare assignment: the order's currency is what every
@@ -187,7 +191,10 @@ public sealed class Order : AggregateRoot<OrderId>
         // through one.
         string normalised = Money.Zero(currency).Currency;
 
-        var order = new Order(OrderId.New(), customerId, shippingAddress, normalised, now);
+        var order = new Order(OrderId.New(), customerId, shippingAddress, normalised, now)
+        {
+            ErasedUnder = [.. erasedUnder.Distinct()]
+        };
 
         foreach (var (product, quantity, unitPrice) in items)
             order.AddLine(product, quantity, unitPrice);
@@ -200,7 +207,8 @@ public sealed class Order : AggregateRoot<OrderId>
         // Inventory can reserve stock (§9.6), and a handler must not have to
         // reload the aggregate to find out what was ordered.
         order.Raise(
-            new OrderPlacedDomainEvent(order.Id, customerId, order.Total, order.SnapshotLines(), now));
+            new OrderPlacedDomainEvent(
+                order.Id, customerId, order.Total, order.SnapshotLines(), order.ErasedUnder, now));
 
         return order;
     }
@@ -243,7 +251,8 @@ public sealed class Order : AggregateRoot<OrderId>
         // Total and Lines are required by the V1.OrderConfirmed contract (§9.1);
         // the mapper has only the event to work from.
         Raise(
-            new OrderConfirmedDomainEvent(Id, CustomerId, reference, ShippingAddress, Total, SnapshotLines(), now));
+            new OrderConfirmedDomainEvent(
+                Id, CustomerId, reference, ShippingAddress, Total, SnapshotLines(), ErasedUnder, now));
     }
 
     public void MarkShipped(TrackingNumber tracking, DateTimeOffset now)
@@ -268,7 +277,7 @@ public sealed class Order : AggregateRoot<OrderId>
             return;   // Idempotent — cancelling twice is not an error.
 
         Status = OrderStatus.Cancelled;
-        Raise(new OrderCancelledDomainEvent(Id, CustomerId, reason, origin, now));
+        Raise(new OrderCancelledDomainEvent(Id, CustomerId, reason, origin, ErasedUnder, now));
     }
 
     private void EnsureStatus(OrderStatus expected)
@@ -385,6 +394,7 @@ public sealed record OrderPlacedDomainEvent(
     CustomerId CustomerId,
     Money Total,
     IReadOnlyList<OrderLineSnapshot> Lines,
+    IReadOnlyList<Guid> ErasedUnder,
     DateTimeOffset OccurredAt) : IDomainEvent;
 
 public sealed record OrderConfirmedDomainEvent(
@@ -394,6 +404,7 @@ public sealed record OrderConfirmedDomainEvent(
     Address ShippingAddress,
     Money Total,
     IReadOnlyList<OrderLineSnapshot> Lines,
+    IReadOnlyList<Guid> ErasedUnder,
     DateTimeOffset OccurredAt) : IDomainEvent;
 
 public sealed record OrderStockConfirmedDomainEvent(
@@ -412,6 +423,7 @@ public sealed record OrderCancelledDomainEvent(
     CustomerId CustomerId,
     CancellationReason Reason,
     CancellationOrigin Origin,
+    IReadOnlyList<Guid> ErasedUnder,
     DateTimeOffset OccurredAt) : IDomainEvent;
 ```
 
