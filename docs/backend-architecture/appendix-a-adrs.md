@@ -112,6 +112,7 @@ decision looks wrong.
 | **ADR-103** | [Shipping keeps the erasure requests an order was placed under on its shipment](adr/ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md) |
 | **ADR-104** | [An operator may switch off Notifications, Shipping and Privacy for a bound, and no other service](adr/ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md) |
 | **ADR-105** | [Appendix E has no per-service unit, so remove-service still edits no document](adr/ADR-105-appendix-e-has-no-per-service-unit-so-remove-service-still-edits-no-document.md) |
+| **ADR-106** | [An S3-compatible object store for product images; the BFF issues a pre-signed upload URL (#472)](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md) |
 
 ---
 

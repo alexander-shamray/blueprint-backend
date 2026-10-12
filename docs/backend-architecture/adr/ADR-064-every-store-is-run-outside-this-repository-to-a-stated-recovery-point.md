@@ -47,6 +47,8 @@ queue's type; it is the next record's to take, when a deployment demands the
 broker survive a node. And
 `migration-failure.md`'s step that verifies against a restored copy can be run
 only where the deployment has a backup to restore from.
+**Extended by [ADR-106](ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)**, which adds the product-image object store to
+the list above.
 
 ---
 

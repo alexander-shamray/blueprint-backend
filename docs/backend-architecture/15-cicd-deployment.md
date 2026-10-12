@@ -607,8 +607,9 @@ to the Dockerfiles; so is the library chart's capability map, in
 > is an API-server error at install time.
 
 **The charts deploy this platform's workloads and no store.** Each service's
-database and the BFF's, both Redis instances, the broker, Keycloak's database
-and the log and trace stores are run by the deployment, outside this
+database and the BFF's, both Redis instances, the broker, Keycloak's database,
+the log and trace stores and the product-image object store
+([ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)) are run by the deployment, outside this
 repository, and the deployment owes each a stated recovery point and recovery
 time, a role that runs its restore, and a rehearsal of that restore. What each
 store's loss costs differs enough that the demand differs too — a service's
