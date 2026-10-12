@@ -345,7 +345,7 @@ from 2 findings each time, both in `.claude/agents/review-adjudicator.md`.
 That is the noise a comparison has to beat, and one head is not a sample of
 the 546. **No sweep was scored in this section**: a full first round at either
 commit is 41 slices, which this change did not spend. The 2026-10-12 section
-scores one of the two and leaves the other unscored.
+scores both.
 
 ## 2026-10-12 — the first scored runs
 
@@ -358,7 +358,7 @@ runs, because the bug sweep is what showed it was needed.
 |---|---|---|---|
 | `branch-reviewer`, 15 heads, twice each | 170 | 6 | 3.5% |
 | Security sweep, round 1, at `5bea8b26`, 41 slices | 51 | 11 | 21.6% |
-| Bug sweep, round 1, at `2a15c639`, 42 slices | 34 | not scored | |
+| Bug sweep, round 1, at `2a15c639`, 42 slices | 34 | 6 | 17.6% |
 
 **The reviewer.** The heads are spread evenly over the pull requests that
 hold at least three Copilot comments, PRs 3 to 250. Four of the 15 heads had
@@ -369,20 +369,23 @@ findings a run against 5.7 comments a head from Copilot.
 findings. A hit is any finding in one of the issue's files, so 21.6% is an
 upper bound for round 1.
 
-**The bug sweep is not a score.** The auditors began answering "the weekly
-usage limit is almost used up" and stopped; 7 of the 42 slices returned no
-findings after a retry, and the other slices that returned JSON may have
-stopped early too. The run reported 14 findings and 0 of 34 found, which
-measures the limit and not the sweep. The runner now ends a run on such a
-notice rather than retrying through it. Step 5's exit still lacks this half.
+**The bug sweep.** The first attempt is not a score: the auditors began
+answering "the weekly usage limit is almost used up" and stopped; 7 of the 42
+slices returned no findings after a retry, and the run's 0 of 34 measured the
+limit. The runner now ends a run on such a notice rather than retrying
+through it. The run was repeated once the limit had reset, from the checkout
+at c7ef8e84 that holds that stop. No slice failed, the auditors reported 38
+findings, and 6 of the 34 entries were found. As for the security sweep, a
+hit is any finding in one of the issue's files, so 17.6% is an upper bound
+for round 1.
 
-**What the numbers do not say.** Both exits ask for "at least". The reviewer's
-is not met on this measure, the security sweep's is not met, and the bug
-sweep's is untested. The measure is lenient for a sweep, which is hit by any
+**What the numbers do not say.** Both exits ask for "at least". None of the
+three is met on this measure. The measure is lenient for a sweep, which is hit by any
 finding in one of the issue's files, and stricter for a review, which also
 needs a line within ten. The earlier sweeps ran up to seven rounds and had a
 second auditor verify each issue, against one round here.
 Copilot raised small points, wording and link forms among them, which
 `branch-reviewer`'s bar leaves out ("incomplete but true" is not a finding).
 Reading 3.5% as the reviewer being worse by that factor would be wrong.
-Reading it as meeting the exit would be wrong too.
+Reading it as meeting the exit would be wrong too. The runner does not
+count tokens, so what these runs cost is still unmeasured.
