@@ -16,9 +16,7 @@ the section it cites, replacing its "Filled by" line, and creates none.
 This section holds what [§2](02-architecture-at-a-glance.md) and
 [§3](03-bounded-contexts.md) no longer state about the reference domain's
 services. [§3.2](03-bounded-contexts.md)'s table of what each service owns,
-publishes, consumes and accepts stays in the chapter: the
-[messaging gate](../../.github/messaging-gate/README.md) reads it there, so it
-is its own owner and is not copied here.
+publishes, consumes and accepts is [E.1.1](#e11-32-the-service-responsibilities-table)'s.
 
 **The one-word example (§3.1).** "Product" in Catalog is a rich marketing
 object with descriptions, images and categories. "Product" in Inventory is a
@@ -178,6 +176,25 @@ SQL, and Notifications' is §9.5's inbox and the unique key on its record.
 service's, and its label there reads "Shipping carrier"; the chapter says
 "Delivery carrier". Its platform node reads "7 domain services + BFF"; the
 container view above is the one that draws six.
+
+### E.1.1 §3.2: the service responsibilities table
+
+[§3.2](03-bounded-contexts.md) states the rule: each service is described by what it
+owns, publishes, consumes and accepts, and the table closes in both directions.
+This table is the reference domain's, and the
+[messaging gate](../../.github/messaging-gate/README.md) reads it here and
+holds every row to what its host's code publishes, consumes and accepts.
+
+| Service | Owns | Publishes (events) | Consumes (events) | Accepts (commands) |
+|---|---|---|---|---|
+| **Catalog** | Product, its Price | `ProductPublished`, `PriceChanged`, `ProductDiscontinued` | `StockLevelChanged` | — |
+| **Ordering** | Order, OrderLine, the fulfilment saga | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | `OrderPlaced` (its own — the saga starts on it), `OrderCancelled` (its own — the saga stops on it), `OrderConfirmed` (its own — the saga waits on it), `ProductPublished`, `PriceChanged`, `ProductDiscontinued`, `StockReserved`, `StockReservationFailed`, `StockReleased`, `PaymentAuthorised`, `PaymentDeclined`, `ShipmentDispatched`, `PersonalDataDeleteRequested` | `CancelOrder`, `ConfirmOrder`, `MarkOrderShipped`, `FlagOrderForReview` |
+| **Inventory** | StockItem, Reservation | `StockReserved`, `StockReservationFailed`, `StockReleased`, `StockLevelChanged` | `OrderCancelled`, `ShipmentDispatched` | `ReserveStock`, `ReleaseStock` |
+| **Payments** | PaymentIntent, Refund | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled`, `PersonalDataDeleteRequested` | `AuthorisePayment` |
+| **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled`, `PersonalDataDeleteRequested` | — |
+| **Notifications** | NotificationLog | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
+| **Privacy** | ErasureRequest | `PersonalDataDeleteRequested` | — | `PersonalDataDeleteCompleted` |
+| **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model owning no fact ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested` | — |
 
 ## E.2 §4: the solution tree and the scaffold
 
@@ -827,7 +844,7 @@ namespace per owning service, and every event is an `IIntegrationEvent`.
 | Catalog | `ProductPublished`, `PriceChanged`, `ProductDiscontinued` | |
 | Privacy | `PersonalDataDeleteRequested` | `PersonalDataDeleteCompleted` |
 
-[§3.2](03-bounded-contexts.md)'s Accepts and Consumes columns are the owner of
+[E.1.1](#e11-32-the-service-responsibilities-table)'s Accepts and Consumes columns are the owner of
 who binds what. `OrderPlaced`, `OrderConfirmed` and `OrderCancelled` each carry
 `ErasedUnder`, optional on all three
 ([ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md)).

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CHAPTER = Path("docs/backend-architecture/03-bounded-contexts.md")
+TABLE_FILE = Path("docs/backend-architecture/appendix-e-reference-domain.md")
 OWED = Path(__file__).resolve().parent / "owed.txt"
 
 COLUMNS = ("publishes", "consumes", "accepts")
@@ -85,11 +85,11 @@ def read_code(root: Path) -> dict[str, Host]:
     return {name: read_host(directory) for name, directory in host_directories(root).items()}
 
 
-def read_table(chapter_text: str) -> dict[str, Host]:
+def read_table(text: str) -> dict[str, Host]:
     """§3.2's rows by service, each cell as the set of names it puts in backticks."""
-    lines = chapter_text.splitlines()
+    lines = text.splitlines()
     try:
-        start = lines.index("## 3.2 Service responsibilities")
+        start = lines.index("### E.1.1 §3.2: the service responsibilities table")
         header = lines.index(HEADER, start)
     except ValueError:
         return {}
@@ -122,14 +122,14 @@ def read_owed(text: str) -> tuple[set[tuple[str, str, str]], list[str]]:
 
 def check(root: Path = ROOT, owed_path: Path = OWED) -> list[str]:
     try:
-        table = read_table((root / CHAPTER).read_text(encoding="utf-8"))
+        table = read_table((root / TABLE_FILE).read_text(encoding="utf-8"))
     except OSError as error:
-        return [f"{CHAPTER} is not readable: {error}"]
+        return [f"{TABLE_FILE} is not readable: {error}"]
     code = read_code(root)
 
     # An empty side compares equal to nothing and passes every check below, so it is the reader that is broken.
     if not table:
-        return [f"found no rows under §3.2's `{HEADER}` in {CHAPTER}: the parser or the chapter is broken"]
+        return [f"found no rows under §3.2's `{HEADER}` in {TABLE_FILE}: the parser or the appendix is broken"]
     if not code:
         return ["found no host under src/Services or src/BFF: the parser or the tree is broken"]
 
