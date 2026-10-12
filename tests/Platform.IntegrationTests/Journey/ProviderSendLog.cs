@@ -27,7 +27,7 @@ internal sealed class ProviderSendLog : IDisposable
 
     internal void Answered(HttpRequestMessage request, string outcome) => Add("done", request, outcome);
 
-    /// <summary>Each send's wall time and gap to the one before, each answer, then every stall the probe saw.</summary>
+    /// <summary>Each send's wall time and gap to the one before, each answer, then the last stalls the probe saw.</summary>
     internal string Describe()
     {
         Event[] events = [.. _events];
