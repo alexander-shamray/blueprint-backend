@@ -36,3 +36,4 @@
 | **App. B** | [Dependency licence register](appendix-b-licences.md) |
 | **App. C** | [Delivery plan](appendix-c-delivery-plan.md) |
 | **App. D** | [Names the solution does not declare](appendix-d-type-inventory.md) |
+| **App. E** | [The reference domain](appendix-e-reference-domain.md) |
