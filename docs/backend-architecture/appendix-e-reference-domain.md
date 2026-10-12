@@ -181,8 +181,9 @@ container view above is the one that draws six.
 
 ### E.1.1 §3.2: the service responsibilities table
 
-[§3.2](03-bounded-contexts.md) states the rule: each service is described by what it
-owns, publishes, consumes and accepts, and the table closes in both directions.
+[§3.2](03-bounded-contexts.md) states the rule: each service is described
+by what it owns, publishes, consumes and accepts, and the table closes in
+both directions.
 This table is the reference domain's, and the
 [messaging gate](../../.github/messaging-gate/README.md) reads it here and
 holds every row to what its host's code publishes, consumes and accepts.

@@ -45,8 +45,8 @@ Each service is described by what it owns, what it publishes, and what it
 listens to. The table is the contract summary for the whole platform.
 
 Events are published to anyone interested; commands are sent to exactly one
-owner (§9.6). The table's columns are separated because that distinction determines
-whether a message uses `Publish` or `Send`, and getting it wrong means a second
+owner (§9.6). The table's columns are separated because that distinction
+determines whether a message uses `Publish` or `Send`, and getting it wrong means a second
 subscriber silently executing your business commands.
 
 In the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), the table has a row for each service
