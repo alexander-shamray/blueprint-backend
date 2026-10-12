@@ -68,6 +68,11 @@ customer places after their own erasure is dropped. The BFF's projection and
 Notifications' intake keep it, because the order names the requests it was
 placed under; Shipping still drops it.
 
+**Superseded in part by
+[ADR-103](ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md)**:
+the same sentence's Shipping clause. Shipping keeps such a shipment, because
+the shipment holds the list.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
