@@ -185,7 +185,70 @@ Filled by #904.
 
 ## E.3 §5, §7 and §8: aggregates, persistence and caching
 
-Filled by #908.
+This section holds what [§5](05-tactical-ddd.md), [§7](07-persistence.md)
+and [§8](08-caching-redis.md) no longer name: which reference service each
+sample comes from, and the cases the rules there were drawn from. Each
+sub-section is cited by the chapter that lost the fact. The roster of
+services itself is [E.1](#e1-2-and-3-the-service-roster-and-the-context-map).
+
+### E.3.1 §5: the Order samples
+
+Every `Service` in §5's samples stands for `Ordering`, the service that owns
+the `Order` aggregate. The chapter writes the placeholder and the reference
+domain spells the name:
+
+| Where in §5 | The chapter writes | The reference domain has |
+|---|---|---|
+| §5.2, `OrderId` | `namespace Service.Domain.Orders;` | `namespace Ordering.Domain.Orders;` |
+| §5.3, `Money` | `namespace Service.Domain.Common;` | `namespace Ordering.Domain.Common;` |
+| §5.4, `Order` | `namespace Service.Domain.Orders;` | `namespace Ordering.Domain.Orders;` |
+| §5.4, the comment above the `OrderPlacedDomainEvent` raise | "so the stock owner can reserve stock (§9.6)" | "so Inventory can reserve stock (§9.6)": Inventory is the stock owner |
+| §5.5, the events | `namespace Service.Domain.Orders.Events;` | `namespace Ordering.Domain.Orders.Events;` |
+| §5.5, the comparison table's Example row | `Common.Contracts.Service.V1.OrderConfirmed` | `Common.Contracts.Ordering.V1.OrderConfirmed` |
+| §5.5, the paragraph on shared type names | `Common.Contracts.Service.V1.OrderPlaced` | `Common.Contracts.Ordering.V1.OrderPlaced` |
+| §5.6, `IOrderRepository` | `namespace Service.Domain.Orders;` | `namespace Ordering.Domain.Orders;` |
+
+### E.3.2 §7: persistence
+
+The reference domain's names behind the samples and the cases of §7:
+
+| Where in §7 | The chapter writes | The reference domain has |
+|---|---|---|
+| §7.1, the Compose and CI provisioning sample | `USE [{service}];`, where `{service}` is the service's name | `USE [Ordering];`; the logins `ordering-runtime` and `ordering-migrator`, the schema `ordering` and the connection strings `ConnectionStrings__Ordering` and `ConnectionStrings__OrderingMigrator` stay in the sample as that service's spelling |
+| §7.2, the `AddTransactionalOutboxEntities` paragraph | "an `IEntityTypeConfiguration<InboxState>` written in the service's Infrastructure project" | "written in `Ordering.Infrastructure`" |
+| §7.2, the mapping excerpt | "`OrderConfiguration`, which holds the whole mapping" | `OrderConfiguration.cs` in `Ordering.Infrastructure/Persistence` holds the whole mapping |
+| §7.4, the library's technical tables row | "A service has any of them only if it holds a saga" | Ordering is the only service with any of them, because it holds the only saga ([§9.6](09-messaging.md)) |
+| §7.5, the collector port | "an `EfDomainEventCollector` in the service's `Infrastructure/Persistence` folder", in `namespace Service.Infrastructure.Persistence;` | Ordering's is `EfDomainEventCollector` in `Ordering.Infrastructure/Persistence`, in `namespace Ordering.Infrastructure.Persistence;`, over `OrderingDbContext` where the chapter writes `ServiceDbContext` |
+
+The case behind §7.3's pessimistic update stays in the chapter as evidence
+and cites this section for its facts. Inventory is the exception to
+optimistic concurrency: stock reservation is genuinely contended, because the
+same SKU may be reserved by many concurrent orders, and optimistic retry
+loops degrade badly under that load. The statement is the `TakeSql` of
+`SqlStockLedger` in `Inventory.Infrastructure/Persistence`, against the
+`inventory.StockItems` table, and the instant it writes is the `OccurredAt`
+of the `StockLevelChanged` that write publishes
+([§3.2](03-bounded-contexts.md)). A bare clock reading in both places fails:
+the second writer can take an earlier instant than the first, and Catalog's
+projection then keeps the older level.
+
+### E.3.3 §8: caching
+
+The reference domain's names behind §8's rules and samples:
+
+| Where in §8 | The chapter writes | The reference domain has |
+|---|---|---|
+| §8.1, the `ApplicationName` example | "a host deployed as `Service.Api` takes `~Service.Api:*`" | "a host deployed as `Ordering.Api` takes `~Ordering.Api:*`" |
+| §8.2, the one-product read | "A real one-product read may not be this handler" | **Catalog's real one-product read is not this handler, and it caches nothing.** `GetProductHandler` ([§6.5](06-cqrs.md)) returns the listing's row, and that row carries Inventory's stock level, which `StockLevelProjection` writes and nothing stages a `Local` invalidation for (§8.4). A cached copy would serve a level no event removes, so the read stays where the listing is: Dapper over the tables, at level 1. |
+| §8.4, the sequence diagram | participants "Owning API" and "Consuming service" | participants "Catalog API" and "Ordering" |
+| §8.4, the local lane | "The owner's own invalidation goes through the local outbox lane" | "Catalog's own invalidation goes through the local outbox lane, not an inline call after commit" (ADR-018) |
+| §8.4, the first-cache rule | "A service that caches nothing stages the `Broker` row alone" | Catalog caches nothing, so its price change stages the `Broker` row alone; the `Local` half arrives with Catalog's first cached read, beside its handler |
+| §8.4, the consumer | "a consumer that caches nothing through `HybridCache`", whose one `PriceChanged` handler is a projection | The consumer's side is Ordering's: Ordering caches nothing through `HybridCache`, so its one `PriceChanged` handler is `ProductPriceProjection` ([§6.6](06-cqrs.md)), which updates the price table the write path reads. The first cached projection of Catalog data brings the second handler with it, in `Ordering.Infrastructure` beside the projection |
+| §8.4, the invalidator sample | `namespace Service.Infrastructure.Caching;` | `namespace Ordering.Infrastructure.Caching;` |
+| §8.5, the Redis claim | "a service's own `Infrastructure.Idempotency` namespace" | `Ordering.Infrastructure.Idempotency`, beside the service that uses it: the obvious home §8.5 rejects, since the code is `Common.Infrastructure.Idempotency` |
+| §8.5, the opt-in test | "`IdempotencyOptInTests.cs` in every service's `Application.Tests` project" | Ordering's is `tests/Ordering.Application.Tests/IdempotencyOptInTests.cs` |
+| §8.5, the replay test | "A service's `Api.Tests` posts the same `CommandId` twice" | `Catalog.Api.Tests` posts the same `CommandId` twice through a real Redis and asserts one product and one identical response |
+| §8.5, the test doubles | "A service's callers, stated through its own `TestAuthHandler`" | Ordering's callers, stated through its `TestAuthHandler` |
 
 ## E.4 §6: CQRS and its projections
 

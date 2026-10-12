@@ -37,7 +37,9 @@ CREATE USER [ordering-migrator] FROM EXTERNAL PROVIDER;
 ```
 
 Compose, the CI service container, and any SQL Server without a directory behind
-it ([§14.1](14-local-development.md)):
+it ([§14.1](14-local-development.md)), with `<Service>` the service's name as
+the reference domain spells it
+([E.3.2](appendix-e-reference-domain.md#e32-7-persistence)):
 
 ```sql
 -- Server-level login, then a database user mapped to it. sqlcmd pastes each
@@ -45,12 +47,12 @@ it ([§14.1](14-local-development.md)):
 -- environment variables of the same name, never with -v, which puts them on
 -- the command line, and generate them without a single quote, which would end
 -- the literal.
-CREATE LOGIN [ordering-runtime]  WITH PASSWORD = '$(OrderingRuntimePassword)';
-CREATE LOGIN [ordering-migrator] WITH PASSWORD = '$(OrderingMigratorPassword)';
+CREATE LOGIN [<service>-runtime]  WITH PASSWORD = '$(<Service>RuntimePassword)';
+CREATE LOGIN [<service>-migrator] WITH PASSWORD = '$(<Service>MigratorPassword)';
 GO
-USE [Ordering];
-CREATE USER [ordering-runtime]  FOR LOGIN [ordering-runtime];
-CREATE USER [ordering-migrator] FOR LOGIN [ordering-migrator];
+USE [<Service>];
+CREATE USER [<service>-runtime]  FOR LOGIN [<service>-runtime];
+CREATE USER [<service>-migrator] FOR LOGIN [<service>-migrator];
 ```
 
 ```sql
@@ -58,11 +60,11 @@ CREATE USER [ordering-migrator] FOR LOGIN [ordering-migrator];
 -- Runtime: data plane only, and only in the service's schema. Not the
 -- database-wide roles: EF keeps its migrations history in dbo, and a runtime
 -- that could write it could tell the migrator a pending migration had run.
-GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::[ordering] TO [ordering-runtime];
+GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::[<service>] TO [<service>-runtime];
 
 -- Migrator: schema plane, used by the pre-deploy job only.
-ALTER ROLE db_ddladmin   ADD MEMBER [ordering-migrator];
-ALTER ROLE db_datawriter ADD MEMBER [ordering-migrator];   -- for data backfills
+ALTER ROLE db_ddladmin   ADD MEMBER [<service>-migrator];
+ALTER ROLE db_datawriter ADD MEMBER [<service>-migrator];   -- for data backfills
 ```
 
 > **Do not let local convenience collapse the two keys.** Locally there is one
@@ -105,15 +107,16 @@ matters because the wrong one is easy to state:
 `ApplyConfigurationsFromAssembly` looks for types *implementing*
 `IEntityTypeConfiguration<T>` in the assembly it is given and says nothing
 about where `T` is declared, so an `IEntityTypeConfiguration<InboxState>`
-written in `Ordering.Infrastructure` would be found and applied like any other.
+written in the service's Infrastructure project would be found and applied like
+any other.
 What forbids it is **ownership**: MassTransit maps those three entities itself
 and its own queries depend on the mapping, so a configuration of ours would be a
 second definition of a schema the library has to agree with — and the next
 version bump moves the library's half while ours sits there looking correct.
 The rule holds for every type this repository defines; §7.4 lists the tables.
 
-`OrderConfiguration.cs` in `Ordering.Infrastructure/Persistence` holds the
-whole mapping; this excerpt is part of it.
+`OrderConfiguration` holds the whole mapping; this excerpt is part of it. Where
+the file lives is in [E.3.2](appendix-e-reference-domain.md#e32-7-persistence).
 
 ```csharp
 internal sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
@@ -250,9 +253,11 @@ which the API translates to `409 Conflict` — `ConcurrencyExceptionHandler` in
 version it disagreed about: both are storage details, and what the client
 needs from this status is only that its copy was stale.
 
-Inventory is the exception. Stock reservation is genuinely contended — the same
-SKU may be reserved by many concurrent orders — and optimistic retry loops
-degrade badly under that load. There, use a targeted pessimistic update:
+In the reference domain Inventory is the exception
+([E.3.2](appendix-e-reference-domain.md#e32-7-persistence)).
+Stock reservation is genuinely contended — the same SKU may be reserved by many
+concurrent orders — and optimistic retry loops degrade badly under that load.
+There, use a targeted pessimistic update:
 
 ```sql
 UPDATE inventory.StockItems
@@ -266,12 +271,14 @@ The `WHERE Available >= @Quantity` makes the check and the decrement a single
 atomic statement. If it affects zero rows, there was not enough stock — no read,
 no race, no retry loop.
 
-`SqlStockLedger` in `Inventory.Infrastructure/Persistence` owns the statement
-as its `TakeSql`, and the `{Stamp}` it interpolates is the ledger's term
-rather than this section's. It is monotonic per row rather than a bare clock
-read, so two serialised writers leave strictly ordered instants whatever the
-server clock does between them, and it is returned beside the level because
-it is the `OccurredAt` of the
+`SqlStockLedger` in `Inventory.Infrastructure/Persistence`, in the reference
+domain
+([E.3.2](appendix-e-reference-domain.md#e32-7-persistence)),
+owns the statement as its `TakeSql`, and the `{Stamp}` it interpolates is the
+ledger's term rather than this section's. It is monotonic per row rather than a
+bare clock read, so two serialised writers leave strictly ordered instants
+whatever the server clock does between them, and it is returned beside the level
+because it is the `OccurredAt` of the
 `StockLevelChanged` that write publishes ([§3.2](03-bounded-contexts.md)). A
 bare reading in both places is the version that fails — the second writer can
 take an earlier one than the first, and Catalog's projection then keeps the
@@ -289,7 +296,7 @@ shape each is:
 |---|---|---|
 | **Write model** | `Orders`, `OrderLines` | The EF model. `IEntityTypeConfiguration<T>` (§7.2) is the source of truth; `dotnet ef migrations add` produces the DDL |
 | **Read models and technical tables** | `OrderSummaries`, `ProductPrices`, `OutboxMessages`, `InboxMessages`, `IdempotencyMarkers`, `OrderReviews` | The EF model, though their shape is the chapters' rather than the aggregate's, because they are shaped for queries and index plans rather than for objects. **`ProductPrices` states the terms**: `ProductPriceConfiguration` maps it so `migrations add` emits it beside the aggregate's tables, and is written to produce §6.6's printed types — `char(3)`, `DEFAULT 1` — rather than EF's defaults for the CLR ones. Every table in this row is mapped on the same terms, each by its own configuration. `ordering.Products` (§6.6) is not built: no configuration or migration creates it, and the sample below is the hand-written route it could take. `IdempotencyMarkers` ([§8.5](08-caching-redis.md)) is mapped the same way and for a reason of its own: [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)'s store both reads and writes it through the service's `DbContext`, because that is what puts the write inside §6.3's transaction, so the entity has to be in the model whether or not the DDL is emitted from it. The rule is that the shape is the chapter's; which tool writes it is negotiable, and a generated table that drifts from the chapter's DDL is not |
-| **A library's own technical tables** | `ordering.InboxState`, `ordering.OutboxState`, `ordering.OutboxMessage` | The EF model, from `modelBuilder.AddTransactionalOutboxEntities()` — **the one stated exception to §7.2's rule that mapping lives in `IEntityTypeConfiguration<T>` classes**, and the exception is about ownership rather than about reach ([ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)). The assembly scan would find a configuration for these entities perfectly well — it selects on the *configuration* type's assembly, not the entity's — but MassTransit maps them itself and queries them on that mapping, so writing one here would be a second definition of a schema the library has to agree with, drifting on its next bump. Their shape is not this blueprint's to specify either, which is the difference from the row above: the rule there is that the shape is the chapter's, and here it is the library's. **Singular, where §9.4's and §9.5's tables are plural** — `OutboxMessage` against `OutboxMessages`, so the two sets share the `ordering` schema without colliding, and a reader of the database sees more messaging tables than the chapters name. **No count on either side of that sentence**: whether §8.5's marker in the cell above is a *messaging* table is the question a numeral here would have to answer, and no chapter does. Ordering is the only service with any of them, because it holds the only saga |
+| **A library's own technical tables** | `ordering.InboxState`, `ordering.OutboxState`, `ordering.OutboxMessage` | The EF model, from `modelBuilder.AddTransactionalOutboxEntities()` — **the one stated exception to §7.2's rule that mapping lives in `IEntityTypeConfiguration<T>` classes**, and the exception is about ownership rather than about reach ([ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)). The assembly scan would find a configuration for these entities perfectly well — it selects on the *configuration* type's assembly, not the entity's — but MassTransit maps them itself and queries them on that mapping, so writing one here would be a second definition of a schema the library has to agree with, drifting on its next bump. Their shape is not this blueprint's to specify either, which is the difference from the row above: the rule there is that the shape is the chapter's, and here it is the library's. **Singular, where §9.4's and §9.5's tables are plural** — `OutboxMessage` against `OutboxMessages`, so the two sets share the `ordering` schema without colliding, and a reader of the database sees more messaging tables than the chapters name. **No count on either side of that sentence**: whether §8.5's marker in the cell above is a *messaging* table is the question a numeral here would have to answer, and no chapter does. A service has any of them only if it holds a saga, and which one does, in the reference domain, is in [E.3.2](appendix-e-reference-domain.md#e32-7-persistence) |
 
 That is why [§6.6](06-cqrs.md) and [§9.4](09-messaging.md) show `CREATE TABLE` and §7.2 does not — the write
 model's schema is a projection of the aggregate, and duplicating it as SQL would
@@ -421,14 +428,17 @@ public interface IDomainEventCollector
 ```
 
 Each service that raises domain events implements it over its own context.
-Ordering's is `EfDomainEventCollector` in `Ordering.Infrastructure/Persistence`,
+The shape is an `EfDomainEventCollector` in the service's
+`Infrastructure/Persistence` folder, under the root namespace `Service` as in
+§5.2 (the reference domain's is in
+[E.3.2](appendix-e-reference-domain.md#e32-7-persistence)),
 and it clears as it collects, so a second call returns only the events raised
 since the first:
 
 ```csharp
-namespace Ordering.Infrastructure.Persistence;
+namespace Service.Infrastructure.Persistence;
 
-internal sealed class EfDomainEventCollector(OrderingDbContext db) : IDomainEventCollector
+internal sealed class EfDomainEventCollector(ServiceDbContext db) : IDomainEventCollector
 {
     public IReadOnlyList<IDomainEvent> CollectAndClear()
     {
