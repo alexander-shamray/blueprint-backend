@@ -404,7 +404,7 @@ public sealed class SendWorker(
         IErasedSubjects erased = sp.GetRequiredService<IErasedSubjects>();
 
         // Asked before the owner is, so an erased customer's mailbox is never fetched, and again after the save, so
-        // an erasure landing between the two finds the row or is seen here (ADR-098).
+        // an erasure landing between the two finds the row or is seen here (ADR-100).
         if (await erased.IsErasedAsync(customer, ct))
         {
             await store.DeleteAsync(customer, ct);
