@@ -228,16 +228,18 @@ class UsageLimit(SystemExit):
 def unwrap(stdout):
     """The reply text and token usage in a `claude -p --output-format json` result.
 
-    Output that is not that envelope is the reply itself, with no usage.
+    Output that is not that envelope is the reply itself, with no usage; an envelope with no
+    reply text, as an error result is, keeps its usage and has the raw output as its reply.
     """
     try:
         result = json.loads(stdout)
     except ValueError:
         return stdout, {}
-    if not isinstance(result, dict) or not isinstance(result.get("result"), str):
+    if not isinstance(result, dict):
         return stdout, {}
     usage = result.get("usage")
-    return result["result"], usage if isinstance(usage, dict) else {}
+    text = result.get("result")
+    return text if isinstance(text, str) else stdout, usage if isinstance(usage, dict) else {}
 
 
 def tokens(spent):
@@ -256,7 +258,7 @@ def ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
                "--output-format", "json", *extra, cwd=cwd)
     text, usage = unwrap(done.stdout)
     if spent is not None:
-        spent.update({key: int(usage.get(key) or 0) for key in TOKEN_KEYS})
+        spent.update({key: usage[key] for key in TOKEN_KEYS if isinstance(usage.get(key), int)})
     value = agent_json(text)
     if value is None:
         if "usage limit" in text.lower():

@@ -251,6 +251,15 @@ class Runs(unittest.TestCase):
             qs.ask("claude", "bug-auditor", "p", "dir", spent=spent)
         self.assertEqual(qs.tokens(spent), {**usage, "total": 2 + 39604 + 100 + 57})
 
+    def test_an_error_result_keeps_its_usage_and_a_malformed_count_is_zero(self):
+        error = json.dumps({"subtype": "error_max_turns", "usage": {"input_tokens": 7, "output_tokens": "many"}})
+        self.assertEqual(qs.unwrap(error), (error, {"input_tokens": 7, "output_tokens": "many"}))
+        spent = collections.Counter()
+        with mock.patch.object(qs, "run", return_value=mock.Mock(stdout=error, returncode=0)), \
+                self.assertRaises(SystemExit):
+            qs.ask("claude", "bug-auditor", "p", "dir", spent=spent)
+        self.assertEqual(qs.tokens(spent)["total"], 7)
+
     def test_a_run_with_no_usage_reports_zeros(self):
         self.assertEqual(qs.tokens(collections.Counter())["total"], 0)
 
