@@ -54,6 +54,7 @@ public static class DependencyInjection
         // §11.7's erasure: the audit row, the deletes in the unit's transaction and the report after it (ADR-094).
         services.AddScoped<IPersonalDataErasureRepository, PersonalDataErasureRepository>();
         services.AddScoped<INotificationsPersonalDataStore, SqlNotificationsPersonalDataStore>();
+        services.AddScoped<IErasedSubjects, SqlErasedSubjects>();
         services.AddScoped<IErasureReporter, ErasureReporter>();
 
         // §8.5's durable half, on the DbContext alias above and so in EfUnitOfWork's transaction. Its loss

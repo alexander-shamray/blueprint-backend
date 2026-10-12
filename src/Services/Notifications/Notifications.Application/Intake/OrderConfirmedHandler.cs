@@ -5,10 +5,10 @@ using Notifications.Application.Rendering;
 namespace Notifications.Application.Intake;
 
 /// <summary>§3.2's subscription; it creates the order record only when it is Ordering's first to arrive.</summary>
-public sealed class OrderConfirmedHandler(IDispatcher dispatcher) : IIntegrationEventHandler<OrderConfirmed>
+public sealed class OrderConfirmedHandler(ErasedIntake intake) : IIntegrationEventHandler<OrderConfirmed>
 {
     public async Task HandleAsync(OrderConfirmed integrationEvent, CancellationToken ct) =>
-        await dispatcher.SendAsync(
+        await intake.RecordAsync(
             new RecordNotificationCommand(
                 integrationEvent.MessageId,
                 integrationEvent.CorrelationId,

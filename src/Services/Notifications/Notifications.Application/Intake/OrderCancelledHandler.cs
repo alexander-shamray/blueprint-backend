@@ -5,10 +5,10 @@ using Notifications.Application.Rendering;
 namespace Notifications.Application.Intake;
 
 /// <summary>§3.2's subscription, and the one that writes ADR-049's deciding fact onto the order record.</summary>
-public sealed class OrderCancelledHandler(IDispatcher dispatcher) : IIntegrationEventHandler<OrderCancelled>
+public sealed class OrderCancelledHandler(ErasedIntake intake) : IIntegrationEventHandler<OrderCancelled>
 {
     public async Task HandleAsync(OrderCancelled integrationEvent, CancellationToken ct) =>
-        await dispatcher.SendAsync(
+        await intake.RecordAsync(
             new RecordNotificationCommand(
                 integrationEvent.MessageId,
                 integrationEvent.CorrelationId,
