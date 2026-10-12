@@ -88,6 +88,13 @@ public abstract class FulfilmentJourney(JourneyWorld world)
 
         string[] keys = [.. asked.Select(e => Header(e, "Idempotency-Key")).Distinct(StringComparer.Ordinal)];
 
+        // Passes, so the evidence goes to a file that CI uploads and posts, not to a message nobody reads.
+        if (asked.Length > 1 && keys.Length == 1)
+            Sightings.Record(
+                $"payment-double-send-{order.Id:N}",
+                $"{asked.Length} requests under key {keys[0]}; {Describe(asked, world.Provider)}; " +
+                world.PaymentsHost.Sends.Describe());
+
         if (asked.Length == 0 || keys.Length != 1 || keys[0] != $"authorise:{order.Id}")
             Assert.Fail(
                 "one order is one charge, however many times a message was delivered; " +
