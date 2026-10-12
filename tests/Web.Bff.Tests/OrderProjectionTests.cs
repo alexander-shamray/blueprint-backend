@@ -7,6 +7,7 @@ using Shouldly;
 using Web.Bff.Messaging;
 using Web.Bff.Orders;
 using Web.Bff.Persistence;
+using Web.Bff.Privacy;
 using Xunit;
 
 namespace Web.Bff.Tests;
@@ -163,7 +164,8 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
         // Built by hand for its logger: an inverted comparison would warn on every event and change no row.
         Guid order = Guid.CreateVersion7();
         WarningLog log = new();
-        OrderProjection projection = new(new SqlConnectionFactory(fixture.ConnectionString), TimeProvider.System, log);
+        SqlConnectionFactory connections = new(fixture.ConnectionString);
+        OrderProjection projection = new(connections, new SqlErasedSubjects(connections), TimeProvider.System, log);
 
         await projection.HandleAsync(OrderEvents.Placed(order, _customer, At), TestContext.Current.CancellationToken);
         await projection.HandleAsync(

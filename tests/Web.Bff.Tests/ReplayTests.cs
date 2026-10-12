@@ -3,6 +3,7 @@ using Common.Contracts.Catalog.V1;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
 using Common.Contracts.Shipping.V1;
+using Common.Domain;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Shouldly;
@@ -125,6 +126,50 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
 
         report.OldestFrom(Named("Catalog")).ShouldBe(published.OccurredAt);
         output.ToString().ShouldContain("Shipping: 1 event(s) sent");
+    }
+
+    [Fact]
+    public async Task A_rebuild_inside_the_outbox_window_leaves_an_erased_subject_absent_and_everyone_else_present()
+    {
+        Guid erased = Guid.CreateVersion7();
+        Guid bystander = Guid.CreateVersion7();
+        Guid erasedOrder = Guid.CreateVersion7();
+        Guid bystandersOrder = Guid.CreateVersion7();
+        OrderPlaced erasedPlacement = OrderEvents.Placed(erasedOrder, erased, At);
+        OrderPlaced bystandersPlacement = OrderEvents.Placed(bystandersOrder, bystander, At.AddMinutes(1));
+        Guid request = Guid.CreateVersion7();
+
+        // The erasure deleted the rows, and the publisher's outbox still names the customer (ADR-051, ADR-097).
+        await fixture.ExecuteAsync(
+            "INSERT INTO bff.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt) VALUES ({0}, {1}, 0, {2})",
+            request,
+            PersonalDataErasure.HashSubject(request, erased),
+            At.AddMinutes(30));
+
+        try
+        {
+            await _outboxes.StageAsync(Named("Ordering"), Processed, erasedPlacement, bystandersPlacement);
+
+            ReplayReport report = await Replay.RunAsync(
+                Settings(),
+                reset: true,
+                TextWriter.Null,
+                Replay.BrokerDeadline,
+                TestContext.Current.CancellationToken);
+
+            report.SentMessageIds.ShouldBe(
+                [erasedPlacement.MessageId, bystandersPlacement.MessageId],
+                ignoreOrder: true);
+            await BffServiceFixture.WaitUntilAsync(async () => (await fixture.InboxAsync()).Count == 2);
+
+            (await fixture.OrderAsync(erasedOrder)).ShouldBeNull("the rebuild put an erased subject back");
+            (await fixture.LinesAsync(erasedOrder)).ShouldBeEmpty();
+            (await fixture.OrderAsync(bystandersOrder)).ShouldNotBeNull().CustomerId.ShouldBe(bystander);
+        }
+        finally
+        {
+            await fixture.ExecuteAsync("DELETE FROM bff.PersonalDataErasures;");
+        }
     }
 
     [Fact]
