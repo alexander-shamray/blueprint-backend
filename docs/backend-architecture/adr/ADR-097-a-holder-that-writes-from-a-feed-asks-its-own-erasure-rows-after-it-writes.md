@@ -51,6 +51,11 @@ order. Two ports named `IErasedSubjects` now sit beside Shipping's, which is the
 price of keeping each holder's audit table to its own service; a shared form is
 its own decision.
 
+**Superseded in part by ADR-098**: the Decision's last sentence and the
+Consequences' last residual. A shipment or payment event now has its row
+deleted when the BFF deleted that order, and still leaves one with no owner
+for an order the BFF never deleted.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
