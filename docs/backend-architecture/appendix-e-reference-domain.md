@@ -340,7 +340,7 @@ Ordering's three, each with the comments that name the line's owner.
         services.AddPluggableFrom(typeof(DependencyInjection).Assembly);   // §6.2
         services.AddDispatcher();
 
-        // Explicit rather than scanned, beside the dispatcher it serves, as §4.2's sample has it (§7.5).
+        // Explicit rather than scanned, beside the dispatcher it serves, as E.2.6's sample has it (§7.5).
         services.AddDomainEventDispatcher();
 
         // §9.3's allow-list, explicit so that what this service publishes is a decision, not a scan's finding.
@@ -362,7 +362,7 @@ Ordering's three, each with the comments that name the line's owner.
         // Scoped, as a command is; only open generics inject it, so a missing one fails the first command.
         services.AddScoped<IdempotencyContext>();
 
-        // §4.2's sample line, anchored on a validator: losing the last one fails the build, not silently.
+        // E.2.6's sample line, anchored on a validator: losing the last one fails the build, not silently.
         services.AddValidatorsFromAssemblyContaining<PlaceOrderValidator>();
         return services;
     }
@@ -475,7 +475,7 @@ line fails `ValidateOnBuild` rather than failing silently.
         // §9.4's, §9.5's and §8.5's retention. Last, so first stopped: an interrupted purge loses nothing.
         services.AddHostedService<RetentionPurgeService>();
 
-        // §6.5's read side, singleton as §4.2's sample has it, on the runtime key rather than the migrator's (§7.1).
+        // §6.5's read side, singleton as E.2.6's sample has it, on the runtime key rather than the migrator's (§7.1).
         services.AddSingleton<IDbConnectionFactory>(
             new SqlConnectionFactory(configuration.GetConnectionString("Ordering")!));
 
