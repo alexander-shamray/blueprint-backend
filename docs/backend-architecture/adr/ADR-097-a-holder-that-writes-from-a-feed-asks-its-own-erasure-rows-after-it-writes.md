@@ -56,6 +56,11 @@ Consequences' last residual. A shipment or payment event now has its row
 deleted when the BFF deleted that order, and still leaves one with no owner
 for an order the BFF never deleted.
 
+**Superseded in part by ADR-099**: the Consequences' sentence that an order a
+customer places after their own erasure is dropped. The BFF's projection and
+Notifications' intake keep it, because the order names the requests it was
+placed under; Shipping still drops it.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

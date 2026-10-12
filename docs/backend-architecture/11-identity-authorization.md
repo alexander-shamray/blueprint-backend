@@ -1475,8 +1475,10 @@ Rules for each service's consumer:
 - **A writer asks its own audit rows after it writes.** A holder fed by
   events that name a customer — the BFF's projection, whose rebuild replays
   them, and Notifications' intake — checks the audit rows above once its write
-  has committed, and deletes what it wrote for an erased customer
-  ([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md)).
+  has committed, and deletes what it wrote for an erased customer, unless the
+  order names the request as one it was placed after
+  ([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md),
+  [ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md)).
 - **Report completion.** The privacy service tracks which services have
   responded and escalates on timeout. Silence is not success.
 
