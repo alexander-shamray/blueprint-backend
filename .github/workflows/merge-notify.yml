@@ -1,0 +1,49 @@
+name: Merge notification
+
+# Tells the owner's Telegram chat that a pull request merged into main. Its
+# credential and where it is set are docs/secrets.md's *A notification
+# credential*.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  notify:
+    # A closed pull request that did not merge is not news.
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Every value the event supplies reaches the shell as an environment
+      # variable and the message is built by jq, so a title cannot inject a
+      # command or break the JSON.
+      - name: Send the message
+        shell: bash
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ vars.TELEGRAM_CHAT_ID }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          MERGED_BY: ${{ github.event.pull_request.merged_by.login }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Unset on a fork or before the owner configures it: a notice, never
+          # a red check on a pull request that has already merged.
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "::notice::TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is not set; no message sent"
+            exit 0
+          fi
+          text="Merged into main: $REPOSITORY #$PR_NUMBER
+          $PR_TITLE
+          by $MERGED_BY
+          $PR_URL"
+          jq -n --arg chat "$TELEGRAM_CHAT_ID" --arg text "$text" \
+            '{chat_id: $chat, text: $text, disable_web_page_preview: true}' |
+            curl -fsS --retry 3 --max-time 30 -o /dev/null \
+              -H 'Content-Type: application/json' --data @- \
+              "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"

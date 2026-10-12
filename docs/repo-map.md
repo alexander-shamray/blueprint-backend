@@ -179,6 +179,10 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              than a job in ci.yml because `edited` there would
                              rebuild the solution on every typo fix in a
                              description
+.github/workflows/merge-notify.yml  a Telegram message when a pull
+                             request merges into main; a notification, not
+                             a gate, so an unset credential skips it.
+                             docs/secrets.md owns the credential
 .github/workflows/broker-permissions.yml  ADR-036's broker ACL, reaching
                              outside its own tree, over the paths
                              SOURCE_INPUTS declares in
