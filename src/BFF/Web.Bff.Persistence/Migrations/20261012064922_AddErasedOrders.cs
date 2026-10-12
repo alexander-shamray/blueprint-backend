@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Web.Bff.Persistence.Migrations;
 
-/// <summary>The ids of orders deleted for an erased customer, holding no personal data (ADR-098).</summary>
+/// <summary>The ids of orders deleted for an erased customer, and the time each was (ADR-098).</summary>
 public partial class AddErasedOrders : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
