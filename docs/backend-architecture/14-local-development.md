@@ -121,41 +121,42 @@ one-shot and the service itself, gated on
 none may migrate at startup ([§4.1](04-solution-structure.md),
 [ADR-007](adr/ADR-007-migrations-as-a-pre-deploy-job.md)), so a service added
 without its migrator starts against an empty schema.
-`deploy/compose/services/ordering.yml` shows the pair; every other service's
-unit keeps it, beside whatever else that service needs:
+Each service's unit file in `deploy/compose/services/` keeps the pair, beside
+whatever else that service needs. The sample is written for any `<Service>`;
+the reference domain's case is in [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development):
 
 ```yaml
-ordering-migrator:
+<service>-migrator:
   build:
     context: ../../..
-    dockerfile: src/Services/Ordering/Ordering.Migrator/Dockerfile
+    dockerfile: src/Services/<Service>/<Service>.Migrator/Dockerfile
   read_only: true
   tmpfs: [ /tmp ]
   environment:
-    ConnectionStrings__OrderingMigrator: "${ORDERING_MIGRATOR_CONNECTION:-Server=sql;Database=Ordering;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+    ConnectionStrings__<Service>Migrator: "${<SERVICE>_MIGRATOR_CONNECTION:-Server=sql;Database=<Service>;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
     DOTNET_ENVIRONMENT: Development
   depends_on:
     sql: { condition: service_healthy }
   restart: "no"
 
-ordering-api:
+<service>-api:
   build:
     context: ../../..
-    dockerfile: src/Services/Ordering/Ordering.Api/Dockerfile
+    dockerfile: src/Services/<Service>/<Service>.Api/Dockerfile
   read_only: true
   tmpfs: [ /tmp ]
   environment:
     ASPNETCORE_ENVIRONMENT: Development
-    ConnectionStrings__Ordering: "${ORDERING_CONNECTION:-Server=sql;Database=Ordering;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
-    ConnectionStrings__RabbitMq: "amqp://ordering-svc:local-dev-ordering@rabbitmq:5672"
+    ConnectionStrings__<Service>: "${<SERVICE>_CONNECTION:-Server=sql;Database=<Service>;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+    ConnectionStrings__RabbitMq: "amqp://<service>-svc:local-dev-<service>@rabbitmq:5672"
     Identity__Authority: "http://keycloak:8080/realms/commerce"
-    ConnectionStrings__RedisCache: "redis-cache:6379,user=ordering-svc,password=local-dev-ordering"
-    ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=ordering-svc,password=local-dev-ordering"
+    ConnectionStrings__RedisCache: "redis-cache:6379,user=<service>-svc,password=local-dev-<service>"
+    ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=<service>-svc,password=local-dev-<service>"
   ports: [ "127.0.0.1:5101:8080" ]
   healthcheck:
-    test: [ "CMD", "dotnet", "Ordering.Api.dll", "--probe" ]
+    test: [ "CMD", "dotnet", "<Service>.Api.dll", "--probe" ]
   depends_on:
-    ordering-migrator: { condition: service_completed_successfully }
+    <service>-migrator: { condition: service_completed_successfully }
     rabbitmq: { condition: service_healthy }
     keycloak: { condition: service_healthy }
     redis-cache: { condition: service_healthy }
@@ -180,8 +181,8 @@ bare `${…}` interpolates to an empty string on a clean checkout, which
 refuses the string's `TrustServerCertificate=True`.
 
 The API carries the authority, to validate inbound tokens
-([§11.2](11-identity-authorization.md)), and no `Identity__Client__*`: Ordering
-calls no peer synchronously — prices come from a local projection (§6.4) and
+([§11.2](11-identity-authorization.md)), and no `Identity__Client__*`: the
+service calls no peer synchronously — prices come from a local projection (§6.4) and
 the rest goes over the broker. [§15.4](15-cicd-deployment.md) says which hosts
 hold client credentials (§11.5, ADR-052). An environment variable nothing reads
 is the container form of an unused registration, so each joins a unit with the
@@ -294,8 +295,8 @@ and §14.3's start order runs the dependency the other way. The hop is over
 cleartext port cannot serve HTTP/1.1 and h2c at once — and that port is
 published to no host and reached by no route.
 
-**Notifications' relay is a sink, and both its ports bind loopback alone.**
-Mailpit runs in Notifications' own unit beside the worker that submits to it,
+**A mail relay that is a sink binds both its ports to loopback alone.**
+Mailpit runs in the unit of the worker that submits to it,
 which reaches it as `mailpit:1025` on the Compose network. Its SMTP port and
 its web UI and HTTP API are published on `127.0.0.1:1025` and
 `127.0.0.1:8025`, the endpoint table's two rows: the UI because it shows
@@ -361,7 +362,7 @@ host with a debugger attached — the usual inner-loop compromise:
 # Both from the repository root — the two commands share one working
 # directory, or the pair cannot be pasted as written.
 docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.infra-only.yml up -d
-dotnet run --project src/Services/Ordering/Ordering.Api
+dotnet run --project src/Services/<Service>/<Service>.Api
 ```
 
 **A host process reads none of the container `environment:` blocks, so every
@@ -376,14 +377,14 @@ second Redis instance, the port — because the compose file publishes each one:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
-export ConnectionStrings__Ordering='Server=localhost;Database=Ordering;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
-export ConnectionStrings__RabbitMq='amqp://ordering-svc:local-dev-ordering@localhost:5672'
+export ConnectionStrings__<Service>='Server=localhost;Database=<Service>;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
+export ConnectionStrings__RabbitMq='amqp://<service>-svc:local-dev-<service>@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
-export ConnectionStrings__RedisCache='localhost:6379,user=ordering-svc,password=local-dev-ordering'
-export ConnectionStrings__RedisCoordination='localhost:6380,user=ordering-svc,password=local-dev-ordering'
-# Not a key the host throws without, but a bind it fails: Ordering's
+export ConnectionStrings__RedisCache='localhost:6379,user=<service>-svc,password=local-dev-<service>'
+export ConnectionStrings__RedisCoordination='localhost:6380,user=<service>-svc,password=local-dev-<service>'
+# Not a key the host throws without, but a bind it fails: the service's
 # appsettings.json pins 8080 and 8081 (ADR-052), and 8080 on the host is
-# Keycloak's. deploy/compose/README.md gives Catalog's pair beside these.
+# Keycloak's. deploy/compose/README.md gives a pair beside these.
 export Kestrel__Endpoints__Rest__Url='http://localhost:5101'
 export Kestrel__Endpoints__Grpc__Url='http://localhost:8082'
 ```
@@ -397,12 +398,12 @@ export Kestrel__Endpoints__Grpc__Url='http://localhost:8082'
 > chart's key guard refuses at render time (§15.3), arriving where nothing
 > checks it.
 
-**The key is the service's own**, and the block above is `Ordering.Api`'s
-because that is the host the fence names. `AddOrderingInfrastructure` reads
-`ConnectionStrings:Ordering` and `AddSqlServer` throws without it, so
-exporting Catalog's key here is a set of instructions that cannot start the
-process it precedes. Running the migrator instead takes
-`ConnectionStrings__OrderingMigrator`, which is §7.1's whole point: two keys,
+**The key is the service's own**, and the block above is `<Service>.Api`'s
+because that is the host the fence names. `Add<Service>Infrastructure` reads
+`ConnectionStrings:<Service>` and `AddSqlServer` throws without it, so
+exporting another service's key here is a set of instructions that cannot
+start the process it precedes. Running the migrator instead takes
+`ConnectionStrings__<Service>Migrator`, which is §7.1's whole point: two keys,
 one of which may issue DDL.
 
 **The environment is the first line and is not decoration.** No project ships a
@@ -427,13 +428,13 @@ The override's whole content, in `deploy/compose/docker-compose.infra-only.yml`,
 is a profile per application service. An override cannot delete a service, but
 profiles gate activation and nothing activates this one, so the default `up`
 skips every service it names — declaratively, with no duplicated configuration
-to drift. Ordering's two entries:
+to drift. One service's two entries:
 
 ```yaml
 services:
-  ordering-migrator:
+  <service>-migrator:
     profiles: [ "excluded" ]
-  ordering-api:
+  <service>-api:
     profiles: [ "excluded" ]
 ```
 
@@ -478,7 +479,7 @@ var coordination = builder
     .WithPersistence();
 
 // The stock image, which is a STATED GAP rather than a parity with §14.1
-// (ADR-021). Ordering's saga schedules through the delayed message exchange,
+// (ADR-021). A saga service's saga schedules through the delayed message exchange,
 // which is a community plugin no official image carries — so this line brings
 // up a broker that takes UseDelayedMessageScheduler, connects, reports
 // healthy, and then hangs on the first saga schedule. §14.1 builds
@@ -487,17 +488,16 @@ var coordination = builder
 // It is left as the stock call because Aspire is not adopted (ADR-011) and a
 // sample nobody compiles is the wrong place to invent an image-build API.
 // **Adopting Aspire means closing this first**: point the resource at the
-// same Dockerfile, or run Ordering against Compose. Catalog's test fixture
+// same Dockerfile, or run the saga service against Compose. A test fixture
 // may stay on the base tag and says why — it schedules nothing — and this
-// AppHost runs Ordering, so it does not have that excuse.
+// AppHost runs a saga service, so it does not have that excuse.
 var mq = builder.AddRabbitMQ("RabbitMq").WithManagementPlugin();
 
 // One database per service or host that this AppHost runs. The rest are omitted
 // deliberately — adding a database without the service and migrator
 // resources that own it creates a schema nothing maintains, which is the
 // shape §4.1 rules out.
-var orderingDb = sql.AddDatabase("Ordering");
-var catalogDb = sql.AddDatabase("Catalog");
+var serviceDb = sql.AddDatabase("<Service>");
 var bffDb = sql.AddDatabase("Bff");
 
 var keycloak = builder
@@ -545,14 +545,9 @@ IResourceBuilder<ProjectResource> WithPlatformIdentity(
 // ADR-007 forbids migrating at application startup, so without this the
 // schema is never created and every service and host fails on its first query.
 // One per database, because one database per service or host (§7.1, ADR-051).
-var orderingMigrator = builder
-    .AddProject<Projects.Ordering_Migrator>("ordering-migrator")
-    .WithReference(orderingDb, connectionName: "OrderingMigrator")
-    .WaitFor(sql);
-
-var catalogMigrator = builder
-    .AddProject<Projects.Catalog_Migrator>("catalog-migrator")
-    .WithReference(catalogDb, connectionName: "CatalogMigrator")
+var serviceMigrator = builder
+    .AddProject<Projects.Service_Migrator>("service-migrator")
+    .WithReference(serviceDb, connectionName: "<Service>Migrator")
     .WaitFor(sql);
 
 var bffMigrator = builder
@@ -560,57 +555,45 @@ var bffMigrator = builder
     .WithReference(bffDb, connectionName: "BffMigrator")
     .WaitFor(sql);
 
-var ordering = WithPlatformIdentity(
+var service = WithPlatformIdentity(
     builder
-        .AddProject<Projects.Ordering_Api>("ordering-api")
-        .WithReference(orderingDb)
-        .WaitFor(orderingDb)
+        .AddProject<Projects.Service_Api>("service-api")
+        .WithReference(serviceDb)
+        .WaitFor(serviceDb)
         .WithReference(cache)          // → ConnectionStrings:RedisCache
         .WithReference(coordination)   // → ConnectionStrings:RedisCoordination
         .WithReference(mq)
         .WaitFor(mq)
         // Gate on the migrator completing, not merely starting — the Compose
         // equivalent is service_completed_successfully (§14.1).
-        .WaitForCompletion(orderingMigrator)
-        // Pinned ports, moved as Catalog's are below; 8082 because Catalog's
-        // h2c listener holds 8081 (ADR-052).
+        .WaitForCompletion(serviceMigrator)
+        // Pinned ports, moved as the comment below says; 8082 because a second
+        // service's h2c listener holds 8081 (ADR-052).
         .WithEnvironment("Kestrel__Endpoints__Rest__Url", "http://localhost:5101")
         .WithEnvironment("Kestrel__Endpoints__Grpc__Url", "http://localhost:8082")
         .WithHttpHealthCheck("/health/ready"));   // authority only — no peer calls
 
-// Catalog and Ordering are the resources here whose ports Aspire does NOT get
-// to choose. Each appsettings.json declares Kestrel:Endpoints — 8080 for REST
+// A service that declares Kestrel:Endpoints is a resource whose ports Aspire
+// does NOT get to choose. Each appsettings.json declares them — 8080 for REST
 // and 8081 for its gRPC surface, because a cleartext port cannot serve HTTP/1.1
 // and h2c at once — and declaring that section suppresses ASPNETCORE_URLS and
 // ASPNETCORE_HTTP_PORTS entirely, which is how Aspire assigns a port. So each
 // binds 8080 whatever this host allocates, and 8080 is what AddKeycloak took
 // above: they fight for it unless each is moved.
 //
-// Move Catalog's, with the same configuration keys the compose README uses for
+// Move each with the same configuration keys the compose README uses for
 // `dotnet run` — a higher provider is the only thing that overrides that file:
 //
 //     .WithEnvironment("Kestrel__Endpoints__Rest__Url", "http://localhost:5102")
 //     .WithEnvironment("Kestrel__Endpoints__Grpc__Url", "http://localhost:8081")
 //
-// And note what WithReference cannot do here: the BFF's hop address is the
-// literal http://catalog-api:8081 (§9.7, §15.4), so a reference does not
+// And note what WithReference cannot do here: the BFF's hop address is a
+// literal host name and port (§9.7, §15.4), so a reference does not
 // re-point it. Aspire runs the BFF against whatever answers on that name.
 //
 // No seed runs under this sample, whose migrators set no Seed__Enabled: §14.3
-// delivers seeded events only through §14.1's start order, and Catalog here
-// waits on neither Ordering nor the BFF, so a seeded event would go unheard.
-var catalog = WithPlatformIdentity(
-    builder
-        .AddProject<Projects.Catalog_Api>("catalog-api")
-        .WithReference(catalogDb)
-        .WaitFor(catalogDb)
-        .WithReference(cache)
-        .WithReference(coordination)
-        .WithReference(mq)
-        .WaitForCompletion(catalogMigrator)
-        .WithEnvironment("Kestrel__Endpoints__Rest__Url", "http://localhost:5102")
-        .WithEnvironment("Kestrel__Endpoints__Grpc__Url", "http://localhost:8081")
-        .WithHttpHealthCheck("/health/ready"));
+// delivers seeded events only through §14.1's start order, and a publisher
+// here waits on none of its consumers, so a seeded event would go unheard.
 
 // The gateway validates JWTs too (§11.2) — it is the component most visible
 // when the authority is missing. No callerClientId: YARP forwards the caller's
@@ -619,8 +602,7 @@ var catalog = WithPlatformIdentity(
 WithPlatformIdentity(
     builder
         .AddProject<Projects.Gateway_Api>("gateway")
-        .WithReference(ordering)
-        .WithReference(catalog)
+        .WithReference(service)
         // The same edge shape Compose declares (§14.1), for the same reason:
         // locally the gateway IS the edge, and browsers reach it directly.
         // Diverging here would make a SPA work under one local path and fail
@@ -653,7 +635,7 @@ WithPlatformIdentity(
         .WithReference(mq)
         .WaitFor(mq)
         .WaitForCompletion(bffMigrator)
-        .WithReference(catalog)
+        .WithReference(service)
         .WithHttpHealthCheck("/health/ready"),
     callerClientId: "web-bff");
 
@@ -673,7 +655,7 @@ would surface as "Aspire doesn't work on my machine" rather than as a defect.
 Two deliberate local simplifications, both matching what the Compose and test
 environments already do:
 
-- **`OrderingMigrator` points at the same SQL login as the runtime connection.**
+- **`<Service>Migrator` points at the same SQL login as the runtime connection.**
   [§7.1](07-persistence.md)'s two identities are a production control; locally there is one `sa`
   account, exactly as [§12.4](12-test-strategy.md)'s fixture notes. The *key* still differs, so the
   migrator reads the name it will read in production.
@@ -725,8 +707,8 @@ instruction, so most of this section is that gate. It should produce
 enough data to exercise pagination and caching: a catalogue of three products
 hides every performance problem you have.
 
-**`CatalogSeeder` and `InventorySeeder` write what their services' own
-commands would have.** Each product goes in with the `ProductPublished`
+**in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), `CatalogSeeder` and `InventorySeeder`
+write what their services' own commands would have.** Each product goes in with the `ProductPublished`
 outbox row `PublishProduct` stages, and each count with the
 `StockLevelChanged` row `SetOnHand` stages, so Ordering's prices, the BFF's
 names and Catalog's stock levels fill through the platform's own delivery
@@ -763,7 +745,8 @@ the effect rather than a branch inside the runner — a migrator that must not
 seed has no seeder in its container to resolve, so there is exactly one place
 configuration is read.
 
-In `src/Services/Catalog/Catalog.Migrator/MigratorHost.cs`, beside the
+Concretely, in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), in
+`src/Services/Catalog/Catalog.Migrator/MigratorHost.cs`, beside the
 `DbContext` registration:
 
 ```csharp

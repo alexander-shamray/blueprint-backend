@@ -88,7 +88,8 @@ checks in §13.5 — belongs in `AddOrderingInfrastructure`, because
 `Common.Web` cannot know them.
 
 `AddObservability` itself, from
-`src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`:
+`src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`, whose comment
+names hosts in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)):
 
 ```csharp
     public static IHostApplicationBuilder AddObservability(this IHostApplicationBuilder builder)
@@ -155,7 +156,8 @@ checks in §13.5 — belongs in `AddOrderingInfrastructure`, because
 ```
 
 A service's own meters are not listed. Every host adds `<service>.*`, the
-service being the first segment of its `ApplicationName`, so `Catalog.Api`
+service being the first segment of its `ApplicationName`, so
+in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), `Catalog.Api`
 exports `Catalog.Outbox` and a service an adopter adds exports its own with no
 edit to `Common.Web` ([ADR-062](adr/ADR-062-the-domain-is-a-reference-implementation.md)).
 A meter named outside its service's prefix is collected by nothing, so a meter
@@ -237,16 +239,19 @@ Placement follows the dependency rule, not the topic. `OrderMetrics` records
 domain quantities — `Placed(Money total)` — so it cannot sit in
 `Common.Application`, which is shared across services and references no domain.
 Its only call site is `OrderSummaryProjection`, which is Infrastructure, so
-Infrastructure would also compile. It belongs in `Ordering.Application` anyway:
+Infrastructure would also compile. It belongs in its service's `Application`
+project anyway:
 the type is a statement about the business vocabulary — placed, cancelled,
 fulfilled — and Infrastructure is where that vocabulary is *implemented*, not
 where it is defined. Application is also where it has to be the moment a
 handler needs it again, and moving a type to satisfy one new call site is how
 its meaning drifts. The type, from
-`src/Services/Ordering/Ordering.Application/Orders/OrderMetrics.cs`:
+`src/Services/<Service>/<Service>.Application/Orders/OrderMetrics.cs`
+(`<Service>` is the owning service; the reference domain's is in
+[E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)):
 
 ```csharp
-namespace Ordering.Application.Orders;
+namespace <Service>.Application.Orders;
 
 /// <summary>§13.3's business instruments, recorded by §6.6's projection after commit, never by a handler.</summary>
 /// <remarks>Not in Common.Application, because <c>Placed</c> takes a domain <see cref="Money"/> (§13.3).</remarks>
@@ -259,7 +264,7 @@ public sealed class OrderMetrics
 
     public OrderMetrics(IMeterFactory factory)
     {
-        Meter meter = factory.Create("Ordering.Orders");
+        Meter meter = factory.Create("<Service>.Orders");
 
         _placed = meter.CreateCounter<long>(
             "orders.placed",
@@ -321,7 +326,7 @@ indistinguishable from a system doing no work. All three call sites are in
 > of whichever handler happened to arrive first.
 
 The three claims are `UPDATE` constants beside the handlers in
-`OrderSummaryProjection.cs`, under `Ordering.Infrastructure/Projections/`, and
+`OrderSummaryProjection.cs`, under `<Service>.Infrastructure/Projections/`, and
 `RecordPendingFactsAsync` runs them in turn, recording each one it wins. The
 cancellation's predicate carries `PlacedCounted = 1`, which is what orders the
 two counters, and `CancelReason` is written by the handler through
@@ -687,7 +692,9 @@ so a property named `Password` is redacted by default rather than by
 discipline, and an `IExternalScopeProvider` wrapper rewrites the **scopes**
 those records inherit — which the processor can read and cannot change. Both
 read one vocabulary, declared once so that the copy nobody edits is not the
-one that stops matching, in `src/BuildingBlocks/Common.Web/SensitiveKeys.cs`:
+one that stops matching, in `src/BuildingBlocks/Common.Web/SensitiveKeys.cs`,
+whose remark names the word in the reference domain that `pin` would
+redact ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)):
 
 ```csharp
 /// <summary>The one never-log vocabulary, read by the redactor and the scope provider alike (§13.4).</summary>
@@ -743,8 +750,8 @@ public static class SensitiveKeys
 Matching is by substring, ordinal and case-insensitive, because the field that
 leaks is never named exactly `password` — it is `NewPassword`, `card_number`,
 `id_token`. The cost is that a term which is a substring of an innocent word
-redacts that word too, which is why `pin` is deliberately absent: `Shipping`
-contains it. Both spellings of the snake_case entries are listed rather than
+redacts that word too, which is why `pin` is deliberately absent: an ordinary
+word such as `shipping` contains it. Both spellings of the snake_case entries are listed rather than
 normalised, because normalising a key would have to guess at the separator
 and a miss here is silent. `All` wraps the array once rather than handing it
 out, because returning it would let a caller cast the view back to `string[]`
@@ -1002,8 +1009,8 @@ The test lives in `Common.Web.Tests` — a `Common.Web` behaviour tested once
 rather than once per host, in the suite that already owns this project's
 behaviour ([§12.1](12-test-strategy.md)). Every host calls `AddObservability`, so a copy in a
 service's own suite would re-assert the same processor over the same pipeline
-and only add a place to forget — and a building block asserted in Ordering's
-suite is one that moves house if Ordering ever does.
+and only add a place to forget — and a building block asserted in one
+service's suite is one that moves house if that service ever does.
 
 **The vocabulary itself is pinned as a list, by a test whose subject is the
 list.** Every other test in this area drives a record through the processor
@@ -1092,9 +1099,10 @@ gives each jurisdiction its own log store, so each has its own lifetime.
 where the jurisdiction's windows live. Those classes are bound by a host that
 applies each window — its own retention purge reads it — and no host deletes a
 log or a span; the store does. A member no code applies would pass validation
-at start and prove nothing about the store. Notifications'
-`Jurisdiction:LogRetention` is a different thing: the window its
-`NotificationLog` rows are kept as evidence, which its own purge applies.
+at start and prove nothing about the store. Concretely, in the reference domain
+([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), Notifications' `Jurisdiction:LogRetention` is a different thing:
+the window its `NotificationLog` rows are kept as evidence, which its own
+purge applies.
 
 **Locally there is no lifetime to choose.** §14.1's `grafana` container holds
 the logs and traces it ingests on no named volume, so they last as long as the
@@ -1108,15 +1116,15 @@ Registration and exposure live in different places, for one reason: the checks
 need connection strings and the endpoints do not.
 
 **The checks** are registered by the service's own Infrastructure — the block
-shown in `AddOrderingInfrastructure` (§4.2), which has the configuration, in
-`src/Services/Ordering/Ordering.Infrastructure/DependencyInjection.cs`:
+shown in `Add<Service>Infrastructure` (§4.2), which has the configuration, in
+`src/Services/<Service>/<Service>.Infrastructure/DependencyInjection.cs`:
 
 ```csharp
         // Readiness lives here, not in Common.Web, because it needs the connection strings (§13.5). Both Redis
         // instances, since AbortOnConnectFail is false and §8.1 gives them different servers.
         services
             .AddHealthChecks()
-            .AddSqlServer(configuration.GetConnectionString("Ordering")!, name: "sql", tags: ["ready"])
+            .AddSqlServer(configuration.GetConnectionString("<Service>")!, name: "sql", tags: ["ready"])
             .AddRedis(
                 configuration.GetConnectionString(RedisConnections.Cache)!,
                 name: "redis-cache",
@@ -1204,13 +1212,13 @@ readiness check, and a host without one does not** — is mechanised by the
 guard above rather than left as prose. The **gateway** owns no database
 (§4.2), so it declares its empty set at the call site and an absence becomes
 a written decision. Every other host fails to start: each service owns a
-schema, including the two with no public API, since Shipping and
-Notifications both ship a migrator and both register a SQL check (§4.1,
-[§3.2](03-bounded-contexts.md)), and so does the BFF, whose projection is a
+schema, including one with no public API, which still ships a migrator and
+registers a SQL check (§4.1, [§3.2](03-bounded-contexts.md); the reference
+domain's two are in [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), and so does the BFF, whose projection is a
 schema of its own
 ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)).
 The BFF's readiness set is its own SQL and the bus, `sql` and
-`masstransit-bus`, and Catalog's hop is kept out of it, because a peer's
+`masstransit-bus`, and its hop to a peer is kept out of it, because a peer's
 outage must not take its caller out of rotation.
 
 **The guard tests the set, not any member of it**, and the bound is stated
@@ -1270,15 +1278,15 @@ actionable — if the response is "acknowledge and ignore", delete it.
 | Latency | p99 > 1 s over 10 min | Users are waiting | `latency.md` |
 | Error queue depth | > 0 | A business process has stopped — and one arrival is a saga's deliberate escalation rather than a fault ([ADR-025](adr/ADR-025-a-saga-state-that-waits-on-two-services-finalises-on-neither-alone.md)): a `PaymentAuthorised` for an order whose instance has already been finalised correlates to nothing, so §9.6 faults it here instead of letting it be consumed cleanly and gone. Money that moved on an order nothing is tracking is what this queue is for. The depth cannot tell that arrival from a broken consumer, so the faulted message's type is what triage reads first | `error-queue.md` |
 | Skipped queue depth | > 0 | An endpoint was handed a message it has **no consumer for**, and MassTransit parked it in `<queue>_skipped`. Nothing threw and nothing will retry it, so the business fact is lost as quietly as an unwatched queue can lose one. Deliberately not folded into the row above with a `.+_(error\|skipped)` selector: an error-queue message is one a consumer accepted and could not finish, this is one no consumer would take, and the two are triaged from opposite ends — replay is the right first move here and the wrong one there. **It fires on a correctly ordered release exactly never**, which is what makes it worth paging on and what makes [§9.2](09-messaging.md)'s consumer-before-producer rule enforceable rather than advisory | `skipped-queue.md` |
-| Queue backlog | a working queue above 1000 messages **and rising** over 10 min | A consumer is not keeping up, or there are too few of it. Both halves are required, as *Outbox growth* below requires both: a deep queue that is draining needs nobody. The dead-letter queues are excluded because the two rows above own them and are triaged from the opposite end. **It sees a receive endpoint and nothing past it**, so work a host keeps in its own tables — Shipping's fulfilment and tracking passes — is outside it, and §15.3 names the gauge that watches that work instead. | `queue-backlog.md` |
+| Queue backlog | a working queue above 1000 messages **and rising** over 10 min | A consumer is not keeping up, or there are too few of it. Both halves are required, as *Outbox growth* below requires both: a deep queue that is draining needs nobody. The dead-letter queues are excluded because the two rows above own them and are triaged from the opposite end. **It sees a receive endpoint and nothing past it**, so work a host keeps in its own tables — a carrier worker's fulfilment and tracking passes — is outside it, and §15.3 names the gauge that watches that work instead. | `queue-backlog.md` |
 | Delivery lag | `messaging.delivery.lag` p95 above §13.7's event end-to-end target over 10 min | The same condition read from an event consumer's end: events reach it late. A ticket for the backlog's reason — a late message is still on the broker, and one that fails for good reaches `_error`, which the error-queue row pages on — and it shares that runbook, because both are answered by deciding whether arrival rose or service fell. **Late is not always slow**: each in-memory retry records the message again from its original `OccurredAt`, so a failing handler raises it too, and the runbook reads the error rate before anything is scaled. It can be read at all because `MessagingMetrics` exports the target as a bucket bound (§13.3) | `queue-backlog.md` |
-| Unattributed order | `bff.orders.unattributed` above 15 min | An order the BFF's projection holds payment or shipment facts for and no buyer, so [§10.7](10-api-gateway.md) returns it to nobody: one buyer's history is missing an order, with no error, no 5xx and no lag anywhere ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)). **Fifteen minutes is past every cause that resolves itself or raises its own row first**: a payment event beating `OrderPlaced` resolves inside §13.7's event end-to-end target, and an Ordering broker-lane stall, a backlog on the BFF's queue and a message in its `_error` queue each raise their own alert first. What is left is the silent case: an Ordering event published before the queue existed, or older than a rebuild reached. A ticket: the order exists in Ordering, and checkout is untouched | `unattributed-order.md` |
-| Address read refused | any `shipping.address.refused` in the last 30 min, longer than a row's longest backoff | Shipping's read of an order's delivery address was refused by the identity provider, by the worker's own grant check, or by Ordering ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)), so every shipment with no stored address backs off and none leaves. An increase, because the counter only grows; a page, because no retry fixes a credential or a grant | `address-refused.md` |
-| Contact read refused | any `notifications.contact.refused` in the last 30 min, longer than a row's longest backoff | The address row's form for Notifications' own owner read: the send worker's read of a customer's contact was refused by the identity provider, by the worker's own grant check, or by Keycloak's admin API ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)), so every notification whose customer has no fresh stored contact backs off and none is sent. The window is argued against `SendClaims`' backoff, which climbs the same `OutboxDispatcher` ladder as Shipping's; a page, because a refused read is never answered from a stored contact | `contact-refused.md` |
-| Erasure requests overdue | any `privacy.erasure.overdue` above zero | An open erasure request past `Privacy:CompletionSlo` with a holder still to answer ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)). Silence is the one outcome the choreography cannot tell from success, so a holder that never answers reads as one that was never asked; `privacy.erasure.overdue.missing` names the holders. No `for`, as the predicate is already an age; a ticket, since the request keeps the subject's id, a late answer still counts and waiting loses nothing | `erasure-overdue.md` |
-| Unscanned shipments | any `shipping.shipments.unscanned` above zero | A shipment still `Booked`, never scanned by the carrier and with no cancellation awaiting its answer, `ShipmentStats.FirstScanAge` after its order's confirmation. The carrier answers an events read for a booking it has not scanned with 404, which Shipping reads as nothing yet, so an events route that has gone polls as healthy until `TrackingWorker.GiveUpAge` abandons the shipments: `shipping.carrier.not_yet_known` counts the 404s, but a backlog awaiting collection raises it too, so it takes no threshold alone. The age is [§9.6](09-messaging.md)'s despatch wait, the one collection bound the platform has decided; no `for`, as the predicate is already an age; a ticket, as the saga has raised, or is about to raise, each order for review and the row is still polled | `unscanned-shipment.md` |
-| Saga age | any saga unfinalised > 1 h **outside `Confirmed`**, or > 4 days **in** it | Orders are stuck. **The margin is argued against the longest wait rather than the set of them**, because a list of thresholds is the half that rots: the shortest in §9.6 is the five-minute reservation wait and the longest is a payment verdict at **thirty minutes** — armed at fifteen when `AuthorisePayment` is sent, and re-armed once when `Compensating` inherits it unanswered ([ADR-025](adr/ADR-025-a-saga-state-that-waits-on-two-services-finalises-on-neither-alone.md)) — so an hour still clears every one of them. The waits also compose along a path, and the margin survives that too. But the despatch wait is **three days** by design, three orders of magnitude further out, and an unqualified hour would page on the healthy path for most of a saga's real lifetime. A despatch that genuinely expires escalates to the row below, not to this one. **The state is named rather than described**: §9.6 has no `AwaitingDespatch`, because the saga arms `DespatchTimeout` on the transition *into* `Confirmed` — the order is confirmed and now waiting on Shipping. A selector spelled the way the description reads would match no series, exclude nothing, and page on every healthy confirmed order. **The four-day branch is not a refinement but the other half of the alert**: excluded outright, a `Confirmed` saga whose three-day timeout was never delivered is invisible here *and* to the row below, because that timeout is what creates the review row. Nothing would page at all | `stuck-saga.md` |
-| Orders awaiting review | any row in `ordering.OrderReviews` older than 1 h | A saga escalated work the Ordering workflow cannot finish itself (§9.6) — a wait it could not compensate, an authorisation that landed while compensation was already under way, or a **confirmation** that did. **"Cannot finish itself" is not "has no contract to do"**: §3.2 gives Payments both a `Refund` aggregate and `OrderCancelled` to act on — what Ordering lacks is a way to *ask*. **Nor does every door follow a cancellation**: on two of the three none has happened yet, and **the second is not necessarily a customer cancelling**: compensation begins on a cancellation, a decline or the fifteen-minute payment timeout alike, so a slow PSP raises that row with nobody having cancelled anything. **Whether the saga has finalised is a property of the BRANCH that raised the row, not of the row and not reliably of the reason**: most are raised on the way out, while `payment_authorised_during_compensation` and `cancelled_after_confirmation` are raised mid-wait from `Compensating` and can sit beside a live instance. The reason alone is not enough because `cancelled_after_confirmation` is raised from `Confirmed` too, where it finalises, so one code spans both answers. **The branch is not quite enough either, and the narrowing runs in both directions** ([ADR-025](adr/ADR-025-a-saga-state-that-waits-on-two-services-finalises-on-neither-alone.md)): `Compensating` finalises on a join — the stock half settled *and* no payment verdict outstanding — so the branch raising `payment_authorised_during_compensation` finalises in the same transition when the stock half has already settled, and leaves the instance standing when it has not. "Raised mid-wait" does not imply a live instance, and a raised row does not imply a wait. What holds is the predicate: a branch whose `Finalize` is absent or conditional can outlive its row's first hour, and the instance is what says which. **Those are the cases the saga-age alert can reach, and it will not usually reach them either**: both thresholds are an hour, and every wait that can hold `Compensating` open ends well inside one — the release wait at ten minutes, and the payment verdict at thirty from `AuthorisePayment` — so the instance is normally gone before this row is old enough to page. The two coincide when a wait failed to arrive at all, which is why this row exists rather than being folded into the one above | `order-review.md` |
+| Unattributed order | `bff.orders.unattributed` above 15 min | An order the BFF's projection holds payment or shipment facts for and no buyer, so [§10.7](10-api-gateway.md) returns it to nobody: one buyer's history is missing an order, with no error, no 5xx and no lag anywhere ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)). **Fifteen minutes is past every cause that resolves itself or raises its own row first**: a payment event beating `OrderPlaced` resolves inside §13.7's event end-to-end target, and an Ordering broker-lane stall, a backlog on the BFF's queue and a message in its `_error` queue each raise their own alert first. What is left is the silent case: an Ordering event published before the queue existed, or older than a rebuild reached. A ticket: the order exists in Ordering, and checkout is untouched (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) | `unattributed-order.md` |
+| Address read refused | any `shipping.address.refused` in the last 30 min, longer than a row's longest backoff | Shipping's read of an order's delivery address was refused by the identity provider, by the worker's own grant check, or by Ordering ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)), so every shipment with no stored address backs off and none leaves. An increase, because the counter only grows; a page, because no retry fixes a credential or a grant (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) | `address-refused.md` |
+| Contact read refused | any `notifications.contact.refused` in the last 30 min, longer than a row's longest backoff | The address row's form for Notifications' own owner read: the send worker's read of a customer's contact was refused by the identity provider, by the worker's own grant check, or by Keycloak's admin API ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)), so every notification whose customer has no fresh stored contact backs off and none is sent. The window is argued against `SendClaims`' backoff, which climbs the same `OutboxDispatcher` ladder as Shipping's; a page, because a refused read is never answered from a stored contact (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) | `contact-refused.md` |
+| Erasure requests overdue | any `privacy.erasure.overdue` above zero | An open erasure request past `Privacy:CompletionSlo` with a holder still to answer ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)). Silence is the one outcome the choreography cannot tell from success, so a holder that never answers reads as one that was never asked; `privacy.erasure.overdue.missing` names the holders. No `for`, as the predicate is already an age; a ticket, since the request keeps the subject's id, a late answer still counts and waiting loses nothing (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) | `erasure-overdue.md` |
+| Unscanned shipments | any `shipping.shipments.unscanned` above zero | A shipment still `Booked`, never scanned by the carrier and with no cancellation awaiting its answer, `ShipmentStats.FirstScanAge` after its order's confirmation. The carrier answers an events read for a booking it has not scanned with 404, which Shipping reads as nothing yet, so an events route that has gone polls as healthy until `TrackingWorker.GiveUpAge` abandons the shipments: `shipping.carrier.not_yet_known` counts the 404s, but a backlog awaiting collection raises it too, so it takes no threshold alone. The age is [§9.6](09-messaging.md)'s despatch wait, the one collection bound the platform has decided; no `for`, as the predicate is already an age; a ticket, as the saga has raised, or is about to raise, each order for review and the row is still polled (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) | `unscanned-shipment.md` |
+| Saga age | any saga unfinalised > 1 h **outside `Confirmed`**, or > 4 days **in** it | Orders are stuck. **The margin is argued against the longest wait rather than the set of them**, because a list of thresholds is the half that rots: the shortest in §9.6 is the five-minute reservation wait and the longest is a payment verdict at **thirty minutes** — armed at fifteen when `AuthorisePayment` is sent, and re-armed once when `Compensating` inherits it unanswered ([ADR-025](adr/ADR-025-a-saga-state-that-waits-on-two-services-finalises-on-neither-alone.md)) — so an hour still clears every one of them. The waits also compose along a path, and the margin survives that too. But the despatch wait is **three days** by design, three orders of magnitude further out, and an unqualified hour would page on the healthy path for most of a saga's real lifetime. A despatch that genuinely expires escalates to the row below, not to this one. **The state is named rather than described**: §9.6 has no `AwaitingDespatch`, because the saga arms `DespatchTimeout` on the transition *into* `Confirmed` — the order is confirmed and now waiting on Shipping. A selector spelled the way the description reads would match no series, exclude nothing, and page on every healthy confirmed order. **The four-day branch is not a refinement but the other half of the alert**: excluded outright, a `Confirmed` saga whose three-day timeout was never delivered is invisible here *and* to the row below, because that timeout is what creates the review row. Nothing would page at all (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) | `stuck-saga.md` |
+| Orders awaiting review | any row in `ordering.OrderReviews` older than 1 h | A saga escalated work the Ordering workflow cannot finish itself (§9.6) — a wait it could not compensate, an authorisation that landed while compensation was already under way, or a **confirmation** that did. **"Cannot finish itself" is not "has no contract to do"**: §3.2 gives Payments both a `Refund` aggregate and `OrderCancelled` to act on — what Ordering lacks is a way to *ask*. **Nor does every door follow a cancellation**: on two of the three none has happened yet, and **the second is not necessarily a customer cancelling**: compensation begins on a cancellation, a decline or the fifteen-minute payment timeout alike, so a slow PSP raises that row with nobody having cancelled anything. **Whether the saga has finalised is a property of the BRANCH that raised the row, not of the row and not reliably of the reason**: most are raised on the way out, while `payment_authorised_during_compensation` and `cancelled_after_confirmation` are raised mid-wait from `Compensating` and can sit beside a live instance. The reason alone is not enough because `cancelled_after_confirmation` is raised from `Confirmed` too, where it finalises, so one code spans both answers. **The branch is not quite enough either, and the narrowing runs in both directions** ([ADR-025](adr/ADR-025-a-saga-state-that-waits-on-two-services-finalises-on-neither-alone.md)): `Compensating` finalises on a join — the stock half settled *and* no payment verdict outstanding — so the branch raising `payment_authorised_during_compensation` finalises in the same transition when the stock half has already settled, and leaves the instance standing when it has not. "Raised mid-wait" does not imply a live instance, and a raised row does not imply a wait. What holds is the predicate: a branch whose `Finalize` is absent or conditional can outlive its row's first hour, and the instance is what says which. **Those are the cases the saga-age alert can reach, and it will not usually reach them either**: both thresholds are an hour, and every wait that can hold `Compensating` open ends well inside one — the release wait at ten minutes, and the payment verdict at thirty from `AuthorisePayment` — so the instance is normally gone before this row is old enough to page. The two coincide when a wait failed to arrive at all, which is why this row exists rather than being folded into the one above (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) | `order-review.md` |
 | Migration job failed | Helm `pre-install,pre-upgrade` hook non-zero, or a release stuck pending | The deploy stopped before any pod rolled ([§7.4](07-persistence.md)). On an **upgrade** the previous version is still serving, which is why nothing else fires — so this alert is the only signal. On a first **install** there is no previous version and no pod at all, so nothing else fires for the opposite reason: check which before promising availability | `migration-failure.md` |
 | Cache hit ratio collapse | hits ÷ (hits + misses) < 50% over 10 min. **The expression lives in the rule file, not here** — see below | Redis lost its working set; every miss becomes a database read, and the databases are sized for a warm cache (ADR-006) | `redis-cold.md` |
 | Business volume | `orders.placed` per hour drops > 50% vs the same hour last week | The most valuable alert here — it catches failures no technical metric detects. §6.6's worked case: `ordering.ProductPrices` has no row for a product, every order containing it is **refused by the domain**, and the result is a 422 `order.products_unavailable` the customer sees, no exception, no 5xx and no lag. **Not a 400, and the difference is where the on-call looks**: the request is well-formed and the validator passed it (§10.5 maps `Error.Rule` to 422, `ValidationException` to 400), so a 400 dashboard shows a path this request never took. Week-over-week rather than a fixed floor, because a volume alert without a seasonality model is the first pager people mute | `business-volume.md` |
@@ -1289,8 +1297,8 @@ exists until §13.7's load run is scheduled or declined
 ([#434](https://github.com/alexander-shamray/blueprint-backend/issues/434)).
 Until then it, `shipping.shipments.waiting` and `shipping.carrier.unavailable`
 are read by `queue-backlog.md`'s procedure for a worker whose wait is outside
-a consumer. The address refusal and the unscanned shipments above are the
-Shipping signals that need no baseline: any refusal is a fault, and a booking
+a consumer. The address refusal and the unscanned shipments above are,
+in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), the Shipping signals that need no baseline: any refusal is a fault, and a booking
 never scanned by the end of the saga's despatch wait is wrong whatever the
 cause, which `unscanned-shipment.md` tells apart.
 
@@ -1334,7 +1342,7 @@ absorb a short RabbitMQ blip or a rolling broker restart without paging anyone.
 
 **These three gauges read the database, not the pod, so aggregate with `max`
 and never `sum`.** Every replica of a service exports the same table-wide
-number — §15.3's Ordering chart runs three — so `sum` reports three times the
+number — §15.3's chart for a service runs three — so `sum` reports three times the
 backlog and trips a thousand-row threshold at about 334 real rows. Sum *across
 lanes* if a total is wanted, but deduplicate replicas first:
 
@@ -1350,7 +1358,7 @@ exception.
 All three gauges carry `lane`, so one query serves both lanes and every alert
 above can say which one it is talking about. The constructor and its per-lane
 read, from `OutboxMetrics.cs` in
-`src/Services/Ordering/Ordering.Infrastructure/Observability/`:
+`src/Services/<Service>/<Service>.Infrastructure/Observability/`:
 
 ```csharp
     public OutboxMetrics(IMeterFactory factory, IOutboxStats stats, ILogger<OutboxMetrics> logger)
@@ -1530,8 +1538,8 @@ One without the other is a safeguard that is stated and absent:
 Registration is the step that makes any of this exist, and it is the step
 `ValidateOnBuild` cannot check — nothing depends on a metrics class, so the
 container is happy without it (§6.2). Both of Infrastructure's metrics types
-are registered in `AddOrderingInfrastructure`, from
-`src/Services/Ordering/Ordering.Infrastructure/DependencyInjection.cs`:
+are registered in `Add<Service>Infrastructure`, from
+`src/Services/<Service>/<Service>.Infrastructure/DependencyInjection.cs`:
 
 ```csharp
         // §13.3's messaging instruments.
@@ -1540,7 +1548,7 @@ are registered in `AddOrderingInfrastructure`, from
         // §13.6's outbox gauges. OutboxStats reads the runtime key's data plane (§7.1), and runs in gauge callbacks,
         // so it gets its own bounded connect timeout, which no query inherits.
         string metricsConnectionString =
-            new SqlConnectionStringBuilder(configuration.GetConnectionString("Ordering"))
+            new SqlConnectionStringBuilder(configuration.GetConnectionString("<Service>"))
             {
                 ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
             }.ConnectionString;
@@ -1607,7 +1615,7 @@ public sealed class MetricsInitialiser : IHostedService
 > silent-instrument failure this class exists to prevent.
 
 **`OrderMetrics` is in that constructor because a replica can run without
-ever building it.** §13.3 puts it in `Ordering.Application` with
+ever building it.** §13.3 puts it in `<Service>.Application` with
 `OrderSummaryProjection` as its only call site, so without the initialiser
 nothing builds it until an order event reaches the replica — raised there,
 which makes the projection registry resolve the handler, or claimed from
@@ -1628,8 +1636,8 @@ service has therefore constructed it. It has not. `IPipelineBehavior` runs for
 what `IDispatcher` handles; a health probe is mapped by `MapHealthChecks`
 (§13.5) and never enters the pipeline. A canary before cutover, a replica behind
 a rate limiter, or a service whose traffic has simply stopped all publish
-nothing — and **Notifications and Shipping have no public API at all** (§3.2),
-so on those two the instrument would never exist under any circumstances.
+nothing — and **a service with no public API at all** (§3.2; the reference
+domain's two are in [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)) never builds it under any circumstances.
 
 `OrderMetrics` is the second worked example, and a different failure. Its call
 site is the projection (§6.6), not the handler that places the order, so no
@@ -1641,7 +1649,7 @@ reachability and not about instrument type.
 Reachability is not decidable from a type, so no test can assert the rule as
 stated. What a test *can* do is refuse to let a metrics type appear without
 somebody deciding, and make the decision the thing under review. From
-`tests/Ordering.Api.Tests/MetricsRegistrationTests.cs`:
+`tests/<Service>.Api.Tests/MetricsRegistrationTests.cs`:
 
 ```csharp
     /// <summary>Types deliberately not forced, each with the reason its instrument can go unbuilt.</summary>
@@ -1772,7 +1780,8 @@ service missing from a series rather than through a metric nobody declared.
 §13.3 places `OutboxMetrics` in each publishing service's `*.Infrastructure`,
 so the gap closes one service at a time, by registering the type and paying
 for it with a copy. **The template closes it for every publishing service
-after it**: Catalog, which §4.5's scaffold renders, registers the gauges, and
+after it**: in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), Catalog, which §4.5's
+scaffold renders, registers the gauges, and
 the scaffold copies them and §13.2's prefix exports them — so a
 rendered publisher publishes them from its first boot, a pure consumer hosts
 no dispatcher to owe them, and the exemption list holds a service only when
@@ -1810,14 +1819,15 @@ satisfied. A row that cannot name one does not belong in the table.
 honest.** `projection.lag` is recorded by `ProjectionInvoker` off an outbox
 row, so it only ever measures a read model this service feeds from its own
 domain events (§7.5). A read model fed by *another* service's contract never
-touches the outbox at all — Ordering's `ordering.ProductPrices` is the worked
-case (§6.6) — so `projection.lag` is empty for it.
+touches the outbox at all — §6.6's price projection is the worked case
+([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)) — so `projection.lag` is empty for it.
 
 > **Its producer is a registered `IProjectionHandler<T>`.**
 > `MessagingMetrics.Projected` is called by `ProjectionInvoker` only after one
 > succeeds, so a service with no projection declares the instrument and never
 > writes to it — a registered name is not a live signal, as §13.6 records for
-> the HybridCache meter. Ordering's is §6.6's `OrderSummaryProjection`, which
+> the HybridCache meter. Concretely, in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), Ordering's is
+> §6.6's `OrderSummaryProjection`, which
 > every placed order reaches, so `deploy/observability/slo/slo.js` asserts
 > this row against the orders its own run places.
 
@@ -1880,7 +1890,7 @@ a healthy platform is a gate that gets switched off:
 | Row | Why the run cannot evaluate it |
 |---|---|
 | Availability | A **monthly** objective; a three-minute run cannot compute one. The run bounds its own error rate instead, says so, and reports no pass for the row |
-| Event end-to-end | `messaging.delivery.lag` is recorded by `IntegrationEventConsumer<T>`; the run places orders, and the consumer that records it handles Catalog's product events, which neither scenario produces |
+| Event end-to-end | `messaging.delivery.lag` is recorded by `IntegrationEventConsumer<T>`; the run places orders, and the consumer that records it handles Catalog's product events (in the reference domain, [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), which neither scenario produces |
 
 The remaining five — the two request rows, the two outbox lanes and own-event
 staleness — are what the run actually asserts. Not a "smoke test": §15.1
@@ -1949,10 +1959,10 @@ attached is a page to somebody who will have to reason from scratch.
 | `docs/runbooks/error-queue.md` | Inspecting a poison message, deciding replay vs discard, replaying safely |
 | `docs/runbooks/skipped-queue.md` | A message an endpoint has no consumer for: reading the type off the headers, telling a producer that shipped ahead of its consumer from a binding that was never written, and why replay is right here and wrong one queue over |
 | `docs/runbooks/queue-backlog.md` | A queue growing: telling arrival from service, the consumer that is not running at all, and what the alert cannot see — the worker whose wait is outside a consumer |
-| `docs/runbooks/unattributed-order.md` | An order the BFF holds no buyer for: telling a late Ordering event from a lost one, Ordering's outbox and the BFF's error queue, repairing by the rebuild tool, and deleting a row nothing will attribute |
-| `docs/runbooks/address-refused.md` | Shipping's address read refused: telling a rejected secret from a changed grant, an opaque token and a disagreement with Ordering, and the rows a long refusal gives up |
+| `docs/runbooks/unattributed-order.md` | An order the BFF holds no buyer for: telling a late Ordering event from a lost one, Ordering's outbox and the BFF's error queue, repairing by the rebuild tool, and deleting a row nothing will attribute (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) |
+| `docs/runbooks/address-refused.md` | Shipping's address read refused: telling a rejected secret from a changed grant, an opaque token and a disagreement with Ordering, and the rows a long refusal gives up (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) |
 | `docs/runbooks/unscanned-shipment.md` | Bookings the carrier has never scanned: telling an events route that has gone from parcels never collected, confirming it against the carrier, and the orders already in review |
-| `docs/runbooks/contact-refused.md` | Notifications' contact read refused: telling a refusal from a Keycloak outage, a rejected secret from a changed grant and an opaque token, and the notifications a long refusal gives up |
+| `docs/runbooks/contact-refused.md` | Notifications' contact read refused: telling a refusal from a Keycloak outage, a rejected secret from a changed grant and an opaque token, and the notifications a long refusal gives up (in the reference domain: [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development).) |
 | `docs/runbooks/erasure-overdue.md` | An erasure request a holder has not answered: telling a request that never arrived from an answer that was lost, and reissuing it |
 | `docs/runbooks/outbox-broker.md` | Broker lane stalled: checking RabbitMQ reachability, credentials, queue limits; what downstream services are missing while it is stopped |
 | `docs/runbooks/projection-lag.md` | Local lane stalled: finding the throwing handler, deciding whether to serve from the write model meanwhile, replaying a projection from scratch |
