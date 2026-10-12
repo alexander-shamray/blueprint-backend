@@ -48,7 +48,8 @@ not a text substitution. The list is what is left to read.
 deletion is a `rm -rf`, and `git restore` is the only way back. Allow-list
 entries the scaffold wrote go with the service's block; entries a person wrote
 for the service's own trees go too, and a comment above one stays and appears
-in the list of mentions.
+in the list of mentions. The block ends at the first blank line after its
+entries, so an entry added by hand below that stays.
 
 Stdlib only, Python 3.12. `cd tools/remove-service && py -3.12 -m unittest`
 runs the suite, which copies the template and the shared files into a temporary
