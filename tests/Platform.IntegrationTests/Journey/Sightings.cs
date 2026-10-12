@@ -9,16 +9,18 @@ internal static class Sightings
 {
     internal const string DirectoryVariable = "PLATFORM_SIGHTINGS_DIR";
 
-    /// <summary>Writes <paramref name="text"/> to <c>name.txt</c> and returns the path.</summary>
-    internal static string Record(string name, string text)
-    {
-        string? named = Environment.GetEnvironmentVariable(DirectoryVariable);
-        string directory = string.IsNullOrWhiteSpace(named)
-            ? Path.Combine(Path.GetTempPath(), "platform-sightings")
-            : named;
+    /// <summary>The directory a named value, or the temp path when none is named.</summary>
+    internal static string Resolve(string? named) =>
+        string.IsNullOrWhiteSpace(named) ? Path.Combine(Path.GetTempPath(), "platform-sightings") : named;
 
-        Directory.CreateDirectory(directory);
-        string path = Path.Combine(directory, name + ".txt");
+    /// <summary>Writes <paramref name="text"/> to <c>name.txt</c> and returns the path.</summary>
+    /// <remarks>A test passes <paramref name="directory"/>; the variable is process-wide and tests run in parallel.</remarks>
+    internal static string Record(string name, string text, string? directory = null)
+    {
+        string target = directory ?? Resolve(Environment.GetEnvironmentVariable(DirectoryVariable));
+
+        Directory.CreateDirectory(target);
+        string path = Path.Combine(target, name + ".txt");
         File.WriteAllText(path, text);
 
         return path;
