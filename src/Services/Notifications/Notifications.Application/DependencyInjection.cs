@@ -2,6 +2,7 @@ using Common.Application;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Contacts;
+using Notifications.Application.Intake;
 
 namespace Notifications.Application;
 
@@ -15,6 +16,9 @@ public static class DependencyInjection
 
         // §7.5's dispatcher for a service §4.1 gives no Domain project, where nothing raises an event.
         services.AddScoped<IDomainEventDispatcher, NoDomainEventDispatcher>();
+
+        // The three order events record, then ask the audit rows whether their customer was erased (ADR-097).
+        services.AddScoped<ErasedIntake>();
 
         // The clock (§5.4) and the request histogram (§13.3), which LoggingBehavior injects.
         services.AddSingleton(TimeProvider.System);

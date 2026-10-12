@@ -3,6 +3,7 @@ using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
 using Common.Contracts.Shipping.V1;
 using Notifications.Application.Intake;
+using Notifications.Application.Privacy;
 using Notifications.Application.Rendering;
 using Shouldly;
 using Xunit;
@@ -34,7 +35,7 @@ public class IntakeMappingTests
             Lines = []
         };
 
-        await new OrderPlacedHandler(_dispatcher).HandleAsync(placed, TestContext.Current.CancellationToken);
+        await new OrderPlacedHandler(Intake()).HandleAsync(placed, TestContext.Current.CancellationToken);
 
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(
             new RecordNotificationCommand(
@@ -66,7 +67,7 @@ public class IntakeMappingTests
             Lines = []
         };
 
-        await new OrderConfirmedHandler(_dispatcher).HandleAsync(confirmed, TestContext.Current.CancellationToken);
+        await new OrderConfirmedHandler(Intake()).HandleAsync(confirmed, TestContext.Current.CancellationToken);
 
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(
             new RecordNotificationCommand(
@@ -97,7 +98,7 @@ public class IntakeMappingTests
             Origin = CancelOrigins.Workflow
         };
 
-        await new OrderCancelledHandler(_dispatcher).HandleAsync(cancelled, TestContext.Current.CancellationToken);
+        await new OrderCancelledHandler(Intake()).HandleAsync(cancelled, TestContext.Current.CancellationToken);
 
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(
             new RecordNotificationCommand(
@@ -235,6 +236,13 @@ public class IntakeMappingTests
         ];
 
         handlers.Length.ShouldBe(TemplateKeys.Placeholders.Count);
+    }
+
+    private ErasedIntake Intake() => new(_dispatcher, new NobodyErased());
+
+    private sealed class NobodyErased : IErasedSubjects
+    {
+        public Task<bool> IsErasedAsync(Guid subjectId, CancellationToken ct) => Task.FromResult(false);
     }
 
     private sealed class RecordingDispatcher : IDispatcher
