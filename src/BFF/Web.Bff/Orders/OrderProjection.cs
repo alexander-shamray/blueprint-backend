@@ -51,11 +51,36 @@ public sealed class OrderProjection(
         WHERE OrderId = @OrderId;
         """;
 
-    /// <summary>The row just written for an erased subject, which the lines follow by the foreign key's cascade.</summary>
+    /// <summary>
+    /// The row just written for an erased subject, which the lines follow by the foreign key's cascade, and the
+    /// order's id kept apart for the events that name no customer (ADR-098).
+    /// </summary>
     private const string DeleteErasedSql =
         """
+        SET XACT_ABORT ON;
+        BEGIN TRANSACTION;
+
+        INSERT INTO bff.ErasedOrders (OrderId, ErasedAt)
+        SELECT o.OrderId, @Now
+        FROM bff.Orders AS o
+        WHERE o.OrderId = @OrderId AND o.CustomerId = @CustomerId
+            AND NOT EXISTS (SELECT 1 FROM bff.ErasedOrders AS e WHERE e.OrderId = o.OrderId);
+
         DELETE FROM bff.Orders
         WHERE OrderId = @OrderId AND CustomerId = @CustomerId;
+
+        COMMIT;
+        """;
+
+    /// <summary>
+    /// Run after a write that names no customer: an order already erased is not given an ownerless row, whichever
+    /// of the erasure and the event came first (ADR-098).
+    /// </summary>
+    private const string DeleteOwnerlessErasedSql =
+        """
+        IF EXISTS (SELECT 1 FROM bff.ErasedOrders WHERE OrderId = @OrderId)
+            DELETE FROM bff.Orders
+            WHERE OrderId = @OrderId AND CustomerId IS NULL;
         """;
 
     private const string PlacedSql =
@@ -129,7 +154,7 @@ public sealed class OrderProjection(
         """;
 
     private const string AuthorisedSql =
-        """
+        $"""
         MERGE bff.Orders WITH (HOLDLOCK) AS target
         USING (SELECT OrderId = @OrderId) AS source
             ON target.OrderId = source.OrderId
@@ -142,10 +167,12 @@ public sealed class OrderProjection(
                 AuthorisedAt     = @OccurredAt,
                 AuthorisedAmount = @Amount,
                 AsOf             = @Now;
+
+        {DeleteOwnerlessErasedSql}
         """;
 
     private const string RefundedSql =
-        """
+        $"""
         MERGE bff.Orders WITH (HOLDLOCK) AS target
         USING (SELECT OrderId = @OrderId) AS source
             ON target.OrderId = source.OrderId
@@ -158,10 +185,12 @@ public sealed class OrderProjection(
                 RefundedAt      = @OccurredAt,
                 RefundedAmount  = @Amount,
                 AsOf            = @Now;
+
+        {DeleteOwnerlessErasedSql}
         """;
 
     private const string DispatchedSql =
-        """
+        $"""
         MERGE bff.Orders WITH (HOLDLOCK) AS target
         USING (SELECT OrderId = @OrderId) AS source
             ON target.OrderId = source.OrderId
@@ -173,10 +202,12 @@ public sealed class OrderProjection(
                 TrackingNumber = COALESCE(target.TrackingNumber, @TrackingNumber),
                 DispatchedAt   = @OccurredAt,
                 AsOf           = @Now;
+
+        {DeleteOwnerlessErasedSql}
         """;
 
     private const string DeliveredSql =
-        """
+        $"""
         MERGE bff.Orders WITH (HOLDLOCK) AS target
         USING (SELECT OrderId = @OrderId) AS source
             ON target.OrderId = source.OrderId
@@ -188,6 +219,8 @@ public sealed class OrderProjection(
                 TrackingNumber = COALESCE(target.TrackingNumber, @TrackingNumber),
                 DeliveredAt    = @OccurredAt,
                 AsOf           = @Now;
+
+        {DeleteOwnerlessErasedSql}
         """;
 
     // CA1848 (ADR-019). Ids only, as §13.4 allows.
@@ -325,7 +358,7 @@ public sealed class OrderProjection(
             await connection.ExecuteAsync(
                 new CommandDefinition(
                     DeleteErasedSql,
-                    new { OrderId = orderId, CustomerId = customerId },
+                    new { OrderId = orderId, CustomerId = customerId, Now = clock.GetUtcNow() },
                     cancellationToken: ct));
             return;
         }

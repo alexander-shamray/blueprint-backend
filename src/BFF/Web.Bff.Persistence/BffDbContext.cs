@@ -22,6 +22,9 @@ public sealed class BffDbContext(DbContextOptions<BffDbContext> options) : DbCon
     /// <summary>§11.7's audit rows: a hash, a count and a time per request, holding no personal data.</summary>
     public DbSet<PersonalDataErasure> PersonalDataErasures => Set<PersonalDataErasure>();
 
+    /// <summary>The ids of orders deleted for an erased customer, which a customer-less event is checked against.</summary>
+    public DbSet<ErasedOrderRow> ErasedOrders => Set<ErasedOrderRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(BffSchema.Name);

@@ -1,5 +1,7 @@
 using Common.Application;
 using Common.Contracts.Ordering.V1;
+using Common.Contracts.Payments.V1;
+using Common.Contracts.Shipping.V1;
 using Common.Domain;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -62,6 +64,52 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
         (await fixture.LinesAsync(order)).ShouldBeEmpty();
     }
 
+    [Theory]
+    [InlineData("Dispatched")]
+    [InlineData("Delivered")]
+    [InlineData("Authorised")]
+    [InlineData("Refunded")]
+    public async Task A_replayed_event_that_names_no_customer_does_not_revive_an_erased_order(string name)
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid bystandersOrder = Guid.CreateVersion7();
+        await RecordErasureAsync(_subject, At.AddDays(-1));
+        await ApplyAsync("Placed", order, _subject);
+        await ApplyAsync("Placed", bystandersOrder, _bystander);
+
+        await ApplyAsync(name, order, _subject);
+        await ApplyAsync(name, bystandersOrder, _bystander);
+
+        (await fixture.OrderAsync(order)).ShouldBeNull("the order was erased, and the event names no one to ask about");
+        (await fixture.OrderAsync(bystandersOrder)).ShouldNotBeNull().CustomerId.ShouldBe(_bystander);
+    }
+
+    [Fact]
+    public async Task An_event_that_names_no_customer_is_kept_for_an_order_nobody_erased()
+    {
+        Guid order = Guid.CreateVersion7();
+        await RecordErasureAsync(_subject, At.AddDays(-1));
+
+        await ApplyAsync("Dispatched", order, _bystander);
+
+        (await fixture.OrderAsync(order)).ShouldNotBeNull().TrackingNumber.ShouldBe(OrderEvents.TrackingNumber);
+    }
+
+    [Fact]
+    public async Task An_event_that_names_no_customer_arriving_first_is_dropped_once_the_customer_is_found_erased()
+    {
+        Guid order = Guid.CreateVersion7();
+        await RecordErasureAsync(_subject, At.AddDays(-1));
+
+        await ApplyAsync("Dispatched", order, _subject);
+        (await fixture.OrderAsync(order)).ShouldNotBeNull("nothing yet says whose order this is");
+
+        await ApplyAsync("Placed", order, _subject);
+        await ApplyAsync("Dispatched", order, _subject);
+
+        (await fixture.OrderAsync(order)).ShouldBeNull("the placing found the customer erased and took the row");
+    }
+
     private IDbConnectionFactory Connections() => fixture.Factory.Services.GetRequiredService<IDbConnectionFactory>();
 
     private static async Task RecordErasureAsync(BffServiceFixture fixture, Guid subject, DateTimeOffset erasedAt)
@@ -92,6 +140,18 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
             case "Confirmed":
                 await Handler<OrderConfirmed>(services)
                     .HandleAsync(OrderEvents.Confirmed(order, customer, At), ct);
+                break;
+            case "Dispatched":
+                await Handler<ShipmentDispatched>(services).HandleAsync(OrderEvents.Dispatched(order, At), ct);
+                break;
+            case "Delivered":
+                await Handler<ShipmentDelivered>(services).HandleAsync(OrderEvents.Delivered(order, At), ct);
+                break;
+            case "Authorised":
+                await Handler<PaymentAuthorised>(services).HandleAsync(OrderEvents.Authorised(order, At), ct);
+                break;
+            case "Refunded":
+                await Handler<PaymentRefunded>(services).HandleAsync(OrderEvents.Refunded(order, At), ct);
                 break;
             default:
                 await Handler<OrderCancelled>(services)
