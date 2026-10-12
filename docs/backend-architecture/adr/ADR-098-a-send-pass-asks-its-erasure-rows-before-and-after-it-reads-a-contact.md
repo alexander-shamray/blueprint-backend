@@ -9,13 +9,14 @@ never asked; a match after the save deletes what was just saved and answers no
 such customer, so nothing is sent. The notice ends undeliverable by the rule
 that already ends one for a customer the owner does not know
 ([ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
-A contact fresh enough to be served without the owner is not asked about: an
-erasure deletes it, and a save that raced the erasure is caught by the second
-question.
-**Supersedes.** The part of ADR-097's Consequences that leaves the mailbox a
-worker fetches between the intake's commit and its delete to be kept and sent:
-it is now neither. The fetch itself is closed only once the erasure's rows are
-visible.
+A stale row served because the owner could not answer is asked about once more
+before it is returned, as the call may have run through its retries. A contact
+fresh enough to be served without the owner is not asked about: an erasure
+deletes it, and a save that raced the erasure is caught by the second question.
+**Supersedes.** The part of ADR-097's Consequences that leaves a worker's one
+fetch of the mailbox, between the intake's commit and its delete, unclosed. The
+fetch no longer happens once the erasure's rows are visible, and the mailbox a
+fetch returns is neither kept nor sent.
 **Why.** The intake's check runs after its unit commits, so for the length of
 one query the notice and the order record exist for an erased customer. A send
 worker that claims the notice inside that interval resolves the customer
