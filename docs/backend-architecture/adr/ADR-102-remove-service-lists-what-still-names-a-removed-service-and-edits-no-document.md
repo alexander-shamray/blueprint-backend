@@ -28,6 +28,9 @@ consistent with the tree on its own. The tool can take on the edit once the
 chapter passes have fixed Appendix E's layout, and that is a new ADR then,
 because it would change what this one decides.
 
+**Settled by ADR-105**: the Consequences' last sentence.
+Appendix E has no per-service unit, so this ADR stands.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
