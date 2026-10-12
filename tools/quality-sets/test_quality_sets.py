@@ -4,6 +4,7 @@ the committed sets' own invariants.
     cd tools/quality-sets && python -m unittest
 """
 
+import collections
 import contextlib
 import io
 import json
@@ -192,7 +193,7 @@ class Runs(unittest.TestCase):
         self.assertTrue(all(pr % 2 for pr, _ in got))
         self.assertEqual(len(qs.sample_heads(entries, 999)), 20)
 
-    def sweep(self, outcomes):
+    def sweep(self, outcomes, spent=None):
         """sweep_findings over a fake worktree, slicer and auditor; outcomes is one list per ask call."""
         with tempfile.TemporaryDirectory() as tmp:
             def fake_run(*argv, **kwargs):
@@ -204,7 +205,8 @@ class Runs(unittest.TestCase):
                 return mock.Mock(stdout="", returncode=0)
             calls = iter(outcomes)
 
-            def fake_ask(claude, agent, prompt, cwd, add_dirs=()):
+            def fake_ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
+                spent.update({"output_tokens": 5})
                 result = next(calls)
                 if isinstance(result, BaseException):
                     raise result
@@ -214,7 +216,7 @@ class Runs(unittest.TestCase):
             with mock.patch.object(qs.tempfile, "gettempdir", return_value=tmp), \
                     mock.patch.object(qs, "git"), mock.patch.object(qs, "run", fake_run), \
                     mock.patch.object(qs, "ask", fake_ask), contextlib.redirect_stderr(io.StringIO()):
-                return qs.sweep_findings("claude", "bug", "c" * 40)
+                return qs.sweep_findings("claude", "bug", "c" * 40, spent)
 
     def test_slices_run_in_numeric_order_and_their_findings_are_gathered(self):
         found, failed, slices = self.sweep([[{"file": "a"}], [], [{"file": "b"}]])
@@ -230,6 +232,27 @@ class Runs(unittest.TestCase):
             qs.ask("claude", "bug-auditor", "p", "dir")
         with self.assertRaises(qs.UsageLimit):
             self.sweep([[{"file": "a"}], qs.UsageLimit("limit")])
+
+    def test_the_tokens_of_every_slice_attempt_are_summed_into_the_run(self):
+        spent = collections.Counter()
+        self.sweep([[{"file": "a"}], None, None, [{"file": "b"}]], spent)
+        self.assertEqual(spent["output_tokens"], 5 * 4)
+
+    def test_the_json_result_gives_the_reply_and_its_usage(self):
+        envelope = json.dumps({"result": 'x {"findings": []}', "usage": {"input_tokens": 2, "output_tokens": 57}})
+        self.assertEqual(qs.unwrap(envelope), ('x {"findings": []}', {"input_tokens": 2, "output_tokens": 57}))
+        self.assertEqual(qs.unwrap("plain reply"), ("plain reply", {}))
+
+    def test_an_ask_sums_all_four_counts_even_when_the_reply_is_not_the_json(self):
+        usage = dict(zip(qs.TOKEN_KEYS, (2, 39604, 100, 57)))
+        done = mock.Mock(stdout=json.dumps({"result": "I could not.", "usage": usage}), returncode=0)
+        spent = collections.Counter()
+        with mock.patch.object(qs, "run", return_value=done), self.assertRaises(SystemExit):
+            qs.ask("claude", "bug-auditor", "p", "dir", spent=spent)
+        self.assertEqual(qs.tokens(spent), {**usage, "total": 2 + 39604 + 100 + 57})
+
+    def test_a_run_with_no_usage_reports_zeros(self):
+        self.assertEqual(qs.tokens(collections.Counter())["total"], 0)
 
     def test_the_slice_directory_is_handed_to_the_auditor(self):
         done = mock.Mock(stdout='{"findings": []}', returncode=0)

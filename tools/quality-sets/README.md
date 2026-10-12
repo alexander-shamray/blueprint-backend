@@ -53,6 +53,12 @@ its files, so recall is an upper bound, and a finding on the right line about
 something else is a hit. A run reports `reported`, `entries`, `found`, `recall`
 and the `missed` ids, scored over the entries pinned to the run's commit only.
 
+It also reports `tokens`: the input, cache-creation, cache-read and output counts
+that each `claude -p` result carries, and their `total`, summed over the run, a
+retried or failed slice's included. A review prints them per attempt; a sweep's
+progress line gives each slice's total. A run that ends on a usage-limit notice
+reports none.
+
 Recall is noisy: the same head scored 0 of 12 and 2 of 12 on two runs
 (`docs/token-usage.md`, 2026-10-11). Read a score as a sample, and run a head
 more than once before comparing two models.

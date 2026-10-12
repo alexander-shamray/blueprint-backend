@@ -5,6 +5,7 @@ what each set holds and what a score means.
 """
 
 import argparse
+import collections
 import json
 import os
 import re
@@ -23,6 +24,7 @@ SWEEP_TRAILER = "Filed by an authorised sweep"
 REVIEWERS = ("Copilot",)
 LINE_WINDOW = 10
 TEXT_CAP = 400
+TOKEN_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 SHA = re.compile(r"\b[0-9a-f]{40}\b")
 FOUND_AT = re.compile(r"(?i)\bfound by\b.*?\bat ([0-9a-f]{7,40})\b")
 PATH = re.compile(r"[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)*\.(?:cs|py|sh|ps1|md|ya?ml|json|props|csproj|sql|tpl|txt|slnx)\b")
@@ -223,20 +225,47 @@ class UsageLimit(SystemExit):
     """An agent stopped on a usage-limit notice: every later run would, so the run ends, unscored."""
 
 
-def ask(claude, agent, prompt, cwd, add_dirs=()):
-    """One non-interactive agent run; its findings, or SystemExit when it returned no JSON."""
+def unwrap(stdout):
+    """The reply text and token usage in a `claude -p --output-format json` result.
+
+    Output that is not that envelope is the reply itself, with no usage.
+    """
+    try:
+        result = json.loads(stdout)
+    except ValueError:
+        return stdout, {}
+    if not isinstance(result, dict) or not isinstance(result.get("result"), str):
+        return stdout, {}
+    usage = result.get("usage")
+    return result["result"], usage if isinstance(usage, dict) else {}
+
+
+def tokens(spent):
+    """The four counts of a tally, always all four, and their sum as `total`."""
+    counts = {key: spent.get(key, 0) for key in TOKEN_KEYS}
+    return {**counts, "total": sum(counts.values())}
+
+
+def ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
+    """One non-interactive agent run; its findings, or SystemExit when it returned no JSON.
+
+    spent, a Counter, gains the run's tokens whether or not it returned findings.
+    """
     extra = [arg for d in add_dirs for arg in ("--add-dir", str(d))]
     done = run(claude, "-p", prompt, "--agents", agent_definition(agent), "--agent", agent,
-               "--output-format", "text", *extra, cwd=cwd)
-    value = agent_json(done.stdout)
+               "--output-format", "json", *extra, cwd=cwd)
+    text, usage = unwrap(done.stdout)
+    if spent is not None:
+        spent.update({key: int(usage.get(key) or 0) for key in TOKEN_KEYS})
+    value = agent_json(text)
     if value is None:
-        if "usage limit" in done.stdout.lower():
-            raise UsageLimit(f"{agent} stopped on a usage-limit notice: {done.stdout.strip()[:200]}")
-        raise SystemExit(f"{agent} returned no findings JSON: {done.stdout.strip()[:200]}")
+        if "usage limit" in text.lower():
+            raise UsageLimit(f"{agent} stopped on a usage-limit notice: {text.strip()[:200]}")
+        raise SystemExit(f"{agent} returned no findings JSON: {text.strip()[:200]}")
     return value["findings"]
 
 
-def review_findings(claude, entries, pr, head):
+def review_findings(claude, entries, pr, head, spent=None):
     """Run branch-reviewer once over a pull request's diff at one commit, in a detached worktree."""
     base = next((e["base"] for e in entries if e["pr"] == pr and e["head"] == head), None)
     if base is None:
@@ -250,14 +279,17 @@ def review_findings(claude, entries, pr, head):
         (out / f"pr{pr}.diff").write_text(git("diff", f"{base}...{head}").stdout, encoding="utf-8")
         prompt = (f"Review the diff at artifacts/review/pr{pr}.diff, a full pass. "
                   "There is no locality verdict: name it in skipped. Return the JSON your profile declares.")
-        return ask(claude, "branch-reviewer", prompt, tree)
+        return ask(claude, "branch-reviewer", prompt, tree, spent=spent)
     finally:
         git("worktree", "remove", "--force", str(work / "tree"), check=False)
         shutil.rmtree(work, ignore_errors=True)
 
 
-def sweep_findings(claude, kind, commit):
-    """Run one auditor per slice of a full first round over a detached worktree at a commit."""
+def sweep_findings(claude, kind, commit, spent=None):
+    """Run one auditor per slice of a full first round over a detached worktree at a commit.
+
+    spent, a Counter, gains the tokens of every run, a retried or failed slice's included.
+    """
     root = Path(tempfile.gettempdir()) / f"secsweep-{os.urandom(3).hex()}"
     git("worktree", "add", "--detach", str(root), commit)
     slices = Path(f"{root}.slices")
@@ -268,9 +300,10 @@ def sweep_findings(claude, kind, commit):
         for number, listing in enumerate(listings, 1):
             prompt = (f"Root path: {root}. Scope: the whole tree. Slice list: {listing}. "
                       "Round 1, nothing known. Return the JSON your profile declares.")
+            slice_spent = collections.Counter()
             for attempt in (1, 2):
                 try:
-                    found += ask(claude, f"{kind}-auditor", prompt, root, [slices])
+                    found += ask(claude, f"{kind}-auditor", prompt, root, [slices], slice_spent)
                     break
                 except SystemExit as error:
                     if isinstance(error, UsageLimit):
@@ -278,7 +311,10 @@ def sweep_findings(claude, kind, commit):
                     print(f"slice {listing.name} attempt {attempt}: {error}", file=sys.stderr)
             else:
                 failed.append(listing.name)
-            print(f"slice {number}/{len(listings)}: {len(found)} findings so far", file=sys.stderr, flush=True)
+            if spent is not None:
+                spent.update(slice_spent)
+            print(f"slice {number}/{len(listings)}: {len(found)} findings so far, "
+                  f"{tokens(slice_spent)['total']} tokens in the slice", file=sys.stderr, flush=True)
         return found, failed, len(listings)
     finally:
         git("worktree", "remove", "--force", str(root), check=False)
@@ -346,17 +382,20 @@ def main(argv=None):
             targets = [(args.pr, head) for head in heads]
         for pr, head in targets:
             for attempt in range(args.repeat):
-                found = review_findings(args.claude, entries, pr, head)
+                spent = collections.Counter()
+                found = review_findings(args.claude, entries, pr, head, spent)
                 result = score(entries, [{"file": f["file"], "line": f.get("line", 0)} for f in found], head)
-                print(json.dumps({"pr": pr, "attempt": attempt + 1, **result}), flush=True)
+                print(json.dumps({"pr": pr, "attempt": attempt + 1, **result, "tokens": tokens(spent)}), flush=True)
     else:
         if not (args.kind and args.commit):
             raise SystemExit("run sweep: --kind and --commit are required")
         full = resolve_commit(args.commit)
         if full is None:
             raise SystemExit(f"{args.commit} is not a commit in this clone")
-        found, failed, slices = sweep_findings(args.claude, args.kind, full)
-        print(json.dumps({"kind": args.kind, "slices": slices, "failed": failed, **score(load(SWEEPS), found, full)}))
+        spent = collections.Counter()
+        found, failed, slices = sweep_findings(args.claude, args.kind, full, spent)
+        print(json.dumps({"kind": args.kind, "slices": slices, "failed": failed,
+                          **score(load(SWEEPS), found, full), "tokens": tokens(spent)}))
     return 0
 
 
