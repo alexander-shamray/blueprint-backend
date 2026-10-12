@@ -14,7 +14,7 @@ public static class DependencyInjection
         services.AddDispatcher();
 
         // Explicit rather than scanned, beside the dispatcher it serves —
-        // §4.2's registration sample is the shape. §7.5's real dispatcher,
+        // E.2.6's registration sample is the shape. §7.5's real dispatcher,
         // and no null one beside it: a dispatcher that drops every domain
         // event is deleted rather than disabled, so nothing can register it
         // back by accident.
@@ -38,7 +38,7 @@ public static class DependencyInjection
         // not startup, because ValidateOnBuild never constructs an open generic.
         services.AddScoped<IdempotencyContext>();
 
-        // §4.2's sample line, over the assembly until the first validator gives it a type.
+        // E.2.6's sample line, over the assembly until the first validator gives it a type.
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
         return services;
     }

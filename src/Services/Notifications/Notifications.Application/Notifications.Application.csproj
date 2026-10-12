@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <!-- Dapper joins with the first query handler (§6.5). -->
-    <!-- Referenced directly because used directly, for §4.2's assembly-scan registration. -->
+    <!-- Referenced directly because used directly, for E.2.6's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <!-- RecordNotificationHandler's LoggerMessage.Define, which CA1848 requires under ADR-019. -->

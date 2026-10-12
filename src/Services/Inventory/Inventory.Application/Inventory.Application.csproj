@@ -11,7 +11,7 @@
   <ItemGroup>
     <!-- §6.5's read side: the query handlers use Dapper directly, never EF. -->
     <PackageReference Include="Dapper" />
-    <!-- Used directly, so referenced directly: §4.2's assembly-scan registration. -->
+    <!-- Used directly, so referenced directly: E.2.6's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <!-- FulfilReservationHandler's LoggerMessage.Define, which CA1848 requires under ADR-019. -->

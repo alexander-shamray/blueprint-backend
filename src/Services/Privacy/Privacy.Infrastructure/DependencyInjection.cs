@@ -130,7 +130,7 @@ public static class DependencyInjection
         // The one retention service §9.5 asks for, registered last so it is stopped first.
         services.AddHostedService<RetentionPurgeService>();
 
-        // §6.5's read side, a singleton as §4.2's sample has it, on §7.1's runtime key.
+        // §6.5's read side, a singleton as E.2.6's sample has it, on §7.1's runtime key.
         services.AddSingleton<IDbConnectionFactory>(
             new SqlConnectionFactory(configuration.GetConnectionString("Privacy")!));
 
