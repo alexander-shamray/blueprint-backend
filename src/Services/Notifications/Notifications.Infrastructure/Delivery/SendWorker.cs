@@ -435,8 +435,8 @@ public sealed class SendWorker(
             await store.SaveAsync(customer, found, clock.GetUtcNow(), ct);
 
             // An erasure since the intake's check finds this row or is seen here, so it is not written back (ADR-100).
-            // Asked without the order's requests, which this service does not keep, so an order ADR-099 kept loses
-            // only a row the next read fetches again; the pass still sends.
+            // Asked without an order's requests, since this read serves all the customer's rows (ADR-101), so an order
+            // ADR-099 kept loses only a row the next read fetches again; the pass still sends.
             if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(customer, [], ct))
                 await store.DeleteAsync(customer, ct);
         }
