@@ -95,8 +95,9 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
 
     public void Dispose()
     {
+        // The gate is left undisposed: it holds no wait handle, and a callback still in flight at shutdown would
+        // otherwise fault on a released semaphore.
         _subscription?.Dispose();
-        _gate.Dispose();
     }
 
     /// <summary>Brings every known endpoint to the state the configuration now asks for.</summary>
@@ -125,16 +126,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
 
     private async Task ApplyAsync(string queue)
     {
-        // Disposed at host shutdown, with a callback possibly still in flight; there is nothing left to switch.
-        try
-        {
-            await _gate.WaitAsync();
-        }
-        catch (ObjectDisposedException)
-        {
-            return;
-        }
-
+        await _gate.WaitAsync();
         try
         {
             IReceiveEndpoint endpoint;
