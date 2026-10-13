@@ -299,14 +299,13 @@ one currency, and without a matching row in `ordering.ProductPrices` every
 order is a 422 (§6.6). The seeded prices in
 [`deploy/compose/README.md`](../compose/README.md#seeded-products) are all in
 one currency; confirm it against the table rather than assuming. The password
-is §14.1's local default unless `SQL_PASSWORD` overrides it in the `.env`
-beside the Compose file:
+is read inside the container, as its healthcheck reads it, so the command
+carries none:
 
 ```bash
-SQL_PASSWORD="${SQL_PASSWORD:-Local_Dev_Pa55w0rd!}"
-docker exec commerce-sql-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa \
-    -P "$SQL_PASSWORD" -C -d Ordering -W \
-    -Q "SELECT Currency, COUNT(*) FROM ordering.ProductPrices GROUP BY Currency"
+docker exec commerce-sql-1 sh -c '/opt/mssql-tools18/bin/sqlcmd \
+    -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d Ordering -W \
+    -Q "SELECT Currency, COUNT(*) FROM ordering.ProductPrices GROUP BY Currency"'
 ```
 
 **4. Run it.** `BASE_URL` is the gateway on 5000, never a service port. Let the
