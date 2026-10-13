@@ -43,6 +43,10 @@ the realm, and unlike that job a red run files no issue: the run is red and the
 repository's notification is the signal. The check does not prove the policy
 allows what the services need; the deployed upload path does.
 
+**Superseded in part by
+[ADR-111](ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)**: the Consequences'
+clause that a red run files no issue.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
