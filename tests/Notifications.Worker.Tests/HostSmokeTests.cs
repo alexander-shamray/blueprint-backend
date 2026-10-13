@@ -66,7 +66,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
 
         // By name, since a dependency added to readiness later is a rollout the relay could block (§15.3). The
-        // operator switches only ever report Degraded, which answers 200 (ADR-114).
+        // operator switches only ever report Degraded, which answers 200 (ADR-115).
         options.Registrations.Select(r => r.Name)
             .ShouldBe(["sql", "masstransit-bus", "operator-switches"], ignoreOrder: true);
     }

@@ -66,7 +66,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
 
         // By name, since excluding the carrier, Ordering and Keycloak from readiness is the point. The operator
-        // switches only ever report Degraded, which answers 200 (ADR-114).
+        // switches only ever report Degraded, which answers 200 (ADR-115).
         options.Registrations.Select(r => r.Name)
             .ShouldBe(["sql", "masstransit-bus", "operator-switches"], ignoreOrder: true);
     }

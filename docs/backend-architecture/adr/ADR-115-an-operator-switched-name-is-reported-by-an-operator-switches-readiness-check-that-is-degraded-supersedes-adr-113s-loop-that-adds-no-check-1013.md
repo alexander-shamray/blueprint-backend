@@ -1,4 +1,4 @@
-# ADR-114 — An operator-switched name is reported by an operator-switches readiness check that is Degraded, supersedes ADR-113's loop that adds no check (#1013)
+# ADR-115 — An operator-switched name is reported by an operator-switches readiness check that is Degraded, supersedes ADR-113's loop that adds no check (#1013)
 
 **Decision.** A host that registers
 [ADR-113](ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)'s
