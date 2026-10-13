@@ -19,8 +19,11 @@
     <PackageReference Include="Shouldly" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Testcontainers.Redis" />
+    <PackageReference Include="Testcontainers.RabbitMq" />
     <!-- The in-memory harness for §9.4's consumers, which know nothing of a transport. -->
     <PackageReference Include="MassTransit" />
+    <!-- The RabbitMQ transport, for the switch's stop and start against a real broker. -->
+    <PackageReference Include="MassTransit.RabbitMQ" />
     <!-- FakeTimeProvider, so §13.3's delivery lag is a value the test chose. -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <!-- Reads the Redis client spans back out of a real tracer (§13.2). -->

@@ -29,7 +29,7 @@ public class OperatorSwitchTests
     }
 
     /// <summary>A provider whose contents the test replaces, which is what a reloaded file does.</summary>
-    private sealed class MutableSource : ConfigurationProvider, IConfigurationSource
+    internal sealed class MutableSource : ConfigurationProvider, IConfigurationSource
     {
         public IConfigurationProvider Build(IConfigurationBuilder builder) => this;
 
