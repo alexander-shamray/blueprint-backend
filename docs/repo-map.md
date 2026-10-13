@@ -461,8 +461,9 @@ expectation nobody holds.
 
 Planned, per §4.1 — do not invent a different shape for it. `src/Services/`
 gains Inventory, Payments and Privacy with the same project set, Shipping
-with a Worker in place of the Api, and Notifications with one fewer (no
-Domain, and a Worker). `deploy/` still owes `k8s/`, and `helm/` and `k8s/`
+with a Worker in place of the Api, and Notifications with no Domain and
+both a Worker and an Api, the second added after its render (ADR-118).
+`deploy/` still owes `k8s/`, and `helm/` and `k8s/`
 are not alternatives: §4.1 gives `k8s/` the raw manifests "where Helm is
 overkill", which is a decision no chapter has yet taken about any particular
 object.

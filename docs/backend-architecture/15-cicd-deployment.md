@@ -515,12 +515,16 @@ other image and not for that one. Every other deployable builds **two**, a
 host and a migrator, and both talk to SQL Server: each service by §4.1, and
 the BFF because its projection is a schema of its own
 ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)).
+A service with two hosts on one database builds **three**, the two hosts and
+the one migrator they share, so its second host's image has no migrator of
+its own
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
 The gateway takes the variant for uniformity: one base across the platform
 means what a host does with a culture-sensitive comparison never depends on
 which suffix somebody picked for its image, and the saving from dropping ICU
 on one deployable does not pay for a second answer to that question.
 
-### Every service builds two images
+### Every service builds a migrator's image beside its host's
 
 The migration job (§7.4) is a Helm `pre-install,pre-upgrade` hook, so its image
 must exist **before** the deploy that uses it. A pipeline that builds only the
