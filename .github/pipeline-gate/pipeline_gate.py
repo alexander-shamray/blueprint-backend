@@ -14,6 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+DEPLOY = ROOT / ".github" / "workflows" / "deploy.yml"
 SOLUTION = ROOT / "Platform.slnx"
 
 # Floors, set well under each stage's real total on purpose: a floor at the
@@ -287,6 +288,12 @@ def check_images(root: Path = ROOT) -> list[str]:
             )
 
     problems.extend(check_sboms(text))
+    try:
+        deploy_text = DEPLOY.read_text(encoding="utf-8")
+    except OSError as error:
+        problems.append(f".github/workflows/deploy.yml is not readable: {error}")
+    else:
+        problems.extend(check_supply_chain(text, deploy_text))
     return problems
 
 
@@ -367,6 +374,254 @@ def check_sboms(workflow_text: str) -> list[str]:
                 "`if:`. ADR-071 gives every image the pipeline builds an SBOM, and "
                 "a leg without one ships an image nothing has inventoried"
             )
+    return problems
+
+
+# What a step gated on main-push says, in the pieces the gate looks for: the
+# leg's own filter, the ref, and an event that is not a pull request.
+FILTER_TERM = "needs.changes.outputs[matrix.filter] == 'true'"
+MAIN_REF = "github.ref == 'refs/heads/main'"
+LOGIN_ACTION = "docker/login-action@"
+COSIGN_ACTION = "sigstore/cosign-installer@"
+PROVENANCE_ACTION = "actions/attest-build-provenance@"
+SBOM_ATTESTATION_ACTION = "actions/attest-sbom@"
+CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
+HELM_COMMAND = re.compile(r"(?:^|[\s;&|(`])helm\s+[a-z]")
+HELM_UPGRADE = re.compile(r"(?:^|[\s;&|(`])helm\s+upgrade\b")
+
+
+def _on_main_push(step: dict[str, str]) -> bool:
+    condition = step.get("if", "")
+    return (
+        FILTER_TERM in condition
+        and MAIN_REF in condition
+        and re.search(r"[\"']push[\"']", condition) is not None
+        and "pull_request" not in condition
+    )
+
+
+def _located(steps: list[dict[str, str]], window: range, *, uses: str | None = None,
+             run: str | None = None) -> int | None:
+    for index in window:
+        step = steps[index]
+        if uses is not None and step.get("uses", "").strip().startswith(uses):
+            return index
+        if run is not None and re.search(run, step.get("run", "")):
+            return index
+    return None
+
+
+def _reference(run: str, command: str) -> str:
+    """The quoted image reference a command names, or its first word if unquoted."""
+    found = re.search(rf'{command}\b[^"\n]*"([^"]*)"', run) or re.search(rf"{command}\b(?:\s+-\S+)*\s+(\S+)", run)
+    return found.group(1) if found else ""
+
+
+def read_workflow_env(workflow_text: str, key: str) -> str | None:
+    """One value of the workflow-level `env:` block, or None."""
+    lines = workflow_text.splitlines()
+    for index, line in enumerate(lines):
+        if not re.match(r"^env:\s*$", line):
+            continue
+        for follow in lines[index + 1:]:
+            if not follow.strip() or follow.lstrip().startswith("#"):
+                continue
+            if not follow.startswith("  "):
+                break
+            if found := re.match(rf"^  {re.escape(key)}:\s*(.*?)\s*$", follow):
+                return found.group(1)
+        return None
+    return None
+
+
+def read_helm_upgrades(workflow_text: str) -> list[str]:
+    """Every `helm upgrade` command a workflow runs, continuation lines joined."""
+    lines = workflow_text.splitlines()
+    commands = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if not line.lstrip().startswith("#") and HELM_UPGRADE.search(line):
+            command = line.strip()
+            while command.endswith("\\") and index + 1 < len(lines):
+                index += 1
+                command = command[:-1] + " " + lines[index].strip()
+            commands.append(command)
+        index += 1
+    return commands
+
+
+def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
+    """Every image the `images` job builds is pushed, signed and attested on main,
+    and the rollout verifies it before Helm runs (ADR-109).
+
+    Coverage rather than findings: the subject is whether each build has its
+    steps, in order, by digest and under the main-push condition, so a job
+    that stops signing is red instead of quietly unsigned.
+    """
+    steps = read_job_steps(workflow_text, "images")
+    builds = [(index, step) for index, step in enumerate(steps) if "docker build" in step.get("run", "")]
+    if not builds:
+        return [
+            "found no `docker build` step in the images job: the supply-chain check "
+            "would pass vacuously, so the parser or the job is what is broken"
+        ]
+
+    problems: list[str] = []
+    for position, (index, build) in enumerate(builds):
+        end = builds[position + 1][0] if position + 1 < len(builds) else len(steps)
+        window = range(index + 1, end)
+        subject = f"the images job's build at step {index + 1}"
+        found = {
+            "registry sign-in": _located(steps, window, uses=LOGIN_ACTION),
+            "`docker push`": _located(steps, window, run=r"\bdocker push\b"),
+            "cosign installer": _located(steps, window, uses=COSIGN_ACTION),
+            "`cosign sign`": _located(steps, window, run=r"\bcosign sign\b"),
+            "provenance attestation": _located(steps, window, uses=PROVENANCE_ACTION),
+            "SBOM attestation": _located(steps, window, uses=SBOM_ATTESTATION_ACTION),
+        }
+        missing = [name for name, where in found.items() if where is None]
+        if missing:
+            problems.append(
+                f"{subject} has no {', no '.join(missing)} after it. ADR-109 has every image "
+                "the job builds pushed, signed and attested on main, and a leg without "
+                "one ships an image the rollout then refuses"
+            )
+            continue
+
+        login, push, installer, sign, provenance, attestation = found.values()
+        for name, where in found.items():
+            if not _on_main_push(steps[where]):
+                problems.append(
+                    f"{subject}: the {name} does not run under the main-push condition "
+                    f"({FILTER_TERM}, {MAIN_REF} and a push or dispatch event). Without it "
+                    "a pull request pushes, or a leg that built nothing signs nothing"
+                )
+        for earlier, later, why in (
+            (login, push, "the push is refused without a login"),
+            (push, sign, "there is no digest to sign before the push"),
+            (installer, sign, "cosign is not on the runner before its installer"),
+            (push, provenance, "there is no digest to attest before the push"),
+            (push, attestation, "there is no digest to attest before the push"),
+        ):
+            if earlier > later:
+                problems.append(f"{subject}: a step runs before the one it needs, because {why}")
+
+        pushed = _reference(steps[push]["run"], "docker push")
+        if not pushed.startswith("$REGISTRY/") or f"--tag {pushed}" not in build["run"]:
+            problems.append(
+                f"{subject} tags no `$REGISTRY/...` reference that the push then pushes "
+                f"(the push names {pushed!r}), so the registry address is spelled outside "
+                "REGISTRY or the push sends an image the build never tagged"
+            )
+
+        identifier = steps[push].get("id", "").strip()
+        digest = f"steps.{identifier}.outputs.digest"
+        if not identifier:
+            problems.append(f"{subject}: the push step has no `id`, so no later step can read its digest")
+            continue
+
+        signed = _reference(steps[sign]["run"], "cosign sign")
+        _, at, after = signed.partition("@")
+        variable = re.fullmatch(r"\$\{?(\w+)\}?", after)
+        from_env = variable is not None and re.search(
+            rf"\b{variable.group(1)}:\s*\$\{{\{{\s*{re.escape(digest)}\s*\}}\}}", steps[sign].get("env", "")
+        )
+        if not at or not (digest in after or from_env):
+            problems.append(
+                f"{subject}: `cosign sign` names {signed!r}, not the pushed digest "
+                f"({digest}). A tag can be pushed over, so a signature made by tag can land on other bytes"
+            )
+
+        for name, where in (("provenance", provenance), ("SBOM", attestation)):
+            attest = steps[where]
+            if digest not in attest.get("subject-digest", ""):
+                problems.append(f"{subject}: the {name} attestation's subject-digest is not the pushed digest ({digest})")
+            if attest.get("push-to-registry", "").strip() != "true":
+                problems.append(
+                    f"{subject}: the {name} attestation is not pushed to the registry, "
+                    "so nothing beside the workflow run can find it"
+                )
+            if not attest.get("subject-name", "").strip().startswith("${{ env.REGISTRY }}/"):
+                problems.append(f"{subject}: the {name} attestation's subject-name is not under REGISTRY")
+
+        sbom = _located(steps, window, uses=SBOM_ACTION)
+        if sbom is not None and steps[attestation].get("sbom-path", "").strip() != steps[sbom].get("output-file", "<none>").strip():
+            problems.append(
+                f"{subject}: the SBOM attestation reads {steps[attestation].get('sbom-path')!r}, "
+                "not the file the SBOM step wrote, so the attested inventory is not the artefact's"
+            )
+
+    problems.extend(_check_rollout(workflow_text, deploy_text))
+    return problems
+
+
+def _check_rollout(workflow_text: str, deploy_text: str) -> list[str]:
+    """deploy.yml verifies before it touches Helm, pins what it verified, and shares REGISTRY."""
+    problems: list[str] = []
+
+    registry = read_workflow_env(workflow_text, "REGISTRY")
+    deployed = read_workflow_env(deploy_text, "REGISTRY")
+    if registry is None:
+        problems.append("ci.yml declares no workflow-level REGISTRY, the one owner of the registry address")
+    elif registry != deployed:
+        problems.append(
+            f"ci.yml's REGISTRY is {registry!r} and deploy.yml's is {deployed!r}. The rollout would "
+            "verify an address CI never pushed to"
+        )
+    for name, text in (("ci.yml", workflow_text), ("deploy.yml", deploy_text)):
+        for line in text.splitlines():
+            if line.lstrip().startswith("#") or not re.search(r"ghcr\.io/", line):
+                continue
+            if re.match(r"^  REGISTRY:", line):
+                continue
+            problems.append(
+                f"{name} spells a registry address outside REGISTRY: {line.strip()!r}. "
+                "The address has one owner, so moving registries stays one value"
+            )
+
+    rollout = read_job_steps(deploy_text, "rollout")
+    if not rollout:
+        return problems + ["found no `rollout` job in deploy.yml: the admission check would pass vacuously"]
+
+    verify = _located(rollout, range(len(rollout)), run=r"\bcosign verify\b")
+    helm = _located(rollout, range(len(rollout)), run=HELM_COMMAND.pattern)
+    if helm is None:
+        problems.append(
+            "found no step in deploy.yml's rollout that runs helm: the order check would pass "
+            "vacuously, so the parser or the job is what is broken"
+        )
+    if verify is None:
+        problems.append(
+            "deploy.yml's rollout has no `cosign verify` step: ADR-071's admission check is not made, "
+            "and any image in the registry rolls"
+        )
+    else:
+        text = " ".join(rollout[verify].values())
+        for needle, why in (
+            (CI_IDENTITY, "pinned to ci.yml on main"),
+            ("--certificate-identity", "given an identity"),
+            ("--certificate-oidc-issuer", "given an issuer"),
+            ("verified-digest", "reading the digest it verified"),
+        ):
+            if needle not in text:
+                problems.append(f"deploy.yml's `cosign verify` step is not {why} ({needle!r} is missing)")
+        if helm is not None and verify > helm:
+            problems.append(
+                "deploy.yml's `cosign verify` runs after the first step that runs helm, so the "
+                "release is read, or changed, before the image is admitted"
+            )
+
+    upgrades = read_helm_upgrades(deploy_text)
+    if not upgrades:
+        problems.append("found no `helm upgrade` in deploy.yml: the digest check would pass vacuously")
+    for command in upgrades:
+        for value in ("image.digest", "image.migratorDigest"):
+            if not re.search(rf"--set-string\s+{re.escape(value)}=", command):
+                problems.append(
+                    f"a `helm upgrade` in deploy.yml does not pass --set-string {value}, so it "
+                    f"pulls by tag what the rollout verified by digest: {command[:60]!r}"
+                )
     return problems
 
 
@@ -816,7 +1071,10 @@ def main(argv: list[str]) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("filters", help="every deployable is matched by some path filter")
-    sub.add_parser("images", help="every Dockerfile is built by some matrix entry, with an SBOM")
+    sub.add_parser(
+        "images",
+        help="every Dockerfile is built by some matrix entry, with an SBOM, a push, a signature "
+             "and two attestations, and the rollout verifies before Helm")
     sub.add_parser("shards", help="the integration shards partition the stage")
     sub.add_parser("actions", help="every third-party action is pinned to a commit")
 
@@ -836,7 +1094,10 @@ def main(argv: list[str]) -> int:
         problems = check_images()
         if code := fail(problems, "the images matrix in ci.yml"):
             return code
-        print("pipeline-gate: every Dockerfile under src/ is built by a matrix entry, and every build has an SBOM.")
+        print(
+            "pipeline-gate: every Dockerfile under src/ is built by a matrix entry, every build has an SBOM, "
+            "is pushed, signed and attested on main, and the rollout verifies it before Helm."
+        )
         return 0
 
     if args.command == "shards":
