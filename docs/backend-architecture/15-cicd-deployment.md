@@ -1368,7 +1368,8 @@ namespace read access.
 
 | Kind | Source | Example |
 |---|---|---|
-| Non-secret config | ConfigMap → environment variables | Log level, feature flags, timeouts |
+| Non-secret config | ConfigMap → environment variables | Log level, timeouts |
+| Operator switches | ConfigMap → a mounted file that reloads | Receive endpoints and worker loops switched off ([ADR-112](adr/ADR-112-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)) |
 | Secrets | External Secrets Operator → Kubernetes Secret | Connection strings, client secrets |
 | Per-environment | Helm values file | Replica counts, resource sizing |
 
@@ -1633,12 +1634,16 @@ states, since per-queue broker metrics are not something this repository
 configures. That alert is what makes this section's rule enforceable; without
 it, a rollout that loses messages looks exactly like one that does not.
 
-Feature flags decouple deployment from release. Deploy the code dark, enable it
-for internal users, then progressively for customers. This also gives you a
-kill switch that does not require a rollback. **For the vocabulary case they
-are an alternative to splitting the release**: emit the new code behind a flag
-that stays off until every consumer is upgraded, which is the same ordering
-bought with a runtime switch instead of a deploy.
+**No feature flag is adopted.** A flag that deploys the code dark and enables
+it for internal users, then for customers, asks a question about a caller, and
+no host here evaluates one. So the vocabulary case above takes the split
+release, not a flag that stays off until every consumer is upgraded. What the
+platform has is the kill switch that does not require a rollback, for the three
+services [ADR-104](adr/ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md)
+lets an operator stop: each receive endpoint and each worker loop of
+Notifications, Shipping and Privacy is switched off by name from a mounted file
+that reloads, with no restart
+([ADR-112](adr/ADR-112-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)).
 
 ---
 
