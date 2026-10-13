@@ -96,10 +96,20 @@ jobs:
           OBJECT_STORE_ENDPOINT: ${{ vars.OBJECT_STORE_ENDPOINT }}
           OBJECT_STORE_BUCKET: ${{ vars.OBJECT_STORE_BUCKET }}
           OBJECT_STORE_REGION: ${{ vars.OBJECT_STORE_REGION }}
+          OBJECT_STORE_ADDRESSING: ${{ vars.OBJECT_STORE_ADDRESSING }}
           OBJECT_STORE_BFF_ACCESS_KEY: ${{ secrets.OBJECT_STORE_BFF_ACCESS_KEY }}
           OBJECT_STORE_BFF_SECRET_KEY: ${{ secrets.OBJECT_STORE_BFF_SECRET_KEY }}
           OBJECT_STORE_CATALOG_ACCESS_KEY: ${{ secrets.OBJECT_STORE_CATALOG_ACCESS_KEY }}
           OBJECT_STORE_CATALOG_SECRET_KEY: ${{ secrets.OBJECT_STORE_CATALOG_SECRET_KEY }}
+
+      # A green run tells a monitor outside GitHub it happened, because a
+      # schedule GitHub sheds or suspends is no run and so no red one
+      # (ADR-114). No `if:`: it runs on success alone, so a red run is a
+      # missed beat as well as an issue. docs/secrets.md owns the URL.
+      - name: The monitor is told the check ran
+        run: python deploy/objectstore/store_check.py heartbeat
+        env:
+          OBJECT_STORE_HEARTBEAT_URL: ${{ secrets.OBJECT_STORE_HEARTBEAT_URL }}
 
       # A notification is read once and an issue stays open, so a red run
       # files one or comments on it (ADR-111, on ADR-043's reasoning). Only
