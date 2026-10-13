@@ -416,8 +416,9 @@ conversion, arranged by hand.
 pairs ([§10.8](backend-architecture/10-api-gateway.md)): the Environment
 *secrets* `OBJECT_STORE_BFF_ACCESS_KEY`, `OBJECT_STORE_BFF_SECRET_KEY`,
 `OBJECT_STORE_CATALOG_ACCESS_KEY`, `OBJECT_STORE_CATALOG_SECRET_KEY` and
-`OBJECT_STORE_HEARTBEAT_URL`, and the Environment *variables* `OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_BUCKET` and
-`OBJECT_STORE_REGION`. They live in the `production` GitHub Environment, whose
+`OBJECT_STORE_HEARTBEAT_URL`, and the Environment *variables*
+`OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_BUCKET` and `OBJECT_STORE_REGION`.
+They live in the `production` GitHub Environment, whose
 deployment branches are restricted to `main` on the realm check's terms, and the
 job is opted in by the repository variable `OBJECT_STORE_CHECK_SCHEDULED`, set
 to `enabled`. Like the realm-check credential it is read by no pod and reaches
