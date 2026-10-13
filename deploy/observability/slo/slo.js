@@ -18,7 +18,7 @@
 //     -e PROM_URL=http://prometheus.observability:9090 \
 //     -e TOKEN_URL=https://id.staging.example.com/realms/commerce/protocol/openid-connect/token \
 //     -e CLIENT_ID=slo-run \
-//     -e SLO_PRODUCT_ID=<a product with a row in ordering.ProductPrices> \
+//     -e SLO_PRODUCT_ID=<a product with a row in ordering.ProductPrices> //     -e SLO_CURRENCY=<the currency of that row> \
 //     deploy/observability/slo/slo.js
 //
 // WHAT THE SLO CLIENT MUST BE GRANTED, because nothing in this repository
@@ -29,8 +29,8 @@
 // `orders:write` to `demo` only. A staging realm has to add one, and that is a
 // deployment obligation this file states rather than assumes.
 //
-// SLO_PRODUCT_ID must have a row in `ordering.ProductPrices` for the run's
-// currency, or §6.6's worked case applies and every order is refused with 422.
+// SLO_PRODUCT_ID must have a row in `ordering.ProductPrices` in SLO_CURRENCY,
+// or §6.6's worked case applies and every order is refused with 422.
 //
 // TWO INSTRUMENTS, DELIBERATELY. k6 measures wall-clock at the client, which
 // includes the edge, TLS and the network; §13.7's command and query rows read
@@ -42,6 +42,7 @@
 import http from 'k6/http';
 import { check, fail } from 'k6';
 import { Trend } from 'k6/metrics';
+import { randomBytes } from 'k6/crypto';
 
 const BASE_URL = __ENV.BASE_URL;
 const PROM_URL = __ENV.PROM_URL;
@@ -146,6 +147,7 @@ export function setup() {
         'CLIENT_ID',
         'CLIENT_SECRET',
         'SLO_PRODUCT_ID',
+        'SLO_CURRENCY',
     ].filter((name) => !__ENV[name]);
 
     if (missing.length > 0)
@@ -181,6 +183,7 @@ export function placeOrder(data) {
     // PlaceOrderTests.PlaceAsync is the working request; read it before
     // editing this.
     const body = JSON.stringify({
+        commandId: newCommandId(),
         items: [{ productId: __ENV.SLO_PRODUCT_ID, quantity: 1 }],
         shippingAddress: {
             line1: '1 Example Street',
@@ -189,7 +192,7 @@ export function placeOrder(data) {
             postalCode: 'EC1A 1BB',
             country: 'GB',
         },
-        currency: 'GBP',
+        currency: __ENV.SLO_CURRENCY,
     });
 
     const response = http.post(`${BASE_URL}/api/v1/orders`, body, {
@@ -337,6 +340,19 @@ export function teardown(data) {
 
     if (breaches.length > 0)
         fail(`SLO run failed:\n  ${breaches.join('\n  ')}`);
+}
+
+// A fresh id per order. `PlaceOrderCommand` is an `IIdempotentCommand` (§8.5),
+// so a repeated id is one order replayed rather than a new one, and a missing
+// one is a 400 from PlaceOrderValidator before the domain runs. A version-4
+// UUID is built from random bytes because k6 has no built-in generator and a
+// remote import would make the run depend on the network.
+function newCommandId() {
+    const b = new Uint8Array(randomBytes(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 function instantQuery(query) {
