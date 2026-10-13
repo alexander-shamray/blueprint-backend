@@ -908,6 +908,20 @@ writes it back — so a config-only deploy (§15.1) scales the service down and 
 climbs out again over the following minutes, with nothing in the deploy log
 saying so.
 
+**A service an operator may switch off is switched off by `suspended: true`,
+not by `kubectl scale`**, which the next deploy undoes, and an HPA at once. The
+Deployment then renders `replicas: 0`, the HPA and the PodDisruptionBudget are
+not rendered, and the migration Job still is, so the schema keeps up with its
+release. Which
+charts may take the value is
+[ADR-104](adr/ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md)'s
+table: a chart whose `suspendable` is not true refuses it, `smoke.sh` holds that
+value to the table and renders every chart suspended, and a canary refuses it.
+The queue-backlog rule (§13.6) is kept, not silenced: it is a ticket and not a
+page, so a suspension does not page, and a suspended consumer's queue may or
+may not reach it. It is no measure of the ADR's bound, which the operator reads
+from the ADR.
+
 **Every Deployment spreads its replicas across nodes as a rule and across
 zones as a preference**, because a disruption budget covers voluntary
 evictions only: without a spread, every replica on one node is a legal
