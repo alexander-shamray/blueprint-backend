@@ -993,8 +993,10 @@ are each file's. In Ordering the ladder applies to the receive endpoints that §
 
 Shipping's `FulfilmentWorker` starts its pass as a child of the trace that
 stamped the shipment, when it is recorded and again when its cancellation is
-requested; its `TrackingWorker` links instead of parenting, because it repeats
-for the shipment's whole life. Notifications' `SendWorker` runs a notice's send
+requested, so the booking or the carrier's cancellation sits in the confirming
+or cancelling trace; its `TrackingWorker` links instead of parenting, because
+it repeats for the shipment's whole life, and the despatch a poll stages
+travels in the poll's trace, one link from the order's. Notifications' `SendWorker` runs a notice's send
 as a child of the trace that stamped it at intake. All three read
 `StagedTrace` and map `StagedTraceColumns` in `Common.Infrastructure/Tracing`.
 
@@ -1186,7 +1188,7 @@ against a Keycloak of its own. The minimal host those tests call runs
 
 The holders in the reference domain are Ordering, Notifications, Shipping,
 Payments and the BFF, and Privacy owns the request; the diagram in §11.7 is
-this case, and its edges are:
+this case, and this table is the owner of what each edge of it erases:
 
 | Holder | Erases | Reports as |
 |---|---|---|

@@ -891,7 +891,8 @@ does; §9.6's saga wants the same transition, not a parallel one.
 saga that sends its own `CancelOrder` finalises once both its stock and its
 payment have come to rest, which [§9.6](09-messaging.md) says when. The endpoint
 above cancels the aggregate and ends nothing — it is the saga's
-*subscription* to `OrderCancelled` (§3.2, §9.6) that stops the
+*subscription* to `OrderCancelled`
+([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table), §9.6) that stops the
 workflow; without it a customer who cancelled here would keep stock reserved
 and a card authorised. Nothing on this page depends on that subscription,
 which is the point worth carrying: an endpoint that publishes a fact has
@@ -1031,7 +1032,7 @@ vocabulary either way.
 > own record**, built from an event whose subject *was* bound from a principal.
 > §9.6's `AuthorisePayment` accordingly carries no `CustomerId` at all, and in
 > the reference domain Payments resolves the payer from the `OrderPlaced` it
-> consumes ([§3.2](03-bounded-contexts.md),
+> consumes ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table),
 > [Appendix E.6.7](appendix-e-reference-domain.md#e67-payer-resolution)).
 >
 > **What decides which fields may stay is instruction versus authority.**
@@ -1400,7 +1401,7 @@ defines the seams and the rules that apply *if* the extension is enabled.
 | Extension | Seam | Baseline rule |
 |---|---|---|
 | **Multi-tenancy** | `TenantId` on the integration event metadata envelope; a logging enrichment hook; an ambient `ITenantContext` resolved from token claims | No tenant is required. **If** tenancy is enabled, `TenantId` must appear in every Redis key — `{service}:cache:{tenant}:...`, after the keyspace segment rather than before it, so [§8.1](08-caching-redis.md)'s eviction split still reads off position two (§8.3) — plus every query predicate and every log scope |
-| **Personal data erasure** | `PersonalDataDeleteRequested` in `Common.Contracts.Privacy.V1` | Defined; in the reference domain Privacy publishes it ([§3.2](03-bounded-contexts.md), [Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure)) and raises none until a request is made. The consumer shape is defined below so services are built ready for it |
+| **Personal data erasure** | `PersonalDataDeleteRequested` in `Common.Contracts.Privacy.V1` | Defined; in the reference domain Privacy publishes it ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table), [Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure)) and raises none until a request is made. The consumer shape is defined below so services are built ready for it |
 | **PCI / HIPAA / SOC 2** | — | Decide before handling regulated data, not after. Record the constraints as an ADR |
 
 > **Decision — a jurisdiction is a value the deployment is given.** See
@@ -1420,7 +1421,8 @@ The right answer is choreography. The request is broadcast; each service deletes
 what it owns and reports back. In the reference domain the holders and what
 each erases are those of
 [Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure),
-and the diagram is that case:
+which is the owner of the facts the diagram leaves out, and the diagram is
+that case:
 
 ```mermaid
 sequenceDiagram
@@ -1438,11 +1440,11 @@ sequenceDiagram
     B->>S: consume (inbox)
     B->>Y: consume (inbox)
     B->>F: consume (inbox)
-    O->>O: anonymise Orders.CustomerId, purge address, clear OrderSummaries.CustomerId
-    N->>N: anonymise ended NotificationLog rows, delete contacts, waiting notices, OrderRecords
-    S->>S: delete DeliveryAddresses rows (ADR-052), empty Shipments.ErasedUnder (ADR-103)
-    Y->>Y: anonymise PaymentOrders.CustomerId
-    F->>F: record the order ids, delete the subject's bff.Orders rows (ADR-098) and saved address (ADR-107)
+    O->>O: erase what it holds (E.6.9)
+    N->>N: erase what it holds (E.6.9)
+    S->>S: erase what it holds (E.6.9)
+    Y->>Y: erase what it holds (E.6.9)
+    F->>F: erase what it holds (E.6.9)
     O->>P: PersonalDataDeleteCompleted {RequestId, "ordering"}
     N->>P: PersonalDataDeleteCompleted {RequestId, "notifications"}
     S->>P: PersonalDataDeleteCompleted {RequestId, "shipping"}
@@ -1502,7 +1504,7 @@ reaches it, and the ids it holds leave it when
 
 > **In the reference domain the Privacy service owns the request.** It is a
 > context with the request aggregate, the expected-responder set as
-> configuration and a completion SLO ([§3.2](03-bounded-contexts.md),
+> configuration and a completion SLO ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table),
 > [Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure)). Naming it in the diagram is what makes the
 > seam checkable: the alternative is discovering that nothing was ever designed
 > to close the request. A service missing from the responder list is the
@@ -1543,8 +1545,9 @@ which is the only place it can be reliably erased.
 > payload is one-way: the payload is serialised into `ordering.OutboxMessages`,
 > whose purge deliberately spares abandoned rows so §13.6's alert can see
 > them; it sits in the broker, for which no chapter sets a retention bound;
-> and it reaches whatever each consumer persists from it, with §3.2 giving the
-> event to the notification service, which has no use for an address at all. The erasure
+> and it reaches whatever each consumer persists from it, with
+> [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+> giving the event to the notification service, which has no use for an address at all. The erasure
 > choreography above reaches none of those, and §13.4's redactor matches key
 > names, none of which cover an address.
 >

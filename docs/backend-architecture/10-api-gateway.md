@@ -1217,9 +1217,9 @@ what the buyer is owed is the outcome it works towards, and that arrives as
 `OrderCancelled`.
 
 > **`dispatched` and `delivered` are the shipping service's.** In the
-> reference domain §3.2 assigns `ShipmentDispatched` and `ShipmentDelivered` to
-> Shipping, which publishes both through its outbox, and Shipping's spec is
-> written against this contract
+> reference domain Shipping publishes both
+> ([Appendix E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table))
+> and its spec is written against this contract
 > ([Appendix E.6.4](appendix-e-reference-domain.md#e64-the-buyer-order-read)).
 
 ### The fields both routes carry
@@ -1295,15 +1295,16 @@ alone.
 > **What Shipping settled, and what it was not asked for.** In the reference
 > domain ([Appendix E.6.4](appendix-e-reference-domain.md#e64-the-buyer-order-read))
 > the shipment half of the detail route is as rich as Shipping's published
-> events, and §3.2 gives it two that carry an order id and a tracking number
-> between them.
+> events, and
+> [E.5.1](appendix-e-reference-domain.md#e51-the-contracts) names two, and
+> the payloads in `Common.Contracts.Shipping.V1` carry an order id and a
+> tracking number between them.
 > So a buyer sees despatch, delivery and a number to take to the carrier, and
 > **no tracking feed**: Shipping publishes no tracking event, and the two
-> milestones are the timeline
-> (`docs/superpowers/specs/2026-09-22-shipping-service-design.md`, section 1).
+> milestones are the timeline (its spec, which E.6.4 names).
 > What its spec was **not** asked for is a read endpoint — ADR-051 exists so
-> that it is not, and §3.2, §4.1, §13 and §15 all describe a Shipping that has
-> none.
+> that it is not, and E.1.1, §4.1, §13 and §15 all describe a Shipping that
+> has none.
 
 ## 10.8 The product image upload
 
