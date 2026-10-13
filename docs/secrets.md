@@ -348,10 +348,10 @@ Environment *secret*, `KEYCLOAK_CHECK_CLIENT_SECRET`. A rotation that replaces
 the client rather than its secret has the first and the last to move.
 
 **The Environment's deployment branches are restricted to `main`, and that
-restriction is the boundary — not the step in either workflow that refuses
-another ref.** Both `deploy.yml`'s rollout and `realm.yml`'s scheduled job
-run whatever copy of the gate the dispatched ref carries, with this
-credential in hand, so a branch could delete the refusing step before
+restriction is the boundary — not the step in any workflow that refuses
+another ref.** `deploy.yml`'s rollout, `realm.yml`'s scheduled job and
+`object-store.yml`'s deployed job run whatever copy of the gate the dispatched
+ref carries, with their credential in hand, so a branch could delete the refusing step before
 dispatching and read the realm with a weakened predicate, or send the secret
 where its own copy of the origin check permits. A workflow cannot enforce a
 rule against the ref it was loaded from. GitHub's *deployment branches*
@@ -410,6 +410,35 @@ never looked, which is the state
 [#157](https://github.com/alexander-shamray/blueprint-backend/issues/157) was
 filed about — and disabling the schedule to quiet the issue is the same
 conversion, arranged by hand.
+
+### An object-store check credential
+
+`object-store.yml`'s `deployed` job holds a second copy of both image credential
+pairs ([§10.8](backend-architecture/10-api-gateway.md)): the Environment
+*secrets* `OBJECT_STORE_BFF_ACCESS_KEY`, `OBJECT_STORE_BFF_SECRET_KEY`,
+`OBJECT_STORE_CATALOG_ACCESS_KEY` and `OBJECT_STORE_CATALOG_SECRET_KEY`, and the
+Environment *variables* `OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_BUCKET` and
+`OBJECT_STORE_REGION`. They live in the `production` GitHub Environment, whose
+deployment branches are restricted to `main` on the realm check's terms, and the
+job is opted in by the repository variable `OBJECT_STORE_CHECK_SCHEDULED`, set
+to `enabled`. Like the realm-check credential it is read by no pod and reaches
+no row of §15.4's table.
+
+**It is opted in the way the realm job is.** `OBJECT_STORE_CHECK_SCHEDULED` is
+a *repository* variable and not an Environment one, because the job-level
+`if:` that reads it is evaluated before the job enters `production`. Until it
+is set the job is skipped; once it is set, nothing in that job is optional.
+
+**The endpoint is pinned here and never read from a release**, because the check
+sends the pairs to it: an endpoint derived from the cluster would let whoever
+can edit a release choose where a signed request goes. `store_check.py` refuses
+a non-`https` endpoint, loopback aside, for the same reason.
+
+**Rotate it with the pair it copies.** Rotating a pair in the store and not here
+makes the next run red with `InvalidAccessKeyId` or `SignatureDoesNotMatch`,
+which the check deliberately does not read as a refusal
+([ADR-110](backend-architecture/adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)).
+Fix the secret; never fix the run by deleting the check.
 
 ### A notification credential
 

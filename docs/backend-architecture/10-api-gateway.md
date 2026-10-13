@@ -1430,7 +1430,10 @@ above. The local store holds each pair to a policy that allows the writes and
 reads above and nothing else, so a delete is refused there as a list is, and
 `ProductImageStoreTests` proves both. A deployed store is run outside this
 repository, so holding it to the sentence above is the deployment's to do, and
-nothing here checks it.
+`object-store.yml` checks that it has, in a deployment that has opted in
+([ADR-110](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)):
+each pair is asked to delete and to list on a daily schedule, and a store that
+allows either fails the run.
 
 **The image is served by the store, or a CDN in front of it, from `products/`
 alone.** It is not served through the gateway, because the gateway would then

@@ -214,6 +214,14 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              and filing a tracker issue when red. The realm a
                              rollout is about to land on is still judged from
                              deploy.yml; this is the moment between rollouts
+.github/workflows/object-store.yml  §10.8's sentence that neither image
+                             credential pair can list a bucket or delete,
+                             asked of the deployed store (ADR-110). Two jobs:
+                             `check` runs the suite on the two triggers that
+                             carry a diff, and `deployed` runs the check
+                             daily and on dispatch under the production
+                             Environment, opted in by the repository variable
+                             OBJECT_STORE_CHECK_SCHEDULED
 .github/<gate>/              one directory per gate — licence-gate,
                              secret-scan, closure-gate, locality-gate,
                              pipeline-gate, output-gate, comment-gate,
@@ -312,6 +320,13 @@ deploy/observability/        §13.8's dashboards, §13.6's alert rules and
                              list self-clearing instead of a list of alerts
                              nobody ever turned on. It reaches no Prometheus
                              and does not validate rule syntax, and says so
+deploy/objectstore/          §10.8's permissions asked of a deployed store.
+                             `store_check.py` signs a delete of an absent key
+                             under each prefix and a list of the bucket with
+                             each credential pair, and requires AccessDenied;
+                             the suite starts a local server that answers as
+                             a store configured to taste. It writes nothing
+                             to the store, and reads only its own tree
 deploy/keycloak/             §11's token obligations against a Keycloak realm
                              representation. `realm_check.py` decides,
                              `read_admin.py` is the one file that talks to

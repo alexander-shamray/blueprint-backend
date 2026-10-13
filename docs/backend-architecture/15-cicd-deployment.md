@@ -190,9 +190,9 @@ the same silence §13.6 spends a callout on, and reading it as "nothing wrong"
 would turn this stage into the gate configured to pass that this paragraph
 opens by ruling out.
 
-**Five** `deploy/**` artefacts are exercised by CI directly rather than
+**Six** `deploy/**` artefacts are exercised by CI directly rather than
 deployed, one per subtree, each in its own path-filtered workflow. **None is the
-smoke stage ruled out above**: all five deploy nothing and assert only what a
+smoke stage ruled out above**: all six deploy nothing and assert only what a
 chapter already defines.
 
 > **A count in prose is a claim to reconcile.** This one is a number rather
@@ -264,7 +264,7 @@ rather than restated** — no client-level `access.token.lifespan` override, no
 client enabling the implicit flow, and `use.refresh.tokens` false on §11.2's
 browser client with `standardFlowEnabled` true beside it.
 
-**It is the one of the five whose gate also reads a subject this repository
+**It is the first of two whose gate also reads a subject this repository
 holds no copy of.** The same predicate runs in `deploy.yml`'s rollout job, over
 the realm a deployment is about to be rolled onto — fetched through Keycloak's
 admin API by `read_admin.py`, under the `production` GitHub Environment, and
@@ -301,7 +301,18 @@ between the two — §11.2's password grant is on in the local realm and off in 
 deployed one — and a check that guessed would pass a production realm on the
 local realm's terms.
 
-**All five filters name files outside their own tree**, and none is an
+The sixth is the object store check
+([ADR-110](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)).
+`.github/workflows/object-store.yml`, path-filtered to `deploy/objectstore/**`,
+runs that tree's suite, which holds `store_check.py` to a local server answering
+as a store configured to taste. Its `deployed` job runs the check daily and on
+`workflow_dispatch`, under the `production` Environment: with each of
+[§10.8](10-api-gateway.md)'s two credential pairs it asks the deployed store to
+delete a key nothing holds and to list the bucket, and fails the run unless
+every answer is `AccessDenied`. It is opted in by a repository variable, on the
+realm job's reasoning, and a red run files no issue.
+
+**Five of the six filters name files outside their own tree**, and none is an
 oversight — each names an input its gate actually reads. Compose's names the
 files it mounts from `deploy/observability/` and what a host's healthcheck
 reads: the probe, the endpoints it asks and the files that bind each host's
@@ -323,7 +334,9 @@ restated, `deploy/compose/keycloak/realm-export.json`, because that file is
 its subject in CI, and `deploy/canary/**`, because its scheduled job loops
 over the plan's workloads to find every release it judges
 ([ADR-043](adr/ADR-043-the-deployed-realm-is-checked-between-rollouts.md)).
-**None of the four keeps that list in its own YAML.**
+**None of the four keeps that list in its own YAML**, and the sixth filter
+names its own tree and its workflow alone, because its gate reads nothing
+else.
 `smoke.sh`, `check.py`, `canary.py` and `realm_check.py` each declare
 `SOURCE_INPUTS` beside the reads, and each asserts that both of its workflow's
 triggers cover every entry — a copy of a list drifts exactly as a copy of a
