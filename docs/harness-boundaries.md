@@ -387,7 +387,12 @@ first, which on Windows may be Git Bash or the WSL launcher: different
 programs, with different filesystems. Either way the failure lands in the
 redirect and reports nothing. So each hook here is `py -3.12` and its
 arguments, with no env-var prefix and no bare `bash`, as the `PreToolUse`
-guards beside it are. The index hooks are
+guards beside it are. **The two hint hooks are the exception**, started as
+`bash …/hint-bound.sh`: Claude Code passes a hook's command to Git Bash on
+Windows, so the `bash` inside it is Git's own and never the WSL launcher.
+A machine without Git Bash falls back to PowerShell, where the wrapper does
+not run and the hint is dropped, as it was before the wrapper existed. The
+index hooks are
 started through `runpy` from `-c` rather than as a file argument, because
 Python exits 2 on a file it cannot open, as when a worktree is emptied under
 a session still running in it: under `UserPromptSubmit` that erases every
