@@ -359,11 +359,12 @@ advice. Two residuals are accepted, because neither can be reported from
 inside the hook and neither has been seen: the wrapper's own start, where
 `bash` stalling past the settings timeout is a case no hook can report, and
 a machine without Git Bash, where the paragraph on hook commands needing no
-shell says why the hint is dropped. A fresh `bash -c true` on the owner's workstation, read
-2026-10-13, took 0.1 s to 3.3 s over six starts, so the cold start that
-stalls a `py` launcher stays far below the settings timeout. A `shell`
-field with an invocation that needs no `bash` would close the second, and
-is not taken: it would run a hint hook the wrapper cannot bound.
+shell says why the hint is dropped. A fresh `bash -c true` on the owner's
+workstation, read 2026-10-13, took 0.1 s to 3.3 s over six starts, so the
+cold start that stalls a `py` launcher stays far below the settings
+timeout. A `shell` field with an invocation that needs no `bash` would
+close the second, and is not taken: it would run a hint hook the wrapper
+cannot bound.
 `test_hint_bound.py` runs the wrapper against a launcher that never answers,
 one that fails and one that answers, and holds `settings.json` to routing
 both hints through it with a timeout above the bound.
