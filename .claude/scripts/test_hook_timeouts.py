@@ -1,6 +1,6 @@
 """settings.json's hooks: a `py` launcher start outlives a 5 s timeout, so each hook that carries one has room for it.
 
-#989 measured `py -3.12 -P` start-up at 2.9 s on a busy machine, and a hook that times out has its output discarded,
+A measured `py -3.12 -P` start-up reached 2.9 s on a busy machine, and a hook that times out has its output discarded,
 which for `index-query-hint.py` means the hint is silently not delivered.
 """
 
@@ -9,7 +9,7 @@ import unittest
 
 from review_helpers import SETTINGS, setUpModule
 
-# The slowest `py` start #989 measured was 2.9 s; a hook needs that and its own work, with room to spare.
+# The slowest `py` start measured was 2.9 s; a hook needs that and its own work, with room to spare.
 FLOOR_SECONDS = 15
 
 
