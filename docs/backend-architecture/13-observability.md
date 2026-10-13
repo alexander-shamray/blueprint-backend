@@ -1167,7 +1167,7 @@ question than the bus's own check already answers.
 **A host that registers the operator switch adds one more check, named
 `operator-switches`, tagged `ready`** and registered by `AddOperatorSwitches`,
 not by this block
-([ADR-114](adr/ADR-114-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-that-is-degraded-supersedes-adr-113s-loop-that-adds-no-check-1013.md)).
+([ADR-115](adr/ADR-115-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-that-is-degraded-supersedes-adr-113s-loop-that-adds-no-check-1013.md)).
 It reports Degraded while a receive endpoint or a worker loop is switched off
 ([ADR-113](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)),
 and never Unhealthy, so `/health/ready` still answers 200 and a deliberate stop

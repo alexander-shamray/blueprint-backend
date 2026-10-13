@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>ADR-114's check: a name switched off shows in readiness, and readiness still answers 200.</summary>
+/// <summary>ADR-115's check: a name switched off shows in readiness, and readiness still answers 200.</summary>
 public class OperatorSwitchHealthCheckTests
 {
     private static ServiceProvider Build(params string[] off)

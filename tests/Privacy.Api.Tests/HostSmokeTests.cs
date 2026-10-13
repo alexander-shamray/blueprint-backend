@@ -74,7 +74,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         bus.Tags.ShouldContain("ready", "a bus check outside the ready predicate reports to nobody");
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
 
-        // Reports Degraded only, which answers 200, so it is in the set and never takes the pod out (ADR-114).
+        // Reports Degraded only, which answers 200, so it is in the set and never takes the pod out (ADR-115).
         options.Registrations.Single(r => r.Name == "operator-switches").Tags.ShouldContain("ready");
     }
 
