@@ -37,8 +37,7 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
     [Fact]
     public async Task A_message_published_while_the_endpoint_is_off_waits_in_the_queue_and_drains_when_it_is_on()
     {
-        // A queue of this run's own, so a broker kept between runs holds nothing from the last.
-        string queue = $"switch-broker-probe-{Guid.CreateVersion7():N}";
+        string queue = RabbitFixture.Queue;
         OperatorSwitchTests.MutableSource source = new();
         IConfiguration configuration = new ConfigurationBuilder().Add(source).Build();
         ServiceCollection services = new();
@@ -52,7 +51,14 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
             {
                 cfg.Host(new Uri(fixture.BrokerAddress));
                 cfg.ConnectOperatorSwitch(context);
-                cfg.ReceiveEndpoint(queue, e => e.ConfigureConsumer<BrokerProbeConsumer>(context));
+                cfg.ReceiveEndpoint(
+                    queue,
+                    e =>
+                    {
+                        // Binding this test's message-type exchange is outside payments-svc's grant (ADR-036).
+                        e.ConfigureConsumeTopology = false;
+                        e.ConfigureConsumer<BrokerProbeConsumer>(context);
+                    });
             });
         });
 
@@ -72,7 +78,8 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
                 "Unhealthy would unready the pod, and a switched-off pod is meant to stay in service");
 
             Guid waiting = Guid.CreateVersion7();
-            await bus.Publish(new BrokerProbe(waiting), TestContext.Current.CancellationToken);
+            ISendEndpoint endpoint = await bus.GetSendEndpoint(new Uri($"queue:{queue}"));
+            await endpoint.Send(new BrokerProbe(waiting), TestContext.Current.CancellationToken);
             await Task.Delay(1000, TestContext.Current.CancellationToken);
             BrokerProbeConsumer.Seen.ShouldNotContain(
                 waiting,
