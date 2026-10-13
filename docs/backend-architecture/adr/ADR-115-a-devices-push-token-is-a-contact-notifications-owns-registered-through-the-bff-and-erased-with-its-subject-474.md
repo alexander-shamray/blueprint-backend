@@ -29,7 +29,8 @@ drops the row seen least recently.
 **The client registers through the BFF**: `PUT /bff/v1/devices/{installationId}`
 with the platform, the app id and the token, sent on every start of the app
 and on every rotation, and `DELETE` on the same path at sign-out, answered 204
-whether or not a row was there unless it is stale, below. **Each request carries the installation's
+whether or not a row was there unless it is stale, below. **Each request
+carries the installation's
 sequence**, a counter the app raises before every registration and sign-out
 and keeps with its installation id, and Notifications applies a request only
 when its sequence is above the row's: one equal to it is a repeat and is
@@ -154,7 +155,8 @@ name for its row**: a subject who learns another's can move that row to
 themselves, which stops the other's pushes until that app's next start, when
 the 409 sends it past the mover's sequence, and reads none of them. A mover
 who repeats the move after every start of the other's app keeps the row for as
-long as they keep at it; the id is a random UUID the app never shows. **A registration made after an erasure**
+long as they keep at it; the id is a random UUID the app never shows. **A
+registration made after an erasure**
 makes a new row of the subject's own act, as ADR-107 accepts for the saved
 address, and it comes back on every start of the app for as long as the
 deployment leaves the subject able to sign in, since Keycloak takes no part in
