@@ -1873,12 +1873,10 @@ class DigestTests(unittest.TestCase):
         self.assertEqual(SHA, canary.verified_digest(verification(SHA, SHA)))
 
     def test_real_cosign_output_is_read(self) -> None:
-        """What `cosign verify -o json` printed for catalog-api at 8cb90fd0.
+        """What cosign v3.1.3 printed for the first image the pipeline signed.
 
-        cosign v3.1.3 against the first image the pipeline signed: the
-        signature, the provenance and the SBOM attestation, all over one
-        digest. A hand-built document says the reader agrees with its author,
-        and this one says it agrees with cosign (#982).
+        A hand-built document shows the reader agrees with its author, and
+        this one shows it agrees with cosign.
         """
         path = canary.CANARY / "fixtures" / "cosign-verify-catalog-api.json"
         document = json.loads(path.read_text(encoding="utf-8"))
