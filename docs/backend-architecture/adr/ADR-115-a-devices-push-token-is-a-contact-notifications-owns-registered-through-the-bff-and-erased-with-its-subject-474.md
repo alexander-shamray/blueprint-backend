@@ -29,7 +29,7 @@ drops the row seen least recently.
 **The client registers through the BFF**: `PUT /bff/v1/devices/{installationId}`
 with the platform, the app id and the token, sent on every start of the app
 and on every rotation, and `DELETE` on the same path at sign-out, answered 204
-whether or not a row was there. **Each request carries the installation's
+whether or not a row was there unless it is stale, below. **Each request carries the installation's
 sequence**, a counter the app raises before every registration and sign-out
 and keeps with its installation id, and Notifications applies a request only
 when its sequence is above the row's: one equal to it is a repeat and is
