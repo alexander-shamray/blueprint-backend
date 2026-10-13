@@ -6,9 +6,9 @@ namespace Web.Bff.ProductImages;
 
 /// <summary>AWS Signature Version 4 in its query-string form, for one object and one method.</summary>
 /// <remarks>
-/// A local computation, so handing out a URL takes no runtime dependency on the store (ADR-106). Hand-written
-/// rather than taken from the SDK because the signature must cover <c>Content-Length</c> (§10.8), which the SDK's
-/// pre-signer does not sign; the AWS documentation's published example is the test that this is the algorithm.
+/// A local computation, so a URL takes no runtime dependency on the store (ADR-106). Hand-written because the
+/// signature must cover <c>Content-Length</c> (§10.8), which the SDK's pre-signer does not sign; AWS's published
+/// example is the test that this is the algorithm.
 /// </remarks>
 public static class SigV4Presigner
 {

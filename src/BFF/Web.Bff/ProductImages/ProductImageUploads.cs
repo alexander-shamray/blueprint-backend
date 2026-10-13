@@ -12,7 +12,7 @@ public sealed record ProductImageUpload(
     DateTimeOffset ExpiresAt);
 
 /// <summary>§10.8's issue of a pre-signed <c>PUT</c>, and nothing else: it reads no store and writes none.</summary>
-/// <remarks>A singleton, since it holds only options and a clock.</remarks>
+/// <remarks>A singleton, since it holds only options and a clock (§10.8).</remarks>
 public sealed class ProductImageUploads(IOptions<ObjectStoreOptions> options, TimeProvider clock)
 {
     /// <summary>Five minutes, §10.8's expiry: long enough to send 5 MiB from a phone, short enough to lose.</summary>

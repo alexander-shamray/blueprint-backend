@@ -169,12 +169,10 @@ redis:
     cacheKey: cache-connection-string
     coordinationKey: coordination-connection-string
 
-# ADR-106's store, which this service reads an upload from and copies it within
-# (§10.8). `endpoint` is the address this pod reaches; `publicBaseUrl` is where
-# products/ is served from, by the store or a CDN in front of it, and the stored
-# image URL is built from it and from nothing a client sent. The pair is one
-# Secret of this service's own: it reads uploads/ and writes products/, and
-# lists and deletes nothing.
+# ADR-106's store, read from and copied within (§10.8). `endpoint` is the address
+# this pod reaches; `publicBaseUrl` is where products/ is served, and the stored
+# URL is built from it and nothing a client sent. The pair is this service's own
+# Secret: it reads uploads/ and writes products/, and lists and deletes nothing.
 objectStore:
   enabled: true
   endpoint: https://objects.example.com

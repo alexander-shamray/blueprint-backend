@@ -9,8 +9,8 @@ namespace Common.TestSupport;
 
 /// <summary>ADR-106's local store as §14.1 runs it: the same image, identities, bucket rule and edge.</summary>
 /// <remarks>
-/// Every file under <c>deploy/compose/object-store</c> is mounted rather than copied, so a suite that passes here is
-/// passing against what <c>docker compose up</c> starts; the bucket is made by the one-shot's own commands.
+/// Every file under <c>deploy/compose/object-store</c> is mounted rather than copied (§14.1), so a suite that
+/// passes here passes against what <c>docker compose up</c> starts; the one-shot's own commands make the bucket.
 /// </remarks>
 public sealed class ObjectStoreFixture : IAsyncLifetime
 {
