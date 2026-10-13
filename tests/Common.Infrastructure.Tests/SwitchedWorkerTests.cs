@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>A worker loop checks its switch on each tick and skips the pass while it is off (ADR-112).</summary>
+/// <summary>A worker loop checks its switch on each tick and skips the pass while it is off (ADR-113).</summary>
 public class SwitchedWorkerTests
 {
     private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(20);

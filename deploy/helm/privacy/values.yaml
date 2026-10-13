@@ -154,7 +154,7 @@ transport:
 suspendable: true
 suspended: false
 
-# ADR-112's runtime switch: queue and worker names to switch off while the pod
+# ADR-113's runtime switch: queue and worker names to switch off while the pod
 # runs, which the host reloads from a mounted file without a restart. A value
 # here rolls no pod. Empty is nothing off.
 switches:

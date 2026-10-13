@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>ADR-112's switch: a stopped endpoint consumes nothing and a started one drains its queue.</summary>
+/// <summary>ADR-113's switch: a stopped endpoint consumes nothing and a started one drains its queue.</summary>
 public class OperatorSwitchTests
 {
     private const string Queue = "switch-probe";

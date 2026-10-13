@@ -1,6 +1,6 @@
 namespace Common.Infrastructure.Switching;
 
-/// <summary>The names an operator has switched off, read from configuration that reloads (ADR-112).</summary>
+/// <summary>The names an operator has switched off, read from configuration that reloads (ADR-113).</summary>
 public sealed class OperatorSwitchOptions
 {
     public const string SectionName = "Switches";

@@ -17,7 +17,7 @@ namespace Common.Infrastructure.Outbox;
 /// <summary>§9.4's dispatcher: an atomic claim that leases a batch, then delivery that fails per row.</summary>
 public sealed class OutboxDispatcher : BackgroundService, ISwitchedWorker
 {
-    /// <summary>The name an operator lists to switch the dispatcher off (ADR-112).</summary>
+    /// <summary>The name an operator lists to switch the dispatcher off (ADR-113).</summary>
     public const string Name = "outbox-dispatcher";
 
     /// <summary>§9.4's attempt cap, public so §13.6's abandoned-rows gauge reads this number, not a copy.</summary>

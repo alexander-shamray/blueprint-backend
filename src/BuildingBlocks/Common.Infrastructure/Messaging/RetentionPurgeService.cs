@@ -15,7 +15,7 @@ namespace Common.Infrastructure.Messaging;
 /// <remarks>A marker goes once <see cref="IIdempotencyStore"/> lets its claim go (ADR-039, ADR-041).</remarks>
 public sealed class RetentionPurgeService : BackgroundService, ISwitchedWorker
 {
-    /// <summary>The name an operator lists to switch the purge off (ADR-112).</summary>
+    /// <summary>The name an operator lists to switch the purge off (ADR-113).</summary>
     public const string Name = "retention-purge";
 
     // Compiled once, for CA1848 (ADR-019); the arguments bind to the placeholders by position.

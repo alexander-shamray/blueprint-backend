@@ -27,7 +27,7 @@ public sealed class SendWorker(
     ILogger<SendWorker> log,
     OperatorSwitches? switches = null) : BackgroundService, ISwitchedWorker
 {
-    /// <summary>The name an operator lists to switch the send pass off (ADR-112).</summary>
+    /// <summary>The name an operator lists to switch the send pass off (ADR-113).</summary>
     public const string Name = "send-worker";
 
     /// <summary>Rows one pass sends at once; a pass lasts as long as its slowest row.</summary>
