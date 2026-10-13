@@ -34,12 +34,12 @@ whether or not a row was there unless its sequence is out of order, below.
 before every registration and sign-out and keeps with its installation id, and
 Notifications applies a request only when its sequence is above the row's. One
 equal to it is a repeat, answered as the first was, only when it asks for what
-the row already holds — the same subject and, for a `PUT`, the same platform,
-app id and token, or for a `DELETE` a row already cleared — and is otherwise
-stale, as one below the row's is. A stale request changes nothing and is
-answered 409 with the row's sequence, so an app whose counter has fallen behind
-its row — restored from a backup, or overtaken by the move below — sets its
-counter one past it and sends its present state again. A sequence more than
+the row already holds — for a `PUT`, the same subject, platform, app id and
+token, or for a `DELETE` a row already cleared — and is otherwise stale, as one
+below the row's is. A stale request changes nothing and is answered 409 with the
+row's sequence, so an app whose counter has fallen behind its row — restored
+from a backup, or overtaken by the move below — sets its counter one past it and
+sends its present state again. A sequence more than
 `DeviceTokenOptions.MaxSequenceStep` above an existing row's is out of order too
 and is answered the same 409, so no request can put a row's sequence out of an
 app's reach, and an app whose counter ran ahead while its requests failed comes
