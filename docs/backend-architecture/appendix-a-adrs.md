@@ -114,6 +114,7 @@ decision looks wrong.
 | **ADR-105** | [Appendix E has no per-service unit, so remove-service still edits no document](adr/ADR-105-appendix-e-has-no-per-service-unit-so-remove-service-still-edits-no-document.md) |
 | **ADR-106** | [An S3-compatible object store for product images; the BFF issues a pre-signed upload URL (#472)](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md) |
 | **ADR-107** | [The BFF keeps a customer's saved delivery address, and an erasure deletes it (#473)](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md) |
+| **ADR-108** | [The buyer's order has a server-sent event stream that polls its row and ends inside the deadline (#475)](adr/ADR-108-the-buyers-order-has-a-server-sent-event-stream-that-polls-its-row-and-ends-inside-the-deadline-475.md) |
 
 ---
 

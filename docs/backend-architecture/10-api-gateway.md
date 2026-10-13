@@ -1113,7 +1113,8 @@ synchronous call. What follows is its wire contract, which the one consumer
 helped write and builds against.
 
 Two routes, because a list and a detail answer different questions and §10.1's
-rule is that the screen's question is the whole of the request:
+rule is that the screen's question is the whole of the request (a third, the
+detail's event stream, follows the fields):
 
 | | Path |
 |---|---|
@@ -1305,6 +1306,42 @@ alone.
 > What its spec was **not** asked for is a read endpoint — ADR-051 exists so
 > that it is not, and E.1.1, §4.1, §13 and §15 all describe a Shipping that
 > has none.
+
+### The order's event stream
+
+[ADR-108](adr/ADR-108-the-buyers-order-has-a-server-sent-event-stream-that-polls-its-row-and-ends-inside-the-deadline-475.md)
+adds a third route to the group, for a client that would otherwise poll the
+detail route: `GET /bff/v1/orders/{id}/events`, which the gateway matches and
+strips as it does the other two, so it needs no gateway change either. It
+answers `text/event-stream`, with `Cache-Control: no-store` and
+`X-Accel-Buffering: no`, and carries the same subject rule as the detail
+route: **another buyer's order, and an unknown one, answer the same 404 before
+any stream is opened.**
+
+- **`order` events.** `data` is the detail route's `OrderDetail`, byte for byte
+  the shape it returns, and `id` is that row's `asOf`. The first event of a
+  stream is the row as it stands, so opening the stream is also a read; later
+  ones are sent when `asOf` differs from the last one sent.
+- **Heartbeat.** A comment line, `: keep-alive`, after
+  `OrderEventStream.HeartbeatInterval` with nothing sent, for the proxies that
+  close a connection they see idle.
+- **Reconnection.** A request carrying `Last-Event-ID` equal to the row's `asOf`
+  is sent nothing until the row moves. The stream names
+  `OrderEventStream.RetryAfter` in a `retry` field, so a reconnect is paced by
+  the server and not by each client's default.
+- **The stream ends by itself.** After `OrderEventStream.Lifetime`, which is
+  inside `ServiceOptions.OperationTimeout` (§9.7) and so inside every layer
+  above it; at once on a delivered order, the one status nothing follows; and
+  when the row is gone, as an erasure removes it. A client that wants more
+  reconnects, and **a stream is a convenience over the read, never a second
+  source**: a client that missed an event reads the detail route.
+
+Each open stream reads its one row by key every `OrderEventStream.PollInterval`
+and holds nothing between reads, which is why three replicas serve one buyer's
+stream as well as one does: the row is shared and the stream is its own whole
+state. An update reaches the client one interval after the projection writes it.
+The gateway's `authenticated` limiter (§10.3) counts each connect as a request,
+which is the bound on how often a buyer may reopen one.
 
 ## 10.8 The product image upload
 
