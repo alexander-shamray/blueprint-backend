@@ -1439,8 +1439,9 @@ for `PersonalDataDeleteRequested` deletes the subject's row in the transaction
 that deletes their orders and counts it in the request's audit row; the BFF was
 already one of the holders an erasure request waits on
 ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
-so the responder set does not change. The address is never a log attribute, a span attribute or part of an
-exception's message ([§13.4](13-observability.md)).
+so the responder set does not change. The address is never a log attribute, a
+span attribute or part of an exception's message
+([§13.4](13-observability.md)).
 
 ---
 
