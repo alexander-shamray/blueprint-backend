@@ -35,23 +35,36 @@ named; an unreachable store and an unset variable are not answers.
 
 | | |
 |---|---|
-| Variables | `OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_BUCKET`, `OBJECT_STORE_REGION` |
-| Secrets | `OBJECT_STORE_BFF_ACCESS_KEY`, `OBJECT_STORE_BFF_SECRET_KEY`, `OBJECT_STORE_CATALOG_ACCESS_KEY`, `OBJECT_STORE_CATALOG_SECRET_KEY` |
+| Variables | `OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_BUCKET`, `OBJECT_STORE_REGION`; `OBJECT_STORE_ADDRESSING` (`virtual` for a store reachable only by a virtual-hosted name, `path` when unset) |
+| Secrets | `OBJECT_STORE_BFF_ACCESS_KEY`, `OBJECT_STORE_BFF_SECRET_KEY`, `OBJECT_STORE_CATALOG_ACCESS_KEY`, `OBJECT_STORE_CATALOG_SECRET_KEY`, `OBJECT_STORE_HEARTBEAT_URL` |
+| Repository variable | `OBJECT_STORE_CHECK_SCHEDULED`, `enabled` |
 
 Where they live, why the endpoint is pinned and how to rotate them are
 [`docs/secrets.md`](../../docs/secrets.md)'s.
 
+## Provisioning it
+
+The `production` Environment must already exist and admit `main` alone. Put
+every variable and secret above, bar the optional addressing one, in your
+shell's environment; `apply` sets the repository variable itself, last. Then:
+
+```bash
+py -3.12 deploy/objectstore/provision.py check    # what is still missing
+py -3.12 deploy/objectstore/provision.py apply    # sets it, the opt-in last
+```
+
+Create the monitor first and use its ping URL as `OBJECT_STORE_HEARTBEAT_URL`:
+any service that alerts when a URL has not been requested for longer than a
+grace period will do, with a period a little over a day.
+
 ## What it does not check
 
 - **That the policy allows what the services need.** A deployed upload does.
-- **A store addressed only by virtual-hosted name.** The request is signed for
-  a path-style URL.
 - **Anything outside the store's own policy**, such as a CDN or a bucket ACL
   that grants a delete around it.
-- **That the schedule ran.** GitHub sheds a schedule under load, or suspends
-  it after a stretch without a commit, without a red run and so without an
-  issue; a monitor outside GitHub asking whether `object-store.yml` ran
-  recently is the deployment's to add.
+- **That the monitor exists.** A green run requests the heartbeat URL, so a
+  schedule GitHub shed or suspended is heard as silence, but only by a
+  monitor the deployment created ([ADR-114](../../docs/backend-architecture/adr/ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md)).
 
 ## What a red run means
 

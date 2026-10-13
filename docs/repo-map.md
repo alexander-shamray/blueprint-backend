@@ -326,7 +326,10 @@ deploy/observability/        §13.8's dashboards, §13.6's alert rules and
                              nobody ever turned on. It reaches no Prometheus
                              and does not validate rule syntax, and says so
 deploy/objectstore/          §10.8's permissions asked of a deployed store.
-                             `store_check.py` signs a delete of an absent key
+                             `provision.py` names what the production
+                             Environment lacks and sets it; `store_check.py`
+                             also sends the green run's heartbeat. It signs
+                             a delete of an absent key
                              under each prefix and a list of the bucket with
                              each credential pair, and requires AccessDenied;
                              the suite starts a local server that answers as

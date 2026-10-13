@@ -415,8 +415,8 @@ conversion, arranged by hand.
 `object-store.yml`'s `deployed` job holds a second copy of both image credential
 pairs ([§10.8](backend-architecture/10-api-gateway.md)): the Environment
 *secrets* `OBJECT_STORE_BFF_ACCESS_KEY`, `OBJECT_STORE_BFF_SECRET_KEY`,
-`OBJECT_STORE_CATALOG_ACCESS_KEY` and `OBJECT_STORE_CATALOG_SECRET_KEY`, and the
-Environment *variables* `OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_BUCKET` and
+`OBJECT_STORE_CATALOG_ACCESS_KEY`, `OBJECT_STORE_CATALOG_SECRET_KEY` and
+`OBJECT_STORE_HEARTBEAT_URL`, and the Environment *variables* `OBJECT_STORE_ENDPOINT`, `OBJECT_STORE_BUCKET` and
 `OBJECT_STORE_REGION`. They live in the `production` GitHub Environment, whose
 deployment branches are restricted to `main` on the realm check's terms, and the
 job is opted in by the repository variable `OBJECT_STORE_CHECK_SCHEDULED`, set
@@ -426,7 +426,19 @@ no row of §15.4's table.
 **It is opted in the way the realm job is.** `OBJECT_STORE_CHECK_SCHEDULED` is
 a *repository* variable and not an Environment one, because the job-level
 `if:` that reads it is evaluated before the job enters `production`. Until it
-is set the job is skipped; once it is set, nothing in that job is optional.
+is set the job is skipped; once it is set, nothing in that job is optional but
+`OBJECT_STORE_ADDRESSING`, whose absence is `path`.
+
+**The heartbeat URL is a bearer token.** `store_check.py heartbeat` requests it
+after a green check so that a monitor outside GitHub can alert when the
+requests stop, which is the only way a schedule GitHub shed or suspended is
+heard ([ADR-114](backend-architecture/adr/ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md)). It is a secret, never
+in a message, and `https` or loopback alone. The optional Environment variable
+`OBJECT_STORE_ADDRESSING` is `virtual` for a store reachable only by a
+virtual-hosted name, and `path` when unset. `py -3.12
+deploy/objectstore/provision.py check` lists what the Environment lacks and
+`apply` sets it from the same names in the caller's environment, the opt-in
+last; it refuses an Environment that admits more than `main`.
 
 **The endpoint is pinned here and never read from a release**, because the check
 sends the pairs to it: an endpoint derived from the cluster would let whoever
