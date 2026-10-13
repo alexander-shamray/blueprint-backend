@@ -44,6 +44,10 @@ spec:
         refusal for a chart that is not suspendable still runs. `routeSwitch`
         is left out for the same reason (ADR-118). */}}
         {{- $_ := include "commerce.switches" . }}
+        {{- /* Only the gateway chart renders the ConfigMap this mounts. */}}
+        {{- if and .Values.routeSwitch (ne .Chart.Name "gateway") }}
+        {{- fail (printf "routeSwitch is set on the %s chart, and only the gateway chart renders the ConfigMap it mounts: the pod would wait for it forever (ADR-118)." .Chart.Name) }}
+        {{- end }}
         checksum/values: {{ printf "%s%s%s" (toYaml (omit .Values "switches" "routeSwitch")) (include "commerce.configmap" .) $extra | sha256sum }}
     spec:
       {{- /* Nothing in this platform calls the Kubernetes API, and a mounted

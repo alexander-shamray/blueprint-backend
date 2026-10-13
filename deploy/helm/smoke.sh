@@ -2533,6 +2533,8 @@ refuses_chart gateway 'a route named twice is refused, citing ADR-118' 'ADR-118'
     $GATEWAY_OVERLAY --set 'routeSwitch.off={privacy-erase,privacy-erase}'
 for chart in $SERVICE_CHARTS; do
     [ "$chart" = gateway ] && continue
+    refuses_chart "$chart" "$chart: a route switch is refused, citing ADR-118" 'ADR-118' \
+        $GATEWAY_OVERLAY --set 'routeSwitch.off={privacy-erase}'
     check "$chart: mounts no route switch" \
         test "$(count 'mountPath: /etc/commerce/routes' "$OUT/switch-base-$chart.txt")" -eq 0
 done
