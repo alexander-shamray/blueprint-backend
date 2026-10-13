@@ -170,8 +170,8 @@ reason:
 | [§10](../10-api-gateway.md) | §10.1's one `Web.Bff` making one call to one service, §10.4's hop to the one service it calls, and no wire contract for the route beside §10.9's |
 | [§11.5](../11-identity-authorization.md) | The equation above, and the credentials handler attached to every outbound client that calls a peer |
 | [§15.4](../15-cicd-deployment.md) | One set of credentials per host that calls synchronously, as the number of couplings |
-| [Appendix E](../appendix-e-reference-domain.md) | E.2.1's pure-consumer shape for Notifications and the scaffold's `--pure-consumer` rule, E.5.4's hops without this one, E.6.1's one synchronous call from the BFF, and E.6.9's Notifications row without the tokens |
-| [§15.3](../15-cicd-deployment.md) and `deploy/helm/smoke.sh`, where the worker is the host | A worker's chart with no Service and the health endpoint as its only listener, and a Service-less chart's policy asserted to admit nothing — **asserted**: the gate goes red |
+| [Appendix E](../appendix-e-reference-domain.md) | E.2.1's pure-consumer shape for Notifications and the scaffold's `--pure-consumer` rule, E.5.4's hops without this one, E.6.1's one synchronous call from the BFF, E.6.9's Notifications row without the tokens, and E.9.3's Notifications as a worker that exposes no API, whose chart writes `service.enabled: false` |
+| [§15.3](../15-cicd-deployment.md), `deploy/helm/notifications/values.yaml` and `deploy/helm/smoke.sh`, where the worker is the host | A worker's chart with no Service and the health endpoint as its only listener, and a Service-less chart's policy asserted to admit nothing — **asserted**: the gate goes red |
 | `docs/runbooks/latency.md` | One synchronous hop on a request path, BFF to Catalog, as the only one that can make a request wait |
 | `deploy/helm/catalog/Chart.yaml` and `docs/repo-map.md` | The platform's two gRPC servers |
 | `docs/personal-data.md` | No row for the table |
