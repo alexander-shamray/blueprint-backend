@@ -559,7 +559,10 @@ millisecond defaults every lag under five seconds lands in one bucket, where a
 quantile reads the same number whatever the lag was. The bounds reach below a
 second not to claim precision there but so that a healthy lag lands in a
 narrow bucket, and §13.7's targets are bounds themselves, so the p95 §13.6
-alerts on is read at a bucket edge.
+alerts on is read at a bucket edge. The bounds also run closely up to the
+first target from below, so that a run with half a second to spare does not
+print a p99 near the target: a quantile interpolates linearly inside its
+bucket, and a wide bucket reports its top whatever the true value.
 
 Both lags compare a timestamp made on another machine, so both carry the same
 caveat: they are useful at second granularity and meaningless below it, which is

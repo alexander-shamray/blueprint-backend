@@ -37,6 +37,29 @@ public class MessagingMetricsTests
         buckets.First(b => b.BucketCount > 0).ExplicitBound.ShouldBeLessThan(double.PositiveInfinity);
     }
 
+    [Theory]
+    [InlineData("messaging.delivery.lag")]
+    [InlineData("projection.lag")]
+    public void A_lag_just_under_the_first_target_is_exported_well_short_of_it(string instrument)
+    {
+        IReadOnlyList<HistogramBucket> buckets = Export(instrument, TimeSpan.FromMilliseconds(527));
+
+        buckets.First(b => b.BucketCount > 0).ExplicitBound.ShouldBeLessThanOrEqualTo(0.6);
+    }
+
+    [Theory]
+    [InlineData("messaging.delivery.lag")]
+    [InlineData("projection.lag")]
+    public void A_bound_sits_within_a_tenth_of_a_second_below_the_first_target(string instrument)
+    {
+        IReadOnlyList<HistogramBucket> buckets = Export(instrument, TimeSpan.FromMilliseconds(850));
+
+        double landed = buckets.First(b => b.BucketCount > 0).ExplicitBound;
+
+        landed.ShouldBeLessThan(Targets[0]);
+        landed.ShouldBeGreaterThanOrEqualTo(Targets[0] - 0.1);
+    }
+
     private static List<HistogramBucket> Export(string instrument, TimeSpan lag)
     {
         string message = $"Probe{Guid.NewGuid():N}";

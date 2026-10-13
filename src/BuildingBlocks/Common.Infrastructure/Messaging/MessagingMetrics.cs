@@ -9,7 +9,7 @@ public sealed class MessagingMetrics
     /// <summary>Seconds-scale bounds, which the SDK defaults only for instruments it knows by name (§13.3).</summary>
     private static readonly InstrumentAdvice<double> LagBuckets = new()
     {
-        HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30]
+        HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 0.6, 0.75, 0.9, 1, 2, 5, 10, 30]
     };
 
     private readonly Histogram<double> _deliveryLag;
