@@ -431,6 +431,17 @@ neither check: the link check would report on a tree it did not touch. Its PR
 body says so rather than claiming a run that did not happen — a body that names
 the class has named the reason.
 
+**The audit is dispatched, never invoked as the command.** The command's
+frontmatter denies `Edit` on `src/` and the other trees, and a frontmatter deny
+holds to the end of the turn (`docs/harness-boundaries.md`). `/ship` runs the
+whole chain in one turn, so a run that invoked it could make no code fix in a
+later review round, and would have to stop or route round the deny. The step
+spawns the passes the command's *Dispatch* section names, as `general-purpose`
+agents told to edit nothing, and reads their JSON as step 5 reads a finding.
+That is the brief's guarantee and not the tool list's, the same one
+`docs/commands/validate-blueprint.md` states for its own agent; the denies stay
+on the command for a person who invokes it alone.
+
 **One check holds whatever the class: a fix to a script under
 `.claude/` carries its case.** `docs/change-locality.md` §6's
 *Working rules* own the rule, and this step reads it because it runs before
