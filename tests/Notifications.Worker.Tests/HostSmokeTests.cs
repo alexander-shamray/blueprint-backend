@@ -55,7 +55,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
             .Value;
 
         // The count is the assertion, since a readiness check dropped from a growing list turns nothing red.
-        options.Registrations.Count.ShouldBe(2);
+        options.Registrations.Count.ShouldBe(3);
 
         HealthCheckRegistration sql = options.Registrations.Single(r => r.Name == "sql");
         sql.Tags.ShouldContain("ready", "an untagged check is invisible to the /health/ready predicate");
@@ -65,8 +65,10 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         bus.Tags.ShouldContain("ready", "a bus check outside the ready predicate reports to nobody");
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
 
-        // By name, since a dependency added to readiness later is a rollout the relay could block (§15.3).
-        options.Registrations.Select(r => r.Name).ShouldBe(["sql", "masstransit-bus"], ignoreOrder: true);
+        // By name, since a dependency added to readiness later is a rollout the relay could block (§15.3). The
+        // operator switches only ever report Degraded, which answers 200 (ADR-114).
+        options.Registrations.Select(r => r.Name)
+            .ShouldBe(["sql", "masstransit-bus", "operator-switches"], ignoreOrder: true);
     }
 
     [Fact]

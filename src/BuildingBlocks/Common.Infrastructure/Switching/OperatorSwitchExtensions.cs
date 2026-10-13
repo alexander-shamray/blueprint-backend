@@ -20,6 +20,11 @@ public static class OperatorSwitchExtensions
         services.AddSingleton<OperatorSwitches>();
         services.AddSingleton<ReceiveEndpointSwitch>();
 
+        // Tagged ready so a loop that is off shows in readiness; Degraded keeps the pod in service (ADR-114).
+        services
+            .AddHealthChecks()
+            .AddCheck<OperatorSwitchHealthCheck>(OperatorSwitchHealthCheck.Name, tags: ["ready"]);
+
         return services;
     }
 
