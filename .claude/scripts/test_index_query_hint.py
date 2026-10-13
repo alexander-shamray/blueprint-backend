@@ -13,6 +13,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from review_helpers import python_as_py
+
 SCRIPTS = Path(__file__).resolve().parent
 CLAUDE = SCRIPTS.parent
 HINT = CLAUDE / "hooks" / "index-query-hint.py"
@@ -118,7 +120,7 @@ class TheWiring(unittest.TestCase):
             for root, hinted in ((CLAUDE.parent, True), (quoted, True), (Path(scratch), False)):
                 done = subprocess.run(
                     argv, input=event, capture_output=True, timeout=30, check=False,
-                    env=dict(os.environ, CLAUDE_PROJECT_DIR=str(root)))
+                    env=python_as_py(dict(os.environ, CLAUDE_PROJECT_DIR=str(root)), scratch))
                 with self.subTest(root=str(root)):
                     self.assertNotEqual(2, done.returncode, done.stderr)
                     # A hook that cannot run leaves hint-bound.sh's line, and a prompt is never erased.

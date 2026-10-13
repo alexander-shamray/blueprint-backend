@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -69,6 +70,18 @@ def run_bash(script, subject="", **env_extra):
         text=True,
         env=env,
     )
+
+
+def python_as_py(env, directory):
+    """`env` with a `py` first on PATH that runs this interpreter and drops the launcher's version argument.
+
+    hint-bound.sh starts its hook as `py -3.12`; a runner without the Windows launcher has none, and the wrapper
+    would report every hook as not run.
+    """
+    shim = Path(directory) / "py"
+    shim.write_text('#!/usr/bin/env bash\nexec "' + Path(sys.executable).as_posix() + '" "${@:2}"\n', encoding="utf-8")
+    shim.chmod(0o755)
+    return dict(env, PATH=str(directory) + os.pathsep + env["PATH"])
 
 
 def code_lines(text):
