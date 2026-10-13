@@ -1283,13 +1283,11 @@ Here, in the reference domain
 upgrade adds denormalised tables inside Ordering's own database, kept
 current by projections. Two of them serve the history query, one serves
 `PlaceOrder`, and a fourth — `ordering.ProductWithdrawals` — is a watermark
-the upsert below consults and nothing reads:
-
-| Table | Fed by | Read by |
-|---|---|---|
-| `ordering.OrderSummaries` | The service's own five lifecycle events on the local lane — `OrderPlacedDomainEvent`, `OrderStockConfirmedDomainEvent`, `OrderConfirmedDomainEvent`, `OrderShippedDomainEvent`, `OrderCancelledDomainEvent` | The escalated history query, below, which replaces §6.5's |
-| `ordering.Products` | The owning service's `ProductPublished` from the broker | The same query, to resolve the ids a summary stores |
-| `ordering.ProductPrices` | The owning service's `PriceChanged`, `ProductPublished`, `ProductDiscontinued` | `IProductPriceReader`, on the **write** path (§6.4) |
+the upsert below consults and nothing reads. What feeds each table and what
+reads it is [E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)'s
+table; the shape the chapter argues from is a split in who reads. The tables for
+the history screen are read by the escalated query below, which replaces
+§6.5's, and the one for `PlaceOrder` is read on the **write** path (§6.4).
 
 Here, in the reference domain `ordering.ProductPrices` is the consequential one
 ([E.4.5](appendix-e-reference-domain.md#e45-the-ordering-escalation)). A read

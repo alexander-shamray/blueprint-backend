@@ -996,17 +996,15 @@ reachable only by joining logs on the correlation id.
 **A worker that claims its own rows in a later pass is the same hop, and
 takes the same columns.** `StagedTraceColumns` maps them as shadow properties
 on a row whose type is the domain's, and its pass starts on
-`StagedTrace.ClaimSourceName`. Here, in the reference domain
-([Appendix E.5.6](appendix-e-reference-domain.md#e56-the-workers-that-claim-their-own-rows)),
-Shipping stamps a shipment when it is recorded
-and again when its cancellation is requested, the two writes that ask the
-fulfilment worker for a pass, and that pass runs as their child, so the
-booking or the carrier's cancellation sits in the confirming or cancelling
-trace. Notifications stamps a notice at intake, and its send runs as that
-trace's child. **The tracking poll links rather than parents**: it repeats
-for the shipment's whole life and most polls find nothing, so as children
-they would stretch the order's trace to the delivery; the despatch a poll
-stages then travels in the poll's trace, one link from the order's.
+`StagedTrace.ClaimSourceName`. A write that asks that worker for a pass
+stamps the row, and the pass runs as the stamping trace's child, so the work
+sits in the trace that asked for it. Which worker stamps which row, in the
+reference domain, is
+[Appendix E.5.6](appendix-e-reference-domain.md#e56-the-workers-that-claim-their-own-rows)'s.
+**A pass that repeats for a row's whole life links rather than parents**:
+most of its polls find nothing, so as children they would stretch the order's
+trace to the delivery; what such a pass stages then travels in its own trace,
+one link from the order's.
 
 **Parent rather than link, deliberately**, for the outbox and the bounded
 passes: a link would keep the request's trace and the delivery's apart and leave
@@ -1334,7 +1332,8 @@ failure §11.4 describes, because it moves the choice to the caller.
 
 The command endpoint is declared in the service's `AddMassTransitMessaging`,
 which holds each queue name once as a constant, and the consumers it binds are
-§3.2's "Accepts" column, one line each. Here, in the reference domain, this is
+the service's Accepts column ([Appendix E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)),
+one line each. Here, in the reference domain, this is
 Ordering's (`Ordering.Infrastructure/Messaging/DependencyInjection.cs`,
 [Appendix E.5.2](appendix-e-reference-domain.md#e52-the-queues-and-broker-identities)):
 
@@ -1363,7 +1362,7 @@ cfg.ReceiveEndpoint(
         e.UseConsumeFilter(typeof(InboxFilter<>), context);
         e.UseInMemoryOutbox(context);
 
-        // One per command in §3.2's Accepts column. A type missing here is
+        // One per command in E.1.1's Accepts column. A type missing here is
         // sent into a queue that ignores it.
         e.ConfigureConsumer<CommandConsumer<CancelOrder, CancelOrderCommand>>(context);
         e.ConfigureConsumer<CommandConsumer<ConfirmOrder, ConfirmOrderCommand>>(context);
@@ -1383,8 +1382,9 @@ is not an error, it is silence.
 
 The event endpoints take the same shape, with one `ConfigureConsumer` line per
 event type the service subscribes to; §9.8 prints them. The list must match
-the service's Consumes column in §3.2 — a handler with no line there is never
-invoked, and looks correct while doing nothing. Each type also needs an
+the service's Consumes column in
+[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) — a handler with
+no line there is never invoked, and looks correct while doing nothing. Each type also needs an
 `x.AddConsumer<T>()` in the enclosing `AddMassTransit` callback: registering a
 consumer and binding it are two statements, `ConfigureConsumer` resolves what
 `AddConsumer` registered, and nothing fails at startup if a type gets one and
@@ -1927,9 +1927,9 @@ below and at the schedule that arms it.
 > `payment_authorised_during_compensation` row at once.
 
 `OrderPlaced`, `OrderCancelled` and `OrderConfirmed` are all arrows coming from
-this service — [§3.2](03-bounded-contexts.md) lists all three in its own
-Consumes column, for the same reason: a fact the service publishes is also a
-fact its workflow has to react to. `Compensating` writes each of them out, so
+this service — [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+lists all three in its own Consumes column, for the same reason: a fact the
+service publishes is also a fact its workflow has to react to. `Compensating` writes each of them out, so
 the machine has a branch for them in every state it can reach one in. They
 are named rather than counted, because the property the sentence is about is
 self-subscription, not arity.
@@ -2449,7 +2449,8 @@ decline and timeout branches keep their literals because those transitions
 > correlated to. `CancellationObserved`, above, is what closes those.
 >
 > **The money is a gap the last three rows state rather than close.** Undoing
-> an authorisation is a refund, and in [§3.2](03-bounded-contexts.md)
+> an authorisation is a refund, and in
+> [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
 > `AuthorisePayment` is the only command in the **payment service's** Accepts
 > column and the saga's own service holds no money command at all — no
 > service accepts a refund
@@ -2473,7 +2474,8 @@ decline and timeout branches keep their literals because those transitions
 > **saga** leaves the reservation on a confirmed
 > order alone, because one being picked is not Inventory's to drop on a state
 > machine's word. **What that does not do is leave the reservation held.**
-> §3.2 has Inventory consuming `OrderCancelled` directly, so the cancellation
+> [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+> has Inventory consuming `OrderCancelled` directly, so the cancellation
 > that raises this row has already told it to release; what the saga withholds
 > is a second, redundant instruction, not the release itself — which is the
 > decision
@@ -2490,8 +2492,9 @@ decline and timeout branches keep their literals because those transitions
 >
 > **On the `Compensating` raising a `ReleaseStock` has gone out as well** —
 > the state was entered on the premise that no confirmation had happened — and
-> nothing can recall either one, because §3.2 gives the stock service no way
-> to be told
+> nothing can recall either one, because
+> [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+> gives the stock service no way to be told
 > to keep a reservation after all. So the two raisings differ in what the saga
 > sent and not in where the stock ends up. The row is what carries it, as it
 > does for the money.
@@ -2533,8 +2536,9 @@ decline and timeout branches keep their literals because those transitions
 > them.
 
 > **One cancellation starts two races to this queue, and only one of them is
-> a transition.** [§3.2](03-bounded-contexts.md) has the stock service
-> consuming
+> a transition.**
+> [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+> has the stock service consuming
 > `OrderCancelled` **directly** and publishing `StockReleased` off it,
 > independently of the `ReleaseStock` the saga sends — so a release derived
 > from that very event can reach the saga before the saga has consumed its own
@@ -2588,7 +2592,8 @@ The vocabulary splits in two. `not_despatched`, `stock_not_released` and
 `not_confirmed` are **a wait that ran out**, where the order's own state
 genuinely has not moved. `cancelled_after_confirmation` and
 `payment_authorised_during_compensation` are the opposite — they exist because
-**money is authorised and cancellation is the workflow's outcome**, and §3.2
+**money is authorised and cancellation is the workflow's outcome**, and
+[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
 gives the saga's service no refund command to answer that with. A single
 "the process
 stalled" would describe the second pair backwards.
@@ -2613,9 +2618,9 @@ delivery is exactly what is still open on it.
 **Nor is the money the thing that tells the two apart.** Here,
 in the reference domain ([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)),
 Payments consumes `OrderCancelled` and voids an authorisation already taken
-(§3.2), so a refund
-may arrive on either code with nobody acting — and §9.4 orders nothing between
-that consumer and this saga, so neither code predicts whether it has; the
+([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)),
+so a refund may arrive on either code with nobody acting — and §9.4 orders
+nothing between that consumer and this saga, so neither code predicts whether it has; the
 runbook checks on both rather than expecting an answer on either.
 **`Shipping` is the difference**: `cancelled_after_confirmation` means Shipping
 was told and a despatch may be moving, `payment_authorised_during_compensation`
@@ -2927,15 +2932,19 @@ cannot arrive. The ADR carries the measurement.
 
 ### Who moves the order while the saga coordinates it
 
-The saga sends its own service four commands and §3.2's Accepts column lists
-exactly those four — none of which advances the order out of `AwaitingStock`.
+The saga sends its own service four commands and the Accepts column of
+[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+lists exactly those four — none of which advances the order out of
+`AwaitingStock`.
 §5.4's
 `Order.ConfirmStock` is that transition: `ConfirmOrder` arrives after payment,
 `Order.ConfirmPayment` requires `AwaitingPayment`, and something in between
 has to put the order there.
 
-**That piece is a consumer, not a contract.** §3.2 already lists
-`StockReserved` in the service's own Consumes column, so it binds it twice —
+**That piece is a consumer, not a contract.**
+[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+already lists `StockReserved` in the service's own Consumes column, so it
+binds it twice —
 once
 for the saga, which reads it to decide what to ask for next, and once for an
 `IIntegrationEventHandler<StockReserved>` that records it on the aggregate. That
@@ -3348,7 +3357,8 @@ lives.
 ([E.5.5](appendix-e-reference-domain.md#e55-the-retry-ladders)), Ordering's
 for the endpoints above,
 Inventory's for every endpoint its own `DependencyInjection` declares, under
-[§3.2](03-bounded-contexts.md)'s Accepts column and under its Consumes alike,
+[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)'s
+Accepts column and under its Consumes alike,
 and Catalog's for `catalog-inventory-events` — which holds `RetryLimit`,
 `MinInterval`, `MaxInterval` and `IntervalDelta` and applies them through
 `Standard`. Declaring it once per service is what makes agreement between that
