@@ -202,6 +202,7 @@ k6 run \
   -e TOKEN_URL=https://id.staging.example.com/realms/commerce/protocol/openid-connect/token \
   -e CLIENT_ID=slo-run \
   -e SLO_PRODUCT_ID=... \
+  -e SLO_CURRENCY=... \
   deploy/observability/slo/slo.js
 ```
 
@@ -238,3 +239,89 @@ is what makes the authoritative half of this gate mean anything.
 **Availability (99.9% monthly) is deliberately not evaluated.** A three-minute
 run cannot; `http_req_failed` bounds the error rate *during the run*, which is a
 much weaker claim, and the run says so rather than reporting a pass.
+
+### Running it locally
+
+This repository has no staging, so the run has only been made against the
+Compose stack on a developer machine. **That number is a local run, never a
+staging baseline** ([§13.7](../../docs/backend-architecture/13-observability.md)
+says why), and a result is reported with the machine's processor, memory and
+operating system, the Docker engine's limits, the commit and the k6 version.
+k6 is a machine tool like Docker: install it with `winget install k6 --source
+winget`, or `choco install k6`, and add it to no manifest.
+
+**1. Publish Prometheus.** The `grafana` service runs grafana/otel-lgtm, whose
+bundled Prometheus listens on 9090 inside the container and is published
+nowhere. A scratch overlay, kept outside the repository, publishes it; Compose
+appends a `ports` list to the base file's, so 3000 stays. Keep the loopback
+bind, never `0.0.0.0`:
+
+```yaml
+# slo-overlay.yml
+services:
+  grafana:
+    ports: [ "127.0.0.1:9090:9090" ]
+```
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml -f slo-overlay.yml up -d --build --wait
+curl http://127.0.0.1:9090/-/ready
+```
+
+**2. Create the SLO client at runtime.** The Compose realm has no client with
+`orders:write` and a GUID `sub`, which `slo.js`'s header states as an
+obligation, and whether the realm should carry one is not decided here. The
+`commerce-api` client scope already maps a client's `commerce-api` roles into
+the `permission` claim, so a service account holding the role is enough. On
+Git Bash for Windows, `MSYS_NO_PATHCONV=1` stops the `/opt/...` path being
+rewritten:
+
+```bash
+kcadm="docker exec commerce-keycloak-1 /opt/keycloak/bin/kcadm.sh"
+$kcadm config credentials --server http://localhost:8080 --realm master \
+    --user admin --password admin
+$kcadm create clients -r commerce -s clientId=slo-run -s enabled=true \
+    -s publicClient=false -s serviceAccountsEnabled=true \
+    -s standardFlowEnabled=false -s directAccessGrantsEnabled=false \
+    -s 'defaultClientScopes=["commerce-api"]'
+$kcadm add-roles -r commerce --uusername service-account-slo-run \
+    --cclientid commerce-api --rolename orders:write
+$kcadm get clients/<id the create printed>/client-secret -r commerce
+```
+
+Request the token from `localhost:8080`, the host the gateway's authority
+accepts, and decode one before loading anything: `permission` must be
+`["orders:write"]`, `sub` a GUID and `iss`
+`http://localhost:8080/realms/commerce`.
+
+**3. Choose the product and the currency.** The scenario orders one product in
+one currency, and without a matching row in `ordering.ProductPrices` every
+order is a 422 (§6.6). The seeded prices in
+[`deploy/compose/README.md`](../compose/README.md#seeded-products) are all in
+one currency; confirm it against the table rather than assuming:
+
+```bash
+docker exec commerce-sql-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa \
+    -P "$SQL_PASSWORD" -C -d Ordering -W \
+    -Q "SELECT Currency, COUNT(*) FROM ordering.ProductPrices GROUP BY Currency"
+```
+
+**4. Run it.** `BASE_URL` is the gateway on 5000, never a service port. Let the
+stack idle a minute after `up --wait` so the first scrape exists. The secret
+goes through the environment, never `-e`:
+
+```bash
+export CLIENT_SECRET="<the slo-run secret>"
+k6 run \
+  -e BASE_URL=http://localhost:5000 \
+  -e PROM_URL=http://127.0.0.1:9090 \
+  -e TOKEN_URL=http://localhost:8080/realms/commerce/protocol/openid-connect/token \
+  -e CLIENT_ID=slo-run \
+  -e SLO_PRODUCT_ID=<a seeded id> \
+  -e SLO_CURRENCY=<its currency> \
+  deploy/observability/slo/slo.js
+```
+
+A failed run is a finding, not a reason to loosen anything: thresholds, rate
+budgets and checks stay as they are. A defect in `slo.js` is fixed; a defect in
+the platform is filed, and the output goes in the pull request either way.

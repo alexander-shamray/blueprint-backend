@@ -1293,9 +1293,8 @@ actionable — if the response is "acknowledge and ignore", delete it.
 
 **`shipping.shipments.overdue` carries no rule yet, by decision.** A threshold
 on how long a due shipment has waited wants a baseline under load, and none
-exists until §13.7's load run is scheduled or declined
-([#434](https://github.com/alexander-shamray/blueprint-backend/issues/434)).
-Until then it, `shipping.shipments.waiting` and `shipping.carrier.unavailable`
+exists until §13.7's load run has a staging environment to run against, which
+this repository does not have. Until then it, `shipping.shipments.waiting` and `shipping.carrier.unavailable`
 are read by `queue-backlog.md`'s procedure for a worker whose wait is outside
 a consumer. The address refusal and the unscanned shipments above are,
 in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), the Shipping signals that need no baseline: any refusal is a fault, and a booking
@@ -1869,6 +1868,26 @@ Verify order-of-magnitude with the **k6 SLO run against staging**
 run in CD, which asserts the five rows of this table it can evaluate — the two
 request rows, the two outbox lanes and own-event staleness, with the other two
 named below — and is the first real gate after the dev deploy.
+
+**It has been run locally and never against staging**, because this
+repository has no staging environment ([§15.1](15-cicd-deployment.md)). A
+local run drives the whole Compose stack on one machine, so the load
+generator, the services, the database and the broker share its processor and
+memory. What it produces is an order of magnitude for that machine at that
+commit, and **it is not a staging baseline**: no deployed environment is
+bound to it. The machine, the commit, the k6 version and the full output are
+recorded in the pull request that closed
+[#434](https://github.com/alexander-shamray/blueprint-backend/issues/434) and
+not here, because a measurement belongs to the commit it was taken on. The
+local recipe is in `deploy/observability/README.md`.
+
+**Until `request.duration` has buckets that resolve a latency, the first two
+rows cannot be evaluated by any run**
+([#969](https://github.com/alexander-shamray/blueprint-backend/issues/969)).
+Its default bounds are millisecond-scale on a histogram in seconds, so every
+request under five seconds falls in one bucket and the quantile reads a
+constant. A gate that reads that constant fails a healthy platform, which is
+the failure the paragraph below names for a different cause.
 
 **It drives with k6 and adjudicates with Prometheus**, and the split is forced
 by this table rather than chosen. A load generator measures wall-clock at the
