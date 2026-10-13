@@ -113,12 +113,15 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
         last.ShouldBe(expected, $"{routeId} did not follow the file within {Wait}");
     }
 
-    private static RouteConfiguration ReadRoute(string id)
+    /// <summary>Read once, since a poll asks for a route every 250 ms and a read builds a host.</summary>
+    private static readonly Lazy<IReadOnlyList<RouteConfiguration>> Shipped = new(() =>
     {
         using GatewayFactory factory = new();
 
-        return RouteConfiguration.ReadAll(factory.Services.GetRequiredService<IConfiguration>()).Single(r => r.Id == id);
-    }
+        return RouteConfiguration.ReadAll(factory.Services.GetRequiredService<IConfiguration>());
+    });
+
+    private static RouteConfiguration ReadRoute(string id) => Shipped.Value.Single(r => r.Id == id);
 
     private sealed class FileFactory(string destination, string path) : StubbedGatewayFactory(destination)
     {
