@@ -1172,8 +1172,8 @@ It reports Degraded while a receive endpoint or a worker loop is switched off
 ([ADR-113](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)),
 and never Unhealthy, so `/health/ready` still answers 200 and a deliberate stop
 does not take the pod out of service. The endpoint sets no `ResultStatusCodes`,
-so ASP.NET's default maps Degraded to 200 and only Unhealthy to 503. The
-three hosts that switch are Notifications, Shipping and Privacy.
+so ASP.NET's default maps Degraded to 200 and only Unhealthy to 503. A
+host carries it only if ADR-113 gave it the switch.
 
 **The endpoints** are mapped once in `Common.Web`, since the tag predicates are
 identical for every service and need no configuration. `Program.cs` calls this
