@@ -55,7 +55,12 @@ jobs:
       - name: Alerts, runbooks and signals agree
         run: python deploy/observability/check.py
 
-      # The SLO run's stock precondition and confirmed-order floor. The
-      # runner's preinstalled Node runs it; k6 itself is not needed for these.
+      # The SLO run's stock precondition and confirmed-order floor. The pin is
+      # a floor: the quoted glob and the extensionless ESM need Node 22.7 or
+      # later, and the runner's preinstalled Node is not promised to be.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+
       - name: The SLO run's floor holds
         run: node --test "deploy/observability/slo/*.test.js"
