@@ -101,15 +101,11 @@ jobs:
           OBJECT_STORE_CATALOG_ACCESS_KEY: ${{ secrets.OBJECT_STORE_CATALOG_ACCESS_KEY }}
           OBJECT_STORE_CATALOG_SECRET_KEY: ${{ secrets.OBJECT_STORE_CATALOG_SECRET_KEY }}
 
-      # What a red run does, on realm.yml's reasoning (ADR-043): a notification
-      # is read once and an issue is open until somebody closes it, so a red
-      # run files an issue, or comments on the open one, and the tracker holds
-      # one issue per drift and not one per day. `deploy/objectstore/README.md`
-      # is the procedure it points at. Only the `judge` step's failure files: a
-      # dispatch refused for coming from a branch, or a suite that went red,
-      # is not a drift in the store. `security` and `high`: a store that lets
-      # an image credential delete is a protection that does not protect, but
-      # this step cannot tell that from a store it could not reach.
+      # A notification is read once and an issue stays open, so a red run
+      # files one or comments on it (ADR-111, on ADR-043's reasoning). Only
+      # the `judge` step's failure files: a refused dispatch or a red suite is
+      # not a drift. `high` and not `critical`, because this step cannot tell
+      # a drifted policy from a store it could not reach.
       - name: A drifted store is an issue, not a notification
         if: ${{ failure() && steps.judge.outcome == 'failure' }}
         env:
