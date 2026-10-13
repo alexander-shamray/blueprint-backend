@@ -294,7 +294,7 @@ Mail__UserName: {{ $userName | quote }}
 pair is commerce.env's (§15.4). HTTPS unconditionally, as `commerce.requireUrl` argues. The
 BFF's endpoint is the one a client reaches, since it signs the URL the client PUTs to, and
 Catalog's is the one that service reaches; only Catalog stores the public base a stored URL
-is built from (§10.8), and the host refuses a base that is not https when it starts. */}}
+is built from (§10.8), and the host refuses a base that is not https, loopback excepted, when it starts. */}}
 {{- $store := .Values.objectStore }}
 ProductImages__Store__Endpoint: {{ include "commerce.requireUrl" (list $store.endpoint "objectStore.endpoint is required when objectStore.enabled: the host binds ProductImages:Store and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
 ProductImages__Store__Bucket: {{ include "commerce.require" (list $store.bucket "objectStore.bucket is required when objectStore.enabled (§15.4).") | quote }}
