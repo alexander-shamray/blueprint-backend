@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -54,6 +55,24 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
 
         file.Write(Switch(Suspendable, on: false));
         await EventuallyAsync(client, Suspendable, HttpStatusCode.NoContent);
+    }
+
+    /// <summary>
+    /// The control for the test above: the same file over a host whose <c>SuspendableRouteFilter</c> is not registered
+    /// switches the other route off, so that test's assertions can fail and a pass there is the filter's doing.
+    /// </summary>
+    [Fact]
+    public async Task Without_the_filter_the_file_the_refused_reload_test_writes_switches_the_other_route_off()
+    {
+        using TempRouteFile file = new(Switch(Suspendable, on: true));
+        using FileFactory factory = new(stub.Address, file.Path, withoutFilter: true);
+        using HttpClient client = factory.CreateClient();
+        (await StatusAsync(client, Suspendable)).ShouldBe(HttpStatusCode.ServiceUnavailable);
+
+        file.Write(Switch(Suspendable, on: false, Other, on2: true));
+
+        await EventuallyAsync(client, Other, HttpStatusCode.ServiceUnavailable);
+        (await StatusAsync(client, Suspendable)).ShouldBe(HttpStatusCode.NoContent);
     }
 
     /// <summary>A misspelt id is a route with no match to YARP, so it is refused like any other bad reload (ADR-119).</summary>
@@ -123,8 +142,19 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
 
     private static RouteConfiguration ReadRoute(string id) => Shipped.Value.Single(r => r.Id == id);
 
-    private sealed class FileFactory(string destination, string path) : StubbedGatewayFactory(destination)
+    private sealed class FileFactory(string destination, string path, bool withoutFilter = false)
+        : StubbedGatewayFactory(destination)
     {
+        /// <summary>Found by name, as the filter is internal to the gateway; the control is vacuous if none is found.</summary>
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+
+            if (withoutFilter)
+                builder.ConfigureServices(services =>
+                    services.Remove(services.Single(d => d.ImplementationType?.Name == "SuspendableRouteFilter")));
+        }
+
         protected override IEnumerable<KeyValuePair<string, string>> AdditionalSettings =>
         [
             .. base.AdditionalSettings,
