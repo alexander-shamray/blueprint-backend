@@ -304,6 +304,10 @@ can tell a planned suspension from an outage. Only a cluster
 [ADR-104](adr/ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md)
 marks *Yes* may carry it, and `SuspendedRouteTests` holds every route to that
 rule, one way and the other ([ADR-116](adr/ADR-116-a-gateway-route-to-a-service-an-operator-may-stop-is-switched-off-in-its-configuration-and-answers-503-at-the-edge-955.md)).
+On a running gateway an operator sets it in a mounted file the gateway
+follows, rendered by the chart's `routeSwitch.off`, and a reload that sets it
+where it may not be, or names no route, is refused with the configuration
+before it kept ([ADR-118](adr/ADR-118-an-operator-switches-a-gateway-route-from-a-file-that-reloads-and-the-gateway-chart-renders-it-1022.md)).
 
 ### API versioning and deprecation at the edge
 

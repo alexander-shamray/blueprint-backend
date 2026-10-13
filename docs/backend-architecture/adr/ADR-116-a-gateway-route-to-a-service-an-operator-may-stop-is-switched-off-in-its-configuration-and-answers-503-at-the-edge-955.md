@@ -41,6 +41,12 @@ how an operator changes it without a rollout is not decided. The 503 comes
 after authorization, so a caller with no permission for the route is not told
 the service is off.
 
+**Superseded in part by
+[ADR-118](ADR-118-an-operator-switches-a-gateway-route-from-a-file-that-reloads-and-the-gateway-chart-renders-it-1022.md)**:
+in the Consequences, "how an operator changes it without a rollout is not
+decided". A mounted file the gateway follows delivers the value to a running
+gateway.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
