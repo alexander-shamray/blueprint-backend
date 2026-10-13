@@ -14,6 +14,8 @@ docker compose -f deploy/compose/docker-compose.yml up -d --wait
 | Redis (cache) | 6379 | `<service>-svc` / `local-dev-<service>` per service, in `redis/users.conf` (§8.1) |
 | Redis (coordination) | 6380 | the same users |
 | RabbitMQ | 5672, management http://localhost:15672 | **no login ships** — see below |
+| Object store (S3 API) | 8333 | `<service>-images-svc` / `local-dev-<service>-images` per service, in `object-store/s3.json` (ADR-106) |
+| Image edge (public `products/`) | http://localhost:9000 | — |
 | Keycloak | http://localhost:8080 | admin/admin |
 | OTel collector | 4317 (OTLP gRPC), 4318 (OTLP HTTP) | — |
 | Grafana | http://localhost:3000 | — |

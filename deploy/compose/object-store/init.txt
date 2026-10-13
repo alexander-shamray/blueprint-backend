@@ -1,0 +1,3 @@
+s3.bucket.create -name product-images
+fs.configure -locationPrefix=/buckets/product-images/uploads/ -ttl=1d -apply
+exit

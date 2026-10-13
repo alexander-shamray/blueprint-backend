@@ -7,7 +7,7 @@
   "smoke": {
     "migrator": true,
     "autoscaled": true,
-    "capabilities": [],
+    "capabilities": ["objectStore"],
     "overlay": []
   }
 }

@@ -126,6 +126,11 @@ spec:
     {{- if (.Values.carrier).enabled }}
     {{- include "commerce.networkPolicyEgress" (list ($np.carrier).to "carrier.to" "carrier.enabled says this host calls the carrier (§3.2)." (($np.carrier).port | default (include "commerce.urlPort" .Values.carrier.baseUrl))) | nindent 4 }}
     {{- end }}
+    {{- /* Only the service that reads the store dials it: the BFF signs a URL locally and the client
+    does the PUT, so an egress rule on its pods would be an opening nothing uses (ADR-106). */}}
+    {{- if and (.Values.objectStore).enabled (eq .Chart.Name "catalog") }}
+    {{- include "commerce.networkPolicyEgress" (list ($np.objectStore).to "objectStore.to" "objectStore.enabled says this host reaches the object store (ADR-106)." (($np.objectStore).port | default (include "commerce.urlPort" .Values.objectStore.endpoint))) | nindent 4 }}
+    {{- end }}
     {{- if (.Values.mail).enabled }}
     {{- include "commerce.networkPolicyEgress" (list ($np.mail).to "mail.to" "mail.enabled says this host submits to the relay." (($np.mail).port | default .Values.mail.port | toString)) | nindent 4 }}
     {{- end }}

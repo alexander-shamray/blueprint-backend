@@ -54,6 +54,15 @@ services:
       # Redis's own port, and 6380 exists only on the host side.
       ConnectionStrings__RedisCache: "redis-cache:6379,user=catalog-svc,password=local-dev-catalog"
       ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=catalog-svc,password=local-dev-catalog"
+      # ADR-106's store, as this service reaches it on the compose network. The pair reads uploads/ and writes
+      # products/; object-store/s3.json owns it. The public base is the edge a browser reaches, not the store.
+      ProductImages__Store__Endpoint: "http://object-store:8333"
+      ProductImages__Store__Bucket: "product-images"
+      ProductImages__Store__Region: "us-east-1"
+      ProductImages__Store__PathStyle: "true"
+      ProductImages__Store__AccessKey: "catalog-images-svc"
+      ProductImages__Store__SecretKey: "local-dev-catalog-images"
+      ProductImages__Store__PublicBaseUrl: "http://127.0.0.1:9000"
     ports: [ "127.0.0.1:5102:8080" ]
     # §13.5's readiness, asked by the host itself through HealthProbe, because
     # the image has no shell or HTTP client; the timeout outlasts the probe's.
@@ -66,6 +75,9 @@ services:
     depends_on:
       catalog-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
+      # The bucket and the edge a stored URL points at, so a publish with an image works on the first `up`.
+      object-store-init: { condition: service_completed_successfully }
+      image-edge: { condition: service_healthy }
       # service_healthy since infrastructure.yml's keycloak declares a healthcheck; the host itself does not need it.
       keycloak: { condition: service_healthy }
       # service_healthy, not service_started: AddRedisConnections sets

@@ -158,6 +158,14 @@ OMITTED = frozenset(
         "src/Services/Catalog/Catalog.Application/Products/PublishProduct/PublishProductHandler.cs",
         "src/Services/Catalog/Catalog.Application/Products/PublishProduct/PublishProductValidator.cs",
         "src/Services/Catalog/Catalog.Application/Products/ProductErrors.cs",
+        # ADR-106's object store is the product images' (§10.8): a rendered service holds no image, so it holds no
+        # port to the store, its adapter or its options, and the registration that names them is patched out.
+        "src/Services/Catalog/Catalog.Application/Products/IProductImageStore.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/ProductImages/ProductImageRegistration.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/ProductImages/ProductImageStoreOptions.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/ProductImages/S3ProductImageStore.cs",
+        "tests/Catalog.TestSupport/FakeProductImageStore.cs",
+        "tests/Catalog.Application.Tests/PublishProductImageTests.cs",
         "src/Services/Catalog/Catalog.Application/Products/PriceRules.cs",
         "src/Services/Catalog/Catalog.Application/Products/ChangePrice/ChangePriceCommand.cs",
         "src/Services/Catalog/Catalog.Application/Products/ChangePrice/ChangePriceHandler.cs",
@@ -482,6 +490,25 @@ TEMPLATE_START_ORDER = (
     "      # is dropped, so the hosts that consume it are ready first.\n"
     "      ordering-api: { condition: service_healthy }\n"
     "      web-bff: { condition: service_healthy }\n"
+)
+
+
+# The template api's environment and start order for ADR-106's store, which only the product images use.
+TEMPLATE_STORE_ENVIRONMENT = (
+      '      # ADR-106\'s store, as this service reaches it on the compose network. The pair reads uploads/ and writes\n'
+      '      # products/; object-store/s3.json owns it. The public base is the edge a browser reaches, not the store.\n'
+      '      ProductImages__Store__Endpoint: "http://object-store:8333"\n'
+      '      ProductImages__Store__Bucket: "product-images"\n'
+      '      ProductImages__Store__Region: "us-east-1"\n'
+      '      ProductImages__Store__PathStyle: "true"\n'
+      '      ProductImages__Store__AccessKey: "catalog-images-svc"\n'
+      '      ProductImages__Store__SecretKey: "local-dev-catalog-images"\n'
+      '      ProductImages__Store__PublicBaseUrl: "http://127.0.0.1:9000"\n'
+)
+TEMPLATE_STORE_START_ORDER = (
+      '      # The bucket and the edge a stored URL points at, so a publish with an image works on the first `up`.\n'
+      '      object-store-init: { condition: service_completed_successfully }\n'
+      '      image-edge: { condition: service_healthy }\n'
 )
 
 
@@ -1040,7 +1067,16 @@ def render_service_compose(repo_root: Path, names: Names, port: int | None) -> s
         raise ScaffoldError(
             f"{COMPOSE_DIR}/{COMPOSE_TEMPLATE_UNIT} has no `services:` key to render from"
         )
-    block = names.rename(text[text.index(marker) + 1:])
+    block = text[text.index(marker) + 1:]
+
+    # ADR-106's store is the product images': a rendered service holds no image, and would otherwise wait on a
+    # bucket it never writes and carry a credential pair it was never given. Cut before the rename, which
+    # would otherwise turn the template's account names into the new service's.
+    for slice_only in (TEMPLATE_STORE_ENVIRONMENT, TEMPLATE_STORE_START_ORDER):
+        require_once(block, slice_only, f"{COMPOSE_DIR}/{COMPOSE_TEMPLATE_UNIT}")
+        block = block.replace(slice_only, "")
+
+    block = names.rename(block)
 
     # §14.3's start order is the template's own: a rendered service seeds
     # nothing those hosts consume, so it waits on none of them.

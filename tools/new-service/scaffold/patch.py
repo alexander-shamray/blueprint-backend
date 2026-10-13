@@ -21,6 +21,35 @@ from __future__ import annotations
 # it is carried by review and by GeneratedGuidanceIsTrue in the tests, which
 # pins the sites a Grok review found this way.
 PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
+    "tests/Catalog.TestSupport/CatalogApiFactory.cs": (
+        ("using Catalog.Application.Products;\n", ""),
+        ("using Microsoft.Extensions.DependencyInjection.Extensions;\n", ""),
+        # ADR-106's store and the fake that stands in for it are the product images', and a rendered host binds none.
+        (
+            "    /// <summary>The store every host takes, which a test stages uploads on.</summary>\n"
+            "    public FakeProductImageStore ImageStore { get; } = new();\n"
+            "\n",
+            "",
+        ),
+        (
+            "\n"
+            "            // ADR-106's store, which the host validates at start; the fake below replaces the client over it.\n"
+            '            .UseSetting("ProductImages:Store:Endpoint", "https://store.invalid")\n'
+            '            .UseSetting("ProductImages:Store:Bucket", "images")\n'
+            '            .UseSetting("ProductImages:Store:Region", "us-east-1")\n'
+            '            .UseSetting("ProductImages:Store:AccessKey", "not-a-real-key")\n'
+            '            .UseSetting("ProductImages:Store:SecretKey", "not-a-real-secret")\n'
+            '            .UseSetting("ProductImages:Store:PublicBaseUrl", FakeProductImageStore.PublicBase)\n',
+            "",
+        ),
+        (
+            "\n"
+            "                services.RemoveAll<IProductImageStore>();\n"
+            "                services.AddSingleton(ImageStore);\n"
+            "                services.AddSingleton<IProductImageStore>(ImageStore);\n",
+            "",
+        ),
+    ),
     "src/Services/Catalog/Catalog.Application/DependencyInjection.cs": (
         ("using Catalog.Application.Products.PublishProduct;\n", ""),
         (
@@ -129,6 +158,12 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
     "src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj": (
+        # The S3 client is the product images' (ADR-106), and its adapter is omitted with them.
+        (
+            "    <!-- The product image store's S3 client (ADR-106). -->\n"
+            '    <PackageReference Include="AWSSDK.S3" />\n',
+            "",
+        ),
         (
             "    <!-- typeof(ProductPublished).Assembly, the Broker lane's half of\n"
             "         MessageTypeSource. Transitive through Catalog.Application, named\n"
@@ -142,6 +177,14 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         # one namespace up, and dropping the using outright left the generated
         # service naming a type it could not see.
         ("using Catalog.Domain.Products;\n", "using Catalog.Domain;\n"),
+        # ADR-106's store is the product images', and a rendered service holds none.
+        ("using Catalog.Infrastructure.ProductImages;\n", ""),
+        (
+            "        // ADR-106's object store, left out of readiness: a store outage fails an image publish and nothing else.\n"
+            "        services.AddProductImageStore();\n"
+            "\n",
+            "",
+        ),
         (
             "        services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3\n"
             "        services.AddScoped<IProductRepository, ProductRepository>();         // §5.6\n",

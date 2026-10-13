@@ -129,6 +129,28 @@ broker:
 redis:
   enabled: false
 
+# ADR-106's store, which this host signs uploads for (§10.8) and never dials: the
+# URL is a local computation, and the client PUTs to `endpoint` itself. So the
+# endpoint is the address a client reaches, and the network policy carries no
+# egress rule for it. The pair is one Secret of this host's own and can write
+# under uploads/ and nothing else.
+#
+# The bucket's lifecycle rule is the deployment's to set, and this chart states
+# it: objects under uploads/ expire after one day, the rule that bounds an
+# upload nobody attached. products/ has none. A store is run outside this
+# repository (ADR-064), so a chart cannot apply it; it is asserted in the
+# deployment's own checklist, and the BFF cannot tell whether it is set.
+objectStore:
+  enabled: true
+  endpoint: https://objects.example.com
+  bucket: product-images
+  region: us-east-1
+  pathStyle: false
+  secretRef:
+    name: web-bff-object-store
+    accessKeyKey: access-key
+    secretKeyKey: secret-key
+
 observability:
   otlpEndpoint: http://otel-collector.observability:4317
 
