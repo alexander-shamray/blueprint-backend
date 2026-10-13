@@ -41,7 +41,7 @@ public sealed class KeycloakFixture : IAsyncLifetime
     /// <summary>The one locale the container's realm offers, static because CA1861 is an error under ADR-019.</summary>
     private static readonly string[] SupportedLocales = ["en"];
 
-    private readonly KeycloakContainer _keycloak = new KeycloakBuilder()
+    private readonly KeycloakContainer _keycloak = TestcontainersWarmUp.Build(() => new KeycloakBuilder()
         .WithImage(ComposeImage.Of("keycloak"))
         .WithUsername(AdminUser)
         .WithPassword(AdminPassword)
@@ -49,7 +49,7 @@ public sealed class KeycloakFixture : IAsyncLifetime
             new FileInfo(Path.Combine(RepositoryRoot.Locate(), "deploy", "compose", "keycloak", "realm-export.json")),
             "/opt/keycloak/data/import/")
         .WithCommand("--import-realm")
-        .Build();
+        .Build());
 
     private readonly List<ContactHost> _hosts = [];
 
