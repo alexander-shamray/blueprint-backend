@@ -52,7 +52,7 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
                 // replay the first id rather than creating a second product.
                 CommandId = Guid.CreateVersion7(),
                 Name = name,
-                ThumbnailUrl = (string?)null,
+                ImageKey = (string?)null,
                 Amount = amount,
                 Currency = currency
             })

@@ -99,7 +99,7 @@ public sealed class PricingContractVerificationTests(ServiceFixture fixture) : I
                     // several, and one shared CommandId would replay the first.
                     CommandId = Guid.CreateVersion7(),
                     product.Name,
-                    ThumbnailUrl = (string?)null,
+                    ImageKey = (string?)null,
                     product.Amount,
                     product.Currency
                 })
