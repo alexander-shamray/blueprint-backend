@@ -188,10 +188,10 @@ public class MessagingRegistrationTests
     }
 
     [Fact]
-    public void The_outbox_transaction_is_serializable_because_the_saga_repository_stopped_owning_it()
+    public void The_outbox_transaction_is_read_committed_so_its_own_reads_hold_no_locks()
     {
-        // Under ADR-032 the outbox opens the transaction the repository joins, and MassTransit defaults it to
-        // RepeatableRead; only Serializable takes the key-range lock two first deliveries need.
+        // The outbox opens the transaction the repository joins (ADR-032); its level reaches MassTransit's own
+        // reads of OutboxMessage, which Serializable range-locked to the last key and deadlocked (ADR-112).
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());
@@ -202,10 +202,30 @@ public class MessagingRegistrationTests
             .Value;
 
         options.IsolationLevel.ShouldBe(
-            IsolationLevel.Serializable,
-            "the outbox filter opens the consume transaction and the saga repository joins it, so " +
-            "this value — not ConcurrencyMode.Pessimistic — is what serialises two deliveries " +
-            "racing to create one instance (ADR-032)");
+            IsolationLevel.ReadCommitted,
+            "Serializable range-locks the outbox's delivery read against every saga's insert, and " +
+            "RepeatableRead holds that read's row locks against every delivery's delete (ADR-112)");
+    }
+
+    [Fact]
+    public void The_sagas_row_lock_takes_its_key_range_lock_from_its_own_hint()
+    {
+        // The model, not the database, so this fails without a container; the wiring is the saga suite's.
+        ServiceCollection services = new();
+
+        services.AddDbContext<OrderingDbContext>(o => o.UseSqlServer("Server=.;Database=probe"));
+
+        using ServiceProvider provider = services.BuildServiceProvider();
+        using IServiceScope scope = provider.CreateScope();
+        string statement = DependencyInjection.SagaLockStatement.GetRowLockStatement<OrderFulfilmentState>(
+            scope.ServiceProvider.GetRequiredService<OrderingDbContext>());
+
+        statement.ShouldContain("OrderFulfilmentStates", Case.Sensitive, "the saga's own table, not another set");
+        statement.ShouldContain(
+            "WITH (UPDLOCK, ROWLOCK, SERIALIZABLE)",
+            Case.Sensitive,
+            "with the transaction at ReadCommitted, the hint is all that range-locks a CorrelationId " +
+            "with no row yet, which two deliveries both taking Initially race for (ADR-112)");
     }
 
     [Fact]

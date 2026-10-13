@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Data;
 using System.Diagnostics;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
@@ -338,6 +339,46 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             because: "LastSequenceNumber is stamped once the messages staged in ordering.OutboxMessage " +
                 "have been delivered — which is the proof they were staged there and not in a " +
                 "process-local buffer that a crash would have discarded (ADR-032)");
+    }
+
+    [Fact]
+    public async Task Only_the_sagas_row_lock_is_serializable_and_the_outbox_reads_are_read_committed()
+    {
+        // ADR-112 as the host sends it: the registration test pins each half, and only this one shows the
+        // repository took the hinted statement and both ran in the transaction the outbox opened.
+        var orderId = Guid.CreateVersion7();
+        var placedId = Guid.CreateVersion7();
+
+        await PublishPlacedAsync(orderId, placedId);
+
+        await Eventually(
+            () => TransactionalInboxRowsAsync(placedId, deliveredOnly: true),
+            expected: 1,
+            because: "the arrange half: the transition has committed and its sends have been delivered");
+
+        SagaStatement[] statements = [.. fixture.Factory.SagaStatements.Statements];
+
+        SagaStatement[] hinted =
+        [
+            .. statements.Where(s => s.Text.Contains("OrderFulfilmentStates WITH (UPDLOCK, ROWLOCK, SERIALIZABLE)"))
+        ];
+        hinted.ShouldNotBeEmpty(
+            "the repository's Pessimistic load is the hinted statement, or no key-range lock holds a " +
+            "CorrelationId that has no row yet");
+        hinted.ShouldAllBe(
+            s => s.IsolationLevel == IsolationLevel.ReadCommitted,
+            "the load joins the transaction the outbox opens, so the hint is the only serializable part of it");
+
+        // This suite's own reads run outside a transaction, so only the host's are judged. Non-empty, or the
+        // level check below passes without a single delivery read.
+        SagaStatement[] outbox =
+        [
+            .. statements.Where(s => s.Text.Contains("[OutboxMessage]") && s.IsolationLevel is not null)
+        ];
+        outbox.ShouldNotBeEmpty("the delivery reads MassTransit's table, so a recorder that saw none is blind");
+        outbox.ShouldAllBe(
+            s => s.IsolationLevel == IsolationLevel.ReadCommitted,
+            "a Serializable read of OutboxMessage is the range lock that deadlocked the endpoint (ADR-112)");
     }
 
     [Fact]
