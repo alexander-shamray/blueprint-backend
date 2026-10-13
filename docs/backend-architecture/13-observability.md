@@ -452,6 +452,12 @@ injects it" is not the same as "something has constructed it". From
 /// <summary>§13.3's <c>request.duration</c>, injected by <see cref="LoggingBehavior{TRequest,TResult}"/>.</summary>
 public sealed class RequestMetrics
 {
+    /// <summary>Seconds-scale bounds, which the SDK defaults only for instruments it knows by name (§13.3).</summary>
+    private static readonly InstrumentAdvice<double> DurationBuckets = new()
+    {
+        HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.08, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+    };
+
     private readonly Histogram<double> _duration;
 
     public RequestMetrics(IMeterFactory factory)
@@ -460,7 +466,9 @@ public sealed class RequestMetrics
         _duration = meter.CreateHistogram<double>(
             "request.duration",
             unit: "s",
-            description: "Dispatcher entry to result.");
+            description: "Dispatcher entry to result.",
+            tags: null,
+            advice: DurationBuckets);
     }
 
     public void Recorded(string request, string outcome, TimeSpan elapsed) =>
@@ -470,6 +478,12 @@ public sealed class RequestMetrics
             new KeyValuePair<string, object?>("outcome", outcome));
 }
 ```
+
+**`request.duration` is exported on bucket bounds the class gives as
+advice**, `RequestMetrics.DurationBuckets`, for the reason the two lags are
+(below). §13.7's 80 ms and 100 ms targets are bounds themselves, so the p95
+the first two rows read is taken at a bucket edge, and the bounds run on to
+ten seconds so that a slow request is still resolved.
 
 `MessagingMetrics` is registered by `AddOrderingInfrastructure`, because all
 four call sites are Infrastructure types (§9.4, §9.5). Its fields and
@@ -1882,14 +1896,6 @@ recorded in the pull request that closed
 [#434](https://github.com/alexander-shamray/blueprint-backend/issues/434) and
 not here, because a measurement belongs to the commit it was taken on. The
 local recipe is in `deploy/observability/README.md`.
-
-**Until `request.duration` has buckets that resolve a latency, the first two
-rows cannot be evaluated by any run**
-([#969](https://github.com/alexander-shamray/blueprint-backend/issues/969)).
-Its default bounds are millisecond-scale on a histogram in seconds, so every
-request under five seconds falls in one bucket and the quantile reads a
-constant. A gate that reads that constant fails a healthy platform, which is
-the failure the paragraph below names for a different cause.
 
 **It drives with k6 and adjudicates with Prometheus**, and the split is forced
 by this table rather than chosen. A load generator measures wall-clock at the
