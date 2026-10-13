@@ -26,9 +26,10 @@ env:
   REGISTRY: ghcr.io/${{ github.repository }}
 
 concurrency:
-  group: ci-${{ github.ref }}
-  # Not on main: a run cancelled between the push and the signature leaves an
-  # image in the registry that deploy.yml's verifier then refuses (ADR-109).
+  # On main each commit has a group of its own: a run cancelled, or replaced
+  # while pending, between a push and its signature leaves an image that
+  # deploy.yml's verifier refuses, and a group holds one pending run (ADR-109).
+  group: ci-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
