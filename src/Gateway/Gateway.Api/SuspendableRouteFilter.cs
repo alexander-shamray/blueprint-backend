@@ -19,7 +19,7 @@ internal sealed class SuspendableRouteFilter : IProxyConfigFilter
         {
             throw new InvalidOperationException(
                 $"Route '{route.RouteId}' sets '{SuspendedRoute.MetadataKey}' but its cluster is not one ADR-104 " +
-                "lets an operator stop. Four of seven services may never be switched off; the route stays on.");
+                "lets an operator stop. Four of seven services may never be switched off; this load is refused.");
         }
 
         return new(route);
