@@ -33,7 +33,7 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
         // Composed from the registered table, for the reason OutboxTable gives.
         _oldestSql =
             $"""
-            SELECT DATEDIFF(second, MIN(OccurredAt), SYSDATETIMEOFFSET())
+            SELECT DATEDIFF_BIG(millisecond, MIN(OccurredAt), SYSDATETIMEOFFSET()) / 1000.0
             FROM {table.QualifiedName}
             WHERE ProcessedAt IS NULL
                 AND Lane = @lane;

@@ -88,6 +88,16 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Oldest_age_of_a_row_younger_than_a_second_reads_below_one()
+    {
+        // DATEDIFF(second) reads 1 whenever a boundary falls inside the row's life, so slo.js's 1 s row passed by luck.
+        OutboxMessage fresh = await StageOneAsync(OutboxLane.Local);
+        await AgeAsync(fresh, TimeSpan.FromMilliseconds(300));
+
+        NewStats().OldestAgeSeconds(OutboxLane.Local).ShouldBeInRange(0.2, 0.99);
+    }
+
+    [Fact]
     public async Task An_empty_lane_reads_zero_rather_than_failing()
     {
         // MIN over no rows is NULL, and a throwing gauge callback silently stops the series, so zero is the reading.
