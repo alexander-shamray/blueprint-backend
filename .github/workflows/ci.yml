@@ -283,6 +283,40 @@ jobs:
       - name: Every plan written after the planning rule is under its size
         run: python .github/plan-size-gate/plan_size_gate.py
 
+  # The other gates read the workflows as text for coverage and order; none
+  # checks expression syntax, step-output references, action input names or the
+  # shell in a `run:` block, and the signing steps cannot run before the first
+  # push to main. The binary is pinned by version and checked against its
+  # release's published digest, so the download is the one that was read.
+  workflow-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          curl -sSfL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum --check --strict
+          tar -xzf actionlint.tar.gz actionlint
+
+      # A lint that passes every workflow says nothing until it has been seen
+      # to fail one. The fixture reads a step that does not exist, and the
+      # message is matched so a failure for another reason does not count.
+      - name: The linter fails a broken reference
+        run: |
+          if ./actionlint .github/workflow-lint/broken-reference.yml > fixture.out; then
+            echo "actionlint passed the broken fixture"
+            exit 1
+          fi
+          grep -F 'property "absent" is not defined' fixture.out
+
+      - name: Lint every workflow
+        run: ./actionlint
+
   # The scaffold has no template directory: it renders a new service from
   # src/Services/Catalog at run time, so there is one copy of the wiring rather
   # than two that drift. The risk that buys is that Catalog moves under the

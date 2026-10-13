@@ -43,6 +43,12 @@ added on one branch and merged on another is invisible to every diff scan
 downstream of it and visible to this one on the next pull request that touches
 anything.
 
+**The workflows are linted beside those gates, and nothing waits on it.** The
+gates read them as text, which cannot say an expression is malformed or that a
+step output is never produced, and the signing steps cannot run before the
+first push to `main`. What `actionlint` reads and claims is
+[`.github/workflow-lint/`](../../.github/workflow-lint/README.md)'s.
+
 > **The diagram is the target pipeline, and this repository runs the left half
 > of it.** Everything up to and including the image build is live: both
 > halves of the first node, the fork, the build, the three test stages and one
