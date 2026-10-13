@@ -1,0 +1,9 @@
+name: Broken reference
+
+on: push
+
+jobs:
+  broken:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ steps.absent.outputs.digest }}"
