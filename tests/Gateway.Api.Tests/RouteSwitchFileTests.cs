@@ -145,7 +145,7 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
     private sealed class FileFactory(string destination, string path, bool withoutFilter = false)
         : StubbedGatewayFactory(destination)
     {
-        /// <summary>Found by name, as the filter is internal to the gateway; the control is vacuous if none is found.</summary>
+        /// <summary>The filter is internal to the gateway, so it is found by name; a rename fails the control, as Single throws.</summary>
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
