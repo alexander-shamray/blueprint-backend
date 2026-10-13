@@ -52,8 +52,8 @@ method is down, a device's registration fails until the app's next start,
 beside the late mail the table names. A suspension that scales that host down
 fails registrations. ADR-113's switch, which stops only endpoints and loops,
 leaves the method serving, and so does ADR-116's, which switches gateway
-routes off, since no gateway route reaches it. The pricing hop is no longer the BFF's one
-synchronous hop, as the Why calls it.
+routes off, since no gateway route reaches it. The pricing hop is no longer
+the BFF's one synchronous hop, as the Why calls it.
 
 **Amended by
 [ADR-118](ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)**,
