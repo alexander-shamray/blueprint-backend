@@ -995,7 +995,7 @@ jobs:
           docker build
           --file ${{ matrix.dockerfile }}
           --tag ${{ matrix.image }}:${{ github.sha }}
-          --tag $REGISTRY/${{ matrix.image }}:${{ github.sha }}
+          --tag "$REGISTRY/${{ matrix.image }}:${{ github.sha }}"
           --label org.opencontainers.image.source=https://github.com/${{ github.repository }}
           .
 
