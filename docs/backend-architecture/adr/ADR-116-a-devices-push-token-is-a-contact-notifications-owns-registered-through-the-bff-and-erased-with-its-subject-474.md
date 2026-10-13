@@ -1,4 +1,4 @@
-# ADR-115 — A device's push token is a contact Notifications owns, registered through the BFF and erased with its subject (#474)
+# ADR-116 — A device's push token is a contact Notifications owns, registered through the BFF and erased with its subject (#474)
 
 **Decision.** A push token is **personal data and a contact** — an address a
 message is sent to — and Notifications owns it, as the service that sends

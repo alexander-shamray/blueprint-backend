@@ -46,7 +46,7 @@ never be stopped, which means a fault in one of them is repaired in place under
 load, not by switching it off while someone thinks.
 
 **Amended by
-[ADR-115](ADR-115-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)**,
+[ADR-116](ADR-116-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)**,
 which gives Notifications a caller: while the host serving its registration
 method is down, a device's registration fails until the app's next start,
 beside the late mail the table names. A suspension that scales that host down
