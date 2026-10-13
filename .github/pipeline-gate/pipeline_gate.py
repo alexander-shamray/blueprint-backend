@@ -601,6 +601,7 @@ def _check_rollout(workflow_text: str, deploy_text: str) -> list[str]:
             ("--certificate-identity", "given an identity"),
             ("--certificate-oidc-issuer", "given an issuer"),
             ("verified-digest", "reading the digest it verified"),
+            ("--source-ref refs/heads/main", "pinning the provenance to main"),
         ):
             if needle not in text:
                 problems.append(f"deploy.yml's `cosign verify` step is not {why} ({needle!r} is missing)")
