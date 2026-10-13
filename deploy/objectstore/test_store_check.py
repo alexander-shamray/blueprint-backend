@@ -107,7 +107,8 @@ class CheckTests(unittest.TestCase):
         self.assertTrue(all("InvalidAccessKeyId" in v for v in violations))
 
     def test_a_missing_bucket_is_not_a_refusal(self):
-        _, violations = self.run_against({"DELETE": ("404", "<Error><Code>NoSuchBucket</Code></Error>"), "GET": DENIED, "list": DENIED})
+        missing = ("404", "<Error><Code>NoSuchBucket</Code></Error>")
+        _, violations = self.run_against({"DELETE": missing, "GET": DENIED, "list": DENIED})
         self.assertEqual(len(violations), 4)
 
     def test_the_delete_names_a_key_nothing_holds(self):

@@ -75,7 +75,9 @@ def signing_key(secret: str, date: str, region: str, service: str = "s3") -> byt
     return key
 
 
-def sign(method: str, url: str, access_key: str, secret_key: str, region: str, now: datetime.datetime) -> dict[str, str]:
+def sign(
+    method: str, url: str, access_key: str, secret_key: str, region: str, now: datetime.datetime
+) -> dict[str, str]:
     """The headers of a SigV4-signed, bodiless request."""
     parts = urllib.parse.urlsplit(url)
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
@@ -102,16 +104,16 @@ def sign(method: str, url: str, access_key: str, secret_key: str, region: str, n
 
 def ask(method: str, url: str, access_key: str, secret_key: str, region: str) -> tuple[int, str]:
     """The status and body of one request; an HTTP error status is an answer, a network failure is not."""
-    request = urllib.request.Request(
-        url, method=method, headers=sign(method, url, access_key, secret_key, region, datetime.datetime.now(datetime.timezone.utc))
-    )
+    now = datetime.datetime.now(datetime.timezone.utc)
+    request = urllib.request.Request(url, method=method, headers=sign(method, url, access_key, secret_key, region, now))
     try:
         with OPENER.open(request, timeout=TIMEOUT_SECONDS) as response:
             return response.status, response.read(65536).decode("utf-8", "replace")
     except urllib.error.HTTPError as error:
         return error.code, error.read(65536).decode("utf-8", "replace")
     except (urllib.error.URLError, TimeoutError, OSError) as error:
-        raise Refusal(f"{method} {urllib.parse.urlsplit(url).path}: the store could not be reached ({type(error).__name__})") from None
+        path = urllib.parse.urlsplit(url).path
+        raise Refusal(f"{method} {path}: the store could not be reached ({type(error).__name__})") from None
 
 
 def code_of(body: str) -> str:
