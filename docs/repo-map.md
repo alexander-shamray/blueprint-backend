@@ -284,8 +284,9 @@ deploy/compose/              §14.1's model, laid out in its `README.md`: one
                              users, read by both Redis instances.
                              `object-store/` is ADR-106's local store: the
                              S3 identities it imports (`s3.json`), the
-                             bucket and expiry its one-shot makes
-                             (`init.txt`) and the nginx edge that serves
+                             policies they name (`policies/`), the
+                             bucket, policies and expiry its one-shot
+                             puts (`init.txt`) and the nginx edge that serves
                              `products/` with `nosniff` (`edge.conf`), all
                              of which `Platform.IntegrationTests` mounts
                              too

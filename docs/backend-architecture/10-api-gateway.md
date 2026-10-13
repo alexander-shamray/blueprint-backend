@@ -1426,10 +1426,11 @@ Compose's local
 store, its credentials and the chart's store values follow
 [§14.1](14-local-development.md), [§15.4](15-cicd-deployment.md) and
 `docs/secrets.md`'s exception table, and this section owns only the permissions
-above. One residual: the local store cannot tell a delete from a write, so each pair
-can delete under the prefix it writes, the BFF's under `uploads/` and the
-product service's under `products/`; a deployed store is held to the sentence
-above, which a test of the local one cannot prove.
+above. The local store holds each pair to a policy that allows the writes and
+reads above and nothing else, so a delete is refused there as a list is, and
+`ProductImageStoreTests` proves both. A deployed store is run outside this
+repository, so holding it to the sentence above is the deployment's to do, and
+nothing here checks it.
 
 **The image is served by the store, or a CDN in front of it, from `products/`
 alone.** It is not served through the gateway, because the gateway would then
