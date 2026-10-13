@@ -165,6 +165,7 @@ OMITTED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/ProductImages/ProductImageStoreOptions.cs",
         "src/Services/Catalog/Catalog.Infrastructure/ProductImages/S3ProductImageStore.cs",
         "tests/Catalog.TestSupport/FakeProductImageStore.cs",
+        "tests/Catalog.Api.Tests/ProductImageStoreOptionsTests.cs",
         "tests/Catalog.Application.Tests/PublishProductImageTests.cs",
         "src/Services/Catalog/Catalog.Application/Products/PriceRules.cs",
         "src/Services/Catalog/Catalog.Application/Products/ChangePrice/ChangePriceCommand.cs",
