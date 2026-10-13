@@ -1164,6 +1164,17 @@ on every probe and the pod would never become ready. Making it work means
 holding a **second** AMQP connection whose only job is answering a weaker
 question than the bus's own check already answers.
 
+**A host that registers the operator switch adds one more check, named
+`operator-switches`, tagged `ready`** and registered by `AddOperatorSwitches`,
+not by this block
+([ADR-114](adr/ADR-114-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-that-is-degraded-supersedes-adr-113s-loop-that-adds-no-check-1013.md)).
+It reports Degraded while a receive endpoint or a worker loop is switched off
+([ADR-113](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)),
+and never Unhealthy, so `/health/ready` still answers 200 and a deliberate stop
+does not take the pod out of service. The endpoint sets no `ResultStatusCodes`,
+so ASP.NET's default maps Degraded to 200 and only Unhealthy to 503. The three hosts that switch are
+Notifications, Shipping and Privacy.
+
 **The endpoints** are mapped once in `Common.Web`, since the tag predicates are
 identical for every service and need no configuration. `Program.cs` calls this
 after `builder.Build()` (§4.2), from

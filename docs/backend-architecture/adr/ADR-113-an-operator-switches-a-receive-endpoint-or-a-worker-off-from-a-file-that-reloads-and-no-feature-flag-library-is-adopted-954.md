@@ -45,6 +45,13 @@ the split release, as it can no longer be emitted behind a flag; and the
 gateway's route-level switch, which ADR-104 leaves to its own decision, is not
 this one.
 
+**Superseded in part by
+[ADR-114](ADR-114-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-that-is-degraded-supersedes-adr-113s-loop-that-adds-no-check-1013.md)**:
+in the Decision, "a loop that is off is logged and adds no check, because
+§13.5 pins the readiness set". A loop that is off is also reported by an
+`operator-switches` check, Degraded, which readiness answers 200; the log
+line stays.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
