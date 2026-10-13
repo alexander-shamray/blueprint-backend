@@ -6,6 +6,7 @@ import pathlib
 import re
 import threading
 import unittest
+import urllib.parse
 
 import store_check
 
@@ -180,13 +181,16 @@ class AddressingTests(unittest.TestCase):
 
     def test_path_style_puts_the_bucket_in_the_path(self):
         for url in self.urls("https://s3.example:9000/", "path"):
-            self.assertTrue(url.startswith("https://s3.example:9000/product-images"), url)
+            parts = urllib.parse.urlsplit(url)
+            self.assertEqual((parts.scheme, parts.netloc), ("https", "s3.example:9000"), url)
+            self.assertTrue(parts.path.startswith("/product-images"), url)
 
     def test_virtual_hosted_puts_the_bucket_in_the_host(self):
         urls = self.urls("https://s3.example:9000/", "virtual")
         self.assertEqual(len(urls), 3)
         for url in urls:
-            self.assertTrue(url.startswith("https://product-images.s3.example:9000/"), url)
+            parts = urllib.parse.urlsplit(url)
+            self.assertEqual((parts.scheme, parts.netloc), ("https", "product-images.s3.example:9000"), url)
         self.assertRegex(urls[0], r"^https://[^/]+/uploads/check-[0-9a-f]{32}$")
         self.assertEqual(urls[2], "https://product-images.s3.example:9000/?list-type=2&max-keys=1")
 
