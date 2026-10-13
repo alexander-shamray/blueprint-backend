@@ -194,6 +194,11 @@ read decorative, which is the shape ADR-033 was written to withdraw.
   role outside the read roles now stops the run. The clause stands as
   written; the record that moved it is ADR-076.
 
+**Amended by
+[ADR-109](ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md)**,
+which gives the rollout a registry: `deploy.yml`'s header no longer says "no
+registry", and the missing environment and kubeconfig it describes still hold.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

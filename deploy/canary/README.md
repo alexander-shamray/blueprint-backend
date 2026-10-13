@@ -5,7 +5,9 @@
 records the mechanism.
 
 **Nothing here has ever reached a cluster.** There is no dev, staging or
-production environment for this repository, no kubeconfig and no registry.
+production environment for this repository and no kubeconfig. There is a
+registry, GHCR, and the rollout verifies what CI pushed there before Helm runs
+([ADR-109](../../docs/backend-architecture/adr/ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md)).
 `.github/workflows/deploy.yml` is `workflow_dispatch` only for that reason — a
 canary on `push` would fail on every merge for want of a cluster, and a
 pipeline that is red by design trains everybody to ignore it. This is the third
@@ -30,7 +32,7 @@ every chart and asserts what comes out.
 |---|---|
 | `canary.json` | §15.5's ladder and the thresholds |
 | `deployables/` | One descriptor per deployable, which the section below owns |
-| `canary.py` | The weight arithmetic, the signals and their PromQL templates, the promote/rollback verdict, and the gate over `canary.json` and the descriptors |
+| `canary.py` | The weight arithmetic, the signals and their PromQL templates, the promote/rollback verdict, the gate over `canary.json` and the descriptors, and the rollout's digest and image-name reads (`validate-digest`, `verified-digest`, `images`) |
 | `read_prometheus.py` | The one file that talks to anything. Runs `canary.py`'s queries for the signals a workload declares and writes what came back |
 | `test_canary.py` | The suite. It is the whole of the assurance the rollout has |
 
