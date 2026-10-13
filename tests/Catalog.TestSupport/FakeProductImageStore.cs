@@ -5,8 +5,8 @@ namespace Catalog.TestSupport;
 
 /// <summary>The object store, stood in for (ADR-106): what a test uploaded, and what an attach did with it.</summary>
 /// <remarks>
-/// The S3 adapter is tested against a real store in <c>Platform.IntegrationTests</c>; a handler or endpoint test
-/// needs the port's answers and not a server, so it stages the answer here.
+/// The S3 adapter is tested against a real store in <c>Platform.IntegrationTests</c> (ADR-106); a handler or
+/// endpoint test needs the port's answers and not a server, so it stages the answer here.
 /// </remarks>
 public sealed class FakeProductImageStore : IProductImageStore
 {

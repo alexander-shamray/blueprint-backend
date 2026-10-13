@@ -35,7 +35,7 @@ public sealed class ProductImageStoreOptions
 }
 
 /// <summary>Every value present, and ADR-085's <c>https</c> rule as a rule about the configured base (§10.8).</summary>
-/// <remarks>Checked by hand, because this layer carries no data-annotations validator.</remarks>
+/// <remarks>Checked by hand (§15.4), because this layer carries no data-annotations validator.</remarks>
 public sealed class ProductImageStoreOptionsValidator : IValidateOptions<ProductImageStoreOptions>
 {
     public ValidateOptionsResult Validate(string? name, ProductImageStoreOptions options)
