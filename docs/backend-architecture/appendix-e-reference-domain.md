@@ -1433,8 +1433,9 @@ this table says whose signal each reads.
 `shipping.shipments.overdue` carries no rule yet, by decision: a threshold on
 how long a due shipment has waited wants a baseline under load, and none
 exists until §13.7's load run has a staging environment to run against, which
-this repository does not have. It, `shipping.shipments.waiting` and `shipping.carrier.unavailable` are read by
-`queue-backlog.md`'s procedure for a worker whose wait is outside a consumer.
+this repository does not have. It, `shipping.shipments.waiting` and
+`shipping.carrier.unavailable` are read by `queue-backlog.md`'s procedure for a
+worker whose wait is outside a consumer.
 
 **Cases §14 was argued from.**
 
