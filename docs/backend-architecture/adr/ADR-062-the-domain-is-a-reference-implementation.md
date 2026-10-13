@@ -54,6 +54,12 @@ which adds Privacy as a seventh service. This record's "six services" was the
 count when it was written; the services an adopter replaces are the ones
 [§4.1](../04-solution-structure.md) names now.
 
+**Amended by
+[ADR-120](ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)**,
+which records the consent a message is sent under on each channel. The
+consent record an adopter must bring is the lawful basis for holding the
+data, which that record does not supply.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
