@@ -261,7 +261,7 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
             {
                 commandId = Guid.CreateVersion7(),
                 name = "Walnut desk lamp",
-                thumbnailUrl = (string?)null,
+                imageKey = (string?)null,
                 amount,
                 currency = Jurisdiction.Currency
             },
