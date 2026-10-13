@@ -773,8 +773,11 @@ Prices are Catalog's. `IProductPriceReader` is implemented by
 `ordering.ProductPrices`, which Catalog's `ProductPublished`, `PriceChanged`
 and `ProductDiscontinued` keep current. The gRPC pricing client of
 [§9.7](09-messaging.md) is a different caller, the BFF's.
-`PublishProductValidator` and its rules for a name and a thumbnail are
-[ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)'s.
+`PublishProductValidator` and its rule for a name are
+[ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)'s, and its rule for an image is
+a key's bound, which [§10.8](10-api-gateway.md) and
+[ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)
+own.
 
 ### E.4.4 The queries of Ordering and Catalog
 
@@ -1757,6 +1760,9 @@ code reads it, and the host refuses to start without a required one.
 | `Mail__Security` | Config | Helm `mail.security` → ConfigMap, which admits `StartTls` alone | ✓ — **Notifications only**; `StartTls` or `None`, and `None` refuses to start outside Development |
 | `Mail__UserName` | Config | Helm `mail.userName` → ConfigMap | ✓ **outside Development** — **Notifications only**; set with the password or not at all |
 | `Mail__Password` | Secret | Helm `mail.passwordSecretRef` → External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
+| `ProductImages__Store__Endpoint`, `__Bucket`, `__Region`, `__PathStyle` | Config | Helm `objectStore.*` → ConfigMap | ✓ — **Web.Bff and Catalog only**; the object store of [ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md), refused at start when missing. The BFF's endpoint is the address a client reaches, since it signs the URL the client uploads to, and Catalog's is the one that service reaches |
+| `ProductImages__Store__PublicBaseUrl` | Config | Helm `objectStore.publicBaseUrl` → ConfigMap | ✓ — **Catalog only**; where `products/` is served from, the absolute base every stored image URL is built from (its scheme is [§10.8](10-api-gateway.md)'s rule), and short enough that it and the longest destination key fit `ThumbnailUrl` ([§10.8](10-api-gateway.md)) |
+| `ProductImages__Store__AccessKey`, `__SecretKey` | Secret | Helm `objectStore.secretRef` → External Secrets | ✓ — **Web.Bff and Catalog only**; one pair per host, never shared: the BFF's writes `uploads/` and nothing else, and Catalog's reads `uploads/` and writes `products/` (§10.8) |
 | `ContactSource__BaseUrl` | Config | Helm `contactSource.baseUrl` → ConfigMap | ✓ — **Notifications only**; Keycloak's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s contact read, HTTPS outside Development, and the host refuses to start without it |
 | `ContactSource__Realm` | Config | Helm `contactSource.realm` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; the realm whose users are read, the one that issues this host's token, and the host refuses to start without it |
 | `Jurisdiction__Languages__0…n` | Config | Helm `jurisdiction.languages` → ConfigMap | ✓ — **Notifications only**; ADR-053's language set, in the order a message in every language shows them; the host refuses to start unless every language has every template and a culture |
