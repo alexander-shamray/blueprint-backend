@@ -21,9 +21,10 @@ pass deletes a row past the stale window, a provider's unregistered answer
 deletes the row still holding the token the send used, and the erasure
 handler clears the subject's rows — and anonymises the journal on an erasure.
 Each of those writes is one statement or one transaction guarded by the row's
-own state, the sequence and the token ADR-117 puts on it, so a write from the
-other process lands before it or after it and never between; the database
-orders them, not a lock between the hosts.
+own state — the retention delete by the row's last-seen time, the unregistered
+delete by the token the send used, the erasure by the subject — so a write
+from the other process lands before it or after it and never between; the
+database orders them, not a lock between the hosts.
 
 The schema stays the migrator's, run by the worker's chart as it is today;
 **the API host's chart renders no migration Job**, so two hooks never race over
