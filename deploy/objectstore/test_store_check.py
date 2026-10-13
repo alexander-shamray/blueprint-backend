@@ -172,6 +172,84 @@ class RefusalTests(unittest.TestCase):
         self.assertEqual(store.seen, [])
 
 
+class AddressingTests(unittest.TestCase):
+    """A store reachable only by a virtual-hosted name is asked by that name (ADR-114)."""
+
+    def urls(self, endpoint, addressing):
+        return [url for _, _, url in store_check.probes(endpoint, "product-images", addressing)]
+
+    def test_path_style_puts_the_bucket_in_the_path(self):
+        for url in self.urls("https://s3.example:9000/", "path"):
+            self.assertTrue(url.startswith("https://s3.example:9000/product-images"), url)
+
+    def test_virtual_hosted_puts_the_bucket_in_the_host(self):
+        urls = self.urls("https://s3.example:9000/", "virtual")
+        self.assertEqual(len(urls), 3)
+        for url in urls:
+            self.assertTrue(url.startswith("https://product-images.s3.example:9000/"), url)
+        self.assertRegex(urls[0], r"^https://[^/]+/uploads/check-[0-9a-f]{32}$")
+        self.assertEqual(urls[2], "https://product-images.s3.example:9000/?list-type=2&max-keys=1")
+
+    def test_the_signed_host_is_the_virtual_host(self):
+        now = datetime.datetime(2026, 10, 13, 8, 0, 0, tzinfo=datetime.timezone.utc)
+        url = self.urls("https://s3.example", "virtual")[0]
+        self.assertEqual(store_check.sign("DELETE", url, "AK", "SK", "eu-1", now)["Host"], "product-images.s3.example")
+
+    def test_an_unset_addressing_is_path_style(self):
+        store = Store({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
+        self.addCleanup(store.close)
+        self.assertEqual(store_check.check(store.env(**{store_check.ADDRESSING: ""})), [])
+        self.assertTrue(all(path.startswith("/product-images") for _, path, _ in store.seen))
+
+    def test_another_addressing_is_not_guessed_at(self):
+        with self.assertRaisesRegex(store_check.Refusal, store_check.ADDRESSING):
+            store_check.check(Store({}).env(**{store_check.ADDRESSING: "vhost"}))
+
+
+class HeartbeatTests(unittest.TestCase):
+    """A green run tells a monitor outside GitHub it happened (ADR-114)."""
+
+    def beat(self, answer, **over):
+        store = Store({"GET": answer})
+        self.addCleanup(store.close)
+        env = {store_check.HEARTBEAT: store.endpoint + "/ping/the-token"}
+        env.update(over)
+        return store, env
+
+    def test_the_url_is_requested_once(self):
+        store, env = self.beat(("200", "OK"))
+        store_check.heartbeat(env)
+        self.assertEqual([(method, path) for method, path, _ in store.seen], [("GET", "/ping/the-token")])
+
+    def test_an_unset_url_is_named_and_not_a_pass(self):
+        with self.assertRaisesRegex(store_check.Refusal, store_check.HEARTBEAT):
+            store_check.heartbeat({})
+
+    def test_an_answer_that_is_not_a_success_fails(self):
+        _, env = self.beat(("500", ""))
+        with self.assertRaisesRegex(store_check.Refusal, "500"):
+            store_check.heartbeat(env)
+
+    def test_a_redirect_is_not_followed(self):
+        _, env = self.beat(("302", ""))
+        with self.assertRaisesRegex(store_check.Refusal, "302"):
+            store_check.heartbeat(env)
+
+    def test_plain_http_is_refused_off_loopback(self):
+        with self.assertRaisesRegex(store_check.Refusal, "https"):
+            store_check.heartbeat({store_check.HEARTBEAT: "http://monitor.example/ping/the-token"})
+
+    def test_the_token_is_never_in_the_message(self):
+        _, env = self.beat(("500", ""))
+        with self.assertRaises(store_check.Refusal) as caught:
+            store_check.heartbeat(env)
+        self.assertNotIn("the-token", str(caught.exception))
+        env[store_check.HEARTBEAT] = "http://127.0.0.1:1/ping/the-token"
+        with self.assertRaises(store_check.Refusal) as caught:
+            store_check.heartbeat(env)
+        self.assertNotIn("the-token", str(caught.exception))
+
+
 WORKFLOW = pathlib.Path(__file__).resolve().parents[2] / ".github" / "workflows" / "object-store.yml"
 
 
@@ -230,6 +308,31 @@ class FilingTests(unittest.TestCase):
         step_cap = re.search(r"^        timeout-minutes: (\d+)$", judge, re.MULTILINE)
         self.assertIsNotNone(step_cap, "the judge step has no timeout of its own")
         self.assertLess(int(step_cap.group(1)), int(job_cap.group(1)))
+
+
+class HeartbeatStepTests(unittest.TestCase):
+    """The deployed job announces a green run, and only a green one (ADR-114)."""
+
+    def step(self):
+        job = deployed_job()
+        match = re.search(r"^      - name: [^\n]*\n(?:        [^\n]*\n)*?        run: python deploy/objectstore/"
+                          r"store_check\.py heartbeat\n(?:        [^\n]*\n)*", job, re.MULTILINE)
+        self.assertIsNotNone(match, "no step runs store_check.py heartbeat")
+        return job, match
+
+    def test_it_runs_after_the_judgement_and_reads_the_secret(self):
+        job, match = self.step()
+        self.assertGreater(match.start(), job.find("id: judge"))
+        self.assertIn("OBJECT_STORE_HEARTBEAT_URL: ${{ secrets.OBJECT_STORE_HEARTBEAT_URL }}", match.group(0))
+
+    def test_a_red_or_cancelled_run_sends_none(self):
+        _, match = self.step()
+        self.assertNotRegex(match.group(0), r"\n        if: ")
+
+    def test_the_judge_step_passes_the_addressing_variable(self):
+        job = deployed_job()
+        judge = job[job.find("id: judge"):job.find("store_check.py heartbeat")]
+        self.assertIn("OBJECT_STORE_ADDRESSING: ${{ vars.OBJECT_STORE_ADDRESSING }}", judge)
 
 
 if __name__ == "__main__":

@@ -20,6 +20,15 @@ import uuid
 
 ENDPOINT, BUCKET, REGION = "OBJECT_STORE_ENDPOINT", "OBJECT_STORE_BUCKET", "OBJECT_STORE_REGION"
 
+# How the bucket is named in a request: in the path, or as a label of the host
+# for a store reachable only that way (ADR-114). Unset reads as the first.
+ADDRESSING = "OBJECT_STORE_ADDRESSING"
+ADDRESSINGS = ("path", "virtual")
+
+# The URL a green run requests, for a monitor outside GitHub to hear (ADR-114).
+# A bearer token in its path, so it is a secret and never in a message.
+HEARTBEAT = "OBJECT_STORE_HEARTBEAT_URL"
+
 # One variable per half of each pair, named for the host that holds the pair
 # (§10.8): the BFF's writes `uploads/`, Catalog's reads it and writes `products/`.
 PAIRS = {
@@ -121,15 +130,21 @@ def code_of(body: str) -> str:
     return match.group(1) if match else ""
 
 
-def probes(endpoint: str, bucket: str) -> list[tuple[str, str, str]]:
+def probes(endpoint: str, bucket: str, addressing: str = "path") -> list[tuple[str, str, str]]:
     """(label, method, url) for each request a pair must be refused.
 
     The delete names a key nothing holds, so a store that wrongly allows it
     removes nothing: authorization is decided before existence."""
-    base = f"{endpoint.rstrip('/')}/{urllib.parse.quote(bucket, safe='')}"
+    name = urllib.parse.quote(bucket, safe="")
+    if addressing == "virtual":
+        root = urllib.parse.urlsplit(endpoint)
+        base, listing = f"{root.scheme}://{name}.{root.netloc}", "/?list-type=2&max-keys=1"
+    else:
+        base = f"{endpoint.rstrip('/')}/{name}"
+        listing = "?list-type=2&max-keys=1"
     absent = f"check-{uuid.uuid4().hex}"
     found = [(f"delete under {prefix}", "DELETE", f"{base}/{prefix}{absent}") for prefix in PREFIXES]
-    found.append(("list the bucket", "GET", f"{base}?list-type=2&max-keys=1"))
+    found.append(("list the bucket", "GET", f"{base}{listing}"))
     return found
 
 
@@ -142,17 +157,40 @@ def judge(label: str, status: int, body: str) -> str | None:
     return f"{label}: answered {status}, so the pair is not refused it"
 
 
+def require_https(name: str, value: str, reason: str) -> None:
+    url = urllib.parse.urlsplit(value)
+    if url.scheme != "https" and not (url.scheme == "http" and url.hostname in LOOPBACK):
+        raise Refusal(f"{name} must be an https URL, or http on a loopback host: {reason}")
+
+
+def heartbeat(env: dict[str, str]) -> None:
+    """Request the monitor's URL once. The message never carries the URL, whose path is its token."""
+    if not env.get(HEARTBEAT):
+        raise Refusal(f"not configured: {HEARTBEAT}")
+    require_https(HEARTBEAT, env[HEARTBEAT], "its path is a token")
+    try:
+        with OPENER.open(urllib.request.Request(env[HEARTBEAT], method="GET"), timeout=TIMEOUT_SECONDS) as response:
+            status = response.status
+    except urllib.error.HTTPError as error:
+        status = error.code
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise Refusal(f"the heartbeat could not be sent ({type(error).__name__})") from None
+    if not 200 <= status < 300:
+        raise Refusal(f"the heartbeat was answered {status}")
+
+
 def check(env: dict[str, str]) -> list[str]:
     """Every violation found; an empty list is a store that holds §10.8's sentence."""
     missing = [name for name in REQUIRED if not env.get(name)]
     if missing:
         raise Refusal("not configured: " + ", ".join(missing))
-    url = urllib.parse.urlsplit(env[ENDPOINT])
-    if url.scheme != "https" and not (url.scheme == "http" and url.hostname in LOOPBACK):
-        raise Refusal(f"{ENDPOINT} must be an https URL, or http on a loopback host: the pairs are sent to it")
+    require_https(ENDPOINT, env[ENDPOINT], "the pairs are sent to it")
+    addressing = env.get(ADDRESSING) or ADDRESSINGS[0]
+    if addressing not in ADDRESSINGS:
+        raise Refusal(f"{ADDRESSING} must be one of {', '.join(ADDRESSINGS)} when set")
     violations = []
     for host, (access, secret) in PAIRS.items():
-        for label, method, url in probes(env[ENDPOINT], env[BUCKET]):
+        for label, method, url in probes(env[ENDPOINT], env[BUCKET], addressing):
             status, body = ask(method, url, env[access], env[secret], env[REGION])
             found = judge(label, status, body)
             if found:
@@ -162,9 +200,13 @@ def check(env: dict[str, str]) -> list[str]:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("check",))
-    parser.parse_args(argv)
+    parser.add_argument("command", choices=("check", "heartbeat"))
+    command = parser.parse_args(argv).command
     try:
+        if command == "heartbeat":
+            heartbeat(dict(os.environ))
+            print("The heartbeat was sent.")
+            return 0
         violations = check(dict(os.environ))
     except Refusal as error:
         print(f"::error::{error}")
