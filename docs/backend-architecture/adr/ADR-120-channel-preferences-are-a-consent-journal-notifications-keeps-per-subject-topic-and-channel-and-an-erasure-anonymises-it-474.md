@@ -174,7 +174,7 @@ rows ADR-117 and ADR-118 owe:
 |---|---|
 | [§10](../10-api-gateway.md) | No wire contract for the preferences routes beside the one ADR-117 owes for the devices route, and §10.5's 412 row naming `If-Match` and `If-Unmodified-Since` alone, with its close that the 412 half is unimplemented because nothing sends or reads an ETag |
 | [Appendix E](../appendix-e-reference-domain.md) | E.1.1's Notifications row owning `NotificationLog` alone, E.6.9's Notifications row without the anonymised journal, and the configuration inventory without `Jurisdiction__Required` or `Jurisdiction__ConsentRetention` |
-| `deploy/helm/` and `deploy/compose/` | No values for the two jurisdiction members, in either Notifications chart or in Compose |
+| `deploy/helm/` and `deploy/compose/` | No values for the two jurisdiction members, in the worker's chart or in Compose, nor in the `notifications-api` chart ADR-118 owes |
 | `docs/personal-data.md` | No row for the journal |
 
 ---
