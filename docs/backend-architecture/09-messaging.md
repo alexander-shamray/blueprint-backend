@@ -1927,7 +1927,8 @@ below and at the schedule that arms it.
 > `payment_authorised_during_compensation` row at once.
 
 `OrderPlaced`, `OrderCancelled` and `OrderConfirmed` are all arrows coming from
-this service — [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+this service —
+[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
 lists all three in its own Consumes column, for the same reason: a fact the
 service publishes is also a fact its workflow has to react to. `Compensating`
 writes each of them out, so the machine has a branch for them in every state
