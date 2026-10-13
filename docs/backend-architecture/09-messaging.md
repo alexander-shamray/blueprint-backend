@@ -2882,6 +2882,11 @@ x
         // (StockReserved and a timeout), and optimistic retry on a state
         // machine replays transitions that already ran.
         r.ConcurrencyMode = ConcurrencyMode.Pessimistic;
+
+        // UPDLOCK, ROWLOCK, SERIALIZABLE on the load itself: the hint, not
+        // the transaction, range-locks a CorrelationId with no row yet
+        // (ADR-112).
+        r.LockStatementProvider = SagaLockStatement;
     });
 ```
 
@@ -3505,14 +3510,14 @@ x.AddEntityFrameworkOutbox<OrderingDbContext>(o =>
 {
     o.UseSqlServer();
 
-    // Serializable, and load-bearing rather than tuning. This filter opens
+    // ReadCommitted, and load-bearing rather than tuning. This filter opens
     // the consume transaction and §9.6's saga repository joins it, so the
-    // level in force is the one set here — and MassTransit defaults it to
-    // RepeatableRead. ConcurrencyMode.Pessimistic does not cover the gap:
-    // its row lock needs a row that exists, and the case it was chosen for
-    // is two deliveries both taking the Initially branch for a
-    // CorrelationId with none yet, where only a key-range lock helps.
-    o.IsolationLevel = IsolationLevel.Serializable;
+    // level set here reaches MassTransit's own reads of OutboxMessage too.
+    // Serializable range-locked those to the table's last key and
+    // deadlocked the endpoint; RepeatableRead holds their row locks. The
+    // key-range lock two first deliveries need is the saga's own hint
+    // (§9.6, ADR-112).
+    o.IsolationLevel = IsolationLevel.ReadCommitted;
 });
 
 cfg.ReceiveEndpoint(

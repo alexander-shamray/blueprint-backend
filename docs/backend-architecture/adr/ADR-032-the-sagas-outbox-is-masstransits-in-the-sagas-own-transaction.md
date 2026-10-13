@@ -199,6 +199,16 @@ Retiring either one costs a guarantee the other never made.
   enumeration stays, and so does the default that faults everything it does
   not name.
 
+**Superseded in part by
+[ADR-112](ADR-112-the-sagas-outbox-transaction-is-readcommitted-and-only-the-sagas-row-lock-is-serializable-992-supersedes-adr-032s-serializable-outbox-transaction.md)**:
+the Decision's `IsolationLevel.Serializable`, chosen for the key-range lock two
+first deliveries need; and, in the consequence calling the consume
+transaction longer, wider and stricter, the word "stricter" and both of its
+`Serializable` mentions, the three-table one included. The level is still set
+on the outbox and still part of the mechanism, because the outbox still opens
+the transaction, but it is `ReadCommitted`; the transaction is serializable
+only in the saga's own load, which takes its key-range lock from its hint.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

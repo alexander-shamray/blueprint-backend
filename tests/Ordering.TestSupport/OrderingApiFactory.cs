@@ -9,6 +9,7 @@ using Ordering.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -31,6 +32,9 @@ public class OrderingApiFactory(
     /// because §8.1's <c>AbortOnConnectFail = false</c> makes it non-fatal.
     /// </remarks>
     public const string UnreachableRedis = "redis.invalid:6379";
+
+    /// <summary>The saga's statements and their isolation levels, as the host sent them (ADR-112).</summary>
+    public SagaStatementRecorder SagaStatements { get; } = new();
 
     /// <summary>Supplies only §7.1's runtime connection; the host must not read <c>OrderingMigrator</c>.</summary>
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
@@ -82,7 +86,9 @@ public class OrderingApiFactory(
 
                 // The projection handlers those events need; each layer scans itself (§6.2).
                 services.AddPluggableFrom(typeof(AlwaysThrows).Assembly);
-            });
+            })
+            .ConfigureTestServices(services =>
+                services.ConfigureDbContext<OrderingDbContext>(o => o.AddInterceptors(SagaStatements)));
 
     /// <summary>Swaps the JWT scheme for <see cref="TestAuthHandler"/> (§12.4); a host may override it.</summary>
     /// <remarks>Forbid falls back to the challenge scheme, so a 403 is <see cref="TestAuthHandler"/>'s own.</remarks>

@@ -9,6 +9,7 @@ using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Transport;
 using MassTransit;
+using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Ordering.Application.Orders.CancelOrder;
@@ -36,6 +37,10 @@ public static class DependencyInjection
 
     /// <summary>§11.7's erasure request, on its own endpoint so no other consumer's failure holds it.</summary>
     public const string PrivacyQueue = "ordering-privacy";
+
+    /// <summary>The saga's row lock, <c>UPDLOCK, ROWLOCK, SERIALIZABLE</c> on its own statement (ADR-112).</summary>
+    public static ILockStatementProvider SagaLockStatement { get; } =
+        new SqlServerLockStatementProvider(serializable: true);
 
     public static IServiceCollection AddMassTransitMessaging(
         this IServiceCollection services,
@@ -80,6 +85,9 @@ public static class DependencyInjection
                     r.ExistingDbContext<OrderingDbContext>();
                     // Pessimistic, so two events for one order serialise; optimistic retry would replay transitions.
                     r.ConcurrencyMode = ConcurrencyMode.Pessimistic;
+
+                    // The hint, not the transaction, takes the key-range lock two first deliveries need (ADR-112).
+                    r.LockStatementProvider = SagaLockStatement;
                 });
 
             // ADR-032's transactional outbox, for the saga's sends and schedules; UseBusOutbox() is not called,
@@ -88,9 +96,9 @@ public static class DependencyInjection
             {
                 o.UseSqlServer();
 
-                // Serializable, because the saga repository joins this filter's transaction and Pessimistic needs
-                // the key-range lock only Serializable takes (ADR-032).
-                o.IsolationLevel = IsolationLevel.Serializable;
+                // The saga repository joins this transaction. Serializable here range-locked MassTransit's own
+                // outbox reads and deadlocked the endpoint; RepeatableRead holds the same reads' row locks (ADR-112).
+                o.IsolationLevel = IsolationLevel.ReadCommitted;
             });
 
             // ADR-021's scheduler; without UseDelayedMessageScheduler below, the first Schedule(…) throws.
