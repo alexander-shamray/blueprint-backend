@@ -18,6 +18,8 @@
     <PackageReference Include="FluentValidation" />
     <!-- FakeTimeProvider, so §13.3's elapsed time is not the build agent's. -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <!-- Reads the exported histogram bounds back out of a real meter provider (§13.3). -->
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
   </ItemGroup>
 
   <ItemGroup>
