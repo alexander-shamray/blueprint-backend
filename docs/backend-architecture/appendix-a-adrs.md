@@ -120,6 +120,7 @@ decision looks wrong.
 | **ADR-111** | [A red object-store.yml run files a tracker issue, or comments on the open one (#988); narrows ADR-110's consequence that a red run files no issue](adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md) |
 | **ADR-112** | [The saga's outbox transaction is ReadCommitted and only the saga's row lock is serializable (#992); supersedes ADR-032's Serializable outbox transaction](adr/ADR-112-the-sagas-outbox-transaction-is-readcommitted-and-only-the-sagas-row-lock-is-serializable-992-supersedes-adr-032s-serializable-outbox-transaction.md) |
 | **ADR-113** | [An operator switches a receive endpoint or a worker off from a file that reloads, and no feature-flag library is adopted (#954)](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md) |
+| **ADR-114** | [The object store check sends a heartbeat on a green run and is provisioned by a script, and can name a virtual-hosted bucket (#995, #996)](adr/ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md) |
 
 ---
 
