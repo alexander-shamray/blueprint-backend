@@ -55,7 +55,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
             .Value;
 
         // The count is the assertion, since a readiness check dropped from a growing list turns nothing red.
-        options.Registrations.Count.ShouldBe(4);
+        options.Registrations.Count.ShouldBe(5);
 
         HealthCheckRegistration sql = options.Registrations.Single(r => r.Name == "sql");
         sql.Tags.ShouldContain("ready", "an untagged check is invisible to the /health/ready predicate");
@@ -73,6 +73,9 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         HealthCheckRegistration bus = options.Registrations.Single(r => r.Name == "masstransit-bus");
         bus.Tags.ShouldContain("ready", "a bus check outside the ready predicate reports to nobody");
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
+
+        // Reports Degraded only, which answers 200, so it is in the set and never takes the pod out (ADR-114).
+        options.Registrations.Single(r => r.Name == "operator-switches").Tags.ShouldContain("ready");
     }
 
     [Fact]
