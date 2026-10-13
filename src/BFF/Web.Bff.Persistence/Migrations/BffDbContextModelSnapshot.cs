@@ -219,6 +219,44 @@ namespace Web.Bff.Persistence.Migrations
                     b.ToTable("Products", "bff");
                 });
 
+            modelBuilder.Entity("Web.Bff.Persistence.SavedAddressRow", b =>
+                {
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Country")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("nchar(2)")
+                        .IsFixedLength();
+
+                    b.Property<string>("Line1")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Line2")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("PostalCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTimeOffset>("SavedAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.HasKey("CustomerId");
+
+                    b.ToTable("SavedAddresses", "bff");
+                });
+
             modelBuilder.Entity("Web.Bff.Persistence.OrderLineRow", b =>
                 {
                     b.HasOne("Web.Bff.Persistence.OrderRow", null)

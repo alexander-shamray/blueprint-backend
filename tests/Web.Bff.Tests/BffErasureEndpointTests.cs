@@ -104,6 +104,22 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
     }
 
     [Fact]
+    public async Task The_subjects_saved_address_goes_and_a_bystanders_stays()
+    {
+        Guid request = Guid.CreateVersion7();
+        await SeedAddressAsync(Subject);
+        await SeedAddressAsync(Bystander);
+
+        await PublishRequestAsync(request);
+
+        (await CountAddressesAsync(Subject)).ShouldBe(0);
+        (await CountAddressesAsync(Bystander)).ShouldBe(1);
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = Count FROM bff.PersonalDataErasures WHERE RequestId = {0}",
+            request)).ShouldBe(1, "the address is counted with what the request erased (ADR-107)");
+    }
+
+    [Fact]
     public async Task A_failed_audit_write_rolls_the_delete_back_and_reports_nothing()
     {
         Guid order = Guid.CreateVersion7();
@@ -217,6 +233,15 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
             request)).ShouldBe(1);
         await Eventually(CountCompletionsAsync, expected: 1, because: "the inbox dropped the second delivery");
     }
+
+    private Task SeedAddressAsync(Guid customer) =>
+        fixture.ExecuteAsync(
+            "INSERT INTO bff.SavedAddresses (CustomerId, Line1, City, PostalCode, Country, SavedAt) " +
+            "VALUES ({0}, N'1 Test Street', N'Testville', N'T1', N'KZ', SYSDATETIMEOFFSET())",
+            customer);
+
+    private Task<int> CountAddressesAsync(Guid customer) =>
+        fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM bff.SavedAddresses WHERE CustomerId = {0}", customer);
 
     private async Task SeedOrderAsync(Guid order, Guid customer)
     {

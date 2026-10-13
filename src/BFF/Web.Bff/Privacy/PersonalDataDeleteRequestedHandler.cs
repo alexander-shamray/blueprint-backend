@@ -45,6 +45,11 @@ public sealed class PersonalDataDeleteRequestedHandler(
                     $"DELETE FROM bff.Orders WHERE CustomerId = {integrationEvent.SubjectId}",
                     ct);
 
+                // The saved address is the subject's own row, counted with the orders (ADR-107).
+                deleted += await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"DELETE FROM bff.SavedAddresses WHERE CustomerId = {integrationEvent.SubjectId}",
+                    ct);
+
                 PersonalDataErasure? seen = await db.PersonalDataErasures
                     .FirstOrDefaultAsync(e => e.Id == integrationEvent.RequestId, ct);
 
