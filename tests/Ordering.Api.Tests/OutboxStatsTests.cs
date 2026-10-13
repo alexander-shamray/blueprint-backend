@@ -92,9 +92,9 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     {
         // DATEDIFF(second) reads 1 whenever a boundary falls inside the row's life, so slo.js's 1 s row passed by luck.
         OutboxMessage fresh = await StageOneAsync(OutboxLane.Local);
-        await AgeAsync(fresh, TimeSpan.FromMilliseconds(300));
+        await AgeAsync(fresh, TimeSpan.FromMilliseconds(100));
 
-        NewStats().OldestAgeSeconds(OutboxLane.Local).ShouldBeInRange(0.2, 0.99);
+        NewStats().OldestAgeSeconds(OutboxLane.Local).ShouldBeInRange(0.05, 0.99);
     }
 
     [Fact]
