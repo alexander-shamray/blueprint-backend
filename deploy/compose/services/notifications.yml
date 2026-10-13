@@ -1,4 +1,5 @@
-# Notifications: the pair tools/new-service renders from the template's unit (§4.5).
+# Notifications: the pair tools/new-service renders from the template's unit (§4.5), and the API host ADR-118
+# added beside the worker after that render, on the one database the migrator owns.
 services:
   # §14.1's pair rule: a {service}-migrator one-shot plus the service itself,
   # gated on `condition: service_completed_successfully` — every service owns
@@ -95,4 +96,34 @@ services:
       rabbitmq: { condition: service_healthy }
       mailpit: { condition: service_healthy }
       # The first contact read asks the realm for a token, which races the import under service_started.
+      keycloak: { condition: service_healthy }
+
+  # ADR-118's synchronous half: the BFF's gRPC hop on 8081, which no port publishes, as catalog-api's is not (§14.1).
+  # It reads the database the migrator above owns and nothing else of the worker's, so it takes no broker, relay,
+  # contact source or windows.
+  notifications-api:
+    build:
+      context: ../../..
+      dockerfile: src/Services/Notifications/Notifications.Api/Dockerfile
+    # Read-only like the chart's pods (ADR-082), so compose.yml's `up --wait` proves it.
+    read_only: true
+    tmpfs: [ /tmp ]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Runtime identity (DML only) — never the migrator connection.
+      ConnectionStrings__Notifications: "${NOTIFICATIONS_CONNECTION:-Server=sql;Database=Notifications;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+      # The authority, to validate inbound tokens (§11.2); read eagerly, so this line is what lets the host start.
+      Identity__Authority: "http://keycloak:8080/realms/commerce"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+    # §13.5's readiness, asked by the host itself through HealthProbe, because
+    # the image has no shell or HTTP client; the timeout outlasts the probe's.
+    healthcheck:
+      test: [ "CMD", "dotnet", "Notifications.Api.dll", "--probe" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    depends_on:
+      # The schema is the worker's migrator's, so this host never starts against one it is ahead of (ADR-118).
+      notifications-migrator: { condition: service_completed_successfully }
       keycloak: { condition: service_healthy }
