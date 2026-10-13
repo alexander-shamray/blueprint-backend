@@ -13,10 +13,10 @@ public static class TestcontainersWarmUp
 {
     public static void Ensure() => Ensure(RunInitialisers);
 
-    /// <summary>Warms up, then runs <paramref name="build"/>, for a field initialiser that cannot hold a statement.</summary>
+    /// <summary>Warms up, then builds, for a field initialiser that cannot hold a statement.</summary>
     public static T Build<T>(Func<T> build) => Build(RunInitialisers, build);
 
-    /// <summary>Runs <paramref name="initialise"/> as <see cref="Ensure(Action)"/> does, and builds only if it passed.</summary>
+    /// <summary>Runs <paramref name="initialise"/> as <see cref="Ensure(Action)"/> does, then builds.</summary>
     public static T Build<T>(Action initialise, Func<T> build)
     {
         Ensure(initialise);
