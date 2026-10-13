@@ -102,7 +102,8 @@ services:
 
   # ADR-106's local object store: SeaweedFS, because its S3 API takes a pre-signed PUT, scopes a credential pair to
   # a bucket prefix and serves an anonymous read from one prefix alone, which is the §10.8 permission model. Two
-  # identities, neither able to list; object-store/s3.json holds them. A deployment supplies its own store.
+  # credential pairs, neither able to list or delete; object-store/s3.json holds them and object-store/policies/
+  # what each may do. A deployment supplies its own store.
   object-store:
     image: chrislusf/seaweedfs:4.47
     command: [ "server", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-dir=/data" ]
@@ -116,12 +117,14 @@ services:
       retries: 20
       start_period: 10s
 
-  # The bucket and the one-day expiry on uploads/ (§10.8), as a one-shot like the migrators. Idempotent, so a
-  # second `up` leaves the first one's bucket and rule as they were.
+  # The bucket, the two policies and the one-day expiry on uploads/ (§10.8), as a one-shot like the migrators.
+  # Idempotent, so a second `up` leaves the first one's bucket, policies and rule as they were.
   object-store-init:
     image: chrislusf/seaweedfs:4.47
     entrypoint: [ "/bin/sh", "-c", "weed shell -master=object-store:9333 < /etc/seaweedfs/init.txt" ]
-    volumes: [ "./object-store/init.txt:/etc/seaweedfs/init.txt:ro" ]
+    volumes:
+      - ./object-store/init.txt:/etc/seaweedfs/init.txt:ro
+      - ./object-store/policies:/etc/seaweedfs/policies:ro
     depends_on:
       object-store: { condition: service_healthy }
     restart: "no"

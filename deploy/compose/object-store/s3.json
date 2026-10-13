@@ -3,12 +3,14 @@
     {
       "name": "bff",
       "credentials": [{ "accessKey": "bff-images-svc", "secretKey": "local-dev-bff-images" }],
-      "actions": ["Write:product-images/uploads/*"]
+      "actions": [],
+      "policyNames": ["bff-images"]
     },
     {
       "name": "catalog",
       "credentials": [{ "accessKey": "catalog-images-svc", "secretKey": "local-dev-catalog-images" }],
-      "actions": ["Read:product-images/uploads/*", "Write:product-images/products/*"]
+      "actions": [],
+      "policyNames": ["catalog-images"]
     },
     {
       "name": "anonymous",
