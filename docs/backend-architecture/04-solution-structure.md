@@ -47,7 +47,7 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │           │   └── DependencyInjection.cs   Add<Service>Infrastructure(config)
 │           ├── <Service>.Migrator/          Migration job host (§7.4)
 │           └── <Service>.Api/
-│               └── Program.cs               The ONLY composition root (§4.2)
+│               └── Program.cs               Its process's ONLY composition root (§4.2)
 │
 ├── tests/
 │   ├── Common.Domain.Tests/            The building blocks, under the same
@@ -101,7 +101,8 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │                                   ADR-019
 │   ├── <Service>.Domain.Tests/         one set per service; a worker has
 │   ├── <Service>.Application.Tests/    Worker.Tests where Api.Tests would be,
-│   ├── <Service>.Api.Tests/            and a pure consumer has no Domain.Tests
+│   ├── <Service>.Api.Tests/            a pure consumer has no Domain.Tests,
+│   │                                   and a service with both hosts has both
 │   ├── <Service>.TestSupport/          ServiceFixture, the test auth scheme and the
 │   │                                   data builders (§12.4). Not a test project —
 │   │                                   referenced by the two above, which each need
@@ -175,7 +176,11 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 `src/Services/` holds one such directory per service, and its listing is
 the roster. A service whose host is a worker has `<Service>.Worker` where
 `<Service>.Api` would be, and a pure consumer has no `<Service>.Domain`
-either (§4.5). Which services have which shape is in [E.2.1](appendix-e-reference-domain.md#e21-the-services-and-their-host-shapes).
+either (§4.5). A service may have both hosts, each `Program.cs` the only
+composition root of its own process and both composing the one
+Infrastructure project
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
+Which services have which shape is in [E.2.1](appendix-e-reference-domain.md#e21-the-services-and-their-host-shapes).
 
 **`src/`, `tests/` and `tools/` hold source, and nothing a build wrote.** A
 project directory carrying its own `bin/` and `obj/` buries the files a reader
@@ -204,7 +209,8 @@ rather than shipping a `.sln` alongside it.
 a worker and a pure consumer, which expose no public API but still own schemas
 ([§3.2](03-bounded-contexts.md); [E.2.1](appendix-e-reference-domain.md#e21-the-services-and-their-host-shapes) names them).
 
-It is also why [§15.2](15-cicd-deployment.md) builds **two images per service** rather than one, and why
+It is also why [§15.2](15-cicd-deployment.md) builds **two images per service** rather than one — a
+host's and a migrator's, and a third for a service with two hosts — and why
 the migrator gets its own connection string, its own SQL login and its own
 Kubernetes Job. A service without a migrator has no way to create its schema
 that this architecture permits.

@@ -226,9 +226,9 @@ an adopter replaces it with their own.
 `deploy/compose/` holds each service's Compose unit; this table adds only
 what neither says, which host shape each service has. Each service's tests
 are `<Service>.Domain.Tests`, `<Service>.Application.Tests` and
-`<Service>.Api.Tests` (`<Service>.Worker.Tests` for a worker, and no
-`<Service>.Domain.Tests` for a pure consumer, which has no Domain project),
-with a `<Service>.TestSupport`, under `tests/`.
+`<Service>.Api.Tests` (`<Service>.Worker.Tests` for a worker, both for a
+service with both hosts, and no `<Service>.Domain.Tests` for a service with
+no Domain project), with a `<Service>.TestSupport`, under `tests/`.
 
 | Service | Host shape | Projects under `src/Services/<Service>/` |
 |---|---|---|
@@ -238,7 +238,7 @@ with a `<Service>.TestSupport`, under `tests/`.
 | Payments | API host | Domain, Application, Infrastructure, Migrator, Api |
 | Privacy | API host | Domain, Application, Infrastructure, Migrator, Api |
 | Shipping | worker | Domain, Application, Infrastructure, Migrator, Worker |
-| Notifications | pure consumer | Application, Infrastructure, Migrator, Worker |
+| Notifications | worker and API host, no Domain | Application, Infrastructure, Migrator, Worker, Api |
 
 Ordering's tree is the one §4.1 draws generically: its Application project
 holds a `DependencyInjection.cs` with `AddOrderingApplication()`, its
@@ -247,9 +247,14 @@ Infrastructure project one with `AddOrderingInfrastructure(config)`, and
 
 Shipping and Notifications expose no public API but still own schemas:
 `Shipment` and `TrackingEvent`, and `NotificationLog`, respectively
-([§3.2](03-bounded-contexts.md)). `tools/new-service` refuses Shipping
-without `--worker` and Notifications without `--pure-consumer`, so that it
-does not render either in a shape §4.1 does not give it.
+([§3.2](03-bounded-contexts.md)). Notifications' API host is called by the
+BFF alone, on a port no gateway route reaches, and shares the worker's
+database and migrator
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
+`tools/new-service` refuses Shipping without `--worker` and Notifications
+without `--pure-consumer`, so that it does not render either in a shape §4.1
+does not give it; Notifications was rendered a pure consumer, and its API
+host was added beside the render in a shape the scaffold has no mode for.
 
 ### E.2.2 The domain gate
 
