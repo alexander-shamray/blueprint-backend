@@ -2466,6 +2466,45 @@ refuses_chart notifications 'a suspended canary is refused (ADR-022)' 'suspended
     --set suspended=true --set canary.enabled=true --set autoscaling.enabled=false
 
 # --------------------------------------------------------------------------
+section 'The runtime switch rolls no pod, and only a suspendable chart carries one (ADR-112)'
+# --------------------------------------------------------------------------
+# Held to the same `suspendable` value as above, so the two cannot drift: a
+# chart ADR-104 refuses has no switch to throw, and a switch named on it fails
+# the render rather than being ignored.
+for chart in $SERVICE_CHARTS; do
+    suspendable="$(awk '/^suspendable:/ { print $2 }' "$CHARTS_DIR/$chart/values.yaml")"
+    "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+        $GATEWAY_OVERLAY $(overlay_for "$chart") >"$OUT/switch-base-$chart.txt" 2>&1
+
+    if [ "$suspendable" = true ]; then
+        "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+            $GATEWAY_OVERLAY $(overlay_for "$chart") --set 'switches.off={probe-queue,probe-worker}' \
+            >"$OUT/switch-on-$chart.txt" 2>&1
+        check "$chart: renders its switches ConfigMap" \
+            test "$(count '^  name: .*-switches$' "$OUT/switch-base-$chart.txt")" -eq 1
+        check "$chart: nothing is off by default" \
+            grep -q 'switches.json: "{\\"Switches\\":{\\"Off\\":\[\]}}"' "$OUT/switch-base-$chart.txt"
+        check "$chart: a switch lands in the file the host reads" \
+            grep -q 'switches.json: "{\\"Switches\\":{\\"Off\\":\[\\"probe-queue\\",\\"probe-worker\\"\]}}"' \
+            "$OUT/switch-on-$chart.txt"
+        check "$chart: the file is mounted where Common.Web reads it" \
+            grep -q 'mountPath: /etc/commerce/switches' "$OUT/switch-base-$chart.txt"
+        check "$chart: the host polls the mount, which the kubelet swaps by symlink" \
+            in_configmap "$OUT/switch-base-$chart.txt" '^  DOTNET_USE_POLLING_FILE_WATCHER: "true"$'
+        check "$chart: throwing a switch leaves the pod template's checksum alone" \
+            test "$(grep 'checksum/values:' "$OUT/switch-base-$chart.txt")" = \
+            "$(grep 'checksum/values:' "$OUT/switch-on-$chart.txt")"
+    else
+        check "$chart: renders no switches ConfigMap" \
+            test "$(count '^  name: .*-switches$' "$OUT/switch-base-$chart.txt")" -eq 0
+        check "$chart: mounts no switches" \
+            test "$(count 'mountPath: /etc/commerce/switches' "$OUT/switch-base-$chart.txt")" -eq 0
+        refuses_chart "$chart" "$chart: a switch is refused, citing ADR-112" 'ADR-112' \
+            $GATEWAY_OVERLAY --set 'switches.off={probe-queue}'
+    fi
+done
+
+# --------------------------------------------------------------------------
 section 'Result'
 # --------------------------------------------------------------------------
 if [ "$failures" -ne 0 ]; then

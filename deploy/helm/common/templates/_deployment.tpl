@@ -39,7 +39,11 @@ spec:
         {{- range .Values.extraConfigMaps }}
         {{- $extra = printf "%s%s" $extra (include (printf "%s.%s" $.Chart.Name .) $) }}
         {{- end }}
-        checksum/values: {{ printf "%s%s%s" (toYaml .Values) (include "commerce.configmap" .) $extra | sha256sum }}
+        {{- /* Without `switches`: the switch exists so that throwing it rolls
+        nothing (ADR-112), and a value in this sum would roll every pod. Its
+        refusal for a chart that is not suspendable still runs. */}}
+        {{- $_ := include "commerce.switches" . }}
+        checksum/values: {{ printf "%s%s%s" (toYaml (omit .Values "switches")) (include "commerce.configmap" .) $extra | sha256sum }}
     spec:
       {{- /* Nothing in this platform calls the Kubernetes API, and a mounted
       service-account token would hand a cluster credential to anything able
@@ -61,6 +65,11 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
+        {{- if .Values.suspendable }}
+        - name: switches
+          configMap:
+            name: {{ include "commerce.instanceName" . }}-switches
+        {{- end }}
       {{- /* Across nodes and zones (§15.3), counted per track and per revision so
       that neither the canary nor a rollout's surge is held back by the other
       pods' placement. */}}
@@ -96,6 +105,13 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.suspendable }}
+            {{- /* A directory, not a subPath: the kubelet updates a directory
+            mount in place and never a subPath one (ADR-112). */}}
+            - name: switches
+              mountPath: /etc/commerce/switches
+              readOnly: true
+            {{- end }}
           ports:
             {{- range .Values.ports }}
             - name: {{ .name }}
