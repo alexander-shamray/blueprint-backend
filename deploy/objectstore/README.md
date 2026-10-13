@@ -48,6 +48,20 @@ Where they live, why the endpoint is pinned and how to rotate them are
   a path-style URL.
 - **Anything outside the store's own policy**, such as a CDN or a bucket ACL
   that grants a delete around it.
-- **That the schedule ran.** GitHub sheds a schedule under load without a red
-  run, and a red run files no issue; a monitor outside GitHub asking whether
-  `object-store.yml` ran recently is the deployment's to add.
+- **That the schedule ran.** GitHub sheds a schedule under load, or suspends
+  it after a stretch without a commit, without a red run and so without an
+  issue; a monitor outside GitHub asking whether `object-store.yml` ran
+  recently is the deployment's to add.
+
+## What a red run means
+
+A red run of the deployed check files an issue labelled `security` and
+`high`, or comments on the open one ([ADR-111](../../docs/backend-architecture/adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)).
+The run log says which of two things it was, per credential pair:
+
+- **The store allowed a delete or a list**, or answered with a code other than
+  `AccessDenied`. The policy has drifted from §10.8: correct it, then dispatch
+  the workflow and close the issue on the green run.
+- **The store could not be asked**: an unreachable endpoint, an unset variable
+  or a pair the store does not know. Nothing is established either way, so
+  treat it as the first until the run is green.

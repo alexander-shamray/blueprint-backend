@@ -310,7 +310,8 @@ as a store configured to taste. Its `deployed` job runs the check daily and on
 [§10.8](10-api-gateway.md)'s two credential pairs it asks the deployed store to
 delete a key nothing holds and to list the bucket, and fails the run unless
 every answer is `AccessDenied`. It is opted in by a repository variable, on the
-realm job's reasoning, and a red run files no issue.
+realm job's reasoning, and a red run files a tracker issue or comments on the
+open one ([ADR-111](adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)).
 
 **Five of the six filters name files outside their own tree**, and none is an
 oversight — each names an input its gate actually reads. Compose's names the
