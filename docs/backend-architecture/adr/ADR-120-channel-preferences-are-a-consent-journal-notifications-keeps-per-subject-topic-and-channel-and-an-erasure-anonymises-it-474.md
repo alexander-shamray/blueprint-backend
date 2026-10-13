@@ -39,8 +39,11 @@ opts in, when it was written, the client it was written through — the `azp`
 claim of the caller's access token — and the entry it supersedes. The current
 value of a pair is its newest entry. No entry is updated except by an
 erasure, below. **An entry is superseded at most once**, which a unique key
-holds, so two writes that name one entry cannot both append, and the database
-chooses which one lands. An append locks the entry it names and inserts only
+over the entries that supersede one holds, and **a subject's pair has at most
+one first entry**, which a unique key over the entries that supersede none and
+still hold a subject holds. So neither two writes that name one entry nor two
+first writes for one pair can both append, and the database chooses which one
+lands. An append locks the entry it names and inserts only
 while that entry still holds the caller's subject, so an erasure that
 anonymises it lands wholly before the append, which then fails its
 precondition, or wholly after it, and anonymises the new entry with the rest;
