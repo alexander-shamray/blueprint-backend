@@ -116,3 +116,8 @@ tests/Privacy.Api.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c
 tests/Privacy.Api.Tests/MessageTypeMapValidatorTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the validator suite.
 tests/Privacy.Api.Tests/MessagingRegistrationTests.cs | credential-assignment | 8a3a74a3f769 | A broker URI pointing at a hostname that does not resolve.
 tests/Privacy.Api.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.
+
+# The signer's suite, whose subject is AWS's published example: the credentials and the signature in
+# 'Authenticating Requests: Using Query Parameters' are public and name no account.
+tests/Web.Bff.Tests/SigV4PresignerTests.cs | aws-access-key-id | 1a5d44a2dca1 | AWS's documented example access key id, which belongs to no account.
+tests/Web.Bff.Tests/SigV4PresignerTests.cs | credential-assignment | 78314b11be2e | AWS's documented example secret key, which belongs to no account.

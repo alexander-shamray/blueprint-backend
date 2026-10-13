@@ -22,7 +22,14 @@ internal sealed class JourneyBffFactory(string sql, string broker) : WebApplicat
             .UseSetting("Identity:Client:ClientSecret", "not-a-real-secret")
             .UseSetting("Identity:Client:Scope", "commerce-api")
             .UseSetting("ConnectionStrings:Bff", sql)
-            .UseSetting("ConnectionStrings:RabbitMq", broker);
+            .UseSetting("ConnectionStrings:RabbitMq", broker)
+
+            // ADR-106's store, which the host validates at start; the journey signs no upload.
+            .UseSetting("ProductImages:Store:Endpoint", "https://store.invalid")
+            .UseSetting("ProductImages:Store:Bucket", "images")
+            .UseSetting("ProductImages:Store:Region", "us-east-1")
+            .UseSetting("ProductImages:Store:AccessKey", "not-a-real-key")
+            .UseSetting("ProductImages:Store:SecretKey", "not-a-real-secret");
 
     /// <summary>Runs the real §7.4 job host, as the BFF's own suite does.</summary>
     public static Task<int> RunMigratorAsync(string migratorConnectionString) =>
