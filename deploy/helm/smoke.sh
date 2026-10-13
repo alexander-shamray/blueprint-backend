@@ -2243,8 +2243,16 @@ section 'The Service forwards to a port something is listening on'
 # passing quietly.
 pinned=0
 for chart in $SERVICE_CHARTS; do
+    # The host's own project, not its source: a service with two hosts holds two settings files under one source,
+    # and each binds the process its own directory builds (ADR-118).
+    project="$(find "$(src_of "$chart")" -name "$(field "$chart" host).csproj" -not -path '*/bin/*' \
+        -not -path '*/obj/*' | head -n 1)"
+    if [ -z "$project" ]; then
+        fail "$chart's host $(field "$chart" host) has no project under its source — the search, not the chart, is wrong"
+        continue
+    fi
     settings="$(grep -rl '"Kestrel"' --include=appsettings.json --exclude-dir=bin --exclude-dir=obj \
-        "$(src_of "$chart")" || true)"
+        "$(dirname "$project")" || true)"
 
     if [ -z "$settings" ]; then
         echo 8080 >"$OUT/$chart-listeners.txt"

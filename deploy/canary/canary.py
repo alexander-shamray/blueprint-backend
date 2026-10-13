@@ -1277,6 +1277,7 @@ FOR_LIST = re.compile(r"(?m)(?:^|[\s;&|])for[ \t]+\w+[ \t]+in[ \t]")
 # bash expands them before it substitutes. Nor a comma, which Helm reads as a
 # second assignment outside braces and which this refuses everywhere.
 SOURCE_PATH = re.compile(r"src(/[A-Za-z0-9_-][A-Za-z0-9._-]*)+")
+HOST_NAME = re.compile(r"[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)*")
 CAPABILITY = re.compile(r"[A-Za-z]+")
 OVERLAY = re.compile(r"[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)+=[A-Za-z0-9._:/@{}-]*")
 
@@ -1391,7 +1392,13 @@ def _smoke_case(name: str, entry: dict) -> list[str]:
             f"workloads.{name}.source is {source!r}, which is not a path under src/ "
             "that smoke.sh can read as one word"
         )
-    lines = [f"{chart} release {name}", f"{chart} source {source}"]
+    host = entry.get("serviceName")
+    if not isinstance(host, str) or not HOST_NAME.fullmatch(host):
+        raise PlanError(
+            f"workloads.{name}.serviceName is {host!r}, which smoke.sh cannot read as one "
+            "project name to find the host's own settings by"
+        )
+    lines = [f"{chart} release {name}", f"{chart} source {source}", f"{chart} host {host}"]
     for key in ("migrator", "autoscaled"):
         if not isinstance(smoke.get(key), bool):
             raise PlanError(
