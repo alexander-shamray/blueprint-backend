@@ -506,7 +506,8 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
                 problems.append(f"{subject}: a step runs before the one it needs, because {why}")
 
         pushed = _reference(steps[push]["run"], "docker push")
-        if not pushed.startswith("$REGISTRY/") or f"--tag {pushed}" not in build["run"]:
+        tagged = f"--tag {pushed}" in build["run"] or f'--tag "{pushed}"' in build["run"]
+        if not pushed.startswith("$REGISTRY/") or not tagged:
             problems.append(
                 f"{subject} tags no `$REGISTRY/...` reference that the push then pushes "
                 f"(the push names {pushed!r}), so the registry address is spelled outside "

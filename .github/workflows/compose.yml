@@ -80,7 +80,7 @@ jobs:
           expected=$(grep -cE '^\s*- alert:' deploy/observability/alerts/platform-alerts.yaml)
           [ "$expected" -gt 0 ] || { echo "::error::no alert rule counted in the file"; exit 1; }
           loaded=
-          for attempt in $(seq 15); do
+          for _ in $(seq 15); do
             loaded=$(curl -sf http://localhost:3000/api/prometheus/prometheus/api/v1/rules |
               jq '[.data.groups[].rules[] | select(.type == "alerting")] | length') &&
               [ "$loaded" = "$expected" ] && break
@@ -108,7 +108,7 @@ jobs:
           $compose exec -T rabbitmq rabbitmqadmin -u probe -p probe declare queue \
             --name compose-smoke_error --type classic --durable true
           series=0
-          for attempt in $(seq 45); do
+          for _ in $(seq 45); do
             series=$(curl -sf -G http://localhost:3000/api/datasources/proxy/uid/prometheus/api/v1/query \
               --data-urlencode 'query=count(rabbitmq_queue_messages{queue=~".+_error"})' |
               jq -r '.data.result[0].value[1] // 0') && [ "$series" != 0 ] && break

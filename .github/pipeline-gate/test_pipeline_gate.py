@@ -566,6 +566,12 @@ class SupplyChainTests(Fixture):
 
         self.assertTrue(any("tags no `$REGISTRY/...` reference" in problem for problem in problems))
 
+    def test_a_build_that_quotes_the_tag_is_not_a_problem(self) -> None:
+        problems = self.broken("--tag $REGISTRY/${{ matrix.image }}:${{ github.sha }}",
+                               '--tag "$REGISTRY/${{ matrix.image }}:${{ github.sha }}"')
+
+        self.assertEqual(problems, [])
+
     def test_a_signature_before_the_push_is_caught(self) -> None:
         marker, next_marker = "      - name: Push ${{ matrix.image }}", "      - name: Install cosign"
         push = WORKFLOW[WORKFLOW.index(marker):WORKFLOW.index(next_marker)]
