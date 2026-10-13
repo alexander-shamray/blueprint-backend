@@ -43,8 +43,8 @@ are not a relay's:
 |---|---|---|
 | `PushRefusal` | `Unregistered` | The provider says the token is no longer valid for any app: FCM's `UNREGISTERED`, APNs' `410` |
 | | `InvalidToken` | The provider says the token is not one it will deliver to for this sender: FCM's `SENDER_ID_MISMATCH`, APNs' `BadDeviceToken` and `DeviceTokenNotForTopic` |
-| `PushFault` | `Transient` | Unreachable, `429`, `5xx`, or the attempt timed out before a byte was sent |
-| | `Unconfirmed` | The request was sent and no answer came: it may have been delivered |
+| `PushFault` | `Transient` | Unreachable, `429` or `5xx`: no request reached the provider, or it answered that it took nothing |
+| | `Unconfirmed` | The attempt timed out after the request started: it may have been delivered |
 | | `Tls` | The handshake failed |
 | | `Credential` | The provider refused this deployment's credential: FCM's `401` and `THIRD_PARTY_AUTH_ERROR`, APNs' `403` |
 | | `Rejected` | The provider refused the request itself: FCM's `INVALID_ARGUMENT`, APNs' other `400` reasons |
@@ -169,8 +169,12 @@ retry and a total timeout, and a breaker, in `MailHop`'s shape and outside
 [§9.7](../../backend-architecture/09-messaging.md)'s bands by that section's
 rule 1, sized to the leased row. Each pipeline is hand-built as
 `MailPipeline` is — total timeout, retry, breaker, attempt timeout — and
-retries `Transient` and an attempt timeout only, never `Unconfirmed`, which
-the row's backoff retries instead so a duplicate is at most one per backoff.
+retries `Transient` alone: a connection never made, or a provider's answer
+that it took nothing. An attempt timeout is `Unconfirmed`, because once the
+request has started an HTTP client cannot tell whether the provider received
+it, so it is left to the row's backoff, as
+[§9.7](../../backend-architecture/09-messaging.md)'s rule 4 retries a timeout
+only before the message is handed over.
 The numbers are the code's; the design's starting values are `MailHop`'s, and
 rule 2's sizing of each breaker to its own call rate is the plan's to argue,
 since one event is one mail and up to ten pushes.
@@ -329,10 +333,13 @@ token's prefix, so a test drives each outcome rather than waiting for it:
 | `rejected-` | `400 INVALID_ARGUMENT` | `400 BadTopic` |
 | `unavailable-` | `503 UNAVAILABLE` | `503` |
 | `slow-` | `200`, after the attempt timeout | `200`, after the attempt timeout |
+| `slow-unregistered-` | `404 UNREGISTERED`, held for a second | `410 Unregistered`, held for a second |
 
-`slow-` is what a test uses for a token that rotates under a send: it registers
-a new token for the installation while the call is held, and asserts the
-`unregistered-` answer that follows deletes nothing. The simulator serves
+`slow-` is the `Unconfirmed` case: the provider took the push and the client
+gave up first. `slow-unregistered-` is what a test uses for a token that
+rotates under a send: it registers a new token for the installation while the
+call is held, and asserts that the unregistered answer that follows leaves the
+row, which no longer holds the token the send used. The simulator serves
 HTTP/1.1 and verifies no signature, which is why Development accepts both;
 the signatures are proved in unit tests against keys the tests generate.
 
