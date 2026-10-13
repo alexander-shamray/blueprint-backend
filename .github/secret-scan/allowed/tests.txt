@@ -91,6 +91,7 @@ tests/Shipping.TestSupport/ShippingWorkerFactory.cs | credential-assignment | d2
 # the day that service landed; these are the same decision, taken by the
 # tool that rendered them (#161).
 
+tests/Notifications.Api.Tests/NotificationsApiFactory.cs | connection-string-password | da3fd0c5abaa | The worker suite's unusable value, for the API host that must not reach a database either.
 tests/Notifications.Worker.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c5abaa | A deliberately unusable value in a host that must not reach a database.
 tests/Notifications.Worker.Tests/MessagingRegistrationTests.cs | credential-assignment | 93e01615a2b7 | A broker URI pointing at a hostname that does not resolve.
 tests/Notifications.Worker.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.

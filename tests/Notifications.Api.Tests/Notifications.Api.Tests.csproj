@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- xUnit v3 test projects are self-executing: the runner is compiled in
+         rather than loaded by a host, so the assembly has to be an Exe. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Shouldly" />
+    <!-- The §4.2 gate that reads type-level dependencies. -->
+    <PackageReference Include="NetArchTest.Rules" />
+    <!-- WebApplicationFactory over the real Program (§12.4), named directly by these tests. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Not Notifications.TestSupport: it references the worker, whose Program would collide with this host's. -->
+    <ProjectReference Include="..\..\src\Services\Notifications\Notifications.Api\Notifications.Api.csproj" />
+    <ProjectReference Include="..\..\tests\Common.TestSupport\Common.TestSupport.csproj" />
+  </ItemGroup>
+
+</Project>

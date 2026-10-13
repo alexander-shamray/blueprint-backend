@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- ADR-118's synchronous host: health today, and the BFF's gRPC methods on the Http2 port appsettings.json holds. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Notifications.Infrastructure\Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
+  </ItemGroup>
+
+</Project>
