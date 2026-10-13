@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
+using Yarp.ReverseProxy.Configuration;
 using Xunit;
 
 namespace Gateway.Api.Tests;
@@ -91,6 +92,23 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
         (await StatusAsync(client, Suspendable)).ShouldBe(HttpStatusCode.ServiceUnavailable, "the refused reload applied");
     }
 
+    /// <summary>
+    /// The control for the test above (ADR-119): a route with no match and no cluster is refused twice, by the filter and
+    /// by YARP's route validation, so only a host with neither applies the same file, and a pass there is the two of them.
+    /// </summary>
+    [Fact]
+    public async Task Without_the_filter_and_route_validation_the_file_the_misspelt_name_test_writes_applies_the_reload()
+    {
+        using TempRouteFile file = new(Switch(Suspendable, on: true));
+        using FileFactory factory = new(stub.Address, file.Path, withoutFilter: true, withoutValidation: true);
+        using HttpClient client = factory.CreateClient();
+        (await StatusAsync(client, Suspendable)).ShouldBe(HttpStatusCode.ServiceUnavailable);
+
+        file.Write(Switch(Suspendable, on: false, "privacy-eras", on2: true));
+
+        await EventuallyAsync(client, Suspendable, HttpStatusCode.NoContent);
+    }
+
     private static string Switch(string route, bool on, string? second = null, bool on2 = false)
     {
         Dictionary<string, object> routes = new() { [route] = Metadata(on) };
@@ -142,7 +160,7 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
 
     private static RouteConfiguration ReadRoute(string id) => Shipped.Value.Single(r => r.Id == id);
 
-    private sealed class FileFactory(string destination, string path, bool withoutFilter = false)
+    private sealed class FileFactory(string destination, string path, bool withoutFilter = false, bool withoutValidation = false)
         : StubbedGatewayFactory(destination)
     {
         /// <summary>The filter is internal to the gateway, so it is found by name; a rename fails the control, as Single throws.</summary>
@@ -153,6 +171,15 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
             if (withoutFilter)
                 builder.ConfigureServices(services =>
                     services.Remove(services.Single(d => d.ImplementationType?.Name == "SuspendableRouteFilter")));
+
+            if (withoutValidation)
+                builder.ConfigureServices(services =>
+                {
+                    ServiceDescriptor yarp = services.Single(d => d.ServiceType == typeof(IConfigValidator));
+                    services.Remove(yarp);
+                    services.AddSingleton<IConfigValidator>(provider => new RoutesUnvalidated(
+                        (IConfigValidator)ActivatorUtilities.CreateInstance(provider, yarp.ImplementationType!)));
+                });
         }
 
         protected override IEnumerable<KeyValuePair<string, string>> AdditionalSettings =>
@@ -160,6 +187,14 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
             .. base.AdditionalSettings,
             new(RouteSwitchFile.PathKey, path)
         ];
+    }
+
+    /// <summary>YARP's own validator for a cluster and none for a route, so a route with no match reaches the proxy.</summary>
+    private sealed class RoutesUnvalidated(IConfigValidator yarp) : IConfigValidator
+    {
+        public ValueTask<IList<Exception>> ValidateRouteAsync(RouteConfig route) => new(new List<Exception>());
+
+        public ValueTask<IList<Exception>> ValidateClusterAsync(ClusterConfig cluster) => yarp.ValidateClusterAsync(cluster);
     }
 
     private sealed class TempRouteFile : IDisposable
