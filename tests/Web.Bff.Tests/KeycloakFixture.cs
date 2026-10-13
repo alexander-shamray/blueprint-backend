@@ -25,15 +25,16 @@ public sealed class KeycloakFixture : IAsyncLifetime
     private static readonly string[] BuiltInScopes =
         ["basic", "profile", "email", "roles", "acr", "web-origins"];
 
-    private readonly KeycloakContainer _keycloak = TestcontainersWarmUp.Build(() => new KeycloakBuilder()
-        .WithImage(ComposeImage.Of("keycloak"))
-        .WithUsername(AdminUser)
-        .WithPassword(AdminPassword)
-        .WithResourceMapping(
-            new FileInfo(RepositoryFile.Locate(RepositoryFile.RealmExport)),
-            "/opt/keycloak/data/import/")
-        .WithCommand("--import-realm")
-        .Build());
+    private readonly KeycloakContainer _keycloak = TestcontainersWarmUp.Build(() =>
+        new KeycloakBuilder()
+            .WithImage(ComposeImage.Of("keycloak"))
+            .WithUsername(AdminUser)
+            .WithPassword(AdminPassword)
+            .WithResourceMapping(
+                new FileInfo(RepositoryFile.Locate(RepositoryFile.RealmExport)),
+                "/opt/keycloak/data/import/")
+            .WithCommand("--import-realm")
+            .Build());
 
     /// <summary>The realm's authority, as a host would configure it.</summary>
     public string Authority => $"{_keycloak.GetBaseAddress().TrimEnd('/')}/realms/{Realm}";
