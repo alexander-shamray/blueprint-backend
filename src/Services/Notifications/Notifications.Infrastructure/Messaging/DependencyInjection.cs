@@ -5,6 +5,7 @@ using Common.Contracts.Privacy.V1;
 using Common.Contracts.Shipping.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
+using Common.Infrastructure.Switching;
 using Common.Infrastructure.Transport;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
@@ -33,6 +34,9 @@ public static class DependencyInjection
                 "ConnectionStrings:RabbitMq is not configured. The bus cannot start without it (§13.5).");
         }
 
+        // ADR-112's switch, before the bus so the observer below can resolve it.
+        services.AddOperatorSwitches(configuration);
+
         services.AddMassTransit(x =>
         {
             // On by default; §13.2 owns this platform's telemetry, and none of it leaves silently.
@@ -53,6 +57,9 @@ public static class DependencyInjection
 
             x.UsingRabbitMq((context, cfg) =>
             {
+                // First, since the switch sees only the endpoints configured after it (ADR-112).
+                cfg.ConnectOperatorSwitch(context);
+
                 Uri broker = new(connectionString);
                 cfg.Host(broker, host =>
                 {

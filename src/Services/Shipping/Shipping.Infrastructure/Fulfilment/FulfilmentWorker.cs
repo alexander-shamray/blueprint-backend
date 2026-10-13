@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Common.Application;
+using Common.Infrastructure.Switching;
 using Common.Infrastructure.Tracing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,8 +22,14 @@ namespace Shipping.Infrastructure.Fulfilment;
 /// Each call sits outside any unit of work, as ADR-052's read does, so no transaction spans a third party's
 /// latency; a crash before the commit repeats the call under the same key.
 /// </remarks>
-public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<FulfilmentWorker> log) : BackgroundService
+public sealed class FulfilmentWorker(
+    IServiceScopeFactory scopes,
+    ILogger<FulfilmentWorker> log,
+    OperatorSwitches? switches = null) : BackgroundService, ISwitchedWorker
 {
+    /// <summary>The name an operator lists to switch the booking pass off (ADR-112).</summary>
+    public const string Name = "fulfilment-worker";
+
     /// <summary>One, since a row costs up to three calls and the lease must outlive every row's turn.</summary>
     public const int ClaimBatchSize = 1;
 
@@ -92,6 +99,8 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             "Shipment {ShipmentId} on order {OrderId} was voided during its booking, and carrier booking " +
             "{CarrierReference} was not handed back yet; it is kept as booked with its cancellation requested.");
 
+    public string SwitchName => Name;
+
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -99,6 +108,9 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            if (switches?.IsOff(Name) == true)
+                continue;
+
             try
             {
                 await RunOnceAsync(stoppingToken);

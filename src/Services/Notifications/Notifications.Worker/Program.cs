@@ -16,6 +16,7 @@ builder.Host.UseDefaultServiceProvider(o =>
     o.ValidateScopes = true;
 });
 
+builder.Configuration.AddOperatorSwitchFile();  // ADR-112
 builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddNotificationsApplication();       // §6.2
 builder.Services.AddNotificationsInfrastructure(builder.Configuration);   // §4.2, §7.1

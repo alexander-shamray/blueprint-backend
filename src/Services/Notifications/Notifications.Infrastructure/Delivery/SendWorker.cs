@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Common.Application;
+using Common.Infrastructure.Switching;
 using Common.Infrastructure.Tracing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,8 +24,12 @@ namespace Notifications.Infrastructure.Delivery;
 /// </remarks>
 public sealed class SendWorker(
     IServiceScopeFactory scopes,
-    ILogger<SendWorker> log) : BackgroundService
+    ILogger<SendWorker> log,
+    OperatorSwitches? switches = null) : BackgroundService, ISwitchedWorker
 {
+    /// <summary>The name an operator lists to switch the send pass off (ADR-112).</summary>
+    public const string Name = "send-worker";
+
     /// <summary>Rows one pass sends at once; a pass lasts as long as its slowest row.</summary>
     public const int ClaimBatchSize = 10;
 
@@ -152,6 +157,8 @@ public sealed class SendWorker(
             "Notification {NotificationId} on order {OrderId} names an erased customer; nothing is fetched or sent, " +
             "and the erasure deletes the row (ADR-101).");
 
+    public string SwitchName => Name;
+
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -163,6 +170,9 @@ public sealed class SendWorker(
 
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
+            if (switches?.IsOff(Name) == true)
+                continue;
+
             try
             {
                 await RunOnceAsync(stoppingToken, drain.Token);

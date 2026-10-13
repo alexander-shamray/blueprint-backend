@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Common.Application;
+using Common.Infrastructure.Switching;
 using Common.Infrastructure.Tracing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -18,8 +19,12 @@ namespace Shipping.Infrastructure.Tracking;
 /// </remarks>
 public sealed class TrackingWorker(
     IServiceScopeFactory scopes,
-    ILogger<TrackingWorker> log) : BackgroundService
+    ILogger<TrackingWorker> log,
+    OperatorSwitches? switches = null) : BackgroundService, ISwitchedWorker
 {
+    /// <summary>The name an operator lists to switch the carrier poll off (ADR-112).</summary>
+    public const string Name = "tracking-worker";
+
     /// <summary>Carrier calls one pass has in flight; smaller than the outbox's, each row being a round trip.</summary>
     public const int ClaimBatchSize = 20;
 
@@ -56,6 +61,8 @@ public sealed class TrackingWorker(
             new EventId(4, nameof(BackOffFailed)),
             "Backing off shipment {ShipmentId} of order {OrderId} failed; it is polled again when its lease lapses.");
 
+    public string SwitchName => Name;
+
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -64,6 +71,9 @@ public sealed class TrackingWorker(
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            if (switches?.IsOff(Name) == true)
+                continue;
+
             try
             {
                 await ProcessBatchAsync(stoppingToken);

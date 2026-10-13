@@ -1,5 +1,6 @@
 using System.Data;
 using Common.Application;
+using Common.Infrastructure.Switching;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,8 +15,11 @@ namespace Notifications.Infrastructure.Retention;
 /// Apart from <c>RetentionPurgeService</c>, whose windows are housekeeping (ADR-053). An order record goes only once
 /// no pending notice names its order, since that notice waits on it.
 /// </remarks>
-public sealed class NotificationsRetentionService : BackgroundService
+public sealed class NotificationsRetentionService : BackgroundService, ISwitchedWorker
 {
+    /// <summary>The name an operator lists to switch the windows' pass off (ADR-112).</summary>
+    public const string Name = "notifications-retention";
+
     /// <summary>Slow on purpose: a window is measured in days, and a pass competes with the claims.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromHours(1);
 
@@ -100,16 +104,21 @@ public sealed class NotificationsRetentionService : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly NotificationsJurisdictionOptions _windows;
     private readonly ILogger<NotificationsRetentionService> _log;
+    private readonly OperatorSwitches? _switches;
 
     public NotificationsRetentionService(
         IServiceScopeFactory scopes,
         IOptions<NotificationsJurisdictionOptions> windows,
-        ILogger<NotificationsRetentionService> log)
+        ILogger<NotificationsRetentionService> log,
+        OperatorSwitches? switches = null)
     {
         _scopes = scopes;
         _windows = windows.Value;
         _log = log;
+        _switches = switches;
     }
+
+    public string SwitchName => Name;
 
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -119,6 +128,9 @@ public sealed class NotificationsRetentionService : BackgroundService
         // A pass at start, or a deployment restarting more often than Interval would never apply ADR-053's windows.
         do
         {
+            if (_switches?.IsOff(Name) == true)
+                continue;
+
             try
             {
                 await PurgeAsync(stoppingToken);

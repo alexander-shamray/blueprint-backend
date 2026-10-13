@@ -1,5 +1,6 @@
 using System.Data;
 using Common.Application;
+using Common.Infrastructure.Switching;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -10,8 +11,11 @@ namespace Privacy.Infrastructure.Sweep;
 
 /// <summary>Finds the open requests that have outlived their due time and marks each overdue (ADR-092).</summary>
 /// <remarks>Nothing closes an overdue request: an operator reissues it (ADR-092). This only makes the silence visible.</remarks>
-public sealed class OverdueSweepService : BackgroundService
+public sealed class OverdueSweepService : BackgroundService, ISwitchedWorker
 {
+    /// <summary>The name an operator lists to switch the sweep off (ADR-112).</summary>
+    public const string Name = "overdue-sweep";
+
     /// <summary>A due time is measured in days, so a minute is prompt and a pass costs one indexed read.</summary>
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
 
@@ -41,13 +45,21 @@ public sealed class OverdueSweepService : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly TimeProvider _clock;
     private readonly ILogger<OverdueSweepService> _log;
+    private readonly OperatorSwitches? _switches;
 
-    public OverdueSweepService(IServiceScopeFactory scopes, TimeProvider clock, ILogger<OverdueSweepService> log)
+    public OverdueSweepService(
+        IServiceScopeFactory scopes,
+        TimeProvider clock,
+        ILogger<OverdueSweepService> log,
+        OperatorSwitches? switches = null)
     {
         _scopes = scopes;
         _clock = clock;
         _log = log;
+        _switches = switches;
     }
+
+    public string SwitchName => Name;
 
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -57,6 +69,9 @@ public sealed class OverdueSweepService : BackgroundService
         // A pass at start, so a host restarted more often than the interval still sweeps.
         do
         {
+            if (_switches?.IsOff(Name) == true)
+                continue;
+
             try
             {
                 await RunOnceAsync(stoppingToken);
