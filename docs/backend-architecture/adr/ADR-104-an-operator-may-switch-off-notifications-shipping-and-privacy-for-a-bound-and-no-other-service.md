@@ -50,7 +50,8 @@ load, not by switching it off while someone thinks.
 which gives Notifications a caller: while the host serving its registration
 method is down, a device's registration fails until the app's next start,
 beside the late mail the table names. Suspension as defined above stops
-consumers and workers and leaves that method serving.
+consumers and workers and leaves that method serving. The pricing hop is no
+longer the BFF's one synchronous hop, as the Why calls it.
 
 ---
 
