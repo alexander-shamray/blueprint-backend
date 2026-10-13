@@ -1369,7 +1369,7 @@ namespace read access.
 | Kind | Source | Example |
 |---|---|---|
 | Non-secret config | ConfigMap → environment variables | Log level, timeouts |
-| Operator switches | ConfigMap → a mounted file that reloads | Receive endpoints and worker loops switched off ([ADR-112](adr/ADR-112-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)) |
+| Operator switches | ConfigMap → a mounted file that reloads | Receive endpoints and worker loops switched off ([ADR-113](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)) |
 | Secrets | External Secrets Operator → Kubernetes Secret | Connection strings, client secrets |
 | Per-environment | Helm values file | Replica counts, resource sizing |
 
@@ -1643,7 +1643,7 @@ services [ADR-104](adr/ADR-104-an-operator-may-switch-off-notifications-shipping
 lets an operator stop: each receive endpoint and each worker loop of
 Notifications, Shipping and Privacy is switched off by name from a mounted file
 that reloads, with no restart
-([ADR-112](adr/ADR-112-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)).
+([ADR-113](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)).
 
 ---
 

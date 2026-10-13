@@ -32,7 +32,7 @@ public static class DependencyInjection
                 "ConnectionStrings:RabbitMq is not configured. The bus cannot start without it (§13.5).");
         }
 
-        // ADR-112's switch, before the bus so the observer below can resolve it.
+        // ADR-113's switch, before the bus so the observer below can resolve it.
         services.AddOperatorSwitches(configuration);
 
         services.AddMassTransit(x =>
@@ -50,7 +50,7 @@ public static class DependencyInjection
 
             x.UsingRabbitMq((context, cfg) =>
             {
-                // First, since the switch sees only the endpoints configured after it (ADR-112).
+                // First, since the switch sees only the endpoints configured after it (ADR-113).
                 cfg.ConnectOperatorSwitch(context);
 
                 Uri broker = new(connectionString);

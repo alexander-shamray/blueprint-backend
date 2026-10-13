@@ -22,7 +22,7 @@ public sealed class TrackingWorker(
     ILogger<TrackingWorker> log,
     OperatorSwitches? switches = null) : BackgroundService, ISwitchedWorker
 {
-    /// <summary>The name an operator lists to switch the carrier poll off (ADR-112).</summary>
+    /// <summary>The name an operator lists to switch the carrier poll off (ADR-113).</summary>
     public const string Name = "tracking-worker";
 
     /// <summary>Carrier calls one pass has in flight; smaller than the outbox's, each row being a round trip.</summary>

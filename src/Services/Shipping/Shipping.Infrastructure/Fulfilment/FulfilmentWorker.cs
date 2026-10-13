@@ -27,7 +27,7 @@ public sealed class FulfilmentWorker(
     ILogger<FulfilmentWorker> log,
     OperatorSwitches? switches = null) : BackgroundService, ISwitchedWorker
 {
-    /// <summary>The name an operator lists to switch the booking pass off (ADR-112).</summary>
+    /// <summary>The name an operator lists to switch the booking pass off (ADR-113).</summary>
     public const string Name = "fulfilment-worker";
 
     /// <summary>One, since a row costs up to three calls and the lease must outlive every row's turn.</summary>

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 namespace Common.Infrastructure.Switching;
 
 /// <summary>Answers whether a receive endpoint or a worker loop is switched off, and what could be switched.</summary>
-/// <remarks>A name nobody declared is a typo, and an operator needs it reported rather than ignored (ADR-112).</remarks>
+/// <remarks>A name nobody declared is a typo, and an operator needs it reported rather than ignored (ADR-113).</remarks>
 public sealed class OperatorSwitches(IOptionsMonitor<OperatorSwitchOptions> options, IServiceProvider services)
 {
     private readonly ConcurrentDictionary<string, byte> _endpoints = new(StringComparer.Ordinal);
@@ -15,7 +15,7 @@ public sealed class OperatorSwitches(IOptionsMonitor<OperatorSwitchOptions> opti
     public IReadOnlyCollection<string> Endpoints => [.. _endpoints.Keys.Order(StringComparer.Ordinal)];
 
     /// <summary>Every endpoint the bus has configured and every worker the host runs.</summary>
-    /// <remarks>Workers are read from the host when asked, as one resolving this class cannot be built first (ADR-112).</remarks>
+    /// <remarks>Workers are read from the host when asked, as one resolving this class cannot be built first (ADR-113).</remarks>
     public IReadOnlyCollection<string> Declared =>
     [
         .. _endpoints.Keys

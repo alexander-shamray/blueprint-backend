@@ -17,7 +17,7 @@ namespace Notifications.Infrastructure.Retention;
 /// </remarks>
 public sealed class NotificationsRetentionService : BackgroundService, ISwitchedWorker
 {
-    /// <summary>The name an operator lists to switch the windows' pass off (ADR-112).</summary>
+    /// <summary>The name an operator lists to switch the windows' pass off (ADR-113).</summary>
     public const string Name = "notifications-retention";
 
     /// <summary>Slow on purpose: a window is measured in days, and a pass competes with the claims.</summary>

@@ -16,7 +16,7 @@ builder.Host.UseDefaultServiceProvider(o =>
     o.ValidateScopes = true;
 });
 
-builder.Configuration.AddOperatorSwitchFile();  // ADR-112
+builder.Configuration.AddOperatorSwitchFile();  // ADR-113
 builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddShippingApplication();       // §6.2
 builder.Services.AddShippingInfrastructure(builder.Configuration);   // §4.2, §7.1

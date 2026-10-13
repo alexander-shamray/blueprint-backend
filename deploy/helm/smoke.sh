@@ -2466,7 +2466,7 @@ refuses_chart notifications 'a suspended canary is refused (ADR-022)' 'suspended
     --set suspended=true --set canary.enabled=true --set autoscaling.enabled=false
 
 # --------------------------------------------------------------------------
-section 'The runtime switch rolls no pod, and only a suspendable chart carries one (ADR-112)'
+section 'The runtime switch rolls no pod, and only a suspendable chart carries one (ADR-113)'
 # --------------------------------------------------------------------------
 # Held to the same `suspendable` value as above, so the two cannot drift: a
 # chart ADR-104 refuses has no switch to throw, and a switch named on it fails
@@ -2499,7 +2499,7 @@ for chart in $SERVICE_CHARTS; do
             test "$(count '^  name: .*-switches$' "$OUT/switch-base-$chart.txt")" -eq 0
         check "$chart: mounts no switches" \
             test "$(count 'mountPath: /etc/commerce/switches' "$OUT/switch-base-$chart.txt")" -eq 0
-        refuses_chart "$chart" "$chart: a switch is refused, citing ADR-112" 'ADR-112' \
+        refuses_chart "$chart" "$chart: a switch is refused, citing ADR-113" 'ADR-113' \
             $GATEWAY_OVERLAY --set 'switches.off={probe-queue}'
     fi
 done

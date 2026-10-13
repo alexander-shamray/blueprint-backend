@@ -1,4 +1,4 @@
-# ADR-112 — An operator switches a receive endpoint or a worker off from a file that reloads, and no feature-flag library is adopted (#954)
+# ADR-113 — An operator switches a receive endpoint or a worker off from a file that reloads, and no feature-flag library is adopted (#954)
 
 **Decision.** Notifications, Shipping and Privacy, the three services
 [ADR-104](ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md)

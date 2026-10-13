@@ -13,7 +13,7 @@ namespace Privacy.Infrastructure.Sweep;
 /// <remarks>Nothing closes an overdue request: an operator reissues it (ADR-092). This only makes the silence visible.</remarks>
 public sealed class OverdueSweepService : BackgroundService, ISwitchedWorker
 {
-    /// <summary>The name an operator lists to switch the sweep off (ADR-112).</summary>
+    /// <summary>The name an operator lists to switch the sweep off (ADR-113).</summary>
     public const string Name = "overdue-sweep";
 
     /// <summary>A due time is measured in days, so a minute is prompt and a pass costs one indexed read.</summary>

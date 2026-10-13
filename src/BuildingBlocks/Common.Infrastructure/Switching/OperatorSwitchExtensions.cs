@@ -4,7 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Common.Infrastructure.Switching;
 
-/// <summary>The lines a switchable host adds: the services and the bus (ADR-112); the file is Common.Web's.</summary>
+/// <summary>The lines a switchable host adds: the services and the bus (ADR-113); the file is Common.Web's.</summary>
 public static class OperatorSwitchExtensions
 {
     /// <summary>Idempotent, since each host's bus registration calls it and a suite may call that twice.</summary>
@@ -24,7 +24,7 @@ public static class OperatorSwitchExtensions
     }
 
     /// <summary>Connects the switch to every endpoint configured after it, so a new endpoint is not left out.</summary>
-    /// <remarks>Called before the first <c>ReceiveEndpoint</c>; one declared earlier would not be seen (ADR-112).</remarks>
+    /// <remarks>Called before the first <c>ReceiveEndpoint</c>; one declared earlier would not be seen (ADR-113).</remarks>
     public static void ConnectOperatorSwitch(this IBusFactoryConfigurator cfg, IServiceProvider services) =>
         cfg.ConnectEndpointConfigurationObserver(
             new SwitchEveryEndpoint(services.GetRequiredService<ReceiveEndpointSwitch>()));

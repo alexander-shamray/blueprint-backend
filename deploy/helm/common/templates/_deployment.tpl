@@ -40,7 +40,7 @@ spec:
         {{- $extra = printf "%s%s" $extra (include (printf "%s.%s" $.Chart.Name .) $) }}
         {{- end }}
         {{- /* Without `switches`: the switch exists so that throwing it rolls
-        nothing (ADR-112), and a value in this sum would roll every pod. Its
+        nothing (ADR-113), and a value in this sum would roll every pod. Its
         refusal for a chart that is not suspendable still runs. */}}
         {{- $_ := include "commerce.switches" . }}
         checksum/values: {{ printf "%s%s%s" (toYaml (omit .Values "switches")) (include "commerce.configmap" .) $extra | sha256sum }}
@@ -107,7 +107,7 @@ spec:
               mountPath: /tmp
             {{- if .Values.suspendable }}
             {{- /* A directory, not a subPath: the kubelet updates a directory
-            mount in place and never a subPath one (ADR-112). */}}
+            mount in place and never a subPath one (ADR-113). */}}
             - name: switches
               mountPath: /etc/commerce/switches
               readOnly: true

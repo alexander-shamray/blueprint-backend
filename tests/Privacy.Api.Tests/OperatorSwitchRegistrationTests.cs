@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Privacy.Api.Tests;
 
-/// <summary>ADR-112: nothing this host receives or runs is left without a switch.</summary>
+/// <summary>ADR-113: nothing this host receives or runs is left without a switch.</summary>
 public class OperatorSwitchRegistrationTests
 {
     [Fact]
@@ -47,6 +47,6 @@ public class OperatorSwitchRegistrationTests
         loops.ShouldNotBeEmpty("the predicate must see this host's loops, or the assertion below proves nothing");
         loops.ShouldAllBe(
             t => typeof(ISwitchedWorker).IsAssignableFrom(t),
-            "a loop that is not an ISwitchedWorker cannot be switched off by an operator (ADR-112)");
+            "a loop that is not an ISwitchedWorker cannot be switched off by an operator (ADR-113)");
     }
 }

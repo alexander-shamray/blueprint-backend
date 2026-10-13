@@ -10,7 +10,7 @@ data:
   {{- include "commerce.config" . | nindent 2 }}
   {{- if .Values.suspendable }}
   {{- /* The kubelet swaps a mounted ConfigMap through a symlink, which inotify
-  misses; polling sees it (ADR-112). */}}
+  misses; polling sees it (ADR-113). */}}
   DOTNET_USE_POLLING_FILE_WATCHER: "true"
   {{- end }}
 {{- end -}}
