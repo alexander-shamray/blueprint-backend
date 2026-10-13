@@ -1,5 +1,6 @@
 using Common.Application;
 using Common.Web;
+using Microsoft.AspNetCore.Mvc;
 using Web.Bff.Orders;
 
 namespace Web.Bff.Endpoints;
@@ -34,5 +35,29 @@ public static class OrderEndpoints
                 async (Guid id, ICurrentUser user, OrderReader orders, CancellationToken ct) =>
                     (await orders.FindAsync(user.Id, id, ct)).ToHttpResult())
             .WithName("GetOrder");
+
+        // ADR-108: the detail route's answer first, then its changes. A 404 is answered before a stream opens.
+        group
+            .MapGet(
+                "/{id:guid}/events",
+                async (
+                    Guid id,
+                    [FromHeader(Name = "Last-Event-ID")] string? lastEventId,
+                    HttpContext context,
+                    ICurrentUser user,
+                    OrderReader orders,
+                    OrderEventStream stream,
+                    CancellationToken ct) =>
+                {
+                    Result<OrderDetail> first = await orders.FindAsync(user.Id, id, ct);
+
+                    if (first.IsFailure)
+                        return first.ToHttpResult();
+
+                    await stream.RunAsync(context, user.Id, first.Value, lastEventId, ct);
+
+                    return Results.Empty;
+                })
+            .WithName("StreamOrderEvents");
     }
 }

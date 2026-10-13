@@ -89,6 +89,9 @@ builder.Services.AddMassTransitMessaging(builder.Configuration);
 // §10.7's read over the projection; a singleton, as the connection factory it holds is (§6.5).
 builder.Services.AddSingleton<OrderReader>();
 
+// ADR-108's stream over that read; it holds no state of its own between polls, so a singleton is safe.
+builder.Services.AddSingleton<OrderEventStream>();
+
 // §10.9's saved address, in this host's own schema (ADR-107); the validator is called by the endpoint (§6.4).
 builder.Services.AddSingleton<SavedAddressStore>();
 builder.Services.AddSingleton<IValidator<SavedAddress>, SavedAddressValidator>();

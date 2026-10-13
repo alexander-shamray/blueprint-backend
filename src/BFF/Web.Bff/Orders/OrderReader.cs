@@ -54,6 +54,14 @@ public sealed class OrderReader(IDbConnectionFactory connections)
         WHERE l.OrderId = @OrderId;
         """;
 
+    /// <summary>What a stream asks each interval (ADR-108): one key read, and the detail only when this moved.</summary>
+    private const string AsOfSql =
+        """
+        SELECT o.AsOf
+        FROM bff.Orders o
+        WHERE o.OrderId = @OrderId AND o.CustomerId = @CustomerId;
+        """;
+
     public async Task<CursorPage<OrderSummary>> ListAsync(
         Guid customerId,
         string? cursor,
@@ -106,6 +114,18 @@ public sealed class OrderReader(IDbConnectionFactory connections)
         return row is null
             ? Result.Failure<OrderDetail>(OrderReadErrors.NotFound)
             : Result.Success(OrderView.Detail(row, lines));
+    }
+
+    /// <summary>The row's <c>AsOf</c> alone, filtered on id and customer; null for none, as <see cref="FindAsync"/> is.</summary>
+    public async Task<DateTimeOffset?> AsOfAsync(Guid customerId, Guid orderId, CancellationToken ct)
+    {
+        using IDbConnection connection = connections.Create();
+
+        return await connection.QuerySingleOrDefaultAsync<DateTimeOffset?>(
+            new CommandDefinition(
+                AsOfSql,
+                new { OrderId = orderId, CustomerId = customerId },
+                cancellationToken: ct));
     }
 
     private static async Task<ILookup<Guid, OrderLineReadRow>> PageLinesAsync(
