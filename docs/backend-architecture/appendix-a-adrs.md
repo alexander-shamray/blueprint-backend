@@ -122,6 +122,7 @@ decision looks wrong.
 | **ADR-113** | [An operator switches a receive endpoint or a worker off from a file that reloads, and no feature-flag library is adopted (#954)](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md) |
 | **ADR-114** | [The object store check sends a heartbeat on a green run and is provisioned by a script, and can name a virtual-hosted bucket (#995, #996)](adr/ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md) |
 | **ADR-115** | [An operator-switched name is reported by an operator-switches readiness check that is Degraded, supersedes ADR-113's loop that adds no check (#1013)](adr/ADR-115-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-that-is-degraded-supersedes-adr-113s-loop-that-adds-no-check-1013.md) |
+| **ADR-116** | [A gateway route to a service an operator may stop is switched off in its configuration and answers 503 at the edge (#955)](adr/ADR-116-a-gateway-route-to-a-service-an-operator-may-stop-is-switched-off-in-its-configuration-and-answers-503-at-the-edge-955.md) |
 
 ---
 

@@ -583,7 +583,8 @@ builder.Services.Replace(
 // §10.2.
 builder.Services
     .AddReverseProxy()
-    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+    .AddConfigFilter<SuspendableRouteFilter>();   // ADR-116: only a cluster ADR-104 lets an operator stop
 ```
 
 Then, past the rate limiter's two policies and its rejection writer, which are
@@ -707,9 +708,11 @@ app.UseAuthentication();          // §11.3
 app.UseRateLimiter();             // §10.3 — needs the user, precedes policy work
 app.UseAuthorization();           // §11.4
 
-// MapReverseProxy()'s own three steps, beneath the one that keeps the edge's deadline a 504 (§9.7).
+// MapReverseProxy()'s own three steps, beneath the one that keeps the edge's deadline a 504 (§9.7) and the one
+// that answers a switched-off route's 503 first, so nothing is forwarded (§10.5).
 app.MapReverseProxy(proxy =>
 {
+    proxy.Use(SuspendedRoute.AnswerAsync);
     proxy.Use(ProxyDeadline.RethrowAsync);
     proxy.UseSessionAffinity();
     proxy.UseLoadBalancing();
