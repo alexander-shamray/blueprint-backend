@@ -4,15 +4,29 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>A real RabbitMQ on §14.1's stock image, for the suites that prove a transport behaviour (§12.4).</summary>
+/// <summary>A real RabbitMQ holding §14.1's definitions, so the account under test has only its own grant (ADR-036).</summary>
 public sealed class RabbitFixture : IAsyncLifetime
 {
+    /// <summary>The account the broker's definitions grant the <c>payments-</c> queues, borrowed for a probe queue.</summary>
+    public const string Queue = "payments-operator-switch-probe";
+
     private readonly RabbitMqContainer _broker = Build();
 
     private static RabbitMqContainer Build()
     {
         TestcontainersWarmUp.Ensure();
-        return new RabbitMqBuilder().WithImage(ComposeImage.BaseOf("rabbitmq")).Build();
+        return new RabbitMqBuilder()
+            .WithUsername("payments-svc")
+            .WithPassword("local-dev-payments")
+            .WithImage(ComposeImage.BaseOf("rabbitmq"))
+            // A second copy of the Dockerfile's COPY targets, which check_permissions.py holds to it (ADR-036).
+            .WithResourceMapping(
+                new FileInfo(Path.Combine(BrokerContextPath(), "definitions.json")),
+                "/etc/rabbitmq/")
+            .WithResourceMapping(
+                new FileInfo(Path.Combine(BrokerContextPath(), "20-commerce.conf")),
+                "/etc/rabbitmq/conf.d/")
+            .Build();
     }
 
     public string BrokerAddress => _broker.GetConnectionString();
@@ -22,4 +36,25 @@ public sealed class RabbitFixture : IAsyncLifetime
         await DaemonRetry.StartAsync(_broker, TestContext.Current.CancellationToken);
 
     public async ValueTask DisposeAsync() => await _broker.DisposeAsync();
+
+    private static string BrokerContextPath()
+    {
+        for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            if (!File.Exists(Path.Combine(dir.FullName, "Platform.slnx")))
+                continue;
+
+            string context = Path.Combine(dir.FullName, "deploy", "compose", "rabbitmq");
+            if (!File.Exists(Path.Combine(context, "Dockerfile")))
+            {
+                throw new InvalidOperationException(
+                    $"Found the solution at {dir.FullName} but no Dockerfile at {context} (§14.1, ADR-021).");
+            }
+
+            return context;
+        }
+
+        throw new InvalidOperationException(
+            $"No Platform.slnx above {AppContext.BaseDirectory}; the broker's definitions cannot be mapped.");
+    }
 }
