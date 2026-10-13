@@ -176,12 +176,8 @@ WORKFLOW = pathlib.Path(__file__).resolve().parents[2] / ".github" / "workflows"
 
 
 def commands() -> str:
-    """The workflow's commands alone, comment lines removed.
-
-    Whole lines only, as realm.yml's suite strips them: the file explains each
-    command in a comment, so a raw search finds `gh issue create` whether or
-    not anything runs it.
-    """
+    """The workflow's commands alone, comment lines removed, so a raw search
+    cannot find `gh issue create` in the comment beside it."""
     return "\n".join(line for line in WORKFLOW.read_text(encoding="utf-8").splitlines()
                      if not line.lstrip().startswith("#"))
 
