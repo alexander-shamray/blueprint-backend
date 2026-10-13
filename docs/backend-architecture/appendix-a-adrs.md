@@ -119,6 +119,7 @@ decision looks wrong.
 | **ADR-110** | [The deployed object store is checked between rollouts: each image credential pair is asked to delete and to list, and must be refused (#985)](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md) |
 | **ADR-111** | [A red object-store.yml run files a tracker issue, or comments on the open one (#988); narrows ADR-110's consequence that a red run files no issue](adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md) |
 | **ADR-112** | [The saga's outbox transaction is ReadCommitted and only the saga's row lock is serializable (#992); supersedes ADR-032's Serializable outbox transaction](adr/ADR-112-the-sagas-outbox-transaction-is-readcommitted-and-only-the-sagas-row-lock-is-serializable-992-supersedes-adr-032s-serializable-outbox-transaction.md) |
+| **ADR-112** | [An operator switches a receive endpoint or a worker off from a file that reloads, and no feature-flag library is adopted (#954)](adr/ADR-112-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md) |
 
 ---
 
