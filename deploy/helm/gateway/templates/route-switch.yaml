@@ -1,0 +1,27 @@
+{{- /* ADR-118's route switch: each route id in `routeSwitch.off` carries the
+`Suspended` metadata entry that ADR-116 reads, in a ConfigMap the pod mounts
+and the gateway follows. The file is YARP's own configuration, layered over the
+route file, so a reload runs every route through SuspendableRouteFilter, which
+refuses a route to a cluster ADR-104 keeps on. Names are checked for shape
+here and for meaning there. */}}
+{{- $off := ((.Values.routeSwitch).off) | default list }}
+{{- $routes := dict }}
+{{- range $i, $id := $off }}
+{{- if not (regexMatch "^[a-z0-9]+(-[a-z0-9]+)*$" (toString $id)) }}
+{{- fail (printf "routeSwitch.off[%d] is not a route id: lowercase words joined by hyphens, as the route file spells them (ADR-118). A blank or misspelt name would be a switch that switches nothing, which an operator reads as a route that is off." $i) }}
+{{- end }}
+{{- if hasKey $routes $id }}
+{{- fail (printf "routeSwitch.off names %q twice (ADR-118)." $id) }}
+{{- end }}
+{{- $_ := set $routes $id (dict "Metadata" (dict "Suspended" "true")) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  {{- /* Per instance, like the config, so the canary release owns its own. */}}
+  name: {{ include "commerce.instanceName" . }}-route-switch
+  labels:
+    {{- include "commerce.labels" . | nindent 4 }}
+data:
+  {{- /* The file's name is RouteSwitchFile.DefaultPath's. */}}
+  routes.json: {{ dict "ReverseProxy" (dict "Routes" $routes) | toJson | quote }}

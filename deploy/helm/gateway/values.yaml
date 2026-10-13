@@ -182,6 +182,14 @@ networkPolicy:
       - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
   identity: { to: [] }
 
+# ADR-118's route switch: the gateway's route ids an operator has switched off,
+# as a ConfigMap the pod mounts and the gateway follows while it runs. Throwing
+# it rolls no pod, so the checksum leaves it out. Only a route to a cluster
+# ADR-104 lets an operator stop may be named: the gateway refuses the file
+# otherwise, keeps the configuration before it, and the chart cannot say which.
+routeSwitch:
+  off: []
+
 # Whether ADR-104 lets an operator switch this service off, and the switch.
 # smoke.sh holds the first to the ADR's table; the second is for an incident.
 suspendable: false
