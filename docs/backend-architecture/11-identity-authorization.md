@@ -1442,7 +1442,7 @@ sequenceDiagram
     N->>N: anonymise ended NotificationLog rows, delete contacts, waiting notices, OrderRecords
     S->>S: delete DeliveryAddresses rows (ADR-052), empty Shipments.ErasedUnder (ADR-103)
     Y->>Y: anonymise PaymentOrders.CustomerId
-    F->>F: record the order ids, delete the subject's bff.Orders rows (ADR-098)
+    F->>F: record the order ids, delete the subject's bff.Orders rows (ADR-098) and saved address (ADR-107)
     O->>P: PersonalDataDeleteCompleted {RequestId, "ordering"}
     N->>P: PersonalDataDeleteCompleted {RequestId, "notifications"}
     S->>P: PersonalDataDeleteCompleted {RequestId, "shipping"}

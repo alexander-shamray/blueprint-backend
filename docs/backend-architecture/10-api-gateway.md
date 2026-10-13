@@ -1388,6 +1388,60 @@ as that section's reasoning requires of whoever serves content a caller
 supplied; a repository can state this and cannot enforce it, so the
 implementing PR carries a test against the local store that reads the header.
 
+## 10.9 The saved delivery address
+
+[ADR-107](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md)
+decides that `Web.Bff` keeps one delivery address per customer, as a prefill
+for the checkout. What follows is the wire contract, which the one consumer
+builds against.
+
+| | Path |
+|---|---|
+| Client calls | `GET`, `PUT` and `DELETE /bff/v1/saved-address` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
+| Service receives | `/v1/saved-address` |
+
+It needs no gateway change, as §10.7 and §10.8 need none: §10.2's `web-bff`
+route already matches the BFF's whole `/bff/v1` API. The path is singular
+because a customer has one resource and no id to name. **The subject is the
+principal's** ([§11.4](11-identity-authorization.md)), and no request names
+one, so there is no route to another customer's address and no 403 to
+confirm that one exists.
+
+**The body is the order request's own address**, so a client prefills the
+checkout by copying it across: `line1`, `line2`, `city`, `postalCode` and
+`country`. `PUT` replaces whatever was saved and answers 200 with the address
+as stored; `GET` answers 200 with it, or 404 with the code `address.not_found`
+when the caller has saved none, has deleted it, or was erased, three states a
+client cannot and need not tell apart; `DELETE` answers 204 whether or not
+there was one to delete. A `PUT` and a `DELETE` repeated leave the state the
+first left ([§8.5](08-caching-redis.md)).
+
+**The address is validated by the rule an order applies and by no more.** A
+`line1`, a `city` and a `postalCode` are present, a `country` is two ASCII
+letters (ISO 3166-1 alpha-2, in either case, stored in upper case), and each
+part fits the width the order's own validator admits, so an address that saves
+is one an order accepts. A postcode's format is never checked, because no
+format is every country's. A value outside the rule answers 400 in §10.5's
+`Error` vocabulary, naming the field and never repeating the value. A `line2`
+that is blank is stored as none, and every part is trimmed, as an order stores
+an address.
+
+**It is a prefill and an input to nothing.** Placing an order still carries
+the address in the order request, and the order's contract does not change, so
+a saved address that has gone stale cannot redirect an order the customer did
+not confirm. No service reads it.
+
+**Retention and erasure are written here, beside the creation.** The row has
+no window: it lasts until the customer replaces or deletes it, or an erasure
+request deletes it ([§11.7](11-identity-authorization.md)). The BFF's handler
+for `PersonalDataDeleteRequested` deletes the subject's row in the transaction
+that deletes their orders and counts it in the request's audit row; the BFF was
+already one of the holders an erasure request waits on
+([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
+so the responder set does not change. The address is never a log attribute, a span attribute or part of an
+exception's message ([§13.4](13-observability.md)).
+
 ---
 
 [← §9 Messaging](09-messaging.md) · [Index](README.md) · [§11 Identity →](11-identity-authorization.md)

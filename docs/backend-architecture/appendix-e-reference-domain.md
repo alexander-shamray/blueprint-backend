@@ -210,7 +210,7 @@ holds every row to what its host's code publishes, consumes and accepts.
 | **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled`, `PersonalDataDeleteRequested` | — |
 | **Notifications** | NotificationLog | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
 | **Privacy** | ErasureRequest | `PersonalDataDeleteRequested` | — | `PersonalDataDeleteCompleted` |
-| **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model owning no fact ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested` | — |
+| **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model of other services' facts ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)), and a customer's saved address, the one fact it owns ([ADR-107](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested` | — |
 
 ## E.2 §4: the solution tree and the scaffold
 
@@ -1194,7 +1194,7 @@ this case, and its edges are:
 | Notifications | ended `NotificationLog` rows anonymised, contacts, waiting notices and `OrderRecords` deleted | `notifications` |
 | Shipping | `DeliveryAddresses` rows deleted (ADR-052), `Shipments.ErasedUnder` emptied (ADR-103) | `shipping` |
 | Payments | `PaymentOrders.CustomerId` anonymised | `payments` |
-| The BFF | order ids recorded, the subject's `bff.Orders` rows deleted (ADR-098) | `bff` |
+| The BFF | order ids recorded, the subject's `bff.Orders` rows and saved address deleted (ADR-098, ADR-107) | `bff` |
 
 `PersonalDataDeleteRequested` and `PersonalDataDeleteCompleted` are both in
 `Common.Contracts.Privacy.V1`. Privacy publishes the request and accepts the
