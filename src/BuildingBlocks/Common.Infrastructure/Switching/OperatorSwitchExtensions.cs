@@ -24,7 +24,7 @@ public static class OperatorSwitchExtensions
     }
 
     /// <summary>Connects the switch to every endpoint configured after it, so a new endpoint is not left out.</summary>
-    /// <remarks>Called before the first <c>ReceiveEndpoint</c>; one declared earlier would not be seen.</remarks>
+    /// <remarks>Called before the first <c>ReceiveEndpoint</c>; one declared earlier would not be seen (ADR-112).</remarks>
     public static void ConnectOperatorSwitch(this IBusFactoryConfigurator cfg, IServiceProvider services) =>
         cfg.ConnectEndpointConfigurationObserver(
             new SwitchEveryEndpoint(services.GetRequiredService<ReceiveEndpointSwitch>()));
