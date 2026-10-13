@@ -50,9 +50,9 @@ load, not by switching it off while someone thinks.
 which gives Notifications a caller: while the host serving its registration
 method is down, a device's registration fails until the app's next start,
 beside the late mail the table names. A suspension that scales that host down
-fails registrations; ADR-113's switch, which stops endpoints and loops, and
-ADR-116's, which switches gateway routes off, leave the method serving, since
-no gateway route reaches it. The pricing hop is no longer the BFF's one
+fails registrations. ADR-113's switch, which stops only endpoints and loops,
+leaves the method serving, and so does ADR-116's, which switches gateway
+routes off, since no gateway route reaches it. The pricing hop is no longer the BFF's one
 synchronous hop, as the Why calls it.
 
 ---
