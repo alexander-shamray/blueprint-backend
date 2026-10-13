@@ -298,9 +298,12 @@ accepts, and decode one before loading anything: `permission` must be
 one currency, and without a matching row in `ordering.ProductPrices` every
 order is a 422 (§6.6). The seeded prices in
 [`deploy/compose/README.md`](../compose/README.md#seeded-products) are all in
-one currency; confirm it against the table rather than assuming:
+one currency; confirm it against the table rather than assuming. The password
+is §14.1's local default unless `SQL_PASSWORD` overrides it in the `.env`
+beside the Compose file:
 
 ```bash
+SQL_PASSWORD="${SQL_PASSWORD:-Local_Dev_Pa55w0rd!}"
 docker exec commerce-sql-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa \
     -P "$SQL_PASSWORD" -C -d Ordering -W \
     -Q "SELECT Currency, COUNT(*) FROM ordering.ProductPrices GROUP BY Currency"

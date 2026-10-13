@@ -18,7 +18,8 @@
 //     -e PROM_URL=http://prometheus.observability:9090 \
 //     -e TOKEN_URL=https://id.staging.example.com/realms/commerce/protocol/openid-connect/token \
 //     -e CLIENT_ID=slo-run \
-//     -e SLO_PRODUCT_ID=<a product with a row in ordering.ProductPrices> //     -e SLO_CURRENCY=<the currency of that row> \
+//     -e SLO_PRODUCT_ID=<a product with a row in ordering.ProductPrices> \
+//     -e SLO_CURRENCY=<the currency of that row> \
 //     deploy/observability/slo/slo.js
 //
 // WHAT THE SLO CLIENT MUST BE GRANTED, because nothing in this repository
@@ -176,7 +177,7 @@ export function browseCatalog() {
 
 export function placeOrder(data) {
     // THE WIRE SHAPE PlaceOrderCommand BINDS, and nothing else. It is
-    // `(Items, ShippingAddress, Currency)`; an earlier draft of this file sent
+    // `(CommandId, Items, ShippingAddress, Currency)`; an earlier draft of this file sent
     // `lines` and no address, which binds to nothing, fails PlaceOrderValidator
     // and returns 400 before the domain runs — so the "422 storm" the check
     // below guards against would have been a 400 storm that never reached it.
