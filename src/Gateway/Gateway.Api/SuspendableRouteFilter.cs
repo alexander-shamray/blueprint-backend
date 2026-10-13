@@ -3,7 +3,7 @@ using Yarp.ReverseProxy.Configuration;
 namespace Gateway.Api;
 
 /// <summary>Refuses a switched-off route whose cluster is one ADR-104 does not let an operator stop.</summary>
-/// <remarks>A refused first load stops the host; a refused reload keeps the configuration before it (§10.2).</remarks>
+/// <remarks>A refused first load stops the host; a refused reload keeps the configuration before it (ADR-116).</remarks>
 internal sealed class SuspendableRouteFilter : IProxyConfigFilter
 {
     public ValueTask<ClusterConfig> ConfigureClusterAsync(ClusterConfig cluster, CancellationToken cancel) =>
