@@ -60,8 +60,8 @@ the BFF's one synchronous hop, as the Why calls it.
 which serves registrations and preferences from a host of their own whose
 chart refuses `suspended`. Switching Notifications off suspends the worker
 alone, so a registration no longer fails while it is off. The note above,
-where a suspension scales the serving host down, describes the worker as that
-host, which ADR-118 did not choose.
+where a suspension scales the serving host down, holds only if the worker
+serves the method, which ADR-118 did not choose.
 
 ---
 
