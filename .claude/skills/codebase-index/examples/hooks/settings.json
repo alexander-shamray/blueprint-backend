@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR'] + '/.claude/hooks/refresh-index.py', run_name='__main__')\"",
-            "timeout": 5,
+            "timeout": 15,
             "statusMessage": "refreshing the code index"
           }
         ]
@@ -19,7 +19,7 @@
           {
             "type": "command",
             "command": "py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR'] + '/.claude/hooks/refresh-index.py', run_name='__main__')\"",
-            "timeout": 5,
+            "timeout": 15,
             "statusMessage": "refreshing the code index"
           }
         ]
