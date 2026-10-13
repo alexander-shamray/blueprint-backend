@@ -17,6 +17,8 @@ import uuid
 from pathlib import Path
 from unittest import mock
 
+from review_helpers import python_as_py
+
 SCRIPTS = Path(__file__).resolve().parent
 CLAUDE = SCRIPTS.parent
 HINT = CLAUDE / "hooks" / "index-search-hint.py"
@@ -240,7 +242,7 @@ class TheWiring(unittest.TestCase):
                                     "tool_input": {"pattern": "Money"}, "tool_use_id": "x"}).encode()
                 done = subprocess.run(
                     argv, input=event, capture_output=True, timeout=30, check=False,
-                    env=dict(environment(Path(scratch)), CLAUDE_PROJECT_DIR=str(root)))
+                    env=python_as_py(dict(environment(Path(scratch)), CLAUDE_PROJECT_DIR=str(root)), scratch))
                 with self.subTest(root=str(root)):
                     self.assertNotEqual(2, done.returncode, done.stderr)
                     # A hook that cannot run leaves hint-bound.sh's line, and the call is never blocked.
