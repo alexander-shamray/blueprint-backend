@@ -56,14 +56,14 @@ const TOKEN_URL = __ENV.TOKEN_URL;
 const CLIENT_ID = __ENV.CLIENT_ID;
 const CLIENT_SECRET = __ENV.CLIENT_SECRET;
 
-// Wall-clock, split by what the request IS rather than by route, so the two
-// numbers line up with §13.7's two rows.
 // The orders the command scenario places: its rate times its duration, which
 // the stock precondition in setup() and the floor in teardown() both read.
 const ORDER_RATE = 3;
 const ORDER_SECONDS = 180;
 const ORDERS_PLACED = ORDER_RATE * ORDER_SECONDS;
 
+// Wall-clock, split by what the request IS rather than by route, so the two
+// numbers line up with §13.7's two rows.
 const commandDuration = new Trend('slo_command_duration', true);
 const queryDuration = new Trend('slo_query_duration', true);
 
