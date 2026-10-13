@@ -64,17 +64,20 @@ held locks.
 model.** `object-store` is SeaweedFS, because its S3 API takes a pre-signed
 `PUT`, scopes a credential pair to a bucket prefix and serves an anonymous
 read from one prefix alone, which is [§10.8](10-api-gateway.md)'s permission
-model; `deploy/compose/object-store/s3.json` holds its two identities and the
-anonymous one. `object-store-init` is a one-shot, like a migrator: it makes the
-bucket and the one-day expiry on `uploads/`, from
-`deploy/compose/object-store/init.txt`, and a second `up` leaves both as they
+model; `deploy/compose/object-store/s3.json` holds its two credential pairs and
+the anonymous identity, each pair naming a policy under
+`object-store/policies/` that allows its reads and writes and so refuses a list
+and a delete.
+`object-store-init` is a one-shot, like a migrator: it makes the bucket, puts
+the two policies and sets the one-day expiry on `uploads/`, from
+`deploy/compose/object-store/init.txt`, and a second `up` leaves them as they
 were. `image-edge` is nginx in front of `products/`, `GET` and `HEAD` only, and
 it sets `X-Content-Type-Options: nosniff` because the store does not
 ([§10.6](10-api-gateway.md#106-response-security-headers)). The BFF is given
 the store's address as the host's browser reaches it, since it signs the URL
 the client uploads to; the product service is given the address on the Compose
 network and the edge's as the base of every URL it stores. `Platform.IntegrationTests`
-starts the same image with the same three files, so what it proves is what
+starts the same image with the same four, so what it proves is what
 `up` runs.
 
 **The broker is built rather than pulled, and it is the one infrastructure
