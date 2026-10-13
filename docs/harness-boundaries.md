@@ -342,6 +342,25 @@ that worktree. `test_index_mcp_root.py` holds the wiring, the map from tool
 to command against `index-query-hint.py`'s and the wrapper's whitelist, and
 every command it emits to `guard-index-argv.py`.
 
+**The two hint hooks run under `.claude/hooks/hint-bound.sh`, because a hook
+the harness kills leaves nothing to say it did not run.** Raising their
+timeout to 15 s narrowed the window a slow `py` launcher start can fall
+into and could not close it: the harness discards the output of a hook it
+times out, so a hint that stalled looked exactly like a hint that did not
+apply. The wrapper runs the hook under `HINT_BOUND_SECONDS`, 10 s and below
+the settings timeout, and on a stall, or any non-zero exit, prints one
+`additionalContext` line naming the hook that did not run. It leaves with 0
+either way, since exit 2 under these events blocks the prompt or the call,
+and it writes the hook's output to a file and not a pipe, so a launcher's
+orphaned child cannot hold it past the bound. **It wraps the two hints and
+no other hook**: the guards fail closed on their own and carry no timeout,
+and `index-mcp-root` and `refresh-index` print nothing a session reads as
+advice. The residual is the wrapper's own start: `bash` stalling past the
+settings timeout is a case no hook can report.
+`test_hint_bound.py` runs the wrapper against a launcher that never answers,
+one that fails and one that answers, and holds `settings.json` to routing
+both hints through it with a timeout above the bound.
+
 **`MCP_TIMEOUT` is raised in `.claude/settings.json`'s `env`.** The plugin
 servers started through `npx` — `playwright` and `chrome-devtools` — failed
 their first start often enough to drop out of sessions, and Claude Code
