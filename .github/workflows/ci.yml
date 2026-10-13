@@ -951,11 +951,9 @@ jobs:
 
       # The build context is the repository root, exactly as §14.1's Compose
       # file sets it — these Dockerfiles copy csproj files from across the
-      # solution, so a narrower context breaks the restore layer. The first tag
-      # is local, and the SBOM below reads it; the second is the registry's,
-      # which only a push on main uses. The label links the package to this
-      # repository, so it inherits the repository's access rather than being
-      # a package nobody can read.
+      # solution, so a narrower context breaks the restore layer. The second
+      # tag is the registry's, used only by a push on main; the label links the
+      # package to this repository, so it inherits the repository's access.
       - name: Build ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
         run: >
