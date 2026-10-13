@@ -138,6 +138,12 @@ class ApplyTests(unittest.TestCase):
         provision.apply(gh, {**everything(), store_check.ADDRESSING: "virtual"})
         self.assertEqual(gh.variables[store_check.ADDRESSING], "virtual")
 
+    def test_an_addressing_the_check_would_refuse_sets_nothing(self):
+        gh = FakeGh()
+        with self.assertRaisesRegex(store_check.Refusal, store_check.ADDRESSING):
+            provision.apply(gh, {**everything(), store_check.ADDRESSING: "vhost"})
+        self.assertEqual(gh.writes(), [])
+
     def test_a_second_run_changes_nothing(self):
         gh = FakeGh()
         provision.apply(gh, everything())

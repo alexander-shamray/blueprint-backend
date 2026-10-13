@@ -75,6 +75,8 @@ def apply(run: Gh, env: dict[str, str]) -> list[str]:
     unset = [name for name in VARIABLES + SECRETS if not env.get(name)]
     if unset:
         raise store_check.Refusal("not configured: " + ", ".join(unset))
+    if env.get(store_check.ADDRESSING) and env[store_check.ADDRESSING] not in store_check.ADDRESSINGS:
+        raise store_check.Refusal(f"{store_check.ADDRESSING} must be one of {', '.join(store_check.ADDRESSINGS)}")
     found = environment_problems(run)
     if found:
         raise store_check.Refusal(found[0])
