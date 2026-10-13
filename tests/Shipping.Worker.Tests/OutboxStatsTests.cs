@@ -8,8 +8,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
-using AddressRegistration = Shipping.Infrastructure.Addresses.DependencyInjection;
-using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;
 
 namespace Shipping.Worker.Tests;
 
@@ -134,12 +132,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
                         {
                             ["ConnectionStrings:Shipping"] = fixture.ConnectionString,
                             // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
-                            ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672",
-                            // Both read eagerly by AddCarrierGateway; HTTPS because the environment is not Development.
-                            [CarrierRegistration.BaseUrlKey] = "https://shipping-carrier.invalid",
-                            [CarrierRegistration.ApiKeyKey] = "not-a-real-key",
-                            // Read eagerly by AddDeliveryAddressSource, which applies no https rule (§9.7).
-                            [AddressRegistration.BaseUrlKey] = "http://shipping-ordering.invalid"
+                            ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672"
                         })
                     .Build())
             .BuildServiceProvider();
