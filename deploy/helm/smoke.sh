@@ -2505,7 +2505,7 @@ for chart in $SERVICE_CHARTS; do
 done
 
 # --------------------------------------------------------------------------
-section 'The gateway'"'"'s route switch rolls no pod, and no other chart carries one (ADR-118)'
+section 'The gateway'"'"'s route switch rolls no pod, and no other chart carries one (ADR-119)'
 # --------------------------------------------------------------------------
 route_switch() {
     "$HELM" template gateway "$CHARTS_DIR/gateway" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
@@ -2527,13 +2527,13 @@ check 'the gateway polls the mount, which the kubelet swaps by symlink' \
 check 'throwing a route switch leaves the pod template'"'"'s checksum alone' \
     test "$(grep 'checksum/values:' "$OUT/route-switch-base.txt")" = \
     "$(grep 'checksum/values:' "$OUT/route-switch-on.txt")"
-refuses_chart gateway 'a blank route name is refused, citing ADR-118' 'ADR-118' \
+refuses_chart gateway 'a blank route name is refused, citing ADR-119' 'ADR-119' \
     $GATEWAY_OVERLAY --set 'routeSwitch.off={" "}'
-refuses_chart gateway 'a route named twice is refused, citing ADR-118' 'ADR-118' \
+refuses_chart gateway 'a route named twice is refused, citing ADR-119' 'ADR-119' \
     $GATEWAY_OVERLAY --set 'routeSwitch.off={privacy-erase,privacy-erase}'
 for chart in $SERVICE_CHARTS; do
     [ "$chart" = gateway ] && continue
-    refuses_chart "$chart" "$chart: a route switch is refused, citing ADR-118" 'ADR-118' \
+    refuses_chart "$chart" "$chart: a route switch is refused, citing ADR-119" 'ADR-119' \
         $GATEWAY_OVERLAY --set 'routeSwitch.off={privacy-erase}'
     check "$chart: mounts no route switch" \
         test "$(count 'mountPath: /etc/commerce/routes' "$OUT/switch-base-$chart.txt")" -eq 0

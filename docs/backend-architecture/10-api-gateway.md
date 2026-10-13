@@ -307,7 +307,7 @@ rule, one way and the other ([ADR-116](adr/ADR-116-a-gateway-route-to-a-service-
 On a running gateway an operator sets it in a mounted file the gateway
 follows, rendered by the chart's `routeSwitch.off`, and a reload that sets it
 where it may not be, or names no route, is refused with the configuration
-before it kept ([ADR-118](adr/ADR-118-an-operator-switches-a-gateway-route-from-a-file-that-reloads-and-the-gateway-chart-renders-it-1022.md)).
+before it kept ([ADR-119](adr/ADR-119-an-operator-switches-a-gateway-route-from-a-file-that-reloads-and-the-gateway-chart-renders-it-1022.md)).
 
 ### API versioning and deprecation at the edge
 

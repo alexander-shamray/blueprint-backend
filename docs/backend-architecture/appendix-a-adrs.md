@@ -125,7 +125,7 @@ decision looks wrong.
 | **ADR-116** | [A gateway route to a service an operator may stop is switched off in its configuration and answers 503 at the edge (#955)](adr/ADR-116-a-gateway-route-to-a-service-an-operator-may-stop-is-switched-off-in-its-configuration-and-answers-503-at-the-edge-955.md) |
 | **ADR-117** | [A device's push token is a contact Notifications owns, registered through the BFF and erased with its subject (#474)](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md) |
 | **ADR-118** | [Notifications gains an API host for device registration and preferences, and the push adapters stay in the worker (#474)](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md) |
-| **ADR-118** | [An operator switches a gateway route from a file that reloads, and the gateway's chart renders it (#1022)](adr/ADR-118-an-operator-switches-a-gateway-route-from-a-file-that-reloads-and-the-gateway-chart-renders-it-1022.md) |
+| **ADR-119** | [An operator switches a gateway route from a file that reloads, and the gateway's chart renders it (#1022)](adr/ADR-119-an-operator-switches-a-gateway-route-from-a-file-that-reloads-and-the-gateway-chart-renders-it-1022.md) |
 
 ---
 

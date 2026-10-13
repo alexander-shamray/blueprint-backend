@@ -564,7 +564,7 @@ builder.Host.UseDefaultServiceProvider(o =>
     o.ValidateScopes = true;
 });
 
-builder.Configuration.AddRouteSwitchFile();                   // ADR-118
+builder.Configuration.AddRouteSwitchFile();                   // ADR-119
 builder.AddCommonWebDefaults(GatewayLimits.RequestTimeout);   // §13.2, §9.7
 
 // ADR-083's root trace per request, which needs both: the hosting layer's propagator and OpenTelemetry's.

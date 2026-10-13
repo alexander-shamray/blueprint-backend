@@ -42,11 +42,11 @@ spec:
         {{- /* Without `switches`: the switch exists so that throwing it rolls
         nothing (ADR-113), and a value in this sum would roll every pod. Its
         refusal for a chart that is not suspendable still runs. `routeSwitch`
-        is left out for the same reason (ADR-118). */}}
+        is left out for the same reason (ADR-119). */}}
         {{- $_ := include "commerce.switches" . }}
         {{- /* Only the gateway chart renders the ConfigMap this mounts. */}}
         {{- if and .Values.routeSwitch (ne .Chart.Name "gateway") }}
-        {{- fail (printf "routeSwitch is set on the %s chart, and only the gateway chart renders the ConfigMap it mounts: the pod would wait for it forever (ADR-118)." .Chart.Name) }}
+        {{- fail (printf "routeSwitch is set on the %s chart, and only the gateway chart renders the ConfigMap it mounts: the pod would wait for it forever (ADR-119)." .Chart.Name) }}
         {{- end }}
         checksum/values: {{ printf "%s%s%s" (toYaml (omit .Values "switches" "routeSwitch")) (include "commerce.configmap" .) $extra | sha256sum }}
     spec:
@@ -124,7 +124,7 @@ spec:
             {{- end }}
             {{- if .Values.routeSwitch }}
             {{- /* A directory for the reason above; the gateway reads
-            RouteSwitchFile.DefaultPath inside it (ADR-118). */}}
+            RouteSwitchFile.DefaultPath inside it (ADR-119). */}}
             - name: route-switch
               mountPath: /etc/commerce/routes
               readOnly: true

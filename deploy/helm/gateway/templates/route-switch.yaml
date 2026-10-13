@@ -1,4 +1,4 @@
-{{- /* ADR-118's route switch: each route id in `routeSwitch.off` carries the
+{{- /* ADR-119's route switch: each route id in `routeSwitch.off` carries the
 `Suspended` metadata entry that ADR-116 reads, in a ConfigMap the pod mounts
 and the gateway follows. The file is YARP's own configuration, layered over the
 route file, so a reload runs every route through SuspendableRouteFilter, which
@@ -8,10 +8,10 @@ here and for meaning there. */}}
 {{- $routes := dict }}
 {{- range $i, $id := $off }}
 {{- if not (regexMatch "^[a-z0-9]+(-[a-z0-9]+)*$" (toString $id)) }}
-{{- fail (printf "routeSwitch.off[%d] is not a route id: lowercase words joined by hyphens, as the route file spells them (ADR-118). A blank or misspelt name would be a switch that switches nothing, which an operator reads as a route that is off." $i) }}
+{{- fail (printf "routeSwitch.off[%d] is not a route id: lowercase words joined by hyphens, as the route file spells them (ADR-119). A blank or misspelt name would be a switch that switches nothing, which an operator reads as a route that is off." $i) }}
 {{- end }}
 {{- if hasKey $routes $id }}
-{{- fail (printf "routeSwitch.off names %q twice (ADR-118)." $id) }}
+{{- fail (printf "routeSwitch.off names %q twice (ADR-119)." $id) }}
 {{- end }}
 {{- $_ := set $routes $id (dict "Metadata" (dict "Suspended" "true")) }}
 {{- end }}

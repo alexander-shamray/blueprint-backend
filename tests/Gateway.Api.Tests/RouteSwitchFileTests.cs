@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>A route switched from the mounted file takes effect on a running gateway, and a refusal changes nothing (ADR-118).</summary>
+/// <summary>A route switched from the mounted file takes effect on a running gateway, and a refusal changes nothing (ADR-119).</summary>
 public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<StubDestination>
 {
     private const string Suspendable = "privacy-erase";
@@ -56,7 +56,7 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
         await EventuallyAsync(client, Suspendable, HttpStatusCode.NoContent);
     }
 
-    /// <summary>A misspelt id is a route with no match to YARP, so it is refused like any other bad reload (ADR-118).</summary>
+    /// <summary>A misspelt id is a route with no match to YARP, so it is refused like any other bad reload (ADR-119).</summary>
     [Fact]
     public async Task A_name_that_is_no_route_is_refused_and_changes_nothing()
     {

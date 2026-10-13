@@ -1,4 +1,4 @@
-# ADR-118 — An operator switches a gateway route from a file that reloads, and the gateway's chart renders it (#1022)
+# ADR-119 — An operator switches a gateway route from a file that reloads, and the gateway's chart renders it (#1022)
 
 **Decision.** The gateway layers one more configuration file over its route
 file, `RouteSwitchFile.DefaultPath`, optional and followed while the gateway
