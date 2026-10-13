@@ -78,7 +78,7 @@ selectors that name nothing, rather than by the two literals the chart
 compared with.
 
 **Amended by
-[ADR-116](ADR-116-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)**,
+[ADR-117](ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)**,
 which adds an edge to the table: the Notifications workload that serves its
 registration method admits `web-bff` on `grpc`, and `web-bff` reaches it there.
 

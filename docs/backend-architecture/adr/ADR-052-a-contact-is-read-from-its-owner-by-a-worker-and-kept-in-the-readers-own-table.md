@@ -281,7 +281,7 @@ owner. Shipping closes the window that leaves itself, by deleting an address
 it has saved for a subject whose erasure it has recorded.
 
 **Amended by
-[ADR-116](ADR-116-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)**,
+[ADR-117](ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)**,
 whose registration call from the BFF to Notifications holds no client secret,
 so the count of hosts holding one is no longer the count of synchronous
 couplings.
