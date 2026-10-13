@@ -36,8 +36,9 @@ when its sequence is above the row's: one equal to it is a repeat and is
 answered as the first was, and one below it is stale: it changes nothing and
 is answered 409 with the row's sequence, so an app whose counter has fallen
 behind its row — restored from a backup, or overtaken by the move below —
-raises its counter past it and sends its present state again. A sign-out deletes the subject and the token and keeps only the
-installation id and its sequence, until the stale window removes those too.
+raises its counter past it and sends its present state again. A sign-out
+deletes the subject and the token and keeps only the installation id and its
+sequence, until the stale window removes those too.
 That makes both routes `Convergent`
 ([ADR-058](ADR-058-a-write-endpoint-is-keyed-or-declares-why-a-repeat-is-harmless.md))
 inside that record's limit, because the interleaving it names cannot land: a
