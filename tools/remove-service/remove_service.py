@@ -279,11 +279,15 @@ def apply(repo_root: Path, rendered: Plan) -> None:
             target.unlink()
 
 
-def mentions(repo_root: Path, names: Names, rendered: Plan, unread: list[str]) -> dict[str, list[int]]:
+def mentions(
+    repo_root: Path, names: Names, rendered: Plan, unread: list[str], unsearched: dict[str, int],
+) -> dict[str, list[int]]:
     """Files still naming the service once the plan is applied, with their line numbers.
 
     A file that cannot be read is added to `unread`: it is not a mention, and the
-    deletion has already happened by the time this runs.
+    deletion has already happened by the time this runs. A file over
+    MAX_MENTION_BYTES or not UTF-8 is counted in `unsearched` under "too large" or
+    "not UTF-8", so an empty result is never read as a complete one.
     """
     needle = re.compile("|".join(re.escape(token) for token in (names.pascal, names.lower, names.upper)))
     doomed = tuple(f"{path}/" for path in rendered.deleted)
@@ -303,9 +307,11 @@ def mentions(repo_root: Path, names: Names, rendered: Plan, unread: list[str]) -
                 path = repo_root / relative
                 try:
                     if path.stat().st_size > MAX_MENTION_BYTES:
+                        unsearched["too large"] = unsearched.get("too large", 0) + 1
                         continue
                     body = path.read_bytes().decode("utf-8")
                 except UnicodeDecodeError:
+                    unsearched["not UTF-8"] = unsearched.get("not UTF-8", 0) + 1
                     continue
                 except OSError:
                     unread.append(relative)
@@ -347,7 +353,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # Read over the plan's own texts, so a dry run names what the real run leaves.
     unread: list[str] = []
-    left = mentions(args.repo_root, Names(args.name), rendered, unread)
+    unsearched: dict[str, int] = {}
+    left = mentions(args.repo_root, Names(args.name), rendered, unread, unsearched)
     for relative in unread:
         print(f"  could not read {relative}; it may still name {args.name}")
     if left:
@@ -355,8 +362,12 @@ def main(argv: list[str] | None = None) -> int:
         for relative, lines in sorted(left.items()):
             shown = ", ".join(str(n) for n in lines[:5]) + (", ..." if len(lines) > 5 else "")
             print(f"  {relative}: {len(lines)} line(s), at {shown}")
-    elif not unread:
-        print(f"Nothing else names {args.name}.")
+    if unsearched:
+        counts = ", ".join(f"{count} {reason}" for reason, count in sorted(unsearched.items()))
+        print(f"Not searched, so the list is not complete: {counts} "
+              f"(a file is skipped over {MAX_MENTION_BYTES} bytes or when it is not UTF-8).")
+    if not left and not unread:
+        print(f"Nothing else names {args.name}" + (" in the files it searched." if unsearched else "."))
     return 0
 
 
