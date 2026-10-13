@@ -49,8 +49,9 @@ load, not by switching it off while someone thinks.
 [ADR-115](ADR-115-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)**,
 which gives Notifications a caller: while the host serving its registration
 method is down, a device's registration fails until the app's next start,
-beside the late mail the table names. Suspension as defined above stops
-consumers and workers and leaves that method serving. The pricing hop is no
+beside the late mail the table names. A suspension that scales that host down
+fails registrations, and only ADR-113's switch, which stops endpoints and
+loops, leaves the method serving. The pricing hop is no
 longer the BFF's one synchronous hop, as the Why calls it.
 
 ---
