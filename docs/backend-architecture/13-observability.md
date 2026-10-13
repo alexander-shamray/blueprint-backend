@@ -1295,11 +1295,13 @@ actionable — if the response is "acknowledge and ignore", delete it.
 on how long a due shipment has waited wants a baseline under load, and none
 exists until §13.7's load run has a staging environment to run against, which
 this repository does not have. Until then it, `shipping.shipments.waiting`
-and `shipping.carrier.unavailable` are read by `queue-backlog.md`'s procedure for a worker whose wait is outside
-a consumer. The address refusal and the unscanned shipments above are,
-in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), the Shipping signals that need no baseline: any refusal is a fault, and a booking
-never scanned by the end of the saga's despatch wait is wrong whatever the
-cause, which `unscanned-shipment.md` tells apart.
+and `shipping.carrier.unavailable` are read by `queue-backlog.md`'s procedure
+for a worker whose wait is outside a consumer. The address refusal and the
+unscanned shipments above are, in the reference domain
+([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)),
+the Shipping signals that need no baseline: any refusal is a fault, and a
+booking never scanned by the end of the saga's despatch wait is wrong
+whatever the cause, which `unscanned-shipment.md` tells apart.
 
 ### Outbox alerts are per lane
 
@@ -1867,7 +1869,7 @@ Verify order-of-magnitude with the **k6 SLO run against staging**
 ([§15.1](15-cicd-deployment.md)) — `deploy/observability/slo/slo.js`, the load
 run in CD, which asserts the five rows of this table it can evaluate — the two
 request rows, the two outbox lanes and own-event staleness, with the other two
-named below — and is the first real gate after the staging deploy.
+named below — and is the first real gate after the dev deploy.
 
 **It has been run locally and never against staging**, because this
 repository has no staging environment ([§15.1](15-cicd-deployment.md)). A
