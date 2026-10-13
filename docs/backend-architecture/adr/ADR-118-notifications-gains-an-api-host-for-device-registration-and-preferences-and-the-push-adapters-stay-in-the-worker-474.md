@@ -112,6 +112,14 @@ other rows:
 | `deploy/helm/` and `deploy/canary/deployables/` | No `notifications-api` chart, and no descriptor naming it, without which the smoke check that every chart on disk has a descriptor fails; and `smoke.sh`'s two classes on `smoke.migrator`, a chart that migrates its own database or one that has none, with no class for a chart that has a database and no Job — **asserted**: the render checks go red |
 | `deploy/compose/` and the CI image matrix | No unit and no image for the API host |
 
+**Amended by
+[ADR-120](ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)**,
+the preference journal, whose retention pass is a further write the worker
+makes to rows the API wrote, beside the device writes and the journal's
+anonymisation named above. It deletes an entry that is no longer current,
+which the API never writes again, so it is guarded by the row's own state as
+they are.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

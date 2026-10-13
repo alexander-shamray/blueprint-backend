@@ -163,6 +163,16 @@ record owes; none of them says a regulator is satisfied.
 > [ADR-068](ADR-068-the-jurisdiction-records-log-lifetime-and-incident-procedure-are-delivered.md),
 > the log lifetime and the incident procedure.
 
+**Amended by
+[ADR-120](ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)**,
+Notifications' consent journal. Rule 1's list of what a jurisdiction varies
+gains the topic and channel pairs a deployment requires to be sent. Rule 4's
+consent "this platform records nowhere" is recorded there, for the channel a
+message is sent on; a template that is not about the customer's order is
+still a new ADR before it is a pull request. The consent record among the
+four things an adopter must bring is the lawful basis for holding the data,
+which that record does not supply.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
