@@ -116,6 +116,7 @@ decision looks wrong.
 | **ADR-107** | [The BFF keeps a customer's saved delivery address, and an erasure deletes it (#473)](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md) |
 | **ADR-108** | [The buyer's order has a server-sent event stream that polls its row and ends inside the deadline (#475)](adr/ADR-108-the-buyers-order-has-a-server-sent-event-stream-that-polls-its-row-and-ends-inside-the-deadline-475.md) |
 | **ADR-109** | [Images are pushed to GHCR, signed and attested by digest on main, and the rollout verifies them before Helm (#438)](adr/ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md) |
+| **ADR-110** | [The deployed object store is checked between rollouts: each image credential pair is asked to delete and to list, and must be refused (#985)](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md) |
 
 ---
 
