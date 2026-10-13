@@ -92,10 +92,16 @@ OpenTelemetry alone ([§13.4](../backend-architecture/13-observability.md)), so
 **The lookalike is a consumer that is not running at all.** A scaled-to-zero
 Deployment or a crash loop produces a queue that grows and never drains, and
 adding replicas to it adds pods that fail the same way. Check the endpoint has
-consumers before scaling a workload that has none. A consumer that is running
-but was never registered for a message its endpoint receives is a different
-fault again, and raises [`skipped-queue.md`](skipped-queue.md) rather than
-this.
+consumers before scaling a workload that has none. A planned one looks the
+same: `suspended: true` in the chart
+([§15.3](../backend-architecture/15-cicd-deployment.md)), which only the
+services [ADR-104](../backend-architecture/adr/ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md)
+names may take, and this ticket may open while it lasts without the bound
+being near. Read the ADR's bound for that service before anything else; ending
+it is `suspended: false` and a deploy, never a `kubectl scale`. A consumer
+that is running but was never registered for a message its endpoint receives is
+a different fault again, and raises [`skipped-queue.md`](skipped-queue.md)
+rather than this.
 
 **The lag alert cannot see that consumer, so read the backlog alert for it.**
 A restarted process exports as a new series, and `rate` counts nothing for a
