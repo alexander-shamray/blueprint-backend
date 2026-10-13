@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace Ordering.TestSupport;
 
 /// <summary>
-/// Every command naming the saga's table or MassTransit's outbox table, with the isolation level of the
-/// transaction it ran in, so a test reads the locks ADR-112 asks for from the statements the host really sent.
+/// Each async reader or non-query command naming the saga's table or MassTransit's outbox table, with the
+/// isolation level of its transaction, so a test reads ADR-112's locks from the statements the host sent.
 /// </summary>
 public sealed class SagaStatementRecorder : DbCommandInterceptor
 {
