@@ -89,6 +89,7 @@ COPIED = frozenset(
         "tests/Catalog.Api.Tests/MetricsRegistrationTests.cs",
         "tests/Catalog.Api.Tests/InboxFilterTests.cs",
         "tests/Catalog.Api.Tests/OutboxDispatcherTests.cs",
+        "tests/Catalog.Api.Tests/OutboxStatsTests.cs",
         "tests/Catalog.Api.Tests/RetentionPurgeTests.cs",
         "tests/Catalog.Api.Tests/TransientFaultInjection.cs",
         # ADR-058's gate travels, so a rendered host is born under the rule;
@@ -283,6 +284,7 @@ PURE_CONSUMER_OMITTED = frozenset(
         "tests/Catalog.Domain.Tests/Catalog.Domain.Tests.csproj",
         "tests/Catalog.Api.Tests/MessageTypeMapValidatorTests.cs",
         "tests/Catalog.Api.Tests/OutboxDispatcherTests.cs",
+        "tests/Catalog.Api.Tests/OutboxStatsTests.cs",
         "tests/Catalog.TestSupport/Outbox/OutboxRows.cs",
         "tests/Catalog.TestSupport/Outbox/OutboxTestEvents.cs",
     }
