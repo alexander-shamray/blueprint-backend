@@ -6,7 +6,6 @@ printed."""
 import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -21,8 +20,7 @@ SEARCH_HINT = CLAUDE / "hooks" / "index-search-hint.py"
 SETTINGS = CLAUDE / "settings.json"
 SKILL = CLAUDE / "skills" / "codebase-index" / "SKILL.md"
 EVENT = "UserPromptSubmit"
-COMMAND = ("py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR']"
-           " + '/.claude/hooks/index-query-hint.py', run_name='__main__')\"")
+COMMAND = 'bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/hint-bound.sh" UserPromptSubmit index-query-hint.py'
 
 # One prompt per alternative of each pattern, and the subcommand it routes to.
 CASES = {
@@ -111,7 +109,7 @@ class TheWiring(unittest.TestCase):
         """Python exits 2 on a file it cannot open, a worktree emptied under a
         running session, and exit 2 here erases every prompt; through `runpy`
         the same failure exits 1. A project path holding a quote still runs."""
-        argv = [sys.executable, *shlex.split(COMMAND)[2:]]
+        argv = [shutil.which("bash"), str(CLAUDE / "hooks" / "hint-bound.sh"), EVENT, HINT.name]
         event = json.dumps({"hook_event_name": EVENT, "prompt": "where is X"}).encode()
         with tempfile.TemporaryDirectory() as scratch:
             quoted = Path(scratch) / "O'Brien"
@@ -123,7 +121,12 @@ class TheWiring(unittest.TestCase):
                     env=dict(os.environ, CLAUDE_PROJECT_DIR=str(root)))
                 with self.subTest(root=str(root)):
                     self.assertNotEqual(2, done.returncode, done.stderr)
-                    self.assertEqual(hinted, bool(context(done)), done.stderr)
+                    # A hook that cannot run leaves hint-bound.sh's line, and a prompt is never erased.
+                    if hinted:
+                        self.assertTrue(context(done), done.stderr)
+                        self.assertNotIn("did not run", context(done))
+                    else:
+                        self.assertIn("did not run", context(done))
 
     def test_its_entry_has_no_matcher(self):
         """A prompt event takes none; one written would be ignored or read
