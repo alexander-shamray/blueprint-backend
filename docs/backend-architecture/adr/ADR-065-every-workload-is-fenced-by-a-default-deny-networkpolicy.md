@@ -77,6 +77,11 @@ which holds "a peer of every address" by a /8 prefix floor and a refusal of
 selectors that name nothing, rather than by the two literals the chart
 compared with.
 
+**Amended by
+[ADR-115](ADR-115-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)**,
+which adds an edge to the table: the Notifications workload that serves its
+registration method admits `web-bff` on `grpc`, and `web-bff` reaches it there.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
