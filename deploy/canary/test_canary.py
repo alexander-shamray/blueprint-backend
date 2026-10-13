@@ -1838,6 +1838,117 @@ class ImageRevisionTests(unittest.TestCase):
                 canary.validate_tag(tag)
 
 
+SHA = "sha256:" + "a" * 64
+
+
+def verification(*digests: str) -> list[dict]:
+    """The document `cosign verify -o json` prints: one entry per signature."""
+    return [
+        {"critical": {"image": {"docker-manifest-digest": digest}, "type": "cosign container image signature"}}
+        for digest in digests
+    ]
+
+
+class DigestTests(unittest.TestCase):
+    """The digest as Helm's parser would read it, as the tag is above."""
+
+    def test_a_registry_digest_is_accepted(self) -> None:
+        canary.validate_digest(SHA)
+
+    def test_what_strvals_would_split_is_refused(self) -> None:
+        for digest in (SHA + ",image.registry=attacker.example", SHA + "\n", "sha256:" + "A" * 64,
+                       "sha256:" + "a" * 63, "sha512:" + "a" * 64, "", "latest"):
+            with self.subTest(digest=digest):
+                with self.assertRaises(canary.PlanError):
+                    canary.validate_digest(digest)
+
+    def test_it_is_the_chart_s_rule(self) -> None:
+        """`commerce.digest` refuses what this does not, and the rollout would
+        fail inside `helm upgrade` instead of in front of it."""
+        helpers = (canary.ROOT / "deploy/helm/common/templates/_helpers.tpl").read_text(encoding="utf-8")
+
+        self.assertIn(r'regexMatch "^sha256:[a-f0-9]{64}$"', helpers)
+
+    def test_the_digest_cosign_verified_is_the_one_read(self) -> None:
+        self.assertEqual(SHA, canary.verified_digest(verification(SHA, SHA)))
+
+    def test_nothing_verified_is_no_digest(self) -> None:
+        for document in ([], {}, None, "sha256"):
+            with self.subTest(document=document):
+                with self.assertRaises(canary.PlanError):
+                    canary.verified_digest(document)
+
+    def test_signatures_over_two_digests_pin_neither(self) -> None:
+        with self.assertRaises(canary.PlanError) as raised:
+            canary.verified_digest(verification(SHA, "sha256:" + "b" * 64))
+
+        self.assertIn("2 different digests", str(raised.exception))
+
+    def test_an_entry_without_the_digest_is_refused_rather_than_skipped(self) -> None:
+        with self.assertRaises(canary.PlanError):
+            canary.verified_digest(verification(SHA) + [{"critical": {}}])
+
+    def test_a_verified_digest_that_is_not_one_is_refused(self) -> None:
+        with self.assertRaises(canary.PlanError):
+            canary.verified_digest(verification("sha256:short"))
+
+
+class WorkloadImageTests(unittest.TestCase):
+    """The rollout verifies the images the chart pulls, so the chart is the list."""
+
+    def test_a_service_pulls_its_host_and_its_migrator(self) -> None:
+        plan = canary.load_plan()
+
+        self.assertEqual(
+            {"api": "catalog-api", "migrator": "catalog-migrator"},
+            canary.workload_images("catalog-api", plan))
+        self.assertEqual(
+            {"api": "shipping-worker", "migrator": "shipping-migrator"},
+            canary.workload_images("shipping", plan))
+
+    def test_the_bff_s_migrator_is_not_named_for_its_host(self) -> None:
+        self.assertEqual(
+            {"api": "web-bff", "migrator": "bff-migrator"},
+            canary.workload_images("web-bff", canary.load_plan()))
+
+    def test_the_gateway_has_no_migrator(self) -> None:
+        self.assertEqual({"api": "gateway"}, canary.workload_images("gateway", canary.load_plan()))
+
+    def test_a_migrator_is_exactly_where_the_descriptor_says_there_is_one(self) -> None:
+        """Two owners of one fact: the descriptor feeds smoke.sh and the chart
+        feeds the rollout, and a workload one of them gives a migrator and the
+        other does not is an image verified for nobody or pulled unverified."""
+        plan = canary.load_plan()
+        for name, descriptor in canary.entries(plan["workloads"]).items():
+            with self.subTest(workload=name):
+                self.assertEqual(
+                    descriptor["smoke"]["migrator"],
+                    "migrator" in canary.workload_images(name, plan))
+
+    def test_an_unknown_workload_is_refused(self) -> None:
+        with self.assertRaises(canary.PlanError):
+            canary.workload_images("nonesuch", canary.load_plan())
+
+    def test_a_chart_with_no_api_image_is_refused_rather_than_read_as_empty(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        (root / "deploy" / "helm" / "x").mkdir(parents=True)
+        (root / "deploy" / "helm" / "x" / "values.yaml").write_text(
+            "image:\n  # api: commented-out\n  tag: \"\"\n", encoding="utf-8")
+
+        with self.assertRaises(canary.PlanError):
+            canary.workload_images("x", {"workloads": {"x": {"chart": "x"}}}, root)
+
+    def test_a_key_outside_the_image_block_is_not_an_image(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        (root / "deploy" / "helm" / "x").mkdir(parents=True)
+        (root / "deploy" / "helm" / "x" / "values.yaml").write_text(
+            "image:\n  api: x-api\nworker:\n  migrator: not-an-image\n", encoding="utf-8")
+
+        self.assertEqual(
+            {"api": "x-api"},
+            canary.workload_images("x", {"workloads": {"x": {"chart": "x"}}}, root))
+
+
 class ImageSourceTests(unittest.TestCase):
     """The facts that describe the image are read from the tree given."""
 
