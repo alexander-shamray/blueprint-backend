@@ -3,6 +3,7 @@ using Common.Application;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
+using Common.Infrastructure.Switching;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,8 +13,11 @@ namespace Common.Infrastructure.Messaging;
 
 /// <summary>§9.4's, §9.5's and §8.5's retention purges, in one hosted service (§9.5).</summary>
 /// <remarks>A marker goes once <see cref="IIdempotencyStore"/> lets its claim go (ADR-039, ADR-041).</remarks>
-public sealed class RetentionPurgeService : BackgroundService
+public sealed class RetentionPurgeService : BackgroundService, ISwitchedWorker
 {
+    /// <summary>The name an operator lists to switch the purge off (ADR-112).</summary>
+    public const string Name = "retention-purge";
+
     // Compiled once, for CA1848 (ADR-019); the arguments bind to the placeholders by position.
     private static readonly Action<ILogger, int, string, Exception?> Purged =
         LoggerMessage.Define<int, string>(
@@ -36,6 +40,7 @@ public sealed class RetentionPurgeService : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly RetentionPolicy _policy;
     private readonly ILogger<RetentionPurgeService> _log;
+    private readonly OperatorSwitches? _switches;
 
     // Null when no OutboxTable is registered, as for §4.1's pure consumer (§9.5).
     private readonly string? _outboxSql;
@@ -51,8 +56,11 @@ public sealed class RetentionPurgeService : BackgroundService
         ILogger<RetentionPurgeService> log,
         OutboxTable? outbox = null,
         IdempotencyMarkerTable? markers = null,
-        IIdempotencyStore? claims = null)
+        IIdempotencyStore? claims = null,
+        OperatorSwitches? switches = null)
     {
+        _switches = switches;
+
         // A marker table with no store to ask could only be purged by guessing whether its claim is gone (ADR-039).
         if ((markers is null) != (claims is null))
         {
@@ -100,6 +108,8 @@ public sealed class RetentionPurgeService : BackgroundService
                 claims!);
     }
 
+    public string SwitchName => Name;
+
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -107,6 +117,9 @@ public sealed class RetentionPurgeService : BackgroundService
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            if (_switches?.IsOff(Name) == true)
+                continue;
+
             try
             {
                 await PurgeAsync(stoppingToken);

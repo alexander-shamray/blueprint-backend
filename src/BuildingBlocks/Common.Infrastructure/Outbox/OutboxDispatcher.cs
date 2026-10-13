@@ -7,6 +7,7 @@ using Common.Domain;
 using Common.Infrastructure.Tracing;
 using Dapper;
 using MassTransit;
+using Common.Infrastructure.Switching;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -14,8 +15,11 @@ using Microsoft.Extensions.Logging;
 namespace Common.Infrastructure.Outbox;
 
 /// <summary>§9.4's dispatcher: an atomic claim that leases a batch, then delivery that fails per row.</summary>
-public sealed class OutboxDispatcher : BackgroundService
+public sealed class OutboxDispatcher : BackgroundService, ISwitchedWorker
 {
+    /// <summary>The name an operator lists to switch the dispatcher off (ADR-112).</summary>
+    public const string Name = "outbox-dispatcher";
+
     /// <summary>§9.4's attempt cap, public so §13.6's abandoned-rows gauge reads this number, not a copy.</summary>
     public const int MaxAttempts = 10;
 
@@ -55,16 +59,22 @@ public sealed class OutboxDispatcher : BackgroundService
 
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<OutboxDispatcher> _log;
+    private readonly OperatorSwitches? _switches;
 
     // Composed once from the registered table, which is why these are fields, not consts.
     private readonly string _claimSql;
     private readonly string _completeSql;
     private readonly string _failSql;
 
-    public OutboxDispatcher(IServiceScopeFactory scopes, OutboxTable table, ILogger<OutboxDispatcher> log)
+    public OutboxDispatcher(
+        IServiceScopeFactory scopes,
+        OutboxTable table,
+        ILogger<OutboxDispatcher> log,
+        OperatorSwitches? switches = null)
     {
         _scopes = scopes;
         _log = log;
+        _switches = switches;
 
         // Selects and leases in one statement, so two replicas cannot take the same row.
         _claimSql =
@@ -116,6 +126,8 @@ public sealed class OutboxDispatcher : BackgroundService
             """;
     }
 
+    public string SwitchName => Name;
+
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -123,6 +135,9 @@ public sealed class OutboxDispatcher : BackgroundService
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            if (_switches?.IsOff(Name) == true)
+                continue;
+
             try
             {
                 await ProcessBatchAsync(stoppingToken);
