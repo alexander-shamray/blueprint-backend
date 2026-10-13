@@ -37,10 +37,11 @@ when its sequence is above the row's: one equal to it is a repeat and is
 answered as the first was, and one below it is stale: it changes nothing and
 is answered 409 with the row's sequence, so an app whose counter has fallen
 behind its row — restored from a backup, or overtaken by the move below —
-raises its counter past it and sends its present state again. A sequence
-more than `DeviceTokenOptions.MaxSequenceStep` above an existing row's is
-refused, so no request can put a row's sequence out of an app's reach. A
-sign-out
+sets its counter one past it and sends its present state again. A sequence
+more than `DeviceTokenOptions.MaxSequenceStep` above an existing row's is out
+of order too and is answered the same 409, so no request can put a row's
+sequence out of an app's reach, and an app whose counter ran ahead while its
+requests failed comes back to the row in one step. A sign-out
 deletes the subject and the token and keeps only the installation id and its
 sequence, until the stale window removes those too.
 That makes both routes `Convergent`
