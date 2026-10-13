@@ -118,6 +118,33 @@ class CheckTests(unittest.TestCase):
         self.assertTrue(all("/check-" in path for path in deletes))
 
 
+class RedirectTests(unittest.TestCase):
+    def test_a_redirect_is_judged_and_never_followed(self):
+        elsewhere = Store({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
+        self.addCleanup(elsewhere.close)
+
+        class Redirecting(http.server.BaseHTTPRequestHandler):
+            def _go(self):
+                self.send_response(307)
+                self.send_header("Location", elsewhere.endpoint + self.path)
+                self.end_headers()
+
+            do_GET = do_DELETE = _go
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Redirecting)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        env = elsewhere.env(**{store_check.ENDPOINT: f"http://127.0.0.1:{server.server_port}"})
+        violations = store_check.check(env)
+        self.assertEqual(len(violations), 6)
+        self.assertTrue(all("answered 307" in v for v in violations))
+        self.assertEqual(elsewhere.seen, [])
+
+
 class RefusalTests(unittest.TestCase):
     def test_an_unreachable_store_is_not_a_pass(self):
         store = Store({})

@@ -47,6 +47,18 @@ LOOPBACK = ("127.0.0.1", "localhost", "::1")
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib re-sends a request's headers to a redirect's target, so a store, or
+    anything answering for it, could be handed the signed request elsewhere. A
+    redirect is an answer to judge, as read_admin.py treats one."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect)
+
+
 class Refusal(Exception):
     """The store answered something that is not a verdict, or the check cannot ask."""
 
@@ -94,7 +106,7 @@ def ask(method: str, url: str, access_key: str, secret_key: str, region: str) ->
         url, method=method, headers=sign(method, url, access_key, secret_key, region, datetime.datetime.now(datetime.timezone.utc))
     )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        with OPENER.open(request, timeout=TIMEOUT_SECONDS) as response:
             return response.status, response.read(65536).decode("utf-8", "replace")
     except urllib.error.HTTPError as error:
         return error.code, error.read(65536).decode("utf-8", "replace")
