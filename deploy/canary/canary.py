@@ -189,9 +189,8 @@ def validate_digest(digest: str) -> None:
 def verified_digest(verified: object) -> str:
     """The one digest every signature `cosign verify -o json` accepted is over.
 
-    Read from what was verified rather than looked up again from the tag: a
-    second lookup is a second answer, and an overwritten tag could give it a
-    different one (ADR-081).
+    Read from what was verified, not looked up again from the tag, which an
+    overwrite could answer differently (ADR-081).
     """
     if not isinstance(verified, list) or not verified:
         raise PlanError("cosign verified no signature, so there is no digest to pin (ADR-081)")
@@ -217,11 +216,10 @@ def verified_digest(verified: object) -> str:
 
 
 def workload_images(workload: str, plan_document: dict, root: Path = ROOT) -> dict[str, str]:
-    """The image names a workload's chart pulls: `api`, and `migrator` where it has one.
+    """The image names a workload's chart pulls: `api`, and `migrator` if any.
 
-    Read from the chart's own `image:` block, which is where the Deployment
-    and the migration Job read them, so the rollout verifies the images the
-    chart will pull and no list of its own (ADR-071).
+    Read from the chart's own `image:` block, so no table of names is kept
+    beside the chart the Deployment and the migration Job read (ADR-071).
     """
     chart = entries(plan_document.get("workloads", {})).get(workload, {}).get("chart")
     if not chart:

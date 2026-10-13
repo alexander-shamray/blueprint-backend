@@ -1,11 +1,10 @@
 name: Deploy
 
 # §15.5's canary, and §15.1's production leg of the pipeline. It reaches no
-# cluster: there is no environment for this repository and no kubeconfig. It
-# does reach a registry, to verify what CI pushed there and to pin the digest it
-# verified (ADR-109). What is asserted about it is asserted by
-# `deploy/canary/canary.py`, whose suite runs on every change to this tree, and
-# by the `check` job below, which reads this file.
+# cluster: no environment, no kubeconfig. It does reach a registry, to verify
+# what CI pushed and pin the digest it verified (ADR-109). What is asserted
+# about it is asserted by `deploy/canary/canary.py`, whose suite runs on every
+# change to this tree, and by the `check` job below, which reads this file.
 
 # `workflow_dispatch` only, and the reason is `main` staying green: a canary on
 # `push` would fail on every merge for want of a cluster, which trains everyone
@@ -209,18 +208,15 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
-      # The identity is ci.yml on main and nothing else, so a signature made by
-      # a branch, a fork or another workflow verifies as unsigned. The digest
-      # comes out of what cosign verified: a second lookup of the tag could
-      # answer differently, and the one Helm is given must be the verified one
-      # (ADR-081). `gh attestation verify` takes the provenance because it
-      # checks the subject digest and the signing workflow in one call, and
-      # the images are read by digest so the two checks cover the same bytes.
-      # The functions assign a global instead of printing, because a failure
-      # inside `$(...)` does not stop a script that way.
+      # The identity is ci.yml on main and nothing else, so a branch, a fork or
+      # another workflow verifies as unsigned. The digest is the one cosign
+      # verified, not a second lookup of the tag (ADR-081), and the provenance
+      # is checked by that digest, so both checks cover the same bytes.
       - name: The images are the ones CI built and signed
         run: |
           set -euo pipefail
+          # Assigns a global rather than printing: a failure inside $(...)
+          # would not stop the script.
           verify() {
             local reference="$REGISTRY/$1"
             cosign verify "$reference:$TAG" \

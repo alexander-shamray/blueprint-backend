@@ -452,12 +452,10 @@ def read_helm_upgrades(workflow_text: str) -> list[str]:
 
 
 def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
-    """Every image the `images` job builds is pushed, signed and attested on main,
-    and the rollout verifies it before Helm runs (ADR-109).
+    """Every build in the `images` job is pushed, signed and attested on main by
+    digest, and the rollout verifies it before Helm runs (ADR-109).
 
-    Coverage rather than findings: the subject is whether each build has its
-    steps, in order, by digest and under the main-push condition, so a job
-    that stops signing is red instead of quietly unsigned.
+    Coverage rather than findings: a job that stops signing is red.
     """
     steps = read_job_steps(workflow_text, "images")
     builds = [(index, step) for index, step in enumerate(steps) if "docker build" in step.get("run", "")]
