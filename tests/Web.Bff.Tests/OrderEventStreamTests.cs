@@ -179,4 +179,43 @@ public sealed class OrderEventStreamTests(BffServiceFixture fixture) : IAsyncLif
         body.Split($"event: {OrderEventStream.EventName}").Length.ShouldBe(2);
         body.ShouldContain("\"status\":\"delivered\"");
     }
+
+    [Fact]
+    public async Task An_idle_stream_sends_a_heartbeat_and_ends_by_itself_before_the_hosts_deadline()
+    {
+        Guid order = Guid.CreateVersion7();
+        await fixture.DeliverAsync(OrderEvents.Placed(order, _buyer, At));
+        using HttpClient client = As(_buyer);
+        client.Timeout = Common.Web.ServiceOptions.OperationTimeout;
+
+        using HttpResponseMessage response = await OpenAsync(client, order);
+        long started = TimeProvider.System.GetTimestamp();
+        string body = await response.Content.ReadAsStringAsync(Ct);
+        TimeSpan lasted = TimeProvider.System.GetElapsedTime(started);
+
+        body.ShouldContain(": keep-alive");
+        body.Split($"event: {OrderEventStream.EventName}").Length.ShouldBe(2, "an idle row sends its event once");
+        lasted.ShouldBeGreaterThan(OrderEventStream.HeartbeatInterval);
+        lasted.ShouldBeLessThan(Common.Web.ServiceOptions.OperationTimeout);
+    }
+
+    [Fact]
+    public async Task A_stream_ends_when_its_row_is_gone()
+    {
+        Guid order = Guid.CreateVersion7();
+        await fixture.DeliverAsync(OrderEvents.Placed(order, _buyer, At));
+        using HttpClient client = As(_buyer);
+
+        using HttpResponseMessage response = await OpenAsync(client, order);
+        using StreamReader reader = new(await response.Content.ReadAsStreamAsync(Ct));
+        await NextOrderFrameAsync(reader);
+
+        await fixture.ExecuteAsync("DELETE FROM bff.OrderLines WHERE OrderId = {0}", order);
+        await fixture.ExecuteAsync("DELETE FROM bff.Orders WHERE OrderId = {0}", order);
+
+        // A heartbeat could not arrive inside this bound, so only the end reaches the reader's close.
+        using CancellationTokenSource bound = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        bound.CancelAfter(OrderEventStream.HeartbeatInterval);
+        (await reader.ReadToEndAsync(bound.Token)).ShouldNotContain($"event: {OrderEventStream.EventName}");
+    }
 }
