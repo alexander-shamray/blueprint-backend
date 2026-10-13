@@ -125,11 +125,14 @@ of a stale token, and an app that registers on every start keeps the row of
 any buyer who opens it once a month; a longer window keeps rows a provider
 will refuse. The cap bounds a client that registers in a loop.
 **Consequences.** **Notifications becomes a callee.** It serves a port, and
-while it is down a registration fails; the app retries on its next start, and
-sends are unaffected. That amends
+while the host serving it is down a registration fails; the app retries on its
+next start, and sends are unaffected. That amends
 [ADR-104](ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md),
-which lets an operator switch Notifications off because it has no caller:
-switched off, it now also fails registrations. The call holds no client
+which lets an operator switch Notifications off because it has no caller: a
+suspension that takes the serving host down now also fails registrations,
+while one that stops consumers and workers alone, as
+[ADR-113](ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)'s
+switch does, leaves the method serving. The call holds no client
 secret, so the equation §11.5 owns, that the number of hosts holding one is
 the number of synchronous couplings, stops being true — there is now a
 coupling no secret counts, and a reader auditing couplings by the realm's
