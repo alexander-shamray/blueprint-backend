@@ -8,7 +8,6 @@ import importlib.util
 import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -25,8 +24,7 @@ SETTINGS = CLAUDE / "settings.json"
 SKILL = CLAUDE / "skills" / "codebase-index" / "SKILL.md"
 EVENT = "PreToolUse"
 MATCHER = "Grep|Bash|PowerShell"
-COMMAND = ("py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR']"
-           " + '/.claude/hooks/index-search-hint.py', run_name='__main__')\"")
+COMMAND = 'bash "${CLAUDE_PROJECT_DIR}/.claude/hooks/hint-bound.sh" PreToolUse index-search-hint.py'
 
 # Each searches the tree for a named symbol, so a session's first is refused.
 SEARCHES = (
@@ -229,7 +227,7 @@ class TheWiring(unittest.TestCase):
         """Python exits 2 on a file it cannot open, a worktree emptied under a
         running session; through `runpy` the same failure exits 1, and a
         project path holding a quote still runs."""
-        argv = [sys.executable, *shlex.split(COMMAND)[2:]]
+        argv = [shutil.which("bash"), str(CLAUDE / "hooks" / "hint-bound.sh"), EVENT, HINT.name]
         with tempfile.TemporaryDirectory() as scratch:
             transcript = Path(scratch) / "t.jsonl"
             transcript.write_text("", encoding="utf-8")
@@ -245,7 +243,12 @@ class TheWiring(unittest.TestCase):
                     env=dict(environment(Path(scratch)), CLAUDE_PROJECT_DIR=str(root)))
                 with self.subTest(root=str(root)):
                     self.assertNotEqual(2, done.returncode, done.stderr)
-                    self.assertEqual(refused, bool(done.stdout.strip()), done.stderr)
+                    # A hook that cannot run leaves hint-bound.sh's line, and the call is never blocked.
+                    if refused:
+                        self.assertTrue(done.stdout.strip(), done.stderr)
+                        self.assertNotIn(b"did not run", done.stdout)
+                    else:
+                        self.assertIn(b"did not run", done.stdout)
 
 
 class WhatCountsAsASearch(Scratch):

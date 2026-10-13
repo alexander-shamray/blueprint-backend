@@ -98,7 +98,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR'] + '/.claude/hooks/index-search-hint.py', run_name='__main__')\"",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/hint-bound.sh\" PreToolUse index-search-hint.py",
             "timeout": 15
           }
         ]
@@ -144,7 +144,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR'] + '/.claude/hooks/index-query-hint.py', run_name='__main__')\"",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/hint-bound.sh\" UserPromptSubmit index-query-hint.py",
             "timeout": 15
           }
         ]
