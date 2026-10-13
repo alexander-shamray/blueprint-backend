@@ -358,8 +358,8 @@ and `index-mcp-root` and `refresh-index` print nothing a session reads as
 advice. Two residuals are accepted, because neither can be reported from
 inside the hook and neither has been seen: the wrapper's own start, where
 `bash` stalling past the settings timeout is a case no hook can report, and
-a machine without Git Bash, where the next paragraph says why the hint is
-dropped. A fresh `bash -c true` on the owner's workstation, read
+a machine without Git Bash, where the paragraph on hook commands needing no
+shell says why the hint is dropped. A fresh `bash -c true` on the owner's workstation, read
 2026-10-13, took 0.1 s to 3.3 s over six starts, so the cold start that
 stalls a `py` launcher stays far below the settings timeout. A `shell`
 field with an invocation that needs no `bash` would close the second, and
