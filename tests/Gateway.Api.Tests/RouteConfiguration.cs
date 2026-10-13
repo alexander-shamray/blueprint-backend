@@ -9,7 +9,8 @@ internal sealed record RouteConfiguration(
     string MatchPath,
     string? AuthorizationPolicy,
     string? RateLimiterPolicy,
-    IReadOnlyList<string> RemovedPrefixes)
+    IReadOnlyList<string> RemovedPrefixes,
+    IReadOnlyList<string> Methods)
 {
     public static IReadOnlyList<RouteConfiguration> ReadAll(IConfiguration configuration) =>
         [.. configuration.GetSection("ReverseProxy:Routes").GetChildren().Select(Read)];
@@ -64,6 +65,7 @@ internal sealed record RouteConfiguration(
             route["Match:Path"] ?? string.Empty,
             route["AuthorizationPolicy"],
             route["RateLimiterPolicy"],
-            removed);
+            removed,
+            [.. route.GetSection("Match:Methods").GetChildren().Select(m => m.Value!)]);
     }
 }
