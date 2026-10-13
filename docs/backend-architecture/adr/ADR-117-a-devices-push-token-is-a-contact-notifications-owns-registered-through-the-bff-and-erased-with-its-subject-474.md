@@ -189,6 +189,13 @@ reason:
 | `deploy/helm/catalog/Chart.yaml` and `docs/repo-map.md` | The platform's two gRPC servers |
 | `docs/personal-data.md` | No row for the table |
 
+**Amended by
+[ADR-118](ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)**,
+which decides the host: `Notifications.Api`, a host of its own, with the
+adapters in the worker. The closing table's rows written for the worker as
+the host — §15.3, `deploy/helm/smoke.sh` and
+`deploy/helm/notifications/values.yaml` — are void.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

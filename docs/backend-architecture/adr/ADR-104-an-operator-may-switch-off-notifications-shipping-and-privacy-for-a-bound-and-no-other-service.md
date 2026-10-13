@@ -55,6 +55,13 @@ leaves the method serving, and so does ADR-116's, which switches gateway
 routes off, since no gateway route reaches it. The pricing hop is no longer the BFF's one
 synchronous hop, as the Why calls it.
 
+**Amended by
+[ADR-118](ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)**,
+which serves registrations and preferences from a host of their own whose
+chart refuses `suspended`. Switching Notifications off suspends the worker
+alone, so a registration no longer fails while it is off, and the note above
+describes a host this record did not choose.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

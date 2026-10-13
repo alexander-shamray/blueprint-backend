@@ -39,6 +39,12 @@ so a person scales between rollouts and never during one. When
 an external-metric autoscaler over them, with a ceiling set against each
 processor's limit, is the candidate that supersedes this record.
 
+**Amended by
+[ADR-118](ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)**,
+which gives Notifications a second chart, `notifications-api`, that is
+autoscaled because a person waits on its requests and no third party paces
+it. The decision above holds of Notifications' worker chart alone.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

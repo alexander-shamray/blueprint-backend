@@ -82,6 +82,13 @@ compared with.
 which adds an edge to the table: the Notifications workload that serves its
 registration method admits `web-bff` on `grpc`, and `web-bff` reaches it there.
 
+**Amended by
+[ADR-118](ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)**,
+which names the workload ADR-117's edge was left waiting for:
+`notifications-api` admits `web-bff` on `grpc` and reaches its stores, and
+`web-bff` reaches `notifications-api` on `grpc`. `notifications` still admits
+nothing.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
