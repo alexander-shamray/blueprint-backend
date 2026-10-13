@@ -84,6 +84,9 @@
          outbox dispatcher publishes the Broker lane through (§9.4) and for the
          in-memory harness; Appendix B names which. Same version as the
          transport: they ship as one release. -->
+    <!-- The S3 API client behind the product image store (ADR-106), referenced by Catalog.Infrastructure alone.
+         AWSSDK.Core arrives with it, in the one version this release requires. -->
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.1" />
     <PackageVersion Include="MassTransit" Version="8.5.3" />
     <PackageVersion Include="MassTransit.RabbitMQ" Version="8.5.3" />
     <!-- §9.6's saga repository — EntityFrameworkRepository and

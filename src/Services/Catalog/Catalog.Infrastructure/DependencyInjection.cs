@@ -3,6 +3,7 @@ using Catalog.Domain.Products;
 using Catalog.Infrastructure.Messaging;
 using Catalog.Infrastructure.Observability;
 using Catalog.Infrastructure.Persistence;
+using Catalog.Infrastructure.ProductImages;
 using Common.Application;
 using Common.Contracts.Catalog.V1;
 using Common.Infrastructure.Idempotency;
@@ -100,6 +101,9 @@ public static class DependencyInjection
         // §8's two connections, one call by design (§8.2). Both strings are read eagerly, so a missing key
         // stops the host.
         services.AddRedisConnections(configuration);
+
+        // ADR-106's object store, left out of readiness: a store outage fails an image publish and nothing else.
+        services.AddProductImageStore();
 
         // The bus (§9). AddMassTransit registers its own readiness check.
         services.AddMassTransitMessaging(configuration);

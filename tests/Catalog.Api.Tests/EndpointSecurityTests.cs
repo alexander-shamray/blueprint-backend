@@ -24,7 +24,7 @@ public class EndpointSecurityTests(HostSmokeTests.UnreachableInfrastructureFacto
                 {
                     CommandId = Guid.CreateVersion7(),
                     Name = "Walnut desk",
-                    ThumbnailUrl = (string?)null,
+                    ImageKey = (string?)null,
                     Amount = 10m,
                     Currency = "EUR"
                 })

@@ -1,3 +1,4 @@
+using Catalog.Application.Products;
 using Catalog.TestSupport.Outbox;
 using Common.Application;
 using Common.Infrastructure.Messaging;
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace Catalog.TestSupport;
@@ -30,6 +32,9 @@ public class CatalogApiFactory(
     /// </remarks>
     public const string UnreachableRedis = "redis.invalid:6379";
 
+    /// <summary>The store every host takes, which a test stages uploads on.</summary>
+    public FakeProductImageStore ImageStore { get; } = new();
+
     /// <summary>Supplies only §7.1's runtime connection; the host must not read <c>CatalogMigrator</c>.</summary>
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
         builder
@@ -42,9 +47,21 @@ public class CatalogApiFactory(
                 $"ConnectionStrings:{RedisConnections.Coordination}",
                 redisCoordinationConnectionString ?? UnreachableRedis)
             .UseSetting(AuthenticationExtensions.AuthorityKey, UnreachableAuthority)
+
+            // ADR-106's store, which the host validates at start; the fake below replaces the client over it.
+            .UseSetting("ProductImages:Store:Endpoint", "https://store.invalid")
+            .UseSetting("ProductImages:Store:Bucket", "images")
+            .UseSetting("ProductImages:Store:Region", "us-east-1")
+            .UseSetting("ProductImages:Store:AccessKey", "not-a-real-key")
+            .UseSetting("ProductImages:Store:SecretKey", "not-a-real-secret")
+            .UseSetting("ProductImages:Store:PublicBaseUrl", FakeProductImageStore.PublicBase)
             .ConfigureServices(services =>
             {
                 ConfigureAuthentication(services);
+
+                services.RemoveAll<IProductImageStore>();
+                services.AddSingleton(ImageStore);
+                services.AddSingleton<IProductImageStore>(ImageStore);
 
                 // Only the outbox dispatcher: MassTransit's bus is a hosted service too. Left running, the dispatcher
                 // drains rows underneath assertions about them; AddHostedService<T> is what sets ImplementationType.

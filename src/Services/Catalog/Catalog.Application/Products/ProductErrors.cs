@@ -13,4 +13,16 @@ public static class ProductErrors
 
     /// <summary>A withdrawal is final, so neither a second one nor a price change follows it (ADR-074).</summary>
     public static readonly Error Withdrawn = Error.Rule("product.withdrawn", "The product has been withdrawn.");
+
+    /// <summary>Not the shape the BFF mints, or under another seller's prefix (§10.8).</summary>
+    public static readonly Error ImageKeyInvalid =
+        Error.Rule("product.image_key_invalid", "The image key is not one this seller's upload returned.");
+
+    /// <summary>Nothing at the key: the upload was never made, was refused, or has expired (§10.8).</summary>
+    public static readonly Error ImageNotUploaded =
+        Error.Rule("product.image_not_uploaded", "No image has been uploaded under that key.");
+
+    /// <summary>The bytes are not the image their declared type says they are (§10.8).</summary>
+    public static readonly Error ImageNotAnImage =
+        Error.Rule("product.image_not_an_image", "The uploaded file is not the image its content type declares.");
 }
