@@ -172,9 +172,10 @@ rule 1, sized to the leased row. Each pipeline is hand-built as
 retries `Transient` alone: a connection never made, or a provider's answer
 that it took nothing. An attempt timeout is `Unconfirmed`, because once the
 request has started an HTTP client cannot tell whether the provider received
-it, so it is left to the row's backoff, as
-[§9.7](../../backend-architecture/09-messaging.md)'s rule 4 retries a timeout
-only before the message is handed over.
+it, and a push once sent is not idempotent, which
+[§9.7](../../backend-architecture/09-messaging.md)'s rule 4 forbids retrying;
+it is left to the row's backoff, as the mail adapter leaves a send whose
+message it has handed over.
 The numbers are the code's; the design's starting values are `MailHop`'s, and
 rule 2's sizing of each breaker to its own call rate is the plan's to argue,
 since one event is one mail and up to ten pushes.
