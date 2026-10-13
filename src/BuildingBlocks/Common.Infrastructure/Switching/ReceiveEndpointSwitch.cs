@@ -109,15 +109,32 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         foreach (string queue in queues)
             await ApplyAsync(queue);
 
-        Changed(_log, string.Join(", ", _switches.Off), null);
+        // Fire-and-forget from the change callback, so nothing here may fault unobserved.
+        try
+        {
+            Changed(_log, string.Join(", ", _switches.Off), null);
 
-        foreach (string name in _switches.Undeclared)
-            Undeclared(_log, name, null);
+            foreach (string name in _switches.Undeclared)
+                Undeclared(_log, name, null);
+        }
+        catch (Exception ex)
+        {
+            ApplyFailed(_log, "(all)", ex);
+        }
     }
 
     private async Task ApplyAsync(string queue)
     {
-        await _gate.WaitAsync();
+        // Disposed at host shutdown, with a callback possibly still in flight; there is nothing left to switch.
+        try
+        {
+            await _gate.WaitAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
+
         try
         {
             IReceiveEndpoint endpoint;
