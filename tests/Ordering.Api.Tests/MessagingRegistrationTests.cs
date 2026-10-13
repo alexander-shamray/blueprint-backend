@@ -210,7 +210,7 @@ public class MessagingRegistrationTests
     [Fact]
     public void The_sagas_row_lock_takes_its_key_range_lock_from_its_own_hint()
     {
-        // The model, not the database, so this fails without a container; the wiring is the saga suite's.
+        // The model, not the database, so no container; OrderFulfilmentSagaEndpointTests owns the wiring.
         ServiceCollection services = new();
 
         services.AddDbContext<OrderingDbContext>(o => o.UseSqlServer("Server=.;Database=probe"));
