@@ -8,9 +8,9 @@ metadata:
     {{- include "commerce.labels" . | nindent 4 }}
 data:
   {{- include "commerce.config" . | nindent 2 }}
-  {{- if .Values.suspendable }}
+  {{- if or .Values.suspendable .Values.routeSwitch }}
   {{- /* The kubelet swaps a mounted ConfigMap through a symlink, which inotify
-  misses; polling sees it (ADR-113). */}}
+  misses; polling sees it (ADR-113, and the gateway's route switch, ADR-118). */}}
   DOTNET_USE_POLLING_FILE_WATCHER: "true"
   {{- end }}
 {{- end -}}

@@ -41,9 +41,10 @@ spec:
         {{- end }}
         {{- /* Without `switches`: the switch exists so that throwing it rolls
         nothing (ADR-113), and a value in this sum would roll every pod. Its
-        refusal for a chart that is not suspendable still runs. */}}
+        refusal for a chart that is not suspendable still runs. `routeSwitch`
+        is left out for the same reason (ADR-118). */}}
         {{- $_ := include "commerce.switches" . }}
-        checksum/values: {{ printf "%s%s%s" (toYaml (omit .Values "switches")) (include "commerce.configmap" .) $extra | sha256sum }}
+        checksum/values: {{ printf "%s%s%s" (toYaml (omit .Values "switches" "routeSwitch")) (include "commerce.configmap" .) $extra | sha256sum }}
     spec:
       {{- /* Nothing in this platform calls the Kubernetes API, and a mounted
       service-account token would hand a cluster credential to anything able
@@ -69,6 +70,11 @@ spec:
         - name: switches
           configMap:
             name: {{ include "commerce.instanceName" . }}-switches
+        {{- end }}
+        {{- if .Values.routeSwitch }}
+        - name: route-switch
+          configMap:
+            name: {{ include "commerce.instanceName" . }}-route-switch
         {{- end }}
       {{- /* Across nodes and zones (§15.3), counted per track and per revision so
       that neither the canary nor a rollout's surge is held back by the other
@@ -110,6 +116,13 @@ spec:
             mount in place and never a subPath one (ADR-113). */}}
             - name: switches
               mountPath: /etc/commerce/switches
+              readOnly: true
+            {{- end }}
+            {{- if .Values.routeSwitch }}
+            {{- /* A directory for the reason above; the gateway reads
+            RouteSwitchFile.DefaultPath inside it (ADR-118). */}}
+            - name: route-switch
+              mountPath: /etc/commerce/routes
               readOnly: true
             {{- end }}
           ports:
