@@ -71,8 +71,9 @@ helm upgrade --install catalog-api deploy/helm/catalog \
 A tag can be overwritten in the registry, so a render can also pin the bytes:
 `--set-string image.digest=sha256:…` and `image.migratorDigest=sha256:…` turn
 each reference into `…:<tag>@sha256:…`, and anything but a sha256 digest is
-refused. Nothing passes them yet; the rollout will, once a registry exists
-([ADR-081](../../docs/backend-architecture/adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md)).
+refused. The rollout passes both, with `image.registry`, from the digest it
+verified ([ADR-109](../../docs/backend-architecture/adr/ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md),
+[ADR-081](../../docs/backend-architecture/adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md)).
 
 **`--timeout` is not tuning, and leaving it off puts a §13.6 alert outside the
 window it watches.** Helm always blocks on a hook — `--wait` governs the

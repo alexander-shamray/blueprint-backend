@@ -33,6 +33,11 @@ made through it, and a `helm upgrade` run by hand is not refused.
 which has the rollout pin the digest this check verified, so a later pull of
 an overwritten tag cannot run other bytes.
 
+**Amended by
+[ADR-109](ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md)**,
+which names the registry, GHCR, and makes the push, the signature, the two
+attestations and the admission check run.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

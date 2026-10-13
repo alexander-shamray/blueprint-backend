@@ -24,6 +24,11 @@ both forms: a tag alone when no digest is given, and the pinned form, for both
 images, when one is. A digest set without the rollout's help pins whatever an
 operator typed, and keeping it in step with the tag is theirs to do.
 
+**Amended by
+[ADR-109](ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md)**,
+which gives the registry and has the rollout pass the digest it verified. GHCR
+has no tag immutability, so this pinning is what answers an overwritten tag.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

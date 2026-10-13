@@ -47,11 +47,13 @@ anything.
 > of it.** Everything up to and including the image build is live: both
 > halves of the first node, the fork, the build, the three test stages and one
 > `docker build` per changed service — two, where the service has a migrator
-> (§15.2). **Each image gets an SBOM and no signature**
-> ([ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md)):
-> signing waits on a registry this repository does not have, so what runs is
-> the half that can run rather than a step that would have to be faked. No
-> `Deploy:` node is live: there is no dev, staging or production environment,
+> (§15.2). **Each image gets an SBOM, and on `main` it is also pushed to GHCR,
+> signed keyless and attested by digest**
+> ([ADR-109](adr/ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md),
+> which amends
+> [ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md)):
+> a pull request builds and inventories and pushes nothing, and the rollout
+> verifies the signature before Helm runs. No `Deploy:` node is live: there is no dev, staging or production environment,
 > which is why §15.5's canary is `workflow_dispatch` only and why the k6 SLO
 > run, the node after staging, waits on an environment this repository does
 > not have. It has been made only locally, and
@@ -556,6 +558,8 @@ steps:
       docker build
       --file ${{ matrix.dockerfile }}
       --tag ${{ matrix.image }}:${{ github.sha }}
+      --tag $REGISTRY/${{ matrix.image }}:${{ github.sha }}
+      --label org.opencontainers.image.source=https://github.com/${{ github.repository }}
       .
 ```
 
@@ -564,16 +568,23 @@ Both images carry the **same tag**, which is what lets `values.yaml` hold one
 (§7.4). A migrator built from a different commit than the API it precedes is
 the exact failure the migration hook exists to prevent.
 
-**What is built is inventoried, and what is pushed is to be signed.** Once a
-registry exists, the job that pushes signs each digest keyless and attaches its
-SBOM and provenance, and the rollout verifies the signature before Helm runs
-([ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md));
-until then nothing is signed or verified, and the build stops at the SBOM.
+**What is built is inventoried, and what is pushed is signed.** On `main` the
+job pushes each image to GHCR as `$REGISTRY/<image>:<sha>`, `REGISTRY` being the
+one workflow-level value in `ci.yml` that owns the address, reads the digest
+back, and by that digest signs it keyless, attests its provenance and attests
+its SBOM. The rollout verifies the signature and the provenance before its first
+Helm command
+([ADR-109](adr/ADR-109-images-are-pushed-to-ghcr-signed-and-attested-by-digest-on-main-and-the-rollout-verifies-them-before-helm-438.md),
+[ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md)).
+The `images` job is path-filtered, so a dispatch of `ci.yml` builds and signs
+every image once.
 **A verified digest is what a release will pull.** Every chart takes
 `image.digest` and `image.migratorDigest` and pins the reference to them when
-they are set; the rollout passes them once there is a registry to resolve them
-from
+they are set; the rollout passes the digest `cosign verify` reported, and
+`image.registry` from `REGISTRY`
 ([ADR-081](adr/ADR-081-a-workload-image-may-be-pinned-by-digest-and-the-rollout-pins-it-once-a-registry-exists.md)).
+GHCR has no tag immutability, and this pinning is what answers an overwritten
+tag.
 
 ## 15.3 Deployment
 
@@ -808,7 +819,9 @@ own name, so the chart can reference both the API and the migrator (§7.4) from
 one tag. That tag is supplied by CI and never `latest`, and it is empty rather
 than defaulted, because a deploy that cannot name its tag must fail rather than
 roll something; a config-only deploy reads the running value back (§15.1).
-Every probe addresses the container port named `http`, and not the `grpc` one:
+The default is a placeholder: the rollout overrides it with `ci.yml`'s
+`REGISTRY`, so the address has the one owner §15.2 names and no chart carries
+a second copy of it. Every probe addresses the container port named `http`, and not the `grpc` one:
 the health endpoints are mapped on the REST surface, and an HTTP/2-only
 endpoint answers an HTTP/1.1 probe with a 400, which reads as a dead pod.
 `terminationGracePeriodSeconds` must exceed the host's own shutdown timeout,
