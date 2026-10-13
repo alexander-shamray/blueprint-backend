@@ -124,6 +124,7 @@ decision looks wrong.
 | **ADR-115** | [An operator-switched name is reported by an operator-switches readiness check that is Degraded, supersedes ADR-113's loop that adds no check (#1013)](adr/ADR-115-an-operator-switched-name-is-reported-by-an-operator-switches-readiness-check-that-is-degraded-supersedes-adr-113s-loop-that-adds-no-check-1013.md) |
 | **ADR-116** | [A gateway route to a service an operator may stop is switched off in its configuration and answers 503 at the edge (#955)](adr/ADR-116-a-gateway-route-to-a-service-an-operator-may-stop-is-switched-off-in-its-configuration-and-answers-503-at-the-edge-955.md) |
 | **ADR-117** | [A device's push token is a contact Notifications owns, registered through the BFF and erased with its subject (#474)](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md) |
+| **ADR-118** | [Notifications gains an API host for device registration and preferences, and the push adapters stay in the worker (#474)](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md) |
 
 ---
 
