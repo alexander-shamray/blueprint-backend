@@ -1872,6 +1872,30 @@ class DigestTests(unittest.TestCase):
     def test_the_digest_cosign_verified_is_the_one_read(self) -> None:
         self.assertEqual(SHA, canary.verified_digest(verification(SHA, SHA)))
 
+    def test_real_cosign_output_is_read(self) -> None:
+        """What `cosign verify -o json` printed for catalog-api at 8cb90fd0.
+
+        cosign v3.1.3 against the first image the pipeline signed: the
+        signature, the provenance and the SBOM attestation, all over one
+        digest. A hand-built document says the reader agrees with its author,
+        and this one says it agrees with cosign (#982).
+        """
+        path = canary.CANARY / "fixtures" / "cosign-verify-catalog-api.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            "sha256:d07220003b94411646a922059a69eaa79f5a7ec395357e11520224d229936bfd",
+            canary.verified_digest(document))
+        self.assertEqual(3, len(document))
+
+    def test_real_cosign_output_with_one_entry_over_another_digest_is_refused(self) -> None:
+        path = canary.CANARY / "fixtures" / "cosign-verify-catalog-api.json"
+        document = json.loads(path.read_text(encoding="utf-8"))
+        document[1]["critical"]["image"]["docker-manifest-digest"] = "sha256:" + "b" * 64
+
+        with self.assertRaises(canary.PlanError):
+            canary.verified_digest(document)
+
     def test_nothing_verified_is_no_digest(self) -> None:
         for document in ([], {}, None, "sha256"):
             with self.subTest(document=document):

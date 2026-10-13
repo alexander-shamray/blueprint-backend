@@ -34,6 +34,7 @@ every chart and asserts what comes out.
 | `deployables/` | One descriptor per deployable, which the section below owns |
 | `canary.py` | The weight arithmetic, the signals and their PromQL templates, the promote/rollback verdict, the gate over `canary.json` and the descriptors, and the rollout's digest and image-name reads (`validate-digest`, `verified-digest`, `images`) |
 | `read_prometheus.py` | The one file that talks to anything. Runs `canary.py`'s queries for the signals a workload declares and writes what came back |
+| `fixtures/` | Output a tool really printed, which the suite reads: `cosign verify -o json` for `catalog-api`, what `verified-digest` is tested against |
 | `test_canary.py` | The suite. It is the whole of the assurance the rollout has |
 
 ## A deployable is one descriptor
