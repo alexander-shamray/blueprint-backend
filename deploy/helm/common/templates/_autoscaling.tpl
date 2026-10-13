@@ -3,7 +3,7 @@ autoscaler on either track would move the blast radius under the analysis
 judging it. The rollout still sets `autoscaling.enabled=false` on the canary,
 because that value also decides whether the Deployment renders `replicas`. */}}
 {{- define "commerce.hpa" -}}
-{{- if and .Values.autoscaling.enabled (not .Values.canary.enabled) -}}
+{{- if and .Values.autoscaling.enabled (not .Values.canary.enabled) (not (include "commerce.suspended" .)) -}}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -33,7 +33,7 @@ selector matches both tracks, so it protects the canary's pods too but bounds
 only the total, not the canary's weight during §15.5's ladder: ADR-022 records
 that residual. */}}
 {{- define "commerce.pdb" -}}
-{{- if and .Values.podDisruptionBudget.enabled (not .Values.canary.enabled) -}}
+{{- if and .Values.podDisruptionBudget.enabled (not .Values.canary.enabled) (not (include "commerce.suspended" .)) -}}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

@@ -99,6 +99,23 @@ the schema its hook applied, which §15.5's backward-compatibility rule covers. 
 {{- if .Values.canary.enabled }}canary{{ else }}stable{{ end -}}
 {{- end -}}
 
+{{- /* ADR-104's switch: a chart whose `suspendable` is true may render
+`suspended: true`, which stops the workload and leaves the migration Job. Every
+other chart refuses it, and so does one with no `suspendable` at all, so a chart
+added later is not suspendable until its owner says it is. smoke.sh holds each
+chart's value to the ADR's table. */}}
+{{- define "commerce.suspended" -}}
+{{- if .Values.suspended -}}
+{{- if not .Values.suspendable }}
+{{- fail (printf "suspended is true on the %s chart, which ADR-104 does not class as suspendable: stopping it cancels orders or ends checkout, and the ADR names what each service costs while off." .Chart.Name) }}
+{{- end }}
+{{- if .Values.canary.enabled }}
+{{- fail "suspended is true on the canary track. A canary judges a release by the traffic it receives, and a suspended release has none (ADR-022); suspend the stable release." }}
+{{- end }}
+true
+{{- end -}}
+{{- end -}}
+
 {{- /* The name of what this release owns. Helm refuses to touch another release's
 objects; `commerce.name` stays the workload name, and the two differ only on a canary. */}}
 {{- define "commerce.instanceName" -}}
