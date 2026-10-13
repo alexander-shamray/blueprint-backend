@@ -59,8 +59,9 @@ and its version, which is the id of its newest entry.
 `{ "optedIn": <bool> }` and a precondition: `If-Match` with the version it
 read, or `If-None-Match: *` for a pair that has no entry yet. Notifications
 appends only while the entry the precondition names is still the newest.
-Where it is not, the request is a repeat when the newest entry supersedes the
-named one and holds the value asked for, and is answered as the first was.
+Where it is not, the request is a repeat when the newest entry holds the value
+asked for and supersedes the entry named, or, for `If-None-Match: *`,
+supersedes none, and it is answered as the first was.
 Otherwise the precondition has failed, which §10.5 answers 412, with the
 pair's present state in the body; the app shows that state and asks again.
 The BFF refuses a request with no precondition, or with a topic or channel
