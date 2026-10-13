@@ -49,15 +49,17 @@ are not a relay's:
 | | `Credential` | The provider refused this deployment's credential: FCM's `401` and `THIRD_PARTY_AUTH_ERROR`, APNs' `403` |
 | | `Rejected` | The provider refused the request itself: FCM's `INVALID_ARGUMENT`, APNs' other `400` reasons |
 
-**Both refusals end the delivery and delete the device row**, under ADR-117's
-guard: in the transaction that records the outcome, and only while the row
-still holds the token the send used. The owner's decision names "unregistered
-or invalid token" together, and ADR-117 names the unregistered half; a token a
-provider will never deliver to for this sender is as dead as an unregistered
-one, and the app's next start registers a fresh one. **FCM's
+**Both refusals end the delivery; only `Unregistered` deletes the device
+row**, under ADR-117's guard: in the transaction that records the outcome, and
+only while the row still holds the token the send used. The owner's decision
+names "unregistered or invalid token" together, but ADR-117 decides the delete
+on the unregistered answer alone and ADR-118 counts the worker's writes to a
+device row as three, so an invalid token's row stays until the stale pass
+removes it, and each send to it in between ends `invalid_token`. Deleting it
+too is a change to those two records, not to this design. **FCM's
 `INVALID_ARGUMENT` is a fault and not a refusal**, because FCM answers it for a
 malformed message as well as a malformed token: a defect in the platform's own
-payload would otherwise delete every device it was sent to.
+payload would otherwise end every delivery it was sent to.
 
 **One port, two providers.** The worker resolves `IPushChannel` to one
 internal router that picks the provider from the device row's platform, so the
@@ -196,7 +198,7 @@ form:
 
 | Dependency | Unreachable | Answers no | Chose | Runs |
 |---|---|---|---|---|
-| FCM | its breaker parks its platform's rows; rows back off; mail and APNs unaffected | the delivery ends and the device row is deleted under ADR-117's guard; a misconfiguration backs off and is counted by cause | availability | Google, a processor shown a token, a title, a body and an order's id |
+| FCM | its breaker parks its platform's rows; rows back off; mail and APNs unaffected | the delivery ends, and an unregistered answer deletes the device row under ADR-117's guard; a misconfiguration backs off and is counted by cause | availability | Google, a processor shown a token, a title, a body and an order's id |
 | APNs | as FCM, for its own platform | as FCM | availability | Apple, a processor shown the same |
 | Google's token endpoint | the FCM call faults `Transient` and backs off | fault `Credential` | availability | Google |
 
@@ -276,10 +278,10 @@ whose breaker is open, and is sent:
    the call; a delivery that already holds an intent is a resend, counted.
 5. **The port is called.** `Accepted` commits `MarkSent` with
    `CancellationToken.None`, as the mail completion does. Either refusal
-   commits `MarkUndeliverable` with its reason and, in the same transaction,
-   deletes the device row where it still holds the installation and the
-   token the send used. A fault is logged by cause and the row backs off by
-   the notice's formula.
+   commits `MarkUndeliverable` with its reason, and `Unregistered`, in the
+   same transaction, deletes the device row where it still holds the
+   installation and the token the send used. A fault is logged by cause and
+   the row backs off by the notice's formula.
 
 **The waits stay visible.** `notifications.waiting`'s `step` tag gains
 `devices` for a push notice and `fcm` and `apns` for deliveries, and
@@ -350,9 +352,10 @@ simulator's base URL for both providers and no key.
 The `Notifications.Outbound` meter gains `notifications.push.unavailable`,
 tagged `provider` and `cause`; `notifications.push.refused`, tagged `provider`
 and `reason`; `notifications.push.resent`; and `notifications.devices.removed`,
-tagged `reason` — `stale`, `unregistered`, `invalid_token` or `erased`, the
-worker's four removals — so a provider's mass refusal, such as a sandbox
-token sent to the production endpoint, is a series and not a silence. Every
+tagged `reason` — `stale`, `unregistered` or `erased`, the worker's three
+removals — so a provider's mass refusal is a series and not a silence; a mass
+`invalid_token`, such as a sandbox token sent to the production endpoint,
+shows on `notifications.push.refused`. Every
 instrument is resolved at start by the `MetricsInitialiser`. **No alert is
 added**, as none watches the relay, and the shared runbook's Notifications
 half gains the push steps of the waiting gauge.
