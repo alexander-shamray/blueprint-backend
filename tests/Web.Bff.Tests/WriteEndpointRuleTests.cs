@@ -24,7 +24,7 @@ public class WriteEndpointRuleTests(BffFactory factory) : IClassFixture<BffFacto
     public void The_rule_above_is_looking_at_the_writes_this_host_maps()
     {
         // The floor: an offender list is as green over an empty selection.
-        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(["Quote"]);
+        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(["DeleteSavedAddress", "PutSavedAddress", "Quote"]);
 
         // What the selection leaves out by shape, named, so a route this host maps that way is not left out too.
         Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe(["Health checks", "Health checks", "Health checks"]);
@@ -38,7 +38,10 @@ public class WriteEndpointRuleTests(BffFactory factory) : IClassFixture<BffFacto
         // In the table the rule reads, so leaving them out of Writes is the rule's judgement and not a blind spot.
         mapped.ShouldContain("ListOrders");
         mapped.ShouldContain("GetOrder");
-        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(["Quote"]);
+        mapped.ShouldContain("GetSavedAddress");
+        Names(WriteEndpointRule.Writes(Endpoints))
+            .Intersect(["ListOrders", "GetOrder", "GetSavedAddress"])
+            .ShouldBeEmpty();
     }
 
     private static string[] Names(IEnumerable<Endpoint> endpoints) =>

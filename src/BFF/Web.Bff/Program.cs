@@ -5,6 +5,7 @@ using FluentValidation;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
 using Web.Bff;
+using Web.Bff.Addresses;
 using Web.Bff.Endpoints;
 using Web.Bff.Messaging;
 using Web.Bff.Orders;
@@ -88,6 +89,10 @@ builder.Services.AddMassTransitMessaging(builder.Configuration);
 // §10.7's read over the projection; a singleton, as the connection factory it holds is (§6.5).
 builder.Services.AddSingleton<OrderReader>();
 
+// §10.9's saved address, in this host's own schema (ADR-107); the validator is called by the endpoint (§6.4).
+builder.Services.AddSingleton<SavedAddressStore>();
+builder.Services.AddSingleton<IValidator<SavedAddress>, SavedAddressValidator>();
+
 WebApplication app = builder.Build();
 
 // Middleware order is behaviour, not formatting (§4.2); forwarded headers, CORS and the limiter are the edge's.
@@ -105,6 +110,7 @@ app.UseAuthorization();           // §11.4
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapCheckoutEndpoints();
 app.MapOrderEndpoints();          // §10.7 — ADR-051's projection, no hop
+app.MapSavedAddressEndpoints();   // §10.9 — ADR-107's saved address, no hop
 
 app.Run();
 

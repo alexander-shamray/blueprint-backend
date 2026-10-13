@@ -25,6 +25,9 @@ public sealed class BffDbContext(DbContextOptions<BffDbContext> options) : DbCon
     /// <summary>The ids of orders deleted for an erased customer, which a customer-less event is checked against.</summary>
     public DbSet<ErasedOrderRow> ErasedOrders => Set<ErasedOrderRow>();
 
+    /// <summary>The customer's own saved delivery address, which the checkout prefills from (ADR-107).</summary>
+    public DbSet<SavedAddressRow> SavedAddresses => Set<SavedAddressRow>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(BffSchema.Name);
