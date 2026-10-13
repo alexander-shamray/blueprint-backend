@@ -1548,8 +1548,8 @@ which is the only place it can be reliably erased.
 > and it reaches whatever each consumer persists from it, with
 > [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
 > giving the event to the notification service, which has no use for an
-> address at all. The erasure choreography above reaches none of those, and §13.4's redactor matches key
-> names, none of which cover an address.
+> address at all. The erasure choreography above reaches none of those, and
+> §13.4's redactor matches key names, none of which cover an address.
 >
 > **Where personal data legitimately travels, this section still owes a
 > procedure, and does not define one.** An erasure-triggered outbox purge, a

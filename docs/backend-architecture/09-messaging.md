@@ -1383,12 +1383,12 @@ is not an error, it is silence.
 The event endpoints take the same shape, with one `ConfigureConsumer` line per
 event type the service subscribes to; §9.8 prints them. The list must match
 the service's Consumes column in
-[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) — a handler with
-no line there is never invoked, and looks correct while doing nothing. Each
-type also needs an `x.AddConsumer<T>()` in the enclosing `AddMassTransit` callback: registering a
-consumer and binding it are two statements, `ConfigureConsumer` resolves what
-`AddConsumer` registered, and nothing fails at startup if a type gets one and
-not the other.
+[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
+— a handler with no line there is never invoked, and looks correct while doing
+nothing. Each type also needs an `x.AddConsumer<T>()` in the enclosing
+`AddMassTransit` callback: registering a consumer and binding it are two
+statements, `ConfigureConsumer` resolves what `AddConsumer` registered, and
+nothing fails at startup if a type gets one and not the other.
 
 The outbox guarantees **at-least-once** delivery, never exactly-once. A crash
 between publishing and marking processed republishes the message. This is
@@ -1930,9 +1930,9 @@ below and at the schedule that arms it.
 this service — [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
 lists all three in its own Consumes column, for the same reason: a fact the
 service publishes is also a fact its workflow has to react to. `Compensating`
-writes each of them out, so the machine has a branch for them in every state it can reach one in. They
-are named rather than counted, because the property the sentence is about is
-self-subscription, not arity.
+writes each of them out, so the machine has a branch for them in every state
+it can reach one in. They are named rather than counted, because the property
+the sentence is about is self-subscription, not arity.
 
 The diagram has exactly the states the machine declares and no others.
 `Cancelled` and `Shipped` are terminal *outcomes*, not states:
