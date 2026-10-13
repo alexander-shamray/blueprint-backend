@@ -1,3 +1,5 @@
 s3.bucket.create -name product-images
+s3.policy -put -name bff-images -file /etc/seaweedfs/policies/bff-images.json
+s3.policy -put -name catalog-images -file /etc/seaweedfs/policies/catalog-images.json
 fs.configure -locationPrefix=/buckets/product-images/uploads/ -ttl=1d -apply
 exit

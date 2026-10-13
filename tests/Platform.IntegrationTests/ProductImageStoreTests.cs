@@ -213,6 +213,31 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
             Ct))).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
+    [Fact]
+    public async Task Neither_pair_can_delete_the_object_it_wrote()
+    {
+        using AmazonS3Client bff = S3("bff");
+        using AmazonS3Client catalog = S3("catalog");
+        string uploaded = $"uploads/{Guid.CreateVersion7()}/{Guid.CreateVersion7()}.png";
+        string published = $"products/{Guid.CreateVersion7()}/{Guid.CreateVersion7()}.png";
+
+        foreach ((AmazonS3Client client, string key) in new[] { (bff, uploaded), (catalog, published) })
+        {
+            await client.PutObjectAsync(
+                new PutObjectRequest
+                {
+                    BucketName = ObjectStoreFixture.Bucket,
+                    Key = key,
+                    InputStream = new MemoryStream(Png)
+                },
+                Ct);
+
+            (await Should.ThrowAsync<AmazonS3Exception>(() => client.DeleteObjectAsync(
+                new DeleteObjectRequest { BucketName = ObjectStoreFixture.Bucket, Key = key },
+                Ct))).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        }
+    }
+
     [Theory]
     [InlineData("image/png", "png")]
     [InlineData("image/jpeg", "jpg")]
