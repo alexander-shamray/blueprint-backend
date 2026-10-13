@@ -171,3 +171,8 @@ networkPolicy:
 # verified; the migration Job takes none of it.
 transport:
   plaintext: []
+
+# Whether ADR-104 lets an operator switch this service off, and the switch.
+# smoke.sh holds the first to the ADR's table; the second is for an incident.
+suspendable: false
+suspended: false

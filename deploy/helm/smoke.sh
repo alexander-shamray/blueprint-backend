@@ -2405,6 +2405,67 @@ for chart in $DATABASELESS_CHARTS; do
 done
 
 # --------------------------------------------------------------------------
+section 'A suspended service renders no workload, and only where ADR-104 allows it'
+# --------------------------------------------------------------------------
+# The classification is ADR-104's table, read here and not restated: the
+# chart's `suspendable` value is held to it, and every chart on disk is then
+# rendered with `suspended` on, so a service added later is covered without
+# anyone adding it to a list. A chart with no row is not suspendable.
+ADR104="$(ls "$ROOT"/docs/backend-architecture/adr/ADR-104-*.md)"
+ADR104_ROWS="$(awk -F'|' '$3 ~ /^ (Yes|No) $/ { gsub(/ /, "", $2); gsub(/ /, "", $3); print tolower($2), $3 }' "$ADR104")"
+adr104_says() { printf '%s\n' "$ADR104_ROWS" | awk -v c="$1" '$1 == c { print $2 }'; }
+
+check 'ADR-104 has rows that allow a suspension, so the loop below is not vacuous' \
+    sh -c 'printf "%s\n" "$0" | grep -q " Yes$"' "$ADR104_ROWS"
+check 'ADR-104 has rows that refuse one' \
+    sh -c 'printf "%s\n" "$0" | grep -q " No$"' "$ADR104_ROWS"
+
+for service in $(printf '%s\n' "$ADR104_ROWS" | awk '{ print $1 }'); do
+    case " $SERVICE_CHARTS " in
+        *" $service "*) pass "ADR-104's $service has a chart" ;;
+        *) fail "ADR-104 classes $service, which has no chart (or a chart under another name)" ;;
+    esac
+done
+
+for chart in $SERVICE_CHARTS; do
+    allowed="$(adr104_says "$chart")"
+    [ -n "$allowed" ] || allowed=No
+    if [ "$allowed" = Yes ]; then want=true; else want=false; fi
+    check "$chart: suspendable is $want, as ADR-104 classes it" \
+        grep -qx "suspendable: $want" "$CHARTS_DIR/$chart/values.yaml"
+    check "$chart ships unsuspended" grep -qx 'suspended: false' "$CHARTS_DIR/$chart/values.yaml"
+
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+        $GATEWAY_OVERLAY $(overlay_for "$chart") --set suspended=true >"$OUT/suspended-$chart.txt" 2>&1; then
+        rendered=yes
+    else
+        rendered=no
+    fi
+
+    if [ "$want" = true ]; then
+        [ "$rendered" = yes ] && pass "$chart renders suspended" || fail "$chart does not render suspended"
+        check "$chart: suspended runs zero replicas" \
+            test "$(count '^  replicas: 0$' "$OUT/suspended-$chart.txt")" -eq 1
+        check "$chart: suspended renders no HPA" \
+            test "$(count '^kind: HorizontalPodAutoscaler$' "$OUT/suspended-$chart.txt")" -eq 0
+        check "$chart: suspended renders no PodDisruptionBudget" \
+            test "$(count '^kind: PodDisruptionBudget$' "$OUT/suspended-$chart.txt")" -eq 0
+        case " $MIGRATOR_CHARTS " in
+            *" $chart "*) jobs=1 ;;
+            *) jobs=0 ;;
+        esac
+        check "$chart: suspended still renders its migration Job ($jobs)" \
+            test "$(count '^kind: Job$' "$OUT/suspended-$chart.txt")" -eq "$jobs"
+    else
+        [ "$rendered" = no ] && pass "$chart refuses to render suspended" || fail "$chart renders suspended, which ADR-104 refuses"
+        check "$chart: and the refusal cites ADR-104" grep -q 'ADR-104' "$OUT/suspended-$chart.txt"
+    fi
+done
+
+refuses_chart notifications 'a suspended canary is refused (ADR-022)' 'suspended is true on the canary track' \
+    --set suspended=true --set canary.enabled=true --set autoscaling.enabled=false
+
+# --------------------------------------------------------------------------
 section 'Result'
 # --------------------------------------------------------------------------
 if [ "$failures" -ne 0 ]; then

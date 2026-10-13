@@ -10,7 +10,11 @@ metadata:
     {{- include "commerce.labels" . | nindent 4 }}
     app.kubernetes.io/track: {{ include "commerce.track" . }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
+  {{- if include "commerce.suspended" . }}
+  {{- /* Zero even with the HPA on, because none is rendered to write it back
+  (ADR-104). */}}
+  replicas: 0
+  {{- else if not .Values.autoscaling.enabled }}
   {{- /* Omitted rather than set to minReplicas while the HPA is on: a managed
   field the chart writes is one the autoscaler writes back after every upgrade
   (§15.3). */}}
