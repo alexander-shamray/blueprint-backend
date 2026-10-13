@@ -284,10 +284,9 @@ def mentions(
 ) -> dict[str, list[int]]:
     """Files still naming the service once the plan is applied, with their line numbers.
 
-    A file that cannot be read is added to `unread`: it is not a mention, and the
-    deletion has already happened by the time this runs. A file over
-    MAX_MENTION_BYTES or not UTF-8 is counted in `unsearched` under "too large" or
-    "not UTF-8", so an empty result is never read as a complete one.
+    An unreadable file goes in `unread`, the deletion having already happened. One
+    too large or not UTF-8 is counted in `unsearched`, so an empty result is not
+    read as complete.
     """
     needle = re.compile("|".join(re.escape(token) for token in (names.pascal, names.lower, names.upper)))
     doomed = tuple(f"{path}/" for path in rendered.deleted)
