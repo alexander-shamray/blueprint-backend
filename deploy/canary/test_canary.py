@@ -1535,6 +1535,18 @@ class DescriptorTests(unittest.TestCase):
         self.assertEqual(out.getvalue().splitlines(), canary.smoke_cases(canary.load_plan()["workloads"]))
         self.assertIn("payments overlay paymentProvider.baseUrl=https://psp.example.invalid/",
                       out.getvalue().splitlines())
+        self.assertIn("notifications host Notifications.Worker", out.getvalue().splitlines())
+
+    def test_a_host_name_smoke_sh_cannot_find_settings_by_is_refused(self) -> None:
+        """smoke.sh finds a chart's listeners beside its host's project, so the name must be one word it can
+        hand to find; a service with two hosts under one source is why the source alone is not enough."""
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        workloads["payments-api"]["serviceName"] = "Payments Api"
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertTrue(
+            any("payments-api.serviceName" in f and "one project name" in f for f in failures), failures)
 
     def test_a_case_smoke_sh_would_split_into_two_words_is_refused(self) -> None:
         workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
