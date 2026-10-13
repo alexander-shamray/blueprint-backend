@@ -297,6 +297,14 @@ is the same for every cluster, so every cluster carries the same check:
 `Every_cluster_is_health_checked_against_readiness` in `Gateway.Api.Tests`
 holds a new one to it.
 
+**A route to a service an operator may stop can be switched off.** Setting the
+route's `Metadata` entry `Suspended` to `true` makes the gateway answer
+§10.5's 503 with `code` `service.suspended` and forward nothing, so a client
+can tell a planned suspension from an outage. Only a cluster
+[ADR-104](adr/ADR-104-an-operator-may-switch-off-notifications-shipping-and-privacy-for-a-bound-and-no-other-service.md)
+marks *Yes* may carry it, and `SuspendedRouteTests` holds every route to that
+rule, one way and the other ([ADR-116](adr/ADR-116-a-gateway-route-to-a-service-an-operator-may-stop-is-switched-off-in-its-configuration-and-answers-503-at-the-edge-955.md)).
+
 ### API versioning and deprecation at the edge
 
 Versions are URL segments because path matching is trivial to route on and
@@ -817,6 +825,7 @@ no host can take the one without the others.
 | Request body past the edge's ceiling | **413** | The gateway only (§10.1). Kestrel's `BadHttpRequestException` is answered inside the forwarder, which sets this status and writes no body, so it never reaches `UseExceptionHandler` and `UseStatusCodePages` writes the shape. `ExceptionHandlerMiddleware` reads no status off an exception — one that escapes is the unreadable-request row's, at its own status |
 | Domain rule violated | 422 | The request was well-formed but not allowed |
 | Downstream dependency unavailable | 503 | With `Retry-After` where known. Never 500 — the fault is not in this service |
+| A route an operator has switched off | 503 | The gateway only (§10.2), `code` `service.suspended`, with `Retry-After`; nothing is forwarded. Not the row above: that one is a fault and this is a decision ([ADR-116](adr/ADR-116-a-gateway-route-to-a-service-an-operator-may-stop-is-switched-off-in-its-configuration-and-answers-503-at-the-edge-955.md)) |
 | A lock the request needed was not taken, because it stayed held or the wait ended as a deadlock victim | 503 | An exception thrown by the repository method that takes the lock, with `Retry-After` and a `code`. Contention inside this service, so not the row above, and 503 because the lock is taken before any work, so nothing took effect. A consumer meets the same exception and its retry stands. In the reference domain only one service takes such a lock, and [Appendix E.6.2](appendix-e-reference-domain.md#e62-error-catalogue-and-refusals) names its exception, method and `code` |
 | The request outlived its host's deadline | **504** | From the request-timeout middleware every host registers ([§9.7](09-messaging.md), [ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)), `code` `request.timed_out`. Not 503, which says nothing was done: the deadline can fall after a commit, so whether the request took effect is unknown, and a write is retried under its own command identifier rather than a new one |
 | Rate limited | 429 | With `Retry-After` |
