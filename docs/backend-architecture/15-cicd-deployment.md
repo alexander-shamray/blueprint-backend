@@ -53,8 +53,11 @@ anything.
 > the half that can run rather than a step that would have to be faked. No
 > `Deploy:` node is live: there is no dev, staging or production environment,
 > which is why §15.5's canary is `workflow_dispatch` only and why the k6 SLO
-> run has a target that does not exist yet. Naming the split here is cheaper
-> than letting a reader infer from a green pipeline that a deploy happened.
+> run, the node after staging, waits on an environment this repository does
+> not have. It has been made only locally, and
+> [§13.7](13-observability.md) says what that number is. Naming the split here
+> is cheaper than letting a reader infer from a green pipeline that a deploy
+> happened.
 
 Only services whose files changed are built and deployed. Path filters are what
 make a monorepo practical at this size. They are the `changes` job's, in
@@ -178,7 +181,8 @@ reach nothing. `MapCommonHealthEndpoints` refuses to start such a host unless
 it declares that it owns no *readiness* dependency (§13.5), which is what
 makes the probe a gate rather than a formality. The first real gate after dev
 is the k6 SLO run against staging, which names its tool, its target and its
-assertions (§13.7): it is `deploy/observability/slo/slo.js`, and it fails on
+assertions (§13.7) and **waits on a staging environment that does not exist
+here**: it is `deploy/observability/slo/slo.js`, and it fails on
 an **absent** series as well as on a breached one — a target with no data is
 the same silence §13.6 spends a callout on, and reading it as "nothing wrong"
 would turn this stage into the gate configured to pass that this paragraph
