@@ -1384,8 +1384,8 @@ The event endpoints take the same shape, with one `ConfigureConsumer` line per
 event type the service subscribes to; §9.8 prints them. The list must match
 the service's Consumes column in
 [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) — a handler with
-no line there is never invoked, and looks correct while doing nothing. Each type also needs an
-`x.AddConsumer<T>()` in the enclosing `AddMassTransit` callback: registering a
+no line there is never invoked, and looks correct while doing nothing. Each
+type also needs an `x.AddConsumer<T>()` in the enclosing `AddMassTransit` callback: registering a
 consumer and binding it are two statements, `ConfigureConsumer` resolves what
 `AddConsumer` registered, and nothing fails at startup if a type gets one and
 not the other.
@@ -1929,8 +1929,8 @@ below and at the schedule that arms it.
 `OrderPlaced`, `OrderCancelled` and `OrderConfirmed` are all arrows coming from
 this service — [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
 lists all three in its own Consumes column, for the same reason: a fact the
-service publishes is also a fact its workflow has to react to. `Compensating` writes each of them out, so
-the machine has a branch for them in every state it can reach one in. They
+service publishes is also a fact its workflow has to react to. `Compensating`
+writes each of them out, so the machine has a branch for them in every state it can reach one in. They
 are named rather than counted, because the property the sentence is about is
 self-subscription, not arity.
 
@@ -2617,11 +2617,12 @@ delivery is exactly what is still open on it.
 
 **Nor is the money the thing that tells the two apart.** Here,
 in the reference domain ([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga)),
-Payments consumes `OrderCancelled` and voids an authorisation already taken
-([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)),
-so a refund may arrive on either code with nobody acting — and §9.4 orders
-nothing between that consumer and this saga, so neither code predicts whether it has; the
-runbook checks on both rather than expecting an answer on either.
+Payments consumes `OrderCancelled`
+([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table))
+and voids an authorisation already taken, so a refund may arrive on either
+code with nobody acting — and §9.4 orders nothing between that consumer and
+this saga, so neither code predicts whether it has; the runbook checks on
+both rather than expecting an answer on either.
 **`Shipping` is the difference**: `cancelled_after_confirmation` means Shipping
 was told and a despatch may be moving, `payment_authorised_during_compensation`
 means it was not. Ordering having no refund command is true of both; it is not
