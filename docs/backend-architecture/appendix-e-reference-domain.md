@@ -996,9 +996,10 @@ stamped the shipment, when it is recorded and again when its cancellation is
 requested, so the booking or the carrier's cancellation sits in the confirming
 or cancelling trace; its `TrackingWorker` links instead of parenting, because
 it repeats for the shipment's whole life, and the despatch a poll stages
-travels in the poll's trace, one link from the order's. Notifications' `SendWorker` runs a notice's send
-as a child of the trace that stamped it at intake. All three read
-`StagedTrace` and map `StagedTraceColumns` in `Common.Infrastructure/Tracing`.
+travels in the poll's trace, one link from the order's. Notifications'
+`SendWorker` runs a notice's send as a child of the trace that stamped it at
+intake. All three read `StagedTrace` and map `StagedTraceColumns` in
+`Common.Infrastructure/Tracing`.
 
 ## E.6 §10 and §11: the gateway routes and the identity realms
 
