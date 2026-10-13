@@ -946,6 +946,9 @@ jobs:
             image: shipping-migrator
             dockerfile: src/Services/Shipping/Shipping.Migrator/Dockerfile
           - filter: notifications
+            image: notifications-api
+            dockerfile: src/Services/Notifications/Notifications.Api/Dockerfile
+          - filter: notifications
             image: notifications-worker
             dockerfile: src/Services/Notifications/Notifications.Worker/Dockerfile
           - filter: notifications

@@ -31,6 +31,7 @@
     <Project Path="src/Services/Inventory/Inventory.Migrator/Inventory.Migrator.csproj" />
   </Folder>
   <Folder Name="/src/Services/Notifications/">
+    <Project Path="src/Services/Notifications/Notifications.Api/Notifications.Api.csproj" />
     <Project Path="src/Services/Notifications/Notifications.Application/Notifications.Application.csproj" />
     <Project Path="src/Services/Notifications/Notifications.Infrastructure/Notifications.Infrastructure.csproj" />
     <Project Path="src/Services/Notifications/Notifications.Migrator/Notifications.Migrator.csproj" />
@@ -79,6 +80,7 @@
     <Project Path="tests/Inventory.Application.Tests/Inventory.Application.Tests.csproj" />
     <Project Path="tests/Inventory.Domain.Tests/Inventory.Domain.Tests.csproj" />
     <Project Path="tests/Inventory.TestSupport/Inventory.TestSupport.csproj" />
+    <Project Path="tests/Notifications.Api.Tests/Notifications.Api.Tests.csproj" />
     <Project Path="tests/Notifications.Application.Tests/Notifications.Application.Tests.csproj" />
     <Project Path="tests/Notifications.TestSupport/Notifications.TestSupport.csproj" />
     <Project Path="tests/Notifications.Worker.Tests/Notifications.Worker.Tests.csproj" />
