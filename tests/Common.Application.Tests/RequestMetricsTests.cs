@@ -11,6 +11,7 @@ public class RequestMetricsTests
 {
     // §13.7's targets, restated so a bound deleted in production does not delete the expectation.
     private static readonly double[] Targets = [0.08, 0.1];
+
     [Fact]
     public void A_recorded_request_carries_its_name_and_its_outcome()
     {
