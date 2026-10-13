@@ -169,6 +169,24 @@ redis:
     cacheKey: cache-connection-string
     coordinationKey: coordination-connection-string
 
+# ADR-106's store, which this service reads an upload from and copies it within
+# (§10.8). `endpoint` is the address this pod reaches; `publicBaseUrl` is where
+# products/ is served from, by the store or a CDN in front of it, and the stored
+# image URL is built from it and from nothing a client sent. The pair is one
+# Secret of this service's own: it reads uploads/ and writes products/, and
+# lists and deletes nothing.
+objectStore:
+  enabled: true
+  endpoint: https://objects.example.com
+  bucket: product-images
+  region: us-east-1
+  pathStyle: false
+  publicBaseUrl: https://images.example.com
+  secretRef:
+    name: catalog-object-store
+    accessKeyKey: access-key
+    secretKeyKey: secret-key
+
 observability:
   otlpEndpoint: http://otel-collector.observability:4317
 
@@ -197,6 +215,8 @@ networkPolicy:
   database: { port: 1433, to: [] }
   redis: { port: 6379, to: [] }
   broker: { port: 5671, to: [] }   # amqps, as ADR-079 requires; a broker named plaintext dials 5672
+  # Unless a port is stated, it is the endpoint's, so the rule follows the store's address.
+  objectStore: { to: [] }
 
 # ADR-079's opt-out: the connection names this deployment runs in plaintext,
 # such as RabbitMq. Empty, the host refuses every hop not encrypted and

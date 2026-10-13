@@ -289,6 +289,21 @@ Mail__From: {{ $from | quote }}
 Mail__Security: {{ $security | quote }}
 Mail__UserName: {{ $userName | quote }}
 {{- end }}
+{{- if (.Values.objectStore).enabled }}
+{{- /* ADR-106's store, whose address, bucket and region are Config and whose credential
+pair is commerce.env's (§15.4). HTTPS unconditionally, as `commerce.requireUrl` argues. The
+BFF's endpoint is the one a client reaches, since it signs the URL the client PUTs to, and
+Catalog's is the one that service reaches; only Catalog stores the public base a stored URL
+is built from (§10.8), and the host refuses a base that is not https when it starts. */}}
+{{- $store := .Values.objectStore }}
+ProductImages__Store__Endpoint: {{ include "commerce.requireUrl" (list $store.endpoint "objectStore.endpoint is required when objectStore.enabled: the host binds ProductImages:Store and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
+ProductImages__Store__Bucket: {{ include "commerce.require" (list $store.bucket "objectStore.bucket is required when objectStore.enabled (§15.4).") | quote }}
+ProductImages__Store__Region: {{ include "commerce.require" (list $store.region "objectStore.region is required when objectStore.enabled: a signature is scoped to it (§15.4).") | quote }}
+ProductImages__Store__PathStyle: {{ $store.pathStyle | default false | toString | quote }}
+{{- if eq .Chart.Name "catalog" }}
+ProductImages__Store__PublicBaseUrl: {{ include "commerce.requireUrl" (list $store.publicBaseUrl "objectStore.publicBaseUrl is required on the catalog chart when objectStore.enabled: it is where products/ is served from, and the stored image URL is built from it (§10.8).") | quote }}
+{{- end }}
+{{- end }}
 {{- if (.Values.contactSource).enabled }}
 {{- /* ADR-052's contact read. Keycloak can serve its admin API on a hostname of its
 own, so the base is not derived from the authority; HTTPS unconditionally, as
@@ -389,6 +404,15 @@ it. */}}
 {{- if and (or (.Values.mail).host (.Values.mail).port (.Values.mail).from (.Values.mail).security (.Values.mail).userName (.Values.mail).passwordSecretRef) (not (.Values.mail).enabled) }}
 {{- fail "mail.enabled is false but a mail setting is set. The worker reads the relay's keys eagerly (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
 {{- end }}
+{{- if and (or (.Values.objectStore).endpoint (.Values.objectStore).bucket (.Values.objectStore).region (.Values.objectStore).publicBaseUrl (.Values.objectStore).secretRef) (not (.Values.objectStore).enabled) }}
+{{- fail "objectStore.enabled is false but an objectStore setting is set. The host validates ProductImages:Store when it starts (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
+{{- end }}
+{{- if and (.Values.objectStore).enabled (not (has .Chart.Name (list "web-bff" "catalog"))) }}
+{{- fail (printf "objectStore.enabled is true on the %s chart, and only web-bff (which signs an upload) and catalog (which attaches it) touch the store (ADR-106). This would mount a credential pair into a pod that never reads it." .Chart.Name) }}
+{{- end }}
+{{- if and (.Values.objectStore).publicBaseUrl (ne .Chart.Name "catalog") }}
+{{- fail "objectStore.publicBaseUrl is set on a chart that is not catalog. Only the service that stores a published image's URL builds it from a base (§10.8); on the BFF it would be a value nothing reads." }}
+{{- end }}
 {{- if and (or (.Values.contactSource).baseUrl (.Values.contactSource).realm) (not (.Values.contactSource).enabled) }}
 {{- fail "contactSource.enabled is false but a contactSource setting is set. The worker reads ADR-052's contact source at startup, so this renders cleanly and the host does not start." }}
 {{- end }}
@@ -469,6 +493,20 @@ the guard above refuses one key for both. */}}
     secretKeyRef:
       name: {{ include "commerce.require" (list .Values.carrier.apiKeySecretRef.name "carrier.apiKeySecretRef.name is required when carrier.enabled. The key is a reference, never a value (§15.3).") | quote }}
       key: {{ include "commerce.require" (list .Values.carrier.apiKeySecretRef.key "carrier.apiKeySecretRef.key is required when carrier.enabled.") | quote }}
+{{- end }}
+{{- if (.Values.objectStore).enabled }}
+{{- /* The pair is a Secret, one per host and never shared: the BFF's writes uploads/ and the
+product service's reads it and writes products/, and neither lists or deletes (§10.8). */}}
+- name: ProductImages__Store__AccessKey
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "commerce.require" (list (.Values.objectStore.secretRef).name "objectStore.secretRef.name is required when objectStore.enabled. The pair is a reference, never a value (§15.3).") | quote }}
+      key: {{ include "commerce.require" (list (.Values.objectStore.secretRef).accessKeyKey "objectStore.secretRef.accessKeyKey is required when objectStore.enabled.") | quote }}
+- name: ProductImages__Store__SecretKey
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "commerce.require" (list (.Values.objectStore.secretRef).name "objectStore.secretRef.name is required when objectStore.enabled.") | quote }}
+      key: {{ include "commerce.require" (list (.Values.objectStore.secretRef).secretKeyKey "objectStore.secretRef.secretKeyKey is required when objectStore.enabled.") | quote }}
 {{- end }}
 {{- if (.Values.mail).enabled }}
 - name: Mail__Password

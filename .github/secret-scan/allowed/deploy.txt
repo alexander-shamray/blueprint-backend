@@ -159,3 +159,10 @@ deploy/compose/services/privacy.yml | connection-string-password | 098bf5bddb82 
 deploy/compose/services/privacy.yml | credential-assignment | 30486867cf4d | Privacy's local Redis cache default, under its own ACL user.
 deploy/compose/services/privacy.yml | credential-assignment | 8f933555e088 | Privacy's local Redis coordination default, the same ACL user.
 deploy/compose/rabbitmq/definitions.json | credential-assignment | b984e787a117 | The Privacy service account's password hash, Section 14.1's local default.
+
+# ADR-106's local object store: two service pairs, written where the store reads them and where each service
+# is given its own. Section 14.1's model, and docs/secrets.md tabulates them.
+deploy/compose/object-store/s3.json | credential-assignment | ceb7fc08fc4b | The BFF's local object store pair, where the store imports it (ADR-106).
+deploy/compose/object-store/s3.json | credential-assignment | e5d152deced8 | Catalog's local object store pair, where the store imports it (ADR-106).
+deploy/compose/services/web-bff.yml | credential-assignment | ceb7fc08fc4b | The same BFF pair, given to the BFF's unit (ADR-106).
+deploy/compose/services/catalog.yml | credential-assignment | e5d152deced8 | The same Catalog pair, given to Catalog's unit (ADR-106).

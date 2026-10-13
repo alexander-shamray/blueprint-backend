@@ -6,7 +6,7 @@
   "smoke": {
     "migrator": true,
     "autoscaled": true,
-    "capabilities": ["clientCredentials"],
+    "capabilities": ["clientCredentials", "objectStore"],
     "overlay": []
   }
 }

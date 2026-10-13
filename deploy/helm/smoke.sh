@@ -39,6 +39,7 @@ identity=10.94.0.0/16
 carrier=10.95.0.0/16
 mail=10.96.0.0/16
 paymentProvider=10.97.0.0/16
+objectStore=10.99.0.0/16
 "
 NETPOL_OVERLAY=''
 for pair in $NETPOL_PEERS; do
@@ -287,6 +288,10 @@ declares() {
 # its argument through "$@", which cannot carry a shell keyword.
 lacks() { ! declares "$1" "$2"; }
 disowns() { ! owns "$1" "$2"; }
+
+# declares, less the one capability a chart holds without dialling: the BFF signs an upload locally and the
+# client does the PUT, so only the service that reads the store has an egress rule for it (ADR-106).
+dials() { [ "$2" = objectStore ] && [ "$1" != catalog ] && return 1; declares "$1" "$2"; }
 
 src_of() { echo "$ROOT/$(field "$1" source)"; }
 
@@ -587,8 +592,8 @@ for chart in $SERVICE_CHARTS; do
         grep -q "cidr: $(cidr_of identity)$" "$OUT/$chart.policy.yaml"
     # Egress follows the values: a destination's peers appear exactly when the
     # chart declares the capability that dials it.
-    for cap in database redis broker carrier mail paymentProvider; do
-        if declares "$chart" "$cap"; then
+    for cap in database redis broker carrier mail paymentProvider objectStore; do
+        if dials "$chart" "$cap"; then
             check "$chart declares $cap, so its policy reaches $cap's peers" \
                 grep -q "cidr: $(cidr_of "$cap")$" "$OUT/$chart.policy.yaml"
         else
@@ -606,8 +611,8 @@ for chart in $SERVICE_CHARTS; do
     # capability's peer and, on the gateway, the ingress controller. Presence
     # alone stays green beside an extra peer, however narrow.
     addresses=1
-    for cap in database redis broker carrier mail paymentProvider; do
-        if declares "$chart" "$cap"; then addresses=$((addresses + 1)); fi
+    for cap in database redis broker carrier mail paymentProvider objectStore; do
+        if dials "$chart" "$cap"; then addresses=$((addresses + 1)); fi
     done
     if [ "$chart" = gateway ]; then addresses=$((addresses + 1)); fi
     check "$chart's policy names exactly the $addresses address(es) its values state" \
@@ -869,6 +874,63 @@ if "$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY --set-string
     fail 'payments: rendered with the capability off and cleared; the host registers it unconditionally'
 fi
 pass 'paymentProvider renders both keys and refuses an empty address or an address while off'
+
+# --------------------------------------------------------------------------
+section "ADR-106's object store is a capability of two charts, and each key is placed"
+# --------------------------------------------------------------------------
+# The host binds ProductImages:Store and validates it at start, so every state that renders cleanly and is
+# wrong is a pod that never starts. Asserted by placement, as the capabilities above are: the address, the
+# bucket and the region are Config, and the credential pair is a Secret reference that no ConfigMap carries.
+for chart in $SERVICE_CHARTS; do
+    # The descriptors say which charts hold the capability, so a third one is covered the day it declares it.
+    owns "$chart" objectStore || continue
+    STORE_RENDER="$OUT/$chart-object-store.yaml"
+    "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string image.tag="$TAG" >"$STORE_RENDER"
+    check "$chart: ProductImages__Store__Endpoint, Bucket and Region are in the ConfigMap" \
+        awk '/^kind: ConfigMap$/ { in_cm = 1 }
+             /^---$/ { in_cm = 0 }
+             in_cm && /^ *ProductImages__Store__Endpoint: "https:\/\/objects\.example\.com"$/ { e = 1 }
+             in_cm && /^ *ProductImages__Store__Bucket: "product-images"$/ { b = 1 }
+             in_cm && /^ *ProductImages__Store__Region: "us-east-1"$/ { r = 1 }
+             END { exit e && b && r ? 0 : 1 }' "$STORE_RENDER"
+    for key in AccessKey SecretKey; do
+        check "$chart: ProductImages__Store__$key comes from a secretKeyRef, not a literal" \
+            awk -v name="ProductImages__Store__$key" '$0 ~ ("^ *- name: " name "$") { at = NR }
+                 at && NR == at + 1 && /^ *valueFrom:$/ { vf = 1 }
+                 vf && NR == at + 2 && /^ *secretKeyRef:$/ { found = 1 }
+                 END { exit found ? 0 : 1 }' "$STORE_RENDER"
+        check "$chart: no ConfigMap carries ProductImages__Store__$key" \
+            awk -v name="ProductImages__Store__$key" '/^kind: ConfigMap$/ { in_cm = 1 }
+                 /^---$/ { in_cm = 0 }
+                 in_cm && index($0, name) { found = 1 }
+                 END { exit found ? 1 : 0 }' "$STORE_RENDER"
+    done
+    refuses_chart "$chart" "$chart: a cleared store endpoint fails the render" \
+        'objectStore.endpoint is required' --set-string 'objectStore.endpoint='
+    refuses_chart "$chart" "$chart: a plain-HTTP store endpoint fails the render" \
+        'HTTPS address this chart will accept' --set-string 'objectStore.endpoint=http://objects.example.invalid'
+    refuses_chart "$chart" "$chart: a store setting with the capability off fails the render" \
+        'objectStore.enabled is false but an objectStore setting is set' --set objectStore.enabled=false
+done
+
+# The public base is the product service's alone (§10.8): stored there, and read by nothing in the BFF.
+check 'catalog: ProductImages__Store__PublicBaseUrl is in the ConfigMap' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *ProductImages__Store__PublicBaseUrl: "https:\/\/images\.example\.com"$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/catalog-object-store.yaml"
+check 'web-bff: no ConfigMap carries ProductImages__Store__PublicBaseUrl' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /ProductImages__Store__PublicBaseUrl/ { found = 1 }
+         END { exit found ? 1 : 0 }' "$OUT/web-bff-object-store.yaml"
+refuses_chart catalog 'a cleared public base fails the render' \
+    'objectStore.publicBaseUrl is required' --set-string 'objectStore.publicBaseUrl='
+refuses_chart catalog 'a plain-HTTP public base fails the render' \
+    'HTTPS address this chart will accept' --set-string 'objectStore.publicBaseUrl=http://images.example.invalid'
+refuses_chart web-bff 'a public base on the BFF fails the render' \
+    'objectStore.publicBaseUrl is set on a chart that is not catalog' \
+    --set-string 'objectStore.publicBaseUrl=https://images.example.invalid'
 
 # --------------------------------------------------------------------------
 section "Shipping's chart declares its capabilities, and each is required"
@@ -1531,7 +1593,7 @@ check 'and each reads a Secret of its own' \
 # service's Secret in another's pod by turning a credential-bearing capability
 # on. The library holds which chart owns each and the descriptors declare it;
 # the two are held to each other here in both directions.
-CREDENTIAL_CAPABILITIES="paymentProvider carrier mail clientCredentials"
+CREDENTIAL_CAPABILITIES="paymentProvider carrier mail clientCredentials objectStore"
 enable_args() {
     case "$1" in
         paymentProvider) printf '%s' "--set paymentProvider.enabled=true
@@ -1548,6 +1610,12 @@ enable_args() {
             --set-string mail.security=StartTls --set-string mail.userName=notifications
             --set-string mail.passwordSecretRef.name=notifications-mail
             --set-string mail.passwordSecretRef.key=password" ;;
+        objectStore) printf '%s' "--set objectStore.enabled=true
+            --set-string objectStore.endpoint=https://objects.example.invalid
+            --set-string objectStore.bucket=product-images --set-string objectStore.region=us-east-1
+            --set-string objectStore.secretRef.name=x-object-store
+            --set-string objectStore.secretRef.accessKeyKey=access-key
+            --set-string objectStore.secretRef.secretKeyKey=secret-key" ;;
         clientCredentials) printf '%s' "--set identity.clientCredentials=true
             --set-string identity.clientId=x --set-string identity.scope=y
             --set-string identity.clientSecretRef.name=web-bff-identity

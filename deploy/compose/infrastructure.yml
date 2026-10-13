@@ -100,6 +100,45 @@ services:
       retries: 30
       start_period: 20s
 
+  # ADR-106's local object store: SeaweedFS, because its S3 API takes a pre-signed PUT, scopes a credential pair to
+  # a bucket prefix and serves an anonymous read from one prefix alone, which is the §10.8 permission model. Two
+  # identities, neither able to list; object-store/s3.json holds them. A deployment supplies its own store.
+  object-store:
+    image: chrislusf/seaweedfs:4.47
+    command: [ "server", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-dir=/data" ]
+    # The S3 endpoint a client PUTs to (§10.8), so a phone on this machine reaches what the BFF signed.
+    ports: [ "127.0.0.1:8333:8333" ]
+    volumes: [ "object-store-data:/data", "./object-store/s3.json:/etc/seaweedfs/s3.json:ro" ]
+    healthcheck:
+      # 127.0.0.1 and not localhost, which busybox resolves to ::1 first; the S3 listener is IPv4.
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/status" ]
+      interval: 5s
+      retries: 20
+      start_period: 10s
+
+  # The bucket and the one-day expiry on uploads/ (§10.8), as a one-shot like the migrators. Idempotent, so a
+  # second `up` leaves the first one's bucket and rule as they were.
+  object-store-init:
+    image: chrislusf/seaweedfs:4.47
+    entrypoint: [ "/bin/sh", "-c", "weed shell -master=object-store:9333 < /etc/seaweedfs/init.txt" ]
+    volumes: [ "./object-store/init.txt:/etc/seaweedfs/init.txt:ro" ]
+    depends_on:
+      object-store: { condition: service_healthy }
+    restart: "no"
+
+  # §10.8: the public image is served by the layer in front of the store, which sets nosniff. products/ alone, GET
+  # and HEAD alone, and nothing from uploads/.
+  image-edge:
+    image: nginx:1.27.5-alpine
+    ports: [ "127.0.0.1:9000:8080" ]
+    volumes: [ "./object-store/edge.conf:/etc/nginx/conf.d/default.conf:ro" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz" ]
+      interval: 5s
+      retries: 10
+    depends_on:
+      object-store: { condition: service_healthy }
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.158.0
     command: [ "--config=/etc/otel/config.yaml" ]
@@ -137,3 +176,4 @@ volumes:
   sql-data:
   redis-coordination-data:
   rabbit-data:
+  object-store-data:

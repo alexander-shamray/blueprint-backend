@@ -60,6 +60,15 @@ services:
       # Not the same claim as `aud`, and nothing but the realm's audience
       # mapper makes one imply the other.
       Identity__Client__Scope: "commerce-api"
+      # §10.8's upload: the store a client PUTs to, so the endpoint is the one the host's browser reaches
+      # (loopback, path style) and not the compose-network name Catalog uses. The pair can write uploads/ and
+      # nothing else; object-store/s3.json owns it, and docs/secrets.md lists it as a local default.
+      ProductImages__Store__Endpoint: "http://127.0.0.1:8333"
+      ProductImages__Store__Bucket: "product-images"
+      ProductImages__Store__Region: "us-east-1"
+      ProductImages__Store__PathStyle: "true"
+      ProductImages__Store__AccessKey: "bff-images-svc"
+      ProductImages__Store__SecretKey: "local-dev-bff-images"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     ports: [ "127.0.0.1:5200:8080" ]
     # §13.5's readiness, asked by the host itself through HealthProbe, because
@@ -73,6 +82,8 @@ services:
     depends_on:
       bff-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
+      # The bucket, so the first upload a developer signs has somewhere to land; signing itself dials nothing.
+      object-store-init: { condition: service_completed_successfully }
       # Keycloak, because this host mints its own token and would otherwise
       # discover that on the first request.
       keycloak: { condition: service_healthy }
