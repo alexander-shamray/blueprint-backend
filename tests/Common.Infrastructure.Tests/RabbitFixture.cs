@@ -4,10 +4,10 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>A real RabbitMQ holding §14.1's definitions, so the account under test has only its own grant (ADR-036).</summary>
+/// <summary>A real RabbitMQ holding §14.1's definitions, so the account has only its own grant (ADR-036).</summary>
 public sealed class RabbitFixture : IAsyncLifetime
 {
-    /// <summary>The account the broker's definitions grant the <c>payments-</c> queues, borrowed for a probe queue.</summary>
+    /// <summary>A probe queue under the <c>payments-</c> prefix the definitions grant <c>payments-svc</c>.</summary>
     public const string Queue = "payments-operator-switch-probe";
 
     private readonly RabbitMqContainer _broker = Build();
