@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Catalog.TestSupport;
+using Common.Application;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -49,7 +50,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             {
                 CommandId = Guid.CreateVersion7(),
                 Name = name,
-                ThumbnailUrl = (string?)null,
+                ImageKey = (string?)null,
                 Amount = amount,
                 Currency = "EUR"
             },
@@ -83,7 +84,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         {
             CommandId = commandId,
             Name = "Walnut desk",
-            ThumbnailUrl = (string?)null,
+            ImageKey = (string?)null,
             Amount = 10m,
             Currency = "EUR"
         };
@@ -126,12 +127,86 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task Publishing_with_the_sellers_own_upload_stores_a_url_built_from_the_destination_key()
+    {
+        fixture.Factory.ImageStore.Reset();
+        string upload = ProductImageKeys.UploadKey(_seller, Guid.CreateVersion7(), "jpg");
+        fixture.Factory.ImageStore.Upload(upload);
+
+        HttpResponseMessage response = await PostAsAsync(
+            new
+            {
+                CommandId = Guid.CreateVersion7(),
+                Name = "Walnut desk",
+                ImageKey = upload,
+                Amount = 10m,
+                Currency = "EUR"
+            },
+            _seller);
+
+        response.IsSuccessStatusCode.ShouldBeTrue();
+        Guid id = await response.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+
+        // The key names the object the seller uploaded; the URL a reader gets is the platform's own (§10.8).
+        string stored = await fixture.ScalarAsync<string>(
+            "SELECT Value = ThumbnailUrl FROM catalog.Products WHERE Id = {0}",
+            id);
+        stored.ShouldStartWith($"{FakeProductImageStore.PublicBase}/products/{_seller}/");
+        stored.ShouldEndWith(".jpg");
+    }
+
+    [Theory]
+    [InlineData("https://evil.example/desk.jpg")]
+    [InlineData("javascript:alert(1)")]
+    public async Task A_url_in_the_keys_place_is_a_422_and_publishes_nothing(string url)
+    {
+        HttpResponseMessage response = await PostAsAsync(
+            new
+            {
+                CommandId = Guid.CreateVersion7(),
+                Name = "Walnut desk",
+                ImageKey = url,
+                Amount = 10m,
+                Currency = "EUR"
+            },
+            _seller);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+            .ShouldContain("\"code\":\"product.image_key_invalid\"");
+
+        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.Products")).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Another_sellers_upload_cannot_be_attached()
+    {
+        fixture.Factory.ImageStore.Reset();
+        string theirs = ProductImageKeys.UploadKey(Guid.CreateVersion7(), Guid.CreateVersion7(), "png");
+        fixture.Factory.ImageStore.Upload(theirs);
+
+        HttpResponseMessage response = await PostAsAsync(
+            new
+            {
+                CommandId = Guid.CreateVersion7(),
+                Name = "Walnut desk",
+                ImageKey = theirs,
+                Amount = 10m,
+                Currency = "EUR"
+            },
+            _seller);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        fixture.Factory.ImageStore.Copies.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task Publishing_without_a_token_is_a_401()
     {
         // No X-Test-User header, so the challenge stands. This catches the policy being dropped from the endpoint,
         // not UseAuthentication being dropped, since WebApplication adds that middleware itself (§4.2).
         HttpResponseMessage response = await PostAsync(
-            new { Name = "Walnut desk", ThumbnailUrl = (string?)null, Amount = 10m, Currency = "EUR" },
+            new { Name = "Walnut desk", ImageKey = (string?)null, Amount = 10m, Currency = "EUR" },
             permissions: null);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
@@ -148,7 +223,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     {
         // A real caller with the wrong grant, the case a fixture that grants everything hides.
         HttpResponseMessage response = await PostAsync(
-            new { Name = "Walnut desk", ThumbnailUrl = (string?)null, Amount = 10m, Currency = "EUR" },
+            new { Name = "Walnut desk", ImageKey = (string?)null, Amount = 10m, Currency = "EUR" },
             permissions: "catalog:read");
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -295,7 +370,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             {
                 CommandId = Guid.CreateVersion7(),
                 Name = "Walnut desk",
-                ThumbnailUrl = (string?)null,
+                ImageKey = (string?)null,
                 Amount = amount,
                 Currency = currency
             },
@@ -593,7 +668,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             {
                 CommandId = Guid.CreateVersion7(),
                 Name = "Pine stool",
-                ThumbnailUrl = (string?)null,
+                ImageKey = (string?)null,
                 Amount = 5m,
                 Currency = "EUR"
             },

@@ -19,20 +19,16 @@ public sealed class PublishProductValidator : AbstractValidator<PublishProductCo
             .Must(BeVisibleText)
             .WithMessage("'{PropertyName}' must not contain control, format, line-break or broken characters.");
 
-        // The scheme is the point: an href bound to a javascript: or data:text/html URL is stored XSS (§5.7's
-        // division: input, not a bug), and an http image is mixed content on the buyer's page (ADR-085).
-        RuleFor(x => x.ThumbnailUrl)
-            .MaximumLength(400)
-            .Must(BeAnHttpsUrl)
-            .WithMessage("'{PropertyName}' must be an absolute https URL.")
-            .When(x => x.ThumbnailUrl is not null);
+        // A key and never a URL (§10.8): the handler rebuilds the stored URL from the configured base, so no
+        // scheme or host a seller sends reaches the page. Only the bound is checked here, since the seller's own
+        // prefix is the principal's and the handler's to compare.
+        RuleFor(x => x.ImageKey)
+            .NotEmpty()
+            .MaximumLength(ProductImageKeys.LongestDestinationKeyLength)
+            .When(x => x.ImageKey is not null);
 
         PriceRules.Price(this, x => x.Amount, x => x.Currency);
     }
-
-    // A named method, since TryCreate's out parameter does not fit the chain within 120 columns.
-    private static bool BeAnHttpsUrl(string? candidate) =>
-        Uri.TryCreate(candidate, UriKind.Absolute, out Uri? uri) && uri.Scheme == Uri.UriSchemeHttps;
 
     // Every buyer reads the name, so one that reads differently from what it holds is a spoof (ADR-085): the
     // categories ThirdPartyText refuses (ADR-084). Its bound is MaximumLength's, and null and blank are NotEmpty's.

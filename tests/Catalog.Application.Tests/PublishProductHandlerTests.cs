@@ -30,7 +30,7 @@ public sealed class PublishProductHandlerTests(ServiceFixture fixture) : IAsyncL
             new PublishProductCommand(
                 Guid.CreateVersion7(),
                 "Walnut desk",
-                "https://cdn.example/desk.jpg",
+                null,
                 19.99m,
                 "eur"),
             TestContext.Current.CancellationToken);

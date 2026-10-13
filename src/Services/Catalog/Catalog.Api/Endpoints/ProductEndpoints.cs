@@ -37,7 +37,7 @@ public static class ProductEndpoints
                 new PublishProductCommand(
                     Guid.Parse("0199b0c4-6f2e-7a31-8c5d-2e4f6a7b8c9d"),
                     "Walnut desk lamp",
-                    "https://images.example.com/products/walnut-desk-lamp.jpg",
+                    "uploads/0199b0c4-1a2b-7c3d-8e4f-5a6b7c8d9e0f/0199b0c4-2b3c-7d4e-9f50-6b7c8d9e0f1a.jpg",
                     49.90m,
                     "EUR"))
             .WithName("PublishProduct");
