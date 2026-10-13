@@ -24,9 +24,14 @@ namespace Notifications.Infrastructure;
 /// <summary>The one registration method this layer exposes (§4.2), and the assembly's <c>typeof</c> anchor.</summary>
 public static class DependencyInjection
 {
+    /// <param name="host">
+    /// Which of the service's two hosts is composing (ADR-118): the API shares the database and none of the
+    /// worker's consumers, loops or meters, so a second process never runs a second set of them.
+    /// </param>
     public static IServiceCollection AddNotificationsInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        NotificationsHost host)
     {
         // ADR-079, before any connection below is opened.
         services.AddTransportSecurity();
@@ -42,10 +47,24 @@ public static class DependencyInjection
         // context would commit the inbox row outside the handler's transaction.
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<NotificationsDbContext>());
 
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
+
+        // §6.5's read side, a singleton as E.2.6's sample has it, on §7.1's runtime key.
+        services.AddSingleton<IDbConnectionFactory>(
+            new SqlConnectionFactory(configuration.GetConnectionString("Notifications")!));
+
+        // Readiness (§13.5): SQL for both hosts, and the worker's bus check AddMassTransit registers.
+        services
+            .AddHealthChecks()
+            .AddSqlServer(configuration.GetConnectionString("Notifications")!, name: "sql", tags: ["ready"]);
+
+        return host == NotificationsHost.Worker ? services.AddWorkerHalf(configuration) : services;
+    }
+
+    private static IServiceCollection AddWorkerHalf(this IServiceCollection services, IConfiguration configuration)
+    {
         // Each layer scans itself (§6.2).
         services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
-
-        services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
 
         // §5.6's repositories: the notices owed, and the order record four of them wait on for a customer.
         services.AddScoped<INotificationRepository, NotificationRepository>();
@@ -133,17 +152,8 @@ public static class DependencyInjection
         // The one retention service §9.5 asks for, registered last so it is stopped first.
         services.AddHostedService<RetentionPurgeService>();
 
-        // §6.5's read side, a singleton as E.2.6's sample has it, on §7.1's runtime key.
-        services.AddSingleton<IDbConnectionFactory>(
-            new SqlConnectionFactory(configuration.GetConnectionString("Notifications")!));
-
         // ADR-052's contact row, the one table here a mailbox lands in.
         services.AddScoped<IContactStore, SqlContactStore>();
-
-        // Readiness (§13.5): SQL here, and the bus check AddMassTransit registers.
-        services
-            .AddHealthChecks()
-            .AddSqlServer(configuration.GetConnectionString("Notifications")!, name: "sql", tags: ["ready"]);
 
         return services;
     }

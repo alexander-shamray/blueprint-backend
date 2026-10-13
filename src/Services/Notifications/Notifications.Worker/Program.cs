@@ -19,7 +19,7 @@ builder.Host.UseDefaultServiceProvider(o =>
 builder.Configuration.AddOperatorSwitchFile();  // ADR-113
 builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddNotificationsApplication();       // §6.2
-builder.Services.AddNotificationsInfrastructure(builder.Configuration);   // §4.2, §7.1
+builder.Services.AddNotificationsInfrastructure(builder.Configuration, NotificationsHost.Worker);   // §4.2, ADR-118
 
 // The relay behind IMailChannel (ADR-055); plain or anonymous submission is refused outside Development.
 builder.Services.AddMailChannel(builder.Configuration, builder.Environment);
