@@ -142,7 +142,9 @@ one-shot and the service itself, gated on
 `condition: service_completed_successfully`. Every service owns a database and
 none may migrate at startup ([§4.1](04-solution-structure.md),
 [ADR-007](adr/ADR-007-migrations-as-a-pre-deploy-job.md)), so a service added
-without its migrator starts against an empty schema.
+without its migrator starts against an empty schema. A service with two hosts
+gates both on its one migrator, since both read the schema it owns
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
 Each service's unit file in `deploy/compose/services/` keeps the pair, beside
 whatever else that service needs. The sample is written for any `<Service>`;
 the reference domain's case is in [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development):

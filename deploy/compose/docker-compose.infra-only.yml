@@ -33,6 +33,8 @@ services:
     profiles: [ "excluded" ]
   notifications-worker:
     profiles: [ "excluded" ]
+  notifications-api:
+    profiles: [ "excluded" ]
   privacy-migrator:
     profiles: [ "excluded" ]
   privacy-api:
