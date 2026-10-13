@@ -30,20 +30,22 @@ drops the row seen least recently.
 with the platform, the app id and the token, sent on every start of the app
 and on every rotation, and `DELETE` on the same path at sign-out, answered 204
 whether or not a row was there unless its sequence is out of order, below.
-**Each request carries the installation's sequence**, a counter the app
-raises before every registration and sign-out and keeps with its installation
-id, and Notifications applies a request only when its sequence is above the
-row's: one equal to it is a repeat and is answered as the first was, and one
-below it is stale: it changes nothing and is answered 409 with the row's
-sequence, so an app whose counter has fallen behind its row — restored from a
-backup, or overtaken by the move below — sets its counter one past it and
-sends its present state again. A sequence more than
-`DeviceTokenOptions.MaxSequenceStep` above an existing row's is out of order
-too and is answered the same 409, so no request can put a row's sequence out
-of an app's reach, and an app whose counter ran ahead while its requests
-failed comes back to the row in one step. A sign-out deletes the subject and
-the token and keeps only the installation id and its sequence, until the
-stale window removes those too.
+**Each request carries the installation's sequence**, a counter the app raises
+before every registration and sign-out and keeps with its installation id, and
+Notifications applies a request only when its sequence is above the row's. One
+equal to it is a repeat, answered as the first was, only when it asks for what
+the row already holds — the same subject and, for a `PUT`, the same platform,
+app id and token, or for a `DELETE` a row already cleared — and is otherwise
+stale, as one below the row's is. A stale request changes nothing and is
+answered 409 with the row's sequence, so an app whose counter has fallen behind
+its row — restored from a backup, or overtaken by the move below — sets its
+counter one past it and sends its present state again. A sequence more than
+`DeviceTokenOptions.MaxSequenceStep` above an existing row's is out of order too
+and is answered the same 409, so no request can put a row's sequence out of an
+app's reach, and an app whose counter ran ahead while its requests failed comes
+back to the row in one step. A sign-out deletes the subject and the token and
+keeps only the installation id and its sequence, until the stale window removes
+those too.
 That makes both routes `Convergent`
 ([ADR-058](ADR-058-a-write-endpoint-is-keyed-or-declares-why-a-repeat-is-harmless.md))
 inside that record's limit, because the interleaving it names cannot land: a
