@@ -284,9 +284,8 @@ def mentions(
 ) -> dict[str, list[int]]:
     """Files still naming the service once the plan is applied, with their line numbers.
 
-    An unreadable file goes in `unread`, the deletion having already happened. One
-    too large or not UTF-8 is counted in `unsearched`, so an empty result is not
-    read as complete.
+    An unreadable file goes in `unread`; one too large or not UTF-8 is counted in
+    `unsearched`, so an empty result is not read as complete.
     """
     needle = re.compile("|".join(re.escape(token) for token in (names.pascal, names.lower, names.upper)))
     doomed = tuple(f"{path}/" for path in rendered.deleted)
