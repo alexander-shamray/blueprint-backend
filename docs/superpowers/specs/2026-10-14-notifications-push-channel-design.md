@@ -349,12 +349,14 @@ the signatures are proved in unit tests against keys the tests generate.
 **The worker's chart** gains `push`, `fcm` and `apns` blocks, the two private
 keys as secrets in §15.4's shape, and the base URLs as values, ADR-053 rule
 3's chart values. **`docs/secrets.md`** gains the FCM service account's key
-and the APNs signing key, each in the places its *Adding a required key*
-lists and with a rotation row: the
-FCM key is rotated in Google's console and the APNs key in Apple's, and both
-are deployment-held, never the BFF's. **§15.4's inventory** gains the push
-keys in the pull request that binds each, and Compose gives the worker the
-simulator's base URL for both providers and no key.
+and the APNs signing key, each in the Helm values, §15.4's inventory and the
+integration-test fixture, with a rotation row: the FCM key is rotated in
+Google's console and the APNs key in Apple's, and both are deployment-held,
+never the BFF's. **Compose carries neither key**, because Development
+generates one at start, so each takes the note `docs/secrets.md` gives the
+relay credential rather than a Compose default; Compose gives the worker the
+simulator's base URL for both providers. **§15.4's inventory** gains the push
+keys in the pull request that binds each.
 
 ## 9. Observability
 
