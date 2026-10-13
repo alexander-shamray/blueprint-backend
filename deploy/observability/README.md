@@ -223,6 +223,17 @@ consumer that records it handles Catalog's product events and neither
 scenario produces one. Asserting either would fail every run on a healthy
 platform, which is how a gate gets switched off.
 
+**The run must reach the happy path, and two checks hold that.** `placeOrder`
+asserts only the synchronous answer, and the stock reservation fails later, in
+the saga, so a product without stock leaves every check green while every order
+is cancelled `out_of_stock` ([#993](https://github.com/alexander-shamray/blueprint-backend/issues/993)).
+`setup()` reads the product's stock through the gateway, which needs the
+`inventory:admin` permission on the SLO client, and refuses a product with
+fewer available than the run places (540). `teardown()` waits up to a minute
+for the tail of the saga, then fails the run when fewer than 90% of the orders
+`orders.placed` counted ended confirmed (`orders.fulfilment.duration`). Both
+decisions are `slo/gate.js`, tested by `slo/gate.test.js`.
+
 **An absent series fails the run.** It is not treated as "no problem observed",
 for the reason the two rule files exist.
 
@@ -286,6 +297,8 @@ $kcadm create clients -r commerce -s clientId=slo-run -s enabled=true \
     -s 'defaultClientScopes=["commerce-api"]'
 $kcadm add-roles -r commerce --uusername service-account-slo-run \
     --cclientid commerce-api --rolename orders:write
+$kcadm add-roles -r commerce --uusername service-account-slo-run \
+    --cclientid commerce-api --rolename inventory:admin
 $kcadm get clients/<id the create printed>/client-secret -r commerce
 ```
 
@@ -306,6 +319,16 @@ carries none:
 docker exec commerce-sql-1 sh -c '/opt/mssql-tools18/bin/sqlcmd \
     -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d Ordering -W \
     -Q "SELECT Currency, COUNT(*) FROM ordering.ProductPrices GROUP BY Currency"'
+```
+
+**3a. Restock the product.** The run places 540 single-unit orders and
+`setup()` refuses a product with fewer available. Set the count with a
+token that holds `inventory:admin` (the `demo` user's, or the SLO client's):
+
+```bash
+curl -X PUT http://localhost:5000/api/v1/inventory/stock/<a seeded id> \
+  -H "Authorization: Bearer <a token with inventory:admin>" \
+  -H "Content-Type: application/json" -d '{"onHand": 100000}'
 ```
 
 **4. Run it.** `BASE_URL` is the gateway on 5000, never a service port. Let the

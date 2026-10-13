@@ -26,12 +26,16 @@
 // creates it: the token needs `orders:write` (§11.4's permission claim) and a
 // `sub` that parses as a GUID — `HttpContextCurrentUser.Id` calls
 // `Guid.Parse` on it, and an order's owner is bound from the principal rather
-// than from the request. §14.1's Compose realm has no such client; it grants
+// than from the request. It also needs `inventory:admin`, which setup() uses to
+// read the product's stock. §14.1's Compose realm has no such client; it grants
 // `orders:write` to `demo` only. A staging realm has to add one, and that is a
 // deployment obligation this file states rather than assumes.
 //
 // SLO_PRODUCT_ID must have a row in `ordering.ProductPrices` in SLO_CURRENCY,
-// or §6.6's worked case applies and every order is refused with 422.
+// or §6.6's worked case applies and every order is refused with 422. It must
+// also carry stock for every order the run places, or the saga cancels each one
+// as out_of_stock after the 200: setup() refuses a product short of it, and
+// teardown() fails a run in which fewer orders end confirmed than the floor.
 //
 // TWO INSTRUMENTS, DELIBERATELY. k6 measures wall-clock at the client, which
 // includes the edge, TLS and the network; §13.7's command and query rows read
@@ -41,9 +45,10 @@
 // only k6's would fail a healthy service on a slow link; asserting only
 // Prometheus's would let a broken edge through with perfect handler timings.
 import http from 'k6/http';
-import { check, fail } from 'k6';
+import { check, fail, sleep } from 'k6';
 import { Trend } from 'k6/metrics';
 import { randomBytes } from 'k6/crypto';
+import { CONFIRMED_FLOOR, confirmedBreach, stockShortfall } from './gate.js';
 
 const BASE_URL = __ENV.BASE_URL;
 const PROM_URL = __ENV.PROM_URL;
@@ -53,6 +58,12 @@ const CLIENT_SECRET = __ENV.CLIENT_SECRET;
 
 // Wall-clock, split by what the request IS rather than by route, so the two
 // numbers line up with §13.7's two rows.
+// The orders the command scenario places: its rate times its duration, which
+// the stock precondition in setup() and the floor in teardown() both read.
+const ORDER_RATE = 3;
+const ORDER_SECONDS = 180;
+const ORDERS_PLACED = ORDER_RATE * ORDER_SECONDS;
+
 const commandDuration = new Trend('slo_command_duration', true);
 const queryDuration = new Trend('slo_query_duration', true);
 
@@ -105,9 +116,9 @@ export const options = {
             executor: 'constant-arrival-rate',
             // 180/min against §10.3's `authenticated` budget of 300/min per
             // subject, token bucket, QueueLimit = 10. See below.
-            rate: 3,
+            rate: ORDER_RATE,
             timeUnit: '1s',
-            duration: '3m',
+            duration: `${ORDER_SECONDS}s`,
             preAllocatedVUs: 10,
             maxVUs: 30,
             exec: 'placeOrder',
@@ -163,7 +174,23 @@ export function setup() {
     if (response.status !== 200)
         fail(`token endpoint returned ${response.status}: ${response.body}`);
 
-    return { token: response.json('access_token'), startedAt: Date.now() };
+    const token = response.json('access_token');
+
+    // The saga reserves stock after the 200, so a product without enough of it
+    // is a happy path the run never reaches while every check stays green.
+    const stock = http.get(
+        `${BASE_URL}/api/v1/inventory/stock/${__ENV.SLO_PRODUCT_ID}`,
+        { headers: { Authorization: `Bearer ${token}` } });
+
+    if (stock.status !== 200)
+        fail(`stock read returned ${stock.status}; the client needs inventory:admin: ${stock.body}`);
+
+    const shortfall = stockShortfall(Number(stock.json('available')), ORDERS_PLACED);
+
+    if (shortfall !== null)
+        fail(`SLO run is not configured: ${shortfall}; restock it with PUT /api/v1/inventory/stock/{id}`);
+
+    return { token, startedAt: Date.now() };
 }
 
 export function browseCatalog() {
@@ -302,6 +329,13 @@ export function teardown(data) {
 
     const breaches = [];
 
+    // The orders must reach the happy path: placeOrder sees only the 200, and
+    // the saga cancels a refused reservation later. Let the tail settle first.
+    const confirmed = confirmedBreachAfterSettling(data.startedAt);
+
+    if (confirmed !== null)
+        breaches.push(confirmed);
+
     for (const row of rows) {
         const value = instantQuery(row.query);
 
@@ -341,6 +375,28 @@ export function teardown(data) {
 
     if (breaches.length > 0)
         fail(`SLO run failed:\n  ${breaches.join('\n  ')}`);
+}
+
+// Orders placed in the last seconds are still in the saga when teardown() starts,
+// so the read repeats until the floor holds or the settling time is spent.
+function confirmedBreachAfterSettling(startedAt) {
+    let breach = null;
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+        if (attempt > 0)
+            sleep(10);
+
+        const w = `${Math.max(1, Math.ceil((Date.now() - startedAt) / 1000))}s`;
+        breach = confirmedBreach(
+            instantQuery(`sum(increase(orders_placed_total[${w}]))`),
+            instantQuery(`sum(increase(orders_fulfilment_duration_seconds_count[${w}])) or vector(0)`),
+            CONFIRMED_FLOOR);
+
+        if (breach === null)
+            return null;
+    }
+
+    return breach;
 }
 
 // A fresh id per order. `PlaceOrderCommand` is an `IIdempotentCommand` (§8.5),

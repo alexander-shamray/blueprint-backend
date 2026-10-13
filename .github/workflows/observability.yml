@@ -54,3 +54,8 @@ jobs:
 
       - name: Alerts, runbooks and signals agree
         run: python deploy/observability/check.py
+
+      # The SLO run's stock precondition and confirmed-order floor. The
+      # runner's preinstalled Node runs it; k6 itself is not needed for these.
+      - name: The SLO run's floor holds
+        run: node --test "deploy/observability/slo/*.test.js"
