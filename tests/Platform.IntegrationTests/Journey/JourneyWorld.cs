@@ -61,7 +61,8 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
 
     public const string Bff = "Bff";
 
-    private readonly MsSqlContainer _sql = new MsSqlBuilder().WithImage(ComposeImage.Of("sql")).Build();
+    private readonly MsSqlContainer _sql = TestcontainersWarmUp.Build(
+        () => new MsSqlBuilder().WithImage(ComposeImage.Of("sql")).Build());
 
     private readonly RedisContainer _cache = new RedisBuilder()
         .WithImage(ComposeImage.Of("redis-cache"))

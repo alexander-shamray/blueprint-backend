@@ -41,9 +41,9 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     private readonly string _schema;
     private readonly bool _schedules;
 
-    private readonly MsSqlContainer _sql = new MsSqlBuilder()
+    private readonly MsSqlContainer _sql = TestcontainersWarmUp.Build(() => new MsSqlBuilder()
         .WithImage(ComposeImage.Of("sql"))
-        .Build();
+        .Build());
 
     /// <summary>§8.1's two servers, so a coordination key written to the evicting one is caught (§12.4).</summary>
     private readonly RedisContainer? _redisCache;

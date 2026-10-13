@@ -32,6 +32,40 @@ public class TestcontainersWarmUpTests
     }
 
     [Fact]
+    public void A_build_runs_after_the_initialisers_and_returns_what_it_built()
+    {
+        List<string> order = [];
+
+        string built = TestcontainersWarmUp.Build(
+            () => order.Add("initialised"),
+            () =>
+            {
+                order.Add("built");
+                return "container";
+            });
+
+        built.ShouldBe("container");
+        order.ShouldBe(["initialised", "built"]);
+    }
+
+    [Fact]
+    public void A_build_does_not_run_when_an_initialiser_failed()
+    {
+        bool built = false;
+
+        Should.Throw<InvalidOperationException>(
+            () => TestcontainersWarmUp.Build(
+                () => _ = Poisoned.Value,
+                () =>
+                {
+                    built = true;
+                    return 0;
+                }));
+
+        built.ShouldBeFalse();
+    }
+
+    [Fact]
     public void The_real_initialisers_run_without_a_daemon()
     {
         Should.NotThrow(TestcontainersWarmUp.Ensure);

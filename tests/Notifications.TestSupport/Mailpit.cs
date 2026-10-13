@@ -171,16 +171,17 @@ public sealed class Mailpit : IAsyncDisposable
     }
 
     private static ContainerBuilder Builder(int? smtpHostPort = null) =>
-        (smtpHostPort is { } port
-                ? new ContainerBuilder().WithPortBinding(port, SmtpPort)
-                : new ContainerBuilder().WithPortBinding(SmtpPort, assignRandomHostPort: true))
-            .WithImage(Image)
-            .WithPortBinding(ApiPort, assignRandomHostPort: true)
-            .WithEnvironment("MP_ENABLE_CHAOS", "true")
-            .WithWaitStrategy(
-                Wait
-                    .ForUnixContainer()
-                    .UntilHttpRequestIsSucceeded(r => r.ForPort((ushort)ApiPort).ForPath("/readyz")));
+        TestcontainersWarmUp.Build(() =>
+            (smtpHostPort is { } port
+                    ? new ContainerBuilder().WithPortBinding(port, SmtpPort)
+                    : new ContainerBuilder().WithPortBinding(SmtpPort, assignRandomHostPort: true))
+                .WithImage(Image)
+                .WithPortBinding(ApiPort, assignRandomHostPort: true)
+                .WithEnvironment("MP_ENABLE_CHAOS", "true")
+                .WithWaitStrategy(
+                    Wait
+                        .ForUnixContainer()
+                        .UntilHttpRequestIsSucceeded(r => r.ForPort((ushort)ApiPort).ForPath("/readyz"))));
 
     private sealed record MailpitPage(int Total, IReadOnlyList<MailpitSummary> Messages);
 }

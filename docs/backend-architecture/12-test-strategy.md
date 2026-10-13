@@ -338,9 +338,9 @@ on Redis (§8.5) gets two servers, matching §8.1's split, because otherwise the
 suite cannot catch a coordination key written to the evicting instance:
 
 ```csharp
-private readonly MsSqlContainer _sql = new MsSqlBuilder()
+private readonly MsSqlContainer _sql = TestcontainersWarmUp.Build(() => new MsSqlBuilder()
     .WithImage(ComposeImage.Of("sql"))
-    .Build();
+    .Build());
 
 _redisCache = new RedisBuilder()
     .WithImage(ComposeImage.Of("redis-cache"))
