@@ -254,6 +254,10 @@ export function placeOrder(data) {
 }
 
 export function teardown(data) {
+    // Settle first, so the window below ends where the rows are read and keeps
+    // the run's earliest traffic.
+    const confirmed = confirmedBreachAfterSettling(data.startedAt);
+
     // The authoritative half. Every row below names the instrument §13.7 says
     // it reads; a row whose signal does not exist is NOT asserted here and is
     // listed at the bottom instead, because an SLO nobody can compute is worse
@@ -330,9 +334,7 @@ export function teardown(data) {
     const breaches = [];
 
     // The orders must reach the happy path: placeOrder sees only the 200, and
-    // the saga cancels a refused reservation later. Let the tail settle first.
-    const confirmed = confirmedBreachAfterSettling(data.startedAt);
-
+    // the saga cancels a refused reservation later.
     if (confirmed !== null)
         breaches.push(confirmed);
 
@@ -379,12 +381,15 @@ export function teardown(data) {
 
 // Orders placed in the last seconds are still in the saga when teardown() starts,
 // so the read repeats until the floor holds or the settling time is spent.
+const SETTLE_ATTEMPTS = 6;
+const SETTLE_SLEEP_SECONDS = 10;
+
 function confirmedBreachAfterSettling(startedAt) {
     let breach = null;
 
-    for (let attempt = 0; attempt < 6; attempt++) {
+    for (let attempt = 0; attempt < SETTLE_ATTEMPTS; attempt++) {
         if (attempt > 0)
-            sleep(10);
+            sleep(SETTLE_SLEEP_SECONDS);
 
         const w = `${Math.max(1, Math.ceil((Date.now() - startedAt) / 1000))}s`;
         breach = confirmedBreach(

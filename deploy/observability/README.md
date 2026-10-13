@@ -229,10 +229,11 @@ the saga, so a product without stock leaves every check green while every order
 is cancelled `out_of_stock` ([#993](https://github.com/alexander-shamray/blueprint-backend/issues/993)).
 `setup()` reads the product's stock through the gateway, which needs the
 `inventory:admin` permission on the SLO client, and refuses a product with
-fewer available than the run places (540). `teardown()` waits up to a minute
-for the tail of the saga, then fails the run when fewer than 90% of the orders
-`orders.placed` counted ended confirmed (`orders.fulfilment.duration`). Both
-decisions are `slo/gate.js`, tested by `slo/gate.test.js`.
+fewer available than the run places (540). `teardown()` waits up to 50 seconds
+(`SETTLE_ATTEMPTS` and `SETTLE_SLEEP_SECONDS`) for the tail of the saga, then
+fails the run when fewer than 90% of the orders `orders.placed` counted ended
+confirmed (`orders.fulfilment.duration`). Both decisions are `slo/gate.js`,
+tested by `slo/gate.test.js`.
 
 **An absent series fails the run.** It is not treated as "no problem observed",
 for the reason the two rule files exist.
