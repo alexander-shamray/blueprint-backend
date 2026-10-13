@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
-using Yarp.ReverseProxy.Configuration;
 using Xunit;
+using Yarp.ReverseProxy.Configuration;
 
 namespace Gateway.Api.Tests;
 
@@ -160,7 +160,11 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
 
     private static RouteConfiguration ReadRoute(string id) => Shipped.Value.Single(r => r.Id == id);
 
-    private sealed class FileFactory(string destination, string path, bool withoutFilter = false, bool withoutValidation = false)
+    private sealed class FileFactory(
+        string destination,
+        string path,
+        bool withoutFilter = false,
+        bool withoutValidation = false)
         : StubbedGatewayFactory(destination)
     {
         /// <summary>The filter is internal to the gateway, so it is found by name; a rename fails the control, as Single throws.</summary>
@@ -194,7 +198,8 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
     {
         public ValueTask<IList<Exception>> ValidateRouteAsync(RouteConfig route) => new(new List<Exception>());
 
-        public ValueTask<IList<Exception>> ValidateClusterAsync(ClusterConfig cluster) => yarp.ValidateClusterAsync(cluster);
+        public ValueTask<IList<Exception>> ValidateClusterAsync(ClusterConfig cluster) =>
+            yarp.ValidateClusterAsync(cluster);
     }
 
     private sealed class TempRouteFile : IDisposable
