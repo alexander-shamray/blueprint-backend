@@ -345,7 +345,7 @@ class MentionTests(unittest.TestCase):
         (self.root / "docs" / "image.bin").write_bytes(b"\xff\xfeZulu")
         rendered = remove_service.Plan(deleted=["src/Services/Zulu"], updated={"docs/ch.md": "no mention\n"})
 
-        found = remove_service.mentions(self.root, Names("Zulu"), rendered, [])
+        found = remove_service.mentions(self.root, Names("Zulu"), rendered, [], {})
 
         self.assertEqual(
             found,
@@ -358,7 +358,7 @@ class MentionTests(unittest.TestCase):
         self.write("src/Services/Zulu2/Notes.md", "Zulu\n")
         rendered = remove_service.Plan(deleted=["src/Services/Zulu"])
 
-        found = remove_service.mentions(self.root, Names("Zulu"), rendered, [])
+        found = remove_service.mentions(self.root, Names("Zulu"), rendered, [], {})
 
         self.assertEqual(list(found), ["src/Services/Zulu2/Notes.md"])
 
@@ -374,10 +374,22 @@ class MentionTests(unittest.TestCase):
 
         unread: list[str] = []
         with mock.patch.object(Path, "read_bytes", refuse_one):
-            found = remove_service.mentions(self.root, Names("Zulu"), remove_service.Plan(), unread)
+            found = remove_service.mentions(self.root, Names("Zulu"), remove_service.Plan(), unread, {})
 
         self.assertEqual(unread, ["docs/locked.md"])
         self.assertEqual(list(found), ["docs/open.md"])
+
+    def test_files_the_search_cannot_read_as_text_are_counted_not_dropped(self):
+        self.write("docs/open.md", "Zulu\n")
+        self.write("docs/big.md", "Zulu" * 5)
+        (self.root / "docs" / "binary.bin").write_bytes(b"\xff\xfeZulu")
+
+        unsearched: dict[str, int] = {}
+        with mock.patch.object(remove_service, "MAX_MENTION_BYTES", 10):
+            found = remove_service.mentions(self.root, Names("Zulu"), remove_service.Plan(), [], unsearched)
+
+        self.assertEqual(list(found), ["docs/open.md"])
+        self.assertEqual(unsearched, {"too large": 1, "not UTF-8": 1})
 
 
 class AllowListTests(unittest.TestCase):
@@ -478,7 +490,8 @@ class CommandLineTests(unittest.TestCase):
 
         self.assertEqual((code, err), (0, ""))
         self.assertFalse((root / "src" / "Services" / PROBE).exists())
-        self.assertIn(f"Nothing else names {PROBE}.", out)
+        self.assertIn(f"Nothing else names {PROBE}", out)
+        self.assertRegex(out, r"Not searched, so the list is not complete: \d+ not UTF-8")
 
     def test_a_refusal_is_one_line_on_stderr_and_exit_one(self):
         code, out, err = self.run_main("Catalog", "--repo-root", str(self.base))

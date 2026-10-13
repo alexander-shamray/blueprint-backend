@@ -23,11 +23,18 @@ whole tree. A shared file the scaffold learns to edit fails that comparison
 until this tool learns to revert it. The tool holds its own list in code, and
 the table is what that list is checked against.
 
-**It then prints every file that still names the service.** Contracts under
-`Common.Contracts`, the gateway's routes and permissions, the BFF, the Helm
-charts, the chapters and the ADRs all stay, because whether a contract dies
-with its owner or a chapter's evidence moves is the adopter's decision and
-not a text substitution. The list is what is left to read.
+**It then prints the files it searched that still name the service.**
+Contracts under `Common.Contracts`, the gateway's routes and permissions, the
+BFF, the Helm charts, the chapters and the ADRs all stay, because whether a
+contract dies with its owner or a chapter's evidence moves is the adopter's
+decision and not a text substitution. The list is what is left to read.
+
+The search skips what is not part of the tree or cannot be read as text:
+`.git`, `bin`, `obj`, `node_modules`, `artifacts`, `TestResults` and
+`.remember`, the sibling worktrees under `.claude/worktrees`, a file over 2 MB
+(`MAX_MENTION_BYTES`) and a file that is not UTF-8. The last two are counted
+and reported as "Not searched", so neither a list nor a "Nothing else names"
+line is read as complete when files went unread.
 
 ## What it refuses, and what it skips
 
