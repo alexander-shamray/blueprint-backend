@@ -153,6 +153,7 @@ jobs:
             --certificate-identity "$CERTIFICATE_IDENTITY" \\
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
           python deploy/canary/canary.py verified-digest --file "$RUNNER_TEMP/v.json"
+          gh attestation verify "oci://x" --source-ref refs/heads/main
         env:
           CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
 
@@ -664,6 +665,13 @@ class SupplyChainTests(Fixture):
         problems = self.broken("verified-digest", "images", deploy=True)
 
         self.assertIn("reading the digest it verified", problems[0])
+
+    def test_a_provenance_check_that_does_not_pin_the_ref_is_caught(self) -> None:
+        """The signer workflow alone admits ci.yml on any branch."""
+        problems = self.broken("--source-ref refs/heads/main", "--limit 1", deploy=True)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("pinning the provenance to main", problems[0])
 
     def test_a_helm_upgrade_with_no_digest_is_caught(self) -> None:
         problems = self.broken('--set-string image.digest="$API_DIGEST" \\\n', "\\\n", deploy=True)

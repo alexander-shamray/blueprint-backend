@@ -226,7 +226,8 @@ jobs:
             VERIFIED=$(python deploy/canary/canary.py verified-digest --file "$RUNNER_TEMP/$1.verified.json")
             gh attestation verify "oci://$reference@$VERIFIED" \
               --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" > /dev/null
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+              --source-ref refs/heads/main > /dev/null
           }
           API_IMAGE=$(python deploy/canary/canary.py images --workload "$WORKLOAD" --role api)
           MIGRATOR_IMAGE=$(python deploy/canary/canary.py images --workload "$WORKLOAD" --role migrator)

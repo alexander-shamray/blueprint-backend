@@ -20,7 +20,8 @@ else. `deploy.yml`'s rollout, after the tag is validated and before any Helm
 command, verifies the workload's API image and, where its chart has one, its
 migrator: `cosign verify` of the tag against the identity `ci.yml` on
 `refs/heads/main` and GitHub's OIDC issuer, then `gh attestation verify` of the
-provenance for that digest and `--signer-workflow` `ci.yml`. The digest handed
+provenance for that digest, with `--signer-workflow` `ci.yml` and `--source-ref`
+`refs/heads/main`. The digest handed
 on is the one `cosign verify` reports, read by `canary.py verified-digest`,
 which refuses anything but `sha256:` and 64 lowercase hex characters, and every
 `helm upgrade` passes it as `--set-string image.digest`, with
@@ -44,19 +45,21 @@ pins `refs/heads/main`. `gh attestation verify` takes the provenance because it
 checks the subject digest and the signing workflow in one call. The `images` job
 is path-filtered, so a service no push has touched since this landed has no
 signed image to verify, and a change to `ci.yml` does not select it: a dispatch
-of `ci.yml` makes every filter true and signs every image once. Main's runs no
-longer cancel one another, because one cancelled between the push and the
-signature leaves an image the verifier then refuses.
+of `ci.yml` makes every filter true and signs every image once. Each commit on
+`main` has a concurrency group of its own, so no run is cancelled or replaced
+while pending, because one lost between the push and the signature leaves an
+image the verifier then refuses.
 **Consequences.** Nothing here can be exercised before the first push to `main`,
-so the first dispatch is where a wrong action input shows. Keyless signing needs
+so the first dispatch is where a wrong action input shows, or a `cosign verify`
+output the digest reader cannot parse, which refuses the rollout rather than
+passing it. Keyless signing needs
 Sigstore's public service up at build time and writes each signature to a public
 log that names the repository and the workflow. The check guards the deploys
 made through the rollout, and a `helm upgrade` run by hand is not refused; a
 cluster policy is the stronger seat once a cluster exists. A package pulled by a
-future cluster needs an `imagePullSecret` if it is private. Main's runs
-queue instead of cancelling, so a burst of merges builds and signs in sequence.
-**Revisit trigger:** if the repository goes
-private, signing is re-decided, because the Rekor entry would name a private
+future cluster needs an `imagePullSecret` if it is private. A burst of merges
+builds and signs in parallel, one run each. **Revisit trigger:** if the
+repository goes private, signing is re-decided, because the Rekor entry would name a private
 repository in a public log and GitHub's attestations on private repositories
 need Enterprise Cloud; the registry need not change.
 
