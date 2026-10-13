@@ -33,8 +33,10 @@ whether or not a row was there. **Each request carries the installation's
 sequence**, a counter the app raises before every registration and sign-out
 and keeps with its installation id, and Notifications applies a request only
 when its sequence is above the row's: one equal to it is a repeat and is
-answered as the first was, one below it is stale and is answered the same with
-no effect. A sign-out deletes the subject and the token and keeps only the
+answered as the first was, and one below it is stale: it changes nothing and
+is answered 409 with the row's sequence, so an app whose counter has fallen
+behind its row — restored from a backup, or overtaken by the move below —
+raises its counter past it and sends its present state again. A sign-out deletes the subject and the token and keeps only the
 installation id and its sequence, until the stale window removes those too.
 That makes both routes `Convergent`
 ([ADR-058](ADR-058-a-write-endpoint-is-keyed-or-declares-why-a-repeat-is-harmless.md))
@@ -145,8 +147,9 @@ until the next start, with no signal to the platform; mail is unaffected. **A
 shared device** silently stops pushing to the subject who used it before, who
 has signed out of it or been signed over. **An installation id is a bearer
 name for its row**: a subject who learns another's can move that row to
-themselves, which stops the other's pushes and reads none of them, and the id
-is a random UUID the app never shows. **A registration made after an erasure**
+themselves, which stops the other's pushes until that app's next start, when
+the 409 sends it past the mover's sequence, and reads none of them; the id is
+a random UUID the app never shows. **A registration made after an erasure**
 makes a new row of the subject's own act, as ADR-107 accepts for the saved
 address, and it comes back on every start of the app for as long as the
 deployment leaves the subject able to sign in, since Keycloak takes no part in
