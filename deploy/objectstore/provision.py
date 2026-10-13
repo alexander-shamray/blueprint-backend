@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Say what the production Environment still lacks for object-store.yml's deployed job, or set it.
+"""Say what the production Environment lacks for object-store.yml's deployed job, or set it (ADR-114).
 
-The job is skipped until the Environment holds what it reads (docs/secrets.md, ADR-110, ADR-114), and a skipped
-job files nothing. `py -3.12 deploy/objectstore/provision.py check` lists what is missing; `apply` sets it from
-the same names in the caller's environment, the opt-in last, so a half-provisioned job never runs."""
+A job skipped for want of its Environment files nothing: `py -3.12 deploy/objectstore/provision.py check` lists
+what is missing and `apply` sets it from the same names in the caller's environment, the opt-in last."""
 
 from __future__ import annotations
 
