@@ -2,6 +2,8 @@
 
 import datetime
 import http.server
+import pathlib
+import re
 import threading
 import unittest
 
@@ -168,6 +170,70 @@ class RefusalTests(unittest.TestCase):
         with self.assertRaisesRegex(store_check.Refusal, "https"):
             store_check.check(store.env(**{store_check.ENDPOINT: "http://store.example"}))
         self.assertEqual(store.seen, [])
+
+
+WORKFLOW = pathlib.Path(__file__).resolve().parents[2] / ".github" / "workflows" / "object-store.yml"
+
+
+def commands() -> str:
+    """The workflow's commands alone, comment lines removed.
+
+    Whole lines only, as realm.yml's suite strips them: the file explains each
+    command in a comment, so a raw search finds `gh issue create` whether or
+    not anything runs it.
+    """
+    return "\n".join(line for line in WORKFLOW.read_text(encoding="utf-8").splitlines()
+                     if not line.lstrip().startswith("#"))
+
+
+def deployed_job() -> str:
+    text = commands()
+    start = text.find("\n  deployed:")
+    if start == -1:
+        raise AssertionError(f"{WORKFLOW} has no `deployed` job")
+    return text[start:]
+
+
+class FilingTests(unittest.TestCase):
+    """A red run files an issue, because a notification is read once (ADR-110)."""
+
+    def test_only_the_judgement_failing_files_anything(self):
+        job = deployed_job()
+        match = re.search(r"^      - name: A drifted store is an issue.*\n        if: (.*)$", job, re.MULTILINE)
+        self.assertIsNotNone(match, "a red run no longer files anything")
+        self.assertIn("failure()", match.group(1))
+        self.assertIn("steps.judge.outcome == 'failure'", match.group(1))
+
+    def test_the_judge_id_is_on_the_step_that_asks_the_store(self):
+        job = deployed_job()
+        match = re.search(r"^      - name: [^\n]*\n        id: judge\n(?:        [^\n]*\n)*?"
+                          r"        run: python deploy/objectstore/store_check\.py check$", job, re.MULTILINE)
+        self.assertIsNotNone(match, "`judge` is not the step that runs store_check.py check")
+
+    def test_the_issue_is_filed_once_and_commented_on_after(self):
+        job = deployed_job()
+        self.assertIn("gh issue create", job)
+        self.assertIn("--label security --label high", job)
+        self.assertIn("gh issue comment", job)
+        listing = re.search(r"gh issue list (.*?)\\\n", job)
+        self.assertIsNotNone(listing, "the filing step no longer lists issues")
+        for flag in ("--limit 1000", "--state open", "--label security"):
+            self.assertIn(flag, listing.group(1))
+
+    def test_issues_write_is_the_deployed_jobs_and_no_other(self):
+        text = commands()
+        self.assertEqual(text.count("issues: write"), 1)
+        self.assertGreater(text.find("issues: write"), text.find("\n  deployed:"))
+
+    def test_the_judge_step_times_out_before_the_job_does(self):
+        """A job cancelled on its own timeout runs no `failure()` step."""
+        job = deployed_job()
+        job_cap = re.search(r"^    timeout-minutes: (\d+)$", job, re.MULTILINE)
+        self.assertIsNotNone(job_cap, "the deployed job has no timeout")
+        judge = job[job.find("id: judge"):]
+        step_cap = re.search(r"^        timeout-minutes: (\d+)$", judge, re.MULTILINE)
+        self.assertIsNotNone(step_cap, "the judge step has no timeout of its own")
+        self.assertLess(int(step_cap.group(1)), int(job_cap.group(1)))
 
 
 if __name__ == "__main__":

@@ -56,6 +56,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: production
+    permissions:
+      contents: read
+      # `issues: write` is what a red run does, below. It is job-scoped
+      # because the `check` job has no business filing anything.
+      issues: write
     steps:
       # Judged from `main` and nothing else, on realm.yml's reasoning: this
       # job sends the production pairs to the endpoint using whatever copy of
@@ -82,6 +87,10 @@ jobs:
       # variable, a pair the store does not know, an unreachable store and a
       # delete the store allows all fail the step.
       - name: Neither credential pair can delete or list the bucket
+        id: judge
+        # A step timeout, so a hung store is a failed step and not a cancelled
+        # job: `failure()` below fires on the first and not on the second.
+        timeout-minutes: 3
         run: python deploy/objectstore/store_check.py check
         env:
           OBJECT_STORE_ENDPOINT: ${{ vars.OBJECT_STORE_ENDPOINT }}
@@ -91,3 +100,42 @@ jobs:
           OBJECT_STORE_BFF_SECRET_KEY: ${{ secrets.OBJECT_STORE_BFF_SECRET_KEY }}
           OBJECT_STORE_CATALOG_ACCESS_KEY: ${{ secrets.OBJECT_STORE_CATALOG_ACCESS_KEY }}
           OBJECT_STORE_CATALOG_SECRET_KEY: ${{ secrets.OBJECT_STORE_CATALOG_SECRET_KEY }}
+
+      # What a red run does, on realm.yml's reasoning (ADR-043): a notification
+      # is read once and an issue is open until somebody closes it, so a red
+      # run files an issue, or comments on the open one, and the tracker holds
+      # one issue per drift and not one per day. `deploy/objectstore/README.md`
+      # is the procedure it points at. Only the `judge` step's failure files: a
+      # dispatch refused for coming from a branch, or a suite that went red,
+      # is not a drift in the store. `security` and `high`: a store that lets
+      # an image credential delete is a protection that does not protect, but
+      # this step cannot tell that from a store it could not reach.
+      - name: A drifted store is an issue, not a notification
+        if: ${{ failure() && steps.judge.outcome == 'failure' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="The deployed object store no longer refuses an image credential a delete or a list, or could not be reached"
+          # `--limit 1000`, for the reason `.claude/scripts/gh-issue-list.sh`
+          # gives: a listing that cannot see the open issue files a second one.
+          EXISTING=$(gh issue list --state open --label security --limit 1000 \
+            --json number,title --jq "map(select(.title == \"$TITLE\")) | .[0].number // empty")
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "Still red: $RUN_URL"
+          else
+            gh issue create --title "$TITLE" --label security --label high --body "$(cat <<EOF
+          The deployed object store check (ADR-110) went red: $RUN_URL
+
+          Either the deployed store allows one of the two image credential pairs a
+          delete or a list that section 10.8 says it cannot, or the store could not be
+          asked at all. The run log says which, per pair. The procedure is in
+          \`deploy/objectstore/README.md\`.
+
+          Filed by \`.github/workflows/object-store.yml\`. Each further red run comments
+          here rather than filing again; close this issue on a green
+          \`workflow_dispatch\` of the same workflow.
+          EOF
+          )"
+          fi
