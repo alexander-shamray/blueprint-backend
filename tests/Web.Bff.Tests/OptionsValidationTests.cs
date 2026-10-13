@@ -2,6 +2,7 @@ using Common.Infrastructure.Identity;
 using Common.Web;
 using Microsoft.Extensions.Options;
 using Shouldly;
+using Web.Bff.ProductImages;
 using Xunit;
 
 namespace Web.Bff.Tests;
@@ -22,9 +23,26 @@ public class OptionsValidationTests
     [InlineData("Scope")]
     public void The_host_refuses_to_start_without_each_credential_and_names_it(string member)
     {
-        OptionsValidationException refusal = Refusal(member).ShouldBeOfType<OptionsValidationException>();
+        OptionsValidationException refusal =
+            Refusal(ServiceIdentityOptions.SectionName, member).ShouldBeOfType<OptionsValidationException>();
 
         refusal.OptionsType.ShouldBe(typeof(ServiceIdentityOptions));
+        refusal.Message.ShouldContain(member);
+    }
+
+    /// <summary>ADR-106's store is a start-time requirement too: a host that cannot sign must not boot.</summary>
+    [Theory]
+    [InlineData("Endpoint")]
+    [InlineData("Bucket")]
+    [InlineData("Region")]
+    [InlineData("AccessKey")]
+    [InlineData("SecretKey")]
+    public void The_host_refuses_to_start_without_each_store_value_and_names_it(string member)
+    {
+        OptionsValidationException refusal =
+            Refusal(ObjectStoreOptions.SectionName, member).ShouldBeOfType<OptionsValidationException>();
+
+        refusal.OptionsType.ShouldBe(typeof(ObjectStoreOptions));
         refusal.Message.ShouldContain(member);
     }
 
@@ -33,13 +51,13 @@ public class OptionsValidationTests
     /// A failed start can dispose the provider the factory still reads, reporting <see cref="ObjectDisposedException"/>
     /// with no inner exception; only a failed start does that, so a re-ask cannot invent a refusal.
     /// </remarks>
-    private static Exception Refusal(string member)
+    private static Exception Refusal(string section, string member)
     {
         Exception? refusal = null;
 
         for (int attempt = 0; attempt < StartAttempts; attempt++)
         {
-            using MissingSettingFactory factory = new(member);
+            using MissingSettingFactory factory = new($"{section}:{member}");
 
             // The factory builds the host on first use.
             refusal = Record.Exception(() => factory.CreateClient())
@@ -65,17 +83,19 @@ public class OptionsValidationTests
     }
 
     /// <summary>One member blanked rather than unset, so an exported environment variable cannot refill it.</summary>
-    private sealed class MissingSettingFactory(string member) : BffFactory
+    private sealed class MissingSettingFactory(string blanked) : BffFactory
     {
         protected override IEnumerable<KeyValuePair<string, string?>> Settings =>
         [
             new(AuthenticationExtensions.AuthorityKey, UnreachableAuthority),
             new("ConnectionStrings:Bff", UnreachableDatabase),
             new("ConnectionStrings:RabbitMq", UnreachableBroker),
+            .. StoreSettings.Select(Blank),
             .. Members.Select(name =>
-                new KeyValuePair<string, string?>(
-                    $"{ServiceIdentityOptions.SectionName}:{name}",
-                    string.Equals(name, member, StringComparison.Ordinal) ? "" : "supplied"))
+                Blank(new KeyValuePair<string, string?>($"{ServiceIdentityOptions.SectionName}:{name}", "supplied")))
         ];
+
+        private KeyValuePair<string, string?> Blank(KeyValuePair<string, string?> setting) =>
+            string.Equals(setting.Key, blanked, StringComparison.Ordinal) ? new(setting.Key, "") : setting;
     }
 }

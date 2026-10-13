@@ -9,6 +9,7 @@ using Web.Bff.Addresses;
 using Web.Bff.Endpoints;
 using Web.Bff.Messaging;
 using Web.Bff.Orders;
+using Web.Bff.ProductImages;
 
 if (args is [HealthProbe.Argument]) Environment.Exit(await HealthProbe.RunAsync());   // §14.1's healthcheck
 
@@ -96,6 +97,12 @@ builder.Services.AddSingleton<OrderEventStream>();
 builder.Services.AddSingleton<SavedAddressStore>();
 builder.Services.AddSingleton<IValidator<SavedAddress>, SavedAddressValidator>();
 
+// §10.8's upload: the store it signs for, and the permission that gates it (§11.4).
+builder.Services.AddProductImageUploads();
+builder.Services
+    .AddAuthorizationBuilder()
+    .AddPolicy(BffPermissions.CatalogWrite, p => p.RequirePermission(BffPermissions.CatalogWrite));
+
 WebApplication app = builder.Build();
 
 // Middleware order is behaviour, not formatting (§4.2); forwarded headers, CORS and the limiter are the edge's.
@@ -114,6 +121,7 @@ app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no to
 app.MapCheckoutEndpoints();
 app.MapOrderEndpoints();          // §10.7 — ADR-051's projection, no hop
 app.MapSavedAddressEndpoints();   // §10.9 — ADR-107's saved address, no hop
+app.MapProductImageEndpoints();   // §10.8 — signs a URL locally, no hop
 
 app.Run();
 

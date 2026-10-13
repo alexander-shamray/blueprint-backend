@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Web.Bff.ProductImages;
 
 namespace Web.Bff.Tests;
 
@@ -28,6 +29,11 @@ public class BffFactory : WebApplicationFactory<Program>
     /// <summary>A broker that does not resolve and carries no credential; the bus's start does not wait.</summary>
     public const string UnreachableBroker = "amqp://bff-rabbit.invalid:5672";
 
+    /// <summary>The store a client would be told to <c>PUT</c> to; <c>.invalid</c> never resolves.</summary>
+    public const string StoreEndpoint = "https://store.invalid:9000";
+
+    public const string StoreBucket = "product-images";
+
     public Uri? PricingAddress { get; set; }
 
     /// <summary>The runtime key (§7.1), which <c>BffServiceFixture</c> points at its container.</summary>
@@ -47,7 +53,19 @@ public class BffFactory : WebApplicationFactory<Program>
         new($"{ServiceIdentityOptions.SectionName}:ClientSecret", "not-a-real-secret"),
         new($"{ServiceIdentityOptions.SectionName}:Scope", Scope),
         new("ConnectionStrings:Bff", DatabaseConnectionString),
-        new("ConnectionStrings:RabbitMq", BrokerConnectionString)
+        new("ConnectionStrings:RabbitMq", BrokerConnectionString),
+        .. StoreSettings
+    ];
+
+    /// <summary>ADR-106's store, which the host validates at start (§15.4).</summary>
+    protected static IEnumerable<KeyValuePair<string, string?>> StoreSettings =>
+    [
+        new($"{ObjectStoreOptions.SectionName}:Endpoint", StoreEndpoint),
+        new($"{ObjectStoreOptions.SectionName}:Bucket", StoreBucket),
+        new($"{ObjectStoreOptions.SectionName}:Region", "us-east-1"),
+        new($"{ObjectStoreOptions.SectionName}:AccessKey", "not-a-real-key"),
+        new($"{ObjectStoreOptions.SectionName}:SecretKey", "not-a-real-secret"),
+        new($"{ObjectStoreOptions.SectionName}:PathStyle", "true")
     ];
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
