@@ -77,8 +77,8 @@ it sets `X-Content-Type-Options: nosniff` because the store does not
 the store's address as the host's browser reaches it, since it signs the URL
 the client uploads to; the product service is given the address on the Compose
 network and the edge's as the base of every URL it stores. `Platform.IntegrationTests`
-starts the same image with the same four, so what it proves is what
-`up` runs.
+starts the same image with the same files and policies, so what it proves is
+what `up` runs.
 
 **The broker is built rather than pulled, and it is the one infrastructure
 service that is.** `deploy/compose/rabbitmq/Dockerfile` adds the delayed
