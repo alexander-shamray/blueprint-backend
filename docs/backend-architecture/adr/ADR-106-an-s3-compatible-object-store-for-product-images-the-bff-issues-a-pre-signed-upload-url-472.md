@@ -1,5 +1,11 @@
 # ADR-106 — An S3-compatible object store for product images; the BFF issues a pre-signed upload URL (#472)
 
+**Supersedes.** The thumbnail half of
+[ADR-085](ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md):
+that `PublishProductValidator` refuses a thumbnail URL that is not absolute
+`https` and leaves the host to the seller. The request no longer carries a URL,
+so there is none to refuse; the `https` rule is about the configured base
+([§10.8](../10-api-gateway.md)). Its name half stands.
 **Decision.** Product images live in an object store spoken to through the S3
 API, and no service handles the bytes of an upload. `Web.Bff` signs a
 short-lived `PUT` URL for one key it chose, to an authenticated seller; the

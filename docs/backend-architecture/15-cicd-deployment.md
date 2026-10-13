@@ -1356,7 +1356,9 @@ names them). Unbound, the BFF would request a token with an empty scope and get
 
 **Every options type in the solution earns it.**
 `Identity:Client` holds a secret that differs per environment, `Mail` holds
-the mail relay and its credential on the same terms, `Jurisdiction`
+the mail relay and its credential on the same terms, `ProductImages:Store`
+holds the object store's address and credential pair on them too
+([§10.8](10-api-gateway.md)), `Jurisdiction`
 holds what
 [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
 makes values a deployment is given — the statutory windows, and for the

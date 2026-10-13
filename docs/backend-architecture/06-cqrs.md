@@ -1050,9 +1050,12 @@ synchronous and may fail with a spinner. The write path may not.
 
 **What a seller publishes, every buyer reads, so the validator holds it to
 reading as it holds.** `PublishProductValidator` refuses a name with an
-invisible or broken character and a thumbnail that is not `https`, and leaves
-the thumbnail's host to the seller
+invisible or broken character
 ([ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)).
+The request carries an image key and no URL, so the `https` rule is about the
+configured base the service builds the stored URL from
+([§10.8](10-api-gateway.md),
+[ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)).
 
 ## 6.5 A query
 

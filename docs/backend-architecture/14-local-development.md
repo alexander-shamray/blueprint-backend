@@ -49,14 +49,33 @@ which holds the rest.
 
 `deploy/compose/infrastructure.yml` is the shared baseline: SQL Server, the two
 Redis instances [§8.1](08-caching-redis.md) keeps apart because eviction policy
-cannot be shared, the broker, Keycloak, the OpenTelemetry collector and
-Grafana, with the volumes that outlive a `down`. It pins every image's tag.
+cannot be shared, the broker, the object store of
+[ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)
+with its edge, Keycloak, the OpenTelemetry collector and Grafana, with the
+volumes that outlive a `down`. It pins every image's tag.
 Both Redis instances read `deploy/compose/redis/users.conf`, §8.1's
 per-service ACL users: each service's user reaches its own prefix only, and the
 default user may `PING` and nothing else. The cache evicts `allkeys-lru`; the
 coordination instance runs `noeviction`, because locks and idempotency keys
 must never be evicted, and `appendonly`, so a restart does not silently release
 held locks.
+
+**The object store is three services, and the files beside them are the
+model.** `object-store` is SeaweedFS, because its S3 API takes a pre-signed
+`PUT`, scopes a credential pair to a bucket prefix and serves an anonymous
+read from one prefix alone, which is [§10.8](10-api-gateway.md)'s permission
+model; `deploy/compose/object-store/s3.json` holds its two identities and the
+anonymous one. `object-store-init` is a one-shot, like a migrator: it makes the
+bucket and the one-day expiry on `uploads/`, from
+`deploy/compose/object-store/init.txt`, and a second `up` leaves both as they
+were. `image-edge` is nginx in front of `products/`, `GET` and `HEAD` only, and
+it sets `X-Content-Type-Options: nosniff` because the store does not
+([§10.6](10-api-gateway.md#106-response-security-headers)). The BFF is given
+the store's address as the host's browser reaches it, since it signs the URL
+the client uploads to; the product service is given the address on the Compose
+network and the edge's as the base of every URL it stores. `Platform.IntegrationTests`
+starts the same image with the same three files, so what it proves is what
+`up` runs.
 
 **The broker is built rather than pulled, and it is the one infrastructure
 service that is.** `deploy/compose/rabbitmq/Dockerfile` adds the delayed

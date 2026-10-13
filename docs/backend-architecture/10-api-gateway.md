@@ -1398,10 +1398,20 @@ not accepted: the request's `ThumbnailUrl` is replaced by the `key`, and a
 product published without one has no image, as a null `ThumbnailUrl` already
 means. [ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)'s `https`
 rule becomes a rule about the configured base, which is an absolute `https` URL
-short enough that the base and the longest destination key (87 characters) fit
+(`http` for a loopback host alone, which Compose's local edge is) short enough
+that the base and the longest destination key (87 characters) fit
 `ThumbnailUrl`'s 400, both checked when the host starts. Trust in the key is
 the trust in the BFF's issue of it, and the prefix check is what stops a seller
 attaching another seller's upload.
+
+**A key that cannot be attached is a 422, and each refusal has its own code.**
+`product.image_key_invalid` is a key that is not the shape the BFF mints, is
+under another seller's prefix, or arrived with no principal;
+`product.image_not_uploaded` is a key with no object behind it, because the
+upload was never made or has expired; `product.image_not_an_image` is an object
+whose first bytes, or whose stored type, disagree with the type its key
+carries. None of them stores a product. A key longer than the longest
+destination key is a 400 before any of that, from the validator.
 
 **An upload that is never attached is expired, not swept.** The `uploads/`
 prefix carries a lifecycle rule that deletes objects after one day, set by the
@@ -1415,16 +1425,20 @@ can write under `uploads/` and nothing else; the product service's can read
 Compose's local
 store, its credentials and the chart's store values follow
 [§14.1](14-local-development.md), [§15.4](15-cicd-deployment.md) and
-`docs/secrets.md`'s exception table; those documents state them in the PR that
-implements this, and this section owns only the permissions above.
+`docs/secrets.md`'s exception table, and this section owns only the permissions
+above. One residual: the local store cannot tell a delete from a write, so each pair
+can delete under the prefix it writes, the BFF's under `uploads/` and the
+product service's under `products/`; a deployed store is held to the sentence
+above, which a test of the local one cannot prove.
 
 **The image is served by the store, or a CDN in front of it, from `products/`
 alone.** It is not served through the gateway, because the gateway would then
 carry the bytes ADR-106 keeps out of every service. The fronting layer sets
 `X-Content-Type-Options: nosniff` ([§10.6](#106-response-security-headers)),
 as that section's reasoning requires of whoever serves content a caller
-supplied; a repository can state this and cannot enforce it, so the
-implementing PR carries a test against the local store that reads the header.
+supplied; a repository can state this and cannot enforce it, so
+`ProductImageStoreTests` reads the header off the local edge, the one Compose
+puts in front of the store.
 
 ## 10.9 The saved delivery address
 

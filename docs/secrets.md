@@ -439,6 +439,7 @@ to be tidied away:
 | Keycloak admin | `admin` / `admin` |
 | RabbitMQ | one `<name>-svc` / `local-dev-<name>` per service account in `deploy/compose/rabbitmq/definitions.json`; `dead-letter-operator` ships with no password ([ADR-072](backend-architecture/adr/ADR-072-a-person-replays-dead-letters-as-a-broker-account-of-its-own.md)) |
 | Redis | one `<name>-svc` / `local-dev-<name>` per service that calls `AddRedisConnections`, in `deploy/compose/redis/users.conf` |
+| Object store | one `<service>-images-svc` / `local-dev-<service>-images` per service that touches the store (the BFF and Catalog), in `deploy/compose/object-store/s3.json` ([ADR-106](backend-architecture/adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)) |
 | Payment provider key | `local-dev-psp` |
 | Carrier key | `local-dev-carrier` |
 | Shipping worker client secret | `${SHIPPING_CLIENT_SECRET:-local-dev-shipping-secret}` |
@@ -459,7 +460,10 @@ check uses**: `read_admin.py` refuses a base URL that is not `https` and has no
 local subject at all, because the local realm is checked from its file rather
 than through a running Keycloak. The two never meet, and a reader who has just
 met the realm-check service account should not have to infer that from a
-silence. The provider and carrier keys have no seam because nothing checks
+silence. The object store's pairs have no seam on the same argument: the store
+reads them from `deploy/compose/object-store/s3.json`, so a variable would
+front the unit's half while the store still expected the file's. The provider
+and carrier keys have no seam because nothing checks
 them: each simulator ignores its key, so a variable would override a value no
 local party compares. Redis's per-service users have no seam on RabbitMQ's
 argument: both instances read them from `deploy/compose/redis/users.conf`, so
