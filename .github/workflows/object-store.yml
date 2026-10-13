@@ -1,0 +1,93 @@
+name: Object store
+
+# §10.8's sentence that neither image credential pair can list a bucket or
+# delete, asked of the deployed store between rollouts. ADR-110 owns the
+# decision; Compose's store is held to the same sentence by
+# ProductImageStoreTests.
+
+# Path-filtered for the suite alone: a schedule has no diff, and the deployed
+# job runs the suite itself before it sends a credential anywhere.
+on:
+  pull_request:
+    paths:
+      - 'deploy/objectstore/**'
+      - '.github/workflows/object-store.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/objectstore/**'
+      - '.github/workflows/object-store.yml'
+  # Daily, and off the hour, on realm.yml's reasoning. A policy changes when a
+  # deployment is edited, which is rarer than a realm, so the realm's hourly
+  # cadence would buy nothing here.
+  schedule:
+    - cron: '43 4 * * *'
+  # An operator re-runs the judgement after correcting a policy.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: object-store-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'deployed' || format('{0}-{1}', github.event_name, github.ref) }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Stdlib Python against a server the suite starts, so it needs no store.
+      - name: The check's negatives
+        run: python -m unittest discover -s deploy/objectstore
+
+  deployed:
+    # Opted in by `OBJECT_STORE_CHECK_SCHEDULED`, whose scope and
+    # once-enabled-nothing-is-optional rule are docs/secrets.md's. A guard
+    # that reads a configuration, not a skip that reads a failure as absence.
+    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && vars.OBJECT_STORE_CHECK_SCHEDULED == 'enabled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      # Judged from `main` and nothing else, on realm.yml's reasoning: this
+      # job sends the production pairs to the endpoint using whatever copy of
+      # `store_check.py` the dispatched ref carries. docs/secrets.md names what
+      # holds the boundary; this step is the guard against accident.
+      - name: The store is judged from main
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Refusing to judge the deployed store from $GITHUB_REF. This job sends the production credential pairs using the check from the dispatched ref, so it is restricted to the protected branch."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: The check's negatives
+        run: python -m unittest discover -s deploy/objectstore
+
+      # The endpoint is pinned from the Environment and not read from a
+      # release, because the pairs are sent to it (docs/secrets.md). A missing
+      # variable, a pair the store does not know, an unreachable store and a
+      # delete the store allows all fail the step.
+      - name: Neither credential pair can delete or list the bucket
+        run: python deploy/objectstore/store_check.py check
+        env:
+          OBJECT_STORE_ENDPOINT: ${{ vars.OBJECT_STORE_ENDPOINT }}
+          OBJECT_STORE_BUCKET: ${{ vars.OBJECT_STORE_BUCKET }}
+          OBJECT_STORE_REGION: ${{ vars.OBJECT_STORE_REGION }}
+          OBJECT_STORE_BFF_ACCESS_KEY: ${{ secrets.OBJECT_STORE_BFF_ACCESS_KEY }}
+          OBJECT_STORE_BFF_SECRET_KEY: ${{ secrets.OBJECT_STORE_BFF_SECRET_KEY }}
+          OBJECT_STORE_CATALOG_ACCESS_KEY: ${{ secrets.OBJECT_STORE_CATALOG_ACCESS_KEY }}
+          OBJECT_STORE_CATALOG_SECRET_KEY: ${{ secrets.OBJECT_STORE_CATALOG_SECRET_KEY }}
