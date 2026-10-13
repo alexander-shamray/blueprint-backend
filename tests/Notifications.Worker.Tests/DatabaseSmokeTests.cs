@@ -273,7 +273,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
                         // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
                         ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@notifications-rabbit.invalid:5672"
                     })
-                .Build());
+                .Build(),
+            NotificationsHost.Worker);
 
         ServiceDescriptor options =
             services.Single(d => d.ServiceType == typeof(DbContextOptions<NotificationsDbContext>));

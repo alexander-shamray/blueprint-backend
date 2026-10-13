@@ -107,7 +107,7 @@ public class MetricsRegistrationTests
 
         ServiceCollection services = new();
         services.AddNotificationsApplication();
-        services.AddNotificationsInfrastructure(configuration);
+        services.AddNotificationsInfrastructure(configuration, NotificationsHost.Worker);
         services.AddMailChannel(configuration, new TestEnvironment());
         services.AddContactSource(configuration, new TestEnvironment());
 
