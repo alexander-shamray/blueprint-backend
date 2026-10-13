@@ -237,6 +237,13 @@ branch is.
    `docs/backend-architecture/`. A Class A runbook edit runs neither, and its
    PR body says so rather than claiming a run.
 
+   **Dispatch the audit, never invoke the command.** Its frontmatter denies
+   `Edit` on `src/` until the turn ends, so step 5 could not fix code after
+   it. Spawn the passes its *Dispatch* section names as `general-purpose`
+   agents told to edit nothing, hand each the scope and the *Method*
+   bullets, and treat the JSON as step 5 treats a finding. The PR body says
+   the audit was dispatched. (why: docs/commands/ship.md, *Step 2: checks*)
+
    **One check holds whatever the class: a fix to a script under
    `.claude/` carries its case** (`docs/change-locality.md` §6, *Working
    rules*). Run it before every commit steps 3 and 5 make; a run resumed past
