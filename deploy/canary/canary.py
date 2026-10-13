@@ -169,6 +169,81 @@ def validate_tag(tag: str, job_prefix: str | None = None) -> None:
         )
 
 
+# The rule is `commerce.digest`'s (ADR-081). Held here as well because the
+# rollout hands the value to `--set-string`, where a comma is a second
+# assignment, exactly as it is for the tag.
+DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def validate_digest(digest: str) -> None:
+    """Refuse a digest Helm's `--set-string` would read as more than a digest."""
+    if not DIGEST.fullmatch(digest):
+        raise PlanError(
+            f"image digest {digest!r} is not usable: it is sha256: and 64 lowercase "
+            "hex characters, as a registry reports it (ADR-081). Anything else "
+            "would reach `--set-string` unchecked, where a comma is a second "
+            "assignment"
+        )
+
+
+def verified_digest(verified: object) -> str:
+    """The one digest every signature `cosign verify -o json` accepted is over.
+
+    Read from what was verified rather than looked up again from the tag: a
+    second lookup is a second answer, and an overwritten tag could give it a
+    different one (ADR-081).
+    """
+    if not isinstance(verified, list) or not verified:
+        raise PlanError("cosign verified no signature, so there is no digest to pin (ADR-081)")
+    digests = set()
+    for entry in verified:
+        try:
+            digests.add(entry["critical"]["image"]["docker-manifest-digest"])
+        except (KeyError, TypeError) as error:
+            raise PlanError(
+                "a verified signature names no critical.image.docker-manifest-digest, "
+                "so the digest it covers cannot be read (ADR-081)"
+            ) from error
+    if len(digests) != 1:
+        raise PlanError(
+            f"the verified signatures cover {len(digests)} different digests, "
+            "and the rollout can pin only one (ADR-081)"
+        )
+    (digest,) = digests
+    if not isinstance(digest, str):
+        raise PlanError("a verified signature's digest is not a string (ADR-081)")
+    validate_digest(digest)
+    return digest
+
+
+def workload_images(workload: str, plan_document: dict, root: Path = ROOT) -> dict[str, str]:
+    """The image names a workload's chart pulls: `api`, and `migrator` where it has one.
+
+    Read from the chart's own `image:` block, which is where the Deployment
+    and the migration Job read them, so the rollout verifies the images the
+    chart will pull and no list of its own (ADR-071).
+    """
+    chart = entries(plan_document.get("workloads", {})).get(workload, {}).get("chart")
+    if not chart:
+        raise PlanError(f"no workload {workload!r} in the plan")
+    path = root / "deploy" / "helm" / chart / "values.yaml"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise PlanError(f"{path} is not readable: {error}") from error
+    block = re.search(r"(?m)^image:[ \t]*\r?\n((?:[ \t]+.*\r?\n?|[ \t]*\r?\n)*)", text)
+    if block is None:
+        raise PlanError(f"{path} has no `image:` block, so the images {workload!r} pulls are unknown")
+    images = {}
+    for role in ("api", "migrator"):
+        found = re.search(rf"(?m)^[ \t]+{role}:[ \t]*([A-Za-z0-9][A-Za-z0-9._-]*)[ \t]*\r?$", block.group(1))
+        if found:
+            images[role] = found.group(1)
+    if "api" not in images:
+        raise PlanError(f"{path} names no image.api, so the image {workload!r} pulls is unknown")
+    return images
+
+
 # §15.2 builds both of a service's images with the commit as the tag, so a
 # tag here is a commit object name. ADR-050 is why the rollout insists on it:
 # every fact this script derives from `src/` describes the running image, and
@@ -1684,6 +1759,18 @@ def main(argv: list[str]) -> int:
     tag.add_argument("--value", required=True)
     tag.add_argument("--workload", help="apply that workload's migration Job name budget too")
 
+    digest = sub.add_parser("validate-digest", help="refuse a digest Helm would read as two assignments")
+    digest.add_argument("--value", required=True)
+
+    verified = sub.add_parser(
+        "verified-digest", help="the digest a `cosign verify -o json` document verified")
+    verified.add_argument("--file", required=True, type=Path)
+
+    images = sub.add_parser("images", help="the image names a workload's chart pulls")
+    images.add_argument("--workload", required=True)
+    images.add_argument("--role", required=True, choices=("api", "migrator"),
+                        help="empty output for a migrator the chart has none of")
+
     # Separate from `plan` on purpose: the chart a workload deploys is a fact
     # about the plan, and `plan` REFUSES when the step's weight is not
     # expressible at the current replica count. Asking it for a chart would
@@ -1758,6 +1845,34 @@ def main(argv: list[str]) -> int:
             print(f"canary: {error}", file=sys.stderr)
             return 1
         print(args.value)
+        return 0
+
+    if args.command == "validate-digest":
+        try:
+            validate_digest(args.value)
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        print(args.value)
+        return 0
+
+    if args.command == "verified-digest":
+        try:
+            print(verified_digest(json.loads(args.file.read_text(encoding="utf-8"))))
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"canary: {args.file} is not readable JSON: {error}", file=sys.stderr)
+            return 1
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        return 0
+
+    if args.command == "images":
+        try:
+            print(workload_images(args.workload, document).get(args.role, ""))
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
         return 0
 
     if args.command == "chart":
