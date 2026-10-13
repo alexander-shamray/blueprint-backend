@@ -22,7 +22,10 @@ import pipeline_gate
 # A workflow with the two blocks the gates read, at ci.yml's real indentation.
 # Indentation is load-bearing here: `read_filters` finds the end of the block
 # by it, and `check_images` matches filter names on a twelve-space indent.
-WORKFLOW = """\
+WORKFLOW_HEAD = """\
+env:
+  REGISTRY: ghcr.io/${{ github.repository }}
+
 jobs:
   changes:
     steps:
@@ -67,15 +70,9 @@ jobs:
           docker build
           --file ${{ matrix.dockerfile }}
           --tag ${{ matrix.image }}:${{ github.sha }}
+          --tag $REGISTRY/${{ matrix.image }}:${{ github.sha }}
           .
 
-      # A comment between steps belongs to neither.
-      - name: SBOM for ${{ matrix.image }}
-        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          image: ${{ matrix.image }}:${{ github.sha }}
-          format: spdx-json
 """
 
 SBOM_STEP = """\
@@ -86,6 +83,93 @@ SBOM_STEP = """\
         with:
           image: ${{ matrix.image }}:${{ github.sha }}
           format: spdx-json
+          output-file: sbom-${{ matrix.image }}.spdx.json
+"""
+
+# The steps ADR-109 adds, each under the one condition the gate looks for.
+MAIN_PUSH = (
+    "${{ needs.changes.outputs[matrix.filter] == 'true' && "
+    "contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name) && "
+    "github.ref == 'refs/heads/main' }}"
+)
+
+SIGNING_STEPS = f"""\
+      - name: Sign in to the registry
+        if: {MAIN_PUSH}
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+
+      - name: Push ${{{{ matrix.image }}}}
+        id: push
+        if: {MAIN_PUSH}
+        run: |
+          docker push "$REGISTRY/${{{{ matrix.image }}}}:${{{{ github.sha }}}}"
+          echo "digest=sha256:0" >> "$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        if: {MAIN_PUSH}
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Sign ${{{{ matrix.image }}}}
+        if: {MAIN_PUSH}
+        run: cosign sign --yes "$REGISTRY/${{{{ matrix.image }}}}@$DIGEST"
+        env:
+          DIGEST: ${{{{ steps.push.outputs.digest }}}}
+
+      - name: Provenance for ${{{{ matrix.image }}}}
+        if: {MAIN_PUSH}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{{{ env.REGISTRY }}}}/${{{{ matrix.image }}}}
+          subject-digest: ${{{{ steps.push.outputs.digest }}}}
+          push-to-registry: true
+
+      - name: SBOM attestation for ${{{{ matrix.image }}}}
+        if: {MAIN_PUSH}
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-name: ${{{{ env.REGISTRY }}}}/${{{{ matrix.image }}}}
+          subject-digest: ${{{{ steps.push.outputs.digest }}}}
+          sbom-path: sbom-${{{{ matrix.image }}}}.spdx.json
+          push-to-registry: true
+"""
+
+WORKFLOW = WORKFLOW_HEAD + SBOM_STEP + SIGNING_STEPS
+
+DEPLOY_WORKFLOW = """\
+env:
+  REGISTRY: ghcr.io/${{ github.repository }}
+
+jobs:
+  rollout:
+    steps:
+      - name: The tag has to be a tag
+        run: python deploy/canary/canary.py validate-tag --value "$TAG"
+
+      - name: The images are the ones CI built and signed
+        run: |
+          cosign verify "$REGISTRY/$1:$TAG" \\
+            --certificate-identity "$CERTIFICATE_IDENTITY" \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          python deploy/canary/canary.py verified-digest --file "$RUNNER_TEMP/v.json"
+        env:
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
+
+      - name: The stable track's facts
+        run: |
+          helm get values "$WORKLOAD" -n "$NAMESPACE" -o json > stable.json
+
+      # A comment naming helm upgrade is not a command.
+      - name: Promote
+        run: |
+          helm upgrade "$WORKLOAD" "deploy/helm/$CHART" \\
+            -f stable-values.yaml --set-string image.tag="$TAG" \\
+            --set-string image.digest="$API_DIGEST" \\
+            --set-string image.migratorDigest="$MIGRATOR_DIGEST" \\
+            --atomic
+          helm upgrade --install "$WORKLOAD-canary" "deploy/helm/$CHART" \\
+            --set-string image.digest="$API_DIGEST" --set-string image.migratorDigest="$MIGRATOR_DIGEST"
 """
 
 
@@ -112,16 +196,22 @@ class Fixture(unittest.TestCase):
         self.workflow = self.root / ".github" / "workflows" / "ci.yml"
         self.workflow.parent.mkdir(parents=True)
         self.write(WORKFLOW)
+        self.deploy = self.workflow.parent / "deploy.yml"
+        self.write_deploy(DEPLOY_WORKFLOW)
 
         # The module reads ROOT and WORKFLOW as module-level constants, which
         # is right for a script and awkward for a suite. Patched rather than
         # parameterised so the production call sites stay argument-free.
-        original = pipeline_gate.WORKFLOW
-        pipeline_gate.WORKFLOW = self.workflow
-        self.addCleanup(lambda: setattr(pipeline_gate, "WORKFLOW", original))
+        for name, path in (("WORKFLOW", self.workflow), ("DEPLOY", self.deploy)):
+            original = getattr(pipeline_gate, name)
+            setattr(pipeline_gate, name, path)
+            self.addCleanup(lambda name=name, original=original: setattr(pipeline_gate, name, original))
 
     def write(self, text: str) -> None:
         self.workflow.write_text(text, encoding="utf-8")
+
+    def write_deploy(self, text: str) -> None:
+        self.deploy.write_text(text, encoding="utf-8")
 
 
 class FilterTests(Fixture):
@@ -378,16 +468,258 @@ class SbomTests(Fixture):
 
         problems = pipeline_gate.check_images(self.root)
 
+        self.assertEqual(len(problems), 2)
+        self.assertTrue(all("vacuously" in problem for problem in problems))
+
+    def test_the_step_reader_joins_a_folded_run_and_keeps_with_inputs(self) -> None:
+        steps = pipeline_gate.read_job_steps(WORKFLOW_HEAD + SBOM_STEP, "images")
+
+        self.assertEqual(len(steps), 3)
+        self.assertIn("--tag $REGISTRY/${{ matrix.image }}:${{ github.sha }} .", steps[1]["run"])
+        self.assertEqual(steps[2]["image"], "${{ matrix.image }}:${{ github.sha }}")
+        self.assertNotIn("comment", " ".join(steps[1].values()))
+
+
+class SupplyChainTests(Fixture):
+    """ADR-109's coverage: every build is pushed, signed and attested by digest on
+    main, and the rollout verifies before it touches Helm."""
+
+    def broken(self, old: str, new: str, *, deploy: bool = False) -> list[str]:
+        """The problems after one edit, with the edit proved to have landed."""
+        source = DEPLOY_WORKFLOW if deploy else WORKFLOW
+        self.assertIn(old, source)
+        (self.write_deploy if deploy else self.write)(source.replace(old, new))
+        return pipeline_gate.check_images(self.root)
+
+    def test_the_fixture_is_clean(self) -> None:
+        self.assertEqual(pipeline_gate.check_supply_chain(WORKFLOW, DEPLOY_WORKFLOW), [])
+
+    def test_a_build_with_no_sign_step_is_caught(self) -> None:
+        sign = SIGNING_STEPS.split("      - name: Sign ${{ matrix.image }}")[1].split("      - name: Provenance")[0]
+        self.write(WORKFLOW.replace("      - name: Sign ${{ matrix.image }}" + sign, ""))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no `cosign sign`", problems[0])
+
+    def test_a_build_that_is_never_pushed_is_caught(self) -> None:
+        problems = self.broken("docker push", "docker tag")
+
+        self.assertIn("no `docker push`", problems[0])
+
+    def test_a_signature_by_tag_rather_than_digest_is_caught(self) -> None:
+        problems = self.broken('@$DIGEST"', ':${{ github.sha }}"')
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("not the pushed digest", problems[0])
+
+    def test_a_signature_over_another_steps_digest_is_caught(self) -> None:
+        problems = self.broken("DIGEST: ${{ steps.push.outputs.digest }}", "DIGEST: ${{ steps.other.outputs.digest }}")
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("not the pushed digest", problems[0])
+
+    def test_an_attestation_of_another_digest_is_caught(self) -> None:
+        problems = self.broken("subject-digest: ${{ steps.push.outputs.digest }}", "subject-digest: sha256:0")
+
+        self.assertEqual(len(problems), 2)
+        self.assertIn("subject-digest is not the pushed digest", problems[0])
+
+    def test_an_attestation_kept_off_the_registry_is_caught(self) -> None:
+        problems = self.broken("push-to-registry: true", "push-to-registry: false")
+
+        self.assertEqual(len(problems), 2)
+        self.assertIn("not pushed to the registry", problems[0])
+
+    def test_an_sbom_attestation_of_another_file_is_caught(self) -> None:
+        """The attested inventory is the artefact's, or the two can differ."""
+        problems = self.broken("sbom-path: sbom-", "sbom-path: other-")
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("not the file the SBOM step wrote", problems[0])
+
+    def test_a_step_that_runs_on_a_pull_request_is_caught(self) -> None:
+        """A pull request pushing is the failure the condition exists for."""
+        only_the_filter = "${{ needs.changes.outputs[matrix.filter] == 'true' }}"
+        problems = self.broken(
+            f"id: push\n        if: {MAIN_PUSH}\n", f"id: push\n        if: {only_the_filter}\n")
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("main-push condition", problems[0])
+
+    def test_a_step_on_a_pull_request_event_is_caught_even_with_the_ref_test(self) -> None:
+        problems = self.broken(
+            "contains(fromJSON('[\"push\",\"workflow_dispatch\"]'), github.event_name)",
+            "github.event_name == 'pull_request'")
+
+        self.assertTrue(problems)
+        self.assertIn("main-push condition", problems[0])
+
+    def test_a_step_missing_the_ref_test_is_caught(self) -> None:
+        self.assertTrue(self.broken(" && github.ref == 'refs/heads/main' }}", " }}"))
+
+    def test_a_push_of_a_reference_the_build_never_tagged_is_caught(self) -> None:
+        problems = self.broken('docker push "$REGISTRY/${{ matrix.image }}:${{ github.sha }}"',
+                               'docker push "ghcr.io/x/${{ matrix.image }}:${{ github.sha }}"')
+
+        self.assertTrue(any("tags no `$REGISTRY/...` reference" in problem for problem in problems))
+
+    def test_a_signature_before_the_push_is_caught(self) -> None:
+        marker, next_marker = "      - name: Push ${{ matrix.image }}", "      - name: Install cosign"
+        push = WORKFLOW[WORKFLOW.index(marker):WORKFLOW.index(next_marker)]
+        self.write(WORKFLOW.replace(push, "").replace("      - name: Provenance", push + "      - name: Provenance", 1))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no digest to sign before the push", problems[0])
+
+    def test_a_signature_whose_installer_comes_later_is_caught(self) -> None:
+        installer = "      - name: Install cosign\n"
+        block = installer + "        if: " + MAIN_PUSH + "\n        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2\n\n"
+        self.assertIn(block, WORKFLOW)
+        sign = "      - name: Sign ${{ matrix.image }}"
+        self.write(WORKFLOW.replace(block, "").replace(sign, sign + "\n", 1).replace(
+            "      - name: Provenance", block + "      - name: Provenance", 1))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("cosign is not on the runner before its installer", problems[0])
+
+    def test_a_leg_with_no_build_fails_rather_than_passing_empty(self) -> None:
+        problems = pipeline_gate.check_supply_chain(
+            WORKFLOW.replace("          docker build\n", "          podman build\n"), DEPLOY_WORKFLOW)
+
         self.assertEqual(len(problems), 1)
         self.assertIn("vacuously", problems[0])
 
-    def test_the_step_reader_joins_a_folded_run_and_keeps_with_inputs(self) -> None:
-        steps = pipeline_gate.read_job_steps(WORKFLOW, "images")
+    def test_a_second_build_needs_its_own_steps(self) -> None:
+        """Per build, not per job: a build added below the first inherits nothing."""
+        second = (
+            "      - name: Build second\n"
+            "        if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}\n"
+            "        run: docker build --tag second:${{ github.sha }} .\n")
+        problems = pipeline_gate.check_supply_chain(WORKFLOW + "\n" + second, DEPLOY_WORKFLOW)
 
-        self.assertEqual(len(steps), 3)
-        self.assertIn("--tag ${{ matrix.image }}:${{ github.sha }} .", steps[1]["run"])
-        self.assertEqual(steps[2]["image"], "${{ matrix.image }}:${{ github.sha }}")
-        self.assertNotIn("comment", " ".join(steps[1].values()))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("build at step", problems[0])
+        self.assertIn("no registry sign-in", problems[0])
+
+    # deploy.yml
+
+    def test_a_registry_that_differs_between_the_workflows_is_caught(self) -> None:
+        problems = self.broken("REGISTRY: ghcr.io/${{ github.repository }}",
+                               "REGISTRY: registry.example.com/commerce", deploy=True)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("deploy.yml's is 'registry.example.com/commerce'", problems[0])
+
+    def test_a_workflow_with_no_registry_owner_is_caught(self) -> None:
+        self.write(WORKFLOW.replace("env:\n  REGISTRY: ghcr.io/${{ github.repository }}\n\n", "", 1))
+
+        self.assertTrue(any("declares no workflow-level REGISTRY" in p for p in pipeline_gate.check_images(self.root)))
+
+    def test_a_second_copy_of_the_address_is_caught(self) -> None:
+        problems = self.broken("jobs:\n  rollout:", "jobs:\n  rollout:\n    env:\n      IMAGE: ghcr.io/me/app\n", deploy=True)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("outside REGISTRY", problems[0])
+
+    def test_a_comment_naming_the_address_is_not_a_copy(self) -> None:
+        self.assertEqual(self.broken("jobs:\n  rollout:", "# ghcr.io/me/app\njobs:\n  rollout:", deploy=True), [])
+
+    def test_a_rollout_with_no_verify_step_is_caught(self) -> None:
+        problems = self.broken("cosign verify", "cosign triangulate", deploy=True)
+
+        self.assertTrue(any("no `cosign verify` step" in problem for problem in problems))
+
+    def test_a_verify_after_the_first_helm_command_is_caught(self) -> None:
+        verify = DEPLOY_WORKFLOW.split("      - name: The images are the ones CI built and signed")[1].split(
+            "      - name: The stable track's facts")[0]
+        moved = DEPLOY_WORKFLOW.replace("      - name: The images are the ones CI built and signed" + verify, "")
+        self.write_deploy(moved.replace(
+            "      # A comment naming helm upgrade",
+            "      - name: The images are the ones CI built and signed" + verify + "      # A comment naming helm upgrade"))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("runs after the first step that runs helm", problems[0])
+
+    def test_a_verify_for_another_identity_is_caught(self) -> None:
+        problems = self.broken("/.github/workflows/ci.yml@refs/heads/main", "/.github/workflows/any.yml@refs/heads/main",
+                               deploy=True)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("pinned to ci.yml on main", problems[0])
+
+    def test_a_verify_that_names_no_issuer_is_caught(self) -> None:
+        problems = self.broken("--certificate-oidc-issuer", "--issuer", deploy=True)
+
+        self.assertIn("given an issuer", problems[0])
+
+    def test_a_verify_that_reads_no_digest_from_what_it_verified_is_caught(self) -> None:
+        problems = self.broken("verified-digest", "images", deploy=True)
+
+        self.assertIn("reading the digest it verified", problems[0])
+
+    def test_a_helm_upgrade_with_no_digest_is_caught(self) -> None:
+        problems = self.broken('--set-string image.digest="$API_DIGEST" \\\n', "\\\n", deploy=True)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("--set-string image.digest", problems[0])
+
+    def test_a_helm_upgrade_with_no_migrator_digest_is_caught(self) -> None:
+        problems = self.broken('--set-string image.migratorDigest="$MIGRATOR_DIGEST" \\\n', "\\\n", deploy=True)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("image.migratorDigest", problems[0])
+
+    def test_a_digest_set_with_set_instead_of_set_string_is_caught(self) -> None:
+        """`--set` types the value, and a digest of digits would be read as a number."""
+        self.assertEqual(len(self.broken("--set-string image.digest=", "--set image.digest=", deploy=True)), 2)
+
+    def test_a_rollout_with_no_helm_fails_rather_than_passing_empty(self) -> None:
+        problems = pipeline_gate.check_supply_chain(WORKFLOW, "env:\n  REGISTRY: ghcr.io/${{ github.repository }}\n\n"
+                                                    "jobs:\n  rollout:\n    steps:\n      - name: x\n        run: cosign verify\n")
+
+        self.assertTrue(any("runs helm" in problem and "vacuously" in problem for problem in problems))
+        self.assertTrue(any("no `helm upgrade`" in problem for problem in problems))
+
+    def test_a_deploy_workflow_with_no_rollout_job_fails_rather_than_passing_empty(self) -> None:
+        problems = pipeline_gate.check_supply_chain(WORKFLOW, DEPLOY_WORKFLOW.replace("  rollout:\n", "  roll:\n"))
+
+        self.assertTrue(any("no `rollout` job" in problem for problem in problems))
+
+    def test_the_readers_keep_continuations_and_skip_comments(self) -> None:
+        upgrades = pipeline_gate.read_helm_upgrades(DEPLOY_WORKFLOW)
+
+        self.assertEqual(len(upgrades), 2)
+        self.assertIn("image.migratorDigest", upgrades[0])
+        self.assertNotIn("comment", " ".join(upgrades))
+        self.assertEqual(pipeline_gate.read_workflow_env(WORKFLOW, "REGISTRY"), "ghcr.io/${{ github.repository }}")
+        self.assertIsNone(pipeline_gate.read_workflow_env(WORKFLOW, "NOPE"))
+
+    def test_the_gate_sees_this_repositorys_signing_steps(self) -> None:
+        """The subject is what the gate reads, not what it found: if the real
+        workflow's steps stopped parsing, every check above would be green
+        over an empty list."""
+        root = Path(__file__).resolve().parents[2]
+        steps = pipeline_gate.read_job_steps((root / ".github/workflows/ci.yml").read_text(encoding="utf-8"), "images")
+        uses = [step.get("uses", "").split("@")[0] for step in steps]
+
+        for action in ("docker/login-action", "sigstore/cosign-installer", "actions/attest-build-provenance",
+                       "actions/attest-sbom"):
+            self.assertIn(action, uses)
+        self.assertTrue(any("cosign sign" in step.get("run", "") for step in steps))
+        self.assertTrue(any("docker push" in step.get("run", "") for step in steps))
+        rollout = pipeline_gate.read_job_steps(
+            (root / ".github/workflows/deploy.yml").read_text(encoding="utf-8"), "rollout")
+        self.assertTrue(any("cosign verify" in step.get("run", "") for step in rollout))
+        self.assertGreaterEqual(len(pipeline_gate.read_helm_upgrades(
+            (root / ".github/workflows/deploy.yml").read_text(encoding="utf-8"))), 2)
 
 
 class ActionTests(unittest.TestCase):

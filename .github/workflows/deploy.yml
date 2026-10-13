@@ -1,10 +1,11 @@
 name: Deploy
 
 # §15.5's canary, and §15.1's production leg of the pipeline. It reaches no
-# cluster: there is no environment for this repository, no kubeconfig and no
-# registry. What is asserted about it is asserted by `deploy/canary/canary.py`,
-# whose suite runs on every change to this tree, and by the `check` job below,
-# which reads this file.
+# cluster: there is no environment for this repository and no kubeconfig. It
+# does reach a registry, to verify what CI pushed there and to pin the digest it
+# verified (ADR-109). What is asserted about it is asserted by
+# `deploy/canary/canary.py`, whose suite runs on every change to this tree, and
+# by the `check` job below, which reads this file.
 
 # `workflow_dispatch` only, and the reason is `main` staying green: a canary on
 # `push` would fail on every merge for want of a cluster, which trains everyone
@@ -48,6 +49,11 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # ci.yml's REGISTRY, value for value; pipeline-gate fails the build where
+  # the two differ, so the address has the one owner ADR-109 gives it.
+  REGISTRY: ghcr.io/${{ github.repository }}
 
 concurrency:
   # Not cancel-in-progress: cancelling a rollout mid-ladder leaves a canary
@@ -95,6 +101,12 @@ jobs:
     # timeout hit, leaving a canary serving with no step left to remove it.
     timeout-minutes: 150
     environment: production
+    # `packages: read` for the pull and `attestations: read` for the
+    # provenance lookup; the job writes to neither (ADR-109).
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
     env:
       NAMESPACE: commerce
       # A GitHub Environment scopes secrets and variables; it does not put them
@@ -182,6 +194,60 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
           WORKLOAD: ${{ inputs.workload }}
+
+      # The admission check (ADR-071, ADR-109), ahead of every Helm command and
+      # not only the first upgrade: `helm get values` below already reads the
+      # release. A cluster policy is the stronger seat once a cluster exists;
+      # until then this refuses an image CI did not build and sign on main.
+      - name: Sign in to the registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # The identity is ci.yml on main and nothing else, so a signature made by
+      # a branch, a fork or another workflow verifies as unsigned. The digest
+      # comes out of what cosign verified: a second lookup of the tag could
+      # answer differently, and the one Helm is given must be the verified one
+      # (ADR-081). `gh attestation verify` takes the provenance because it
+      # checks the subject digest and the signing workflow in one call, and
+      # the images are read by digest so the two checks cover the same bytes.
+      # The functions assign a global instead of printing, because a failure
+      # inside `$(...)` does not stop a script that way.
+      - name: The images are the ones CI built and signed
+        run: |
+          set -euo pipefail
+          verify() {
+            local reference="$REGISTRY/$1"
+            cosign verify "$reference:$TAG" \
+              --certificate-identity "$CERTIFICATE_IDENTITY" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --output json > "$RUNNER_TEMP/$1.verified.json"
+            VERIFIED=$(python deploy/canary/canary.py verified-digest --file "$RUNNER_TEMP/$1.verified.json")
+            gh attestation verify "oci://$reference@$VERIFIED" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" > /dev/null
+          }
+          API_IMAGE=$(python deploy/canary/canary.py images --workload "$WORKLOAD" --role api)
+          MIGRATOR_IMAGE=$(python deploy/canary/canary.py images --workload "$WORKLOAD" --role migrator)
+          verify "$API_IMAGE"
+          echo "API_DIGEST=$VERIFIED" >> "$GITHUB_ENV"
+          # Empty for a workload with no migrator, which the chart reads as no pin.
+          MIGRATOR_VERIFIED=""
+          if [ -n "$MIGRATOR_IMAGE" ]; then
+            verify "$MIGRATOR_IMAGE"
+            MIGRATOR_VERIFIED="$VERIFIED"
+          fi
+          echo "MIGRATOR_DIGEST=$MIGRATOR_VERIFIED" >> "$GITHUB_ENV"
+        env:
+          TAG: ${{ inputs.tag }}
+          WORKLOAD: ${{ inputs.workload }}
+          CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/ci.yml@refs/heads/main
+          GH_TOKEN: ${{ github.token }}
 
       # The tag is held to the revision it names and that revision's src/ is
       # extracted for the steps below to read: ADR-050 argues why, and this is
@@ -485,6 +551,9 @@ jobs:
               helm upgrade "$WORKLOAD" "deploy/helm/$CANARY_CHART" \
                 -n "$NAMESPACE" \
                 -f stable-values.yaml --set-string image.tag="$TAG" \
+                --set-string image.registry="$REGISTRY" \
+                --set-string image.digest="$API_DIGEST" \
+                --set-string image.migratorDigest="$MIGRATOR_DIGEST" \
                 --set-string identity.authority="$CHECKED_AUTHORITY" \
                 --atomic --wait --timeout 20m
               echo "PROMOTED=true" >> "$GITHUB_ENV"
@@ -532,6 +601,9 @@ jobs:
               --set replicaCount="$CANARY_CANARY_REPLICAS" \
               --set autoscaling.enabled=false \
               --set-string image.tag="$TAG" \
+              --set-string image.registry="$REGISTRY" \
+              --set-string image.digest="$API_DIGEST" \
+              --set-string image.migratorDigest="$MIGRATOR_DIGEST" \
               --wait --timeout 20m
 
             # The window equals the dwell, which is what makes the reading
