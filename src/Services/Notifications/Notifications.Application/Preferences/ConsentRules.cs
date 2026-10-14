@@ -2,8 +2,8 @@ namespace Notifications.Application.Preferences;
 
 /// <summary>ADR-120's decision, a pure function over the requirement and the pair's newest entry.</summary>
 /// <remarks>
-/// One function for the read the subject is shown and for the send, so §10.11's route can never show a value the
-/// send pass would not act on.
+/// One function for the read the subject is shown and for the send, so §10.11's route shows what the send pass
+/// acts on, while both hosts are given one required list (ADR-120).
 /// </remarks>
 public static class ConsentRules
 {
