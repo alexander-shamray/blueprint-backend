@@ -1877,10 +1877,13 @@ def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> 
         ]
     # A key the rollout sets itself is installed past the candidate values, so comparing them would hold nothing.
     pinned = set(re.findall(r"--set(?:-string|-json|-file)?[ =]([\w.]+)=", "\n".join(live)))
+    # A malformed declaration is check 4's refusal; this one reads only what check 4 would admit.
     shared = {
         (name, key)
         for name, entry in workloads.items()
-        for keys in (entry.get("sharesValues") or {}).values()
+        if isinstance(entry.get("sharesValues"), dict)
+        for keys in entry["sharesValues"].values()
+        if isinstance(keys, list)
         for key in keys
         if isinstance(key, str) and any(key == p or key.startswith(p + ".") or p.startswith(key + ".") for p in pinned)
     }
