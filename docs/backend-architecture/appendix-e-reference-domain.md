@@ -213,7 +213,7 @@ holds every row to what its host's code publishes, consumes and accepts.
 | **Inventory** | StockItem, Reservation | `StockReserved`, `StockReservationFailed`, `StockReleased`, `StockLevelChanged` | `OrderCancelled`, `ShipmentDispatched` | `ReserveStock`, `ReleaseStock` |
 | **Payments** | PaymentIntent, Refund | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled`, `PersonalDataDeleteRequested` | `AuthorisePayment` |
 | **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled`, `PersonalDataDeleteRequested` | — |
-| **Notifications** | NotificationLog, the device rows, the consent journal ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
+| **Notifications** | NotificationLog and its push deliveries, the device rows, the consent journal ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
 | **Privacy** | ErasureRequest | `PersonalDataDeleteRequested` | — | `PersonalDataDeleteCompleted` |
 | **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model of other services' facts ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)), and a customer's saved address, the one fact it owns ([ADR-107](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested` | — |
 
@@ -1006,8 +1006,12 @@ negative amount, which the BFF's quote does not rely on. The consumer-driven
 contract's two suites are `tests/Web.Bff.Tests` (`UpstreamRetryTests`,
 `ResilienceHierarchyTests`) and Catalog's own.
 
-The two push hops are registered for each platform an app names, and no send
-calls them yet. Each is a third party behind its own breaker, so one provider's
+The two push hops are registered for each platform an app names, and
+`PushSendWorker` calls them, one delivery a call; an unregistered answer
+deletes the device row in the transaction that ends the delivery
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md),
+[ADR-121](adr/ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md)).
+Each is a third party behind its own breaker, so one provider's
 outage parks its own platform and neither mail nor the other provider.
 
 ### E.5.5 The retry ladders
@@ -1224,7 +1228,7 @@ this case, and this table is the owner of what each edge of it erases:
 | Holder | Erases | Reports as |
 |---|---|---|
 | Ordering | `Orders.CustomerId` anonymised, address purged, `OrderSummaries.CustomerId` cleared | `ordering` |
-| Notifications | ended `NotificationLog` rows anonymised, contacts, waiting notices and `OrderRecords` deleted, device rows cleared to their installation id and sequence ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), keeping the last-seen time the retention pass deletes them by ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)), consent journal entries anonymised, keeping their topic, channel, opt-in, times, client and chain as the evidence that the sends before the erasure were lawful ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | `notifications` |
+| Notifications | ended `NotificationLog` and `PushDeliveries` rows anonymised, contacts, waiting notices, pending deliveries and `OrderRecords` deleted, device rows cleared to their installation id and sequence ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), keeping the last-seen time the retention pass deletes them by ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)), consent journal entries anonymised, keeping their topic, channel, opt-in, times, client and chain as the evidence that the sends before the erasure were lawful ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | `notifications` |
 | Shipping | `DeliveryAddresses` rows deleted (ADR-052), `Shipments.ErasedUnder` emptied (ADR-103) | `shipping` |
 | Payments | `PaymentOrders.CustomerId` anonymised | `payments` |
 | The BFF | order ids recorded, the subject's `bff.Orders` rows and saved address deleted (ADR-098, ADR-107) | `bff` |
@@ -1759,15 +1763,16 @@ Notifications. The queue-backlog rule of §13.6 watches each service's receive
 endpoint, and each one's consumers only write a row: a `Pending` shipment or a
 cancellation for Shipping, a `Pending` notification or an order record for
 Notifications. The replica-bound work is the workers': Shipping's fulfilment
-and tracking passes, and Notifications' send worker. Shipping's gauge is the
-wait of the rows a pass is due to claim and has not, by pass; Notifications'
-is that wait for its one pass, and `notifications.waiting`, by the step a row
-waits on, is the dependency's wait beside it rather than the pass's. For
-Shipping and Notifications alike, the backlog procedure of
-[`queue-backlog.md`](../runbooks/queue-backlog.md) is the cue
+and tracking passes, and Notifications' send and push send workers. Shipping's
+gauge is the wait of the rows a pass is due to claim and has not, by pass;
+Notifications' is that wait over its notices and its push deliveries at once,
+and `notifications.waiting`, by the step a row waits on, is the dependency's
+wait beside it rather than the pass's. For Shipping and Notifications alike,
+the backlog procedure of [`queue-backlog.md`](../runbooks/queue-backlog.md) is
+the cue
 ([ADR-063](adr/ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-hand.md)),
-and the ceiling is the carrier's or the relay's rate limit rather than the
-queue's depth.
+and the ceiling is the carrier's, the relay's or a push provider's rate limit
+rather than the queue's depth.
 
 ### E.9.4 The options a worker binds
 
@@ -1814,7 +1819,7 @@ code reads it, and the host refuses to start without a required one.
 | `Mail__Password` | Secret | Helm `mail.passwordSecretRef` → External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
 | `ProductImages__Store__Endpoint`, `__Bucket`, `__Region`, `__PathStyle` | Config | Helm `objectStore.*` → ConfigMap | ✓ — **Web.Bff and Catalog only**; the object store of [ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md), refused at start when missing. The BFF's endpoint is the address a client reaches, since it signs the URL the client uploads to, and Catalog's is the one that service reaches |
 | `ProductImages__Store__PublicBaseUrl` | Config | Helm `objectStore.publicBaseUrl` → ConfigMap | ✓ — **Catalog only**; where `products/` is served from, the absolute base every stored image URL is built from (its scheme is [§10.8](10-api-gateway.md)'s rule), and short enough that it and the longest destination key fit `ThumbnailUrl` ([§10.8](10-api-gateway.md)) |
-| `Push__Apps__0…n__AppId`, `__Platform` | Config | Helm `push.apps` → ConfigMap, empty in both charts | — **Web.Bff and Notifications' worker**; the worker registers a provider for each platform the list names, and the two charts state the same list. [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)'s apps, each an app id and its platform, which a registration must match (§10.10). The host refuses an app id named twice or a platform outside `fcm` and `apns` at start, and an empty list refuses every registration |
+| `Push__Apps__0…n__AppId`, `__Platform` | Config | Helm `push.apps` → ConfigMap, empty in both charts | — **Web.Bff and Notifications' worker**; the worker registers a provider for each platform the list names, and writes a push notice beside each mail notice only once it names an app, since no device row can exist before; the two charts state the same list. The release that adds push deliveries is rolled out with the list empty, and an app is named only once no worker of an earlier release runs: an earlier worker claims a push notice as mail ([§7.4](07-persistence.md)) [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)'s apps, each an app id and its platform, which a registration must match (§10.10). The host refuses an app id named twice or a platform outside `fcm` and `apns` at start, and an empty list refuses every registration |
 | `ProductImages__Store__AccessKey`, `__SecretKey` | Secret | Helm `objectStore.secretRef` → External Secrets | ✓ — **Web.Bff and Catalog only**; one pair per host, never shared: the BFF's writes `uploads/` and nothing else, and Catalog's reads `uploads/` and writes `products/` (§10.8) |
 | `ContactSource__BaseUrl` | Config | Helm `contactSource.baseUrl` → ConfigMap | ✓ — **Notifications only**; Keycloak's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s contact read, HTTPS outside Development, and the host refuses to start without it |
 | `ContactSource__Realm` | Config | Helm `contactSource.realm` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; the realm whose users are read, the one that issues this host's token, and the host refuses to start without it |
