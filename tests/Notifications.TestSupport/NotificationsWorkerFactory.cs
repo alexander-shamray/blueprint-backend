@@ -1,4 +1,5 @@
 using System.Globalization;
+using MassTransit;
 using Common.Infrastructure.Identity;
 using Common.Infrastructure.Messaging;
 using Common.Web;
@@ -39,7 +40,8 @@ public class NotificationsWorkerFactory(
     string orderRetention = NotificationsWorkerFactory.InventedOrderRetention,
     string giveUpAge = NotificationsWorkerFactory.InventedGiveUpAge,
     string consentRetention = NotificationsWorkerFactory.InventedConsentRetention,
-    IReadOnlyList<string>? required = null)
+    IReadOnlyList<string>? required = null,
+    bool consumes = true)
     : WebApplicationFactory<Program>
 {
     /// <summary>The authority every host must name (§11.3); <c>.invalid</c> never resolves.</summary>
@@ -157,6 +159,10 @@ public class NotificationsWorkerFactory(
                 services.Remove(retention);
 
                 services.AddSingleton<NotificationsRetentionService>();
+
+                // A host that shares the fixture's broker and consumes would take every other delivery from its queue.
+                if (!consumes)
+                    services.RemoveMassTransitHostedService();
             })
             .ConfigureTestServices(services =>
                 services.ConfigureDbContext<NotificationsDbContext>(o =>

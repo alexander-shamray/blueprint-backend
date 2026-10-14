@@ -3,9 +3,11 @@ using Notifications.Application.Contacts;
 using Notifications.Application.Mail;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
+using Notifications.Infrastructure.Delivery;
 using Notifications.TestSupport;
 using Shouldly;
 using Xunit;
+using MessagingRegistration = Notifications.Infrastructure.Messaging.DependencyInjection;
 
 namespace Notifications.Worker.Tests;
 
@@ -18,6 +20,24 @@ public sealed class FixtureStubsTests(ServiceFixture fixture) : IAsyncLifetime
     public async ValueTask InitializeAsync() => await fixture.ResetWithRelayAsync();
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+    [Fact]
+    public async Task A_second_host_takes_no_delivery_from_the_fixture_s_queues()
+    {
+        // A consumer it held would take every other delivery out of the fixture's sight; its bus connects late, so
+        // the count is watched for a while rather than read once.
+        string[] queues = [MessagingRegistration.EventsQueue, MessagingRegistration.PrivacyQueue];
+        await ServiceFixture.WaitUntilAsync(async () => await ConsumersAsync(queues) == 2);
+        using NotificationsWorkerFactory second = fixture.NewWorkerHost();
+        _ = second.Services.GetRequiredService<SendWorker>();
+
+        DateTimeOffset until = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTimeOffset.UtcNow < until)
+        {
+            (await ConsumersAsync(queues)).ShouldBe(2, "one consumer a queue, the fixture's own");
+            await Task.Delay(TimeSpan.FromMilliseconds(250), Ct);
+        }
+    }
 
     [Fact]
     public async Task The_stub_keycloak_answers_the_host_s_own_adapter_as_the_admin_api_does()
@@ -66,6 +86,9 @@ public sealed class FixtureStubsTests(ServiceFixture fixture) : IAsyncLifetime
             "AND Status = 'Pending' AND NextAttemptAt <= SYSDATETIMEOFFSET() AND LockedUntil IS NULL",
             staged.NotificationId)).ShouldBe(1);
     }
+
+    private async Task<int> ConsumersAsync(string[] queues) =>
+        (await Task.WhenAll(queues.Select(fixture.ConsumersAsync))).Sum();
 
     private async Task<ContactLookup> ReadAsync(Guid customer)
     {

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Globalization;
 using Notifications.Infrastructure.Persistence;
 using Notifications.Migrator;
 using Common.Contracts;
@@ -110,6 +111,13 @@ public sealed class ServiceFixture()
             .SingleOrDefaultAsync(r => r.OrderId == orderId, TestContext.Current.CancellationToken);
     }
 
+    /// <summary>How many consumers the broker holds on one queue, read from the broker itself.</summary>
+    public async Task<int> ConsumersAsync(string queue) =>
+        (await BrokerRowsAsync(["list_queues", "name", "consumers"]))
+            .Where(columns => columns.Length == 2 && columns[0] == queue)
+            .Select(columns => int.Parse(columns[1], CultureInfo.InvariantCulture))
+            .Single();
+
     /// <summary>The exchanges bound to one queue, read from the broker itself.</summary>
     public async Task<string[]> BindingsAsync(string queue) =>
     [
@@ -158,21 +166,30 @@ public sealed class ServiceFixture()
     /// <summary>Commits the host's next sent mark, then fails its acknowledgement, so the unit runs again.</summary>
     public CommitFault LoseNextSentAcknowledgement() => Factory.CommitFaults.Arm(afterCommit: true);
 
-    /// <summary>A second host over the same database, broker and stubs, with a breaker of its own.</summary>
+    /// <summary>A second host over the same database and stubs, with a breaker of its own and no consumers.</summary>
     /// <param name="required">The pairs this host's jurisdiction requires, each <c>topic/channel</c> (ADR-120).</param>
+    /// <remarks>A consumer here would take a share of <see cref="DeliverAsync{T}"/>'s messages, round robin.</remarks>
     public NotificationsWorkerFactory NewWorkerHost(
         string? relayHost = null,
         int? relayPort = null,
         IReadOnlyList<string>? required = null) =>
+        Host(relayHost, relayPort, required, consumes: false);
+
+    protected override NotificationsWorkerFactory CreateFactory() => Host(null, null, null, consumes: true);
+
+    private NotificationsWorkerFactory Host(
+        string? relayHost,
+        int? relayPort,
+        IReadOnlyList<string>? required,
+        bool consumes) =>
         new(
             ConnectionString,
             BrokerConnectionString,
             mailHost: relayHost ?? Relay.Host,
             mailPort: relayPort ?? Relay.Port,
             contactSourceBaseUrl: Keycloak.Urls[0] + "/",
-            required: required);
-
-    protected override NotificationsWorkerFactory CreateFactory() => NewWorkerHost();
+            required: required,
+            consumes: consumes);
 
     protected override async Task StartStubsAsync()
     {
