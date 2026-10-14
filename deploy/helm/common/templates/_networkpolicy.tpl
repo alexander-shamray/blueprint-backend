@@ -144,7 +144,7 @@ spec:
     {{- if has "apns" $providers }}
     {{- $pushPorts = append $pushPorts (include "commerce.urlPort" .Values.apns.baseUrl) }}
     {{- end }}
-    {{- if ($np.push).port }}
+    {{- if and ($np.push).port $pushPorts }}
     {{- $pushPorts = list (($np.push).port | toString) }}
     {{- end }}
     {{- range $port := uniq $pushPorts }}
