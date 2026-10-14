@@ -20,6 +20,8 @@
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <!-- Reads records and metrics back out of a real OpenTelemetry pipeline. -->
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+    <!-- LogRecord, Metric and BaseExporter, which the redaction and meter tests name. -->
+    <PackageReference Include="OpenTelemetry" />
     <!-- Transitive, and named because this assembly uses its types to pin §11.3's parameters. -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <!-- Transitive, and named because this assembly throws its exceptions directly. -->

@@ -34,6 +34,8 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
     <!-- The spans the SDK exports, so an APNs token is proved absent from what leaves the process (ADR-117). -->
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+    <!-- Sdk.CreateTracerProviderBuilder, which builds the tracer the APNs test exports from. -->
+    <PackageReference Include="OpenTelemetry" />
   </ItemGroup>
 
   <ItemGroup>
