@@ -22,6 +22,9 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
 
     private static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
+    /// <summary>A span the retry ladder cannot outrun: its limit in waits, none longer than its ceiling (§9.8).</summary>
+    private static readonly TimeSpan LadderBound = RetryPolicy.MaxInterval * RetryPolicy.RetryLimit;
+
     /// <summary>Every message this test published, so the teardown can wait for its inbox rows.</summary>
     private readonly List<(Guid MessageId, string Endpoint)> _published = [];
 
@@ -113,6 +116,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
         var orderId = Guid.CreateVersion7();
 
         await PublishCancelledAsync(orderId, Guid.CreateVersion7(), CancelOrigins.User);
+        DateTimeOffset cancelled = DateTimeOffset.UtcNow;
 
         await Task.Delay(TimeSpan.FromSeconds(1.5), TestContext.Current.CancellationToken);
 
@@ -129,6 +133,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             expected: 1,
             because: "the placement creates the instance the retry needs");
 
+        // The rescue rides whichever retry follows the placement, and under load that can be the last rung,
+        // which alone outlasts DeliveryBudget; so the wait runs from the cancellation to the end of the ladder.
         await Eventually(
             () => fixture.ScalarAsync<string>(
                 "SELECT Value = CurrentState FROM ordering.OrderFulfilmentStates " +
@@ -136,7 +142,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
                 orderId),
             expected: "Compensating",
             because: "a retried delivery has to correlate to the instance the " +
-                "placement created and compensate, not reach the error queue");
+                "placement created and compensate, not reach the error queue",
+            until: cancelled + LadderBound + DeliveryBudget);
     }
 
     [Fact]
@@ -585,9 +592,13 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     private static Task Eventually(Func<Task<int>> read, int expected, string because) =>
         Eventually<int>(read, expected, because);
 
-    private static async Task Eventually<T>(Func<Task<T>> read, T expected, string because)
+    private static async Task Eventually<T>(
+        Func<Task<T>> read,
+        T expected,
+        string because,
+        DateTimeOffset? until = null)
     {
-        DateTimeOffset deadline = DateTimeOffset.UtcNow + DeliveryBudget;
+        DateTimeOffset deadline = until ?? DateTimeOffset.UtcNow + DeliveryBudget;
         T actual = default!;
 
         while (DateTimeOffset.UtcNow < deadline)
