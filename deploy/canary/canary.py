@@ -1856,12 +1856,26 @@ def _rollout_follows_the_migrator(workloads: dict, workflow: Path = WORKFLOW) ->
     return []
 
 
+def _assignments(argument: str) -> list[str]:
+    """A `--set` argument's comma-joined assignments, leaving a `{a,b}` list and an escaped comma whole."""
+    parts, current, depth, escaped = [], "", 0, False
+    for char in argument:
+        if char == "," and depth == 0 and not escaped:
+            parts.append(current)
+            current = ""
+            continue
+        depth += {"{": 1, "}": -1}.get(char, 0) if not escaped else 0
+        escaped = char == "\\" and not escaped
+        current += char
+    return [*parts, current]
+
+
 def _pinned_keys(lines: list[str]) -> set[str]:
     """Every values path a `--set` flag in `lines` assigns, quoted or not, each of a comma-joined list."""
     keys = set()
     flags = re.findall(r"--set(?:-string|-json|-file|-literal)?(?:=|\s+)('[^']*'|\"[^\"]*\"|\S+)", "\n".join(lines))
     for argument in flags:
-        for part in re.split(r"(?<!\\),", argument.strip("'\"")):
+        for part in _assignments(argument.strip("'\"")):
             # An indexed member, `push.apps[0]`, pins the list it is a member of.
             key = re.sub(r"\[\d+\]", "", part.split("=", 1)[0].strip("'\""))
             if "=" in part and re.fullmatch(r"[\w.-]+", key):

@@ -1969,6 +1969,10 @@ class SharedValuesTests(unittest.TestCase):
                 self.assertEqual(1, len(failures), failures)
                 self.assertIn(f"names {key}, which", failures[0])
 
+    def test_a_list_member_or_an_escaped_comma_is_no_pinned_key(self) -> None:
+        self.assertEqual({"x", "y"}, canary._pinned_keys(["helm upgrade r c --set x={a,b=c},y=1"]))
+        self.assertEqual({"x"}, canary._pinned_keys(["helm upgrade r c --set 'x=a" + chr(92) + ",b=c'"]))
+
     def test_a_comparison_of_the_running_values_is_refused(self) -> None:
         """The running values carry the old chart's defaults, so a changed default would pass unseen."""
         running = self.shipped.replace('--values "$RUNNER_TEMP/candidate.json"', '--values "$RUNNER_TEMP/stable.json"')
