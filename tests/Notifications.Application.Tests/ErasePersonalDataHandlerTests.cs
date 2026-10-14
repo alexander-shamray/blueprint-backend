@@ -25,6 +25,8 @@ public class ErasePersonalDataHandlerTests
     {
         _store.Waiting = 1;
         _store.Ended = 2;
+        _store.WaitingDeliveries = 5;
+        _store.EndedDeliveries = 6;
         _store.Orders = 3;
         _store.Contacts = 1;
         _store.Devices = 2;
@@ -32,13 +34,13 @@ public class ErasePersonalDataHandlerTests
 
         Result<int> result = await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
 
-        result.Value.ShouldBe(13);
+        result.Value.ShouldBe(24);
         _store.Calls.ShouldBe(
-            ["waiting", "ended", "orders", "contact", "devices", "consent"],
+            ["waiting", "ended", "waiting deliveries", "ended deliveries", "orders", "contact", "devices", "consent"],
             "the notices are found through the order records, so those go after them");
         PersonalDataErasure row = _erasures.Added.ShouldHaveSingleItem();
         row.Id.ShouldBe(Request);
-        row.Count.ShouldBe(13);
+        row.Count.ShouldBe(24, "the push design's section 6: the count includes the deliveries");
         _store.ConsentStampedAt.ShouldBe(Now, "ADR-120: the anonymising stamps when it ran");
         row.SubjectHash.ShouldBe(PersonalDataErasure.HashSubject(Request, Subject));
     }
@@ -73,6 +75,10 @@ public class ErasePersonalDataHandlerTests
 
         public int Ended { get; set; }
 
+        public int WaitingDeliveries { get; set; }
+
+        public int EndedDeliveries { get; set; }
+
         public int Orders { get; set; }
 
         public int Contacts { get; set; }
@@ -88,6 +94,12 @@ public class ErasePersonalDataHandlerTests
         public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, CancellationToken ct) => Run("waiting", Waiting);
 
         public Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, CancellationToken ct) => Run("ended", Ended);
+
+        public Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
+            Run("waiting deliveries", WaitingDeliveries);
+
+        public Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
+            Run("ended deliveries", EndedDeliveries);
 
         public Task<int> DeleteOrderRecordsAsync(Guid subjectId, CancellationToken ct) => Run("orders", Orders);
 

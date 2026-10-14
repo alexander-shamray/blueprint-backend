@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Common.Contracts.Ordering.V1;
 using Notifications.Application.Contacts;
+using Notifications.Application.Devices;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 
@@ -38,6 +39,16 @@ public static class SendRules
         // cancellation from an older publisher loses only the decline, as the cancellation notice gives the reason.
         return order.CancelledAt is not null && order.CancelOrigin != CancelOrigins.Workflow;
     }
+
+    /// <summary>Whether a delivery's device still reaches its customer on the platform it was fanned out for.</summary>
+    /// <remarks>
+    /// Gone, cleared, another subject's or another platform's, it does not: a device ADR-117 moved to another subject
+    /// must never show the subject before it a notice of theirs.
+    /// </remarks>
+    public static bool Reaches(PushDevice? device, Guid customerId, string platform) =>
+        device is { Token: not null, AppId: not null } &&
+        device.SubjectId == customerId &&
+        string.Equals(device.Platform, platform, StringComparison.Ordinal);
 
     /// <summary>A stored contact against ADR-052's two numbers; the ceiling's instant is not served.</summary>
     public static ContactAge AgeOf(ContactRecord? contact, DateTimeOffset now, ContactOptions options)

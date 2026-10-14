@@ -107,6 +107,10 @@ public static class DependencyInjection
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IOrderRecordRepository, OrderRecordRepository>();
 
+        // The push design's deliveries, and the device rows the fan-out and the push pass read.
+        services.AddScoped<IPushDeliveryRepository, PushDeliveryRepository>();
+        services.AddScoped<PushDevices>();
+
         // §11.7's erasure: the audit row, the deletes in the unit's transaction and the report after it (ADR-094).
         services.AddScoped<IPersonalDataErasureRepository, PersonalDataErasureRepository>();
         services.AddScoped<INotificationsPersonalDataStore, SqlNotificationsPersonalDataStore>();
@@ -165,6 +169,10 @@ public static class DependencyInjection
         // The send pass; the generic overload, so a suite can remove it by its ImplementationType (§12.4).
         services.AddScoped<SendClaims>();
         services.AddHostedService<SendWorker>();
+
+        // The push pass, a loop of its own so a provider's wait never holds a mail notice, nor the relay's a push.
+        services.AddScoped<PushClaims>();
+        services.AddHostedService<PushSendWorker>();
 
         // ADR-053's three windows, applied by a pass of its own; by implementation type, which §12.4's fixture
         // removes it by, so its start-up pass never races a seed.

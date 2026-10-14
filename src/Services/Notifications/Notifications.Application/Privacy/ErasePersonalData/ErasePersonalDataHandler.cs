@@ -3,7 +3,7 @@ using Common.Domain;
 
 namespace Notifications.Application.Privacy.ErasePersonalData;
 
-/// <summary>Erases the subject's notices, records, contact, devices and consent; writes the audit row.</summary>
+/// <summary>Erases the subject's notices, deliveries, records, contact, devices and consent, and audits it.</summary>
 /// <remarks>
 /// In this order, since the notices are found through the order records; the count is every row touched. A request
 /// already seen repeats rather than fails, so a reissue reports again (§11.7).
@@ -19,6 +19,8 @@ public sealed class ErasePersonalDataHandler(
         DateTimeOffset now = clock.GetUtcNow();
         int count = await store.DeleteWaitingNoticesAsync(command.SubjectId, ct) +
             await store.AnonymiseEndedNoticesAsync(command.SubjectId, ct) +
+            await store.DeleteWaitingDeliveriesAsync(command.SubjectId, ct) +
+            await store.AnonymiseEndedDeliveriesAsync(command.SubjectId, ct) +
             await store.DeleteOrderRecordsAsync(command.SubjectId, ct) +
             await store.DeleteContactAsync(command.SubjectId, ct) +
             await store.ClearDevicesAsync(command.SubjectId, ct) +

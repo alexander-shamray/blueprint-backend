@@ -15,6 +15,9 @@ public sealed class NotificationsDbContext(DbContextOptions<NotificationsDbConte
     /// <summary>§3.2's record of every notice owed.</summary>
     public DbSet<Notification> NotificationLog => Set<Notification>();
 
+    /// <summary>The push design's one row per push notice and installation, each sent and ended alone.</summary>
+    public DbSet<PushDelivery> PushDeliveries => Set<PushDelivery>();
+
     /// <summary>ADR-017's local projection of Ordering's events, which four notices wait on for a customer.</summary>
     public DbSet<OrderRecord> OrderRecords => Set<OrderRecord>();
 

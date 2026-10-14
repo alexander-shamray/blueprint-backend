@@ -1,6 +1,7 @@
 using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Notifications.Application.Preferences;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 using Notifications.Infrastructure;
@@ -36,12 +37,42 @@ public sealed class NotificationGaugeTests(ServiceFixture fixture) : IAsyncLifet
             "UPDATE notifications.NotificationLog SET SendStartedAt = SYSDATETIMEOFFSET() WHERE NotificationId = {0};",
             noRelay.NotificationId);
 
-        foreach (Notification waiting in new[] { noRecord, noCancellation, noContact, noRelay })
+        // A push notice past its record waits on its devices, and each delivery on its platform's provider.
+        Notification noDevices =
+            await fixture.PendingAsync(TemplateKeys.OrderPlaced, placed, channel: ConsentVocabulary.Push);
+        Notification fannedOut =
+            await fixture.PendingAsync(TemplateKeys.OrderConfirmed, placed, channel: ConsentVocabulary.Push);
+        await DeliveryAsync(fannedOut, "fcm", attempts: 1);
+        await DeliveryAsync(fannedOut, "apns", attempts: 2);
+        await DeliveryAsync(fannedOut, "apns", attempts: 0);
+
+        foreach (Notification waiting in new[] { noRecord, noCancellation, noContact, noRelay, noDevices })
             await fixture.SetAttemptsAsync(waiting.NotificationId, 1);
 
         ReadGauge("notifications.waiting").ShouldBe(
-            [("step=order_record", 2), ("step=contact", 1), ("step=relay", 1)],
+            [
+                ("step=order_record", 2), ("step=contact", 1), ("step=relay", 1), ("step=devices", 1),
+                ("step=fcm", 1), ("step=apns", 1)
+            ],
             ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task A_due_delivery_no_pass_holds_reads_as_the_overdue_wait()
+    {
+        Guid order = Guid.CreateVersion7();
+        await fixture.OrderAsync(order, Guid.CreateVersion7());
+        Notification fannedOut =
+            await fixture.PendingAsync(TemplateKeys.OrderPlaced, order, channel: ConsentVocabulary.Push);
+        await fixture.ExecuteAsync(
+            "UPDATE notifications.NotificationLog SET Status = 'Dispatched', CompletedAt = SYSDATETIMEOFFSET() " +
+            "WHERE NotificationId = {0};",
+            fannedOut.NotificationId);
+        await DeliveryAsync(fannedOut, "fcm", attempts: 0, dueSecondsAgo: 120);
+
+        double overdue = ReadGauge("notifications.overdue").ShouldHaveSingleItem().Value;
+
+        overdue.ShouldBeInRange(120 - NotificationStats.OverdueGrace.TotalSeconds, 180);
     }
 
     [Fact]
@@ -57,7 +88,10 @@ public sealed class NotificationGaugeTests(ServiceFixture fixture) : IAsyncLifet
             finished.NotificationId);
 
         ReadGauge("notifications.waiting").ShouldBe(
-            [("step=order_record", 0), ("step=contact", 0), ("step=relay", 0)],
+            [
+                ("step=order_record", 0), ("step=contact", 0), ("step=relay", 0), ("step=devices", 0),
+                ("step=fcm", 0), ("step=apns", 0)
+            ],
             ignoreOrder: true,
             "every step reports, as a step missing from a max reads as a healthy zero");
     }
@@ -107,6 +141,16 @@ public sealed class NotificationGaugeTests(ServiceFixture fixture) : IAsyncLifet
         measured.ShouldBeEmpty();
         overdue.ShouldBeEmpty();
     }
+
+    private Task DeliveryAsync(Notification notice, string platform, int attempts, int dueSecondsAgo = 0) =>
+        fixture.ExecuteAsync(
+            "INSERT notifications.PushDeliveries (DeliveryId, NotificationId, InstallationId, Platform, Status, " +
+            "CreatedAt, Attempts, NextAttemptAt, CorrelationId) VALUES (NEWID(), {0}, NEWID(), {1}, 'Pending', " +
+            "SYSDATETIMEOFFSET(), {2}, DATEADD(second, -{3}, SYSDATETIMEOFFSET()), NEWID());",
+            notice.NotificationId,
+            platform,
+            attempts,
+            dueSecondsAgo);
 
     private Task DueAsync(Notification notification, TimeSpan ago) =>
         fixture.ExecuteAsync(

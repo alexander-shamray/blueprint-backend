@@ -384,7 +384,7 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         await using AsyncServiceScope scope = host.Services.CreateAsyncScope();
         SendClaims claims = scope.ServiceProvider.GetRequiredService<SendClaims>();
 
-        SendWork lapsed = (await claims.ClaimAsync(Ct)).ShouldHaveSingleItem();
+        SendWork lapsed = (await claims.ClaimAsync(mailParked: false, Ct)).ShouldHaveSingleItem();
         await fixture.ExecuteAsync(
             "UPDATE notifications.NotificationLog SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
             "WHERE NotificationId = {0};",
@@ -396,7 +396,7 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             await fixture.ScalarAsync<int>(
                 "SELECT Value = CASE WHEN SYSDATETIMEOFFSET() > {0} THEN 1 ELSE 0 END",
                 firstClaim) == 1);
-        SendWork holder = (await claims.ClaimAsync(Ct)).ShouldHaveSingleItem();
+        SendWork holder = (await claims.ClaimAsync(mailParked: false, Ct)).ShouldHaveSingleItem();
         holder.LockedUntil.ShouldNotBe(lapsed.LockedUntil, "the two claims hold distinct leases");
 
         (await claims.BackOffAsync(owed.NotificationId, lapsed.LockedUntil, Ct)).ShouldBeFalse();

@@ -17,6 +17,10 @@ builder.Host.UseDefaultServiceProvider(o =>
     o.ValidateScopes = true;
 });
 
+// Two passes drain at a stop, the send and the push, and the host stops its services one after another by default,
+// so the second would start its drain only once the first had spent the shared 30 seconds (§15.3).
+builder.Services.Configure<HostOptions>(o => o.ServicesStopConcurrently = true);
+
 builder.Configuration.AddOperatorSwitchFile();  // ADR-113
 builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddNotificationsApplication(NotificationsHost.Worker);   // §6.2, ADR-118

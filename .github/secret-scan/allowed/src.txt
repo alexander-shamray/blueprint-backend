@@ -7,3 +7,5 @@
 #
 # covers: src/
 
+src/Services/Notifications/Notifications.Application/Records/NotificationReasons.cs | credential-assignment | f81df2268c43 | A push delivery's terminal reason code, named for the provider's PushRefusal.InvalidToken answer; it names a refusal and holds no credential.
+

@@ -27,6 +27,7 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
         columns.ShouldBe(
             [
                 "Attempts",
+                "Channel",
                 "CompletedAt",
                 "ConsentEntryId",
                 "CorrelationId",
@@ -49,6 +50,54 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
                 "TraceState"
             ],
             ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task A_delivery_row_holds_no_token_and_no_parameters()
+    {
+        string[] columns = await fixture.ColumnsAsync("notifications", "PushDeliveries");
+
+        // The push design's section 3: the send reads the device row's token, and the render its notice's values.
+        columns.ShouldBe(
+            [
+                "Attempts",
+                "CompletedAt",
+                "ConsentEntryId",
+                "CorrelationId",
+                "CreatedAt",
+                "CustomerId",
+                "DeliveryId",
+                "InstallationId",
+                "Languages",
+                "LockedUntil",
+                "NextAttemptAt",
+                "NotificationId",
+                "Platform",
+                "Reason",
+                "RowVersion",
+                "SendStartedAt",
+                "Status",
+                "TemplateVersion",
+                "TraceParent",
+                "TraceState"
+            ],
+            ignoreOrder: true);
+    }
+
+    [Fact]
+    public async Task A_row_written_without_a_channel_is_a_mail_notice()
+    {
+        // A worker of the version before names no channel while both run (§7.4); the default makes its row mail.
+        Guid notificationId = Guid.CreateVersion7();
+        await fixture.ExecuteAsync(
+            "INSERT notifications.NotificationLog (NotificationId, EventId, CorrelationId, TemplateKey, OrderId, " +
+            "Parameters, Status, CreatedAt, Attempts, NextAttemptAt) VALUES ({0}, NEWID(), NEWID(), 'order-placed', " +
+            "NEWID(), '', 'Pending', SYSDATETIMEOFFSET(), 0, SYSDATETIMEOFFSET());",
+            notificationId);
+
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = Channel FROM notifications.NotificationLog WHERE NotificationId = {0}",
+            notificationId)).ShouldBe("email");
     }
 
     [Fact]
@@ -83,6 +132,7 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
             Guid.CreateVersion7(),
             correlation,
             "payment-declined",
+            "email",
             Guid.CreateVersion7(),
             """{"v":1}""",
             Now);
@@ -110,7 +160,14 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
     }
 
     private static Notification Placed(Guid eventId) =>
-        Notification.Pending(eventId, Guid.CreateVersion7(), "order-placed", Guid.CreateVersion7(), """{"v":1}""", Now);
+        Notification.Pending(
+            eventId,
+            Guid.CreateVersion7(),
+            "order-placed",
+            "email",
+            Guid.CreateVersion7(),
+            """{"v":1}""",
+            Now);
 
     private async Task SaveAsync(Notification notification)
     {

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Notifications.Application.Delivery;
 using Notifications.Application.Push;
 
 namespace Notifications.Infrastructure.Push;
@@ -24,6 +25,9 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<PushOptions>, PushOptionsValidator>();
         services.AddSingleton<PushMetrics>();
+
+        // The intake writes a push notice only once an app is named, as no device row can exist before (ADR-117).
+        services.AddSingleton(new DeliveryChannels(push: apps.Apps.Count > 0));
 
         if (apps.Names(FcmPushProvider.Name))
             AddFcm(services, configuration, environment);

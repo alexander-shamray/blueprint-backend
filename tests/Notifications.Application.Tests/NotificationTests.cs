@@ -1,3 +1,4 @@
+using Notifications.Application.Preferences;
 using Notifications.Application.Records;
 using Shouldly;
 using Xunit;
@@ -16,14 +17,58 @@ public class NotificationTests
         Guid? correlationId = null,
         string templateKey = "order-placed",
         Guid? orderId = null,
-        string parameters = """{"v":1}""") =>
+        string parameters = """{"v":1}""",
+        string channel = ConsentVocabulary.Email) =>
         Notification.Pending(
             eventId ?? Guid.CreateVersion7(),
             correlationId ?? Guid.CreateVersion7(),
             templateKey,
+            channel,
             orderId ?? Guid.CreateVersion7(),
             parameters,
             Now);
+
+    [Fact]
+    public void A_channel_outside_the_vocabulary_is_the_caller_s_defect()
+    {
+        Should.Throw<ArgumentOutOfRangeException>(() => Pending(channel: "sms"));
+    }
+
+    [Fact]
+    public void A_push_notice_that_fans_out_is_dispatched_with_its_languages_and_entry()
+    {
+        Notification push = Pending(channel: ConsentVocabulary.Push);
+
+        push.Dispatch("kk,en", Entry, Later).ShouldBeTrue();
+
+        push.Status.ShouldBe(NotificationStatus.Dispatched, "its outcome is now its deliveries'");
+        push.Languages.ShouldBe("kk,en");
+        push.ConsentEntryId.ShouldBe(Entry, "ADR-120: the row shows the consent the fan-out ran under");
+        push.CompletedAt.ShouldBe(Later, "LogRetention ages it from here, once no delivery is pending");
+        push.Dispatch("kk,en", Entry, Later).ShouldBeFalse("a dispatched notice is terminal");
+        push.MarkUndeliverable(NotificationReasons.NoDevice, Later).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_mail_notice_never_dispatches()
+    {
+        Notification mail = Pending();
+
+        mail.Dispatch("en", null, Later).ShouldBeFalse("a mail notice is sent, never fanned out");
+        mail.Status.ShouldBe(NotificationStatus.Pending);
+    }
+
+    [Fact]
+    public void A_push_notice_with_no_device_is_undeliverable_and_a_delivery_reason_is_not_a_notice_s()
+    {
+        Notification push = Pending(channel: ConsentVocabulary.Push);
+
+        Should.Throw<ArgumentOutOfRangeException>(
+            () => push.MarkUndeliverable(NotificationReasons.Unregistered, Later),
+            "a provider's answer lands on a delivery, never on the notice");
+        push.MarkUndeliverable(NotificationReasons.NoDevice, Later).ShouldBeTrue();
+        push.Reason.ShouldBe(NotificationReasons.NoDevice);
+    }
 
     private static Notification Started()
     {
@@ -228,9 +273,13 @@ public class NotificationTests
     [Fact]
     public void The_closed_set_is_every_terminal_reason_the_record_names()
     {
-        // ADR-052's outcomes, the relay's two refusals and §11.7's erasure, and nothing a caller could misspell.
+        // ADR-052's outcomes, the relay's two refusals, §11.7's erasure and a push notice with no device, and nothing a
+        // caller could misspell.
         NotificationReasons.All.ShouldBe(
-            ["no_such_customer", "recipient_refused", "not_a_mailbox", "gave_up", "erased"],
+            ["no_such_customer", "recipient_refused", "not_a_mailbox", "gave_up", "erased", "no_device"],
+            ignoreOrder: true);
+        NotificationReasons.Delivery.ShouldBe(
+            ["unregistered", "invalid_token", "no_device", "gave_up"],
             ignoreOrder: true);
     }
 

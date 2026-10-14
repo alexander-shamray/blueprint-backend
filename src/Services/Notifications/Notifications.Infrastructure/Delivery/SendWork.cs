@@ -12,6 +12,7 @@ public sealed record SendWork(
     Guid OrderId,
     Guid? CustomerId,
     string TemplateKey,
+    string Channel,
     string Parameters,
     DateTimeOffset CreatedAt,
     DateTimeOffset? SendStartedAt,

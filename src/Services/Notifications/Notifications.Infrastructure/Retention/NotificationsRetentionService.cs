@@ -8,13 +8,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Notifications.Application.Devices;
 using Notifications.Infrastructure.Jurisdiction;
+using Notifications.Infrastructure.Push;
 
 namespace Notifications.Infrastructure.Retention;
 
 /// <summary>ADR-053's three windows, ADR-117's stale window over the device rows and ADR-120's journal.</summary>
 /// <remarks>
 /// Apart from <c>RetentionPurgeService</c>, whose windows are housekeeping (ADR-053). An order record goes only once
-/// no pending notice names its order, since that notice waits on it.
+/// no pending notice names its order, since that notice waits on it; a push delivery ages with its notice.
 /// </remarks>
 public sealed class NotificationsRetentionService : BackgroundService, ISwitchedWorker
 {
@@ -30,18 +31,41 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
     /// <summary>Batches per table per pass, so a backlog drains and a pass still ends.</summary>
     public const int MaxBatchesPerPass = 20;
 
-    private const string EndedNotices =
+    // A dispatched push notice's outcome is its deliveries', so it is never aged while one of them is pending, and is
+    // aged from the last of them to end, so each keeps ADR-053 rule 4's window; they go with it, by the cascade.
+    private const string NoPendingDelivery =
         """
-        SELECT TOP (@BatchSize) NotificationId
-        FROM notifications.NotificationLog
-        WHERE CompletedAt IS NOT NULL AND CompletedAt < @Before AND Status <> 'Pending'
-        ORDER BY CompletedAt;
+        NOT EXISTS (
+            SELECT 1 FROM notifications.PushDeliveries d
+            WHERE d.NotificationId = n.NotificationId AND d.Status = 'Pending')
+        """;
+
+    private const string LastDelivery =
+        """
+        OUTER APPLY (
+            SELECT MAX(d.CompletedAt) AS CompletedAt
+            FROM notifications.PushDeliveries d
+            WHERE d.NotificationId = n.NotificationId) last
+        """;
+
+    private const string NoticeEndedAt = "COALESCE(last.CompletedAt, n.CompletedAt)";
+
+    private const string EndedNotices =
+        $"""
+        SELECT TOP (@BatchSize) n.NotificationId
+        FROM notifications.NotificationLog n
+        {LastDelivery}
+        WHERE n.CompletedAt IS NOT NULL AND {NoticeEndedAt} < @Before AND n.Status <> 'Pending'
+            AND {NoPendingDelivery}
+        ORDER BY n.CompletedAt;
         """;
 
     private const string DeleteNotices =
-        """
-        DELETE FROM notifications.NotificationLog
-        WHERE NotificationId IN @Keys AND CompletedAt < @Before AND Status <> 'Pending';
+        $"""
+        DELETE n FROM notifications.NotificationLog n
+        {LastDelivery}
+        WHERE n.NotificationId IN @Keys AND n.CompletedAt IS NOT NULL AND {NoticeEndedAt} < @Before
+            AND n.Status <> 'Pending' AND {NoPendingDelivery};
         """;
 
     private const string ExpiredOrders =
@@ -116,12 +140,15 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
 
     private const string EndedAt = "COALESCE(later.WrittenAt, e.AnonymisedAt)";
 
-    // ADR-120's second condition: no kept record of a send names the entry, or the entry it ended.
+    // ADR-120's second condition: no kept record of a send, notice or delivery, names the entry or the entry it ended.
     private const string Unnamed =
         """
         NOT EXISTS (
             SELECT 1 FROM notifications.NotificationLog n
             WHERE n.ConsentEntryId = e.EntryId OR n.ConsentEntryId = e.SupersedesEntryId)
+        AND NOT EXISTS (
+            SELECT 1 FROM notifications.PushDeliveries d
+            WHERE d.ConsentEntryId = e.EntryId OR d.ConsentEntryId = e.SupersedesEntryId)
         """;
 
     private const string ExpiredConsent =
@@ -156,6 +183,7 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
     private readonly IServiceScopeFactory _scopes;
     private readonly NotificationsJurisdictionOptions _windows;
     private readonly DeviceTokenOptions _devices;
+    private readonly PushMetrics _metrics;
     private readonly ILogger<NotificationsRetentionService> _log;
     private readonly OperatorSwitches? _switches;
 
@@ -163,12 +191,14 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
         IServiceScopeFactory scopes,
         IOptions<NotificationsJurisdictionOptions> windows,
         DeviceTokenOptions devices,
+        PushMetrics metrics,
         ILogger<NotificationsRetentionService> log,
         OperatorSwitches? switches = null)
     {
         _scopes = scopes;
         _windows = windows.Value;
         _devices = devices;
+        _metrics = metrics;
         _log = log;
         _switches = switches;
     }
@@ -247,6 +277,7 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
             null,
             ct);
         Purged(_log, devices, "device installations", null);
+        _metrics.DevicesRemoved(PushMetrics.Stale, devices);
 
         // After the log's own window, so an entry the pass just freed of its last send goes in the same pass.
         int consent = await PurgeWindowAsync(

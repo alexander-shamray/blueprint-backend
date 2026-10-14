@@ -1,6 +1,7 @@
 using Common.Infrastructure.Tracing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Notifications.Application.Preferences;
 using Notifications.Application.Records;
 
 namespace Notifications.Infrastructure.Persistence;
@@ -14,15 +15,16 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
         builder.HasKey(n => n.NotificationId);
         builder.Property(n => n.NotificationId).ValueGeneratedNever();
 
-        // One row per event per template, the second line behind §9.5's inbox rather than the first.
-        builder.HasIndex(n => new { n.EventId, n.TemplateKey }).IsUnique();
+        // One row per event per template per channel, the second line behind §9.5's inbox rather than the first.
+        builder.HasIndex(n => new { n.EventId, n.TemplateKey, n.Channel }).IsUnique();
 
-        // The send claim's population, its filter repeated by SendClaims.Claimable so the optimiser matches it.
+        // The send claim's population, its filter repeated by SendClaims.Claimable so the optimiser matches it; the
+        // channel included, as an open relay narrows the claim to push notices (the push design's section 1).
         builder
             .HasIndex(n => n.NextAttemptAt)
             .HasDatabaseName("IX_NotificationLog_SendClaim")
             .HasFilter("[Status] = 'Pending'")
-            .IncludeProperties(n => new { n.LockedUntil });
+            .IncludeProperties(n => new { n.LockedUntil, n.Channel });
 
         // OrderRetention's floor: an order record goes only once no pending notice names its order.
         builder
@@ -43,6 +45,14 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
             .HasFilter("[ConsentEntryId] IS NOT NULL");
 
         builder.Property(n => n.TemplateKey).HasMaxLength(NotificationLimits.MaxTemplateKeyLength);
+
+        // Defaulted to email, which backfills every row written before push and every row a version that predates
+        // it writes while both run (§7.4); the record always sets it, so the default never stands in for a push.
+        builder
+            .Property(n => n.Channel)
+            .HasMaxLength(ConsentVocabulary.MaxChannelLength)
+            .IsUnicode(false)
+            .HasDefaultValue(ConsentVocabulary.Email);
         builder.Property(n => n.Languages).HasMaxLength(NotificationLimits.MaxLanguagesLength);
         builder.Property(n => n.Parameters).HasMaxLength(NotificationLimits.MaxParametersLength);
         builder.Property(n => n.Reason).HasMaxLength(NotificationLimits.MaxReasonLength);

@@ -8,4 +8,7 @@ public enum NotificationStatus
     Sent,
     Suppressed,
     Undeliverable,
+
+    /// <summary>A push notice that fanned out: its outcome is its deliveries' (the push design's section 3).</summary>
+    Dispatched,
 }

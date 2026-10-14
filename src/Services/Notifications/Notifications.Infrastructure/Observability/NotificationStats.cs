@@ -2,6 +2,7 @@ using System.Data;
 using Common.Application;
 using Dapper;
 using Microsoft.Extensions.Caching.Memory;
+using Notifications.Application.Preferences;
 using Notifications.Application.Rendering;
 using Notifications.Infrastructure.Delivery;
 using Notifications.Infrastructure.Mail;
@@ -24,7 +25,8 @@ internal sealed class NotificationStats(IDbConnectionFactory connections) : INot
     /// <summary>Two ticks: a due row a healthy pass has not reached yet reads as no wait.</summary>
     internal static readonly TimeSpan OverdueGrace = MailHop.SendTick * 2;
 
-    // The intent first, then the record, then everything else before the intent, which is the contact's step.
+    // The intent first, then the record, then everything else before the intent: a push notice's devices, a mail
+    // notice's contact. A delivery waits on its platform's provider (the push design's section 4).
     private static readonly string WaitingSql =
         $"""
         SELECT Step, COUNT(*) AS Waiting
@@ -34,21 +36,32 @@ internal sealed class NotificationStats(IDbConnectionFactory connections) : INot
                 WHEN r.OrderId IS NULL
                     OR (n.TemplateKey = '{TemplateKeys.PaymentDeclined}' AND r.CancelledAt IS NULL)
                     THEN '{WaitingSteps.OrderRecord}'
+                WHEN n.Channel = '{ConsentVocabulary.Push}' THEN '{WaitingSteps.Devices}'
                 ELSE '{WaitingSteps.Contact}'
             END AS Step
             FROM notifications.NotificationLog n
             LEFT JOIN notifications.OrderRecords r ON r.OrderId = n.OrderId
             WHERE n.Status = 'Pending' AND n.Attempts > 0
+            UNION ALL
+            SELECT CASE d.Platform
+                WHEN '{WaitingSteps.Fcm}' THEN '{WaitingSteps.Fcm}'
+                ELSE '{WaitingSteps.Apns}'
+            END
+            FROM notifications.PushDeliveries d
+            WHERE d.Status = 'Pending' AND d.Attempts > 0
         ) waiting
         GROUP BY Step;
         """;
 
-    // The claim's own population, aged from when each row became due; NULL is no wait.
+    // Both claims' own populations, aged from when each row became due; NULL is no wait.
     private static readonly string OverdueSql =
         $"""
-        SELECT DATEDIFF_BIG(millisecond, MIN(NextAttemptAt), SYSDATETIMEOFFSET()) / 1000.0
-        FROM notifications.NotificationLog
-        WHERE {SendClaims.Claimable};
+        SELECT DATEDIFF_BIG(millisecond, MIN(Due), SYSDATETIMEOFFSET()) / 1000.0
+        FROM (
+            SELECT NextAttemptAt AS Due FROM notifications.NotificationLog WHERE {SendClaims.Claimable}
+            UNION ALL
+            SELECT NextAttemptAt FROM notifications.PushDeliveries WHERE {PushClaims.Claimable}
+        ) due;
         """;
 
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());

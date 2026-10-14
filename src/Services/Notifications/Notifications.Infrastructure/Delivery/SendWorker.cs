@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Notifications.Application.Contacts;
 using Notifications.Application.Delivery;
+using Notifications.Application.Devices;
 using Notifications.Application.Mail;
 using Notifications.Application.Preferences;
 using Notifications.Application.Privacy;
@@ -18,10 +19,11 @@ using Notifications.Infrastructure.Observability;
 
 namespace Notifications.Infrastructure.Delivery;
 
-/// <summary>Claims notices under a lease and makes every call that leaves the service.</summary>
+/// <summary>Claims notices under a lease: sends a mail notice, and fans a push notice out to its deliveries.</summary>
 /// <remarks>
 /// <c>FulfilmentWorker</c>'s shape with <c>TrackingWorker</c>'s rows at once. No consumer calls out (ADR-052), and
-/// the intent is committed before the send, so a crash after the relay's accept is a row that says so.
+/// the intent is committed before the send, so a crash after the relay's accept is a row that says so. A delivery
+/// is sent by <see cref="PushSendWorker"/>, whose waits are a provider's and not the relay's (the push design).
 /// </remarks>
 public sealed class SendWorker(
     IServiceScopeFactory scopes,
@@ -54,7 +56,7 @@ public sealed class SendWorker(
         LoggerMessage.Define<DateTimeOffset?>(
             LogLevel.Debug,
             new EventId(2, nameof(Parked)),
-            "The relay's breaker is open until {ParkedUntil}; no notice is claimed.");
+            "The relay's breaker is open until {ParkedUntil}; only push notices are claimed.");
 
     private static readonly Action<ILogger, Guid, Guid, Exception?> PassFailed =
         LoggerMessage.Define<Guid, Guid>(
@@ -165,6 +167,19 @@ public sealed class SendWorker(
             "Notification {NotificationId} on order {OrderId} is suppressed: its customer's newest consent entry " +
             "withdraws it, so nothing is fetched or sent (ADR-120).");
 
+    private static readonly Action<ILogger, Guid, Guid, Guid, Exception?> NoDevice =
+        LoggerMessage.Define<Guid, Guid, Guid>(
+            LogLevel.Information,
+            new EventId(19, nameof(NoDevice)),
+            "Push notification {NotificationId} on order {OrderId} finds no device customer {CustomerId} holds; " +
+            "it is undeliverable (ADR-117).");
+
+    private static readonly Action<ILogger, Guid, Guid, int, Exception?> Dispatched =
+        LoggerMessage.Define<Guid, Guid, int>(
+            LogLevel.Information,
+            new EventId(20, nameof(Dispatched)),
+            "Push notification {NotificationId} on order {OrderId} fanned out to {Devices} device(s).");
+
     public string SwitchName => Name;
 
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
@@ -203,17 +218,15 @@ public sealed class SendWorker(
         await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
         MailPipeline relay = claimScope.ServiceProvider.GetRequiredService<MailPipeline>();
 
-        // An open breaker parks the claim, so unclaimed rows keep their backoff and nothing reaches a queue (§9.7).
-        // Past the break a pass claims as usual; its first send probes and rows the breaker rejects back off.
-        if (relay.IsOpen)
-        {
+        // An open breaker parks the mail notices, so they keep their backoff and nothing reaches a queue (§9.7), and a
+        // push notice still fans out. Past the break a pass claims as usual; its first send probes.
+        bool mailParked = relay.IsOpen;
+        if (mailParked)
             Parked(log, relay.ParkedUntil, null);
-            return new SendPass(0, 0);
-        }
 
         SendClaims claims = claimScope.ServiceProvider.GetRequiredService<SendClaims>();
         claim.ThrowIfCancellationRequested();
-        IReadOnlyList<SendWork> claimed = await claims.ClaimAsync(rows);
+        IReadOnlyList<SendWork> claimed = await claims.ClaimAsync(mailParked, rows);
 
         // Every row at once, so a pass lasts one row's calls and the lease bounds it; WhenAll, so one row's fault
         // leaves the others to finish.
@@ -333,13 +346,16 @@ public sealed class SendWorker(
         if (work.CustomerId is null)
             await CommitAsync(sp, work, (n, _) => n.AssignCustomer(customer), ct);
 
+        if (work.Channel == ConsentVocabulary.Push)
+            return await FanOutAsync(sp, work, customer, reads, ct);
+
         // Decided when the send is made, so a withdrawal reaches the next one; a resend was decided at its intent,
         // which carries the entry, and is not asked again (ADR-120).
         Guid? consentEntry = null;
 
         if (work.SendStartedAt is null)
         {
-            PreferenceState consent = await ConsentAsync(sp, customer, work.TemplateKey, ct);
+            PreferenceState consent = await ConsentAsync(sp, customer, work.TemplateKey, ConsentVocabulary.Email, ct);
 
             if (!consent.OptedIn)
             {
@@ -419,14 +435,99 @@ public sealed class SendWorker(
         };
     }
 
-    /// <summary>The mail pair under its requirement, the customer's newest entry or its default (ADR-120).</summary>
-    private static async Task<PreferenceState> ConsentAsync(
+    /// <summary>
+    /// A push notice's steps past the customer: the pair, the devices, the language, then one transaction that
+    /// writes a delivery per device and ends the notice <c>Dispatched</c> (the push design's section 4).
+    /// </summary>
+    private async Task<bool> FanOutAsync(
+        IServiceProvider sp,
+        SendWork work,
+        Guid customer,
+        ContactReads reads,
+        CancellationToken ct)
+    {
+        PreferenceState consent = await ConsentAsync(sp, customer, work.TemplateKey, ConsentVocabulary.Push, ct);
+
+        if (!consent.OptedIn)
+        {
+            bool optedOut = await CommitAsync(sp, work, (n, now) => n.OptOut(consent.Version, now), ct);
+
+            if (optedOut)
+                OptedOut(log, work.NotificationId, work.OrderId, null);
+
+            return optedOut;
+        }
+
+        IReadOnlyList<PushDevice> devices = await sp.GetRequiredService<PushDevices>().OfSubjectAsync(customer, ct);
+
+        if (devices.Count == 0)
+        {
+            bool none = await CommitAsync(
+                sp,
+                work,
+                (n, now) => n.MarkUndeliverable(NotificationReasons.NoDevice, now),
+                ct);
+
+            if (none)
+                NoDevice(log, work.NotificationId, work.OrderId, customer, null);
+
+            return none;
+        }
+
+        // For the language alone: a push is addressed to a device, so the mailbox is never used (ADR-052).
+        if (await ContactAsync(sp, work, customer, reads, ct) is not ContactLookup.Found contact)
+        {
+            bool unknown = await CommitAsync(
+                sp,
+                work,
+                (n, now) => n.MarkUndeliverable(NotificationReasons.NoSuchCustomer, now),
+                ct);
+
+            if (unknown)
+                NoSuchCustomer(log, work.NotificationId, work.OrderId, customer, null);
+
+            return unknown;
+        }
+
+        string languages = string.Join(',', sp.GetRequiredService<TemplateRenderer>().LanguagesFor(contact.Locale));
+        IPushDeliveryRepository deliveries = sp.GetRequiredService<IPushDeliveryRepository>();
+
+        // One transaction, so a pass repeated after a crash finds the notice pending with no rows, or both done.
+        bool dispatched = await CommitAsync(
+            sp,
+            work,
+            (n, now) =>
+            {
+                if (!n.Dispatch(languages, consent.Version, now))
+                    return false;
+
+                foreach (PushDevice device in devices)
+                {
+                    deliveries.Add(
+                        PushDelivery.For(n, device.InstallationId, device.Platform!, consent.Version, languages, now));
+                }
+
+                return true;
+            },
+            ct);
+
+        if (dispatched)
+            Dispatched(log, work.NotificationId, work.OrderId, devices.Count, null);
+        else
+            Outgrown(log, work.NotificationId, work.OrderId, null);
+
+        return dispatched;
+    }
+
+    /// <summary>One pair under its requirement, the customer's newest entry or its default (ADR-120).</summary>
+    internal static async Task<PreferenceState> ConsentAsync(
         IServiceProvider sp,
         Guid customer,
         string topic,
+        string channel,
         CancellationToken ct)
     {
-        ConsentPair pair = new(topic, ConsentVocabulary.Email);
+        ConsentPair pair = new(topic, channel);
         RequiredPairs required = sp.GetRequiredService<RequiredPairs>();
 
         // A required pair takes no entry, so the journal is not asked for one.
