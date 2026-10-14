@@ -3015,12 +3015,14 @@ concurrent fan-out costs only the slowest call. That is the rule; [§10.1](10-ap
 two-BFF diagram illustrates it, and is a picture of the pattern rather than of
 this platform.
 
-`Web.Bff`'s pricing hop to Catalog (below) is, in the reference domain
+`Web.Bff`'s pricing hop to Catalog (below) and its registration hop to
+Notifications are, in the reference domain
 ([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)), the
-platform's one synchronous call on a request path, and Catalog calls nobody,
-so the deepest chain is
-`Client → Gateway → BFF → Catalog`. There is a second synchronous call between
-services and it is on no request path at all:
+platform's two synchronous calls on a request path, each the one hop of its
+own request, and neither callee calls anybody, so the deepest chain is
+`Client → Gateway → BFF → Catalog`, or the same ending at Notifications.
+There is a third synchronous call between services and it is on no request
+path at all:
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 has a Shipping worker read a delivery address from Ordering with nothing
 waiting on the answer, so it spends no hop of this budget and §2.3's callout
@@ -3146,8 +3148,15 @@ Keycloak is the deployment's own and no third party. The outbound clients of the
 other kind call third parties — Payments' `ProviderHop`, behind the
 anti-corruption layer that, in the reference domain, [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map) gives Payments, Shipping's `CarrierHop`, to the
 carrier, and Notifications' `MailHop`, to its relay — and each is registered by
-the service that makes the call. `PricingHop`, beside the BFF's registration,
-names the client and Catalog's address once: `http`, not `https`, because TLS
+the service that makes the call. A call under the caller's own token is a
+third kind, and §4.2's helper registers none of it either: in the reference
+domain the BFF's registration hop forwards the buyer's access token unchanged
+and holds no grant for it
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)),
+so `NotificationsHop` sizes it as `PricingHop` sizes its own, and no client
+secret counts it (§11.5). `PricingHop`, beside the pricing client's
+registration in `Program.cs`, names the client and Catalog's address once:
+`http`, not `https`, because TLS
 terminates at the ingress and traffic inside the cluster is plain (§10.1); the
 host is the Service name YARP also routes to (§10.2); and a second, HTTP/2-only
 port rather than the REST one, because a cleartext Kestrel endpoint cannot serve
@@ -3340,7 +3349,9 @@ has the mechanism, which is a linked file rather than Pact.
 > say, so a comparison that should be ordinal is never handed two spellings
 > to reconcile. **A synchronous hop is the one place a peer's behaviour is
 > load-bearing rather than eventual**, which is why this is where the
-> platform spends a contract.
+> platform spends a contract. The registration hop beside it spends none,
+> because its consumer computes nothing over the reply, as
+> [§12.6](12-test-strategy.md) argues.
 
 ## 9.8 Failure handling
 

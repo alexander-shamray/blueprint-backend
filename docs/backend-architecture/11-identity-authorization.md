@@ -1148,10 +1148,23 @@ for one of its own; every other service exchanges events over the broker and
 reads local projections ([§6.4](06-cqrs.md), ADR-002), so none of them ever
 presents itself to another.
 
+**One synchronous call carries no grant at all.** The BFF's device
+registration forwards the buyer's own access token to Notifications
+unchanged, so Notifications registers the subject the token names and nobody
+else
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)).
+The warning above is about background work, and this is the buyer's own
+request, made while they wait; a BFF client able to register a device to any
+subject is what a stolen secret must not buy.
+
 That is not a simplification for the sake of the example — it is what ADR-002
 and ADR-017 add up to. The mechanism below is worth understanding precisely
-because the number of hosts using it is the number of synchronous couplings in
-the platform, and the callout below says what moving that number costs. "Every
+because the number of hosts using it is the number of synchronous couplings
+made under a grant, and the callout below says what moving that number costs.
+It is not every coupling: the registration above holds no secret and is in no
+count of the realm's clients, so an audit of couplings reads
+[Appendix E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)'s
+hops as well. "Every
 host gets the full identity block" is the natural-looking generalisation and
 the wrong one; so is reading this section and concluding the services talk to
 each other.
@@ -1165,11 +1178,14 @@ each other.
 > [ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
 > left neither value a way to arrive by event. The argument above is why each
 > took a record rather than a registration: the count of hosts holding a
-> client secret is the count of synchronous couplings, and it moves only by a
-> decision that says what each new secret reads when it is stolen.
+> client secret is the count of synchronous couplings made under a grant, and
+> it moves only by a decision that says what each new secret reads when it is
+> stolen.
 
 Mechanically this is a `DelegatingHandler` attached to every outbound client
-that calls a peer (§9.7), so no call site has to remember it. It is
+that calls a peer under a grant of its own (§9.7), so no call site has to
+remember it; the registration's client takes the BFF's `CallerTokenHandler`
+in its place. It is
 `src/BuildingBlocks/Common.Infrastructure/Identity/ClientCredentialsHandler.cs`,
 and the token it asks for is cached, so one fetch serves many calls. A token
 the callee refuses is evicted from the cache, so the next call fetches a fresh

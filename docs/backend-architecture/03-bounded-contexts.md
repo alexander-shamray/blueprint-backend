@@ -270,10 +270,13 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
 
 Note the shapes this produces. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), **Shipping**
 and **Notifications** expose no
-public API at all — they are reached only through the broker, and
+public API at all. Shipping is reached only through the broker, and
 [ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
 settles the one read that would otherwise have asked Shipping for one.
-Only Notifications is a *pure* consumer among the services, though: the
+Notifications has one caller besides the broker, the BFF, which registers a
+signed-in buyer's device over gRPC on a port no gateway route reaches
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)).
+Only Notifications publishes nothing among the services, though: the
 table in [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) gives Shipping two events to publish, and ADR-051's projection
 — the BFF's row, a host's rather than a service's — is built on them.
 **Notifications** is the simplest possible service and the last one built,

@@ -1243,8 +1243,10 @@ public async Task The_service_receives_the_path_with_the_namespace_prefix_remove
 The pyramid's outbound-hop row is each caller's own suite. `Web.Bff.Tests`
 holds §9.7's pricing hop, whose three properties no suite outside this row
 can reach: a timeout hierarchy, a credential handler's *position*, and a
-realm that nothing compiles against. A worker's `*.Worker.Tests` holds them for
-the reads
+realm that nothing compiles against. It holds the first of them for the
+registration hop beside it too, which carries the caller's own token and so
+has no handler to place and no grant to prove. A worker's `*.Worker.Tests`
+holds them for the reads
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 adds, and
 [E.7.1](appendix-e-reference-domain.md#e71-the-journey-and-the-outbound-hops)
@@ -2049,7 +2051,7 @@ consumer authors and the provider verifies — is taken, and the broker and wire
 format that ship it across a repository boundary are declined, because this is a
 monorepo and that boundary is not there.
 
-**Two things it does not do.** It does not cover the address read
+**Three things it does not do.** It does not cover the address read
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 gives a worker, the second relationship
 [ADR-023](adr/ADR-023-the-consumer-driven-contract-is-a-linked-file-not-pact.md)
@@ -2067,7 +2069,13 @@ each of those statuses against the real provider
 The worker's
 stub is still a hand-written one, so a worker that comes to depend on more of
 the reply is
-where the contract becomes owed. And it does not cross a repository boundary —
+where the contract becomes owed. Nor does it cover the BFF's registration hop
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)),
+on the same judgement and for a smaller reason: the BFF compares nothing in
+the reply with its own state, only the sequence with the one it sent, and
+relays the rest
+([E.7.8](appendix-e-reference-domain.md#e78-the-pricing-hop-and-the-address-read)).
+And it does not cross a repository boundary —
 extract the BFF and this file becomes something that has to be published, at
 which point Pact is the answer after all.
 
