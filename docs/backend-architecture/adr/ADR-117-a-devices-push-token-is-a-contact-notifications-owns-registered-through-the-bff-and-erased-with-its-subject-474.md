@@ -196,6 +196,14 @@ adapters in the worker. The closing table's rows written for the worker as
 the host — §15.3, `deploy/helm/smoke.sh` and
 `deploy/helm/notifications/values.yaml` — are void.
 
+**Amended by
+[ADR-121](ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md)**,
+which confines the `DELETE`'s ownership rule to a live row, so a cleared row
+is ordered against any caller's sign-out and has its sequence moved by it;
+says a cleared row keeps its last-seen time beside its installation id and
+sequence, whatever cleared it; and keeps the row on a provider's invalid-token
+answer.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
