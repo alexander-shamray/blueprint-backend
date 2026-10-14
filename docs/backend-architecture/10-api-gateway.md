@@ -1519,8 +1519,10 @@ span attribute or part of an exception's message
 
 [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)
 decides that an app registers its installation's push token through
-`Web.Bff`, and that Notifications owns the row. What follows is the wire
-contract, which the app builds against.
+`Web.Bff`, and that the service that sends to the token owns the row — in the
+reference domain Notifications, whose API host the BFF calls
+([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)). What
+follows is the wire contract, which the app builds against.
 
 | | Path |
 |---|---|
@@ -1530,16 +1532,16 @@ contract, which the app builds against.
 
 It needs no gateway change, as §10.9 needs none. The installation id is the
 UUID the app minted once per install; a path segment that is not one matches
-no route and answers 404. **The subject is the caller's**, taken by
-Notifications from the access token the BFF forwards, and no request names
+no route and answers 404. **The subject is the caller's**, taken by the
+owning service from the access token the BFF forwards, and no request names
 one.
 
 **A `PUT` registers**, on every start of the app and on every rotation, with
 a body of `platform` (`fcm` or `apns`), `appId`, `token` and `sequence`. **A
 `DELETE` signs out**, with the sequence as its one query parameter,
 `?sequence=`, and no body. The sequence is the installation's counter, raised
-by the app before every request. Either answers 204 when Notifications applies
-it or when it repeats the write before it, and a sign-out answers 204 whether
+by the app before every request. Either answers 204 when the owning service
+applies it or when it repeats the write before it, and a sign-out answers 204 whether
 or not there was a row to clear, and whatever its sequence when the row is
 another subject's
 ([ADR-121](adr/ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md)).
@@ -1557,24 +1559,24 @@ ASCII, and a sequence of zero or below. A sequence that does not bind as an
 integer, or a `DELETE` with none, is §10.5's unreadable-request 400 instead.
 `PushOptions` is bound from the `Push` section, and an empty list is a
 deployment that sends no push and refuses every registration.
-Notifications checks the same shapes again, because the BFF is not all that
-can reach its method.
+The owning service checks the same shapes again, because the BFF is not all
+that can reach its method.
 
-**One hop, under the caller's own token.** The BFF calls Notifications.Api
-over gRPC ([§9.7](09-messaging.md), `NotificationsHop`), with
+**One hop, under the caller's own token.** The BFF calls the owning service's
+API host over gRPC ([§9.7](09-messaging.md), `NotificationsHop`), with
 `CallerTokenHandler` copying the inbound `Authorization` header unchanged and
 no client-credentials handler, so no credential the BFF holds can register a
-device to anybody else ([§11.5](11-identity-authorization.md)). Notifications
-refusing a token the BFF has already validated is a 500, as Catalog refusing
-the BFF's own is, and its unavailability is §10.5's 503. A reply
+device to anybody else ([§11.5](11-identity-authorization.md)). The callee
+refusing a token the BFF has already validated is a 500, as the pricing hop's
+callee refusing the BFF's own is, and its unavailability is §10.5's 503. A reply
 `devices.proto` forbids — an outcome left unset, an applied or repeated write
 carrying a sequence other than the request's, or a stale one carrying none —
 is a 500, by §9.7's sixth rule.
 
 **The cluster half is ADR-118's.** The hop resolves `notifications-api:8081`
-under Compose; in Kubernetes it also needs Notifications.Api's chart, whose
+under Compose; in Kubernetes it also needs the API host's own chart, whose
 Service carries that name, and the `web-bff` egress row ADR-065's table gains
-for it, both of which land with that host's chart.
+for it, both of which land with that chart.
 
 **Retention and erasure are ADR-117's**: a row not seen for
 `DeviceTokenOptions.StaleAfter` is deleted, and an erasure clears every row of

@@ -1149,9 +1149,9 @@ reads local projections ([§6.4](06-cqrs.md), ADR-002), so none of them ever
 presents itself to another.
 
 **One synchronous call carries no grant at all.** The BFF's device
-registration forwards the buyer's own access token to Notifications
-unchanged, so Notifications registers the subject the token names and nobody
-else
+registration forwards the buyer's own access token to the service that owns
+the device row, unchanged, so that service registers the subject the token
+names and nobody else
 ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)).
 The warning above is about background work, and this is the buyer's own
 request, made while they wait; a BFF client able to register a device to any
