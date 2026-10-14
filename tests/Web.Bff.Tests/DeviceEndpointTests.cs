@@ -16,10 +16,10 @@ public sealed class DeviceEndpointTests : IAsyncLifetime
 {
     private static readonly Guid Installation = Guid.Parse("0f8fad5b-d9cb-469f-a165-70867728950e");
 
-    private const string CallerToken = "Bearer caller-access-token";
+    private const string CallerHeader = "Bearer caller-access-token";
 
     // A placeholder shaped like no provider's token, so nothing here reads as a credential.
-    private const string PushToken = "test-push-token-1";
+    private const string DeviceHandle = "test-push-token-1";
 
     private readonly StubNotifications _notifications = new();
 
@@ -47,13 +47,13 @@ public sealed class DeviceEndpointTests : IAsyncLifetime
     {
         HttpClient client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, "customer-1");
-        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", CallerToken);
+        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", CallerHeader);
 
         return client;
     }
 
     private static DeviceRegistration Registration(long sequence = 7) =>
-        new("fcm", BffFactory.FcmApp, PushToken, sequence);
+        new("fcm", BffFactory.FcmApp, DeviceHandle, sequence);
 
     [Fact]
     public async Task A_registration_is_one_call_carrying_the_request_and_answers_204()
@@ -69,7 +69,7 @@ public sealed class DeviceEndpointTests : IAsyncLifetime
         call.InstallationId.ShouldBe(Installation.ToString("D"));
         call.Platform.ShouldBe("fcm");
         call.AppId.ShouldBe(BffFactory.FcmApp);
-        call.Token.ShouldBe(PushToken);
+        call.Token.ShouldBe(DeviceHandle);
         call.Sequence.ShouldBe(7);
     }
 
@@ -86,7 +86,7 @@ public sealed class DeviceEndpointTests : IAsyncLifetime
         StubNotifications.Call call = _notifications.Calls.ShouldHaveSingleItem();
 
         // Unchanged, so Notifications takes the subject from the buyer's token (ADR-117).
-        call.Authorization.ShouldBe(CallerToken);
+        call.Authorization.ShouldBe(CallerHeader);
         call.CorrelationId.ShouldBe("corr-devices-1");
 
         // The pricing hop's token source was never asked, so no client credential reached this hop (§11.5).
@@ -132,7 +132,7 @@ public sealed class DeviceEndpointTests : IAsyncLifetime
         call.Method.ShouldBe("SignOut");
         call.InstallationId.ShouldBe(Installation.ToString("D"));
         call.Sequence.ShouldBe(9);
-        call.Authorization.ShouldBe(CallerToken);
+        call.Authorization.ShouldBe(CallerHeader);
     }
 
     [Fact]
@@ -151,12 +151,12 @@ public sealed class DeviceEndpointTests : IAsyncLifetime
 
     /// <summary>Each of ADR-117's refusals, answered before the hop, so none spends §9.7's budget.</summary>
     [Theory]
-    [InlineData("gcm", BffFactory.FcmApp, PushToken, 7, "Platform")]
-    [InlineData("fcm", "com.example.unknown", PushToken, 7, "AppId")]
-    [InlineData("fcm", BffFactory.ApnsApp, PushToken, 7, "AppId")]
+    [InlineData("gcm", BffFactory.FcmApp, DeviceHandle, 7, "Platform")]
+    [InlineData("fcm", "com.example.unknown", DeviceHandle, 7, "AppId")]
+    [InlineData("fcm", BffFactory.ApnsApp, DeviceHandle, 7, "AppId")]
     [InlineData("fcm", BffFactory.FcmApp, "has a space", 7, "Token")]
     [InlineData("fcm", BffFactory.FcmApp, "", 7, "Token")]
-    [InlineData("fcm", BffFactory.FcmApp, PushToken, 0, "Sequence")]
+    [InlineData("fcm", BffFactory.FcmApp, DeviceHandle, 0, "Sequence")]
     public async Task A_malformed_registration_is_a_400_and_no_call(
         string platform,
         string appId,
@@ -260,7 +260,7 @@ public sealed class DeviceEndpointTests : IAsyncLifetime
         _notifications.Calls.Count.ShouldBe(2);
 
         // Each attempt runs the handler again, and still carries the caller's token once.
-        _notifications.Calls.ShouldAllBe(call => call.Authorization == CallerToken);
+        _notifications.Calls.ShouldAllBe(call => call.Authorization == CallerHeader);
     }
 
     /// <summary>§9.7's rule 6: a reply the contract forbids is a 500, never a 204 or a 409.</summary>
