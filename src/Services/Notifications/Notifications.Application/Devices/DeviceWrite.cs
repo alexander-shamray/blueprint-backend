@@ -7,8 +7,8 @@ public sealed record DeviceWrite(DeviceWriteOutcome Outcome, long Sequence);
 public enum DeviceWriteOutcome
 {
     /// <summary>
-    /// The request was above the row's sequence and inside the step, and was applied; a sign-out finding no live row
-    /// of the caller's has nothing to clear, and writes nothing.
+    /// The request was above the row's sequence and inside the step, and was applied; a sign-out finding no row, or
+    /// another subject's, has nothing of the caller's to clear, and writes nothing.
     /// </summary>
     Applied,
 

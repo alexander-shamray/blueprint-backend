@@ -92,7 +92,7 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
             RETURN;
         END;
 
-        -- A cleared row is ordered as any row is, and its equal sequence is the repeat; above it nothing is written.
+        -- A cleared row is ordered as any row is, and its equal sequence is the repeat.
         IF @Owner IS NULL AND @Sequence = @Current
         BEGIN
             SELECT 'Repeated' AS Outcome, @Current AS Sequence;
@@ -105,15 +105,16 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
             RETURN;
         END;
 
+        -- Above a cleared row only the sequence moves, so a registration delayed past this sign-out is stale (ADR-117),
+        -- and the last-seen time stays, so no caller's sign-out keeps the row past the stale window.
         IF @Owner IS NULL
-        BEGIN
-            SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
-            RETURN;
-        END;
-
-        UPDATE notifications.DeviceInstallations
-        SET {Cleared}, Sequence = @Sequence, LastSeenAt = @Now
-        WHERE InstallationId = @InstallationId;
+            UPDATE notifications.DeviceInstallations
+            SET Sequence = @Sequence
+            WHERE InstallationId = @InstallationId;
+        ELSE
+            UPDATE notifications.DeviceInstallations
+            SET {Cleared}, Sequence = @Sequence, LastSeenAt = @Now
+            WHERE InstallationId = @InstallationId;
 
         SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
         """;
