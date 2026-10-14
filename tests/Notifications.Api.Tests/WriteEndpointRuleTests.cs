@@ -22,16 +22,24 @@ public class WriteEndpointRuleTests(NotificationsApiFactory factory) : IClassFix
     }
 
     [Fact]
-    public void This_host_maps_no_write_for_the_rule_above_to_look_at_yet()
+    public void The_rule_above_looks_at_every_write_this_host_maps()
     {
         // The floor: an offender list is as green over an empty selection.
-        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBeEmpty(
-            "This host maps no write endpoint yet, so the rule above is vacuous. The day it maps " +
-            "one, this test fails — replace it with the ShouldBe form naming that endpoint, " +
-            "which is what keeps a vacuous gate from quietly becoming a permanent one (§8.5).");
+        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(
+            [
+                "gRPC - /notifications.devices.v1.Devices/Register",
+                "gRPC - /notifications.devices.v1.Devices/SignOut"
+            ]);
 
         // What the selection leaves out by shape, named, so a route this host maps that way is not left out too.
-        Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe(["Health checks", "Health checks", "Health checks"]);
+        Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe(
+            [
+                "Health checks",
+                "Health checks",
+                "Health checks",
+                "gRPC - Unimplemented method for notifications.devices.v1.Devices",
+                "gRPC - Unimplemented service"
+            ]);
     }
 
     private static string[] Names(IEnumerable<Endpoint> endpoints) =>

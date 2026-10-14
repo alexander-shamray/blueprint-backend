@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 namespace Notifications.Api.Tests;
 
 /// <summary>The real API host over an unreachable database, with the production JWT scheme (§12.4).</summary>
-public sealed class NotificationsApiFactory : WebApplicationFactory<Program>
+public class NotificationsApiFactory : WebApplicationFactory<Program>
 {
     // .invalid never resolves, so the check fails on NXDOMAIN; Connect Timeout=1 bounds a resolver that answers.
     internal const string UnreachableSql =

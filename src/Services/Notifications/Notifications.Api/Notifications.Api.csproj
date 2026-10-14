@@ -1,8 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!-- ADR-118's synchronous host: health today, and the BFF's gRPC methods on appsettings.json's Http2 port. -->
+  <!-- ADR-118's synchronous host: health, and the BFF's gRPC methods on appsettings.json's Http2 port. -->
 
   <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Both halves, as Catalog.Api generates its own: the server here, the client for this host's own suite. -->
+    <Protobuf Include="Protos\devices.proto" GrpcServices="Both" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Notifications.Application\Notifications.Application.csproj" />
     <ProjectReference Include="..\Notifications.Infrastructure\Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
   </ItemGroup>
