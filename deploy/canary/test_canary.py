@@ -1789,6 +1789,138 @@ class RolloutOrderTests(unittest.TestCase):
         self.assertEqual([], canary._rollout_follows_the_migrator(workloads, self._workflow("")))
 
 
+class SharedValuesTests(unittest.TestCase):
+    """ADR-125: a value two releases are each given is held equal before either rolls; check 14 holds it."""
+
+    @property
+    def workloads(self) -> dict:
+        return json.loads(json.dumps(canary.entries(canary.load_plan()["workloads"])))
+
+    def _checked(self, workloads: dict) -> list[str]:
+        return canary.check({**canary.load_plan(), "workloads": workloads})
+
+    def _workflow(self, text: str) -> Path:
+        path = Path(tempfile.mkdtemp()) / "deploy.yml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    @property
+    def shipped(self) -> str:
+        return canary.WORKFLOW.read_text(encoding="utf-8")
+
+    def test_the_shipped_pairs_are_read_from_both_ends(self) -> None:
+        plan = canary.load_plan()
+
+        self.assertEqual(
+            [("notifications-api", "jurisdiction.required"), ("web-bff", "push.apps")],
+            canary.shared_values("notifications", plan))
+        self.assertEqual([("notifications", "jurisdiction.required")], canary.shared_values("notifications-api", plan))
+        self.assertEqual([("notifications", "push.apps")], canary.shared_values("web-bff", plan))
+        self.assertEqual([], canary.shared_values("catalog-api", plan))
+
+    def test_the_cli_prints_one_pair_a_line_and_refuses_an_unknown_workload(self) -> None:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = canary.main(["canary", "shared-values", "--workload", "web-bff"])
+        self.assertEqual((0, "notifications push.apps\n"), (code, out.getvalue()))
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(1, canary.main(["canary", "shared-values", "--workload", "nobody"]))
+
+    def test_the_shipped_descriptors_pass_check_4(self) -> None:
+        self.assertEqual([], [f for f in self._checked(self.workloads) if "sharesValues" in f])
+
+    def test_a_declaration_check_4_refuses(self) -> None:
+        cases = {
+            "names no peer and no key": {},
+            "which is not another workload": {"nobody": ["push.apps"]},
+            "which names no key": {"web-bff": []},
+            "which is not a dotted values path": {"web-bff": ["push..apps"]},
+        }
+        for message, declared in cases.items():
+            with self.subTest(message):
+                workloads = self.workloads
+                workloads["notifications"]["sharesValues"] = declared
+
+                self.assertTrue(any(message in f for f in self._checked(workloads)), self._checked(workloads))
+
+    def test_a_pair_declared_from_both_ends_is_refused(self) -> None:
+        workloads = self.workloads
+        workloads["web-bff"]["sharesValues"] = {"notifications": ["push.apps"]}
+
+        self.assertTrue(any("one declaration is the pair's owner" in f for f in self._checked(workloads)))
+
+    def test_equal_values_agree_whatever_their_order(self) -> None:
+        mine = {"push": {"apps": [{"appId": "a", "platform": "fcm"}, {"appId": "b", "platform": "apns"}]}}
+        theirs = {"push": {"apps": [{"platform": "apns", "appId": "b"}, {"appId": "a", "platform": "fcm"}]}}
+
+        self.assertEqual([], canary.values_agree("push.apps", mine, theirs, "web-bff"))
+
+    def test_a_member_only_one_release_names_is_a_difference_that_says_which(self) -> None:
+        mine = {"jurisdiction": {"required": ["order-placed/email", "order-confirmed/email"]}}
+        theirs = {"jurisdiction": {"required": ["order-placed/email"]}}
+
+        differences = canary.values_agree("jurisdiction.required", mine, theirs, "notifications-api")
+
+        self.assertEqual(1, len(differences), differences)
+        self.assertIn('only this release names "order-confirmed/email"', differences[0])
+        self.assertIn("only notifications-api names nothing", differences[0])
+
+    def test_absent_null_and_empty_are_three_answers(self) -> None:
+        """A chart refuses null as unstated and takes [] as none (Appendix E), so neither stands in for the other."""
+        absent, null, empty = {}, {"jurisdiction": {"required": None}}, {"jurisdiction": {"required": []}}
+
+        for a, b in [(absent, null), (null, empty), (absent, empty)]:
+            with self.subTest(a=a, b=b):
+                self.assertTrue(canary.values_agree("jurisdiction.required", a, b, "peer"))
+        self.assertEqual([], canary.values_agree("jurisdiction.required", absent, {}, "peer"))
+
+    def test_the_cli_exits_by_the_answer(self) -> None:
+        folder = Path(tempfile.mkdtemp())
+        same, other = folder / "same.json", folder / "other.json"
+        same.write_text(json.dumps({"push": {"apps": []}}), encoding="utf-8")
+        other.write_text(json.dumps({"push": {"apps": [{"appId": "a", "platform": "fcm"}]}}), encoding="utf-8")
+        argv = ["canary", "values-agree", "--key", "push.apps", "--peer-name", "web-bff"]
+
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(0, canary.main([*argv, "--values", str(same), "--peer", str(same)]))
+            self.assertEqual(1, canary.main([*argv, "--values", str(same), "--peer", str(other)]))
+        self.assertIn("push.apps differs from web-bff's", err.getvalue())
+
+    def test_the_shipped_workflow_compares_the_pairs(self) -> None:
+        self.assertEqual([], canary._rollout_holds_shared_values(self.workloads))
+
+    def test_a_workflow_that_never_asks_is_refused(self) -> None:
+        without = "\n".join(line for line in self.shipped.splitlines() if "canary.py shared-values" not in line)
+
+        failures = canary._rollout_holds_shared_values(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("runs no `canary.py shared-values`", failures[0])
+
+    def test_an_answer_that_compares_nothing_is_refused(self) -> None:
+        without = "\n".join(line for line in self.shipped.splitlines() if "canary.py values-agree" not in line)
+
+        failures = canary._rollout_holds_shared_values(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("refuses nothing", failures[0])
+
+    def test_a_commented_out_question_is_no_question(self) -> None:
+        commented = self.shipped.replace(
+            "python deploy/canary/canary.py shared-values", "# python deploy/canary/canary.py shared-values")
+
+        failures = canary._rollout_holds_shared_values(self.workloads, self._workflow(commented))
+
+        self.assertEqual(1, len(failures), failures)
+
+    def test_with_no_pair_declared_there_is_nothing_to_compare(self) -> None:
+        workloads = self.workloads
+        del workloads["notifications"]["sharesValues"]
+
+        self.assertEqual([], canary._rollout_holds_shared_values(workloads, self._workflow("")))
+
+
 class SourceInputTests(unittest.TestCase):
     """SOURCE_INPUTS against the reads it claims to enumerate.
 
