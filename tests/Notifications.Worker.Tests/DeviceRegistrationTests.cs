@@ -238,12 +238,12 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task No_log_line_holds_a_token()
     {
-        const string token = "token-that-must-never-be-logged";
+        const string marker = "value-that-must-never-be-logged";
         fixture.CapturedLogs.Clear();
 
-        await RegisterAsync(Guid.CreateVersion7(), Guid.CreateVersion7(), token, 1);
+        await RegisterAsync(Guid.CreateVersion7(), Guid.CreateVersion7(), marker, 1);
 
-        fixture.CapturedLogs.Everything.ShouldNotContain(line => line.Contains(token), "§13.4, ADR-117");
+        fixture.CapturedLogs.Everything.ShouldNotContain(line => line.Contains(marker), "§13.4, ADR-117");
         fixture.CapturedLogs.Everything.ShouldContain(line => line.Contains(nameof(RegisterDeviceCommand)));
     }
 }

@@ -12,8 +12,8 @@ namespace Notifications.Infrastructure.Persistence;
 
 /// <summary>ADR-117's registration and sign-out, each one batch deciding against the row it holds locked.</summary>
 /// <remarks>
-/// UPDLOCK and HOLDLOCK take the installation's key, or its range when there is no row yet, so two requests for one
-/// installation run one after the other; the token's own range is held the same way when another row is cleared.
+/// UPDLOCK and HOLDLOCK take the installation's key, or its range when it has no row yet, so two requests for one
+/// installation run one after the other, as do two that name one token (ADR-118).
 /// </remarks>
 internal sealed class SqlDeviceStore(NotificationsDbContext db, IOptions<DeviceTokenOptions> options) : IDeviceStore
 {

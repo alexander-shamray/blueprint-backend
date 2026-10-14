@@ -8,7 +8,7 @@ using Microsoft.Extensions.Primitives;
 namespace Notifications.Api.Tests;
 
 /// <summary>§12.4's test scheme: a test states its subject in a header, which the service reads.</summary>
-/// <remarks>A copy: Notifications.TestSupport references the worker, whose Program collides.</remarks>
+/// <remarks>A copy: Notifications.TestSupport references the worker, whose Program collides (§12.4).</remarks>
 public sealed class TestAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,

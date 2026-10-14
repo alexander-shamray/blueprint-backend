@@ -13,7 +13,7 @@ namespace Notifications.Api.Tests;
 /// </summary>
 public sealed class DevicesTransportTests : IDisposable
 {
-    private const string AToken = "fcm-token-that-must-never-appear-in-a-status";
+    private const string Marker = "fcm-value-that-must-never-appear-in-a-status";
 
     private readonly NotificationsApiFactory _production = new();
     private readonly AuthenticatedApiFactory _authenticated = new();
@@ -41,7 +41,7 @@ public sealed class DevicesTransportTests : IDisposable
             InstallationId = Guid.CreateVersion7().ToString(),
             Platform = "fcm",
             AppId = "com.example.shop",
-            Token = AToken,
+            Token = Marker,
             Sequence = 1
         };
 
@@ -93,7 +93,7 @@ public sealed class DevicesTransportTests : IDisposable
                     request.Platform = "sms";
                     break;
                 case "token":
-                    request.Token = AToken + " with a space";
+                    request.Token = Marker + " with a space";
                     break;
                 default:
                     request.Sequence = 0;
@@ -106,7 +106,7 @@ public sealed class DevicesTransportTests : IDisposable
 
             // Before the transaction, so the unreachable database is never asked; and no value in the detail (§13.4).
             refused.StatusCode.ShouldBe(StatusCode.InvalidArgument);
-            refused.Status.Detail.ShouldNotContain(AToken);
+            refused.Status.Detail.ShouldNotContain(Marker);
         }
     }
 

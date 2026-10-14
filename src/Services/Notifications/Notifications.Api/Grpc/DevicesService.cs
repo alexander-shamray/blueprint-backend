@@ -11,8 +11,8 @@ namespace Notifications.Api.Grpc;
 
 /// <summary>ADR-117's registration and sign-out, a transport adapter under §4.2's gate.</summary>
 /// <remarks>
-/// Authenticated with the caller's own token, which the BFF forwards unchanged, so the subject is the token's and
-/// no credential the BFF holds can register a device to anyone else; no permission, since a buyer carries none.
+/// Under the caller's own token, which the BFF forwards, so no credential the BFF holds can register a device to
+/// anyone else; no permission, since a buyer carries none (ADR-117, §11.5).
 /// </remarks>
 [Authorize]
 internal sealed class DevicesService(IDispatcher dispatcher, ICurrentUser user) : DevicesGrpc.DevicesBase

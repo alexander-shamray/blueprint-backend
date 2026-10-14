@@ -1,7 +1,7 @@
 namespace Notifications.Infrastructure.Persistence;
 
 /// <summary>Mapped only so <c>migrations add</c> emits <see cref="SqlDeviceStore"/>'s table (ADR-117).</summary>
-/// <remarks>A cleared row keeps only its installation id, its sequence and its last-seen time.</remarks>
+/// <remarks>A cleared row keeps only its installation id, its sequence and its last-seen time (ADR-117).</remarks>
 internal sealed class DeviceInstallationRow
 {
     public Guid InstallationId { get; set; }
