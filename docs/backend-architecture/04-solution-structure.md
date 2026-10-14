@@ -376,9 +376,10 @@ what makes it cover a service before it exists: this service's own
 assemblies and the building blocks, both *by name*, because a test library
 shares each one's prefix and is neither — `Common.TestSupport` (§4.1) is named
 like a building block, and `<Service>.TestSupport` like one of the service's
-own projects. A service with two hosts holds the rule in each host's suite,
-each over the assemblies its host reaches, because one suite cannot load two
-`Program` types
+own projects. A service with two hosts splits the rule: the first host's
+suite holds it over every assembly of the service but the second host, and
+the second host's suite over that host's own, because one suite cannot load
+two `Program` types
 ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
 
 A service's, in the same file (§4.2), is the list of
