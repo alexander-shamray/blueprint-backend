@@ -1856,36 +1856,19 @@ def _rollout_follows_the_migrator(workloads: dict, workflow: Path = WORKFLOW) ->
     return []
 
 
-def _assignments(argument: str) -> list[str]:
-    """A `--set` argument's comma-joined assignments, leaving a `{a,b}` list and an escaped comma whole."""
-    parts, current, listing, escaped = [], "", False, False
-    for char in argument:
-        if char == "," and not listing and not escaped:
-            parts.append(current)
-            current = ""
-            continue
-        # Helm's rule: a brace opens a list only straight after a key's `=`, and only that list's brace closes it.
-        if not escaped and char == "{" and not listing and current.endswith("="):
-            listing = True
-        elif not escaped and char == "}" and listing:
-            listing = False
-        escaped = char == "\\" and not escaped
-        current += char
-    # A list left open is no list: split on every unescaped comma, which over-reports rather than hides a key.
-    return [*parts, current] if not listing else re.split(r"(?<!\\),", argument)
-
-
 def _pinned_keys(lines: list[str]) -> set[str]:
-    """Every values path a `--set` flag in `lines` assigns, quoted or not, each of a comma-joined list."""
+    """Every name a `--set` argument in `lines` writes before an `=`: a superset of the paths it pins, never fewer.
+
+    Parsing Helm's grammar fails open at each edge it misses; a list member read as a key fails closed.
+    """
     keys = set()
     flags = re.findall(r"--set(?:-string|-json|-file|-literal)?(?:=|\s+)('[^']*'|\"[^\"]*\"|\S+)", "\n".join(lines))
     for argument in flags:
-        for part in _assignments(argument.strip("'\"")):
-            # An indexed member, `push.apps[0]`, pins the list it is a member of.
-            key = re.sub(r"\[\d+\]", "", part.split("=", 1)[0].strip("'\""))
-            if "=" in part and re.fullmatch(r"[\w.-]+", key):
-                keys.add(key)
+        # An indexed member, `push.apps[0]`, pins the list it is a member of.
+        for name in re.findall(r"([\w.-]+(?:\[\d+\][\w.-]*)*)=", argument):
+            keys.add(re.sub(r"\[\d+\]", "", name))
     return keys
+
 
 
 def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> list[str]:
