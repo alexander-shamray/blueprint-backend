@@ -341,6 +341,16 @@ ContactSource__Realm: {{ $realm | quote }}
 {{- /* ADR-052's give-up age for a waiting notification; DeliveryOptions owns its range. */}}
 Delivery__GiveUpAge: {{ include "commerce.timeSpan" (list .Values.delivery.giveUpAge "delivery.giveUpAge" "delivery.giveUpAge is required when delivery.enabled: ADR-052's give-up age is a value the deployment is given, and DeliveryOptions refuses to boot without it." "DeliveryOptions binds it at start (ADR-052).") | quote }}
 {{- end }}
+{{- /* ADR-117's app list (§10.10), which a registration's app id and platform
+must match. The host refuses an app id named twice at start; empty is a
+deployment that sends no push, and the BFF then refuses every registration. */}}
+{{- range $i, $app := (.Values.push).apps }}
+{{- if not (has (toString $app.platform) (list "fcm" "apns")) }}
+{{- fail (printf "push.apps[%d].platform is %q, and a token belongs to fcm or apns (ADR-117)." $i (toString $app.platform)) }}
+{{- end }}
+Push__Apps__{{ $i }}__AppId: {{ include "commerce.require" (list $app.appId (printf "push.apps[%d].appId is required: it is the bundle id or package name a registration names (ADR-117)." $i)) | quote }}
+Push__Apps__{{ $i }}__Platform: {{ $app.platform | quote }}
+{{- end }}
 {{- /* ADR-079's opt-out, by connection name: each one listed is a hop the
 deployer accepts in plaintext. Empty or absent, as each chart ships it, the
 host refuses each one that is not encrypted and verified. */}}
