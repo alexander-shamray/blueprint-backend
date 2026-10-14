@@ -6,7 +6,10 @@ public sealed record DeviceWrite(DeviceWriteOutcome Outcome, long Sequence);
 /// <summary>A stale request changes nothing; the caller is told the row's sequence so the app can pass it.</summary>
 public enum DeviceWriteOutcome
 {
-    /// <summary>The request was above the row's sequence and inside the step, and was applied.</summary>
+    /// <summary>
+    /// The request was above the row's sequence and inside the step, and was applied; a sign-out finding no live row
+    /// of the caller's has nothing to clear, and writes nothing.
+    /// </summary>
     Applied,
 
     /// <summary>The request carried the row's own sequence and asked for what the row already holds.</summary>

@@ -47,6 +47,6 @@ message DeviceReply {
   }
 
   Outcome outcome = 1;
-  // The row's sequence after the request: the request's own unless STALE.
+  // The request's own sequence, unless STALE, when it is the row's.
   int64 sequence = 2;
 }

@@ -193,6 +193,23 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
+    public async Task A_sign_out_is_ordered_against_a_cleared_row_as_against_any_other()
+    {
+        Guid subject = Guid.CreateVersion7();
+        Guid installation = Guid.CreateVersion7();
+        await RegisterAsync(subject, installation, "token-a", 1);
+        await SignOutAsync(subject, installation, 5);
+
+        (await SignOutAsync(subject, installation, 4)).ShouldBe(new DeviceWrite(DeviceWriteOutcome.Stale, 5));
+        (await SignOutAsync(Guid.CreateVersion7(), installation, 4))
+            .ShouldBe(new DeviceWrite(DeviceWriteOutcome.Stale, 5), "a cleared row is nobody's, so anyone is ordered");
+        (await SignOutAsync(subject, installation, 5 + 1001)).ShouldBe(new DeviceWrite(DeviceWriteOutcome.Stale, 5));
+        (await SignOutAsync(subject, installation, 6)).ShouldBe(new DeviceWrite(DeviceWriteOutcome.Applied, 6));
+
+        (await SequenceAsync(installation)).ShouldBe(5, "an applied sign-out of a cleared row writes nothing");
+    }
+
+    [Fact]
     public async Task An_erasure_clears_the_subjects_rows_and_keeps_their_sequences()
     {
         Guid subject = Guid.CreateVersion7();

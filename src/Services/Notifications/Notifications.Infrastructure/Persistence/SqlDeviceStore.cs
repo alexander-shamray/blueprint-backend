@@ -85,20 +85,29 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
         FROM notifications.DeviceInstallations WITH (UPDLOCK, HOLDLOCK)
         WHERE InstallationId = @InstallationId;
 
-        -- No row, a cleared one or another subject's: a DELETE acts only on the caller's own row (ADR-117), and the
-        -- repeat of the one that cleared it is answered as it was.
-        IF @Current IS NULL OR @Owner IS NULL OR @Owner <> @SubjectId
+        -- No row, or another subject's: a DELETE acts only on the caller's own row (ADR-117), so nothing is written.
+        IF @Current IS NULL OR @Owner <> @SubjectId
         BEGIN
-            IF @Owner IS NULL AND @Sequence = @Current
-                SELECT 'Repeated' AS Outcome, @Current AS Sequence;
-            ELSE
-                SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
+            SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
+            RETURN;
+        END;
+
+        -- A cleared row is ordered as any row is, and its equal sequence is the repeat; above it nothing is written.
+        IF @Owner IS NULL AND @Sequence = @Current
+        BEGIN
+            SELECT 'Repeated' AS Outcome, @Current AS Sequence;
             RETURN;
         END;
 
         IF @Sequence <= @Current OR @Sequence - @Current > @MaxSequenceStep
         BEGIN
             SELECT 'Stale' AS Outcome, @Current AS Sequence;
+            RETURN;
+        END;
+
+        IF @Owner IS NULL
+        BEGIN
+            SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
             RETURN;
         END;
 
