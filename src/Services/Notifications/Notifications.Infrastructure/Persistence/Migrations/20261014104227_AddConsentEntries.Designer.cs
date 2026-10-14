@@ -268,6 +268,9 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                     b.Property<bool>("OptedIn")
                         .HasColumnType("bit");
 
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
                     b.Property<Guid?>("SubjectId")
                         .HasColumnType("uniqueidentifier");
 
@@ -285,7 +288,7 @@ namespace Notifications.Infrastructure.Persistence.Migrations
 
                     b.HasKey("EntryId");
 
-                    b.HasIndex(new[] { "SubjectId", "Topic", "Channel" }, "IX_ConsentEntries_SubjectPair");
+                    b.HasIndex(new[] { "SubjectId", "Topic", "Channel", "Position" }, "IX_ConsentEntries_SubjectPair");
 
                     b.HasIndex(new[] { "SubjectId", "Topic", "Channel" }, "UX_ConsentEntries_FirstEntry")
                         .IsUnique()

@@ -166,7 +166,7 @@ public sealed class ConsentJournalTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Retention_deletes_an_ended_entry_past_the_window_from_the_oldest_end_and_never_the_newest()
+    public async Task Retention_deletes_every_ended_entry_past_the_window_in_one_pass_and_never_the_newest()
     {
         Guid subject = Guid.CreateVersion7();
         PreferenceWrite first = await SetAsync(subject, false, null);
@@ -174,15 +174,41 @@ public sealed class ConsentJournalTests(ServiceFixture fixture) : IAsyncLifetime
         PreferenceWrite newest = await SetAsync(subject, false, second.State.Version);
         await AgeJournalAsync();
 
-        // The second's predecessor is still there when a pass's one batch selects, so it waits a pass.
-        (await fixture.PurgeNotificationsRetentionAsync()).Consent.ShouldBe(1);
+        (await fixture.PurgeNotificationsRetentionAsync()).Consent.ShouldBe(2);
         (await EntriesAsync(first.State.Version!.Value)).ShouldBe(0);
-        (await fixture.PurgeNotificationsRetentionAsync()).Consent.ShouldBe(1);
         (await EntriesAsync(second.State.Version!.Value)).ShouldBe(0);
         (await fixture.PurgeNotificationsRetentionAsync()).Consent.ShouldBe(0, "a current entry is never aged");
 
         // By version, as the ageing above moved the newest entry's time too.
-        (await ReadAsync(subject)).Version.ShouldBe(newest.State.Version, "nothing older resurfaces as the newest");
+        (await ReadAsync(subject)).Version.ShouldBe(newest.State.Version);
+    }
+
+    [Fact]
+    public async Task An_entry_kept_for_a_send_never_reads_as_newest_once_the_entry_after_it_has_gone()
+    {
+        // ADR-120 keeps an entry while a send names the entry it ended, and no longer: here the second is kept for
+        // the first's send, the third goes, and the second must not become the pair's newest again.
+        Guid subject = Guid.CreateVersion7();
+        PreferenceWrite first = await SetAsync(subject, true, null);
+        PreferenceWrite second = await SetAsync(subject, false, first.State.Version);
+        PreferenceWrite third = await SetAsync(subject, true, second.State.Version);
+        PreferenceWrite newest = await SetAsync(subject, false, third.State.Version);
+        Notifications.Application.Records.Notification sent = await fixture.PendingAsync(
+            Notifications.Application.Rendering.TemplateKeys.OrderPlaced,
+            Guid.CreateVersion7());
+        await fixture.ExecuteAsync(
+            "UPDATE notifications.NotificationLog SET ConsentEntryId = {1} WHERE NotificationId = {0};",
+            sent.NotificationId,
+            first.State.Version!.Value);
+        await AgeJournalAsync();
+
+        (await fixture.PurgeNotificationsRetentionAsync()).Consent.ShouldBe(1);
+        (await EntriesAsync(third.State.Version!.Value)).ShouldBe(0);
+        (await EntriesAsync(second.State.Version!.Value)).ShouldBe(1, "it shows when the sent consent ended");
+        (await ReadAsync(subject)).Version.ShouldBe(newest.State.Version);
+
+        // And the next write still names the newest, which the precondition reads by position as the read does.
+        (await SetAsync(subject, true, newest.State.Version)).Outcome.ShouldBe(ConsentAppendOutcome.Appended);
     }
 
     [Fact]

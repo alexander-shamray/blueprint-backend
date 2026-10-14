@@ -18,9 +18,9 @@ internal sealed class ConsentEntryRowConfiguration : IEntityTypeConfiguration<Co
         builder.Property(r => r.Channel).HasMaxLength(ConsentVocabulary.MaxChannelLength).IsUnicode(false);
         builder.Property(r => r.Client).HasMaxLength(ConsentVocabulary.MaxClientLength).IsUnicode(false);
 
-        // The pair's range an append holds and the erasure's by subject (ADR-120), and every read of a subject's.
-        // Named, as EF keys an unnamed index by its columns and the second key below shares these.
-        builder.HasIndex(r => new { r.SubjectId, r.Topic, r.Channel }, "IX_ConsentEntries_SubjectPair");
+        // The pair's range an append holds and the erasure's by subject (ADR-120), every read of a subject's, and the
+        // position a pair's newest entry is read by. Named, as a second key below shares its leading columns.
+        builder.HasIndex(r => new { r.SubjectId, r.Topic, r.Channel, r.Position }, "IX_ConsentEntries_SubjectPair");
 
         // ADR-120's two keys: an entry is superseded at most once, and a subject's pair has one first entry.
         builder
