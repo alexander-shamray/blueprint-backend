@@ -1185,8 +1185,9 @@ each other.
 
 Mechanically this is a `DelegatingHandler` attached to every outbound client
 that calls a peer under a grant of its own (§9.7), so no call site has to
-remember it; the BFF's clients to Notifications, the registration's and the
-preferences', take its `CallerTokenHandler` in its place. It is
+remember it; the BFF's clients to the owning service's API host, the
+registration's and the preferences', take its `CallerTokenHandler` in its
+place. It is
 `src/BuildingBlocks/Common.Infrastructure/Identity/ClientCredentialsHandler.cs`,
 and the token it asks for is cached, so one fetch serves many calls. A token
 the callee refuses is evicted from the cache, so the next call fetches a fresh
