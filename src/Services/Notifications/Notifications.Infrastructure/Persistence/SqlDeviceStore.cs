@@ -82,27 +82,23 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, IOptions<DeviceT
 
     private const string SignOutSql =
         $"""
-        DECLARE @Current bigint, @Owner uniqueidentifier, @Cleared bit;
-        SELECT @Current = Sequence, @Owner = SubjectId, @Cleared = CASE WHEN Token IS NULL THEN 1 ELSE 0 END
+        DECLARE @Current bigint, @Owner uniqueidentifier;
+        SELECT @Current = Sequence, @Owner = SubjectId
         FROM notifications.DeviceInstallations WITH (UPDLOCK, HOLDLOCK)
         WHERE InstallationId = @InstallationId;
 
-        IF @Current IS NULL OR (@Owner IS NOT NULL AND @Owner <> @SubjectId)
+        -- No row, a cleared one or another subject's: a DELETE acts only on the caller's own row (ADR-117), and the
+        -- repeat of the one that cleared it is answered as it was.
+        IF @Current IS NULL OR @Owner IS NULL OR @Owner <> @SubjectId
         BEGIN
-            SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
-            RETURN;
-        END;
-
-        IF @Sequence = @Current
-        BEGIN
-            IF @Cleared = 1
+            IF @Owner IS NULL AND @Sequence = @Current
                 SELECT 'Repeated' AS Outcome, @Current AS Sequence;
             ELSE
-                SELECT 'Stale' AS Outcome, @Current AS Sequence;
+                SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
             RETURN;
         END;
 
-        IF @Sequence < @Current OR @Sequence - @Current > @MaxSequenceStep
+        IF @Sequence <= @Current OR @Sequence - @Current > @MaxSequenceStep
         BEGIN
             SELECT 'Stale' AS Outcome, @Current AS Sequence;
             RETURN;
