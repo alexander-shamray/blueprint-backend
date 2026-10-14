@@ -102,25 +102,34 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
     private const string DeleteDevices =
         "DELETE FROM notifications.DeviceInstallations WHERE InstallationId IN @Keys AND LastSeenAt < @Before;";
 
-    // When an entry stopped being current: superseded, or anonymised while it was the newest (ADR-120).
-    private const string EndedAt = "COALESCE(s.WrittenAt, e.AnonymisedAt)";
-
-    // No kept send names it or the entry it ended, and the entry it ended is gone, so a chain goes from its oldest
-    // end and the entry after one still deleted is never read as the pair's newest (ADR-120).
-    private const string ConsentReleased =
+    // When an entry stopped being current: the first entry written after it in its pair, or its erasure when none
+    // survives to say (ADR-120). A pair's newest has neither, so it is never aged.
+    private const string Later =
         """
-        NOT EXISTS (SELECT 1 FROM notifications.ConsentEntries p WHERE p.EntryId = e.SupersedesEntryId)
-            AND NOT EXISTS (
-                SELECT 1 FROM notifications.NotificationLog n
-                WHERE n.ConsentEntryId = e.EntryId OR n.ConsentEntryId = e.SupersedesEntryId)
+        OUTER APPLY (
+            SELECT MIN(n.WrittenAt) AS WrittenAt
+            FROM notifications.ConsentEntries n
+            WHERE n.SupersedesEntryId = e.EntryId
+                OR (n.SubjectId = e.SubjectId AND n.Topic = e.Topic AND n.Channel = e.Channel
+                    AND n.Position > e.Position)) later
+        """;
+
+    private const string EndedAt = "COALESCE(later.WrittenAt, e.AnonymisedAt)";
+
+    // ADR-120's second condition: no kept record of a send names the entry, or the entry it ended.
+    private const string Unnamed =
+        """
+        NOT EXISTS (
+            SELECT 1 FROM notifications.NotificationLog n
+            WHERE n.ConsentEntryId = e.EntryId OR n.ConsentEntryId = e.SupersedesEntryId)
         """;
 
     private const string ExpiredConsent =
         $"""
         SELECT TOP (@BatchSize) e.EntryId
         FROM notifications.ConsentEntries e
-        LEFT JOIN notifications.ConsentEntries s ON s.SupersedesEntryId = e.EntryId
-        WHERE {EndedAt} < @Before AND {ConsentReleased}
+        {Later}
+        WHERE {EndedAt} < @Before AND {Unnamed}
         ORDER BY {EndedAt};
         """;
 
@@ -128,8 +137,8 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
     private const string DeleteConsent =
         $"""
         DELETE e FROM notifications.ConsentEntries e
-        LEFT JOIN notifications.ConsentEntries s ON s.SupersedesEntryId = e.EntryId
-        WHERE e.EntryId IN @Keys AND {EndedAt} < @Before AND {ConsentReleased};
+        {Later}
+        WHERE e.EntryId IN @Keys AND {EndedAt} < @Before AND {Unnamed};
         """;
 
     private static readonly Action<ILogger, int, string, Exception?> Purged =

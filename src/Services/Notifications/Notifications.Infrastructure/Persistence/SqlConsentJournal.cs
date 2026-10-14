@@ -16,41 +16,53 @@ namespace Notifications.Infrastructure.Persistence;
 /// </remarks>
 internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnectionFactory connections) : IConsentJournal
 {
-    // An entry is the pair's newest while nothing supersedes it; a chain is one subject's and one pair's (ADR-120).
-    private const string NotSuperseded =
-        "NOT EXISTS (SELECT 1 FROM notifications.ConsentEntries s WHERE s.SupersedesEntryId = e.EntryId)";
+    // The pair's newest is its highest position, which the append assigns under the lock: never a chain link, which
+    // the retention pass may delete, nor a time, which two API replicas' clocks need not agree on (ADR-120).
+    private const string Newest =
+        """
+        NOT EXISTS (SELECT 1 FROM notifications.ConsentEntries h
+            WHERE h.SubjectId = e.SubjectId AND h.Topic = e.Topic AND h.Channel = e.Channel AND h.Position > e.Position)
+        """;
 
     private const string NewestSql =
         $"""
         SELECT e.EntryId, e.Topic, e.Channel, e.OptedIn, e.WrittenAt, e.Client, e.SupersedesEntryId AS Supersedes
         FROM notifications.ConsentEntries e
-        WHERE e.SubjectId = @SubjectId AND {NotSuperseded};
+        WHERE e.SubjectId = @SubjectId AND {Newest};
         """;
 
     private const string NewestOfPairSql =
         $"""
         SELECT e.EntryId, e.Topic, e.Channel, e.OptedIn, e.WrittenAt, e.Client, e.SupersedesEntryId AS Supersedes
         FROM notifications.ConsentEntries e
-        WHERE e.SubjectId = @SubjectId AND e.Topic = @Topic AND e.Channel = @Channel AND {NotSuperseded};
+        WHERE e.SubjectId = @SubjectId AND e.Topic = @Topic AND e.Channel = @Channel AND {Newest};
         """;
 
     private const string AppendSql =
         $"""
+        -- Every entry of the pair's range, so the lock covers the range and not only the row the newest is.
+        DECLARE @Pair TABLE (EntryId uniqueidentifier NOT NULL, OptedIn bit NOT NULL,
+            WrittenAt datetimeoffset(7) NOT NULL, Client varchar(255) NOT NULL, Supersedes uniqueidentifier NULL,
+            Position int NOT NULL);
+        INSERT @Pair
+        SELECT e.EntryId, e.OptedIn, e.WrittenAt, e.Client, e.SupersedesEntryId, e.Position
+        FROM notifications.ConsentEntries e WITH (UPDLOCK, HOLDLOCK)
+        WHERE e.SubjectId = @SubjectId AND e.Topic = @Topic AND e.Channel = @Channel;
+
         DECLARE @Newest TABLE (EntryId uniqueidentifier NOT NULL, OptedIn bit NOT NULL,
             WrittenAt datetimeoffset(7) NOT NULL, Client varchar(255) NOT NULL, Supersedes uniqueidentifier NULL);
         INSERT @Newest
-        SELECT e.EntryId, e.OptedIn, e.WrittenAt, e.Client, e.SupersedesEntryId
-        FROM notifications.ConsentEntries e WITH (UPDLOCK, HOLDLOCK)
-        WHERE e.SubjectId = @SubjectId AND e.Topic = @Topic AND e.Channel = @Channel AND {NotSuperseded};
+        SELECT TOP (1) EntryId, OptedIn, WrittenAt, Client, Supersedes FROM @Pair ORDER BY Position DESC;
 
         DECLARE @NewestId uniqueidentifier = (SELECT EntryId FROM @Newest);
+        DECLARE @Position int = ISNULL((SELECT MAX(Position) FROM @Pair), 0) + 1;
 
         -- Only while the entry read is still the newest, which also means it still holds the caller's subject.
         IF (@ReadVersion IS NULL AND @NewestId IS NULL) OR @NewestId = @ReadVersion
         BEGIN
             INSERT notifications.ConsentEntries
-                (EntryId, SubjectId, Topic, Channel, OptedIn, WrittenAt, Client, SupersedesEntryId)
-            VALUES (@EntryId, @SubjectId, @Topic, @Channel, @OptedIn, @Now, @Client, @ReadVersion);
+                (EntryId, SubjectId, Topic, Channel, OptedIn, WrittenAt, Client, SupersedesEntryId, Position)
+            VALUES (@EntryId, @SubjectId, @Topic, @Channel, @OptedIn, @Now, @Client, @ReadVersion, @Position);
 
             SELECT 'Appended' AS Outcome, @EntryId AS EntryId, @OptedIn AS OptedIn, @Now AS WrittenAt,
                 @Client AS Client, @ReadVersion AS Supersedes;

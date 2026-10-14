@@ -2,8 +2,8 @@ namespace Notifications.Infrastructure.Persistence;
 
 /// <summary>Mapped only so <c>migrations add</c> emits <see cref="SqlConsentJournal"/>'s table (ADR-120).</summary>
 /// <remarks>
-/// Written once and never updated, except by an erasure, which clears the subject and stamps
-/// <see cref="AnonymisedAt"/>; an entry stops being current when another supersedes it or an erasure reaches it.
+/// Written once and never updated but by an erasure, which clears the subject and stamps <see cref="AnonymisedAt"/>;
+/// <see cref="Position"/> orders a subject's pair, so a deleted entry never leaves an older one reading as newest.
 /// </remarks>
 internal sealed class ConsentEntryRow
 {
@@ -15,5 +15,6 @@ internal sealed class ConsentEntryRow
     public DateTimeOffset WrittenAt { get; set; }
     public string Client { get; set; } = "";
     public Guid? SupersedesEntryId { get; set; }
+    public int Position { get; set; }
     public DateTimeOffset? AnonymisedAt { get; set; }
 }

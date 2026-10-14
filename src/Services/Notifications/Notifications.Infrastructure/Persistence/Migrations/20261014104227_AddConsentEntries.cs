@@ -31,6 +31,7 @@ public partial class AddConsentEntries : Migration
                 WrittenAt = table.Column<DateTimeOffset>(type: "datetimeoffset(7)", nullable: false),
                 Client = table.Column<string>(type: "varchar(255)", unicode: false, maxLength: 255, nullable: false),
                 SupersedesEntryId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                Position = table.Column<int>(type: "int", nullable: false),
                 AnonymisedAt = table.Column<DateTimeOffset>(type: "datetimeoffset(7)", nullable: true)
             },
             constraints: table =>
@@ -49,7 +50,7 @@ public partial class AddConsentEntries : Migration
             name: "IX_ConsentEntries_SubjectPair",
             schema: "notifications",
             table: "ConsentEntries",
-            columns: ["SubjectId", "Topic", "Channel"]);
+            columns: ["SubjectId", "Topic", "Channel", "Position"]);
 
         migrationBuilder.CreateIndex(
             name: "UX_ConsentEntries_FirstEntry",
