@@ -26,8 +26,10 @@ would open the relay's port to the providers' peers and theirs to the
 relay's.
 
 **Consequences.** **A deployment that names an app states the providers'
-peers**, usually the range of whatever carries its egress: the providers'
-addresses are Google's and Apple's to move, and
+peers**: the ranges Google and Apple publish, as ADR-065 names a third party,
+or the address of a proxy or egress gateway the worker dials, and never the
+range a NAT translates the worker's traffic to, since a policy matches the
+destination as it leaves the pod.
 [ADR-080](ADR-080-a-networkpolicy-peer-is-refused-wider-than-a-8-or-with-selectors-that-name-nothing.md)
 refuses a peer wider than a /8. A proxy the worker dials on a port of its own
 is that port stated at `networkPolicy.push.port`, which wins. **The edge
