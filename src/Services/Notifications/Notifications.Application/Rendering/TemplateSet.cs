@@ -7,9 +7,8 @@ namespace Notifications.Application.Rendering;
 
 /// <summary>Every template the service ships, parsed and checked once, so a defect fails the host at start.</summary>
 /// <remarks>
-/// A cancellation's map is a file beside its template and versioned with it, so a row's version reproduces the reason
-/// it gave as well as the text (ADR-053 rule 4), and a third language is files alone (ADR-053 rule 2). A push
-/// template is a file of its own, versioned apart from the mail key's, with a title in place of a subject.
+/// A cancellation's map and a push template are each files beside the mail template, versioned with a row's stamp
+/// (ADR-053 rule 4), so a third language is files alone (ADR-053 rule 2).
 /// </remarks>
 public sealed class TemplateSet
 {

@@ -200,7 +200,7 @@ public sealed class TemplateRenderer
     }
 
     /// <summary>The locale's language when the set holds it, else the whole set in its order (ADR-053).</summary>
-    /// <remarks>The locale's primary subtag, so a realm's "ru-RU" selects a deployment's "ru".</remarks>
+    /// <remarks>The locale's primary subtag, so a realm's "ru-RU" selects a deployment's "ru" (ADR-053).</remarks>
     public IReadOnlyList<string> LanguagesFor(string? locale)
     {
         if (string.IsNullOrWhiteSpace(locale))
