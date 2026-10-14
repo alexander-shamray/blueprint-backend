@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 // Notifications owns this file, because Notifications.Api serves the RPCs.
-// Web.Bff links it rather than copying it (§4.3), as it links Catalog's
+// Web.Bff is to link it rather than copy it (§4.3), as it links Catalog's
 // pricing.proto: one contract, two generated halves.
 package notifications.devices.v1;
 
