@@ -83,7 +83,7 @@ internal sealed class FcmPushProvider : IPushProvider
 
             sending = true;
             using HttpResponseMessage response = await client.SendAsync(request, attempt);
-            return await AnswerAsync(push, response, attempt);
+            return await AnswerAsync(push, accessToken, response, attempt);
         }
         // The caller's, or an attempt timeout before the request, which the pipeline converts, counts and may retry.
         catch (OperationCanceledException) when (caller.IsCancellationRequested || !sending)
@@ -121,7 +121,11 @@ internal sealed class FcmPushProvider : IPushProvider
 
     // FCM's errorCode decides, and the status only where none is given; INVALID_ARGUMENT is a fault, as FCM answers
     // it for a malformed message as well as a malformed token.
-    private async Task<PushResult> AnswerAsync(OutboundPush push, HttpResponseMessage response, CancellationToken ct)
+    private async Task<PushResult> AnswerAsync(
+        OutboundPush push,
+        string accessToken,
+        HttpResponseMessage response,
+        CancellationToken ct)
     {
         if (response.IsSuccessStatusCode)
             return new PushResult.Accepted();
@@ -160,7 +164,7 @@ internal sealed class FcmPushProvider : IPushProvider
         };
 
         if (status == 401)
-            _tokens.Invalidate();
+            _tokens.Invalidate(accessToken);
 
         _metrics.Unavailable(Name, cause);
         throw new PushUnavailableException($"Delivery {push.DeliveryId} met FCM's {status}.", cause, status);

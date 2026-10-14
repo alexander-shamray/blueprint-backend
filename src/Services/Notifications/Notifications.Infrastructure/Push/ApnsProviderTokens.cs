@@ -45,8 +45,12 @@ internal sealed class ApnsProviderTokens : IDisposable
         }
     }
 
-    /// <summary>Drops the held token after APNs said it expired, so the next attempt mints again.</summary>
-    public void Invalidate() => Volatile.Write(ref _issued, null);
+    /// <summary>Drops <paramref name="refused"/> while held, so a late answer never drops a newer one.</summary>
+    public void Invalidate(string refused)
+    {
+        if (Volatile.Read(ref _issued) is { } held && held.Token == refused)
+            Interlocked.CompareExchange(ref _issued, null, held);
+    }
 
     // SignData's default is IEEE P1363's fixed-width r || s, the form RFC 7518 section 3.4 asks of ES256.
     internal string Mint(DateTimeOffset now) =>
