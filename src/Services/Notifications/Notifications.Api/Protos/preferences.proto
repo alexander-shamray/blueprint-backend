@@ -37,6 +37,8 @@ message Preference {
     SET = 3;
   }
 
+  // One of the seven order events, by template key: order-placed, order-confirmed, order-cancelled,
+  // payment-declined, payment-refunded, shipment-dispatched or shipment-delivered.
   string topic = 1;
   // email or push.
   string channel = 2;
