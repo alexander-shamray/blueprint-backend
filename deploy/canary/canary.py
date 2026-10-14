@@ -2068,7 +2068,7 @@ def main(argv: list[str]) -> int:
     sharing = sub.add_parser("shared-values", help="the peers and keys this release must agree with")
     sharing.add_argument("--workload", required=True)
 
-    # Silent and 0 when the key agrees; each difference on stderr and 1 when not.
+    # Silent and 0 when the key agrees; each difference on stderr and 1 when not; 2 when it cannot compare.
     agreeing = sub.add_parser("values-agree", help="whether one key agrees between two releases' values")
     agreeing.add_argument("--key", required=True)
     agreeing.add_argument("--values", required=True, type=Path, help="this release's `helm get values --all -o json`")
@@ -2209,13 +2209,13 @@ def main(argv: list[str]) -> int:
     if args.command == "values-agree":
         if not SHARED_KEY.fullmatch(args.key):
             print(f"canary: {args.key!r} is not a dotted values path", file=sys.stderr)
-            return 1
+            return 2
         try:
             mine = json.loads(args.values.read_text(encoding="utf-8"))
             theirs = json.loads(args.peer.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             print(f"canary: a values document is not readable JSON: {error}", file=sys.stderr)
-            return 1
+            return 2
         differences = values_agree(args.key, mine, theirs, args.peer_name)
         for difference in differences:
             print(f"canary: {difference} (ADR-125)", file=sys.stderr)

@@ -1889,9 +1889,16 @@ class SharedValuesTests(unittest.TestCase):
         other.write_text(json.dumps({"push": {"apps": [{"appId": "a", "platform": "fcm"}]}}), encoding="utf-8")
         argv = ["canary", "values-agree", "--key", "push.apps", "--peer-name", "web-bff"]
 
+        broken = folder / "broken.json"
+        broken.write_text("{", encoding="utf-8")
+
         with contextlib.redirect_stderr(io.StringIO()) as err:
             self.assertEqual(0, canary.main([*argv, "--values", str(same), "--peer", str(same)]))
             self.assertEqual(1, canary.main([*argv, "--values", str(same), "--peer", str(other)]))
+            self.assertEqual(2, canary.main([*argv, "--values", str(same), "--peer", str(broken)]))
+            self.assertEqual(2, canary.main(
+                ["canary", "values-agree", "--key", "push..apps", "--peer-name", "web-bff",
+                 "--values", str(same), "--peer", str(same)]))
         self.assertIn("push.apps differs from web-bff's", err.getvalue())
 
     def test_the_shipped_workflow_compares_the_pairs(self) -> None:

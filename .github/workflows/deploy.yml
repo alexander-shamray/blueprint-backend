@@ -379,9 +379,15 @@ jobs:
               continue
             fi
             helm get values "$PEER" -n "$NAMESPACE" --all -o json > "$RUNNER_TEMP/peer.json"
-            if ! python deploy/canary/canary.py values-agree --key "$KEY" \
-                --values "$RUNNER_TEMP/stable.json" --peer "$RUNNER_TEMP/peer.json" --peer-name "$PEER"; then
+            AGREES=0
+            python deploy/canary/canary.py values-agree --key "$KEY" \
+              --values "$RUNNER_TEMP/stable.json" --peer "$RUNNER_TEMP/peer.json" --peer-name "$PEER" || AGREES=$?
+            if [ "$AGREES" -eq 1 ]; then
               echo "::error::$WORKLOAD and $PEER are given different $KEY, which both read. State one value in both releases' values before either rolls (ADR-125)."
+              exit 1
+            fi
+            if [ "$AGREES" -ne 0 ]; then
+              echo "::error::$KEY could not be compared between $WORKLOAD and $PEER; canary.py says why above (ADR-125)."
               exit 1
             fi
           done < "$RUNNER_TEMP/shared.txt"
