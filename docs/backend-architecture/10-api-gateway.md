@@ -1541,9 +1541,9 @@ a body of `platform` (`fcm` or `apns`), `appId`, `token` and `sequence`. **A
 `DELETE` signs out**, with the sequence as its one query parameter,
 `?sequence=`, and no body. The sequence is the installation's counter, raised
 by the app before every request. Either answers 204 when the owning service
-applies it or when it repeats the write before it, and a sign-out answers 204 whether
-or not there was a row to clear, and whatever its sequence when the row is
-another subject's
+applies it or when it repeats the write before it, and a sign-out answers
+204 whether or not there was a row to clear, and whatever its sequence when
+the row is another subject's
 ([ADR-121](adr/ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md)).
 One out of order answers §10.5's 409 with the `code` `device.stale_sequence`
 and a `sequence` member holding the row's; the app sets its counter one past
@@ -1568,8 +1568,8 @@ API host over gRPC ([§9.7](09-messaging.md), `NotificationsHop`), with
 no client-credentials handler, so no credential the BFF holds can register a
 device to anybody else ([§11.5](11-identity-authorization.md)). The callee
 refusing a token the BFF has already validated is a 500, as the pricing hop's
-callee refusing the BFF's own is, and its unavailability is §10.5's 503. A reply
-`devices.proto` forbids — an outcome left unset, an applied or repeated write
+callee refusing the BFF's own is, and its unavailability is §10.5's 503. A
+reply `devices.proto` forbids — an outcome left unset, an applied or repeated write
 carrying a sequence other than the request's, or a stale one carrying none —
 is a 500, by §9.7's sixth rule.
 
