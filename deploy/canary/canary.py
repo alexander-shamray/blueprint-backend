@@ -2216,6 +2216,10 @@ def main(argv: list[str]) -> int:
         except (OSError, json.JSONDecodeError) as error:
             print(f"canary: a values document is not readable JSON: {error}", file=sys.stderr)
             return 2
+        # A path neither holds compared nothing, which is not a disagreement to report as one.
+        if _value_at(mine, args.key) is _ABSENT and _value_at(theirs, args.key) is _ABSENT:
+            print(f"canary: {values_agree(args.key, mine, theirs, args.peer_name)[0]}", file=sys.stderr)
+            return 2
         differences = values_agree(args.key, mine, theirs, args.peer_name)
         for difference in differences:
             print(f"canary: {difference} (ADR-125)", file=sys.stderr)
