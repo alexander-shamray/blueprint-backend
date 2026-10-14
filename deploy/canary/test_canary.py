@@ -1969,13 +1969,16 @@ class SharedValuesTests(unittest.TestCase):
                 self.assertEqual(1, len(failures), failures)
                 self.assertIn(f"names {key}, which", failures[0])
 
-    def test_a_list_member_or_an_escaped_comma_is_no_pinned_key(self) -> None:
-        self.assertEqual({"x", "y"}, canary._pinned_keys(["helm upgrade r c --set x={a,b=c},y=1"]))
-        self.assertEqual({"x"}, canary._pinned_keys(["helm upgrade r c --set 'x=a" + chr(92) + ",b=c'"]))
-        self.assertEqual({"a", "push.apps"}, canary._pinned_keys(["helm upgrade r c --set a=x{y,push.apps=z"]))
-        for balanced in ["a=x{y,push.apps=z}", "a=}x,push.apps=z,c={"]:
-            with self.subTest(balanced=balanced):
-                self.assertIn("push.apps", canary._pinned_keys([f"helm upgrade r c --set {balanced}"]))
+    def test_no_spelling_of_a_set_flag_hides_a_key_it_pins(self) -> None:
+        """A superset: a list member may read as a key, which refuses; a pinned key never reads as none."""
+        for argument in [
+            "a=x{y,push.apps=z", "a=x{y,push.apps=z}", "a=}x,push.apps=z,c={", "a=b={x,push.apps=y}",
+            "'x=a" + chr(92) + ",push.apps=c'", "x={a,b},push.apps=1",
+        ]:
+            with self.subTest(argument=argument):
+                self.assertIn("push.apps", canary._pinned_keys([f"helm upgrade r c --set {argument}"]))
+        self.assertEqual({"image.tag"}, canary._pinned_keys(['helm upgrade r c --set-string image.tag="$TAG"']))
+
 
     def test_a_comparison_of_the_running_values_is_refused(self) -> None:
         """The running values carry the old chart's defaults, so a changed default would pass unseen."""
