@@ -22,8 +22,7 @@ namespace Notifications.Infrastructure.Delivery;
 /// <summary>Claims notices under a lease: sends a mail notice, and fans a push notice out to its deliveries.</summary>
 /// <remarks>
 /// <c>FulfilmentWorker</c>'s shape with <c>TrackingWorker</c>'s rows at once. No consumer calls out (ADR-052), and
-/// the intent is committed before the send, so a crash after the relay's accept is a row that says so. A delivery
-/// is sent by <see cref="PushSendWorker"/>, whose waits are a provider's and not the relay's (the push design).
+/// a crash after the relay's accept leaves a row whose intent says so; <see cref="PushSendWorker"/> sends a push.
 /// </remarks>
 public sealed class SendWorker(
     IServiceScopeFactory scopes,

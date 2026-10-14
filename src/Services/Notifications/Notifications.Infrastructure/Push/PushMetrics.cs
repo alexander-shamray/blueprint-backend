@@ -6,10 +6,8 @@ namespace Notifications.Infrastructure.Push;
 
 /// <summary>Provider faults by cause and refusals by reason, so a provider's mass refusal is a series.</summary>
 /// <remarks>
-/// Operational series, not business facts, so §13.3's committed-path rule does not reach them: each says that a
-/// provider or a removal is happening at all, and an erasure retried after a rollback counting its rows twice
-/// over-reads a rate nobody bills or reconciles. With the resends and the worker's three writes to a device row
-/// (ADR-118): two deletes and the erasure's clear.
+/// Operational series, not business facts, so §13.3's committed-path rule does not reach them: a retried erasure
+/// counting twice over-reads a rate nobody reconciles. With the worker's three device-row writes (ADR-118).
 /// </remarks>
 public sealed class PushMetrics
 {
