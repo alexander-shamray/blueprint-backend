@@ -1590,10 +1590,11 @@ an exception's message ([§13.4](13-observability.md)).
 ## 10.11 The notification preferences
 
 [ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)
-decides that which messages Notifications may send a subject, on which
-channel, is a journal of the subject's own acts, and that the journal is the
-consent record. The client reads and writes it through `Web.Bff`, which calls
-Notifications' API host as §10.10's registration does
+decides that which messages a subject may be sent, on which channel, is a
+journal of the subject's own acts, kept by the service that sends them, and
+that the journal is the consent record. The client reads and writes it
+through `Web.Bff`, which calls that service's API host as §10.10's
+registration does: in the reference domain Notifications.Api
 ([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)). What
 follows is the wire contract.
 
@@ -1607,8 +1608,8 @@ It needs no gateway change, as §10.10 needs none. A topic is one of the seven
 order events, by its template key — `order-placed`, `order-confirmed`,
 `order-cancelled`, `payment-declined`, `payment-refunded`,
 `shipment-dispatched` and `shipment-delivered` — and a channel is `email` or
-`push`. Notifications' `ConsentVocabulary` owns the list and `PreferenceRules`
-is the BFF's check against it. **The subject is the caller's**, as on
+`push`. The owning service's `ConsentVocabulary` holds the list, and
+`PreferenceRules` is the BFF's check against it. **The subject is the caller's**, as on
 §10.10's routes.
 
 **A `GET` reads every pair**, topic by topic in that order and each topic's
