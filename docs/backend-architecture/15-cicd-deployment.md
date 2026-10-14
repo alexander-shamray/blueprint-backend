@@ -138,9 +138,10 @@ services, so it belongs to all of them; owned by none, it would run for none.
 
 **Two filters reach into another service's tree, and each names a file its
 deployable compiles.** In the reference domain, Web.Bff compiles Catalog's
-`pricing.proto` and Notifications' `devices.proto` as linked source files
-(§9.7) and its Dockerfile copies both paths, so a proto-only change alters
-what the BFF ships while matching only `catalog` or `notifications`;
+`pricing.proto` and Notifications' `devices.proto` and `preferences.proto` as
+linked source files (§9.7) and its Dockerfile copies both paths, so a
+proto-only change alters what the BFF ships while matching only `catalog` or
+`notifications`;
 Shipping's images copy Ordering's `Protos/` on the same terms, and its filter
 names that path too
 ([Appendix E.9](appendix-e-reference-domain.md#e9-15-cicd-and-deployment)).
@@ -739,7 +740,7 @@ must be resolved before `helm lint` or `helm template` will run. `charts/` and
 > Helm's `fullname` is `{{ .Release.Name }}-{{ .Chart.Name }}`, and that is
 > wrong here: §10.2's route file resolves `http://catalog-api:8080/`,
 > [§9.7](09-messaging.md)'s pricing hop `http://catalog-api:8081` and
-> [§10.10](10-api-gateway.md)'s device hop `http://notifications-api:8081`,
+> [§10.10](10-api-gateway.md)'s and §10.11's hop `http://notifications-api:8081`,
 > all as literals in source, on the stated grounds that the host *is* the
 > Kubernetes Service name. A release-derived name makes that false the moment
 > the umbrella installs the same workload under its own release name, and the

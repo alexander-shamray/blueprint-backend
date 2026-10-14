@@ -213,7 +213,7 @@ holds every row to what its host's code publishes, consumes and accepts.
 | **Inventory** | StockItem, Reservation | `StockReserved`, `StockReservationFailed`, `StockReleased`, `StockLevelChanged` | `OrderCancelled`, `ShipmentDispatched` | `ReserveStock`, `ReleaseStock` |
 | **Payments** | PaymentIntent, Refund | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled`, `PersonalDataDeleteRequested` | `AuthorisePayment` |
 | **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled`, `PersonalDataDeleteRequested` | — |
-| **Notifications** | NotificationLog | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
+| **Notifications** | NotificationLog, the device rows, the consent journal ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
 | **Privacy** | ErasureRequest | `PersonalDataDeleteRequested` | — | `PersonalDataDeleteCompleted` |
 | **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model of other services' facts ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)), and a customer's saved address, the one fact it owns ([ADR-107](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested` | — |
 
@@ -253,9 +253,9 @@ Infrastructure project one with `AddOrderingInfrastructure(config)`, and
 Shipping and Notifications expose no public API but still own schemas:
 `Shipment` and `TrackingEvent`, and `NotificationLog`, respectively
 ([§3.2](03-bounded-contexts.md)). Notifications' API host shares the worker's
-database and migrator and serves ADR-117's device registration, and ADR-120's
-methods once they land, which are the BFF's alone to call, on a port no
-gateway route reaches
+database and migrator and serves ADR-117's device registration and ADR-120's
+preferences, which are the BFF's alone to call, on a port no gateway route
+reaches
 ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
 `tools/new-service` refuses Shipping without `--worker` and Notifications
 without `--pure-consumer`, so that it renders Shipping only in the shape §4.1
@@ -637,7 +637,8 @@ which `InternalsVisibleTo` would have to list.
   selector would miss it.
 - **The callees of the BFF's hops.** The stubs that `Web.Bff.TestSupport`
   holds are Catalog's, with the server half of `pricing.proto`, and
-  Notifications', with the server half of `devices.proto`; the
+  Notifications', with the server halves of `devices.proto` and
+  `preferences.proto`; the
   `PricingContract` is linked into `Catalog.Api.Tests`.
 - **A bound only one service enforces.** Catalog's id ceiling, which
   `GetPricesValidator` holds, is the case to compare against
@@ -971,7 +972,7 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 | Hop | Caller | Callee | Registered and sized in |
 |---|---|---|---|
 | Pricing | `Web.Bff` | Catalog, `pricing.proto` | `src/BFF/Web.Bff/PricingHop.cs` |
-| Device registration | `Web.Bff` | Notifications.Api, `devices.proto` | `src/BFF/Web.Bff/NotificationsHop.cs` |
+| Device registration and preferences | `Web.Bff` | Notifications.Api, `devices.proto` and `preferences.proto` | `src/BFF/Web.Bff/NotificationsHop.cs` |
 | Delivery address | Shipping's worker | Ordering | `Shipping.Infrastructure/Addresses/AddressHop.cs` |
 | Contact | Notifications' worker | Keycloak's admin API | `Notifications.Infrastructure/Contacts/ContactHop.cs` |
 | Payment provider | Payments' consumers | the provider | `Payments.Infrastructure/Provider/ProviderHop.cs` |
@@ -979,13 +980,15 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 | Mail relay | Notifications' worker | the relay | `Notifications.Infrastructure/Mail/MailHop.cs` |
 
 Catalog owns `pricing.proto` in `Catalog.Api/Protos`, and `Web.Bff` links it;
-Notifications owns `devices.proto` in `Notifications.Api/Protos`, and
-`Web.Bff` links it too. The command path never calls Catalog: it reads
+Notifications owns `devices.proto` and `preferences.proto` in
+`Notifications.Api/Protos`, and `Web.Bff` links both too, one gRPC client each
+on the one hop's numbers. The command path never calls Catalog: it reads
 Ordering's price projection. The deepest chains on a request path are
 `Client → Gateway → BFF → Catalog` and `Client → Gateway → BFF →
-Notifications.Api`, and neither callee calls anybody. The registration carries
-the caller's own token and no client credentials
-([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)). The two worker reads of the address and the contact are
+Notifications.Api`, and neither callee calls anybody. The registration and the
+preferences carry the caller's own token and no client credentials
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md),
+[ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)). The two worker reads of the address and the contact are
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s,
 the contact only for a verified email
 ([ADR-086](adr/ADR-086-an-unverified-email-is-no-contact.md)), and they spend
@@ -1215,7 +1218,7 @@ this case, and this table is the owner of what each edge of it erases:
 | Holder | Erases | Reports as |
 |---|---|---|
 | Ordering | `Orders.CustomerId` anonymised, address purged, `OrderSummaries.CustomerId` cleared | `ordering` |
-| Notifications | ended `NotificationLog` rows anonymised, contacts, waiting notices and `OrderRecords` deleted, device rows cleared to their installation id and sequence ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), keeping the last-seen time the retention pass deletes them by ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)) | `notifications` |
+| Notifications | ended `NotificationLog` rows anonymised, contacts, waiting notices and `OrderRecords` deleted, device rows cleared to their installation id and sequence ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), keeping the last-seen time the retention pass deletes them by ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)), consent journal entries anonymised, keeping their topic, channel, opt-in, times, client and chain as the evidence that the sends before the erasure were lawful ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | `notifications` |
 | Shipping | `DeliveryAddresses` rows deleted (ADR-052), `Shipments.ErasedUnder` emptied (ADR-103) | `shipping` |
 | Payments | `PaymentOrders.CustomerId` anonymised | `payments` |
 | The BFF | order ids recorded, the subject's `bff.Orders` rows and saved address deleted (ADR-098, ADR-107) | `bff` |
@@ -1683,7 +1686,7 @@ The two filters that reach into another service's tree:
 
 | Filter | Extra path | Why |
 |---|---|---|
-| `bff` | `src/Services/Catalog/Catalog.Api/Protos/**` and `src/Services/Notifications/Notifications.Api/Protos/**` | Web.Bff compiles Catalog's `pricing.proto` and Notifications' `devices.proto` as linked source files (§9.7) and its Dockerfile copies both paths |
+| `bff` | `src/Services/Catalog/Catalog.Api/Protos/**` and `src/Services/Notifications/Notifications.Api/Protos/**` | Web.Bff compiles Catalog's `pricing.proto` and Notifications' `devices.proto` and `preferences.proto` as linked source files (§9.7) and its Dockerfile copies both paths |
 | `shipping` | `src/Services/Ordering/Ordering.Api/Protos/**` | Shipping's images copy Ordering's `Protos/` for the delivery-address contract, on the BFF's terms |
 
 `tests/Ordering.*/**` covers `Ordering.TestSupport` as well as Ordering's three
@@ -1733,8 +1736,8 @@ the BFF.
 
 Notifications' second host has its own chart, `deploy/helm/notifications-api/`
 ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)):
-a Service on `http` for the probes and `grpc` for the BFF's device hop
-(§10.10), an autoscaler as Catalog's, and the worker's database under the
+a Service on `http` for the probes and `grpc` for the BFF's hop (§10.10,
+§10.11), an autoscaler as Catalog's, and the worker's database under the
 worker's `connectionName` and runtime Secret, with no migrator image and no
 Job. Its descriptor's `migratedBy` is `notifications`, the worker's release,
 so the two roll in lockstep
@@ -1813,6 +1816,8 @@ code reads it, and the host refuses to start without a required one.
 | `Jurisdiction__LogRetention` | Config | Helm `jurisdiction.logRetention` → ConfigMap | ✓ — **Notifications only**; ADR-053 rule 4's statutory window for the record of a send, and the host refuses to start without it |
 | `Jurisdiction__ContactRetention` | Config | Helm `jurisdiction.contactRetention` → ConfigMap | ✓ — **Notifications only**; ADR-052's contact row's window, refused at start when shorter than `ContactOptions.StaleCeiling` |
 | `Jurisdiction__OrderRetention` | Config | Helm `jurisdiction.orderRetention` → ConfigMap | ✓ — **Notifications only**; the order record's window, and the host refuses to start without it |
+| `Jurisdiction__ConsentRetention` | Config | Helm `jurisdiction.consentRetention` → ConfigMap | ✓ — **Notifications' worker only**; [ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)'s statutory window for a consent entry once it stops being current, kept longer while a kept send names it or the entry it ended, and the host refuses to start without it |
+| `Jurisdiction__Required__0…n` | Config | Helm `jurisdiction.required` → ConfigMap, in both Notifications charts | ✓ **in the chart** — **Notifications only, both hosts**; ADR-120's topic/channel pairs the deployment is obliged to send, which take no preference. The charts refuse it unstated and take `[]` as none; a host reads it absent as none, since configuration binds no key for an empty list, and refuses a pair outside the vocabulary or the service class at start. The reference values require the email of all seven topics |
 | `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a notification still pending, past which it is undeliverable with the reason `NotificationReasons.GaveUp`; the host refuses to start without it, or with one longer than `RetentionPolicy.InboxWindow` |
 
 ---
