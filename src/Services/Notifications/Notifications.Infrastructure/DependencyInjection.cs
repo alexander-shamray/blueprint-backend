@@ -1,5 +1,8 @@
 using Common.Infrastructure.Transport;
+using Notifications.Application;
 using Notifications.Application.Contacts;
+using Notifications.Application.Devices;
+using Notifications.Infrastructure.Devices;
 using Notifications.Application.Privacy;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
@@ -49,6 +52,28 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
 
+        // §8.5's durable half, on the DbContext alias above and so in EfUnitOfWork's transaction, which both hosts'
+        // commands run in. Its loss fails the first command, not startup: ValidateOnBuild never builds
+        // TransactionBehavior's open generic.
+        services.AddScoped<IIdempotencyMarkerStore, EfIdempotencyMarkerStore>();
+
+        // §2: no Redis. The purge still asks the claim store (ADR-039), so this one never claims.
+        services.AddSingleton<IIdempotencyStore, NoClaimsIdempotencyStore>();
+
+        // One local, so the tables of §9.5 and §8.5 cannot name different schemas; there is no outbox (§3.2).
+        const string schema = "notifications";
+        services.AddSingleton(new InboxTable(schema));
+        services.AddSingleton(new IdempotencyMarkerTable(schema));
+
+        // ADR-117's device rows: the API writes them and the worker's stale pass and erasure clear them, both under
+        // the window and caps bound here (§15.4).
+        services
+            .AddOptions<DeviceTokenOptions>()
+            .BindConfiguration(DeviceTokenOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<DeviceTokenOptions>, DeviceTokenOptionsValidator>();
+        services.AddScoped<IDeviceStore, SqlDeviceStore>();
+
         // §6.5's read side, a singleton as E.2.6's sample has it, on §7.1's runtime key.
         services.AddSingleton<IDbConnectionFactory>(
             new SqlConnectionFactory(configuration.GetConnectionString("Notifications")!));
@@ -75,18 +100,6 @@ public static class DependencyInjection
         services.AddScoped<INotificationsPersonalDataStore, SqlNotificationsPersonalDataStore>();
         services.AddScoped<IErasedSubjects, SqlErasedSubjects>();
         services.AddScoped<IErasureReporter, ErasureReporter>();
-
-        // §8.5's durable half, on the DbContext alias above and so in EfUnitOfWork's transaction. Its loss
-        // fails the first command, not startup: ValidateOnBuild never builds TransactionBehavior's open generic.
-        services.AddScoped<IIdempotencyMarkerStore, EfIdempotencyMarkerStore>();
-
-        // §2: no Redis. The purge still asks the claim store (ADR-039), so this one never claims.
-        services.AddSingleton<IIdempotencyStore, NoClaimsIdempotencyStore>();
-
-        // One local, so the tables of §9.5 and §8.5 cannot name different schemas; there is no outbox (§3.2).
-        const string schema = "notifications";
-        services.AddSingleton(new InboxTable(schema));
-        services.AddSingleton(new IdempotencyMarkerTable(schema));
 
         // Registered rather than const: §9.5 says to check the inbox window against the broker's redelivery limits.
         services.AddSingleton(new RetentionPolicy());

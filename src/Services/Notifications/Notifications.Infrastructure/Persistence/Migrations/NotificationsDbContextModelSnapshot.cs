@@ -259,6 +259,51 @@ namespace Notifications.Infrastructure.Persistence.Migrations
 
                     b.ToTable("ContactRecords", "notifications");
                 });
+
+            modelBuilder.Entity("Notifications.Infrastructure.Persistence.DeviceInstallationRow", b =>
+                {
+                    b.Property<Guid>("InstallationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AppId")
+                        .HasMaxLength(255)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<string>("Platform")
+                        .HasMaxLength(8)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(8)");
+
+                    b.Property<DateTimeOffset?>("RegisteredAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid?>("SubjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Token")
+                        .HasMaxLength(1024)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(1024)");
+
+                    b.HasKey("InstallationId");
+
+                    b.HasIndex("LastSeenAt");
+
+                    b.HasIndex("SubjectId");
+
+                    b.HasIndex("Platform", "AppId", "Token")
+                        .IsUnique()
+                        .HasFilter("[Token] IS NOT NULL");
+
+                    b.ToTable("DeviceInstallations", "notifications");
+                });
 #pragma warning restore 612, 618
         }
     }

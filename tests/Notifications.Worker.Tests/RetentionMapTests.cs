@@ -2,6 +2,7 @@ using System.Reflection;
 using Common.TestSupport;
 using Notifications.Application.Contacts;
 using Notifications.Infrastructure.Delivery;
+using Notifications.Infrastructure.Devices;
 using Notifications.Infrastructure.Jurisdiction;
 using Notifications.Infrastructure.Retention;
 using Shouldly;
@@ -18,6 +19,7 @@ public class RetentionMapTests
         typeof(NotificationsJurisdictionOptions),
         typeof(ContactOptions),
         typeof(DeliveryOptions),
+        typeof(DeviceTokenOptions),
         typeof(NotificationsRetentionService)
     ];
 

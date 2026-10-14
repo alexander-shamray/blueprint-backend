@@ -1,6 +1,6 @@
-namespace Notifications.Infrastructure;
+namespace Notifications.Application;
 
-/// <summary>The service's two hosts, which compose this layer differently (ADR-118).</summary>
+/// <summary>The service's two hosts, which compose the Application and Infrastructure layers differently (ADR-118).</summary>
 public enum NotificationsHost
 {
     /// <summary>The consumers, the send pass, the retention passes and the outbound hops.</summary>

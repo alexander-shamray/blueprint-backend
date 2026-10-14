@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using Notifications.Application;
 using Notifications.Infrastructure;
 using Notifications.Infrastructure.Persistence;
 using Notifications.TestSupport;
@@ -29,7 +30,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
 
         // Named and ordered, since a count passes on a shorter prefix applied twice.
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(13);
+        applied.Length.ShouldBe(14);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddInbox");
         applied[2].ShouldEndWith("_AddIdempotencyMarkers");
@@ -43,6 +44,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[10].ShouldEndWith("_AddSendTraceContext");
         applied[11].ShouldEndWith("_AddPersonalDataErasures");
         applied[12].ShouldEndWith("_AddOrderRecordErasedUnder");
+        applied[13].ShouldEndWith("_AddDeviceInstallations");
     }
 
     [Fact]
