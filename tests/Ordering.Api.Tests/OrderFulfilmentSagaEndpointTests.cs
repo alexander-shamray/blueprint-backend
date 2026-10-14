@@ -10,6 +10,7 @@ using Ordering.Infrastructure.Messaging;
 using Ordering.TestSupport;
 using Shouldly;
 using Xunit;
+using MessagingEndpoints = Ordering.Infrastructure.Messaging.Endpoints;
 
 namespace Ordering.Api.Tests;
 
@@ -102,8 +103,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             () => Task.FromResult(stopped.Any(a =>
                 a.Kind == ActivityKind.Producer &&
                 a.TraceId == trace &&
-                // Endpoints.InventoryQueue's name, which is internal to Ordering.Infrastructure.
-                Equals(a.GetTagItem("messaging.destination.name"), "inventory-commands"))),
+                Equals(a.GetTagItem("messaging.destination.name"), MessagingEndpoints.InventoryQueue.AbsolutePath))),
             expected: true,
             because: "the saga's send to Inventory left the bus outbox in a trace of its own");
     }
