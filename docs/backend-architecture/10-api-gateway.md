@@ -1656,7 +1656,8 @@ to a pair or value other than the one asked — is a 500, by §9.7's sixth rule.
 the pair's requirement, its newest entry or its default when it makes a send,
 and the record of the send names the entry it was decided under. A send whose
 intent committed before a withdrawal is still made, and resent under that intent
-until it ends, as ADR-052's resend of a send that may have reached the relay is.
+until it ends, without being decided again
+([ADR-123](adr/ADR-123-a-send-is-decided-once-by-the-pass-that-commits-its-intent-and-a-resend-under-that-intent-is-not-decided-again-1041-474.md)).
 Retention and erasure are ADR-120's: an entry no longer current is kept for
 `NotificationsJurisdictionOptions.ConsentRetention` and for as long as a kept
 send names it or the entry it ended, and an erasure anonymises every entry of
