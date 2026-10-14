@@ -65,8 +65,12 @@ internal sealed class FcmAccessTokens : IDisposable
         }
     }
 
-    /// <summary>Drops the held token after FCM refused it, so the next attempt exchanges again.</summary>
-    public void Invalidate() => Volatile.Write(ref _issued, null);
+    /// <summary>Drops <paramref name="refused"/> while it is the one held, so the next attempt exchanges.</summary>
+    public void Invalidate(string refused)
+    {
+        if (Volatile.Read(ref _issued) is { } held && held.AccessToken == refused)
+            Interlocked.CompareExchange(ref _issued, null, held);
+    }
 
     internal string Assertion(DateTimeOffset now) =>
         Jws.Sign(

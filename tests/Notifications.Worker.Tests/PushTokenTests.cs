@@ -90,12 +90,28 @@ public sealed class PushTokenTests : IDisposable
     {
         FakeTimeProvider clock = new(new DateTimeOffset(2026, 10, 14, 9, 0, 0, TimeSpan.Zero));
         using ApnsProviderTokens tokens = Apns(clock, privateKey: null);
-        _ = tokens.Get();
+        string refused = tokens.Get();
 
         clock.Advance(TimeSpan.FromMinutes(1));
-        tokens.Invalidate();
+        tokens.Invalidate(refused);
 
         Json(tokens.Get().Split('.')[1]).GetProperty("iat").GetInt64().ShouldBe(clock.GetUtcNow().ToUnixTimeSeconds());
+    }
+
+    [Fact]
+    public void A_late_refusal_of_an_older_token_keeps_the_newer_one()
+    {
+        FakeTimeProvider clock = new(new DateTimeOffset(2026, 10, 14, 9, 0, 0, TimeSpan.Zero));
+        using ApnsProviderTokens tokens = Apns(clock, privateKey: null);
+        string older = tokens.Get();
+        clock.Advance(TimeSpan.FromMinutes(1));
+        tokens.Invalidate(older);
+        string newer = tokens.Get();
+
+        // A second send still holding the older token is refused after the newer one was minted.
+        tokens.Invalidate(older);
+
+        tokens.Get().ShouldBe(newer, "Apple refuses a renewal inside twenty minutes");
     }
 
     private static JsonElement Json(string part) =>

@@ -88,7 +88,8 @@ internal sealed class ApnsPushProvider : IPushProvider
                     : HttpVersionPolicy.RequestVersionOrLower,
                 Content = new StringContent(Payload(push).ToJsonString(), Encoding.UTF8, "application/json")
             };
-            request.Headers.Authorization = new AuthenticationHeaderValue("bearer", _tokens.Get());
+            string providerToken = _tokens.Get();
+            request.Headers.Authorization = new AuthenticationHeaderValue("bearer", providerToken);
             request.Headers.Add("apns-topic", push.AppId);
             request.Headers.Add("apns-push-type", "alert");
             request.Headers.Add("apns-priority", "10");
@@ -102,7 +103,7 @@ internal sealed class ApnsPushProvider : IPushProvider
 
             sending = true;
             using HttpResponseMessage response = await client.SendAsync(request, attempt);
-            return await AnswerAsync(push, response, attempt);
+            return await AnswerAsync(push, providerToken, response, attempt);
         }
         // The caller's, or an attempt timeout before the request, which the pipeline converts, counts and may retry.
         catch (OperationCanceledException) when (caller.IsCancellationRequested || !sending)
@@ -133,7 +134,11 @@ internal sealed class ApnsPushProvider : IPushProvider
         ["topic"] = push.TemplateKey
     };
 
-    private async Task<PushResult> AnswerAsync(OutboundPush push, HttpResponseMessage response, CancellationToken ct)
+    private async Task<PushResult> AnswerAsync(
+        OutboundPush push,
+        string providerToken,
+        HttpResponseMessage response,
+        CancellationToken ct)
     {
         if (response.IsSuccessStatusCode)
             return new PushResult.Accepted();
@@ -166,7 +171,7 @@ internal sealed class ApnsPushProvider : IPushProvider
         // Only an expired token is minted again early: Apple refuses renewals inside twenty minutes, and a wrong
         // key or id is not cured by one.
         if (status == 403 && reason == "ExpiredProviderToken")
-            _tokens.Invalidate();
+            _tokens.Invalidate(providerToken);
 
         _metrics.Unavailable(Name, cause);
         throw new PushUnavailableException($"Delivery {push.DeliveryId} met APNs' {status}.", cause, status);
