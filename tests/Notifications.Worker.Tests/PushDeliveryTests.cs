@@ -343,7 +343,19 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
         return written.Value.State.Version!.Value;
     }
 
-    private Task<SendPass> FanOutAsync() => _host.Services.GetRequiredService<SendWorker>().RunOnceAsync(Ct);
+    // A delivery is stamped due on the host's clock and claimed on the engine's, which can trail it by a moment, as
+    // ServiceFixture.WaitUntilDueAsync says of a notice; so a push pass made at once could find nothing due.
+    private async Task<SendPass> FanOutAsync()
+    {
+        SendPass pass = await _host.Services.GetRequiredService<SendWorker>().RunOnceAsync(Ct);
+
+        await ServiceFixture.WaitUntilAsync(async () =>
+            await fixture.ScalarAsync<int>(
+                "SELECT Value = COUNT(*) FROM notifications.PushDeliveries " +
+                "WHERE Status = 'Pending' AND NextAttemptAt > SYSDATETIMEOFFSET()") == 0);
+
+        return pass;
+    }
 
     private Task<SendPass> PushPassAsync() => _host.Services.GetRequiredService<PushSendWorker>().RunOnceAsync(Ct);
 
