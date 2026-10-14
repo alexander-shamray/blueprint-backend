@@ -662,6 +662,32 @@ for chart in $SERVICE_CHARTS; do
 done
 check 'the in-namespace edges were read from the renders' test "$edges" -gt 0
 
+# And from the other end, because a new edge is written at the callee first:
+# an ingress that admits a workload whose own policy never reaches it reads as
+# a granted edge, and the call is refused at the caller (ADR-065, ADR-118).
+ingress_edges_of() {
+    # ingress_edges_of <policy> -> "workload port" per in-namespace ingress peer
+    awk '/^  ingress:/ { i = 1 } /^  egress:/ { i = 0 } i && /app.kubernetes.io\/name: / { w = $2 }
+         i && w && /- port: / { print w, $3; w = "" }' "$1"
+}
+reaches() {
+    # reaches <policy> <workload> <port> -> exit 0 when an egress rule reaches it
+    awk -v w="$2" -v p="$3" '/^  egress:/ { e = 1 }
+         e && /- to:/ { want = 0 } e && $0 ~ ("app.kubernetes.io/name: " w "$") { want = 1 }
+         e && want && $0 ~ ("- port: " p "$") { found = 1 }
+         END { exit found ? 0 : 1 }' "$1"
+}
+admitted=0
+for chart in $SERVICE_CHARTS; do
+    while read -r peer port; do
+        [ -n "$peer" ] || continue
+        admitted=$((admitted + 1))
+        check "$chart's ingress from $peer on $port meets $peer's egress to $(workload_of "$chart")" \
+            reaches "$OUT/$(chart_of "$peer").policy.yaml" "$(workload_of "$chart")" "$port"
+    done < <(ingress_edges_of "$OUT/$chart.policy.yaml")
+done
+check 'the in-namespace ingress edges were read from the renders' test "$admitted" -gt 0
+
 # The canary is fenced exactly as the stable track is, or the rollout judges a
 # differently fenced workload (ADR-022): its own object, its own pods, the
 # same rules.
