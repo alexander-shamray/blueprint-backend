@@ -23,7 +23,7 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
         Notification pending = await fixture.PendingAsync(TemplateKeys.OrderPlaced, Guid.CreateVersion7());
         await fixture.AgeAsync(pending.NotificationId, TimeSpan.FromDays(2000));
 
-        (int notifications, _, _) = await fixture.PurgeNotificationsRetentionAsync();
+        (int notifications, _, _, _) = await fixture.PurgeNotificationsRetentionAsync();
 
         notifications.ShouldBe(1, "1013 days is the invented log window");
         (await CountAsync("NotificationLog", "NotificationId", old.NotificationId)).ShouldBe(0);
@@ -40,7 +40,7 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
         await fixture.StageContactAsync(stale, "aigerim@example.test", null, TimeSpan.FromDays(18));
         await fixture.StageContactAsync(fresher, "dana@example.test", "kk", TimeSpan.FromDays(16));
 
-        (_, int contacts, _) = await fixture.PurgeNotificationsRetentionAsync();
+        (_, int contacts, _, _) = await fixture.PurgeNotificationsRetentionAsync();
 
         contacts.ShouldBe(1, "17 days is the invented contact window");
         (await fixture.ContactAsync(stale)).ShouldBeNull();
@@ -57,7 +57,7 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
         await EndAsync(await fixture.PendingAsync(TemplateKeys.OrderPlaced, finished), TimeSpan.FromDays(1));
         Guid inside = await AgedOrderAsync(TimeSpan.FromDays(70));
 
-        (_, _, int orders) = await fixture.PurgeNotificationsRetentionAsync();
+        (_, _, int orders, _) = await fixture.PurgeNotificationsRetentionAsync();
 
         orders.ShouldBe(2);
         (await CountAsync("OrderRecords", "OrderId", unnamed)).ShouldBe(0);
@@ -67,7 +67,7 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
         (await CountAsync("OrderRecords", "OrderId", inside)).ShouldBe(1, "71 days is the invented order window");
 
         await EndAsync(waiting, TimeSpan.FromMinutes(1));
-        (_, _, int later) = await fixture.PurgeNotificationsRetentionAsync();
+        (_, _, int later, _) = await fixture.PurgeNotificationsRetentionAsync();
 
         later.ShouldBe(1, "once nothing waits on it, the record goes on its window");
         (await CountAsync("OrderRecords", "OrderId", waitedOn)).ShouldBe(0);
@@ -109,7 +109,7 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
             """,
             backlog);
 
-        (_, int contacts, _) = await fixture.PurgeNotificationsRetentionAsync();
+        (_, int contacts, _, _) = await fixture.PurgeNotificationsRetentionAsync();
 
         contacts.ShouldBe(backlog);
         (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM notifications.ContactRecords")).ShouldBe(0);

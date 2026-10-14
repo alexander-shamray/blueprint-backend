@@ -6,11 +6,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Notifications.Infrastructure.Devices;
 using Notifications.Infrastructure.Jurisdiction;
 
 namespace Notifications.Infrastructure.Retention;
 
-/// <summary>ADR-053's three windows, applied: the record of a send, the order record and the contact.</summary>
+/// <summary>ADR-053's three windows, applied, and ADR-117's stale window over the device rows.</summary>
 /// <remarks>
 /// Apart from <c>RetentionPurgeService</c>, whose windows are housekeeping (ADR-053). An order record goes only once
 /// no pending notice names its order, since that notice waits on it.
@@ -89,6 +90,18 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
     private const string DeleteContacts =
         "DELETE FROM notifications.ContactRecords WHERE CustomerId IN @Keys AND FetchedAt < @Before;";
 
+    private const string StaleDevices =
+        """
+        SELECT TOP (@BatchSize) InstallationId
+        FROM notifications.DeviceInstallations
+        WHERE LastSeenAt < @Before
+        ORDER BY LastSeenAt;
+        """;
+
+    // Guarded by the row's last-seen time, so a registration the API made since the select keeps its row (ADR-118).
+    private const string DeleteDevices =
+        "DELETE FROM notifications.DeviceInstallations WHERE InstallationId IN @Keys AND LastSeenAt < @Before;";
+
     private static readonly Action<ILogger, int, string, Exception?> Purged =
         LoggerMessage.Define<int, string>(
             LogLevel.Information,
@@ -103,17 +116,20 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
 
     private readonly IServiceScopeFactory _scopes;
     private readonly NotificationsJurisdictionOptions _windows;
+    private readonly DeviceTokenOptions _devices;
     private readonly ILogger<NotificationsRetentionService> _log;
     private readonly OperatorSwitches? _switches;
 
     public NotificationsRetentionService(
         IServiceScopeFactory scopes,
         IOptions<NotificationsJurisdictionOptions> windows,
+        IOptions<DeviceTokenOptions> devices,
         ILogger<NotificationsRetentionService> log,
         OperatorSwitches? switches = null)
     {
         _scopes = scopes;
         _windows = windows.Value;
+        _devices = devices.Value;
         _log = log;
         _switches = switches;
     }
@@ -144,8 +160,8 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    /// <summary>One pass over the three tables, public so tests drive it rather than race a timer (§12.4).</summary>
-    public async Task<(int Notifications, int Contacts, int Orders)> PurgeAsync(CancellationToken ct)
+    /// <summary>One pass over the four tables, public so tests drive it rather than race a timer (§12.4).</summary>
+    public async Task<(int Notifications, int Contacts, int Orders, int Devices)> PurgeAsync(CancellationToken ct)
     {
         await using AsyncServiceScope scope = _scopes.CreateAsyncScope();
 
@@ -183,7 +199,16 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
             ct);
         Purged(_log, contacts, "contact records", null);
 
-        return (notifications, contacts, orders);
+        int devices = await PurgeWindowAsync(
+            connection,
+            StaleDevices,
+            DeleteDevices,
+            now - _devices.StaleAfter,
+            null,
+            ct);
+        Purged(_log, devices, "device installations", null);
+
+        return (notifications, contacts, orders, devices);
     }
 
     /// <summary>Selected, then deleted by key, so a delete locks nothing the select did not choose.</summary>
