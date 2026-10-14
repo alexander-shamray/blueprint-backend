@@ -737,9 +737,10 @@ must be resolved before `helm lint` or `helm template` will run. `charts/` and
 
 > **The workload's name is routing configuration, not a Helm convention.**
 > Helm's `fullname` is `{{ .Release.Name }}-{{ .Chart.Name }}`, and that is
-> wrong here: §10.2's route file resolves `http://catalog-api:8080/` and
-> [§9.7](09-messaging.md)'s pricing hop resolves `http://catalog-api:8081`, both
-> as literals in source, on the stated grounds that the host *is* the
+> wrong here: §10.2's route file resolves `http://catalog-api:8080/`,
+> [§9.7](09-messaging.md)'s pricing hop `http://catalog-api:8081` and
+> [§10.10](10-api-gateway.md)'s device hop `http://notifications-api:8081`,
+> all as literals in source, on the stated grounds that the host *is* the
 > Kubernetes Service name. A release-derived name makes that false the moment
 > the umbrella installs the same workload under its own release name, and the
 > failure is a 502 rather than a template error. So every chart carries a
@@ -1018,7 +1019,10 @@ ingress:
 one.** Only the gateway has `ingress.enabled: true`: every service with
 an API and the BFF are reached *through* the edge (§10.1, §10.2), so an Ingress
 on any of them would publish a second door past the rate limiting, the CORS
-policy and the forwarded-header handling that live there. Against a service, a
+policy and the forwarded-header handling that live there. A second host that
+serves the BFF alone is reached through the BFF, behind that same edge, and has
+no route at all
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)). Against a service, a
 worker differs by `service.enabled` alone **among these two keys**, which is
 what this paragraph is about; a worker's chart differs in more than them, and
 the next paragraph says how.
@@ -1177,7 +1181,14 @@ extraConfigMaps:
 
 **The migration hook belongs to each service chart rather than to the
 umbrella**, because a subchart's hooks run in the parent's release: so placed,
-one deployable can be rolled on its own and still migrate. **The gateway's
+one deployable can be rolled on its own and still migrate. **A service with two
+hosts on one database migrates from one chart alone**, since two hooks over one
+schema race: the other host's chart renders no Job and is rolled only at a
+revision the migrating release serves or has moved past, which its descriptor's
+`migratedBy` names and the rollout refuses otherwise
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
+`smoke.sh` holds such a chart to a third class, beside the charts that migrate
+their own database and those that own none. **The gateway's
 probes are a service's three, and its readiness set is empty on purpose.** It
 proxies four services and depends on all of them; what it does not do is
 report unready when one is down, which would take the edge out of rotation for

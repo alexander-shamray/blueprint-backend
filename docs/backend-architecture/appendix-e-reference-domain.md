@@ -1721,14 +1721,26 @@ Ordering calls no peer: Shipping reads its delivery address over the RPC
 its prices come from a local projection (§6.4) and the rest goes over the
 broker, so its `identity.clientCredentials` is `false`.
 
-The reference domain's workers are Shipping and Notifications. Each consumes
-from the broker and exposes no API, and each chart, `deploy/helm/shipping/` and
-`deploy/helm/notifications/`, writes `service.enabled: false` and
-`ingress.enabled: false` down. `deploy/helm/shipping/values.yaml` is the
-instance of §15.3's worker fence. Against Ordering, a worker differs by
-`service.enabled` alone among those two keys. The Ingress is the gateway's
-alone; every API host and the BFF are reached through the edge
-(§10.1, §10.2).
+The reference domain's workers are Shipping's and Notifications'. Each
+consumes from the broker and exposes no API, and each chart,
+`deploy/helm/shipping/` and `deploy/helm/notifications/`, writes
+`service.enabled: false` and `ingress.enabled: false` down.
+`deploy/helm/shipping/values.yaml` is the instance of §15.3's worker fence.
+Against Ordering, a worker differs by `service.enabled` alone among those two
+keys. The Ingress is the gateway's alone; every API host and the BFF are
+reached through the edge (§10.1, §10.2), and Notifications' API host through
+the BFF.
+
+Notifications' second host has its own chart, `deploy/helm/notifications-api/`
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)):
+a Service on `http` for the probes and `grpc` for the BFF's device hop
+(§10.10), an autoscaler as Catalog's, and the worker's database under the
+worker's `connectionName` and runtime Secret, with no migrator image and no
+Job. Its descriptor's `migratedBy` is `notifications`, the worker's release,
+so the rollout refuses its tag until the worker's release serves that
+revision or one after it. Its
+fence admits `web-bff` on `grpc` and reaches the identity provider and the
+database alone; it holds no broker account and no grant.
 
 Each worker's chart sets `autoscaling.enabled: false` and `replicaCount: 3`,
 three for availability across a node drain. What says three is too few is

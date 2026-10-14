@@ -352,7 +352,9 @@ needs DDL permissions it should not have.
 
 Instead migrations run as a distinct step that must complete before new pods
 receive traffic. `_migration-job.tpl` in `deploy/helm/common/templates` renders
-it for every chart that owns a database; these are the lines that make it one:
+it for every chart that migrates the database it owns, which is every such
+chart but a second host's on a database another chart migrates
+([§15.3](15-cicd-deployment.md)); these are the lines that make it one:
 
 ```yaml
 apiVersion: batch/v1
