@@ -1871,7 +1871,6 @@ def _pinned_keys(lines: list[str]) -> set[str]:
     return keys
 
 
-
 def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> list[str]:
     """Check 14: where a descriptor names `sharesValues`, the rollout asks for the pairs and compares each one.
 
