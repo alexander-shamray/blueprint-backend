@@ -827,7 +827,7 @@ no host can take the one without the others.
 | The command under this key has already been applied | 409 | From `CommandAlreadyCommittedException` ([§8.5](08-caching-redis.md), [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md), [ADR-059](adr/ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md)), `code` `command.already_committed`. A 409 that does **not** say retry, which is why the `detail` carries the whole difference: the work is durable and its result cannot be handed back — never recorded on the lost-acknowledgement path, recorded and expired on the commoner one, recorded with no fingerprint to show it is this request's on the third — so a retry meets this same refusal for as long as the entry or the marker lasts. Read the resource. 200 with an empty body is the tempting alternative and is worse — a success-shaped answer to a request whose result this service cannot produce |
 | The command identifier was already used for a different request | 409 | From `CommandIdReusedException` ([§8.5](08-caching-redis.md), [ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)), `code` `command.id_reused`. It does **not** say retry either: the key's entry holds another command's result, so this request, sent again under the same identifier, meets this refusal for as long as that entry lives. A changed request is a new request and takes a new identifier. 200 with the stored result would be a success-shaped answer to a request that was never applied |
 | An installation's sequence is out of order | 409 | From the BFF's device registration (§10.10, [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), `code` `device.stale_sequence`, with a `sequence` member carrying the row's. It says retry, but not as sent: the app sets its counter one past `sequence` and sends its present state again |
-| `If-Match` / `If-Unmodified-Since` failed | **412** | The client *did* send a precondition and it did not hold. Distinguishing this from 409 tells the client whether retrying with a fresh ETag is the fix |
+| `If-Match` / `If-None-Match` failed | **412** | The client *did* send a precondition and it did not hold. Distinguishing this from 409 tells the client whether retrying with a fresh ETag is the fix. From the BFF's preference write (§10.11, [ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)), `code` `preference.precondition_failed`, with a `preference` member holding the pair as it now stands |
 | Request body past the edge's ceiling | **413** | The gateway only (§10.1). Kestrel's `BadHttpRequestException` is answered inside the forwarder, which sets this status and writes no body, so it never reaches `UseExceptionHandler` and `UseStatusCodePages` writes the shape. `ExceptionHandlerMiddleware` reads no status off an exception — one that escapes is the unreadable-request row's, at its own status |
 | Domain rule violated | 422 | The request was well-formed but not allowed |
 | Downstream dependency unavailable | 503 | With `Retry-After` where known. Never 500 — the fault is not in this service |
@@ -959,7 +959,7 @@ Each belongs to a mechanism that runs before or beside a handler, and giving
 |---|---|---|
 | 400 | `ValidationBehavior` throwing `ValidationException` ([§6.3](06-cqrs.md)) — or, in the one host with no handler pipeline to run one, an endpoint invoking its own validator and throwing the same exception ([ADR-045](adr/ADR-045-the-checkout-quote-takes-quantities.md)); and, while the endpoint binds its parameters, the binding refusal that the status table's unreadable-request row names | The validation refusal's `errors` extension is field-keyed, and `Error` has no field. A malformed request is refused without a result, so no handler can return one |
 | 401 / 403 | The authentication and authorization middleware (§11.4) | Decided before the endpoint's delegate is entered — and written with **no body at all** unless something converts them, which is what `app.UseStatusCodePages()` is for (§4.2). Registering `AddProblemDetails` is not enough: it supplies a writer that nothing on this path calls, so without the conversion the two statuses a client meets first would break the promise this section opens with |
-| 409 / 412 | `DbUpdateConcurrencyException` and the precondition filter | A different conversation with the client — retry with a fresh ETag, rather than the request was understood and refused |
+| 409 / 412 | `DbUpdateConcurrencyException`, and §10.11's write behind its precondition filter | A different conversation with the client — retry with a fresh ETag, rather than the request was understood and refused |
 
 That asymmetry is why `Rule` maps to 422 rather than 409: 409 is already spoken
 for by the concurrency case, and a domain refusal is not a race.
@@ -1025,7 +1025,8 @@ exactly this: `request.concurrency_conflict`, `request.in_progress`,
 `CommandIdReusedException`
 ([ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)),
 and `device.stale_sequence` for §10.10's out-of-order registration.
-The `Error` path carries a `code` on the same terms.
+The `Error` path carries a `code` on the same terms, and so does the one 412,
+`preference.precondition_failed`.
 
 **The 409s from §8.5 share one status, and that is the design rather than a
 shortage of statuses.** They share the statement — this request conflicts with
@@ -1034,10 +1035,11 @@ their `code` tells a client and their `detail` tells a person. Inventing a
 status for one of them would be inventing one for a distinction HTTP does not
 draw.
 
-The 412 half of that row is unimplemented, deliberately: it needs a
-precondition filter reading `If-Match`, and nothing here sends or reads an
-ETag. What separates the two is whether the client sent a precondition, so
-until it can, every conflict is the no-precondition case the 409s answer.
+The 412 half of that row has one producer, §10.11's preference write:
+`PreconditionFilter` reads its `If-Match` or `If-None-Match`, and the owning
+service decides whether the precondition held. What separates the two is
+whether the client sent a precondition, and no other route reads one, so every
+other conflict is the no-precondition case the 409s answer.
 
 ## 10.6 Response security headers
 
@@ -1584,6 +1586,81 @@ table.
 `DeviceTokenOptions.StaleAfter` is deleted, and an erasure clears every row of
 the subject. The token is never a log attribute, a span attribute or part of
 an exception's message ([§13.4](13-observability.md)).
+
+## 10.11 The notification preferences
+
+[ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)
+decides that which messages Notifications may send a subject, on which
+channel, is a journal of the subject's own acts, and that the journal is the
+consent record. The client reads and writes it through `Web.Bff`, which calls
+Notifications' API host as §10.10's registration does
+([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)). What
+follows is the wire contract.
+
+| | Path |
+|---|---|
+| Client calls | `GET /bff/v1/notification-preferences` and `PUT /bff/v1/notification-preferences/{topic}/{channel}` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
+| Service receives | `/v1/notification-preferences` and `/v1/notification-preferences/{topic}/{channel}` |
+
+It needs no gateway change, as §10.10 needs none. A topic is one of the seven
+order events, by its template key — `order-placed`, `order-confirmed`,
+`order-cancelled`, `payment-declined`, `payment-refunded`,
+`shipment-dispatched` and `shipment-delivered` — and a channel is `email` or
+`push`. Notifications' `ConsentVocabulary` owns the list and `PreferenceRules`
+is the BFF's check against it. **The subject is the caller's**, as on
+§10.10's routes.
+
+**A `GET` reads every pair**, topic by topic in that order and each topic's
+two channels, as `{ "preferences": [ … ] }`. A pair carries `topic`,
+`channel`, `optedIn` and `source`: `required` for a pair the deployment is
+obliged to send, `default` for one with no entry, and `set` for one the
+subject set. A set pair alone carries `setAt` and `version`, the id of its
+newest entry; any other carries both as `null`. A required pair is always
+opted in, and the read says so rather than offering a switch that would do
+nothing.
+
+**A `PUT` sets one pair**, with a body of `{ "optedIn": <bool> }` and one
+precondition: `If-Match` carrying the pair's `version` as a strong entity tag,
+`"<version>"`, or `If-None-Match: *` for a pair the read showed with none. It
+answers 200 with the pair as it now stands, in the read's shape, and an `ETag`
+carrying its new version, both when the owning service appends an entry and
+when the request repeats the write before it. **A write that lost a race**,
+because another device's write landed since this one's read, answers §10.5's
+412 with the `code` `preference.precondition_failed`, a `preference` member
+holding the pair as it now stands, and that pair's `ETag` when it has one; the
+app shows that state and asks again, so an opt-in made on one device never
+undoes a withdrawal made on another. A pair the deployment requires answers
+§10.5's 422 with the `code` `preference.required`. The route is `Convergent`
+([§8.5](08-caching-redis.md)), so it takes no idempotency key.
+
+**The BFF refuses a malformed request before the hop**, with §10.5's 400
+naming the field and never repeating the value: no precondition, or both; an
+`If-None-Match` other than `*`; an `If-Match` that is not one strong tag
+holding a version, so a weak tag, a list and `*` are refused; a topic or
+channel outside the vocabulary; and a body without `optedIn`.
+`PreconditionFilter` reads the two headers, and the owning service decides,
+under the lock its append takes, whether the precondition held.
+
+**One hop, under the caller's own token**, as §10.10's: `NotificationsHop`
+registers the preferences client on the same numbers with its own breaker,
+and `CallerTokenHandler` copies the inbound `Authorization` header unchanged.
+The owning service records the token's `azp` claim as the client each entry
+was written through. The callee's refusals and its unavailability are
+answered as §10.10's are, and a reply `preferences.proto` forbids — an
+outcome or a source left unset, a set pair without its version and time,
+another pair with either, a pair outside the vocabulary, or a write applied
+to a pair or value other than the one asked — is a 500, by §9.7's sixth rule.
+
+**What is sent is decided at the send**, not at the write: the send pass reads
+the pair's requirement, its newest entry or its default when it makes a send,
+and the record of the send names the entry it was decided under. A send whose
+intent committed before a withdrawal is still made, and resent under that intent
+until it ends, as ADR-052's resend of a send that may have reached the relay is.
+Retention and erasure are ADR-120's: an entry no longer current is kept for
+`NotificationsJurisdictionOptions.ConsentRetention` and for as long as a kept
+send names it or the entry it ended, and an erasure anonymises every entry of
+the subject and keeps it.
 
 ---
 

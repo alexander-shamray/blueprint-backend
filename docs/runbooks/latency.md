@@ -76,9 +76,10 @@ up here.
 
 There are two synchronous hops on a request path, each its request's one —
 BFF → Catalog for pricing, and BFF → Notifications.Api for a device
-registration ([§9.7](../backend-architecture/09-messaging.md), ADR-017,
-ADR-117) — and they are the only ones that can make an HTTP request wait. If
-the BFF is the service alerting, check which route is slow, then the callee's
+registration or a notification preference
+([§9.7](../backend-architecture/09-messaging.md), ADR-017, ADR-117, ADR-120) —
+and they are the only ones that can make an HTTP request wait. If the BFF is
+the service alerting, check which route is slow, then the callee's
 own p99, then the resilience handler's timeout hierarchy —
 `ServiceOptions.OperationTimeout` is 20 s and a request sitting near it is a
 peer that has stopped answering rather than one that is merely slow.

@@ -1148,11 +1148,12 @@ for one of its own; every other service exchanges events over the broker and
 reads local projections ([§6.4](06-cqrs.md), ADR-002), so none of them ever
 presents itself to another.
 
-**One synchronous call carries no grant at all.** The BFF's device
-registration forwards the buyer's own access token to the service that owns
-the device row, unchanged, so that service registers the subject the token
-names and nobody else
-([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)).
+**One hop's calls carry no grant at all.** The BFF's device registration and
+its preference read and write forward the buyer's own access token to the
+service that owns the rows, unchanged, so that service acts for the subject
+the token names and nobody else
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md),
+[ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)).
 The warning above is about background work, and this is the buyer's own
 request, made while they wait; a BFF client able to register a device to any
 subject is what a stolen secret must not buy.
@@ -1184,8 +1185,8 @@ each other.
 
 Mechanically this is a `DelegatingHandler` attached to every outbound client
 that calls a peer under a grant of its own (§9.7), so no call site has to
-remember it; the registration's client takes the BFF's `CallerTokenHandler`
-in its place. It is
+remember it; the BFF's clients to Notifications, the registration's and the
+preferences', take its `CallerTokenHandler` in its place. It is
 `src/BuildingBlocks/Common.Infrastructure/Identity/ClientCredentialsHandler.cs`,
 and the token it asks for is cached, so one fetch serves many calls. A token
 the callee refuses is evicted from the cache, so the next call fetches a fresh

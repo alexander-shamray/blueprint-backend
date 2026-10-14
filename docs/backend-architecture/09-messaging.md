@@ -3015,8 +3015,8 @@ concurrent fan-out costs only the slowest call. That is the rule; [§10.1](10-ap
 two-BFF diagram illustrates it, and is a picture of the pattern rather than of
 this platform.
 
-`Web.Bff`'s pricing hop to Catalog (below) and its registration hop to
-Notifications are, in the reference domain
+`Web.Bff`'s pricing hop to Catalog (below) and its hop to Notifications, for
+the device registration and the preferences, are, in the reference domain
 ([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)), the
 platform's two synchronous calls on a request path, each the one hop of its
 own request, and neither callee calls anybody, so the deepest chain is
@@ -3150,9 +3150,10 @@ anti-corruption layer that, in the reference domain, [E.1](appendix-e-reference-
 carrier, and Notifications' `MailHop`, to its relay — and each is registered by
 the service that makes the call. A call under the caller's own token is a
 third kind, and §4.2's helper registers none of it either: in the reference
-domain the BFF's registration hop forwards the buyer's access token unchanged
-and holds no grant for it
-([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)),
+domain the BFF's hop to Notifications forwards the buyer's access token
+unchanged and holds no grant for it
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md),
+[ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)),
 so `NotificationsHop` sizes it as `PricingHop` sizes its own, and no client
 secret counts it (§11.5). `PricingHop`, beside the pricing client's
 registration in `Program.cs`, names the client and Catalog's address once:
