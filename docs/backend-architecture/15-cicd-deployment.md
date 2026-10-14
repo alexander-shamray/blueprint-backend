@@ -1183,10 +1183,12 @@ extraConfigMaps:
 umbrella**, because a subchart's hooks run in the parent's release: so placed,
 one deployable can be rolled on its own and still migrate. **A service with two
 hosts on one database migrates from one chart alone**, since two hooks over one
-schema race: the other host's chart renders no Job and is rolled only at a
-revision the migrating release serves or has moved past, which its descriptor's
-`migratedBy` names and the rollout refuses otherwise
-([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
+schema race: the other host's chart renders no Job and is rolled only at the
+revision the migrating release serves, and that release only while the other
+host serves that same revision, so the two roll in lockstep. Its descriptor's
+`migratedBy` names the pair and the rollout refuses either tag otherwise
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md),
+[ADR-122](adr/ADR-122-notifications-two-hosts-roll-in-lockstep-so-a-migrations-previous-release-is-the-one-both-hosts-run-1038.md)).
 `smoke.sh` holds such a chart to a third class, beside the charts that migrate
 their own database and those that own none. **The gateway's
 probes are a service's three, and its readiness set is empty on purpose.** It

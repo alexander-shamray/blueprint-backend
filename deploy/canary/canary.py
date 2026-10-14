@@ -50,6 +50,12 @@ INSTALLED_FLAG = "--installed-source"
 # which check 13 asserts the rollout holds the tag's revision to (ADR-118).
 MIGRATED_REVISION = "MIGRATED_REVISION"
 
+# The other direction (ADR-122): the revision the rolled workload's stable
+# track serves, and the one a host whose schema it migrates serves, which
+# check 13 asserts the rollout holds to it.
+STABLE_REVISION = "STABLE_REVISION"
+HOST_REVISION = "HOST_REVISION"
+
 
 def _argument(flag: str, variable: str) -> str:
     """The whole argument check 12 looks for, spelled once.
@@ -694,8 +700,9 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     #     anything else here noticing.
     failures += _rollout_reads_the_image_source()
 
-    # 13. A workload another release migrates is rolled behind that release
-    #     (ADR-118), and the rollout asks the descriptor which one it is.
+    # 13. A workload another release migrates is rolled at that release's
+    #     revision, and that release only beside it (ADR-118, ADR-122); the
+    #     rollout asks the descriptors which workloads those are.
     failures += _rollout_follows_the_migrator(workloads)
 
     return failures
@@ -1452,8 +1459,7 @@ def smoke_cases(workloads: dict) -> list[str]:
 def migrated_by(workload: str, plan_document: dict) -> str | None:
     """The workload whose chart migrates `workload`'s schema, or None for one that migrates its own.
 
-    ADR-118's rollout order: a host on a schema another release migrates is
-    rolled only behind that release, and the rollout asks this which one.
+    The rollout asks this which release a host rolls in lockstep with (ADR-118, ADR-122).
     """
     workloads = entries(plan_document["workloads"])
     if workload not in workloads:
@@ -1462,6 +1468,14 @@ def migrated_by(workload: str, plan_document: dict) -> str | None:
     if named is not None and not isinstance(named, str):
         raise PlanError(f"workloads.{workload}.migratedBy is {named!r}, which names no workload")
     return named
+
+
+def migrates(workload: str, plan_document: dict) -> list[str]:
+    """The workloads whose schema `workload`'s chart migrates, which ADR-122 rolls it beside."""
+    workloads = entries(plan_document["workloads"])
+    if workload not in workloads:
+        raise PlanError(f"no workload {workload!r} in the plan")
+    return [name for name, entry in workloads.items() if entry.get("migratedBy") == workload]
 
 
 def _migrated_by_reads(name: str, workloads: dict) -> list[str]:
@@ -1687,9 +1701,9 @@ def _invocations(lines: list[str], command: str) -> list[str]:
 
 
 def _rollout_follows_the_migrator(workloads: dict, workflow: Path = WORKFLOW) -> list[str]:
-    """Check 13: where a descriptor names `migratedBy`, the rollout asks for it and refuses on the answer.
+    """Check 13: where a descriptor names `migratedBy`, the rollout asks from both ends and refuses on the answer.
 
-    Only while one does: with none, the step has nothing to order and its
+    Only while one does: with none, the steps have nothing to order and their
     absence is not a gap.
     """
     if not any(entry.get("migratedBy") for entry in workloads.values()):
@@ -1710,6 +1724,31 @@ def _rollout_follows_the_migrator(workloads: dict, workflow: Path = WORKFLOW) ->
         return [
             f"{WORKFLOW_PATH} asks `canary.py migrated-by` and never holds the tag's "
             f"revision to ${MIGRATED_REVISION}, so the answer refuses nothing (ADR-118)"
+        ]
+    if not _invocations(live, f'merge-base --is-ancestor "${MIGRATED_REVISION}" "$REVISION"'):
+        return [
+            f"{WORKFLOW_PATH} holds the tag's revision under ${MIGRATED_REVISION} and not "
+            "over it, so a host can roll back to a revision older than the schema "
+            "another release has migrated (ADR-122)"
+        ]
+    asks = _invocations(live, "canary.py migrates ")
+    if not any(_argument("--workload", "WORKLOAD") in run for run in asks):
+        return [
+            f"{WORKFLOW_PATH} runs no `canary.py migrates` for the dispatched "
+            f"{_argument('--workload', 'WORKLOAD')}, so a release can migrate a schema "
+            "under a host several releases behind it (ADR-122)"
+        ]
+    if not _invocations(live, f'merge-base --is-ancestor "${STABLE_REVISION}" "${HOST_REVISION}"'):
+        return [
+            f"{WORKFLOW_PATH} asks `canary.py migrates` and never holds "
+            f"${HOST_REVISION} to ${STABLE_REVISION}, so the answer refuses nothing "
+            "(ADR-122)"
+        ]
+    if not _invocations(live, f'merge-base --is-ancestor "${HOST_REVISION}" "${STABLE_REVISION}"'):
+        return [
+            f"{WORKFLOW_PATH} holds ${HOST_REVISION} over ${STABLE_REVISION} and not "
+            "under it, so a release rolled back can migrate a schema under a host "
+            "newer than its previous release (ADR-122)"
         ]
     return []
 
@@ -1887,6 +1926,11 @@ def main(argv: list[str]) -> int:
     migrated = sub.add_parser("migrated-by", help="the workload whose release migrates this one's schema")
     migrated.add_argument("--workload", required=True)
 
+    # ADR-122's other half, one name per line and none for a release that
+    # migrates no other host's schema, for the rollout's shell loop.
+    migrating = sub.add_parser("migrates", help="the workloads whose schema this one's release migrates")
+    migrating.add_argument("--workload", required=True)
+
     # One name per line, for the shell loop in which `realm.yml`'s scheduled
     # job judges each release's realm (ADR-043).
     sub.add_parser("workloads", help="every workload in the plan, one per line")
@@ -1995,6 +2039,15 @@ def main(argv: list[str]) -> int:
     if args.command == "migrated-by":
         try:
             print(migrated_by(args.workload, document) or "")
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        return 0
+
+    if args.command == "migrates":
+        try:
+            for name in migrates(args.workload, document):
+                print(name)
         except PlanError as error:
             print(f"canary: {error}", file=sys.stderr)
             return 1

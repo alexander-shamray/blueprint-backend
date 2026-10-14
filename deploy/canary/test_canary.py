@@ -1676,9 +1676,26 @@ class DescriptorTests(unittest.TestCase):
         self.assertEqual(1, code)
         self.assertIn("no workload 'no-such-workload'", err.getvalue())
 
+    def test_migrates_prints_each_host_whose_schema_the_release_migrates(self) -> None:
+        for workload, printed in (("notifications", "notifications-api\n"), ("catalog-api", "")):
+            with self.subTest(workload=workload):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = canary.main(["canary", "migrates", "--workload", workload])
+
+                self.assertEqual((0, printed), (code, out.getvalue()))
+
+    def test_migrates_refuses_a_workload_the_plan_does_not_describe(self) -> None:
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = canary.main(["canary", "migrates", "--workload", "no-such-workload"])
+
+        self.assertEqual(1, code)
+        self.assertIn("no workload 'no-such-workload'", err.getvalue())
+
 
 class RolloutOrderTests(unittest.TestCase):
-    """Check 13: a host another release migrates rolls behind it (ADR-118)."""
+    """Check 13: a host another release migrates rolls in lockstep with it (ADR-118, ADR-122)."""
 
     def _workflow(self, text: str) -> Path:
         path = Path(tempfile.mkdtemp()) / "deploy.yml"
@@ -1714,6 +1731,48 @@ class RolloutOrderTests(unittest.TestCase):
 
         self.assertEqual(1, len(failures), failures)
         self.assertIn("refuses nothing", failures[0])
+
+    def test_a_host_held_from_above_only_is_refused(self) -> None:
+        """ADR-122: a host may not roll back behind a schema the migrating release has moved."""
+        without = "\n".join(
+            line for line in self.shipped.splitlines()
+            if 'merge-base --is-ancestor "$MIGRATED_REVISION" "$REVISION"' not in line)
+
+        failures = canary._rollout_follows_the_migrator(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("older than the schema", failures[0])
+
+    def test_a_migrating_release_that_never_asks_what_it_migrates_is_refused(self) -> None:
+        without = "\n".join(
+            line for line in self.shipped.splitlines() if "canary.py migrates " not in line)
+
+        failures = canary._rollout_follows_the_migrator(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("runs no `canary.py migrates`", failures[0])
+
+    def test_a_migrating_release_held_to_no_host_is_refused(self) -> None:
+        without = "\n".join(
+            line for line in self.shipped.splitlines() if "merge-base --is-ancestor" not in line
+            or "HOST_REVISION" not in line)
+
+        failures = canary._rollout_follows_the_migrator(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("never holds", failures[0])
+        self.assertIn("$HOST_REVISION", failures[0])
+
+    def test_a_migrating_release_held_from_below_only_is_refused(self) -> None:
+        """ADR-122: a worker rolled back leaves the host ahead of it, and the next migration need not support that."""
+        without = "\n".join(
+            line for line in self.shipped.splitlines()
+            if 'merge-base --is-ancestor "$HOST_REVISION" "$STABLE_REVISION"' not in line)
+
+        failures = canary._rollout_follows_the_migrator(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("newer than", failures[0])
 
     def test_a_commented_out_question_is_no_question(self) -> None:
         commented = self.shipped.replace(

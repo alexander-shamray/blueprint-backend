@@ -72,6 +72,11 @@ helm upgrade --install catalog-api deploy/helm/catalog \
     --namespace commerce --timeout 20m --set-string image.tag="$SHA"
 ```
 
+`notifications-api` is installed at the tag the `notifications` release
+already serves, because the two roll in lockstep and the rollout refuses the
+worker's next tag otherwise
+([ADR-122](../../docs/backend-architecture/adr/ADR-122-notifications-two-hosts-roll-in-lockstep-so-a-migrations-previous-release-is-the-one-both-hosts-run-1038.md)).
+
 A tag can be overwritten in the registry, so a render can also pin the bytes:
 `--set-string image.digest=sha256:…` and `image.migratorDigest=sha256:…` turn
 each reference into `…:<tag>@sha256:…`, and anything but a sha256 digest is

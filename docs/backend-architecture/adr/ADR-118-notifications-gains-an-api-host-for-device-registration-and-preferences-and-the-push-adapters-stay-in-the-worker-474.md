@@ -120,6 +120,11 @@ anonymisation named above. It deletes an entry that is no longer current,
 which the API never writes again, so it is guarded by the row's own state as
 they are.
 
+**Amended by [ADR-122](ADR-122-notifications-two-hosts-roll-in-lockstep-so-a-migrations-previous-release-is-the-one-both-hosts-run-1038.md)**, which bounds the API host's rollout from
+below as well as from above, and the worker's by the API host, so the two
+hosts roll in lockstep and a migration's previous release is the one both
+run.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

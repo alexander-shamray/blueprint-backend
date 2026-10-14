@@ -295,12 +295,11 @@ jobs:
         env:
           WORKLOAD: ${{ inputs.workload }}
 
-      # ADR-118's rollout order: a host whose schema another release's hook
-      # migrates rolls only at a revision that release already serves, so it
-      # never starts against a schema it is ahead of. Ancestry, because that
-      # release may have moved on; its stable track, which a rollback keeps.
-      # Empty from `migrated-by` is a workload that migrates its own schema.
-      - name: A host another release migrates rolls behind it
+      # ADR-118 and ADR-122: a host whose schema another release's hook
+      # migrates rolls only at the revision that release's stable track
+      # serves, neither ahead of the schema nor behind it. Empty from
+      # `migrated-by` is a workload that migrates its own schema.
+      - name: A host another release migrates rolls at that release's revision
         run: |
           set -euo pipefail
           MIGRATED_BY=$(python deploy/canary/canary.py migrated-by --workload "$WORKLOAD")
@@ -320,8 +319,48 @@ jobs:
             echo "::error::$WORKLOAD at $REVISION is ahead of $MIGRATED_BY, which serves $MIGRATED_REVISION and migrates its schema. Roll $MIGRATED_BY to this revision first (ADR-118)."
             exit 1
           fi
+          if ! git merge-base --is-ancestor "$MIGRATED_REVISION" "$REVISION"; then
+            echo "::error::$WORKLOAD at $REVISION is behind $MIGRATED_BY, which serves $MIGRATED_REVISION and has migrated its schema past it. Roll $WORKLOAD at $MIGRATED_REVISION (ADR-122)."
+            exit 1
+          fi
         env:
           TAG: ${{ inputs.tag }}
+          WORKLOAD: ${{ inputs.workload }}
+
+      # ADR-122's other half: a release whose hook migrates another host's
+      # schema rolls only while that host serves this release's stable
+      # revision, so §15.5's previous release is the one every host runs. A
+      # host with no release has nothing to break, and is found by listing so
+      # that any other helm failure still fails the step.
+      - name: A release that migrates another host's schema rolls only beside it
+        run: |
+          set -euo pipefail
+          STABLE_TAG=$(python deploy/canary/canary.py installed-tag --values "$RUNNER_TEMP/stable.json")
+          STABLE_REVISION=$(python deploy/canary/canary.py revision --value "$STABLE_TAG")
+          python deploy/canary/canary.py migrates --workload "$WORKLOAD" > "$RUNNER_TEMP/migrates.txt"
+          while read -r HOST; do
+            RELEASES=$(helm list -a -q -n "$NAMESPACE" --filter "^${HOST}$")
+            if [ -z "$RELEASES" ]; then
+              echo "$HOST has no release, so no host on this schema is behind it."
+              continue
+            fi
+            helm get values "$HOST" -n "$NAMESPACE" --all -o json > "$RUNNER_TEMP/host.json"
+            HOST_TAG=$(python deploy/canary/canary.py installed-tag --values "$RUNNER_TEMP/host.json")
+            HOST_REVISION=$(python deploy/canary/canary.py revision --value "$HOST_TAG")
+            if ! git cat-file -e "$HOST_REVISION^{commit}" 2>/dev/null; then
+              echo "::error::$HOST serves $HOST_REVISION, which is not a commit in this repository, so it cannot be compared with the schema $WORKLOAD migrates."
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$STABLE_REVISION" "$HOST_REVISION"; then
+              echo "::error::$HOST serves $HOST_REVISION, older than $STABLE_REVISION, which $WORKLOAD serves, so this release would migrate its schema past a revision that migration need not support. Roll $HOST to $STABLE_REVISION first (ADR-122)."
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$HOST_REVISION" "$STABLE_REVISION"; then
+              echo "::error::$HOST serves $HOST_REVISION, newer than $STABLE_REVISION, which $WORKLOAD serves, so this release would migrate its schema under a revision that migration need not support. Roll $HOST to $STABLE_REVISION first (ADR-122)."
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/migrates.txt"
+        env:
           WORKLOAD: ${{ inputs.workload }}
 
       # The same gate the `check` job ran, over the image's tree instead of

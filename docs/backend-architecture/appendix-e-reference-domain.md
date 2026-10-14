@@ -1737,10 +1737,11 @@ a Service on `http` for the probes and `grpc` for the BFF's device hop
 (§10.10), an autoscaler as Catalog's, and the worker's database under the
 worker's `connectionName` and runtime Secret, with no migrator image and no
 Job. Its descriptor's `migratedBy` is `notifications`, the worker's release,
-so the rollout refuses its tag until the worker's release serves that
-revision or one after it. Its fence admits `web-bff` on `grpc` and reaches,
-beyond the DNS and telemetry every host reaches, the identity provider and
-the database; it holds no broker account and no grant.
+so the two roll in lockstep
+([ADR-122](adr/ADR-122-notifications-two-hosts-roll-in-lockstep-so-a-migrations-previous-release-is-the-one-both-hosts-run-1038.md)). Its fence admits
+`web-bff` on `grpc` and reaches, beyond the DNS and telemetry every host
+reaches, the identity provider and the database; it holds no broker account
+and no grant.
 
 Each worker's chart sets `autoscaling.enabled: false` and `replicaCount: 3`,
 three for availability across a node drain. What says three is too few is
