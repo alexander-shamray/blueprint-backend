@@ -170,6 +170,7 @@ networkPolicy:
     - { workload: gateway, port: http }
   egressTo:
     - { workload: catalog-api, port: grpc }
+    - { workload: notifications-api, port: grpc }   # the device hop (§10.10, ADR-118)
   dns:
     to:
       - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }

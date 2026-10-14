@@ -5,6 +5,7 @@
   "signals": ["http"],
   "smoke": {
     "migrator": false,
+    "database": false,
     "autoscaled": true,
     "capabilities": [],
     "overlay": []

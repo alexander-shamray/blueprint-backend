@@ -8,19 +8,23 @@ can be rolled on its own — which is what §15.1's per-service path filters
 produce — and an environment can be stood up whole.
 
 ```
-common/        the library chart: every template, once
-catalog/       ┐
-ordering/      │
-inventory/     │ Chart.yaml + values.yaml + one-line templates that include
-payments/      │ the library's. The values ARE the per-service decisions.
-shipping/      │ A chart whose host registers a capability unconditionally
-notifications/ │ carries one template more: the guard on it.
-web-bff/       ┘
-gateway/       the same, plus edge-config.yaml — the two keys no service has
-               (§15.3), in a template only this chart carries
-platform/      the umbrella — one dependency per service chart and no values
-               of its own
-smoke.sh       renders every chart and the umbrella and asserts what comes out
+common/            the library chart: every template, once
+catalog/           ┐
+ordering/          │
+inventory/         │ Chart.yaml + values.yaml + one-line templates that include
+payments/          │ the library's. The values ARE the per-service decisions.
+shipping/          │ A chart whose host registers a capability unconditionally
+notifications/     │ carries one template more: the guard on it.
+privacy/           │
+web-bff/           ┘
+notifications-api/ the same, with no migrate-job.yaml: the worker's chart
+                   migrates the schema it reads, and is rolled first (ADR-118)
+gateway/           the same, plus edge-config.yaml — the two keys no service
+                   has (§15.3), in a template only this chart carries
+platform/          the umbrella — one dependency per service chart and no
+                   values of its own
+smoke.sh           renders every chart and the umbrella and asserts what
+                   comes out
 ```
 
 ## Setup is one command per chart
@@ -93,7 +97,8 @@ migration this platform has". So the deploy window is set to outlive it, and
 
 The umbrella takes a tag per subchart, because §15.1 builds and deploys per
 service — a change under `src/Services/Catalog` rebuilds Catalog alone, and
-every other subchart must keep the tag it is already running:
+every other subchart must keep the tag it is already running. Notifications'
+two charts take one tag, because one filter builds all three of its images:
 
 ```bash
 helm upgrade --install platform deploy/helm/platform \
@@ -106,6 +111,8 @@ helm upgrade --install platform deploy/helm/platform \
     --set-string payments.image.tag="$PAYMENTS_SHA" \
     --set-string shipping.image.tag="$SHIPPING_SHA" \
     --set-string notifications.image.tag="$NOTIFICATIONS_SHA" \
+    --set-string notifications-api.image.tag="$NOTIFICATIONS_SHA" \
+    --set-string privacy.image.tag="$PRIVACY_SHA" \
     --set-string gateway.image.tag="$GATEWAY_SHA" \
     --set-string web-bff.image.tag="$BFF_SHA"
 ```

@@ -1592,6 +1592,130 @@ class DescriptorTests(unittest.TestCase):
 
         self.assertTrue(any("two descriptors name the chart 'catalog'" in f for f in failures), failures)
 
+    def test_a_descriptor_that_does_not_say_whether_it_has_a_database_is_refused(self) -> None:
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        del workloads["catalog-api"]["smoke"]["database"]
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertTrue(any("catalog-api.smoke.database" in f for f in failures), failures)
+
+    def test_a_chart_that_migrates_a_database_it_lacks_is_refused(self) -> None:
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        workloads["catalog-api"]["smoke"]["database"] = False
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertTrue(any("migrates a database it does not have" in f for f in failures), failures)
+
+    def test_a_database_with_no_job_must_name_the_release_that_migrates_it(self) -> None:
+        """ADR-118: without the name, nothing orders the rollout behind the schema."""
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        del workloads["notifications-api"]["migratedBy"]
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertTrue(
+            any("notifications-api" in f and "names no migratedBy" in f for f in failures), failures)
+
+    def test_a_chart_that_migrates_itself_names_no_other(self) -> None:
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        workloads["catalog-api"]["migratedBy"] = "notifications"
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertTrue(
+            any("catalog-api.migratedBy" in f and "no schema" in f for f in failures), failures)
+
+    def test_migrated_by_must_name_a_workload_whose_chart_migrates(self) -> None:
+        for named in ("gateway", "notifications-api", "no-such-workload"):
+            with self.subTest(named=named):
+                workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+                workloads["notifications-api"]["migratedBy"] = named
+
+                failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+                self.assertTrue(
+                    any("notifications-api.migratedBy" in f and "runs a migration Job" in f
+                        for f in failures), failures)
+
+    def test_the_shipped_plan_names_the_worker_as_the_api_host_s_migrator(self) -> None:
+        cases = canary.smoke_cases(canary.load_plan()["workloads"])
+
+        self.assertIn("notifications-api migratedBy notifications", cases)
+        self.assertIn("notifications-api database yes", cases)
+        self.assertIn("notifications-api migrator no", cases)
+
+    def test_migrated_by_prints_the_release_or_nothing(self) -> None:
+        for workload, printed in (("notifications-api", "notifications\n"), ("catalog-api", "\n")):
+            with self.subTest(workload=workload):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = canary.main(["canary", "migrated-by", "--workload", workload])
+
+                self.assertEqual((0, printed), (code, out.getvalue()))
+
+    def test_migrated_by_refuses_a_workload_the_plan_does_not_describe(self) -> None:
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = canary.main(["canary", "migrated-by", "--workload", "no-such-workload"])
+
+        self.assertEqual(1, code)
+        self.assertIn("no workload 'no-such-workload'", err.getvalue())
+
+
+class RolloutOrderTests(unittest.TestCase):
+    """Check 13: a host another release migrates rolls behind it (ADR-118)."""
+
+    def _workflow(self, text: str) -> Path:
+        path = Path(tempfile.mkdtemp()) / "deploy.yml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    @property
+    def shipped(self) -> str:
+        return canary.WORKFLOW.read_text(encoding="utf-8")
+
+    @property
+    def workloads(self) -> dict:
+        return canary.entries(canary.load_plan()["workloads"])
+
+    def test_the_shipped_workflow_orders_the_rollout(self) -> None:
+        self.assertEqual([], canary._rollout_follows_the_migrator(self.workloads))
+
+    def test_a_workflow_that_never_asks_is_refused(self) -> None:
+        without = "\n".join(
+            line for line in self.shipped.splitlines() if "canary.py migrated-by" not in line)
+
+        failures = canary._rollout_follows_the_migrator(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("runs no `canary.py migrated-by`", failures[0])
+
+    def test_an_answer_that_refuses_nothing_is_refused(self) -> None:
+        without = "\n".join(
+            line for line in self.shipped.splitlines() if "merge-base --is-ancestor" not in line
+            or "MIGRATED_REVISION" not in line)
+
+        failures = canary._rollout_follows_the_migrator(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("refuses nothing", failures[0])
+
+    def test_a_commented_out_question_is_no_question(self) -> None:
+        commented = self.shipped.replace(
+            "MIGRATED_BY=$(python deploy/canary/canary.py migrated-by",
+            "# MIGRATED_BY=$(python deploy/canary/canary.py migrated-by")
+
+        failures = canary._rollout_follows_the_migrator(self.workloads, self._workflow(commented))
+
+        self.assertTrue(any("runs no `canary.py migrated-by`" in f for f in failures), failures)
+
+    def test_with_no_host_migrated_by_another_there_is_nothing_to_order(self) -> None:
+        workloads = {name: entry for name, entry in self.workloads.items() if "migratedBy" not in entry}
+
+        self.assertEqual([], canary._rollout_follows_the_migrator(workloads, self._workflow("")))
+
 
 class SourceInputTests(unittest.TestCase):
     """SOURCE_INPUTS against the reads it claims to enumerate.

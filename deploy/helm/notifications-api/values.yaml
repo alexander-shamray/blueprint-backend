@@ -1,0 +1,148 @@
+# Notifications' API host, per §15.3 and ADR-118: a request-serving host on the
+# worker's database, reached by the BFF alone and migrated by the worker's
+# chart, so what is specific here is the one caller, the one port it dials and
+# the absent migrator.
+
+workload:
+  # Not derived from the release name, and _helpers.tpl says why:
+  # NotificationsHop.cs dials `http://notifications-api:8081` as a literal in
+  # source, so the Service answers to the name its caller already spells.
+  name: notifications-api
+
+replicaCount: 3
+
+# §15.5's canary track, and off is what every ordinary release means. Turned
+# on, this chart renders the second of two Deployments, and the stable release
+# keeps the names it owns (ADR-022). Set by the rollout, not by an operator.
+canary:
+  enabled: false
+
+image:
+  # Registry namespace only; each workload appends its own name (§7.4).
+  registry: registry.example.com/commerce
+  api: notifications-api
+  # No migrator key, and no templates/migrate-job.yaml: the schema is the
+  # worker's chart's to migrate, since two hooks over one schema race (ADR-118).
+  # smoke.sh asserts the two halves agree, as it does for the gateway.
+
+  # Supplied by CI, never "latest", and empty rather than defaulted: a deploy
+  # that cannot name its tag must fail, not roll something (§15.3).
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# The container ports, and the Service's: §13.5's probes on an HTTP/1.1
+# endpoint, and the HTTP/2-only one the BFF's device hop dials, for the reason
+# Notifications.Api/appsettings.json gives. 8081 is cluster-internal: no route
+# reaches it and there is no Ingress, so the RPC on it still authenticates
+# (§11.2).
+ports:
+  - name: http
+    containerPort: 8080
+  - name: grpc
+    containerPort: 8081
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { memory: 512Mi }          # No CPU limit — §15.3.
+
+# On, and the amendment ADR-118 makes to ADR-063: a person waits on these
+# requests and no third party paces them, so CPU is the right signal here as
+# it is for catalog-api.
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Spread across nodes as a rule and across zones as a preference (§15.3).
+topologySpread:
+  maxSkew: 1
+  whenUnsatisfiable:
+    node: DoNotSchedule
+    zone: ScheduleAnyway
+
+# Must exceed the host's own shutdown timeout, which is 30 s — §15.3 carries
+# the argument.
+terminationGracePeriodSeconds: 45
+
+probes:
+  # `http` and not `grpc`: an HTTP/2-only endpoint answers an HTTP/1.1 probe
+  # with a 400, which reads as a dead pod. Readiness is SQL alone (§13.5).
+  probePort: http
+  liveness:  { path: /health/live,  initialDelaySeconds: 10, periodSeconds: 10 }
+  readiness: { path: /health/ready, initialDelaySeconds: 5,  periodSeconds: 5 }
+  startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
+
+service:
+  # True: the BFF dials this workload by name.
+  enabled: true
+
+ingress:
+  # False, and written down rather than omitted (§15.3). No route reaches this
+  # host at all: the client registers through the BFF (§10.10).
+  enabled: false
+
+identity:
+  # The authority, to validate the caller's token the BFF forwards (§11.2), and
+  # nothing else: this host calls no peer, so it holds no grant (§11.5).
+  authority: https://id.example.com/realms/commerce
+  clientCredentials: false
+
+database:
+  enabled: true
+  # GetConnectionString("Notifications"), the worker's database and its
+  # runtime login. No migrator Secret: the hook that would mount it is the
+  # worker chart's.
+  connectionName: Notifications
+  runtimeSecretRef:
+    name: notifications-database
+    key: connection-string
+
+# No bus: the host registers no consumer and publishes nothing (ADR-118), so
+# the broker account is the worker's alone. Declared rather than omitted
+# (§15.3).
+broker:
+  enabled: false
+
+# No Redis (§8.1), as for the worker: the idempotency marker is SQL's and
+# nothing is cached.
+redis:
+  enabled: false
+
+observability:
+  otlpEndpoint: http://otel-collector.observability:4317
+
+extraConfigMaps: []
+
+# ADR-065's fence, with the edge ADR-118 adds: the BFF in on `grpc`, and out to
+# the identity provider and the database alone. A peer inside the namespace is
+# a workload and a port name; what runs outside it is a list of NetworkPolicy
+# peers the deployment states, and an empty one is refused wherever a
+# capability above dials it, since a rule with no peer admits all.
+networkPolicy:
+  ingressFrom:
+    - { workload: web-bff, port: grpc }
+  egressTo: []
+  dns:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+        podSelector: { matchLabels: { k8s-app: kube-dns } }
+  telemetry:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
+  identity: { to: [] }
+  database: { port: 1433, to: [] }
+
+# ADR-079's opt-out: the connection names this deployment runs in plaintext.
+# Empty, the host refuses every hop not encrypted and verified.
+transport:
+  plaintext: []
+
+# ADR-104 has no row for this host, so it may not be switched off: suspending
+# Notifications stops the worker and leaves registration serving (ADR-118).
+suspendable: false
+suspended: false
