@@ -1527,9 +1527,9 @@ for chart in $MIGRATED_ELSEWHERE_CHARTS; do
     connection="$(values_key "$chart" database connectionName)"
     check "$chart and $migrator name one connection ($connection)" \
         sh -c '[ -n "$0" ] && [ "$0" = "$1" ]' "$connection" "$(values_key "$migrator" database connectionName)"
-    secret="$(runtime_secret_of "$chart")"
-    check "$chart and $migrator read one runtime Secret ($secret)" \
-        sh -c '[ -n "$0" ] && [ "$0" = "$1" ]' "$secret" "$(runtime_secret_of "$migrator")"
+    runtime_ref="$(runtime_secret_of "$chart")"
+    check "$chart and $migrator read one runtime Secret ($runtime_ref)" \
+        sh -c '[ -n "$0" ] && [ "$0" = "$1" ]' "$runtime_ref" "$(runtime_secret_of "$migrator")"
 done
 check 'a chart migrated by another is found, so the loop above is not vacuous' test -n "$MIGRATED_ELSEWHERE_CHARTS"
 
