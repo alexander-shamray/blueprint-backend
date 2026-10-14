@@ -389,7 +389,7 @@ src/BFF/                     the third host, Web.Bff, and the one that calls
 src/Services/Catalog/        §4.1's project set — Domain, Application,
                              Infrastructure, Migrator, Api. The first real
                              service, the scaffold's template, and the first
-                             of the platform's two gRPC servers
+                             of the platform's three gRPC servers
 src/Services/Ordering/       the same set, rendered by the scaffold rather
                              than written, then given §5's Order aggregate,
                              §6.6's price projection with its withdrawal
