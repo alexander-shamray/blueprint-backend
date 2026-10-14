@@ -206,7 +206,8 @@ rather than shipping a `.sln` alongside it.
 
 **Every service has a `*.Migrator`, because every service owns a database**
 ([§7.1](07-persistence.md)) and ADR-007 forbids migrating at application startup. That includes
-a worker and a pure consumer, which expose no public API but still own schemas
+a worker and a service with no Domain project, which expose no public API but
+still own schemas
 ([§3.2](03-bounded-contexts.md); [E.2.1](appendix-e-reference-domain.md#e21-the-services-and-their-host-shapes) names them).
 
 It is also why [§15.2](15-cicd-deployment.md) builds **two images per service** rather than one — a
@@ -375,7 +376,10 @@ what makes it cover a service before it exists: this service's own
 assemblies and the building blocks, both *by name*, because a test library
 shares each one's prefix and is neither — `Common.TestSupport` (§4.1) is named
 like a building block, and `<Service>.TestSupport` like one of the service's
-own projects.
+own projects. A service with two hosts holds the rule in each host's suite,
+each over the assemblies its host reaches, because one suite cannot load two
+`Program` types
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
 
 A service's, in the same file (§4.2), is the list of
 building blocks, the service's own projects read off the five assemblies, and
@@ -971,7 +975,11 @@ the twentieth dependency.
 
 **Every** service of §4.1 shares the shape below — as an API host, as a worker
 or as a pure consumer, which [E.2.1](appendix-e-reference-domain.md#e21-the-services-and-their-host-shapes) sorts — and writing one by hand is how it ends up
-subtly different from the rest. One command renders it instead:
+subtly different from the rest. A service with both hosts is rendered as one
+of them and has the other added beside the render, a shape the scaffold has
+no mode for
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
+One command renders it instead:
 
 ```bash
 python tools/new-service/new_service.py Yankee --port 5199
@@ -1172,8 +1180,9 @@ the thing worth writing down is the rule, not the arithmetic.
 
 **In the reference domain ([E.2.1](appendix-e-reference-domain.md#e21-the-services-and-their-host-shapes)) the scaffold refuses `Shipping`
 without `--worker` and `Notifications` without `--pure-consumer`.** A note is not a guard: without the refusal the
-script would render either in a shape §4.1 does not give it, and contradict
-the chapter quietly.
+script would render Shipping in a shape §4.1 does not give it, and
+Notifications in one that is not the render its tree was built on, and
+contradict the chapter quietly.
 
 ---
 

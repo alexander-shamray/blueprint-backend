@@ -247,14 +247,16 @@ Infrastructure project one with `AddOrderingInfrastructure(config)`, and
 
 Shipping and Notifications expose no public API but still own schemas:
 `Shipment` and `TrackingEvent`, and `NotificationLog`, respectively
-([§3.2](03-bounded-contexts.md)). Notifications' API host is called by the
-BFF alone, on a port no gateway route reaches, and shares the worker's
-database and migrator
+([§3.2](03-bounded-contexts.md)). Notifications' API host shares the worker's
+database and migrator and serves health alone until ADR-117's and ADR-120's
+methods land, which are the BFF's alone to call, on a port no gateway route
+reaches
 ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
 `tools/new-service` refuses Shipping without `--worker` and Notifications
-without `--pure-consumer`, so that it does not render either in a shape §4.1
-does not give it; Notifications was rendered a pure consumer, and its API
-host was added beside the render in a shape the scaffold has no mode for.
+without `--pure-consumer`, so that it renders Shipping only in the shape §4.1
+gives it and Notifications only as the render its tree was built on: a pure
+consumer, beside which the API host was added in a shape the scaffold has no
+mode for.
 
 ### E.2.2 The domain gate
 
@@ -1674,7 +1676,8 @@ whose entry point is `Ordering.Api.dll`, and its migrator's is
 `src/Services/Ordering/Ordering.Migrator/Dockerfile`, whose entry point is
 `Ordering.Migrator.dll`. The `images` job's matrix lists the pair for Ordering
 as `filter: ordering` with the images `ordering-api` and `ordering-migrator`;
-every other service has its own pair there.
+every other service has its own pair there, and Notifications, with two
+hosts, its three (§15.2).
 
 ### E.9.3 The charts
 
