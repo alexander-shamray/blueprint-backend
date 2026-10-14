@@ -178,7 +178,7 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
-    public async Task A_sign_out_touches_only_a_row_of_the_callers_own()
+    public async Task A_sign_out_clears_only_a_live_row_of_the_callers_own()
     {
         Guid owner = Guid.CreateVersion7();
         Guid installation = Guid.CreateVersion7();
