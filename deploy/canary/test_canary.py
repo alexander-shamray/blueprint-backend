@@ -1845,7 +1845,7 @@ class SharedValuesTests(unittest.TestCase):
                 self.assertTrue(any(message in f for f in self._checked(workloads)), self._checked(workloads))
 
     def test_a_malformed_declaration_is_refused_and_not_a_crash(self) -> None:
-        for declared in [["web-bff"], {"web-bff": "push.apps"}]:
+        for declared in [["web-bff"], {"web-bff": 1}]:
             with self.subTest(declared=declared):
                 plan = canary.load_plan()
                 plan["workloads"]["notifications"]["sharesValues"] = declared
