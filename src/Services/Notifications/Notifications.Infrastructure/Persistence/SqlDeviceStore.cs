@@ -85,7 +85,7 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
         FROM notifications.DeviceInstallations WITH (UPDLOCK, HOLDLOCK)
         WHERE InstallationId = @InstallationId;
 
-        -- No row, or another subject's: a DELETE acts only on the caller's own row (ADR-117), so nothing is written.
+        -- No row, or another subject's live one: a DELETE clears only the caller's (ADR-117), so nothing is written.
         IF @Current IS NULL OR @Owner <> @SubjectId
         BEGIN
             SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
@@ -105,8 +105,9 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
             RETURN;
         END;
 
-        -- Above a cleared row only the sequence moves, so a registration delayed past this sign-out is stale (ADR-117),
-        -- and the last-seen time stays, so no caller's sign-out keeps the row past the stale window.
+        -- A cleared row has no subject, so any caller's sign-out above it moves its sequence and nothing else: a
+        -- registration delayed past the sign-out is then stale (ADR-117), and the unchanged last-seen time lets no
+        -- caller keep the row past the stale window.
         IF @Owner IS NULL
             UPDATE notifications.DeviceInstallations
             SET Sequence = @Sequence
