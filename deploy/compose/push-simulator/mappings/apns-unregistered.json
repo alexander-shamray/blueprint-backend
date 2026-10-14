@@ -1,0 +1,28 @@
+{
+  "Guid": "5b1e0c70-0010-4000-8000-000000000010",
+  "Title": "APNs: unregistered- answers 410 Unregistered",
+  "Priority": 2,
+  "Request": {
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/3/device/unregistered-[^/]*$"
+        }
+      ]
+    },
+    "Methods": [
+      "POST"
+    ]
+  },
+  "Response": {
+    "StatusCode": 410,
+    "Headers": {
+      "Content-Type": "application/json"
+    },
+    "BodyAsJson": {
+      "reason": "Unregistered",
+      "timestamp": 1760400000000
+    }
+  }
+}

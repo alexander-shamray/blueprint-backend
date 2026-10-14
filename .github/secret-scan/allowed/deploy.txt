@@ -166,3 +166,8 @@ deploy/compose/object-store/s3.json | credential-assignment | ceb7fc08fc4b | The
 deploy/compose/object-store/s3.json | credential-assignment | e5d152deced8 | Catalog's local object store pair, where the store imports it (ADR-106).
 deploy/compose/services/web-bff.yml | credential-assignment | ceb7fc08fc4b | The same BFF pair, given to the BFF's unit (ADR-106).
 deploy/compose/services/catalog.yml | credential-assignment | e5d152deced8 | The same Catalog pair, given to Catalog's unit (ADR-106).
+
+# The push simulator's token endpoint and the worker's address for it. Neither is a credential: the simulator
+# hands out a fixed literal and verifies nothing, and TokenUri is a URL whose key happens to say token.
+deploy/compose/push-simulator/mappings/token.json | credential-assignment | 2b4543fd9d28 | The simulator's fixed access token, which no provider issues or checks.
+deploy/compose/services/notifications.yml | credential-assignment | 5e9846d95da2 | Fcm__TokenUri, the simulator's token endpoint address and no credential.

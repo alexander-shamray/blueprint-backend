@@ -1,0 +1,27 @@
+{
+  "Guid": "5b1e0c70-0013-4000-8000-000000000013",
+  "Title": "APNs: unavailable- answers 503",
+  "Priority": 2,
+  "Request": {
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/3/device/unavailable-[^/]*$"
+        }
+      ]
+    },
+    "Methods": [
+      "POST"
+    ]
+  },
+  "Response": {
+    "StatusCode": 503,
+    "Headers": {
+      "Content-Type": "application/json"
+    },
+    "BodyAsJson": {
+      "reason": "ServiceUnavailable"
+    }
+  }
+}

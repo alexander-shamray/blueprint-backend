@@ -1,0 +1,21 @@
+{
+  "Guid": "5b1e0c70-0009-4000-8000-000000000009",
+  "Title": "APNs: any other token is accepted",
+  "Priority": 10,
+  "Request": {
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/3/device/[^/]*$"
+        }
+      ]
+    },
+    "Methods": [
+      "POST"
+    ]
+  },
+  "Response": {
+    "StatusCode": 200
+  }
+}

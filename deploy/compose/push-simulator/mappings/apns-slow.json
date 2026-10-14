@@ -1,0 +1,22 @@
+{
+  "Guid": "5b1e0c70-0014-4000-8000-000000000014",
+  "Title": "APNs: slow- is accepted after ApnsHop's attempt timeout",
+  "Priority": 2,
+  "Request": {
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/3/device/slow-[^/]*$"
+        }
+      ]
+    },
+    "Methods": [
+      "POST"
+    ]
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Delay": 10000
+  }
+}

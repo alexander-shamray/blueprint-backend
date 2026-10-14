@@ -1,0 +1,43 @@
+{
+  "Guid": "5b1e0c70-0006-4000-8000-000000000006",
+  "Title": "FCM: unavailable- answers 503 UNAVAILABLE",
+  "Priority": 2,
+  "Request": {
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/v1/projects/[^/]+/messages:send$"
+        }
+      ]
+    },
+    "Methods": [
+      "POST"
+    ],
+    "Body": {
+      "Matcher": {
+        "Name": "RegexMatcher",
+        "Pattern": "\"token\"\\s*:\\s*\"unavailable-"
+      }
+    }
+  },
+  "Response": {
+    "StatusCode": 503,
+    "Headers": {
+      "Content-Type": "application/json"
+    },
+    "BodyAsJson": {
+      "error": {
+        "code": 503,
+        "message": "Simulated.",
+        "status": "UNAVAILABLE",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError",
+            "errorCode": "UNAVAILABLE"
+          }
+        ]
+      }
+    }
+  }
+}
