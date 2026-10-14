@@ -1194,8 +1194,10 @@ host serves that same revision, so the two roll in lockstep. Its descriptor's
 their own database and those that own none. **A value two releases are each
 given is held equal before either rolls**: a descriptor's `sharesValues`
 names the pair and the values path, and the rollout refuses either release
-while their installed values differ ([ADR-125](adr/ADR-125-a-value-two-releases-are-each-given-is-held-equal-before-either-rolls-1042.md)). **The gateway's
-probes are a service's three, and its readiness set is empty on purpose.** It
+while the values it would be installed with differ from the ones the other
+runs ([ADR-125](adr/ADR-125-a-value-two-releases-are-each-given-is-held-equal-before-either-rolls-1042.md)).
+**The gateway's probes are a service's three, and its readiness set is empty
+on purpose.** It
 proxies four services and depends on all of them; what it does not do is
 report unready when one is down, which would take the edge out of rotation for
 a fault it is meant to pass through. The host declares that at the call site,

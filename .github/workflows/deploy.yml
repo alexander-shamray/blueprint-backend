@@ -363,15 +363,23 @@ jobs:
         env:
           WORKLOAD: ${{ inputs.workload }}
 
-      # ADR-125: a value two releases are each given is equal in both before
-      # either rolls. The stable track's values are the ones this release
-      # runs, and a rollout keeps every value it was given; a peer with no
-      # release reads nothing yet, and is found by listing so that any other
-      # helm failure still fails the step.
+      # ADR-125: what this release will be installed with equals what its peer
+      # runs. The upgrade lays the release's own overrides over the checked-out
+      # chart, so Helm coalesces the same two over a chart of its values alone,
+      # rendering nothing else. A peer with no release reads nothing yet, and is
+      # found by listing so that any other helm failure still fails the step.
       - name: A value another release reads is the one this release is given
         run: |
           set -euo pipefail
           python deploy/canary/canary.py shared-values --workload "$WORKLOAD" > "$RUNNER_TEMP/shared.txt"
+          CHART=$(python deploy/canary/canary.py chart --workload "$WORKLOAD")
+          mkdir -p "$RUNNER_TEMP/candidate-values/templates"
+          printf 'apiVersion: v2\nname: candidate-values\nversion: 0.0.0\n' > "$RUNNER_TEMP/candidate-values/Chart.yaml"
+          cp "deploy/helm/$CHART/values.yaml" "$RUNNER_TEMP/candidate-values/values.yaml"
+          printf '{{ .Values | toJson }}\n' > "$RUNNER_TEMP/candidate-values/templates/values.json"
+          helm get values "$WORKLOAD" -n "$NAMESPACE" -o yaml > "$RUNNER_TEMP/overrides.yaml"
+          helm template candidate-values "$RUNNER_TEMP/candidate-values" -f "$RUNNER_TEMP/overrides.yaml" \
+            --show-only templates/values.json | grep -v -e '^---$' -e '^# Source: ' > "$RUNNER_TEMP/candidate.json"
           while read -r PEER KEY; do
             RELEASES=$(helm list -a -q -n "$NAMESPACE" --filter "^${PEER}$")
             if [ -z "$RELEASES" ]; then
@@ -381,9 +389,9 @@ jobs:
             helm get values "$PEER" -n "$NAMESPACE" --all -o json > "$RUNNER_TEMP/peer.json"
             AGREES=0
             python deploy/canary/canary.py values-agree --key "$KEY" \
-              --values "$RUNNER_TEMP/stable.json" --peer "$RUNNER_TEMP/peer.json" --peer-name "$PEER" || AGREES=$?
+              --values "$RUNNER_TEMP/candidate.json" --peer "$RUNNER_TEMP/peer.json" --peer-name "$PEER" || AGREES=$?
             if [ "$AGREES" -eq 1 ]; then
-              echo "::error::$WORKLOAD and $PEER are given different $KEY, which both read. State one value in both releases' values before either rolls (ADR-125)."
+              echo "::error::$WORKLOAD and $PEER are given different $KEY, which both read. State one value in either release's values so the two agree (ADR-125)."
               exit 1
             fi
             if [ "$AGREES" -ne 0 ]; then

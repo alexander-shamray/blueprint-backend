@@ -149,9 +149,11 @@ because a branch driven by the file it judges asserts nothing. Every value
     a migration that release runs.
 14. While any descriptor names `sharesValues`, `deploy.yml` asks
     `canary.py shared-values` for the dispatched workload and compares each
-    key between the release's installed values and the peer's through
-    `canary.py values-agree` (ADR-125). So two releases a deployment gives one
-    value never roll while they disagree on it.
+    key between the values the release will be installed with, its own
+    overrides coalesced over the checked-out chart's, and the peer's running
+    values through `canary.py values-agree` (ADR-125), and refuses a shared
+    key the rollout sets with its own `--set`. So two releases a deployment
+    gives one value never roll while they disagree on it.
 
 ## What a workload is judged on
 
