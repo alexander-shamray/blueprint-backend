@@ -8,8 +8,10 @@ twice.
 live**, meaning it still holds a subject and a token. A **cleared** row is one
 with no subject and no token, whatever cleared it: a sign-out, an erasure, or
 a registration that took its token to another installation or passed the
-subject's `DeviceTokenOptions.MaxPerSubject`. It keeps its installation id, its
-sequence and its last-seen time. It belongs to no caller, so any caller's
+subject's `DeviceTokenOptions.MaxPerSubject`. It keeps its installation id
+and its sequence, and the last-seen time
+[ADR-118](ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)'s
+retention delete is guarded by. It belongs to no caller, so any caller's
 sign-out is ordered against it as against any row. An equal sequence is the
 repeat. One below the row's, or more than `DeviceTokenOptions.MaxSequenceStep`
 above it, is stale and is answered 409. One above it, within that step, moves
