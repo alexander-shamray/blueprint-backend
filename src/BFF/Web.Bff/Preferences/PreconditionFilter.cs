@@ -9,9 +9,8 @@ public sealed record Precondition(Guid? ReadVersion);
 
 /// <summary>§10.5's precondition filter: a write names the version it read, or it is refused as malformed.</summary>
 /// <remarks>
-/// ADR-120's two forms and no others: one strong entity tag holding an entry's id in <c>If-Match</c>, or
-/// <c>If-None-Match: *</c> for a pair with no entry. Whether the precondition holds is Notifications' to decide, under
-/// the lock it takes; this filter only reads it. A refusal is §10.5's 400 keyed by the header, quoting no value.
+/// ADR-120's two forms alone, one strong tag holding an entry's id or <c>If-None-Match: *</c>; whether it held is
+/// Notifications' to decide under its lock. A refusal is §10.5's 400 keyed by the header, quoting no value.
 /// </remarks>
 internal sealed class PreconditionFilter : IEndpointFilter
 {

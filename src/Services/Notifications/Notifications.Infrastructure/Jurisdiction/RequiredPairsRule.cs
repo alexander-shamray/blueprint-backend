@@ -6,7 +6,7 @@ namespace Notifications.Infrastructure.Jurisdiction;
 /// <summary>ADR-120's start-up refusal of a required pair, and the set both hosts decide by.</summary>
 /// <remarks>
 /// A pair must name a topic and a channel of the vocabulary, and a service topic, so no deployment can require a
-/// promotion; a pair named twice is refused as the typo it most likely is.
+/// promotion (ADR-120); a pair named twice is refused as the typo it most likely is.
 /// </remarks>
 internal static class RequiredPairsRule
 {

@@ -12,7 +12,7 @@ namespace Notifications.Infrastructure.Persistence;
 /// <summary>ADR-120's journal: an append decided in one batch against the pair's newest entry, held locked.</summary>
 /// <remarks>
 /// UPDLOCK and HOLDLOCK take the subject's pair range, so two writes for one pair, and an append and the erasure's
-/// anonymising, run one after the other; the two unique keys are the backstop the record names.
+/// anonymising, run one after the other; the two unique keys are the backstop ADR-120 names.
 /// </remarks>
 internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnectionFactory connections) : IConsentJournal
 {

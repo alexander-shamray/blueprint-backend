@@ -3,7 +3,7 @@ namespace Notifications.Application.Preferences;
 /// <summary>The pairs a jurisdiction obliges the service to send, which no preference switches off (ADR-120).</summary>
 /// <remarks>
 /// Built by Infrastructure from <c>NotificationsJurisdictionOptions.Required</c> once start-up has refused any
-/// pair outside the service class, so every pair here is a service topic's.
+/// pair outside the service class (ADR-053 rule 1), so every pair here is a service topic's.
 /// </remarks>
 public sealed class RequiredPairs(IEnumerable<ConsentPair> pairs)
 {
