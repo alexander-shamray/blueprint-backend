@@ -1591,9 +1591,8 @@ def _canonical(value: object) -> object:
 def values_agree(key: str, values: dict, peer_values: dict, peer: str) -> list[str]:
     """The ways `key` differs between this release's values and `peer`'s, or none (ADR-125).
 
-    `values` is what the release will be installed with, its overrides
-    coalesced over the checked-out chart's; `peer_values` is the peer's
-    `helm get values --all -o json`. Both carry a chart's defaults as values.
+    `values` is what the release will be installed with, coalesced over the checked-out chart;
+    `peer_values` is the peer's `helm get values --all -o json`. Both carry chart defaults.
     """
     mine, theirs = _value_at(values, key), _value_at(peer_values, key)
     # Both carry every chart default, so a path neither holds is a misspelt key, never an agreement.
