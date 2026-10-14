@@ -2,6 +2,7 @@ using Notifications.Application;
 using Notifications.Infrastructure;
 using Notifications.Infrastructure.Contacts;
 using Notifications.Infrastructure.Mail;
+using Notifications.Infrastructure.Push;
 using Common.Infrastructure.Identity;
 using Common.Web;
 
@@ -23,6 +24,10 @@ builder.Services.AddNotificationsInfrastructure(builder.Configuration, Notificat
 
 // The relay behind IMailChannel (ADR-055); plain or anonymous submission is refused outside Development.
 builder.Services.AddMailChannel(builder.Configuration, builder.Environment);
+
+// The providers behind IPushChannel, each registered only while an app names it; plain HTTP and a missing
+// key are refused outside Development, where the worker generates a key.
+builder.Services.AddPushChannel(builder.Configuration, builder.Environment);
 
 // ADR-052's contact read; its address is read, and its scheme checked, eagerly (ADR-055).
 builder.Services.AddContactSource(builder.Configuration, builder.Environment);

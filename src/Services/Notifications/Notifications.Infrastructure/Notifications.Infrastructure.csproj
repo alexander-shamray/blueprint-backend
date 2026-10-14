@@ -18,6 +18,8 @@
     <PackageReference Include="MimeKit" />
     <!-- The relay's pipeline, built by hand because SMTP is no HttpClient (§9.7's rules, Polly's engine). -->
     <PackageReference Include="Polly.Core" />
+    <!-- SuppressInstrumentationScope, so APNs' span never records the token its URL carries (ADR-117). -->
+    <PackageReference Include="OpenTelemetry" />
     <!-- The hosting abstractions this project names: IHostEnvironment, in each outbound hop's registration. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <!-- The contact read's typed client and its pipeline (§9.7), as Shipping's address read takes it. -->
