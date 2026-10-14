@@ -130,6 +130,7 @@ decision looks wrong.
 | **ADR-121** | [A sign-out above a cleared device row moves its sequence whoever sends it, and an invalid-token answer keeps the row (#1034, #474)](adr/ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md) |
 | **ADR-122** | [Notifications' two hosts roll in lockstep, so a migration's previous release is the one both hosts run (#1038)](adr/ADR-122-notifications-two-hosts-roll-in-lockstep-so-a-migrations-previous-release-is-the-one-both-hosts-run-1038.md) |
 | **ADR-123** | [A send is decided once, by the pass that commits its intent, and a resend under that intent is not decided again (#1041, #474)](adr/ADR-123-a-send-is-decided-once-by-the-pass-that-commits-its-intent-and-a-resend-under-that-intent-is-not-decided-again-1041-474.md) |
+| **ADR-124** | [The Notifications worker reaches each push provider an app names, on the port its address dials (#474)](adr/ADR-124-the-notifications-worker-reaches-each-push-provider-an-app-names-on-the-port-its-address-dials-474.md) |
 
 ---
 
