@@ -254,7 +254,8 @@ repository's**, and it decides the procedure:
   upgrade: update the vault, wait for External Secrets to reconcile, then
   upgrade with the new `apns.keyId`, which rolls the pods onto both at once.
   An upgrade made first signs under the new id with the old key, and APNs
-  refuses every push until the Secret follows.
+  refuses every push until the pods restart again after the Secret has
+  reconciled, since a pod reads its key when it starts.
 
 Confirm the same way for both. For Payments, `payments.provider.unavailable`
 stays flat while authorisations succeed; for Shipping,
