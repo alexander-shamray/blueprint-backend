@@ -74,7 +74,7 @@ public sealed class ServiceFixture()
 
     // The factory's retention defaults are the invented windows, so this
     // host runs as ADR-053 rule 2's made-up jurisdiction and no test opts in.
-    protected override ShippingWorkerFactory CreateFactory() => NewWorkerHost(Carrier.Urls[0] + "/");
+    protected override ShippingWorkerFactory CreateFactory() => Host(Carrier.Urls[0] + "/", consumes: true);
 
     /// <summary>Widens <c>shipping-svc</c>'s write to publish Ordering's and Privacy's events (ADR-036).</summary>
     protected override string? HarnessWrite(string granted)
@@ -419,13 +419,28 @@ public sealed class ServiceFixture()
             .Select(columns => columns[0])
     ];
 
-    /// <summary>A second worker host over these containers, with its own resilience pipeline.</summary>
-    public ShippingWorkerFactory NewWorkerHost(string carrierBaseUrl) =>
+    /// <summary>A second worker host over these containers, with its own pipeline, consuming nothing.</summary>
+    public ShippingWorkerFactory NewWorkerHost(string carrierBaseUrl) => Host(carrierBaseUrl, consumes: false);
+
+    private ShippingWorkerFactory Host(string carrierBaseUrl, bool consumes) =>
         new(
             ConnectionString,
             BrokerConnectionString,
             carrierBaseUrl,
-            addressSourceBaseUrl: Ordering.Address.ToString());
+            addressSourceBaseUrl: Ordering.Address.ToString(),
+            consumes: consumes);
+
+    /// <summary>How many consumers the broker holds on one queue, none before it is declared.</summary>
+    public async Task<int> ConsumersAsync(string queue)
+    {
+        foreach (string[] columns in await BrokerRowsAsync(["list_queues", "name", "consumers"]))
+        {
+            if (columns.Length == 2 && columns[0] == queue)
+                return int.Parse(columns[1], System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return 0;
+    }
 
     /// <summary>Makes one carrier server answer one path with one status code, after an optional delay.</summary>
     public static IDisposable CarrierAnswers(
