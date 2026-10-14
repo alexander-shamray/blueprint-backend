@@ -1308,7 +1308,9 @@ check 'notifications-api: the required pairs are in the ConfigMap, in order' \
     in_configmap "$NA" '^ *Jurisdiction__Required__0: "order-placed/email"$'
 check "notifications-api: none of the worker's jurisdiction members is in the ConfigMap" \
     sh -c '! grep -Eq "Jurisdiction__(Languages|TimeZone|[A-Za-z]+Retention)" "$0"' "$NA"
-for chart in notifications notifications-api; do
+# A function rather than a loop, as canary.py refuses a chart list written by hand here.
+refuses_unstated_required() {
+    local chart="$1"
     if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         $(field "$chart" overlay | awk 'index($0, "jurisdiction.required=") != 1' |
             sed 's/^/--set-string /' | tr '\n' ' ') >"$OUT/unstated.txt" 2>&1; then
@@ -1320,7 +1322,9 @@ for chart in notifications notifications-api; do
     refuses_chart "$chart" 'a required pair that is not one fails the render' \
         'not a topic/channel pair this chart will accept' --set-string 'jurisdiction.required={order-placed}'
     refuses_removed "$chart" jurisdiction.required 'jurisdiction.required is unstated'
-done
+}
+refuses_unstated_required notifications
+refuses_unstated_required notifications-api
 refuses_chart notifications-api 'a jurisdiction the capability is off for fails the render' \
     'but a jurisdiction setting is set' --set jurisdiction.enabled=false
 
