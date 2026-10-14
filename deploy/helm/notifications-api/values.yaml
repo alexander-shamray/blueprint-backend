@@ -119,10 +119,10 @@ observability:
 extraConfigMaps: []
 
 # ADR-065's fence, with the edge ADR-118 adds: the BFF in on `grpc`, and out to
-# the identity provider and the database alone. A peer inside the namespace is
-# a workload and a port name; what runs outside it is a list of NetworkPolicy
-# peers the deployment states, and an empty one is refused wherever a
-# capability above dials it, since a rule with no peer admits all.
+# the identity provider and the database beside every host's DNS and telemetry.
+# A peer inside the namespace is a workload and a port name; one outside it is
+# a NetworkPolicy peer the deployment states, and an empty list is refused
+# wherever a capability above dials it, since a rule with no peer admits all.
 networkPolicy:
   ingressFrom:
     - { workload: web-bff, port: grpc }

@@ -1738,9 +1738,9 @@ a Service on `http` for the probes and `grpc` for the BFF's device hop
 worker's `connectionName` and runtime Secret, with no migrator image and no
 Job. Its descriptor's `migratedBy` is `notifications`, the worker's release,
 so the rollout refuses its tag until the worker's release serves that
-revision or one after it. Its
-fence admits `web-bff` on `grpc` and reaches the identity provider and the
-database alone; it holds no broker account and no grant.
+revision or one after it. Its fence admits `web-bff` on `grpc` and reaches,
+beyond the DNS and telemetry every host reaches, the identity provider and
+the database; it holds no broker account and no grant.
 
 Each worker's chart sets `autoscaling.enabled: false` and `replicaCount: 3`,
 three for availability across a node drain. What says three is too few is
