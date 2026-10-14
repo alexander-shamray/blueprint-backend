@@ -80,6 +80,16 @@ services:
       Jurisdiction__LogRetention: "1001.00:00:00"
       Jurisdiction__ContactRetention: "13.00:00:00"
       Jurisdiction__OrderRetention: "97.00:00:00"
+      Jurisdiction__ConsentRetention: "1009.00:00:00"
+      # ADR-120's reference values: every order email is a duty, so the journal governs push alone
+      # and today's mail is unchanged. notifications-api states the same list below.
+      Jurisdiction__Required__0: "order-placed/email"
+      Jurisdiction__Required__1: "order-confirmed/email"
+      Jurisdiction__Required__2: "order-cancelled/email"
+      Jurisdiction__Required__3: "payment-declined/email"
+      Jurisdiction__Required__4: "payment-refunded/email"
+      Jurisdiction__Required__5: "shipment-dispatched/email"
+      Jurisdiction__Required__6: "shipment-delivered/email"
       # ADR-052's give-up age: a notice a day late is worse than none, and an
       # operator lengthens it during an outage rather than a release.
       Delivery__GiveUpAge: "1.00:00:00"
@@ -115,6 +125,15 @@ services:
       # The authority, to validate inbound tokens (§11.2); read eagerly, so this line is what lets the host start.
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      # ADR-120's required pairs, the one jurisdiction member this host reads; the worker's list, as the
+      # preferences read must show what the send pass decides.
+      Jurisdiction__Required__0: "order-placed/email"
+      Jurisdiction__Required__1: "order-confirmed/email"
+      Jurisdiction__Required__2: "order-cancelled/email"
+      Jurisdiction__Required__3: "payment-declined/email"
+      Jurisdiction__Required__4: "payment-refunded/email"
+      Jurisdiction__Required__5: "shipment-dispatched/email"
+      Jurisdiction__Required__6: "shipment-delivered/email"
     # §13.5's readiness, asked by the host itself through HealthProbe, because
     # the image has no shell or HTTP client; the timeout outlasts the probe's.
     healthcheck:

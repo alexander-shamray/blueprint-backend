@@ -20,7 +20,8 @@ public sealed class JurisdictionOptionsTests
         ["Jurisdiction:TimeZone"] = NotificationsWorkerFactory.InventedTimeZone,
         ["Jurisdiction:LogRetention"] = NotificationsWorkerFactory.InventedLogRetention,
         ["Jurisdiction:ContactRetention"] = NotificationsWorkerFactory.InventedContactRetention,
-        ["Jurisdiction:OrderRetention"] = NotificationsWorkerFactory.InventedOrderRetention
+        ["Jurisdiction:OrderRetention"] = NotificationsWorkerFactory.InventedOrderRetention,
+        ["Jurisdiction:ConsentRetention"] = NotificationsWorkerFactory.InventedConsentRetention
     };
 
     /// <summary>The production binding and validator over a configuration of the test's own.</summary>
@@ -71,6 +72,9 @@ public sealed class JurisdictionOptionsTests
     [InlineData("Jurisdiction:Languages:1", "de", "Templates/order-placed.v1.de.txt")]
     [InlineData("Jurisdiction:Languages:1", "kk", "'kk' twice")]
     [InlineData("Jurisdiction:ContactRetention", "23:59:59", "StaleCeiling")]
+    [InlineData("Jurisdiction:ConsentRetention", null, "ConsentRetention")]
+    [InlineData("Jurisdiction:Required:0", "order-placed/sms", "order-placed/sms")]
+    [InlineData("Jurisdiction:Required:0", "order-placed", "Jurisdiction:Required:0")]
     public void Each_refusal_names_what_to_fix(string key, string? value, string named)
     {
         using ServiceProvider provider = Validating(With(key, value));
@@ -106,6 +110,40 @@ public sealed class JurisdictionOptionsTests
         Should
             .Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
             .Message.ShouldContain("Languages");
+    }
+
+    [Fact]
+    public void An_unstated_requirement_is_none_and_a_stated_one_binds_its_pairs()
+    {
+        // Configuration binds no key for an empty list, so absent is the only spelling of none (ADR-120).
+        using ServiceProvider none = Validating(Invented);
+        using ServiceProvider two = Validating(
+            new Dictionary<string, string?>(Invented)
+            {
+                ["Jurisdiction:Required:0"] = "order-placed/email",
+                ["Jurisdiction:Required:1"] = "shipment-delivered/push"
+            });
+
+        Should.NotThrow(() => none.GetRequiredService<IStartupValidator>().Validate());
+        Should.NotThrow(() => two.GetRequiredService<IStartupValidator>().Validate());
+        none.GetRequiredService<IOptions<NotificationsJurisdictionOptions>>().Value.Required.ShouldBeNull();
+        two.GetRequiredService<IOptions<NotificationsJurisdictionOptions>>().Value.Required
+            .ShouldBe(["order-placed/email", "shipment-delivered/push"]);
+    }
+
+    [Fact]
+    public void A_pair_required_twice_is_refused_as_the_typo_it_most_likely_is()
+    {
+        using ServiceProvider provider = Validating(
+            new Dictionary<string, string?>(Invented)
+            {
+                ["Jurisdiction:Required:0"] = "order-placed/email",
+                ["Jurisdiction:Required:1"] = "order-placed/email"
+            });
+
+        Should
+            .Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
+            .Message.ShouldContain("a second time");
     }
 
     [Fact]

@@ -211,10 +211,10 @@ The shape and the port range are `requireUrl`'s, with the scheme widened. */}}
 AddressSource__BaseUrl: {{ $addressSource | quote }}
 {{- end }}
 {{- if (.Values.jurisdiction).enabled }}
-{{- /* ADR-053 rule 1's three kinds, none defaulted: a language set, the zone dates
-are rendered in, and every other member a statutory window. Which members a
-host binds is its chart's to say, in capabilities.yaml, since a member removed
-outright renders nothing here. */}}
+{{- /* ADR-053 rule 1's kinds, none defaulted: a language set, the zone dates are
+rendered in, ADR-120's required pairs, and every other member a statutory
+window. Which members a host binds is its chart's to say, in capabilities.yaml,
+since a member removed outright renders nothing here. */}}
 {{- $jurisdiction := .Values.jurisdiction }}
 {{- if hasKey $jurisdiction "languages" }}
 {{- $languages := $jurisdiction.languages | default list }}
@@ -239,7 +239,24 @@ Jurisdiction__Languages__{{ $i }}: {{ $tag | quote }}
 {{- end }}
 Jurisdiction__TimeZone: {{ $zone | quote }}
 {{- end }}
-{{- range $key, $window := omit $jurisdiction "enabled" "languages" "timeZone" }}
+{{- if hasKey $jurisdiction "required" }}
+{{- /* ADR-120's duties, which an empty list states as none: configuration binds no
+key for an empty list, so null is what this chart refuses as unstated. */}}
+{{- if kindIs "invalid" $jurisdiction.required }}
+{{- fail "jurisdiction.required is unstated. ADR-120 makes the topic/channel pairs a jurisdiction obliges the service to send a value the deployment is given, as in [order-placed/email]; state [] for one that requires none." }}
+{{- end }}
+{{- if not (kindIs "slice" $jurisdiction.required) }}
+{{- fail "jurisdiction.required is not a list. ADR-120's pairs render one indexed key each, as §15.4 spells a list." }}
+{{- end }}
+{{- range $i, $pair := $jurisdiction.required }}
+{{- $named := include "commerce.require" (list $pair (printf "jurisdiction.required[%d] is blank: each entry is a topic/channel pair (ADR-120)." $i)) }}
+{{- if not (regexMatch "^[a-z][a-z0-9-]*/[a-z]+$" $named) }}
+{{- fail (printf "jurisdiction.required[%d] is %q, which is not a topic/channel pair this chart will accept, as in order-placed/email. Whether the service knows the pair is the host's to refuse at start (ADR-120)." $i $named) }}
+{{- end }}
+Jurisdiction__Required__{{ $i }}: {{ $named | quote }}
+{{- end }}
+{{- end }}
+{{- range $key, $window := omit $jurisdiction "enabled" "languages" "timeZone" "required" }}
 {{- $value := include "commerce.timeSpan" (list $window (printf "jurisdiction.%s" $key) (printf "jurisdiction.%s is required when jurisdiction.enabled: ADR-053 makes every window a value the deployment is given, and the host's jurisdiction options refuse to boot without it." $key) "The host's jurisdiction options bind it at start (ADR-053).") }}
 Jurisdiction__{{ upper (substr 0 1 $key) }}{{ substr 1 (len $key) $key }}: {{ $value | quote }}
 {{- end }}

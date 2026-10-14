@@ -44,6 +44,15 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         WHERE SubjectId = @SubjectId;
         """;
 
+    // Every entry keeps its pair, value, times, client and chain as evidence, and loses whom it was about. Over the
+    // subject's range, held, so an append runs wholly before or after it (ADR-120).
+    private const string AnonymiseConsentSql =
+        """
+        UPDATE notifications.ConsentEntries WITH (UPDLOCK, HOLDLOCK)
+        SET SubjectId = NULL, AnonymisedAt = @Now
+        WHERE SubjectId = @SubjectId;
+        """;
+
     public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(DeleteWaitingSql, subjectId, ct);
 
@@ -59,7 +68,13 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
     public Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(ClearDevicesSql, subjectId, ct);
 
-    private async Task<int> ExecuteAsync(string sql, Guid subjectId, CancellationToken ct)
+    public Task<int> AnonymiseConsentAsync(Guid subjectId, DateTimeOffset now, CancellationToken ct) =>
+        ExecuteAsync(AnonymiseConsentSql, new { SubjectId = subjectId, Now = now }, ct);
+
+    private Task<int> ExecuteAsync(string sql, Guid subjectId, CancellationToken ct) =>
+        ExecuteAsync(sql, new { SubjectId = subjectId }, ct);
+
+    private async Task<int> ExecuteAsync(string sql, object parameters, CancellationToken ct)
     {
         IDbContextTransaction? current = db.Database.CurrentTransaction;
 
@@ -75,7 +90,7 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         return await connection.ExecuteAsync(
             new CommandDefinition(
                 sql,
-                new { SubjectId = subjectId },
+                parameters,
                 current.GetDbTransaction(),
                 cancellationToken: ct));
     }

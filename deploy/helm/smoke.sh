@@ -1172,11 +1172,29 @@ check 'notifications: the contact source is in the ConfigMap' \
 check 'notifications: its realm is in the ConfigMap' in_configmap "$N" '^ *ContactSource__Realm: "commerce"$'
 check 'notifications: the language set is in the ConfigMap' in_configmap "$N" '^ *Jurisdiction__Languages__0: "en"$'
 check 'notifications: the zone is in the ConfigMap' in_configmap "$N" '^ *Jurisdiction__TimeZone: "Europe/London"$'
-check 'notifications: its three windows are in the ConfigMap' \
+check 'notifications: its four windows are in the ConfigMap' \
     awk '/^kind: ConfigMap$/ { in_cm = 1 }
          /^---$/ { in_cm = 0 }
          in_cm && /^ *Jurisdiction__[A-Za-z]+Retention: / { n++ }
-         END { exit n == 3 ? 0 : 1 }' "$N"
+         END { exit n == 4 ? 0 : 1 }' "$N"
+check 'notifications: the required pair is in the ConfigMap' \
+    in_configmap "$N" '^ *Jurisdiction__Required__0: "order-placed/email"$'
+check 'notifications: two required pairs render two indexed keys, in order' \
+    sh -c '"$0" template notifications "$1" --set-string "image.tag=$2" $3 \
+        --set-string "jurisdiction.required={order-placed/email,shipment-delivered/push}" |
+        grep -q "Jurisdiction__Required__1: \"shipment-delivered/push\""' \
+    "$HELM" "$CHARTS_DIR/notifications" "$TAG" "$(overlay_for notifications) $NETPOL_OVERLAY"
+# From a values file, since --set's {} is a list of one empty string; and without the overlay's pair, which would
+# override it.
+printf 'jurisdiction:\n  required: []\n' >"$OUT/none-required-values.yaml"
+if "$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+    $(field notifications overlay | awk 'index($0, "jurisdiction.required=") != 1' |
+        sed 's/^/--set-string /' | tr '\n' ' ') -f "$OUT/none-required-values.yaml" >"$OUT/none-required.txt" 2>&1; then
+    check 'notifications: a stated none renders no required pair' \
+        sh -c '! grep -q "Jurisdiction__Required__" "$0"' "$OUT/none-required.txt"
+else
+    fail 'notifications: a stated none fails the render — it must render, with no required pair'
+fi
 check 'notifications: the give-up age is in the ConfigMap' in_configmap "$N" '^ *Delivery__GiveUpAge: "1[.]00:00:00"$'
 check "notifications: the token is asked for under ADR-052's roles scope" \
     in_configmap "$N" '^ *Identity__Client__Scope: "roles"$'
@@ -1256,7 +1274,8 @@ refuses_chart notifications 'the jurisdiction off and cleared fails the render' 
     'jurisdiction.enabled is false on the notifications chart' \
     --set jurisdiction.enabled=false --set-string 'jurisdiction.languages=' \
     --set-string 'jurisdiction.timeZone=' --set-string 'jurisdiction.logRetention=' \
-    --set-string 'jurisdiction.contactRetention=' --set-string 'jurisdiction.orderRetention='
+    --set-string 'jurisdiction.contactRetention=' --set-string 'jurisdiction.orderRetention=' \
+    --set-string 'jurisdiction.consentRetention=' --set-string 'jurisdiction.required='
 refuses_removed notifications jurisdiction.languages \
     'jurisdiction.languages is required on the notifications chart'
 refuses_removed notifications jurisdiction.orderRetention \
@@ -1276,6 +1295,34 @@ refuses_chart notifications 'client credentials off with a client id fails the r
 refuses_chart notifications 'client credentials off and cleared fails the render' \
     'identity.clientCredentials is false on the notifications chart' \
     --set identity.clientCredentials=false --set-string 'identity.clientId='
+
+# ADR-120's required pairs, which both Notifications hosts read and both charts
+# state: an empty list is a stated none, and the chart's own null is what a
+# values file that never states them renders. Helm drops a key its chart sets
+# to null, so the capability check refuses that; a null a values file sets
+# survives as nil, so the library's helper refuses that one.
+NA="$OUT/notifications-api-capability.yaml"
+"$HELM" template notifications-api "$CHARTS_DIR/notifications-api" $NETPOL_OVERLAY \
+    --set-string image.tag="$TAG" $(overlay_for notifications-api) >"$NA"
+check 'notifications-api: the required pairs are in the ConfigMap, in order' \
+    in_configmap "$NA" '^ *Jurisdiction__Required__0: "order-placed/email"$'
+check "notifications-api: none of the worker's jurisdiction members is in the ConfigMap" \
+    sh -c '! grep -Eq "Jurisdiction__(Languages|TimeZone|[A-Za-z]+Retention)" "$0"' "$NA"
+for chart in notifications notifications-api; do
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+        $(field "$chart" overlay | awk 'index($0, "jurisdiction.required=") != 1' |
+            sed 's/^/--set-string /' | tr '\n' ' ') >"$OUT/unstated.txt" 2>&1; then
+        fail "$chart: the required pairs left at the chart's null render — they must not"
+    else
+        check "$chart: the required pairs left at the chart's null fail the render" \
+            grep -q "jurisdiction.required is required on the $chart chart" "$OUT/unstated.txt"
+    fi
+    refuses_chart "$chart" 'a required pair that is not one fails the render' \
+        'not a topic/channel pair this chart will accept' --set-string 'jurisdiction.required={order-placed}'
+    refuses_removed "$chart" jurisdiction.required 'jurisdiction.required is unstated'
+done
+refuses_chart notifications-api 'a jurisdiction the capability is off for fails the render' \
+    'but a jurisdiction setting is set' --set jurisdiction.enabled=false
 
 # --------------------------------------------------------------------------
 section 'Probes — three per workload (§13.5)'

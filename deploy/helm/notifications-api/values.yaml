@@ -58,6 +58,14 @@ podDisruptionBudget:
   enabled: true
   minAvailable: 2
 
+# ADR-120's required pairs, the one jurisdiction member this host reads: the
+# preferences read shows them as required and a write naming one is refused.
+# The worker's chart states the same list, which decides the sends, so the two
+# are stated alike; [] states none, and unstated is refused.
+jurisdiction:
+  enabled: true
+  required: ~
+
 # Spread across nodes as a rule and across zones as a preference (§15.3).
 topologySpread:
   maxSkew: 1

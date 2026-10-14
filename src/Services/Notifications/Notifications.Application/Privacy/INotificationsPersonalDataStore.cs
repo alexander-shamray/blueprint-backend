@@ -17,4 +17,7 @@ public interface INotificationsPersonalDataStore
 
     /// <summary>Clears the subject's device rows as a sign-out does, keeping their sequences (ADR-117).</summary>
     Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct);
+
+    /// <summary>Takes the subject off every journal entry and stamps when, keeping the rest (ADR-120).</summary>
+    Task<int> AnonymiseConsentAsync(Guid subjectId, DateTimeOffset now, CancellationToken ct);
 }

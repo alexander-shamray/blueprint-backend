@@ -154,9 +154,13 @@ contactSource:
   baseUrl: ""
   realm: commerce
 
-# ADR-053's three kinds — a language set, the zone dates are rendered in, and
-# the statutory windows — none defaulted: each is a fact about where a
-# deployment runs, refused rather than guessed, at render and again at start.
+# ADR-053's kinds — a language set, the zone dates are rendered in, the
+# statutory windows, and ADR-120's required pairs — none defaulted: each is a
+# fact about where a deployment runs, refused rather than guessed, at render
+# and again at start. `required` lists the topic/channel pairs the service is
+# obliged to send, which take no preference; [] states none, and unstated is
+# refused. notifications-api's chart states the same list, as both hosts read
+# it.
 jurisdiction:
   enabled: true
   languages: []
@@ -164,6 +168,8 @@ jurisdiction:
   logRetention: ""
   contactRetention: ""
   orderRetention: ""
+  consentRetention: ""
+  required: ~
 
 # ADR-052's give-up age: how long a notification stays Pending before it is
 # given up. Defaulted, because a notice a day late is worse than none in every

@@ -159,13 +159,18 @@ public sealed class ServiceFixture()
     public CommitFault LoseNextSentAcknowledgement() => Factory.CommitFaults.Arm(afterCommit: true);
 
     /// <summary>A second host over the same database, broker and stubs, with a breaker of its own.</summary>
-    public NotificationsWorkerFactory NewWorkerHost(string? relayHost = null, int? relayPort = null) =>
+    /// <param name="required">The pairs this host's jurisdiction requires, each <c>topic/channel</c> (ADR-120).</param>
+    public NotificationsWorkerFactory NewWorkerHost(
+        string? relayHost = null,
+        int? relayPort = null,
+        IReadOnlyList<string>? required = null) =>
         new(
             ConnectionString,
             BrokerConnectionString,
             mailHost: relayHost ?? Relay.Host,
             mailPort: relayPort ?? Relay.Port,
-            contactSourceBaseUrl: Keycloak.Urls[0] + "/");
+            contactSourceBaseUrl: Keycloak.Urls[0] + "/",
+            required: required);
 
     protected override NotificationsWorkerFactory CreateFactory() => NewWorkerHost();
 
@@ -361,8 +366,9 @@ public sealed class ServiceFixture()
             notificationId,
             (int)age.TotalSeconds);
 
-    /// <summary>Runs exactly one pass of ADR-053's three windows, with no timer.</summary>
-    public Task<(int Notifications, int Contacts, int Orders, int Devices)> PurgeNotificationsRetentionAsync() =>
+    /// <summary>Runs exactly one pass of the retention service's five windows, with no timer.</summary>
+    public Task<(int Notifications, int Contacts, int Orders, int Devices, int Consent)>
+        PurgeNotificationsRetentionAsync() =>
         Factory.Services
             .GetRequiredService<NotificationsRetentionService>()
             .PurgeAsync(TestContext.Current.CancellationToken);

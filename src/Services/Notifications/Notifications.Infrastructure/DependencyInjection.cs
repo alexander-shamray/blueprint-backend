@@ -2,6 +2,7 @@ using Common.Infrastructure.Transport;
 using Notifications.Application;
 using Notifications.Application.Contacts;
 using Notifications.Application.Devices;
+using Notifications.Application.Preferences;
 using Notifications.Application.Privacy;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
@@ -67,6 +68,18 @@ public static class DependencyInjection
         // ADR-117's device rows: the API writes them, and the worker's stale pass and erasure clear them.
         services.AddScoped<IDeviceStore, SqlDeviceStore>();
 
+        // ADR-120's journal: the API appends and reads it, and the worker reads it at send time.
+        services.AddScoped<IConsentJournal, SqlConsentJournal>();
+
+        // ADR-053's one options class, in both hosts since both read the required pairs; each host validates the
+        // members it reads, so the API is not refused for the worker's windows (ADR-120).
+        services
+            .AddOptions<NotificationsJurisdictionOptions>()
+            .BindConfiguration(NotificationsJurisdictionOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton(sp =>
+            RequiredPairsRule.From(sp.GetRequiredService<IOptions<NotificationsJurisdictionOptions>>()));
+
         // §6.5's read side, a singleton as E.2.6's sample has it, on §7.1's runtime key.
         services.AddSingleton<IDbConnectionFactory>(
             new SqlConnectionFactory(configuration.GetConnectionString("Notifications")!));
@@ -76,7 +89,13 @@ public static class DependencyInjection
             .AddHealthChecks()
             .AddSqlServer(configuration.GetConnectionString("Notifications")!, name: "sql", tags: ["ready"]);
 
-        return host == NotificationsHost.Worker ? services.AddWorkerHalf(configuration) : services;
+        if (host == NotificationsHost.Api)
+        {
+            services.AddSingleton<IValidateOptions<NotificationsJurisdictionOptions>, RequiredPairsValidator>();
+            return services;
+        }
+
+        return services.AddWorkerHalf(configuration);
     }
 
     private static IServiceCollection AddWorkerHalf(this IServiceCollection services, IConfiguration configuration)
@@ -107,11 +126,7 @@ public static class DependencyInjection
         // The bus (§9). AddMassTransit registers its own readiness check.
         services.AddMassTransitMessaging(configuration);
 
-        // ADR-053's one options class, bound beside the renderer that reads its language set and zone (§15.4).
-        services
-            .AddOptions<NotificationsJurisdictionOptions>()
-            .BindConfiguration(NotificationsJurisdictionOptions.SectionName)
-            .ValidateOnStart();
+        // The whole of ADR-053's class, validated beside the renderer that reads its language set and zone (§15.4).
         services.AddSingleton<
             IValidateOptions<NotificationsJurisdictionOptions>,
             NotificationsJurisdictionValidator>();

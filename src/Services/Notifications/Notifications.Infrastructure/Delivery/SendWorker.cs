@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Notifications.Application.Contacts;
 using Notifications.Application.Delivery;
 using Notifications.Application.Mail;
+using Notifications.Application.Preferences;
 using Notifications.Application.Privacy;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
@@ -156,6 +157,13 @@ public sealed class SendWorker(
             new EventId(17, nameof(ErasedCustomer)),
             "Notification {NotificationId} on order {OrderId} names an erased customer; nothing is fetched or sent, " +
             "and the erasure deletes the row (ADR-101).");
+
+    private static readonly Action<ILogger, Guid, Guid, Exception?> OptedOut =
+        LoggerMessage.Define<Guid, Guid>(
+            LogLevel.Information,
+            new EventId(18, nameof(OptedOut)),
+            "Notification {NotificationId} on order {OrderId} is suppressed: its customer's newest consent entry " +
+            "withdraws it, so nothing is fetched or sent (ADR-120).");
 
     public string SwitchName => Name;
 
@@ -325,6 +333,27 @@ public sealed class SendWorker(
         if (work.CustomerId is null)
             await CommitAsync(sp, work, (n, _) => n.AssignCustomer(customer), ct);
 
+        // Decided when the send is made, so a withdrawal reaches the next one; a resend was decided at its intent,
+        // which carries the entry, and is not asked again (ADR-120).
+        Guid? consentEntry = null;
+
+        if (work.SendStartedAt is null)
+        {
+            PreferenceState consent = await ConsentAsync(sp, customer, work.TemplateKey, ct);
+
+            if (!consent.OptedIn)
+            {
+                bool optedOut = await CommitAsync(sp, work, (n, now) => n.OptOut(consent.Version, now), ct);
+
+                if (optedOut)
+                    OptedOut(log, work.NotificationId, work.OrderId, null);
+
+                return optedOut;
+            }
+
+            consentEntry = consent.Version;
+        }
+
         if (await ContactAsync(sp, work, customer, reads, ct) is not ContactLookup.Found contact)
         {
             bool unknown = await CommitAsync(
@@ -351,7 +380,7 @@ public sealed class SendWorker(
             bool started = await CommitAsync(
                 sp,
                 work,
-                (n, now) => n.StartSend(message.TemplateVersion, message.LanguageList, now),
+                (n, now) => n.StartSend(message.TemplateVersion, message.LanguageList, consentEntry, now),
                 ct);
 
             if (!started)
@@ -388,6 +417,24 @@ public sealed class SendWorker(
             MailResult.Refused refused => await RefusedAsync(sp, work, refused.Reason, ct),
             _ => throw new InvalidOperationException($"Unknown relay answer {result.GetType().Name}.")
         };
+    }
+
+    /// <summary>The mail pair under its requirement, the customer's newest entry or its default (ADR-120).</summary>
+    private static async Task<PreferenceState> ConsentAsync(
+        IServiceProvider sp,
+        Guid customer,
+        string topic,
+        CancellationToken ct)
+    {
+        ConsentPair pair = new(topic, ConsentVocabulary.Email);
+        RequiredPairs required = sp.GetRequiredService<RequiredPairs>();
+
+        // A required pair takes no entry, so the journal is not asked for one.
+        ConsentEntry? newest = required.Contains(pair)
+            ? null
+            : await sp.GetRequiredService<IConsentJournal>().NewestAsync(customer, pair, ct);
+
+        return ConsentRules.StateOf(pair, required, newest);
     }
 
     /// <summary>The customer's contact, read once a pass for all their rows (ADR-052).</summary>

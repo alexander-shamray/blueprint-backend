@@ -1,0 +1,11 @@
+{{- /* This host binds NotificationsJurisdictionOptions for ADR-120's required pairs
+alone, and reads an absent list as none, so a values file that switched the
+member off or removed it would render cleanly and let a subject withdraw a pair
+the worker still sends. So this chart refuses both, as the worker's refuses its
+own members. */}}
+{{- if not (.Values.jurisdiction).enabled }}
+{{- fail "jurisdiction.enabled is false on the notifications-api chart. The host binds NotificationsJurisdictionOptions for its required pairs (ADR-120), which the worker's chart states too." }}
+{{- end }}
+{{- if not (hasKey .Values.jurisdiction "required") }}
+{{- fail "jurisdiction.required is required on the notifications-api chart: the host reads ADR-120's required pairs, and a member removed outright renders no key at all." }}
+{{- end }}

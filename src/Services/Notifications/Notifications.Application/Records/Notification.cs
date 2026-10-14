@@ -27,6 +27,10 @@ public sealed class Notification
 
     public string? Languages { get; private set; }
 
+    /// <summary>The journal entry a send or an opt-out was decided under; null where a default or a duty was.</summary>
+    /// <remarks>Stamped once, with the intent or the opt-out, so the row shows its consent (ADR-120).</remarks>
+    public Guid? ConsentEntryId { get; private set; }
+
     /// <summary>The values the template's placeholders take, as their own writer formats them.</summary>
     public string Parameters { get; private set; } = "";
 
@@ -110,6 +114,19 @@ public sealed class Notification
         return true;
     }
 
+    /// <summary>The subject's newest entry for the pair withdrew it, so nothing is fetched or sent (ADR-120).</summary>
+    public bool OptOut(Guid? consentEntryId, DateTimeOffset now)
+    {
+        if (Status != NotificationStatus.Pending || SendStartedAt is not null)
+            return false;
+
+        Status = NotificationStatus.Suppressed;
+        Reason = NotificationReasons.OptedOut;
+        ConsentEntryId = consentEntryId;
+        CompletedAt = now;
+        return true;
+    }
+
     /// <summary>A terminal answer whose reason is one of <see cref="NotificationReasons.All"/>.</summary>
     public bool MarkUndeliverable(string reason, DateTimeOffset now)
     {
@@ -125,9 +142,9 @@ public sealed class Notification
         return true;
     }
 
-    /// <summary>The intent, before the send: the version and languages rendered, and when it began.</summary>
+    /// <summary>The intent, before the send: the version, languages and consent entry it ran under, and when.</summary>
     /// <remarks>Once only: a row claimed with the intent set is resent under it, not restamped (ADR-052).</remarks>
-    public bool StartSend(int templateVersion, string languages, DateTimeOffset now)
+    public bool StartSend(int templateVersion, string languages, Guid? consentEntryId, DateTimeOffset now)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(templateVersion, 1);
         Require(languages, NotificationLimits.MaxLanguagesLength, nameof(languages));
@@ -137,6 +154,7 @@ public sealed class Notification
 
         TemplateVersion = templateVersion;
         Languages = languages;
+        ConsentEntryId = consentEntryId;
         SendStartedAt = now;
         return true;
     }

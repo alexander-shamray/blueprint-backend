@@ -9,6 +9,7 @@ public class NotificationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 2, 9, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Later = Now.AddMinutes(5);
+    private static readonly Guid Entry = Guid.CreateVersion7();
 
     private static Notification Pending(
         Guid? eventId = null,
@@ -27,7 +28,7 @@ public class NotificationTests
     private static Notification Started()
     {
         Notification notification = Pending();
-        notification.StartSend(1, "en", Now).ShouldBeTrue();
+        notification.StartSend(1, "en", null, Now).ShouldBeTrue();
         return notification;
     }
 
@@ -35,6 +36,12 @@ public class NotificationTests
     public static TheoryData<string, Func<Notification, bool>, NotificationStatus, string?> Moves => new()
     {
         { "a decline the customer cancelled", n => n.Suppress(Later), NotificationStatus.Suppressed, null },
+        {
+            "the customer's newest consent entry withdraws the pair",
+            n => n.OptOut(Entry, Later),
+            NotificationStatus.Suppressed,
+            NotificationReasons.OptedOut
+        },
         {
             "the owner answers that the customer does not exist",
             n => n.MarkUndeliverable(NotificationReasons.NoSuchCustomer, Later),
@@ -65,7 +72,7 @@ public class NotificationTests
             NotificationStatus.Undeliverable,
             NotificationReasons.Erased
         },
-        { "the send is about to start", n => n.StartSend(2, "en,kk", Later), NotificationStatus.Pending, null },
+        { "the send is about to start", n => n.StartSend(2, "en,kk", null, Later), NotificationStatus.Pending, null },
     };
 
     [Fact]
@@ -106,11 +113,38 @@ public class NotificationTests
     {
         Notification notification = Pending();
 
-        notification.StartSend(2, "en,kk", Later).ShouldBeTrue();
+        notification.StartSend(2, "en,kk", null, Later).ShouldBeTrue();
 
         notification.TemplateVersion.ShouldBe(2);
         notification.Languages.ShouldBe("en,kk");
         notification.SendStartedAt.ShouldBe(Later);
+    }
+
+    [Fact]
+    public void The_intent_stamps_the_consent_entry_it_was_decided_under()
+    {
+        Notification decided = Pending();
+        Notification defaulted = Pending();
+
+        decided.StartSend(1, "en", Entry, Later).ShouldBeTrue();
+        defaulted.StartSend(1, "en", null, Later).ShouldBeTrue();
+
+        decided.ConsentEntryId.ShouldBe(Entry, "ADR-120: the record of a send names its entry");
+        defaulted.ConsentEntryId.ShouldBeNull("a default or a requirement decided it");
+    }
+
+    [Fact]
+    public void An_opt_out_names_the_entry_and_never_reaches_a_send_already_under_way()
+    {
+        Notification optedOut = Pending();
+        optedOut.OptOut(Entry, Later).ShouldBeTrue();
+        optedOut.ConsentEntryId.ShouldBe(Entry);
+
+        // ADR-120's residual: a send whose intent committed before the withdrawal is still made, and resent.
+        Notification started = Started();
+        started.OptOut(Entry, Later).ShouldBeFalse();
+        started.Status.ShouldBe(NotificationStatus.Pending);
+        started.ConsentEntryId.ShouldBeNull();
     }
 
     [Fact]
@@ -141,7 +175,7 @@ public class NotificationTests
         // A row claimed with the intent already set is resent under it, never restamped.
         Notification notification = Started();
 
-        notification.StartSend(3, "ru", Later).ShouldBeFalse();
+        notification.StartSend(3, "ru", null, Later).ShouldBeFalse();
 
         notification.TemplateVersion.ShouldBe(1);
         notification.Languages.ShouldBe("en");
@@ -201,6 +235,14 @@ public class NotificationTests
     }
 
     [Fact]
+    public void An_opt_out_is_a_suppression_and_never_an_undeliverable_reason()
+    {
+        // ADR-120's opted_out ends a row Suppressed; MarkUndeliverable refuses it as the typo it would be there.
+        Should.Throw<ArgumentOutOfRangeException>(() =>
+            Pending().MarkUndeliverable(NotificationReasons.OptedOut, Later));
+    }
+
+    [Fact]
     public void An_empty_event_correlation_or_order_id_is_refused_at_the_door()
     {
         Should.Throw<ArgumentOutOfRangeException>(() => Pending(eventId: Guid.Empty));
@@ -225,9 +267,9 @@ public class NotificationTests
         Should.Throw<ArgumentException>(() => Pending(parameters: ""));
         Should.Throw<ArgumentOutOfRangeException>(() =>
             Pending(templateKey: new string('k', NotificationLimits.MaxTemplateKeyLength + 1)));
-        Should.Throw<ArgumentOutOfRangeException>(() => Pending().StartSend(0, "en", Later));
+        Should.Throw<ArgumentOutOfRangeException>(() => Pending().StartSend(0, "en", null, Later));
         Should.Throw<ArgumentOutOfRangeException>(() =>
-            Pending().StartSend(1, new string('x', NotificationLimits.MaxLanguagesLength + 1), Later));
+            Pending().StartSend(1, new string('x', NotificationLimits.MaxLanguagesLength + 1), null, Later));
     }
 
     private static IEnumerable<Notification> Terminals()
@@ -241,6 +283,9 @@ public class NotificationTests
         Notification sent = Started();
         sent.MarkSent(Now);
 
-        return [suppressed, undeliverable, sent];
+        Notification optedOut = Pending();
+        optedOut.OptOut(Entry, Now);
+
+        return [suppressed, undeliverable, sent, optedOut];
     }
 }

@@ -57,8 +57,9 @@ public static class DependencyInjection
         return services;
     }
 
-    /// <summary>The namespaces whose handlers the API host serves: ADR-117's device rows.</summary>
-    public static readonly IReadOnlyList<string> ApiNamespaces = ["Notifications.Application.Devices"];
+    /// <summary>The namespaces whose handlers the API host serves: ADR-117's devices and ADR-120's journal.</summary>
+    public static readonly IReadOnlyList<string> ApiNamespaces =
+        ["Notifications.Application.Devices", "Notifications.Application.Preferences"];
 
     private static void KeepOnlyTheApisHandlers(IServiceCollection services)
     {
