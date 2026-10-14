@@ -463,9 +463,9 @@ expectation nobody holds.
 set, Shipping with a Worker in place of the Api, and Notifications with no
 Domain and both a Worker and an Api, the second added after its render
 (ADR-118). Planned, per §4.1 — do not invent a different shape for it:
-`deploy/` still owes `k8s/`, and `helm/` and `k8s/` are not alternatives: §4.1 gives `k8s/` the raw manifests "where Helm is
-overkill", which is a decision no chapter has yet taken about any particular
-object.
+`deploy/` still owes `k8s/`, and `helm/` and `k8s/` are not alternatives:
+§4.1 gives `k8s/` the raw manifests "where Helm is overkill", which is a
+decision no chapter has yet taken about any particular object.
 
 Three things sit outside that tree because §4.1 does not draw them:
 `global.json`, whose SDK pin §4.1's prose relies on for the `.slnx` floor;
