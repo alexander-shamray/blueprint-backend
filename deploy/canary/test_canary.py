@@ -1856,6 +1856,11 @@ class SharedValuesTests(unittest.TestCase):
 
         self.assertEqual([], canary.values_agree("push.apps", mine, theirs, "web-bff"))
 
+    def test_a_member_named_twice_is_the_same_member(self) -> None:
+        mine, theirs = {"push": {"apps": ["a", "a", "b"]}}, {"push": {"apps": ["b", "a"]}}
+
+        self.assertEqual([], canary.values_agree("push.apps", mine, theirs, "web-bff"))
+
     def test_a_member_only_one_release_names_is_a_difference_that_says_which(self) -> None:
         mine = {"jurisdiction": {"required": ["order-placed/email", "order-confirmed/email"]}}
         theirs = {"jurisdiction": {"required": ["order-placed/email"]}}
