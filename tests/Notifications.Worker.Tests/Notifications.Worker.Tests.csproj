@@ -32,6 +32,8 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <!-- Named although transitive, because the live suite reads the token Keycloak issued. -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+    <!-- The spans the SDK exports, so an APNs token is proved absent from what leaves the process (ADR-117). -->
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
   </ItemGroup>
 
   <ItemGroup>

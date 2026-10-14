@@ -35,6 +35,16 @@ services:
       MP_ENABLE_CHAOS: "true"
     ports: [ "127.0.0.1:1025:1025", "127.0.0.1:8025:8025" ]
 
+  # FCM, Google's token endpoint and APNs behind one port, scripted by the device token's prefix
+  # (../push-simulator/README.md). The mappings are the ones the adapters' tests load, and the tag is
+  # Directory.Packages.props' WireMock.Net pin, which a test holds. Loopback alone, as every simulator's is.
+  push-simulator:
+    image: sheyenrath/wiremock.net:2.12.0
+    command: [ "--ReadStaticMappings", "true" ]
+    volumes:
+      - ../push-simulator/mappings:/app/__admin/mappings:ro
+    ports: [ "127.0.0.1:5192:80" ]
+
   notifications-worker:
     build:
       context: ../../..
@@ -62,6 +72,20 @@ services:
       Mail__Port: "1025"
       Mail__From: "Commerce <no-reply@commerce.test>"
       Mail__Security: "None"
+      # The apps the BFF's unit names, so every token it registers has a provider here. Plain HTTP and no key are
+      # Development's alone: the worker generates each signing key, and the simulator verifies no signature, so
+      # this unit carries no Fcm__PrivateKey or Apns__PrivateKey (docs/secrets.md).
+      Push__Apps__0__AppId: "com.example.shop"
+      Push__Apps__0__Platform: "fcm"
+      Push__Apps__1__AppId: "com.example.shop.ios"
+      Push__Apps__1__Platform: "apns"
+      Fcm__BaseUrl: "http://push-simulator/"
+      Fcm__TokenUri: "http://push-simulator/token"
+      Fcm__ProjectId: "commerce-local"
+      Fcm__ClientEmail: "notifications@commerce-local.example.invalid"
+      Apns__BaseUrl: "http://push-simulator/"
+      Apns__TeamId: "LOCALTEAM1"
+      Apns__KeyId: "LOCALKEY01"
       # ADR-052's contact read: the realm's admin API, under the realm that issues this host's token. Read and
       # checked at start; plain HTTP is Development's alone (§15.4).
       ContactSource__BaseUrl: "http://keycloak:8080/"
@@ -105,6 +129,7 @@ services:
       notifications-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
       mailpit: { condition: service_healthy }
+      push-simulator: { condition: service_started }
       # The first contact read asks the realm for a token, which races the import under service_started.
       keycloak: { condition: service_healthy }
 

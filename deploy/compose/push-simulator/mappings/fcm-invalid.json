@@ -1,0 +1,43 @@
+{
+  "Guid": "5b1e0c70-0004-4000-8000-000000000004",
+  "Title": "FCM: invalid- answers 403 SENDER_ID_MISMATCH",
+  "Priority": 2,
+  "Request": {
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/v1/projects/[^/]+/messages:send$"
+        }
+      ]
+    },
+    "Methods": [
+      "POST"
+    ],
+    "Body": {
+      "Matcher": {
+        "Name": "RegexMatcher",
+        "Pattern": "\"token\"\\s*:\\s*\"invalid-"
+      }
+    }
+  },
+  "Response": {
+    "StatusCode": 403,
+    "Headers": {
+      "Content-Type": "application/json"
+    },
+    "BodyAsJson": {
+      "error": {
+        "code": 403,
+        "message": "Simulated.",
+        "status": "PERMISSION_DENIED",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError",
+            "errorCode": "SENDER_ID_MISMATCH"
+          }
+        ]
+      }
+    }
+  }
+}

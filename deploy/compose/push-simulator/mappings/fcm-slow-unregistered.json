@@ -1,0 +1,44 @@
+{
+  "Guid": "5b1e0c70-0008-4000-8000-000000000008",
+  "Title": "FCM: slow-unregistered- answers 404 UNREGISTERED, held for a second",
+  "Priority": 1,
+  "Request": {
+    "Path": {
+      "Matchers": [
+        {
+          "Name": "RegexMatcher",
+          "Pattern": "^/v1/projects/[^/]+/messages:send$"
+        }
+      ]
+    },
+    "Methods": [
+      "POST"
+    ],
+    "Body": {
+      "Matcher": {
+        "Name": "RegexMatcher",
+        "Pattern": "\"token\"\\s*:\\s*\"slow-unregistered-"
+      }
+    }
+  },
+  "Response": {
+    "StatusCode": 404,
+    "Headers": {
+      "Content-Type": "application/json"
+    },
+    "BodyAsJson": {
+      "error": {
+        "code": 404,
+        "message": "Simulated.",
+        "status": "NOT_FOUND",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.firebase.fcm.v1.FcmError",
+            "errorCode": "UNREGISTERED"
+          }
+        ]
+      }
+    },
+    "Delay": 1000
+  }
+}
