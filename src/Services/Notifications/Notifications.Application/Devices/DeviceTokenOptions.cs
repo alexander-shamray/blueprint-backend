@@ -7,7 +7,9 @@ namespace Notifications.Application.Devices;
 /// </remarks>
 public sealed record DeviceTokenOptions
 {
-    /// <summary>The 270 days after which FCM expires an inactive token itself; a longer window keeps dead rows.</summary>
+    /// <summary>
+    /// The 270 days after which FCM expires an inactive token itself; a longer window keeps dead rows.
+    /// </summary>
     private static readonly TimeSpan MaximumStaleAfter = TimeSpan.FromDays(270);
 
     /// <summary>ADR-117's numbers: thirty days unseen, ten rows a subject, a step of a thousand.</summary>
