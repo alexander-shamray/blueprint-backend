@@ -1973,10 +1973,12 @@ class SharedValuesTests(unittest.TestCase):
         """A superset: a list member may read as a key, which refuses; a pinned key never reads as none."""
         for argument in [
             "a=x{y,push.apps=z", "a=x{y,push.apps=z}", "a=}x,push.apps=z,c={", "a=b={x,push.apps=y}",
-            "'x=a" + chr(92) + ",push.apps=c'", "x={a,b},push.apps=1",
+            "'x=a" + chr(92) + ",push.apps=c'", "x={a,b},push.apps=1", '"push.apps"=x', 'push."apps"=x',
         ]:
             with self.subTest(argument=argument):
                 self.assertIn("push.apps", canary._pinned_keys([f"helm upgrade r c --set {argument}"]))
+        continued = ["helm upgrade r c --set " + chr(92), "  push.apps=x --wait"]
+        self.assertIn("push.apps", canary._pinned_keys(continued))
         self.assertEqual({"image.tag"}, canary._pinned_keys(['helm upgrade r c --set-string image.tag="$TAG"']))
 
 
