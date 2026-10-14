@@ -1981,7 +1981,6 @@ class SharedValuesTests(unittest.TestCase):
         self.assertIn("push.apps", canary._pinned_keys(continued))
         self.assertEqual({"image.tag"}, canary._pinned_keys(['helm upgrade r c --set-string image.tag="$TAG"']))
 
-
     def test_a_comparison_of_the_running_values_is_refused(self) -> None:
         """The running values carry the old chart's defaults, so a changed default would pass unseen."""
         running = self.shipped.replace('--values "$RUNNER_TEMP/candidate.json"', '--values "$RUNNER_TEMP/stable.json"')
