@@ -1562,7 +1562,7 @@ def _shared_values_reads(name: str, workloads: dict) -> list[str]:
         back = workloads[peer].get("sharesValues")
         if isinstance(back, dict) and name in back:
             failures.append(
-                f"workloads.{name} and workloads.{peer} each declare the values they share, and one "
+                f"workloads.{name} and workloads.{peer} each declare sharesValues for the other, and one "
                 "declaration is the pair's owner: drop one of them"
             )
     return failures
