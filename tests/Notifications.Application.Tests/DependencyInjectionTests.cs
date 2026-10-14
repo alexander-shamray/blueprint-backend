@@ -123,6 +123,21 @@ public class DependencyInjectionTests
 
     // The first handler of either kind and the first validator each bring back their own registration test (§6.2).
 
+    [Theory]
+    [InlineData(NotificationsHost.Api)]
+    [InlineData(NotificationsHost.Worker)]
+    public void Both_hosts_register_adr_117s_numbers_as_a_value(NotificationsHost host)
+    {
+        ServiceCollection services = new();
+
+        services.AddNotificationsApplication(host);
+
+        ServiceDescriptor options = services
+            .Where(d => d.ServiceType == typeof(Devices.DeviceTokenOptions))
+            .ShouldHaveSingleItem();
+        options.ImplementationInstance.ShouldBe(new Devices.DeviceTokenOptions());
+    }
+
     [Fact]
     public void The_api_host_keeps_the_device_handlers_and_none_of_the_workers()
     {

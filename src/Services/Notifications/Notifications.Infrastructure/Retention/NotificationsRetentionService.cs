@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Notifications.Infrastructure.Devices;
+using Notifications.Application.Devices;
 using Notifications.Infrastructure.Jurisdiction;
 
 namespace Notifications.Infrastructure.Retention;
@@ -123,13 +123,13 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
     public NotificationsRetentionService(
         IServiceScopeFactory scopes,
         IOptions<NotificationsJurisdictionOptions> windows,
-        IOptions<DeviceTokenOptions> devices,
+        DeviceTokenOptions devices,
         ILogger<NotificationsRetentionService> log,
         OperatorSwitches? switches = null)
     {
         _scopes = scopes;
         _windows = windows.Value;
-        _devices = devices.Value;
+        _devices = devices;
         _log = log;
         _switches = switches;
     }

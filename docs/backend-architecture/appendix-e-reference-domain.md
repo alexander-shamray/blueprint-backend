@@ -1779,9 +1779,6 @@ code reads it, and the host refuses to start without a required one.
 | `Jurisdiction__ContactRetention` | Config | Helm `jurisdiction.contactRetention` → ConfigMap | ✓ — **Notifications only**; ADR-052's contact row's window, refused at start when shorter than `ContactOptions.StaleCeiling` |
 | `Jurisdiction__OrderRetention` | Config | Helm `jurisdiction.orderRetention` → ConfigMap | ✓ — **Notifications only**; the order record's window, and the host refuses to start without it |
 | `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a notification still pending, past which it is undeliverable with the reason `NotificationReasons.GaveUp`; the host refuses to start without it, or with one longer than `RetentionPolicy.InboxWindow` |
-| `Devices__StaleAfter` | Config | Not set by Compose or a chart; defaulted in `DeviceTokenOptions` | — **Notifications only**, both hosts; [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)'s window after which an unseen device row is deleted, and the hosts refuse to start with one of zero or past 270 days |
-| `Devices__MaxPerSubject` | Config | Not set by Compose or a chart; defaulted in `DeviceTokenOptions` | — **Notifications only**, both hosts; ADR-117's cap on a subject's device rows, refused at start outside 1 to 100 |
-| `Devices__MaxSequenceStep` | Config | Not set by Compose or a chart; defaulted in `DeviceTokenOptions` | — **Notifications only**, both hosts; how far above a row's sequence ADR-117 lets a request be, refused at start below 1 |
 
 ---
 
