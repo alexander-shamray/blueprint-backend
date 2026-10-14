@@ -22,11 +22,12 @@ Once it commits, the send may already have reached the channel, and the
 worker's resend under it is how a send whose answer was lost is made again.
 Deciding the resend again would let a withdrawal end it `opted_out`:
 a record saying nothing was sent, of a message that may have been. ADR-120's
-own rule is that the record of every send names the entry it was decided
-under, and a second decision would name one entry on the intent and another
-on the outcome. The alternative was to read the journal on every pass and end
-a resend opted out. It was rejected because it trades a bounded residual for
-a false record, and the record is the consent evidence ADR-120 keeps.
+own rule is that the record of every send names the entry it was decided under,
+and a second decision would replace the entry the intent named, so the record
+would lose the entry a send that may have been made was decided under. The
+alternative was to read the journal on every pass and end a resend opted out. It
+was rejected because it trades a bounded residual for a false record, and the
+record is the consent evidence ADR-120 keeps.
 
 **Consequences.** **The residual is bounded by time, not by passes**: a
 message can follow a withdrawal by up to `DeliveryOptions.GiveUpAge` when it
