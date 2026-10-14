@@ -1973,6 +1973,9 @@ class SharedValuesTests(unittest.TestCase):
         self.assertEqual({"x", "y"}, canary._pinned_keys(["helm upgrade r c --set x={a,b=c},y=1"]))
         self.assertEqual({"x"}, canary._pinned_keys(["helm upgrade r c --set 'x=a" + chr(92) + ",b=c'"]))
         self.assertEqual({"a", "push.apps"}, canary._pinned_keys(["helm upgrade r c --set a=x{y,push.apps=z"]))
+        for balanced in ["a=x{y,push.apps=z}", "a=}x,push.apps=z,c={"]:
+            with self.subTest(balanced=balanced):
+                self.assertIn("push.apps", canary._pinned_keys([f"helm upgrade r c --set {balanced}"]))
 
     def test_a_comparison_of_the_running_values_is_refused(self) -> None:
         """The running values carry the old chart's defaults, so a changed default would pass unseen."""

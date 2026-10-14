@@ -1858,17 +1858,21 @@ def _rollout_follows_the_migrator(workloads: dict, workflow: Path = WORKFLOW) ->
 
 def _assignments(argument: str) -> list[str]:
     """A `--set` argument's comma-joined assignments, leaving a `{a,b}` list and an escaped comma whole."""
-    parts, current, depth, escaped = [], "", 0, False
+    parts, current, listing, escaped = [], "", False, False
     for char in argument:
-        if char == "," and depth == 0 and not escaped:
+        if char == "," and not listing and not escaped:
             parts.append(current)
             current = ""
             continue
-        depth += {"{": 1, "}": -1}.get(char, 0) if not escaped else 0
+        # Helm's rule: a brace opens a list only straight after a key's `=`, and only that list's brace closes it.
+        if not escaped and char == "{" and not listing and current.endswith("="):
+            listing = True
+        elif not escaped and char == "}" and listing:
+            listing = False
         escaped = char == "\\" and not escaped
         current += char
-    # Unbalanced braces are no list: split on every unescaped comma, which over-reports rather than hides a key.
-    return [*parts, current] if depth == 0 else re.split(r"(?<!\\),", argument)
+    # A list left open is no list: split on every unescaped comma, which over-reports rather than hides a key.
+    return [*parts, current] if not listing else re.split(r"(?<!\\),", argument)
 
 
 def _pinned_keys(lines: list[str]) -> set[str]:
