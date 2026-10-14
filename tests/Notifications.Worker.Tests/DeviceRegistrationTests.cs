@@ -52,6 +52,11 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
         fixture.ScalarAsync<long>(
             "SELECT Value = Sequence FROM notifications.DeviceInstallations WHERE InstallationId = {0}", installation);
 
+    private Task<DateTimeOffset> LastSeenAsync(Guid installation) =>
+        fixture.ScalarAsync<DateTimeOffset>(
+            "SELECT Value = LastSeenAt FROM notifications.DeviceInstallations WHERE InstallationId = {0}",
+            installation);
+
     [Fact]
     public async Task A_first_registration_writes_the_row_and_its_repeat_is_answered_as_it_was()
     {
@@ -185,11 +190,6 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
 
         (await TokenAsync(installation)).ShouldBe("token-a");
         (await SequenceAsync(installation)).ShouldBe(1);
-
-        // Nor a cleared row, which is nobody's: its sequence stays where the owner's sign-out left it.
-        await SignOutAsync(owner, installation, 2);
-        (await SignOutAsync(Guid.CreateVersion7(), installation, 3)).Outcome.ShouldBe(DeviceWriteOutcome.Applied);
-        (await SequenceAsync(installation)).ShouldBe(2);
     }
 
     [Fact]
@@ -204,9 +204,29 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
         (await SignOutAsync(Guid.CreateVersion7(), installation, 4))
             .ShouldBe(new DeviceWrite(DeviceWriteOutcome.Stale, 5), "a cleared row is nobody's, so anyone is ordered");
         (await SignOutAsync(subject, installation, 5 + 1001)).ShouldBe(new DeviceWrite(DeviceWriteOutcome.Stale, 5));
-        (await SignOutAsync(subject, installation, 6)).ShouldBe(new DeviceWrite(DeviceWriteOutcome.Applied, 6));
+        DateTimeOffset lastSeen = await LastSeenAsync(installation);
+        (await SignOutAsync(Guid.CreateVersion7(), installation, 7))
+            .ShouldBe(new DeviceWrite(DeviceWriteOutcome.Applied, 7));
 
-        (await SequenceAsync(installation)).ShouldBe(5, "an applied sign-out of a cleared row writes nothing");
+        (await SequenceAsync(installation)).ShouldBe(7);
+        (await LastSeenAsync(installation)).ShouldBe(lastSeen, "no sign-out keeps a cleared row past its window");
+        (await SubjectAsync(installation)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_registration_delayed_past_a_sign_out_of_a_cleared_row_is_stale()
+    {
+        Guid subject = Guid.CreateVersion7();
+        Guid installation = Guid.CreateVersion7();
+        await RegisterAsync(subject, installation, "token-a", 1);
+        await SignOutAsync(subject, installation, 2);
+
+        // The app registers at 3 and signs out at 4, and the sign-out arrives first (ADR-117).
+        (await SignOutAsync(subject, installation, 4)).ShouldBe(new DeviceWrite(DeviceWriteOutcome.Applied, 4));
+        (await RegisterAsync(subject, installation, "token-a", 3))
+            .ShouldBe(new DeviceWrite(DeviceWriteOutcome.Stale, 4));
+
+        (await TokenAsync(installation)).ShouldBeNull();
     }
 
     [Fact]
