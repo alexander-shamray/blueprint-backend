@@ -12,7 +12,7 @@ namespace Web.Bff.Tests;
 /// <summary>§9.7's timeout hierarchy, read off the built host's named options for each of its two hops.</summary>
 public class ResilienceHierarchyTests
 {
-    /// <summary>Each hop by the name its options are registered under, so a hop this host gains joins here.</summary>
+    /// <summary>Each hop by the name its options are registered under; a hop this host gains is added here.</summary>
     public static TheoryData<string> Hops => [PricingHop.ResilienceOptionsName, NotificationsHop.ResilienceOptionsName];
 
     private static HttpStandardResilienceOptions Configured(string hop)
