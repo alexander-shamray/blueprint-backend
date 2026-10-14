@@ -6,7 +6,7 @@ using TestResult = NetArchTest.Rules.TestResult;
 
 namespace Notifications.Api.Tests;
 
-/// <summary>§4.2's composition-root rule over the second host, which the worker's suite cannot load (ADR-118).</summary>
+/// <summary>§4.2's composition-root rule over the second host, which the worker's suite cannot load.</summary>
 public class ArchitectureTests
 {
     private static readonly string[] Forbidden =
@@ -53,7 +53,7 @@ public class ArchitectureTests
             "the exemption should cover Program and its own generated helpers, nothing more");
     }
 
-    /// <summary>The service's projects this host may emit a reference to: its Infrastructure and its Application.</summary>
+    /// <summary>The service's projects this host may emit a reference to (ADR-118).</summary>
     private static readonly string[] OwnProjects = ["Notifications.Application", "Notifications.Infrastructure"];
 
     /// <summary>§4.1's building blocks by name, because Common.TestSupport is named like one and is not.</summary>
