@@ -933,7 +933,7 @@ refuses_chart web-bff 'a public base on the BFF fails the render' \
     --set-string 'objectStore.publicBaseUrl=https://images.example.invalid'
 
 # ADR-117's app list (§10.10), which the BFF binds as PushOptions: each app is a pair of keys, the chart ships
-# none, and an app the host would refuse at start is refused here instead.
+# none, and a missing app id or a platform outside the pair fails the render; the host refuses the rest at start.
 PUSH_RENDER="$OUT/web-bff-push.yaml"
 "$HELM" template web-bff "$CHARTS_DIR/web-bff" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
     --set-string 'push.apps[0].appId=com.example.shop' --set-string 'push.apps[0].platform=fcm' >"$PUSH_RENDER"
