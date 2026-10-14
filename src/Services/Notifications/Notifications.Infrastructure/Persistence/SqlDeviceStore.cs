@@ -105,9 +105,9 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
             RETURN;
         END;
 
-        -- A cleared row has no subject, so any caller's sign-out above it moves its sequence and nothing else (ADR-121):
-        -- a registration delayed past the sign-out is then stale, and the unchanged last-seen time lets no caller keep
-        -- the row past the stale window.
+        -- A cleared row has no subject, so any caller's sign-out above it moves its sequence and nothing else
+        -- (ADR-121): a registration delayed past the sign-out is then stale, and the unchanged last-seen time lets no
+        -- caller keep the row past the stale window.
         IF @Owner IS NULL
             UPDATE notifications.DeviceInstallations
             SET Sequence = @Sequence
