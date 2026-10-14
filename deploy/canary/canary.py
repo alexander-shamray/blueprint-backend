@@ -1862,7 +1862,8 @@ def _pinned_keys(lines: list[str]) -> set[str]:
     flags = re.findall(r"--set(?:-string|-json|-file|-literal)?(?:=|\s+)('[^']*'|\"[^\"]*\"|\S+)", "\n".join(lines))
     for argument in flags:
         for part in re.split(r"(?<!\\),", argument.strip("'\"")):
-            key = part.split("=", 1)[0].strip("'\"")
+            # An indexed member, `push.apps[0]`, pins the list it is a member of.
+            key = re.sub(r"\[\d+\]", "", part.split("=", 1)[0].strip("'\""))
             if "=" in part and re.fullmatch(r"[\w.-]+", key):
                 keys.add(key)
     return keys
