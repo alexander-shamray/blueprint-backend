@@ -73,7 +73,7 @@ entries in lists kept separately, which §15.3 names with their owners.
 | `source` | The host's tree under `src/`, which `smoke.sh` holds the chart to |
 | `signals` | What the workload is judged on, from `canary.py`'s `SIGNALS` (ADR-047) |
 | `httpExemption`, `consumeExemption`, `sagaExemption` | The argument for a signal check 9 finds owed and the workload does not declare |
-| `migratedBy` | The workload whose chart's hook migrates this one's schema, named exactly when `smoke.database` is true and `smoke.migrator` false; the rollout refuses a tag whose revision that release has not reached, by ancestry (ADR-118) |
+| `migratedBy` | The workload whose chart's hook migrates this one's schema, named exactly when `smoke.database` is true and `smoke.migrator` false; the rollout refuses a tag whose revision is not the one that release serves (ADR-118, ADR-122), and that release's tag while this one serves any revision but its own (ADR-122) |
 | `smoke.migrator` | Whether the chart renders §7.4's migration Job |
 | `smoke.database` | Whether the chart mounts a database connection, with a Job or, under `migratedBy`, without one |
 | `smoke.autoscaled` | Whether the chart runs an HPA or a fixed replica count (§15.3) |
@@ -139,8 +139,11 @@ because a branch driven by the file it judges asserts nothing. Every value
     passes, and the facts above quietly describe the checkout again.
 13. While any descriptor names `migratedBy`, `deploy.yml` asks
     `canary.py migrated-by` for the dispatched workload and holds the tag's
-    revision to the migrating release's by ancestry (ADR-118), so a host never
-    rolls ahead of the schema another chart migrates.
+    revision to the migrating release's by ancestry in both directions
+    (ADR-118, ADR-122), and asks `canary.py migrates` and holds each host it
+    names to the dispatched workload's stable revision (ADR-122). So a host
+    never rolls ahead of the schema another chart migrates, nor stays behind
+    a migration that release runs.
 
 ## What a workload is judged on
 
