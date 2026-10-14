@@ -224,7 +224,7 @@ networkPolicy:
   broker: { port: 5671, to: [] }   # amqps, as ADR-079 requires; a broker named plaintext dials 5672
   # Unless a port is stated, it is mail.port, so the rule follows the relay's.
   mail: { to: [] }
-  # FCM, Google's token endpoint and APNs while an app names their platform, each on the port its address
+  # ADR-124: FCM, Google's token endpoint and APNs while an app names their platform, each on the port its address
   # dials unless one is stated here.
   push: { to: [] }
 
