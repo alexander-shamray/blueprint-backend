@@ -1710,13 +1710,10 @@ check 'editing an edge-only value rolls the gateway pods' test "$before" != "$af
 # --------------------------------------------------------------------------
 section 'Service names are routing configuration (§10.2, §9.7)'
 # --------------------------------------------------------------------------
-# The gateway's route file and PricingHop.cs dial these hosts as literals, on
-# the premise that the host is the Kubernetes Service name; this keeps that
-# true. One direction only: every Service this platform renders must be a name
-# something in src/ dials, plus the gateway, which the Ingress dials. The other
-# direction is not asserted, because §10.2's route file deliberately names
-# inventory ahead of the service that will answer it. Host and port both,
-# because both are literals and both are dialled.
+# The gateway's route file and the BFF's hops dial these hosts as literals, on the premise that
+# the host is the Kubernetes Service name. One direction only: every rendered Service must be a
+# name src/ dials, plus the gateway, which the Ingress dials; §10.2's route file deliberately
+# names inventory ahead of its service. Host and port both, as both are literals and dialled.
 grep -ohE 'http://[a-z0-9-]+:[0-9]+' \
     "$ROOT/src/Gateway/Gateway.Api/appsettings.json" \
     "$ROOT/src/BFF/Web.Bff/PricingHop.cs" \
@@ -1750,7 +1747,7 @@ for chart in $SERVICE_CHARTS; do
     fi
 done
 
-# The ports are literals in the same two files, so they are asserted the same
+# The ports are literals in the same files, so they are asserted the same
 # way — and it is the Service port, not the container port: `PricingHop.cs`
 # dials `http://catalog-api:8081`, and what answers is `spec.ports[].port`.
 # Every pair the name gate parses is a row, because `_service.tpl` takes `port`
