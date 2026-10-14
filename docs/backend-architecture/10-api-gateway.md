@@ -1606,11 +1606,10 @@ follows is the wire contract.
 
 It needs no gateway change, as §10.10 needs none. A topic is one of the seven
 order events, by its template key — `order-placed`, `order-confirmed`,
-`order-cancelled`, `payment-declined`, `payment-refunded`,
-`shipment-dispatched` and `shipment-delivered` — and a channel is `email` or
-`push`. The owning service's `ConsentVocabulary` holds the list, and
-`PreferenceRules` is the BFF's check against it. **The subject is the caller's**, as on
-§10.10's routes.
+`order-cancelled`, `payment-declined`, `payment-refunded`, `shipment-dispatched`
+and `shipment-delivered` — and a channel is `email` or `push`. The owning
+service's `ConsentVocabulary` holds the list, and `PreferenceRules` is the BFF's
+check against it. **The subject is the caller's**, as on §10.10's routes.
 
 **A `GET` reads every pair**, topic by topic in that order and each topic's
 two channels, as `{ "preferences": [ … ] }`. A pair carries `topic`,
