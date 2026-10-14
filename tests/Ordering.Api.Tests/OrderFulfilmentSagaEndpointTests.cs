@@ -133,8 +133,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             expected: 1,
             because: "the placement creates the instance the retry needs");
 
-        // The rescue rides whichever retry follows the placement, and under load that can be the last rung,
-        // which alone outlasts DeliveryBudget; so the wait runs from the cancellation to the end of the ladder.
+        // The retry that rescues it is timed from the cancellation, not from the row, and under load it can be
+        // the ladder's last rung; so the wait runs from the cancellation to the end of the ladder.
         await Eventually(
             () => fixture.ScalarAsync<string>(
                 "SELECT Value = CurrentState FROM ordering.OrderFulfilmentStates " +
