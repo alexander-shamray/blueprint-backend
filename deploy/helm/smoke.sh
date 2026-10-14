@@ -1296,11 +1296,11 @@ refuses_chart notifications 'client credentials off and cleared fails the render
     'identity.clientCredentials is false on the notifications chart' \
     --set identity.clientCredentials=false --set-string 'identity.clientId='
 
-# ADR-120's required pairs, which both Notifications hosts read and both charts
-# state: an empty list is a stated none, and the chart's own null is what a
-# values file that never states them renders. Helm drops a key its chart sets
-# to null, so the capability check refuses that; a null a values file sets
-# survives as nil, so the library's helper refuses that one.
+# ADR-120's required pairs, stated by both Notifications charts: [] is a stated
+# none, and the chart's own null is an unstated list. Helm 3 and 4 deliver a
+# chart's null and a --set one differently, as nil or as no key, so each case
+# accepts either refusal: the library helper's for nil, the capability's for
+# no key.
 NA="$OUT/notifications-api-capability.yaml"
 "$HELM" template notifications-api "$CHARTS_DIR/notifications-api" $NETPOL_OVERLAY \
     --set-string image.tag="$TAG" $(overlay_for notifications-api) >"$NA"
@@ -1317,11 +1317,12 @@ refuses_unstated_required() {
         fail "$chart: the required pairs left at the chart's null render — they must not"
     else
         check "$chart: the required pairs left at the chart's null fail the render" \
-            grep -q "jurisdiction.required is required on the $chart chart" "$OUT/unstated.txt"
+            grep -Eq "jurisdiction.required is (unstated|required on the $chart chart)" "$OUT/unstated.txt"
     fi
     refuses_chart "$chart" 'a required pair that is not one fails the render' \
         'not a topic/channel pair this chart will accept' --set-string 'jurisdiction.required={order-placed}'
-    refuses_removed "$chart" jurisdiction.required 'jurisdiction.required is unstated'
+    refuses_removed "$chart" jurisdiction.required \
+        "jurisdiction.required is \(unstated\|required on the $chart chart\)"
 }
 refuses_unstated_required notifications
 refuses_unstated_required notifications-api
