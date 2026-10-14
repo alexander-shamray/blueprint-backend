@@ -10,10 +10,10 @@ it was decided under. **A resend under a committed intent is not decided
 again**, on either channel. A send whose intent committed and whose call then
 faulted backs off with the intent kept, and a later pass resends it under
 that intent without reading the journal. So **the residual after a withdrawal
-is every send decided before it committed**: each one a pass held, having
-read the journal and not yet committed its intent, which is what ADR-120's
-consequence says, and also every send whose intent had already committed,
-until each ends, at the latest when it gives up at `DeliveryOptions.GiveUpAge`.
+is every send decided before it committed**: each notice a pass held at that
+moment, which ADR-120's consequence names, and also every send whose intent
+had already committed and that a later pass resends, until each ends, at the
+latest when it gives up at `DeliveryOptions.GiveUpAge`.
 
 **Why.** The intent is the record
 [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
