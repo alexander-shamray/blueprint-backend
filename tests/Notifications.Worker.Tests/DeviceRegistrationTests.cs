@@ -185,6 +185,11 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
 
         (await TokenAsync(installation)).ShouldBe("token-a");
         (await SequenceAsync(installation)).ShouldBe(1);
+
+        // Nor a cleared row, which is nobody's: its sequence stays where the owner's sign-out left it.
+        await SignOutAsync(owner, installation, 2);
+        (await SignOutAsync(Guid.CreateVersion7(), installation, 3)).Outcome.ShouldBe(DeviceWriteOutcome.Applied);
+        (await SequenceAsync(installation)).ShouldBe(2);
     }
 
     [Fact]
