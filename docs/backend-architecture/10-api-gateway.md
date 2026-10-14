@@ -1574,9 +1574,11 @@ carrying a sequence other than the request's, or a stale one carrying none — i
 a 500, by §9.7's sixth rule.
 
 **The cluster half is ADR-118's.** The hop resolves `notifications-api:8081`
-under Compose; in Kubernetes it also needs the API host's own chart, whose
-Service carries that name, and the `web-bff` egress row ADR-065's table gains
-for it, both of which land with that chart.
+under Compose and in Kubernetes alike: there it is the Service of the API
+host's own chart, `deploy/helm/notifications-api/`, which admits `web-bff` on
+`grpc`, and `web-bff`'s policy reaches it there, the edge ADR-118 adds to
+[ADR-065](adr/ADR-065-every-workload-is-fenced-by-a-default-deny-networkpolicy.md)'s
+table.
 
 **Retention and erasure are ADR-117's**: a row not seen for
 `DeviceTokenOptions.StaleAfter` is deleted, and an erasure clears every row of
