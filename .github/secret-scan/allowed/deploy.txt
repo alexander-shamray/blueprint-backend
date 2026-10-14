@@ -130,7 +130,7 @@ deploy/compose/README.md | credential-assignment | d219e95f003c | Section 14.1's
 # the day that service landed; these are the same decision, taken by the
 # tool that rendered them (#161).
 
-deploy/compose/services/notifications.yml | connection-string-password | 8a11e54d9d5b | Section 14.1's local database default, nested inside this service's two connection defaults.
+deploy/compose/services/notifications.yml | connection-string-password | 8a11e54d9d5b | Section 14.1's local database default, nested inside each of this service's connection defaults.
 deploy/compose/services/notifications.yml | credential-assignment | c0515ae77855 | Notifications's local connection default, in-cluster hostname.
 deploy/compose/services/notifications.yml | credential-assignment | 3dc3f9162b8b | Section 14.1's broker default for Notifications, the per-service account that replaced guest.
 deploy/compose/services/web-bff.yml | credential-assignment | c786d8c731e5 | Section 14.1's broker default for the BFF, the per-host account ADR-051 adds.
