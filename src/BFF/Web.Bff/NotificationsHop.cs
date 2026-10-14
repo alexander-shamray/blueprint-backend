@@ -1,6 +1,6 @@
 namespace Web.Bff;
 
-/// <summary>This host's second synchronous hop, ADR-117's registration, named in one place (§9.7, ADR-017).</summary>
+/// <summary>ADR-117's registration hop to Notifications, named in one place (§9.7, ADR-017).</summary>
 /// <remarks>Its own numbers, not <see cref="PricingHop"/>'s, so neither budget is a term in the other.</remarks>
 public static class NotificationsHop
 {
