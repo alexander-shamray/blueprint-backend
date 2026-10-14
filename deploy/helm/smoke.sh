@@ -38,6 +38,7 @@ broker=10.93.0.0/16
 identity=10.94.0.0/16
 carrier=10.95.0.0/16
 mail=10.96.0.0/16
+push=10.90.0.0/16
 paymentProvider=10.97.0.0/16
 objectStore=10.99.0.0/16
 "
@@ -1242,6 +1243,49 @@ refuses_chart notifications 'the relay off and cleared fails the render' \
     --set mail.enabled=false --set mail.port=null --set mail.security=null \
     --set mail.passwordSecretRef=null --set-string 'mail.host=' \
     --set-string 'mail.from=' --set-string 'mail.userName='
+# ADR-118's push providers, registered for each platform the worker's apps name: the chart ships no app, so it
+# renders no provider key, no signing key and no egress, and an app of a platform makes that provider's block
+# required. Only this chart carries a provider block, since a signing key is a credential.
+PUSH_APPS="--set-string push.apps[0].appId=com.example.shop --set-string push.apps[0].platform=fcm
+    --set-string push.apps[1].appId=com.example.shop.ios --set-string push.apps[1].platform=apns
+    --set-string fcm.projectId=commerce --set-string fcm.clientEmail=notifications@commerce.example.invalid
+    --set-string apns.teamId=TEAM123456 --set-string apns.keyId=KEY1234567"
+PUSH_N="$OUT/notifications-push.yaml"
+"$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
+    $(overlay_for notifications) $PUSH_APPS >"$PUSH_N"
+check 'notifications: an fcm app renders its app and FCM'"'"'s keys' \
+    sh -c 'grep -q "Push__Apps__0__Platform: \"fcm\"" "$0" && grep -q "Fcm__ProjectId: \"commerce\"" "$0" &&
+        grep -q "Fcm__TokenUri: \"https://oauth2.googleapis.com/token\"" "$0"' "$PUSH_N"
+check 'notifications: an apns app renders APNs'"'"' keys' \
+    in_configmap "$PUSH_N" '^ *Apns__KeyId: "KEY1234567"$'
+check 'notifications: each provider'"'"'s signing key is a Secret reference' \
+    sh -c 'grep -q "name: Fcm__PrivateKey" "$0" && grep -q "name: Apns__PrivateKey" "$0"' "$PUSH_N"
+check 'notifications: the providers are an egress rule to the stated peer' grep -q '10.90.0.0/16' "$PUSH_N"
+# A third party's port is read from its address (ADR-065), so a provider on another port moves its rule.
+"$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
+    $(overlay_for notifications) $PUSH_APPS --set-string apns.baseUrl=https://api.push.apple.com:2197/ \
+    >"$OUT/notifications-push-port.yaml"
+check 'notifications: an APNs address on another port opens that port' \
+    grep -q 'port: 2197' "$OUT/notifications-push-port.yaml"
+"$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
+    $(overlay_for notifications) $PUSH_APPS --set networkPolicy.push.port=8443 >"$OUT/notifications-push-stated.yaml"
+check 'notifications: a push port stated wins over the addresses'"'"' own' \
+    grep -q 'port: 8443' "$OUT/notifications-push-stated.yaml"
+check 'notifications: the chart as shipped renders no push key' outside_configmap "$N" '^ *(Push|Fcm|Apns)__'
+check 'notifications: the chart as shipped mounts no signing key' sh -c '! grep -q "PrivateKey" "$0"' "$N"
+check 'notifications: the chart as shipped opens no push egress' sh -c '! grep -q "10.90.0.0/16" "$0"' "$N"
+refuses_chart notifications 'an fcm app with no project fails the render' \
+    'fcm.projectId is required' $PUSH_APPS --set-string 'fcm.projectId='
+refuses_chart notifications 'an apns team id that is not one word fails the render' \
+    'not one printable ASCII word' $PUSH_APPS --set-string 'apns.teamId=TEAM 12345'
+refuses_chart notifications 'a plain-HTTP provider fails the render' \
+    'HTTPS address this chart will accept' $PUSH_APPS --set-string 'fcm.baseUrl=http://fcm.example.invalid/'
+refuses_chart notifications 'a provider with no egress peer stated fails the render' \
+    'networkPolicy.push.to is required' $PUSH_APPS --set networkPolicy.push.to=null
+refuses_chart notifications 'a signing key with no Secret named fails the render' \
+    'apns.privateKeySecretRef.name is required' $PUSH_APPS --set apns.privateKeySecretRef=null
+refuses_foreign web-bff 'a provider block on the BFF fails the render' \
+    'fcm or apns is set on the web-bff chart' --set-string 'fcm.projectId=commerce'
 refuses_chart notifications 'a cleared contact source fails the render' \
     'contactSource.baseUrl is required' --set-string 'contactSource.baseUrl='
 refuses_chart notifications 'a plain-HTTP contact source fails the render' \

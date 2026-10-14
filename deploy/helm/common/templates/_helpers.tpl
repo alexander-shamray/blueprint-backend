@@ -368,6 +368,21 @@ deployment that sends no push, and the BFF then refuses every registration. */}}
 Push__Apps__{{ $i }}__AppId: {{ include "commerce.require" (list $app.appId (printf "push.apps[%d].appId is required: it is the bundle id or package name a registration names (ADR-117)." $i)) | quote }}
 Push__Apps__{{ $i }}__Platform: {{ $app.platform | quote }}
 {{- end }}
+{{- /* The providers the worker registers for the platforms its apps name, each
+over HTTPS unconditionally, as `commerce.requireUrl` argues; its signing key is
+commerce.env's. A chart with no provider block, the BFF's, renders none. */}}
+{{- $providers := splitList "," (include "commerce.pushProviders" .) }}
+{{- if has "fcm" $providers }}
+Fcm__BaseUrl: {{ include "commerce.requireUrl" (list .Values.fcm.baseUrl "fcm.baseUrl is required while push.apps names an fcm app: the worker registers FCM's provider and validates FcmOptions at start (§15.4).") | quote }}
+Fcm__TokenUri: {{ include "commerce.requireUrl" (list .Values.fcm.tokenUri "fcm.tokenUri is required while push.apps names an fcm app: the signed assertion is exchanged there (§15.4).") | quote }}
+Fcm__ProjectId: {{ include "commerce.pushWord" (list .Values.fcm.projectId "fcm.projectId") | quote }}
+Fcm__ClientEmail: {{ include "commerce.pushWord" (list .Values.fcm.clientEmail "fcm.clientEmail") | quote }}
+{{- end }}
+{{- if has "apns" $providers }}
+Apns__BaseUrl: {{ include "commerce.requireUrl" (list .Values.apns.baseUrl "apns.baseUrl is required while push.apps names an apns app: the worker registers APNs' provider and validates ApnsOptions at start (§15.4).") | quote }}
+Apns__TeamId: {{ include "commerce.pushWord" (list .Values.apns.teamId "apns.teamId") | quote }}
+Apns__KeyId: {{ include "commerce.pushWord" (list .Values.apns.keyId "apns.keyId") | quote }}
+{{- end }}
 {{- /* ADR-079's opt-out, by connection name: each one listed is a hop the
 deployer accepts in plaintext. Empty or absent, as each chart ships it, the
 host refuses each one that is not encrypted and verified. */}}
@@ -476,6 +491,9 @@ charts, so a further chart growing one is a design change made here. */}}
 {{- if and (.Values.privacy).enabled (ne .Chart.Name "privacy") }}
 {{- fail (printf "privacy.enabled is true on the %s chart, and only privacy tracks an erasure request (ADR-092). This would hand a service the holder set that decides when a person's data counts as gone." .Chart.Name) }}
 {{- end }}
+{{- if and (or .Values.fcm .Values.apns) (ne .Chart.Name "notifications") }}
+{{- fail (printf "fcm or apns is set on the %s chart, and only notifications sends a push (ADR-118). This would mount a provider's signing key into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- end }}
 {{- if and (.Values.mail).enabled (ne .Chart.Name "notifications") }}
 {{- fail (printf "mail.enabled is true on the %s chart, and only notifications submits to a relay (§3.2). This would mount the relay's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
 {{- end }}
@@ -559,4 +577,40 @@ product service's reads it and writes products/, and neither lists or deletes (�
       name: {{ include "commerce.require" (list (.Values.mail.passwordSecretRef).name "mail.passwordSecretRef.name is required when mail.enabled. The password is a reference, never a value (§15.3).") | quote }}
       key: {{ include "commerce.require" (list (.Values.mail.passwordSecretRef).key "mail.passwordSecretRef.key is required when mail.enabled.") | quote }}
 {{- end }}
+{{- $providers := splitList "," (include "commerce.pushProviders" .) }}
+{{- if has "fcm" $providers }}
+- name: Fcm__PrivateKey
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "commerce.require" (list (.Values.fcm.privateKeySecretRef).name "fcm.privateKeySecretRef.name is required while push.apps names an fcm app. The key is a reference, never a value (§15.3).") | quote }}
+      key: {{ include "commerce.require" (list (.Values.fcm.privateKeySecretRef).key "fcm.privateKeySecretRef.key is required while push.apps names an fcm app.") | quote }}
+{{- end }}
+{{- if has "apns" $providers }}
+- name: Apns__PrivateKey
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "commerce.require" (list (.Values.apns.privateKeySecretRef).name "apns.privateKeySecretRef.name is required while push.apps names an apns app. The key is a reference, never a value (§15.3).") | quote }}
+      key: {{ include "commerce.require" (list (.Values.apns.privateKeySecretRef).key "apns.privateKeySecretRef.key is required while push.apps names an apns app.") | quote }}
+{{- end }}
+{{- end -}}
+
+{{- /* The push providers this chart calls: each platform its apps name for which
+it carries a provider block, comma-joined, empty on a chart with none (ADR-118). */}}
+{{- define "commerce.pushProviders" -}}
+{{- $platforms := list -}}
+{{- range (.Values.push).apps }}{{- $platforms = append $platforms (toString .platform) -}}{{- end -}}
+{{- $out := list -}}
+{{- if and .Values.fcm (has "fcm" $platforms) }}{{- $out = append $out "fcm" -}}{{- end -}}
+{{- if and .Values.apns (has "apns" $platforms) }}{{- $out = append $out "apns" -}}{{- end -}}
+{{- join "," $out -}}
+{{- end -}}
+
+{{- /* A provider value that lands in a URL, a claim or a header, so one printable
+word: list (value, key). */}}
+{{- define "commerce.pushWord" -}}
+{{- $value := include "commerce.require" (list (index . 0) (printf "%s is required while push.apps names its platform: the worker validates it at start (§15.4)." (index . 1))) -}}
+{{- if not (regexMatch "^[!-~]+$" $value) }}
+{{- fail (printf "%s is %q, which is not one printable ASCII word: it lands in a URL, a claim or a header (§15.4)." (index . 1) $value) }}
+{{- end -}}
+{{- $value -}}
 {{- end -}}
