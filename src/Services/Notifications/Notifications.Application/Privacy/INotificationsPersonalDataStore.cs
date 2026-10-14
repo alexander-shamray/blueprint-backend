@@ -14,4 +14,7 @@ public interface INotificationsPersonalDataStore
 
     /// <summary>Deletes the subject's mailbox and language (ADR-052).</summary>
     Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct);
+
+    /// <summary>Clears the subject's device rows as a sign-out does, keeping their sequences (ADR-117).</summary>
+    Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct);
 }

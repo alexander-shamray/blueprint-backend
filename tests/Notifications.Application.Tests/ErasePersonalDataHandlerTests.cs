@@ -27,16 +27,17 @@ public class ErasePersonalDataHandlerTests
         _store.Ended = 2;
         _store.Orders = 3;
         _store.Contacts = 1;
+        _store.Devices = 2;
 
         Result<int> result = await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
 
-        result.Value.ShouldBe(7);
+        result.Value.ShouldBe(9);
         _store.Calls.ShouldBe(
-            ["waiting", "ended", "orders", "contact"],
+            ["waiting", "ended", "orders", "contact", "devices"],
             "the notices are found through the order records, so those go after them");
         PersonalDataErasure row = _erasures.Added.ShouldHaveSingleItem();
         row.Id.ShouldBe(Request);
-        row.Count.ShouldBe(7);
+        row.Count.ShouldBe(9);
         row.SubjectHash.ShouldBe(PersonalDataErasure.HashSubject(Request, Subject));
     }
 
@@ -74,6 +75,8 @@ public class ErasePersonalDataHandlerTests
 
         public int Contacts { get; set; }
 
+        public int Devices { get; set; }
+
         public List<string> Calls { get; } = [];
 
         public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, CancellationToken ct) => Run("waiting", Waiting);
@@ -83,6 +86,8 @@ public class ErasePersonalDataHandlerTests
         public Task<int> DeleteOrderRecordsAsync(Guid subjectId, CancellationToken ct) => Run("orders", Orders);
 
         public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) => Run("contact", Contacts);
+
+        public Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct) => Run("devices", Devices);
 
         private Task<int> Run(string call, int rows)
         {

@@ -40,6 +40,8 @@ public class EndErasedSubjectHandlerTests
 
         public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) => Run("contact", subjectId);
 
+        public Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct) => Run("devices", subjectId);
+
         private Task<int> Run(string call, Guid subjectId)
         {
             Calls.Add(call);

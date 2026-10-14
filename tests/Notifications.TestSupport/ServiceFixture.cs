@@ -362,7 +362,7 @@ public sealed class ServiceFixture()
             (int)age.TotalSeconds);
 
     /// <summary>Runs exactly one pass of ADR-053's three windows, with no timer.</summary>
-    public Task<(int Notifications, int Contacts, int Orders)> PurgeNotificationsRetentionAsync() =>
+    public Task<(int Notifications, int Contacts, int Orders, int Devices)> PurgeNotificationsRetentionAsync() =>
         Factory.Services
             .GetRequiredService<NotificationsRetentionService>()
             .PurgeAsync(TestContext.Current.CancellationToken);

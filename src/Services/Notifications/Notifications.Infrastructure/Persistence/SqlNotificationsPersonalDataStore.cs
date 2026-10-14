@@ -35,6 +35,15 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
     private const string DeleteContactSql =
         "DELETE FROM notifications.ContactRecords WHERE CustomerId = @SubjectId;";
 
+    // Guarded by the subject, so a registration that lands after the erasure is a new row of the subject's own act,
+    // and the kept sequence refuses a retry of one made before it (ADR-117, ADR-118).
+    private const string ClearDevicesSql =
+        """
+        UPDATE notifications.DeviceInstallations WITH (UPDLOCK, HOLDLOCK)
+        SET SubjectId = NULL, Platform = NULL, AppId = NULL, Token = NULL, RegisteredAt = NULL
+        WHERE SubjectId = @SubjectId;
+        """;
+
     public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(DeleteWaitingSql, subjectId, ct);
 
@@ -46,6 +55,9 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
 
     public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(DeleteContactSql, subjectId, ct);
+
+    public Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct) =>
+        ExecuteAsync(ClearDevicesSql, subjectId, ct);
 
     private async Task<int> ExecuteAsync(string sql, Guid subjectId, CancellationToken ct)
     {
