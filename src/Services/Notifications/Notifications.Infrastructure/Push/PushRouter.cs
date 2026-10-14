@@ -4,7 +4,7 @@ using Notifications.Application.Push;
 namespace Notifications.Infrastructure.Push;
 
 /// <summary>The one <see cref="IPushChannel"/>, choosing a provider by the device row's platform.</summary>
-/// <remarks>So the send path names no provider, and each provider stays behind its own hop and breaker.</remarks>
+/// <remarks>So the send path names no provider, and each stays behind its own hop and breaker (ADR-118).</remarks>
 internal sealed class PushRouter(IEnumerable<IPushProvider> providers) : IPushChannel
 {
     private readonly FrozenDictionary<string, IPushProvider> _byPlatform =

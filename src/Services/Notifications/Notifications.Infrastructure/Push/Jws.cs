@@ -5,7 +5,7 @@ using System.Text.Json;
 namespace Notifications.Infrastructure.Push;
 
 /// <summary>A compact JWS (RFC 7515), the one shape both providers' signed tokens take.</summary>
-/// <remarks>Written here rather than taken from a JWT library, as the design keeps both adapters to the BCL.</remarks>
+/// <remarks>Over the BCL, so each provider's signing is as much its adapter's as its request is (§3.1).</remarks>
 internal static class Jws
 {
     public static string Sign(

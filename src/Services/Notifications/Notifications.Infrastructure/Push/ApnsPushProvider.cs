@@ -13,9 +13,8 @@ namespace Notifications.Infrastructure.Push;
 
 /// <summary>The one place that speaks APNs' provider API, for iOS.</summary>
 /// <remarks>
-/// APNs takes the token in the request's path, which an HTTP client span records whole, so the call runs with
-/// instrumentation suppressed and its client logs nothing: the token is never a span or a log attribute (ADR-117).
-/// A fault names the delivery and the status, with none of Apple's words.
+/// The token is in the request's path, which a client span records whole, so the call runs with instrumentation
+/// suppressed and its client logs nothing (ADR-117); a fault names the delivery and status, none of Apple's words.
 /// </remarks>
 internal sealed class ApnsPushProvider : IPushProvider
 {
