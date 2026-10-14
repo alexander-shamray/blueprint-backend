@@ -1584,7 +1584,7 @@ def _value_at(values: dict, key: str) -> object:
 def _canonical(value: object) -> object:
     # A list is compared as the members it holds, in any order: every key shared today is a set the hosts read.
     if isinstance(value, list):
-        return sorted(json.dumps(member, sort_keys=True) for member in value)
+        return sorted({json.dumps(member, sort_keys=True) for member in value})
     return json.dumps(value, sort_keys=True) if value is not _ABSENT else "<absent>"
 
 
