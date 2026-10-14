@@ -177,6 +177,11 @@ rows ADR-117 and ADR-118 owe:
 | `deploy/helm/` and `deploy/compose/` | No values for the two jurisdiction members, in the worker's chart or in Compose, nor in the `notifications-api` chart ADR-118 owes |
 | `docs/personal-data.md` | No row for the journal |
 
+**Amended by [ADR-123](ADR-123-a-send-is-decided-once-by-the-pass-that-commits-its-intent-and-a-resend-under-that-intent-is-not-decided-again-1041-474.md)**,
+which adds to the residual after a withdrawal, beside the notices a pass
+held, every send whose intent committed before it, until each ends: a resend
+under a committed intent is not decided again.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
