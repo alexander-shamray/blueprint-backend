@@ -111,12 +111,12 @@ public sealed class ServiceFixture()
             .SingleOrDefaultAsync(r => r.OrderId == orderId, TestContext.Current.CancellationToken);
     }
 
-    /// <summary>How many consumers the broker holds on one queue, read from the broker itself.</summary>
+    /// <summary>How many consumers the broker holds on one queue, none before it is declared.</summary>
     public async Task<int> ConsumersAsync(string queue) =>
         (await BrokerRowsAsync(["list_queues", "name", "consumers"]))
             .Where(columns => columns.Length == 2 && columns[0] == queue)
             .Select(columns => int.Parse(columns[1], CultureInfo.InvariantCulture))
-            .Single();
+            .SingleOrDefault();
 
     /// <summary>The exchanges bound to one queue, read from the broker itself.</summary>
     public async Task<string[]> BindingsAsync(string queue) =>
