@@ -220,7 +220,9 @@ before anything else:
   not a wait at all: `notifications.push.refused` by `reason` counts the
   deliveries ended `unregistered` or `invalid_token`, and a burst of
   `invalid_token` across one platform is a deployment sending to the wrong
-  sender or environment rather than devices going away.
+  sender or environment rather than devices going away. With the provider
+  healthy, the step also counts a delivery this version cannot render: the
+  worker's line "renders parameters this version cannot read" names it.
 
 ```promql
 max by (step) (notifications_waiting)
