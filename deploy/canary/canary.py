@@ -622,7 +622,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
             )
         failures += _smoke_reads(name, entry, root)
         failures += _migrated_by_reads(name, workloads)
-    charts =[entry.get("chart") for entry in workloads.values()]
+    charts = [entry.get("chart") for entry in workloads.values()]
     for chart in sorted({chart for chart in charts if chart and charts.count(chart) > 1}):
         failures.append(f"two descriptors name the chart {chart!r}, and smoke.sh renders a chart once")
 
