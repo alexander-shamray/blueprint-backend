@@ -1862,10 +1862,11 @@ def _pinned_keys(lines: list[str]) -> set[str]:
     Parsing Helm's grammar fails open at each edge it misses; a list member read as a key fails closed.
     """
     keys = set()
-    flags = re.findall(r"--set(?:-string|-json|-file|-literal)?(?:=|\s+)('[^']*'|\"[^\"]*\"|\S+)", "\n".join(lines))
-    for argument in flags:
+    # The whole invocation from its first flag, continuations joined and quotes gone, so no word boundary hides one.
+    for run in _invocations(lines, "--set"):
+        unquoted = run[run.index("--set"):].replace('"', "").replace("'", "")
         # An indexed member, `push.apps[0]`, pins the list it is a member of.
-        for name in re.findall(r"([\w.-]+(?:\[\d+\][\w.-]*)*)=", argument):
+        for name in re.findall(r"([\w.-]+(?:\[\d+\][\w.-]*)*)=", unquoted):
             keys.add(re.sub(r"\[\d+\]", "", name))
     return keys
 
