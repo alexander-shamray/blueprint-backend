@@ -363,6 +363,31 @@ jobs:
         env:
           WORKLOAD: ${{ inputs.workload }}
 
+      # ADR-125: a value two releases are each given is equal in both before
+      # either rolls. The stable track's values are the ones this release
+      # runs, and a rollout keeps every value it was given; a peer with no
+      # release reads nothing yet, and is found by listing so that any other
+      # helm failure still fails the step.
+      - name: A value another release reads is the one this release is given
+        run: |
+          set -euo pipefail
+          python deploy/canary/canary.py shared-values --workload "$WORKLOAD" > "$RUNNER_TEMP/shared.txt"
+          while read -r PEER KEY; do
+            RELEASES=$(helm list -a -q -n "$NAMESPACE" --filter "^${PEER}$")
+            if [ -z "$RELEASES" ]; then
+              echo "$PEER has no release, so nothing it reads can differ from $KEY here."
+              continue
+            fi
+            helm get values "$PEER" -n "$NAMESPACE" --all -o json > "$RUNNER_TEMP/peer.json"
+            if ! python deploy/canary/canary.py values-agree --key "$KEY" \
+                --values "$RUNNER_TEMP/stable.json" --peer "$RUNNER_TEMP/peer.json" --peer-name "$PEER"; then
+              echo "::error::$WORKLOAD and $PEER are given different $KEY, which both read. State one value in both releases' values before either rolls (ADR-125)."
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/shared.txt"
+        env:
+          WORKLOAD: ${{ inputs.workload }}
+
       # The same gate the `check` job ran, over the image's tree instead of
       # the checkout's (ADR-050), and over the release it replaces as well.
       # `--workload` scopes the first: a tag names one workload's image, and

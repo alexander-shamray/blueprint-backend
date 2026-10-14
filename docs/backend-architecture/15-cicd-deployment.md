@@ -1191,7 +1191,10 @@ host serves that same revision, so the two roll in lockstep. Its descriptor's
 ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md),
 [ADR-122](adr/ADR-122-notifications-two-hosts-roll-in-lockstep-so-a-migrations-previous-release-is-the-one-both-hosts-run-1038.md)).
 `smoke.sh` holds such a chart to a third class, beside the charts that migrate
-their own database and those that own none. **The gateway's
+their own database and those that own none. **A value two releases are each
+given is held equal before either rolls**: a descriptor's `sharesValues`
+names the pair and the values path, and the rollout refuses either release
+while their installed values differ ([ADR-125](adr/ADR-125-a-value-two-releases-are-each-given-is-held-equal-before-either-rolls-1042.md)). **The gateway's
 probes are a service's three, and its readiness set is empty on purpose.** It
 proxies four services and depends on all of them; what it does not do is
 report unready when one is down, which would take the edge out of rotation for

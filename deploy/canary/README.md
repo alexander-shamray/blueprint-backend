@@ -74,6 +74,7 @@ entries in lists kept separately, which §15.3 names with their owners.
 | `signals` | What the workload is judged on, from `canary.py`'s `SIGNALS` (ADR-047) |
 | `httpExemption`, `consumeExemption`, `sagaExemption` | The argument for a signal check 9 finds owed and the workload does not declare |
 | `migratedBy` | The workload whose chart's hook migrates this one's schema, named exactly when `smoke.database` is true and `smoke.migrator` false; the rollout refuses a tag whose revision is not the one that release serves (ADR-118, ADR-122), and that release's tag while this one serves any revision but its own (ADR-122) |
+| `sharesValues` | The workloads whose release is given a value this one is too, each with the dotted values paths both read, declared on one of the two descriptors; the rollout refuses either release while the two differ (ADR-125) |
 | `smoke.migrator` | Whether the chart renders §7.4's migration Job |
 | `smoke.database` | Whether the chart mounts a database connection, with a Job or, under `migratedBy`, without one |
 | `smoke.autoscaled` | Whether the chart runs an HPA or a fixed replica count (§15.3) |
@@ -99,7 +100,9 @@ because a branch driven by the file it judges asserts nothing. Every value
    that no other descriptor names, its `source` holds that assembly's
    project, its `smoke` block is one `smoke.sh` can read, and its
    `migratedBy` is present exactly when its chart has a database and no Job,
-   naming another workload whose chart runs one.
+   naming another workload whose chart runs one. Its `sharesValues`, where
+   present, names other workloads, each with dotted values paths, and a pair
+   is declared on one of its two descriptors alone.
 5. Every series the query templates read is vouched for: either a loaded alert
    reads it — and `deploy/observability/check.py` has already established
    that something publishes it — or it is an instrument of a meter
@@ -144,6 +147,11 @@ because a branch driven by the file it judges asserts nothing. Every value
     names to the dispatched workload's stable revision (ADR-122). So a host
     never rolls ahead of the schema another chart migrates, nor stays behind
     a migration that release runs.
+14. While any descriptor names `sharesValues`, `deploy.yml` asks
+    `canary.py shared-values` for the dispatched workload and compares each
+    key between the release's installed values and the peer's through
+    `canary.py values-agree` (ADR-125). So two releases a deployment gives one
+    value never roll while they disagree on it.
 
 ## What a workload is judged on
 

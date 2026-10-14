@@ -628,6 +628,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
             )
         failures += _smoke_reads(name, entry, root)
         failures += _migrated_by_reads(name, workloads)
+        failures += _shared_values_reads(name, workloads)
     charts = [entry.get("chart") for entry in workloads.values()]
     for chart in sorted({chart for chart in charts if chart and charts.count(chart) > 1}):
         failures.append(f"two descriptors name the chart {chart!r}, and smoke.sh renders a chart once")
@@ -704,6 +705,10 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     #     revision, and that release only beside it (ADR-118, ADR-122); the
     #     rollout asks the descriptors which workloads those are.
     failures += _rollout_follows_the_migrator(workloads)
+
+    # 14. A value two releases are each given is equal in both before either
+    #     rolls (ADR-125); the rollout asks the descriptors which values.
+    failures += _rollout_holds_shared_values(workloads)
 
     return failures
 
@@ -1508,6 +1513,100 @@ def _migrated_by_reads(name: str, workloads: dict) -> list[str]:
     return []
 
 
+# A dotted path into a release's values, each segment a Helm values key.
+SHARED_KEY = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*")
+
+
+def shared_values(workload: str, plan_document: dict) -> list[tuple[str, str]]:
+    """Each (peer, key) whose value the rollout holds equal between `workload`'s release and the peer's (ADR-125).
+
+    A pair is declared once, on either descriptor, and read from both ends,
+    so the rollout of either release asks the same question.
+    """
+    workloads = entries(plan_document["workloads"])
+    if workload not in workloads:
+        raise PlanError(f"no workload {workload!r} in the plan")
+    pairs = set()
+    for name, entry in workloads.items():
+        declared = entry.get("sharesValues")
+        if not isinstance(declared, dict):
+            continue
+        for peer, keys in declared.items():
+            other = peer if name == workload else name if peer == workload else None
+            if other is None or not isinstance(keys, list):
+                continue
+            pairs.update((other, key) for key in keys if isinstance(key, str))
+    return sorted(pairs)
+
+
+def _shared_values_reads(name: str, workloads: dict) -> list[str]:
+    """Check 4 for `sharesValues`: each peer another workload, each key a values path, and each pair named once."""
+    declared = workloads[name].get("sharesValues")
+    if declared is None:
+        return []
+    if not isinstance(declared, dict) or not declared:
+        return [f"workloads.{name}.sharesValues is {declared!r}, which names no peer and no key"]
+    failures = []
+    for peer, keys in declared.items():
+        if peer == name or peer not in workloads:
+            failures.append(f"workloads.{name}.sharesValues names {peer!r}, which is not another workload")
+            continue
+        if not isinstance(keys, list) or not keys:
+            failures.append(f"workloads.{name}.sharesValues.{peer} is {keys!r}, which names no key")
+            continue
+        for key in keys:
+            if not isinstance(key, str) or not SHARED_KEY.fullmatch(key):
+                failures.append(
+                    f"workloads.{name}.sharesValues.{peer} names {key!r}, which is not a dotted values path"
+                )
+        back = workloads[peer].get("sharesValues")
+        if isinstance(back, dict) and name in back:
+            failures.append(
+                f"workloads.{name} and workloads.{peer} each declare the values they share, and one "
+                "declaration is the pair's owner: drop one of them"
+            )
+    return failures
+
+
+# Distinct from a value of null, which a chart can state.
+_ABSENT = object()
+
+
+def _value_at(values: dict, key: str) -> object:
+    node: object = values
+    for segment in key.split("."):
+        if not isinstance(node, dict) or segment not in node:
+            return _ABSENT
+        node = node[segment]
+    return node
+
+
+def _canonical(value: object) -> object:
+    # A list is compared as the members it holds, in any order: every key shared today is a set the hosts read.
+    if isinstance(value, list):
+        return sorted(json.dumps(member, sort_keys=True) for member in value)
+    return json.dumps(value, sort_keys=True) if value is not _ABSENT else "<absent>"
+
+
+def values_agree(key: str, values: dict, peer_values: dict, peer: str) -> list[str]:
+    """The ways `key` differs between this release's values and `peer`'s, or none (ADR-125).
+
+    Each document is a `helm get values --all -o json`, so a chart's default
+    counts as a value the release was given.
+    """
+    mine, theirs = _canonical(_value_at(values, key)), _canonical(_value_at(peer_values, key))
+    if mine == theirs:
+        return []
+    if isinstance(mine, list) and isinstance(theirs, list):
+        only_mine = sorted(set(mine) - set(theirs))
+        only_theirs = sorted(set(theirs) - set(mine))
+        return [
+            f"{key} differs from {peer}'s: only this release names {', '.join(only_mine) or 'nothing'}, "
+            f"and only {peer} names {', '.join(only_theirs) or 'nothing'}"
+        ]
+    return [f"{key} is {mine} in this release and {theirs} in {peer}'s"]
+
+
 def _smoke_reads(name: str, entry: dict, root: Path) -> list[str]:
     """Check 4 for smoke.sh: the cases parse, and the source holds the host."""
     try:
@@ -1753,6 +1852,35 @@ def _rollout_follows_the_migrator(workloads: dict, workflow: Path = WORKFLOW) ->
     return []
 
 
+def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> list[str]:
+    """Check 14: where a descriptor names `sharesValues`, the rollout asks for the pairs and compares each one.
+
+    Only while one does: with none, there is nothing to compare.
+    """
+    if not any(entry.get("sharesValues") for entry in workloads.values()):
+        return []
+    try:
+        text = workflow.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"{WORKFLOW_PATH} is not readable, so ADR-125's shared values are unchecked: {error}"]
+    live = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+    asks = _invocations(live, "canary.py shared-values")
+    if not any(_argument("--workload", "WORKLOAD") in run for run in asks):
+        return [
+            f"{WORKFLOW_PATH} runs no `canary.py shared-values` for the dispatched "
+            f"{_argument('--workload', 'WORKLOAD')}, so two releases can roll on values "
+            "that disagree (ADR-125)"
+        ]
+    compares = _invocations(live, "canary.py values-agree")
+    if not any('--values "$RUNNER_TEMP/stable.json"' in run and "--peer " in run for run in compares):
+        return [
+            f"{WORKFLOW_PATH} asks `canary.py shared-values` and never compares the "
+            "release's installed values with a peer's through `canary.py values-agree`, "
+            "so the answer refuses nothing (ADR-125)"
+        ]
+    return []
+
+
 def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
     """The rollout hands each image's tree to everything that reads `src/`.
 
@@ -1931,6 +2059,18 @@ def main(argv: list[str]) -> int:
     migrating = sub.add_parser("migrates", help="the workloads whose schema this one's release migrates")
     migrating.add_argument("--workload", required=True)
 
+    # ADR-125's pairs, "peer key" one per line and none for a release that
+    # shares no value, for the rollout's shell loop.
+    sharing = sub.add_parser("shared-values", help="the peers and keys this release must agree with")
+    sharing.add_argument("--workload", required=True)
+
+    # Silent and 0 when the key agrees; each difference on stderr and 1 when not.
+    agreeing = sub.add_parser("values-agree", help="whether one key agrees between two releases' values")
+    agreeing.add_argument("--key", required=True)
+    agreeing.add_argument("--values", required=True, type=Path, help="this release's `helm get values --all -o json`")
+    agreeing.add_argument("--peer", required=True, type=Path, help="the peer's `helm get values --all -o json`")
+    agreeing.add_argument("--peer-name", required=True)
+
     # One name per line, for the shell loop in which `realm.yml`'s scheduled
     # job judges each release's realm (ADR-043).
     sub.add_parser("workloads", help="every workload in the plan, one per line")
@@ -2052,6 +2192,30 @@ def main(argv: list[str]) -> int:
             print(f"canary: {error}", file=sys.stderr)
             return 1
         return 0
+
+    if args.command == "shared-values":
+        try:
+            for peer, key in shared_values(args.workload, document):
+                print(f"{peer} {key}")
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        return 0
+
+    if args.command == "values-agree":
+        if not SHARED_KEY.fullmatch(args.key):
+            print(f"canary: {args.key!r} is not a dotted values path", file=sys.stderr)
+            return 1
+        try:
+            mine = json.loads(args.values.read_text(encoding="utf-8"))
+            theirs = json.loads(args.peer.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"canary: a values document is not readable JSON: {error}", file=sys.stderr)
+            return 1
+        differences = values_agree(args.key, mine, theirs, args.peer_name)
+        for difference in differences:
+            print(f"canary: {difference} (ADR-125)", file=sys.stderr)
+        return 1 if differences else 0
 
     if args.command == "workloads":
         for name in entries(document["workloads"]):
