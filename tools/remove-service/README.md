@@ -47,7 +47,7 @@ line is read as complete when files went unread.
   Shipping and Notifications have no Redis user, and removing them says so
   rather than failing.
 - **Half of a Compose pair is refused**, because §14.1's rule is a migrator
-  and one host.
+  and its hosts, one or both, gated on it (ADR-118).
 
 ## What it does not do
 
