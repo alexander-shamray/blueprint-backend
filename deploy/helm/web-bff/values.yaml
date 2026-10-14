@@ -149,6 +149,12 @@ objectStore:
     accessKeyKey: access-key
     secretKeyKey: secret-key
 
+# ADR-117's apps (§10.10): each an app id and the provider its tokens belong
+# to, `fcm` or `apns`. Empty, as the reference deployment ships it, is a
+# deployment that sends no push, and the BFF refuses every registration.
+push:
+  apps: []
+
 observability:
   otlpEndpoint: http://otel-collector.observability:4317
 

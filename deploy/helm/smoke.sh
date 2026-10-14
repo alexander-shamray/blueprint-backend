@@ -932,6 +932,25 @@ refuses_chart web-bff 'a public base on the BFF fails the render' \
     'objectStore.publicBaseUrl is set on a chart that is not catalog' \
     --set-string 'objectStore.publicBaseUrl=https://images.example.invalid'
 
+# ADR-117's app list (§10.10), which the BFF binds as PushOptions: each app is a pair of keys, the chart ships
+# none, and an app the host would refuse at start is refused here instead.
+PUSH_RENDER="$OUT/web-bff-push.yaml"
+"$HELM" template web-bff "$CHARTS_DIR/web-bff" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
+    --set-string 'push.apps[0].appId=com.example.shop' --set-string 'push.apps[0].platform=fcm' >"$PUSH_RENDER"
+check 'web-bff: a push app is its AppId and Platform in the ConfigMap' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *Push__Apps__0__AppId: "com\.example\.shop"$/ { a = 1 }
+         in_cm && /^ *Push__Apps__0__Platform: "fcm"$/ { p = 1 }
+         END { exit a && p ? 0 : 1 }' "$PUSH_RENDER"
+check 'web-bff: the chart as shipped renders no push app' \
+    outside_configmap "$OUT/web-bff-object-store.yaml" '^ *Push__'
+refuses_chart web-bff 'a push platform outside fcm and apns fails the render' \
+    'and a token belongs to fcm or apns' \
+    --set-string 'push.apps[0].appId=com.example.shop' --set-string 'push.apps[0].platform=gcm'
+refuses_chart web-bff 'a push app with no app id fails the render' \
+    'appId is required' --set-string 'push.apps[0].platform=fcm'
+
 # --------------------------------------------------------------------------
 section "Shipping's chart declares its capabilities, and each is required"
 # --------------------------------------------------------------------------
@@ -1700,7 +1719,8 @@ section 'Service names are routing configuration (§10.2, §9.7)'
 # because both are literals and both are dialled.
 grep -ohE 'http://[a-z0-9-]+:[0-9]+' \
     "$ROOT/src/Gateway/Gateway.Api/appsettings.json" \
-    "$ROOT/src/BFF/Web.Bff/PricingHop.cs" |
+    "$ROOT/src/BFF/Web.Bff/PricingHop.cs" \
+    "$ROOT/src/BFF/Web.Bff/NotificationsHop.cs" |
     sed -E 's|http://([a-z0-9-]+):([0-9]+)|\1 \2|' | sort -u >"$OUT/pairs.txt"
 
 cut -d' ' -f1 "$OUT/pairs.txt" | sort -u >"$OUT/dialled.txt"
