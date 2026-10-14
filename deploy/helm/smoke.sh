@@ -72,7 +72,11 @@ owns() { case " $(field "$1" capability | tr '\n' ' ') " in *" $2 "*) return 0 ;
 
 SERVICE_CHARTS="$(awk '$2 == "release" { print $1 }' "$CASES" | tr '\n' ' ' | sed 's/ *$//')"
 MIGRATOR_CHARTS="$(charts_where migrator yes)"
-DATABASELESS_CHARTS="$(charts_where migrator no)"
+DATABASELESS_CHARTS="$(charts_where database no)"
+# The third class ADR-118 adds: a host on a database another chart's hook migrates, which runs no Job of its own.
+MIGRATED_ELSEWHERE_CHARTS="$(awk '$2 == "database" && $3 == "yes" { db[$1] = 1 }
+    $2 == "migrator" && $3 == "no" { none[$1] = 1 }
+    END { for (c in db) if (c in none) print c }' "$CASES" | sort | tr '\n' ' ' | sed 's/ *$//')"
 
 # The required per-chart values a render cannot supply for every chart (§15.4):
 # on any other chart each is a setting with the capability off, which the
@@ -216,14 +220,16 @@ else
     fail "the descriptors' charts ($listed) do not match the chart directories ($found)"
 fi
 
-# And the two sub-classifications partition it, so a chart cannot be in the
-# suite while belonging to neither — which is how it would reach the migration
+# And the three sub-classifications partition it, so a chart cannot be in the
+# suite while belonging to none — which is how it would reach the migration
 # section and be checked by nothing there.
-both="$(printf '%s\n' $MIGRATOR_CHARTS $DATABASELESS_CHARTS | sort | tr '\n' ' ' | sed 's/ *$//')"
-if [ "$both" = "$listed" ]; then
-    pass 'every chart is classified as owning a database or not'
+all3="$(printf '%s\n' $MIGRATOR_CHARTS $DATABASELESS_CHARTS $MIGRATED_ELSEWHERE_CHARTS |
+    sort | tr '\n' ' ' | sed 's/ *$//')"
+if [ "$all3" = "$listed" ]; then
+    pass 'every chart is classified as migrating its database, owning none, or migrated by another'
 else
-    fail "MIGRATOR_CHARTS + DATABASELESS_CHARTS ($both) do not partition SERVICE_CHARTS ($listed)"
+    classes='MIGRATOR_CHARTS + DATABASELESS_CHARTS + MIGRATED_ELSEWHERE_CHARTS'
+    fail "$classes ($all3) do not partition SERVICE_CHARTS ($listed)"
 fi
 
 # A worker chart sets a replica count instead of an autoscaler (§15.3), so the
@@ -1493,6 +1499,40 @@ for chart in $DATABASELESS_CHARTS; do
         test "$(count 'ConnectionStrings__' "$OUT/$chart.yaml")" -eq 0
 done
 
+# A host on a database another chart's hook migrates (ADR-118): no Job of its
+# own, so two hooks never race over one schema; the runtime login and never
+# the migrator's; and the same database as the chart it names, read from both
+# values files, or the rollout order is waiting on someone else's schema.
+values_key() {
+    # values_key <chart> <block> <key> -> that key's value inside the top-level block
+    awk -v block="$2" -v key="$3" '
+        $0 ~ ("^" block ":") { inside = 1; next }
+        /^[a-z]/ { inside = 0 }
+        inside && $1 == key ":" { print $2; exit }
+    ' "$CHARTS_DIR/$1/values.yaml"
+}
+runtime_secret_of() {
+    awk '/^  runtimeSecretRef:/ { r = 1; next } r && /^    name:/ { print $2; exit }' "$CHARTS_DIR/$1/values.yaml"
+}
+for chart in $MIGRATED_ELSEWHERE_CHARTS; do
+    migrator="$(field "$chart" migratedBy)"
+    check "$chart renders no migration Job" test "$(count '^kind: Job$' "$OUT/$chart.yaml")" -eq 0
+    check "$chart mounts its runtime connection string" \
+        grep -qE '^ *- name: ConnectionStrings__[A-Za-z]+$' "$OUT/$chart.yaml"
+    check "$chart mounts no migrator connection string" \
+        test "$(count 'ConnectionStrings__[A-Za-z]*Migrator' "$OUT/$chart.yaml")" -eq 0
+    check "$chart names the chart that migrates it ($migrator), and that chart runs a Job" \
+        sh -c 'case " $1 " in *" $0 "*) [ -n "$0" ] ;; *) false ;; esac' "$migrator" "$MIGRATOR_CHARTS"
+    # Each read is asserted non-empty first, or two failed reads agree.
+    connection="$(values_key "$chart" database connectionName)"
+    check "$chart and $migrator name one connection ($connection)" \
+        sh -c '[ -n "$0" ] && [ "$0" = "$1" ]' "$connection" "$(values_key "$migrator" database connectionName)"
+    secret="$(runtime_secret_of "$chart")"
+    check "$chart and $migrator read one runtime Secret ($secret)" \
+        sh -c '[ -n "$0" ] && [ "$0" = "$1" ]' "$secret" "$(runtime_secret_of "$migrator")"
+done
+check 'a chart migrated by another is found, so the loop above is not vacuous' test -n "$MIGRATED_ELSEWHERE_CHARTS"
+
 for chart in $SERVICE_CHARTS; do
     has_template=no
     [ -f "$CHARTS_DIR/$chart/templates/migrate-job.yaml" ] && has_template=yes
@@ -2450,7 +2490,7 @@ for chart in $MIGRATOR_CHARTS; do
         test "$(docs_of "$OUT/$chart-canary.yaml" Job hook | count '"helm.sh/hook": pre-install,pre-upgrade' /dev/stdin)" -eq 1
 done
 
-for chart in $DATABASELESS_CHARTS; do
+for chart in $DATABASELESS_CHARTS $MIGRATED_ELSEWHERE_CHARTS; do
     check "$chart: the canary renders no migration Job either" \
         test "$(count '^kind: Job$' "$OUT/$chart-canary.yaml")" -eq 0
 done

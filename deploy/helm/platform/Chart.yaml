@@ -30,6 +30,12 @@ dependencies:
   - name: notifications
     version: 0.1.0
     repository: file://../notifications
+  # After the worker's chart, whose hook migrates the schema this host reads
+  # (ADR-118). A list order is not a Helm install order, so the rollout holds
+  # the order between per-service releases; here one release runs the one hook.
+  - name: notifications-api
+    version: 0.1.0
+    repository: file://../notifications-api
   - name: privacy
     version: 0.1.0
     repository: file://../privacy

@@ -1,0 +1,15 @@
+{
+  "serviceName": "Notifications.Api",
+  "chart": "notifications-api",
+  "source": "src/Services/Notifications/Notifications.Api",
+  "signals": ["http"],
+  "consumeExemption": "The consumers check 9 finds are the worker's: Notifications' two hosts share one service tree, and this one composes the shared Infrastructure as NotificationsHost.Api, which registers no bus, no consumer and no saga (ADR-118). A declared consume signal would read a series this host never emits, and an empty result rolls every rung back. Its one surface is the BFF's gRPC hop, judged by http.",
+  "migratedBy": "notifications",
+  "smoke": {
+    "migrator": false,
+    "database": true,
+    "autoscaled": true,
+    "capabilities": [],
+    "overlay": []
+  }
+}

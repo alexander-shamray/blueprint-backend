@@ -1,0 +1,12 @@
+apiVersion: v2
+name: notifications-api
+description: >-
+  Notifications' second host (ADR-118) — the gRPC server the BFF registers a
+  device through (§10.10), on Notifications' database and with no migration
+  Job of its own: the worker's chart migrates the schema, and is rolled first.
+type: application
+version: 0.1.0
+dependencies:
+  - name: commerce-common
+    version: 0.1.0
+    repository: file://../common

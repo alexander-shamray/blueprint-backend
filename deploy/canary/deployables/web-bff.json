@@ -5,6 +5,7 @@
   "signals": ["http", "consume"],
   "smoke": {
     "migrator": true,
+    "database": true,
     "autoscaled": true,
     "capabilities": ["clientCredentials", "objectStore"],
     "overlay": []

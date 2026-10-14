@@ -73,7 +73,9 @@ entries in lists kept separately, which §15.3 names with their owners.
 | `source` | The host's tree under `src/`, which `smoke.sh` holds the chart to |
 | `signals` | What the workload is judged on, from `canary.py`'s `SIGNALS` (ADR-047) |
 | `httpExemption`, `consumeExemption`, `sagaExemption` | The argument for a signal check 9 finds owed and the workload does not declare |
+| `migratedBy` | The workload whose chart's hook migrates this one's schema, named exactly when `smoke.database` is true and `smoke.migrator` false; the rollout refuses a tag whose revision that release has not reached, by ancestry (ADR-118) |
 | `smoke.migrator` | Whether the chart renders §7.4's migration Job |
+| `smoke.database` | Whether the chart mounts a database connection, with a Job or, under `migratedBy`, without one |
 | `smoke.autoscaled` | Whether the chart runs an HPA or a fixed replica count (§15.3) |
 | `smoke.capabilities` | The credential-bearing capabilities the chart may turn on, in `smoke.sh`'s vocabulary; the library refuses each on every other chart, and `smoke.sh` holds the two to each other |
 | `smoke.overlay` | The `key=value` settings a render of this chart cannot do without and no other chart may carry, passed as `--set-string` |
@@ -95,7 +97,9 @@ because a branch driven by the file it judges asserts nothing. Every value
 4. Each workload's key is a Helm release name, its `serviceName` is an entry
    assembly this solution builds, its `chart` is a chart under `deploy/helm`
    that no other descriptor names, its `source` holds that assembly's
-   project, and its `smoke` block is one `smoke.sh` can read.
+   project, its `smoke` block is one `smoke.sh` can read, and its
+   `migratedBy` is present exactly when its chart has a database and no Job,
+   naming another workload whose chart runs one.
 5. Every series the query templates read is vouched for: either a loaded alert
    reads it — and `deploy/observability/check.py` has already established
    that something publishes it — or it is an instrument of a meter
@@ -133,6 +137,10 @@ because a branch driven by the file it judges asserts nothing. Every value
     `src/` — ADR-050's binding, and any piece of it can go missing while
     every command in the rollout still runs, every other check here still
     passes, and the facts above quietly describe the checkout again.
+13. While any descriptor names `migratedBy`, `deploy.yml` asks
+    `canary.py migrated-by` for the dispatched workload and holds the tag's
+    revision to the migrating release's by ancestry (ADR-118), so a host never
+    rolls ahead of the schema another chart migrates.
 
 ## What a workload is judged on
 

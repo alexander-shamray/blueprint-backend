@@ -46,6 +46,10 @@ INSTALLED_SOURCE = "INSTALLED_SOURCE"
 SOURCE_FLAG = "--source"
 INSTALLED_FLAG = "--installed-source"
 
+# The revision the release that migrates the rolled workload's schema serves,
+# which check 13 asserts the rollout holds the tag's revision to (ADR-118).
+MIGRATED_REVISION = "MIGRATED_REVISION"
+
 
 def _argument(flag: str, variable: str) -> str:
     """The whole argument check 12 looks for, spelled once.
@@ -617,7 +621,8 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
                 "not a chart under deploy/helm"
             )
         failures += _smoke_reads(name, entry, root)
-    charts = [entry.get("chart") for entry in workloads.values()]
+        failures += _migrated_by_reads(name, workloads)
+    charts =[entry.get("chart") for entry in workloads.values()]
     for chart in sorted({chart for chart in charts if chart and charts.count(chart) > 1}):
         failures.append(f"two descriptors name the chart {chart!r}, and smoke.sh renders a chart once")
 
@@ -688,6 +693,10 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     #     (ADR-050), and every piece of that wiring can go missing without
     #     anything else here noticing.
     failures += _rollout_reads_the_image_source()
+
+    # 13. A workload another release migrates is rolled behind that release
+    #     (ADR-118), and the rollout asks the descriptor which one it is.
+    failures += _rollout_follows_the_migrator(workloads)
 
     return failures
 
@@ -1399,13 +1408,18 @@ def _smoke_case(name: str, entry: dict) -> list[str]:
             "project name to find the host's own settings by"
         )
     lines = [f"{chart} release {name}", f"{chart} source {source}", f"{chart} host {host}"]
-    for key in ("migrator", "autoscaled"):
+    for key in ("migrator", "database", "autoscaled"):
         if not isinstance(smoke.get(key), bool):
             raise PlanError(
                 f"workloads.{name}.smoke.{key} is {smoke.get(key)!r} rather than "
                 f"true or false, so smoke.sh cannot classify the chart {chart!r}"
             )
         lines.append(f"{chart} {key} {'yes' if smoke[key] else 'no'}")
+    if smoke["migrator"] and not smoke["database"]:
+        raise PlanError(
+            f"workloads.{name}.smoke says the chart {chart!r} migrates a database "
+            "it does not have, so smoke.sh would hold it to two classes at once"
+        )
     for key, field, pattern in (("capabilities", "capability", CAPABILITY), ("overlay", "overlay", OVERLAY)):
         values = smoke.get(key)
         if not isinstance(values, list) or not all(
@@ -1419,8 +1433,61 @@ def _smoke_case(name: str, entry: dict) -> list[str]:
 
 
 def smoke_cases(workloads: dict) -> list[str]:
-    """Every descriptor's smoke.sh cases, as `<chart> <field> <value>` lines."""
-    return [line for name, entry in entries(workloads).items() for line in _smoke_case(name, entry)]
+    """Every descriptor's smoke.sh cases, as `<chart> <field> <value>` lines.
+
+    A chart migrated by another names that chart, so smoke.sh can hold the two
+    to one database; an unknown name is check 4's to refuse and prints nothing.
+    """
+    workloads = entries(workloads)
+    lines = []
+    for name, entry in workloads.items():
+        lines += _smoke_case(name, entry)
+        migrator = workloads.get(entry.get("migratedBy"))
+        if isinstance(migrator, dict) and isinstance(migrator.get("chart"), str):
+            lines.append(f"{entry['chart']} migratedBy {migrator['chart']}")
+    return lines
+
+
+def migrated_by(workload: str, plan_document: dict) -> str | None:
+    """The workload whose chart migrates `workload`'s schema, or None for one that migrates its own.
+
+    ADR-118's rollout order: a host on a schema another release migrates is
+    rolled only behind that release, and the rollout asks this which one.
+    """
+    workloads = entries(plan_document["workloads"])
+    if workload not in workloads:
+        raise PlanError(f"no workload {workload!r} in the plan")
+    return workloads[workload].get("migratedBy")
+
+
+def _migrated_by_reads(name: str, workloads: dict) -> list[str]:
+    """Check 4 for `migratedBy`: named exactly when the chart has a database and no Job, and named right."""
+    entry = workloads[name]
+    smoke = entry.get("smoke") if isinstance(entry.get("smoke"), dict) else {}
+    owes = smoke.get("database") is True and smoke.get("migrator") is False
+    migrator = entry.get("migratedBy")
+    if migrator is None:
+        if owes:
+            return [
+                f"workloads.{name} has a database and no migration Job, and names no "
+                "migratedBy, so nothing orders its rollout behind the release that "
+                "migrates its schema (ADR-118)"
+            ]
+        return []
+    if not owes:
+        return [
+            f"workloads.{name}.migratedBy is {migrator!r}, but its chart runs no "
+            "database or migrates its own, so there is no schema for the rollout to "
+            "wait on"
+        ]
+    other = workloads.get(migrator) if isinstance(migrator, str) else None
+    other_smoke = other.get("smoke") if isinstance(other, dict) else None
+    if migrator == name or not isinstance(other_smoke, dict) or other_smoke.get("migrator") is not True:
+        return [
+            f"workloads.{name}.migratedBy is {migrator!r}, which is not another "
+            "workload whose chart runs a migration Job"
+        ]
+    return []
 
 
 def _smoke_reads(name: str, entry: dict, root: Path) -> list[str]:
@@ -1615,6 +1682,34 @@ def _invocations(lines: list[str], command: str) -> list[str]:
     return found
 
 
+def _rollout_follows_the_migrator(workloads: dict, workflow: Path = WORKFLOW) -> list[str]:
+    """Check 13: where a descriptor names `migratedBy`, the rollout asks for it and refuses on the answer.
+
+    Only while one does: with none, the step has nothing to order and its
+    absence is not a gap.
+    """
+    if not any(entry.get("migratedBy") for entry in workloads.values()):
+        return []
+    try:
+        text = workflow.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"{WORKFLOW_PATH} is not readable, so ADR-118's rollout order is unchecked: {error}"]
+    live = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+    asks = _invocations(live, "canary.py migrated-by")
+    if not any(_argument("--workload", "WORKLOAD") in run for run in asks):
+        return [
+            f"{WORKFLOW_PATH} runs no `canary.py migrated-by` for the dispatched "
+            f"{_argument('--workload', 'WORKLOAD')}, so a host another release "
+            "migrates can roll ahead of its schema (ADR-118)"
+        ]
+    if not _invocations(live, f'merge-base --is-ancestor "$REVISION" "${MIGRATED_REVISION}"'):
+        return [
+            f"{WORKFLOW_PATH} asks `canary.py migrated-by` and never holds the tag's "
+            f"revision to ${MIGRATED_REVISION}, so the answer refuses nothing (ADR-118)"
+        ]
+    return []
+
+
 def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
     """The rollout hands each image's tree to everything that reads `src/`.
 
@@ -1783,6 +1878,11 @@ def main(argv: list[str]) -> int:
     chart = sub.add_parser("chart", help="the chart directory a workload deploys")
     chart.add_argument("--workload", required=True)
 
+    # ADR-118's rollout order: empty for a workload that migrates its own
+    # schema or has none, so a shell reads "nothing to wait on" from no output.
+    migrated = sub.add_parser("migrated-by", help="the workload whose release migrates this one's schema")
+    migrated.add_argument("--workload", required=True)
+
     # One name per line, for the shell loop in which `realm.yml`'s scheduled
     # job judges each release's realm (ADR-043).
     sub.add_parser("workloads", help="every workload in the plan, one per line")
@@ -1886,6 +1986,14 @@ def main(argv: list[str]) -> int:
             print(f"canary: no workload {args.workload!r} in the plan", file=sys.stderr)
             return 1
         print(workloads[args.workload]["chart"])
+        return 0
+
+    if args.command == "migrated-by":
+        try:
+            print(migrated_by(args.workload, document) or "")
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
         return 0
 
     if args.command == "workloads":
