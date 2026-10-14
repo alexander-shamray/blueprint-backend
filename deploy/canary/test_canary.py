@@ -1873,7 +1873,14 @@ class SharedValuesTests(unittest.TestCase):
         for a, b in [(absent, null), (null, empty), (absent, empty)]:
             with self.subTest(a=a, b=b):
                 self.assertTrue(canary.values_agree("jurisdiction.required", a, b, "peer"))
-        self.assertEqual([], canary.values_agree("jurisdiction.required", absent, {}, "peer"))
+        self.assertEqual([], canary.values_agree("jurisdiction.required", null, null, "peer"))
+
+    def test_a_path_neither_release_holds_is_refused_and_not_agreed(self) -> None:
+        """A misspelt key would otherwise pass every rollout, since `--all` carries every default."""
+        differences = canary.values_agree("push.app", {"push": {"apps": []}}, {"push": {"apps": []}}, "web-bff")
+
+        self.assertEqual(1, len(differences), differences)
+        self.assertIn("neither this release's values nor web-bff's hold", differences[0])
 
     def test_the_cli_exits_by_the_answer(self) -> None:
         folder = Path(tempfile.mkdtemp())

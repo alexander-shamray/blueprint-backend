@@ -1594,7 +1594,11 @@ def values_agree(key: str, values: dict, peer_values: dict, peer: str) -> list[s
     Each document is a `helm get values --all -o json`, so a chart's default
     counts as a value the release was given.
     """
-    mine, theirs = _canonical(_value_at(values, key)), _canonical(_value_at(peer_values, key))
+    mine, theirs = _value_at(values, key), _value_at(peer_values, key)
+    # `--all` carries every chart default, so a path neither holds is a misspelt key, never an agreement.
+    if mine is _ABSENT and theirs is _ABSENT:
+        return [f"{key} is a path neither this release's values nor {peer}'s hold, so nothing was compared"]
+    mine, theirs = _canonical(mine), _canonical(theirs)
     if mine == theirs:
         return []
     if isinstance(mine, list) and isinstance(theirs, list):
