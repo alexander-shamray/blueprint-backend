@@ -1923,6 +1923,52 @@ class SharedValuesTests(unittest.TestCase):
         self.assertEqual(1, len(failures), failures)
         self.assertIn("refuses nothing", failures[0])
 
+    def test_a_key_the_rollout_sets_itself_is_refused(self) -> None:
+        """Read from the workflow's own `--set` flags, so a newly pinned key is covered without a list to keep."""
+        self.assertIn('identity.authority="$CHECKED_AUTHORITY"', self.shipped)
+        for key in ["identity.authority", "image", "image.tag"]:
+            with self.subTest(key=key):
+                workloads = self.workloads
+                workloads["notifications"]["sharesValues"]["web-bff"].append(key)
+
+                failures = canary._rollout_holds_shared_values(workloads, self._workflow(self.shipped))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn(f"names {key}, which", failures[0])
+                self.assertIn("own command line", failures[0])
+
+    def test_a_comparison_of_the_running_values_is_refused(self) -> None:
+        """The running values carry the old chart's defaults, so a changed default would pass unseen."""
+        running = self.shipped.replace('--values "$RUNNER_TEMP/candidate.json"', '--values "$RUNNER_TEMP/stable.json"')
+
+        failures = canary._rollout_holds_shared_values(self.workloads, self._workflow(running))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("will be installed with", failures[0])
+
+    def test_overrides_read_with_their_defaults_are_refused(self) -> None:
+        coalesced = self.shipped.replace(
+            '-n "$NAMESPACE" -o yaml > "$RUNNER_TEMP/overrides.yaml"',
+            '-n "$NAMESPACE" --all -o yaml > "$RUNNER_TEMP/overrides.yaml"')
+
+        failures = canary._rollout_holds_shared_values(self.workloads, self._workflow(coalesced))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("own overrides", failures[0])
+
+    def test_candidate_values_not_drawn_from_the_checked_out_chart_are_refused(self) -> None:
+        for mutation in [
+            ('cp "deploy/helm/$CHART/values.yaml"', 'touch "deploy/helm/$CHART/values.yaml"'),
+            ('-f "$RUNNER_TEMP/overrides.yaml" ' + chr(92), chr(92)),
+        ]:
+            with self.subTest(mutation=mutation[0]):
+                self.assertIn(mutation[0], self.shipped)
+                failures = canary._rollout_holds_shared_values(
+                    self.workloads, self._workflow(self.shipped.replace(*mutation)))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("checked-out chart's", failures[0])
+
     def test_a_commented_out_question_is_no_question(self) -> None:
         commented = self.shipped.replace(
             "python deploy/canary/canary.py shared-values", "# python deploy/canary/canary.py shared-values")

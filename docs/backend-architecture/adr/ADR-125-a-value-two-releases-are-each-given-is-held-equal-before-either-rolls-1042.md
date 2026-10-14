@@ -5,9 +5,12 @@ either release while the two are given different values.** The pair and the
 values path are declared once, in one release's canary descriptor, as
 `sharesValues`, and read from both ends. Before a rollout changes the
 cluster, `deploy.yml` asks `canary.py shared-values` which peers and keys the
-dispatched release shares, and holds each key equal between this release's
-installed values and the peer's, as `helm get values --all` reports both. A
-list is compared by the members it holds, in any order. A peer with no
+dispatched release shares, and holds each key equal between the values this
+release will be installed with and the ones the peer runs. The first are its
+own overrides laid over the checked-out chart's defaults, as the upgrade lays
+them, which Helm coalesces over a chart holding those values alone; the
+second are `helm get values --all`. A list is compared by the members it
+holds, in any order. A peer with no
 release yet reads nothing, so it holds nothing back. Today the values shared
 are
 [ADR-120](ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)'s
@@ -34,18 +37,20 @@ by construction, and holds nothing a deployment states.
 release, not when it is made**: a rollout keeps every value its release was
 given, so an operator who upgrades one release's values by hand learns of
 the other at the next dispatch, which then refuses until both agree. **A
-shared key's chart default is not held**: the comparison reads the values
-each release is running, and a rollout takes the checked-out chart's defaults
-for what its release was not given, so a commit that changes a shared default
-reaches each release as it rolls, and the second is refused until its value
-is stated by hand. A shared key is one a deployment states. **The
+commit that changes a shared key's chart default is refused at a release
+that would roll onto it while its peer runs the old value**: that release
+would install the new default beside the old one, so it rolls only once its
+peer runs the value it would install, which an operator states in either
+release's values. **The
 refusal names the key and the members only one release holds**, which are
 configuration and not secrets. `jurisdiction.required`'s chart default is
 null, which the charts refuse as unstated, and they take an empty list as
 none ([Appendix E](../appendix-e-reference-domain.md)'s
 `Jurisdiction__Required` row), so a release that leaves it unstated does not
 agree with one that states none. A third shared value is one more key in a
-descriptor, and the workflow needs no change.
+descriptor, and the workflow needs no change. A key the rollout sets on its
+own command line, as it does the image and the checked authority, is
+installed past the values compared, so check 14 refuses it as a shared key.
 
 ---
 

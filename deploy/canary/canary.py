@@ -1591,11 +1591,12 @@ def _canonical(value: object) -> object:
 def values_agree(key: str, values: dict, peer_values: dict, peer: str) -> list[str]:
     """The ways `key` differs between this release's values and `peer`'s, or none (ADR-125).
 
-    Each document is a `helm get values --all -o json`, so a chart's default
-    counts as a value the release was given.
+    `values` is what the release will be installed with, its overrides
+    coalesced over the checked-out chart's; `peer_values` is the peer's
+    `helm get values --all -o json`. Both carry a chart's defaults as values.
     """
     mine, theirs = _value_at(values, key), _value_at(peer_values, key)
-    # `--all` carries every chart default, so a path neither holds is a misspelt key, never an agreement.
+    # Both carry every chart default, so a path neither holds is a misspelt key, never an agreement.
     if mine is _ABSENT and theirs is _ABSENT:
         return [f"{key} is a path neither this release's values nor {peer}'s hold, so nothing was compared"]
     mine, theirs = _canonical(mine), _canonical(theirs)
@@ -1875,12 +1876,47 @@ def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> 
             f"{_argument('--workload', 'WORKLOAD')}, so two releases can roll on values "
             "that disagree (ADR-125)"
         ]
+    # A key the rollout sets itself is installed past the candidate values, so comparing them would hold nothing.
+    pinned = set(re.findall(r"--set(?:-string|-json|-file)?[ =]([\w.]+)=", "\n".join(live)))
+    shared = {
+        (name, key)
+        for name, entry in workloads.items()
+        for keys in (entry.get("sharesValues") or {}).values()
+        for key in keys
+        if isinstance(key, str) and any(key == p or key.startswith(p + ".") or p.startswith(key + ".") for p in pinned)
+    }
+    if shared:
+        return [
+            f"workloads.{name}.sharesValues names {key}, which {WORKFLOW_PATH} sets on the upgrade's own "
+            "command line, so the values compared are not the ones installed (ADR-125)"
+            for name, key in sorted(shared)
+        ]
     compares = _invocations(live, "canary.py values-agree")
-    if not any('--values "$RUNNER_TEMP/stable.json"' in run and "--peer " in run for run in compares):
+    if not any('--values "$RUNNER_TEMP/candidate.json"' in run and "--peer " in run for run in compares):
         return [
             f"{WORKFLOW_PATH} asks `canary.py shared-values` and never compares the "
-            "release's installed values with a peer's through `canary.py values-agree`, "
+            "values the release will be installed with to a peer's through `canary.py values-agree`, "
             "so the answer refuses nothing (ADR-125)"
+        ]
+    # Overrides alone, as the upgrade applies them: `--all` would carry the old chart's defaults over the new.
+    overrides = _invocations(live, "helm get values")
+    if not any(
+        run.startswith('helm get values "$WORKLOAD" ') and '> "$RUNNER_TEMP/overrides.yaml"' in run
+        and "--all" not in run
+        for run in overrides
+    ):
+        return [
+            f"{WORKFLOW_PATH} never reads the release's own overrides into "
+            '"$RUNNER_TEMP/overrides.yaml" without `--all`, so the values compared are not the ones '
+            "the upgrade installs (ADR-125)"
+        ]
+    if not any('cp "deploy/helm/$CHART/values.yaml"' in line for line in live) or not any(
+        '-f "$RUNNER_TEMP/overrides.yaml"' in run and '> "$RUNNER_TEMP/candidate.json"' in run
+        for run in _invocations(live, "helm template candidate-values")
+    ):
+        return [
+            f"{WORKFLOW_PATH} never coalesces the overrides over the checked-out chart's "
+            'values into "$RUNNER_TEMP/candidate.json", so a changed chart default is never compared (ADR-125)'
         ]
     return []
 
@@ -2071,7 +2107,8 @@ def main(argv: list[str]) -> int:
     # Silent and 0 when the key agrees; each difference on stderr and 1 when not; 2 when it cannot compare.
     agreeing = sub.add_parser("values-agree", help="whether one key agrees between two releases' values")
     agreeing.add_argument("--key", required=True)
-    agreeing.add_argument("--values", required=True, type=Path, help="this release's `helm get values --all -o json`")
+    agreeing.add_argument(
+        "--values", required=True, type=Path, help="the values this release will be installed with, as JSON")
     agreeing.add_argument("--peer", required=True, type=Path, help="the peer's `helm get values --all -o json`")
     agreeing.add_argument("--peer-name", required=True)
 
