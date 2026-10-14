@@ -31,6 +31,7 @@ public class WriteEndpointRuleTests(BffFactory factory) : IClassFixture<BffFacto
                 "DeleteSavedAddress",
                 "IssueProductImageUpload",
                 "PutDevice",
+                "PutNotificationPreference",
                 "PutSavedAddress",
                 "Quote"
             ]);
@@ -48,8 +49,9 @@ public class WriteEndpointRuleTests(BffFactory factory) : IClassFixture<BffFacto
         mapped.ShouldContain("ListOrders");
         mapped.ShouldContain("GetOrder");
         mapped.ShouldContain("GetSavedAddress");
+        mapped.ShouldContain("GetNotificationPreferences");
         Names(WriteEndpointRule.Writes(Endpoints))
-            .Intersect(["ListOrders", "GetOrder", "GetSavedAddress"])
+            .Intersect(["ListOrders", "GetOrder", "GetSavedAddress", "GetNotificationPreferences"])
             .ShouldBeEmpty();
     }
 

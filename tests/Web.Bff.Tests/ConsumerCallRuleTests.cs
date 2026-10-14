@@ -49,7 +49,7 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
 
         // Named, so a client this host gains is seen here before a consumer can reach it.
         Names(ConsumerCallRule.Clients(factory.Composition, Host)).ShouldBe(
-            ["CachingTokenClient", "DevicesClient", "HttpClient", "PricingClient"]);
+            ["CachingTokenClient", "DevicesClient", "HttpClient", "PreferencesClient", "PricingClient"]);
     }
 
     private static string[] Names(IEnumerable<Type> types) => [.. types.Select(type => type.Name)];

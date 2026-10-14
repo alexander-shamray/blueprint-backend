@@ -57,6 +57,11 @@
       Include="..\..\Services\Notifications\Notifications.Api\Protos\devices.proto"
       Link="Protos\devices.proto"
       GrpcServices="Client" />
+    <!-- ADR-120's preferences, linked from the same host on the same terms. -->
+    <Protobuf
+      Include="..\..\Services\Notifications\Notifications.Api\Protos\preferences.proto"
+      Link="Protos\preferences.proto"
+      GrpcServices="Client" />
   </ItemGroup>
 
 </Project>
