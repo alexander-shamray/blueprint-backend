@@ -154,10 +154,10 @@ contactSource:
   baseUrl: ""
   realm: commerce
 
-# ADR-053's kinds, none defaulted and each refused unstated, at render and
-# again at start: a language set, the zone dates are rendered in, the windows,
-# and ADR-120's required pairs, the topic/channel pairs the service must send,
-# where [] states none. notifications-api's chart states the same pairs.
+# ADR-053's kinds, none defaulted and each refused unstated at render: a
+# language set, the zone dates are rendered in and the windows, which the host
+# refuses again at start, and ADR-120's required pairs, which it reads absent
+# as none, so [] states none. notifications-api's chart states the same pairs.
 jurisdiction:
   enabled: true
   languages: []
