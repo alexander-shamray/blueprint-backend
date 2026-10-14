@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace Notifications.Infrastructure.Push;
 
 /// <summary>Where FCM and Google's token endpoint are, and the service account this deployment sends as.</summary>
-/// <remarks>Required only while an app names <c>fcm</c>; the key is a secret, mounted as the relay's is.</remarks>
+/// <remarks>Required only while an app names <c>fcm</c>; its key is a secret, as the relay's is (§15.4).</remarks>
 public sealed class FcmOptions
 {
     /// <summary>The configuration section, named once (§15.4).</summary>

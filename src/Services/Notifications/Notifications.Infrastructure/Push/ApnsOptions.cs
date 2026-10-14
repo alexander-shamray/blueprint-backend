@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace Notifications.Infrastructure.Push;
 
 /// <summary>Where APNs is, and the team and key this deployment's provider tokens are minted under.</summary>
-/// <remarks>Required only while an app names <c>apns</c>; the key is a secret, mounted as the relay's is.</remarks>
+/// <remarks>Required only while an app names <c>apns</c>; its key is a secret, as the relay's is (§15.4).</remarks>
 public sealed class ApnsOptions
 {
     /// <summary>The configuration section, named once (§15.4).</summary>

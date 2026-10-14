@@ -2,9 +2,8 @@ namespace Notifications.Application.Push;
 
 /// <summary>One push as the worker hands it over: rendered, addressed to one device and identified.</summary>
 /// <remarks>
-/// Its text names the delivery alone, so a log or a fault that prints one holds no token (ADR-117, §13.4). The
-/// token is in memory for the length of the call and nowhere else; the collapse key makes a resend replace the
-/// copy it repeats on the device rather than show beside it.
+/// Its text names the delivery alone, so no log or fault that prints one holds the token (ADR-117, §13.4); the
+/// collapse key makes a resend replace the copy it repeats on the device rather than show beside it.
 /// </remarks>
 public sealed record OutboundPush(
     string Platform,

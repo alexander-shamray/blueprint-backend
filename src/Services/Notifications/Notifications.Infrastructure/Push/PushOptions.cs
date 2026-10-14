@@ -3,7 +3,7 @@ namespace Notifications.Infrastructure.Push;
 /// <summary>The apps this deployment pushes to, each with its provider: the list ADR-117's BFF reads.</summary>
 /// <remarks>
 /// A platform no app names has no provider registered and needs no provider options, so a deployment may run one
-/// provider or none. The BFF's chart value and this one name the same list.
+/// provider or none. The BFF's chart value and this one name the same list (ADR-117).
 /// </remarks>
 public sealed class PushOptions
 {

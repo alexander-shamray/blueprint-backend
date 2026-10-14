@@ -9,8 +9,8 @@ namespace Notifications.Infrastructure.Push;
 
 /// <summary>FCM's access token, for a signed assertion under OAuth 2.0's JWT bearer grant (RFC 7523).</summary>
 /// <remarks>
-/// Cached and renewed a margin before the lifetime the exchange returns. Google's refusal is a credential fault and
-/// its silence a transient one, counted here as the provider's own answers are.
+/// Cached, and renewed <see cref="RenewalMargin"/> before the lifetime the exchange returns. Google's refusal is a
+/// credential fault and its silence a transient one, counted here as the provider's own answers are.
 /// </remarks>
 internal sealed class FcmAccessTokens : IDisposable
 {

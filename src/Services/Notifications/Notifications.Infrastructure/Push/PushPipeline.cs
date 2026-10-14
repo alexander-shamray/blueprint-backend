@@ -20,9 +20,8 @@ internal sealed record PushHopBudget(
 
 /// <summary>A provider's budget as one pipeline, held by its singleton adapter so the breaker is the host's.</summary>
 /// <remarks>
-/// Built by hand as <c>MailPipeline</c> is, in the standard handler's order: total, retry, breaker, attempt (§9.7).
-/// The standard handler is not used because it retries an attempt that timed out, and a push once started may have
-/// been delivered; here only a request the provider took nothing in is retried.
+/// Built by hand in the standard handler's order, total, retry, breaker, attempt, since that handler retries a timed
+/// out attempt and a push once started may be delivered; only one the provider took nothing in is retried (§9.7).
 /// </remarks>
 internal sealed class PushPipeline
 {
