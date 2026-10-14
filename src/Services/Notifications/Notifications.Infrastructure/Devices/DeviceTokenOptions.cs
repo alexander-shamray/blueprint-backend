@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace Notifications.Infrastructure.Devices;
 
 /// <summary>ADR-117's numbers for the device rows, defaulted here and refused at start out of bounds.</summary>
-/// <remarks>Not a jurisdiction's: none is statutory, so a deployment overrides them only for its own reasons.</remarks>
+/// <remarks>Not a jurisdiction's: none is statutory (ADR-053), so a deployment changes them for its own ends.</remarks>
 public sealed class DeviceTokenOptions
 {
     /// <summary>The configuration section, named once (§15.4).</summary>
