@@ -1867,7 +1867,8 @@ def _assignments(argument: str) -> list[str]:
         depth += {"{": 1, "}": -1}.get(char, 0) if not escaped else 0
         escaped = char == "\\" and not escaped
         current += char
-    return [*parts, current]
+    # Unbalanced braces are no list: split on every unescaped comma, which over-reports rather than hides a key.
+    return [*parts, current] if depth == 0 else re.split(r"(?<!\\),", argument)
 
 
 def _pinned_keys(lines: list[str]) -> set[str]:
