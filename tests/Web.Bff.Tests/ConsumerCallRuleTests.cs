@@ -37,7 +37,7 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
     [Fact]
     public void Every_synchronous_call_a_consumer_reaches_is_declared()
     {
-        // The pricing hop is an endpoint's (§9.7), so the projection's consumers reach none of these.
+        // Both hops are endpoints' (§9.7), so the projection's consumers reach none of these.
         ConsumerCallRule.Offenders(factory.Composition, Host, []).ShouldBeEmpty();
     }
 
@@ -49,7 +49,7 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
 
         // Named, so a client this host gains is seen here before a consumer can reach it.
         Names(ConsumerCallRule.Clients(factory.Composition, Host)).ShouldBe(
-            ["CachingTokenClient", "HttpClient", "PricingClient"]);
+            ["CachingTokenClient", "DevicesClient", "HttpClient", "PricingClient"]);
     }
 
     private static string[] Names(IEnumerable<Type> types) => [.. types.Select(type => type.Name)];

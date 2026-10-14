@@ -52,6 +52,11 @@
       Include="..\..\Services\Catalog\Catalog.Api\Protos\pricing.proto"
       Link="Protos\pricing.proto"
       GrpcServices="Client" />
+    <!-- ADR-117's registration, linked from Notifications.Api, which serves it, on the same terms. -->
+    <Protobuf
+      Include="..\..\Services\Notifications\Notifications.Api\Protos\devices.proto"
+      Link="Protos\devices.proto"
+      GrpcServices="Client" />
   </ItemGroup>
 
 </Project>

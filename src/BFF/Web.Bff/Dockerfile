@@ -20,8 +20,9 @@ WORKDIR /src
 # on deploy/compose/** while a reference lands under src/.
 #
 # What that job does NOT close is a filter that never fires. The `bff` filter
-# has to name every path this image copies — including Catalog's proto, which
-# is why it reaches into another service's tree (§15.1).
+# has to name every path this image copies — including Catalog's and
+# Notifications' protos, which is why it reaches into two other services'
+# trees (§15.1).
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/BuildingBlocks/Common.Domain/Common.Domain.csproj src/BuildingBlocks/Common.Domain/
 COPY src/BuildingBlocks/Common.Application/Common.Application.csproj src/BuildingBlocks/Common.Application/
@@ -49,6 +50,8 @@ COPY src/BFF/ src/BFF/
 # src/Services/Catalog that the reader will go looking for in a Dockerfile that
 # builds no Catalog project at all. A Catalog *rename* breaks it the same way.
 COPY src/Services/Catalog/Catalog.Api/Protos/ src/Services/Catalog/Catalog.Api/Protos/
+# Notifications' devices.proto, on the same terms, for ADR-117's registration.
+COPY src/Services/Notifications/Notifications.Api/Protos/ src/Services/Notifications/Notifications.Api/Protos/
 
 RUN dotnet publish src/BFF/Web.Bff/Web.Bff.csproj \
     -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false

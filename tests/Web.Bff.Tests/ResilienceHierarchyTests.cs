@@ -9,10 +9,13 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§9.7's timeout hierarchy, read off the built host's named options.</summary>
+/// <summary>§9.7's timeout hierarchy, read off the built host's named options for each of its two hops.</summary>
 public class ResilienceHierarchyTests
 {
-    private static HttpStandardResilienceOptions Configured()
+    /// <summary>Each hop by the name its options are registered under, so a hop this host gains joins here.</summary>
+    public static TheoryData<string> Hops => [PricingHop.ResilienceOptionsName, NotificationsHop.ResilienceOptionsName];
+
+    private static HttpStandardResilienceOptions Configured(string hop)
     {
         using BffFactory factory = new();
 
@@ -21,7 +24,7 @@ public class ResilienceHierarchyTests
 
         return factory.Services
             .GetRequiredService<IOptionsMonitor<HttpStandardResilienceOptions>>()
-            .Get(PricingHop.ResilienceOptionsName);
+            .Get(hop);
     }
 
     /// <summary>The deadline the host's request-timeout middleware ends a request at.</summary>
@@ -35,10 +38,11 @@ public class ResilienceHierarchyTests
             .Value.DefaultPolicy!.Timeout!.Value;
     }
 
-    [Fact]
-    public void The_outbound_total_sits_below_the_hosts_own_request_deadline()
+    [Theory]
+    [MemberData(nameof(Hops))]
+    public void The_outbound_total_sits_below_the_hosts_own_request_deadline(string hop)
     {
-        HttpStandardResilienceOptions options = Configured();
+        HttpStandardResilienceOptions options = Configured(hop);
         TimeSpan deadline = RequestDeadline();
 
         deadline.ShouldBe(ServiceOptions.OperationTimeout, "§9.7: a BFF request meets the service operation total.");
@@ -49,10 +53,11 @@ public class ResilienceHierarchyTests
             "§9.7: the outbound client total must be below the service operation total.");
     }
 
-    [Fact]
-    public void The_attempts_and_their_backoff_fit_inside_the_total()
+    [Theory]
+    [MemberData(nameof(Hops))]
+    public void The_attempts_and_their_backoff_fit_inside_the_total(string hop)
     {
-        HttpStandardResilienceOptions options = Configured();
+        HttpStandardResilienceOptions options = Configured(hop);
 
         TimeSpan attempts = options.AttemptTimeout.Timeout * (options.Retry.MaxRetryAttempts + 1);
 
@@ -69,20 +74,22 @@ public class ResilienceHierarchyTests
             "cancelled part-way and the retry never had a chance to help (§9.7).");
     }
 
-    [Fact]
-    public void The_attempt_timeout_is_inside_the_band_the_hierarchy_names()
+    [Theory]
+    [MemberData(nameof(Hops))]
+    public void The_attempt_timeout_is_inside_the_band_the_hierarchy_names(string hop)
     {
-        HttpStandardResilienceOptions options = Configured();
+        HttpStandardResilienceOptions options = Configured(hop);
 
         // §9.7's 1–2 s band, where too short an attempt turns a slow dependency into a failure.
         options.AttemptTimeout.Timeout.ShouldBeGreaterThanOrEqualTo(TimeSpan.FromSeconds(1));
         options.AttemptTimeout.Timeout.ShouldBeLessThanOrEqualTo(TimeSpan.FromSeconds(2));
     }
 
-    [Fact]
-    public void TotalRequestTimeout_is_not_left_at_its_default()
+    [Theory]
+    [MemberData(nameof(Hops))]
+    public void TotalRequestTimeout_is_not_left_at_its_default(string hop)
     {
-        HttpStandardResilienceOptions options = Configured();
+        HttpStandardResilienceOptions options = Configured(hop);
 
         // §9.7's named trap, as its own test so a failure names the property.
         options.TotalRequestTimeout.Timeout.ShouldNotBe(

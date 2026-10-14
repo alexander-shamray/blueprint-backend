@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Not a test project (§4.1). The stub's server half of pricing.proto, compiled beside Web.Bff's client half,
+  <!-- Not a test project (§4.1). A stub's server half of a proto, compiled beside Web.Bff's client half,
        would define every message twice in one compilation, and CS0436 is an error under ADR-019. -->
 
   <PropertyGroup>
@@ -25,6 +25,11 @@
     <Protobuf
       Include="..\..\src\Services\Catalog\Catalog.Api\Protos\pricing.proto"
       Link="Protos\pricing.proto"
+      GrpcServices="Server" />
+    <!-- StubNotifications' half of devices.proto, on the same terms. -->
+    <Protobuf
+      Include="..\..\src\Services\Notifications\Notifications.Api\Protos\devices.proto"
+      Link="Protos\devices.proto"
       GrpcServices="Server" />
   </ItemGroup>
 
