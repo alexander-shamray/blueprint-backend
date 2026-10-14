@@ -1,0 +1,4 @@
+Title: Your order has been cancelled
+
+Your order has been cancelled. Open the app to see why.
+Order: {OrderId}

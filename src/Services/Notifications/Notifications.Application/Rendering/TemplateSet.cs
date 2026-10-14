@@ -1,13 +1,15 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using Notifications.Application.Preferences;
 
 namespace Notifications.Application.Rendering;
 
 /// <summary>Every template the service ships, parsed and checked once, so a defect fails the host at start.</summary>
 /// <remarks>
 /// A cancellation's map is a file beside its template and versioned with it, so a row's version reproduces the reason
-/// it gave as well as the text (ADR-053 rule 4), and a third language is files alone (ADR-053 rule 2).
+/// it gave as well as the text (ADR-053 rule 4), and a third language is files alone (ADR-053 rule 2). A push
+/// template is a file of its own, versioned apart from the mail key's, with a title in place of a subject.
 /// </remarks>
 public sealed class TemplateSet
 {
@@ -19,18 +21,20 @@ public sealed class TemplateSet
 
     private const string Extension = ".txt";
     private const string ReasonsSuffix = "reasons";
+    private const string PushSuffix = "push";
     private const string SubjectPrefix = "Subject: ";
+    private const string TitlePrefix = "Title: ";
 
     private static readonly Lazy<TemplateSet> Shipped = new(() => Parse(EmbeddedFiles()));
 
-    private readonly Dictionary<(string Key, int Version, string Language), Template> _templates;
+    private readonly Dictionary<(string Key, string Channel, int Version, string Language), Template> _templates;
     private readonly Dictionary<(int Version, string Language), IReadOnlyDictionary<string, string>> _reasons;
-    private readonly Dictionary<string, int> _current;
+    private readonly Dictionary<(string Key, string Channel), int> _current;
 
     private TemplateSet(
-        Dictionary<(string Key, int Version, string Language), Template> templates,
+        Dictionary<(string Key, string Channel, int Version, string Language), Template> templates,
         Dictionary<(int Version, string Language), IReadOnlyDictionary<string, string>> reasons,
-        Dictionary<string, int> current)
+        Dictionary<(string Key, string Channel), int> current)
     {
         _templates = templates;
         _reasons = reasons;
@@ -44,14 +48,14 @@ public sealed class TemplateSet
     /// <summary>Every language some template is written in.</summary>
     public IReadOnlySet<string> Languages { get; }
 
-    /// <summary>The highest version present for a key, which is the one sent (ADR-053 rule 4).</summary>
-    public int CurrentVersion(string key) =>
-        _current.TryGetValue(key, out int version)
+    /// <summary>The highest version present for a key on a channel, which is the one sent (ADR-053 rule 4).</summary>
+    public int CurrentVersion(string key, string channel = ConsentVocabulary.Email) =>
+        _current.TryGetValue((key, channel), out int version)
             ? version
-            : throw new ArgumentOutOfRangeException(nameof(key), key, "Not one of TemplateKeys.");
+            : throw new ArgumentOutOfRangeException(nameof(key), key, "Not one of TemplateKeys on this channel.");
 
-    public Template? Find(string key, int version, string language) =>
-        _templates.GetValueOrDefault((key, version, language));
+    public Template? Find(string key, int version, string language, string channel = ConsentVocabulary.Email) =>
+        _templates.GetValueOrDefault((key, channel, version, language));
 
     /// <summary>A cancellation's map for one version and language, by code and <see cref="OtherReason"/>.</summary>
     public IReadOnlyDictionary<string, string>? Reasons(int version, string language) =>
@@ -67,13 +71,18 @@ public sealed class TemplateSet
         {
             foreach (string key in TemplateKeys.Placeholders.Keys.Order(StringComparer.Ordinal))
             {
-                int version = _current[key];
+                int version = _current[(key, ConsentVocabulary.Email)];
 
-                if (!_templates.ContainsKey((key, version, language)))
-                    missing.Add(NameOf(key, version, language, reasons: false));
+                if (!_templates.ContainsKey((key, ConsentVocabulary.Email, version, language)))
+                    missing.Add(NameOf(key, version, language, ""));
 
                 if (key == TemplateKeys.OrderCancelled && !_reasons.ContainsKey((version, language)))
-                    missing.Add(NameOf(key, version, language, reasons: true));
+                    missing.Add(NameOf(key, version, language, ReasonsSuffix));
+
+                int push = _current[(key, ConsentVocabulary.Push)];
+
+                if (!_templates.ContainsKey((key, ConsentVocabulary.Push, push, language)))
+                    missing.Add(NameOf(key, push, language, PushSuffix));
             }
         }
 
@@ -86,11 +95,11 @@ public sealed class TemplateSet
         ArgumentNullException.ThrowIfNull(files);
 
         List<string> refusals = [];
-        Dictionary<(string Key, int Version, string Language), Template> templates = [];
+        Dictionary<(string Key, string Channel, int Version, string Language), Template> templates = [];
         Dictionary<(int Version, string Language), IReadOnlyDictionary<string, string>> reasons = [];
 
         // By name rather than by what parsed, so a broken newest file is refused and never quietly passed over.
-        Dictionary<string, int> current = new(StringComparer.Ordinal);
+        Dictionary<(string Key, string Channel), int> current = [];
 
         foreach (TemplateFile file in files)
         {
@@ -109,7 +118,10 @@ public sealed class TemplateSet
             }
 
             if (!name.IsReasons)
-                current[name.Key] = Math.Max(current.GetValueOrDefault(name.Key), name.Version);
+            {
+                current[(name.Key, name.Channel)] =
+                    Math.Max(current.GetValueOrDefault((name.Key, name.Channel)), name.Version);
+            }
 
             // A checkout's line endings are no part of a message.
             string text = file.Text.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -121,12 +133,18 @@ public sealed class TemplateSet
             }
             else if (TemplateIn(file.Name, name, text, refusals) is Template template)
             {
-                templates[(name.Key, name.Version, name.Language)] = template;
+                templates[(name.Key, name.Channel, name.Version, name.Language)] = template;
             }
         }
 
-        foreach (string key in TemplateKeys.Placeholders.Keys.Where(k => !current.ContainsKey(k)))
-            refusals.Add($"{Folder}{key}: no template is shipped for this key at any version.");
+        foreach (string key in TemplateKeys.Placeholders.Keys)
+        {
+            if (!current.ContainsKey((key, ConsentVocabulary.Email)))
+                refusals.Add($"{Folder}{key}: no template is shipped for this key at any version.");
+
+            if (!current.ContainsKey((key, ConsentVocabulary.Push)))
+                refusals.Add($"{Folder}{key}: no push template is shipped for this key at any version.");
+        }
 
         if (refusals.Count > 0)
             throw new TemplateSetException(refusals);
@@ -134,10 +152,9 @@ public sealed class TemplateSet
         return new TemplateSet(templates, reasons, current);
     }
 
-    private static string NameOf(string key, int version, string language, bool reasons) =>
-        reasons
-            ? $"{Folder}{key}.v{version.ToString(CultureInfo.InvariantCulture)}.{language}.{ReasonsSuffix}{Extension}"
-            : $"{Folder}{key}.v{version.ToString(CultureInfo.InvariantCulture)}.{language}{Extension}";
+    private static string NameOf(string key, int version, string language, string suffix) =>
+        $"{Folder}{key}.v{version.ToString(CultureInfo.InvariantCulture)}.{language}" +
+        (suffix.Length == 0 ? "" : "." + suffix) + Extension;
 
     private static Template? TemplateIn(string file, FileName name, string text, List<string> refusals)
     {
@@ -146,31 +163,36 @@ public sealed class TemplateSet
         string first = end < 0 ? text : text[..end];
         string body = end < 0 ? "" : text[(end + 1)..].Trim('\n');
 
-        if (!first.StartsWith(SubjectPrefix, StringComparison.Ordinal) ||
-            string.IsNullOrWhiteSpace(first[SubjectPrefix.Length..]))
+        bool push = name.Channel == ConsentVocabulary.Push;
+        string prefix = push ? TitlePrefix : SubjectPrefix;
+        string heading = push ? "title" : "subject";
+
+        if (!first.StartsWith(prefix, StringComparison.Ordinal) || string.IsNullOrWhiteSpace(first[prefix.Length..]))
         {
-            refusals.Add($"{file}: its first line is not '{SubjectPrefix}' and a subject.");
+            refusals.Add($"{file}: its first line is not '{prefix}' and a {heading}.");
             return null;
         }
 
-        string subject = first[SubjectPrefix.Length..].Trim();
+        string subject = first[prefix.Length..].Trim();
 
-        // No value another service wrote may reach a header, so a subject names no placeholder at all.
+        // No value another service wrote may reach a header or a lock screen's title, so neither names a placeholder.
         if (subject.AsSpan().IndexOfAny('{', '}') >= 0)
-            refusals.Add($"{file}: its subject names a placeholder, and a subject may name none.");
+            refusals.Add($"{file}: its {heading} names a placeholder, and a {heading} may name none.");
 
         if (string.IsNullOrWhiteSpace(body))
             refusals.Add($"{file}: it has no body.");
 
+        IReadOnlySet<string> allowed = (push ? TemplateKeys.PushPlaceholders : TemplateKeys.Placeholders)[name.Key];
+        string kind = push ? "push placeholders" : "placeholders";
         List<TemplatePart>? parts = PartsOf(file, body, refusals);
         foreach (TemplatePart part in parts?.Where(p => p.IsPlaceholder) ?? [])
         {
-            if (!TemplateKeys.Placeholders[name.Key].Contains(part.Text))
-                refusals.Add($"{file}: names {{{part.Text}}}, which is not among {name.Key}'s placeholders.");
+            if (!allowed.Contains(part.Text))
+                refusals.Add($"{file}: names {{{part.Text}}}, which is not among {name.Key}'s {kind}.");
         }
 
         return refusals.Count == before && parts is not null
-            ? new Template(name.Key, name.Version, name.Language, subject, parts)
+            ? new Template(name.Key, name.Version, name.Language, subject, parts, name.Channel)
             : null;
     }
 
@@ -270,7 +292,7 @@ public sealed class TemplateSet
     }
 
     /// <summary>A resource name read as its parts, or null when it is not one this set can hold.</summary>
-    private sealed record FileName(string Key, int Version, string Language, bool IsReasons)
+    private sealed record FileName(string Key, int Version, string Language, bool IsReasons, string Channel)
     {
         public static FileName? Read(string name)
         {
@@ -282,8 +304,9 @@ public sealed class TemplateSet
 
             string[] parts = name[Folder.Length..^Extension.Length].Split('.');
             bool reasons = parts.Length == 4 && parts[3] == ReasonsSuffix;
+            bool push = parts.Length == 4 && parts[3] == PushSuffix;
 
-            if (parts.Length != (reasons ? 4 : 3))
+            if (parts.Length != (reasons || push ? 4 : 3))
                 return null;
 
             string version = parts[1];
@@ -298,7 +321,8 @@ public sealed class TemplateSet
                     parts[0],
                     int.Parse(version.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture),
                     language,
-                    reasons)
+                    reasons,
+                    push ? ConsentVocabulary.Push : ConsentVocabulary.Email)
                 : null;
         }
     }

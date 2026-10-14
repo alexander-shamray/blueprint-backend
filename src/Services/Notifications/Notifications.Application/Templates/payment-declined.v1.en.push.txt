@@ -1,0 +1,4 @@
+Title: Your payment was not accepted
+
+The payment for your order was not accepted.
+Order: {OrderId}

@@ -1,0 +1,4 @@
+Title: Your order is confirmed
+
+Your order is confirmed and is being prepared.
+Order: {OrderId}

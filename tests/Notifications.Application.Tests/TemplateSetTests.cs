@@ -1,4 +1,5 @@
 using Common.Contracts.Ordering.V1;
+using Notifications.Application.Preferences;
 using Notifications.Application.Rendering;
 using Shouldly;
 using Xunit;
@@ -15,6 +16,8 @@ public class TemplateSetTests
     [
         .. TemplateKeys.Placeholders.Keys.Select(key =>
             new TemplateFile($"Templates/{key}.v1.{language}.txt", "Subject: A notice\n\nOrder {OrderId}.\n")),
+        .. TemplateKeys.Placeholders.Keys.Select(key =>
+            new TemplateFile($"Templates/{key}.v1.{language}.push.txt", "Title: A push\n\nOrder {OrderId}.\n")),
         new TemplateFile(
             $"Templates/order-cancelled.v1.{language}.reasons.txt",
             string.Concat(TemplateKeys.CancellationCodes.Append(TemplateSet.OtherReason).Select(c => $"{c}: Why.\n")))
@@ -36,21 +39,104 @@ public class TemplateSetTests
         foreach (string key in TemplateKeys.Placeholders.Keys)
         {
             shipped.CurrentVersion(key).ShouldBe(1, key);
+            shipped.CurrentVersion(key, ConsentVocabulary.Push).ShouldBe(1, key);
             foreach (string language in Shipped)
+            {
                 shipped.Find(key, 1, language).ShouldNotBeNull($"{key} in {language}");
+                shipped.Find(key, 1, language, ConsentVocabulary.Push).ShouldNotBeNull($"{key}'s push in {language}");
+            }
         }
 
         shipped.MissingFor(Shipped).ShouldBeEmpty();
     }
 
     [Fact]
-    public void The_assembly_holds_twenty_four_resources_under_the_folder_none_split_into_a_satellite()
+    public void The_assembly_holds_forty_five_resources_under_the_folder_none_split_into_a_satellite()
     {
         int resources = typeof(TemplateSet).Assembly
             .GetManifestResourceNames()
             .Count(name => name.StartsWith(TemplateSet.Folder, StringComparison.Ordinal));
 
-        resources.ShouldBe(24, "twenty-one templates and three maps, none split into a satellite");
+        resources.ShouldBe(45, "twenty-one mail templates, twenty-one push and three maps, none in a satellite");
+    }
+
+    [Fact]
+    public void Every_shipped_push_names_the_order_s_reference_and_nothing_else()
+    {
+        // The push design's section 5: a lock screen shows it to whoever holds the device, and both providers see it.
+        foreach (string key in TemplateKeys.Placeholders.Keys)
+        {
+            TemplateKeys.PushPlaceholders[key].ShouldHaveSingleItem().ShouldBe(PlaceholderNames.OrderId, key);
+            TemplateKeys.PushPlaceholders[key].ShouldBeSubsetOf(TemplateKeys.Placeholders[key], key);
+
+            foreach (string language in Shipped)
+            {
+                Template push = TemplateSet.Embedded.Find(key, 1, language, ConsentVocabulary.Push)!;
+                push.Channel.ShouldBe(ConsentVocabulary.Push);
+                push.Body.Where(p => p.IsPlaceholder).Select(p => p.Text).ShouldBe([PlaceholderNames.OrderId]);
+            }
+        }
+    }
+
+    [Fact]
+    public void A_push_naming_a_value_beyond_the_order_s_reference_is_refused()
+    {
+        List<TemplateFile> files = With(
+            Minimal(),
+            new TemplateFile("Templates/order-placed.v1.en.push.txt", "Title: Placed\n\n{Amount} {Currency}\n"));
+
+        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(files)).Refusals.ShouldBe(
+        [
+            "Templates/order-placed.v1.en.push.txt: names {Amount}, which is not among order-placed's push placeholders.",
+            "Templates/order-placed.v1.en.push.txt: names {Currency}, which is not among order-placed's push " +
+            "placeholders."
+        ]);
+    }
+
+    [Fact]
+    public void A_push_s_first_line_is_a_title_naming_no_placeholder()
+    {
+        List<TemplateFile> noTitle = With(
+            Minimal(),
+            new TemplateFile("Templates/order-placed.v1.en.push.txt", "Subject: Placed\n\nOrder {OrderId}.\n"));
+        List<TemplateFile> named = With(
+            Minimal(),
+            new TemplateFile("Templates/order-placed.v1.en.push.txt", "Title: {OrderId}\n\nOrder {OrderId}.\n"));
+
+        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(noTitle)).Refusals.ShouldBe(
+            ["Templates/order-placed.v1.en.push.txt: its first line is not 'Title: ' and a title."]);
+        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(named)).Refusals.ShouldBe(
+            ["Templates/order-placed.v1.en.push.txt: its title names a placeholder, and a title may name none."]);
+    }
+
+    [Fact]
+    public void A_key_with_no_push_at_any_version_is_refused_and_a_language_without_one_is_missing()
+    {
+        List<TemplateFile> none = Minimal();
+        none.RemoveAll(f => f.Name == "Templates/shipment-delivered.v1.en.push.txt");
+
+        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(none)).Refusals.ShouldBe(
+            ["Templates/shipment-delivered: no push template is shipped for this key at any version."]);
+
+        List<TemplateFile> two = [.. Minimal("en"), .. Minimal("kk")];
+        two.RemoveAll(f => f.Name == "Templates/shipment-delivered.v1.kk.push.txt");
+
+        TemplateSet.Parse(two).MissingFor(["en", "kk"]).ShouldBe(["Templates/shipment-delivered.v1.kk.push.txt"]);
+    }
+
+    [Fact]
+    public void A_push_is_versioned_apart_from_its_mail_key()
+    {
+        List<TemplateFile> files =
+        [
+            .. Minimal(),
+            new TemplateFile("Templates/order-placed.v2.en.push.txt", "Title: Placed again\n\nOrder {OrderId}.\n")
+        ];
+
+        TemplateSet set = TemplateSet.Parse(files);
+
+        set.CurrentVersion(TemplateKeys.OrderPlaced, ConsentVocabulary.Push).ShouldBe(2);
+        set.CurrentVersion(TemplateKeys.OrderPlaced).ShouldBe(1, "a new push says nothing of the mail's version");
     }
 
     [Fact]

@@ -1,0 +1,4 @@
+Title: Your refund has been issued
+
+The money for your order has been refunded.
+Order: {OrderId}
