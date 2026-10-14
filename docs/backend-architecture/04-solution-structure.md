@@ -485,7 +485,10 @@ Each layer exposes exactly one registration method for what it holds, and an
 outbound hop registers in one of its own beside it
 ([ADR-055](adr/ADR-055-an-outbound-hop-registers-beside-its-layer-and-the-host-calls-it.md)).
 `Program.cs` calls them, binds the host's own client credentials (§11.5), and
-does nothing else with Infrastructure — which is what makes the rule above
+does nothing else with Infrastructure; a service's second host calls only
+those its half needs, and names its half to the Infrastructure method
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md))
+— which is what makes the rule above
 enforceable rather than aspirational, and what lets tests exercise the real
 registration path ([§6.2](06-cqrs.md)) instead of a hand-built container.
 
