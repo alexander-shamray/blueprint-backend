@@ -1204,7 +1204,7 @@ this case, and this table is the owner of what each edge of it erases:
 | Holder | Erases | Reports as |
 |---|---|---|
 | Ordering | `Orders.CustomerId` anonymised, address purged, `OrderSummaries.CustomerId` cleared | `ordering` |
-| Notifications | ended `NotificationLog` rows anonymised, contacts, waiting notices and `OrderRecords` deleted, device rows cleared to their installation id, sequence and last-seen time ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)) | `notifications` |
+| Notifications | ended `NotificationLog` rows anonymised, contacts, waiting notices and `OrderRecords` deleted, device rows cleared to their installation id and sequence ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), keeping the last-seen time the stale pass deletes them by ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)) | `notifications` |
 | Shipping | `DeliveryAddresses` rows deleted (ADR-052), `Shipments.ErasedUnder` emptied (ADR-103) | `shipping` |
 | Payments | `PaymentOrders.CustomerId` anonymised | `payments` |
 | The BFF | order ids recorded, the subject's `bff.Orders` rows and saved address deleted (ADR-098, ADR-107) | `bff` |
