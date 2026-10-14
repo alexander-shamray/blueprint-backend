@@ -8,6 +8,7 @@ using Common.Infrastructure.Identity;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
 using Common.Web;
+using MassTransit;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -30,7 +31,8 @@ public class ShippingWorkerFactory(
     string addressSourceBaseUrl = ShippingWorkerFactory.UnreachableAddressSource,
     string addressRetention = ShippingWorkerFactory.InventedAddressRetention,
     string trackingRetention = ShippingWorkerFactory.InventedTrackingRetention,
-    string giveUpAge = ShippingWorkerFactory.InventedGiveUpAge)
+    string giveUpAge = ShippingWorkerFactory.InventedGiveUpAge,
+    bool consumes = true)
     : WebApplicationFactory<Program>
 {
     /// <summary>The authority every host must name (§11.3); <c>.invalid</c> never resolves.</summary>
@@ -127,6 +129,10 @@ public class ShippingWorkerFactory(
                 services.Remove(retention);
 
                 services.AddSingleton<ShippingRetentionService>();
+
+                // A host that shares the fixture's broker and consumes would take every other delivery from its queue.
+                if (!consumes)
+                    services.RemoveMassTransitHostedService();
 
                 // §9.4: added to rather than replaced, so a test cannot stage a type the real host would refuse.
                 services
