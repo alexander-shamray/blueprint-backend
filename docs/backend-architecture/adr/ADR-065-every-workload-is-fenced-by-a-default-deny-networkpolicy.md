@@ -89,6 +89,11 @@ which names the workload ADR-117's edge was left waiting for:
 `web-bff` reaches `notifications-api` on `grpc`. `notifications` still admits
 nothing.
 
+**Amended by [ADR-124](ADR-124-the-notifications-worker-reaches-each-push-provider-an-app-names-on-the-port-its-address-dials-474.md)**,
+which adds the push providers to the worker's row: `notifications` reaches each
+one whose platform the deployment's apps name, by `networkPolicy.push`, on the
+port its address dials.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

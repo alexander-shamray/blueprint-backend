@@ -126,6 +126,10 @@ which bounds the API host's rollout from below as well as from above, and the
 worker's by the API host, so the two hosts roll in lockstep and a migration's
 previous release is the one both run.
 
+**Amended by [ADR-124](ADR-124-the-notifications-worker-reaches-each-push-provider-an-app-names-on-the-port-its-address-dials-474.md)**,
+which gives the worker's row the edge its push adapters need: it reaches each
+push provider an app names, and still admits nothing.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
