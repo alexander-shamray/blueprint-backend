@@ -1271,6 +1271,14 @@ check 'notifications: an APNs address on another port opens that port' \
     $(overlay_for notifications) $PUSH_APPS --set networkPolicy.push.port=8443 >"$OUT/notifications-push-stated.yaml"
 check 'notifications: a push port stated wins over the addresses'"'"' own' \
     grep -q 'port: 8443' "$OUT/notifications-push-stated.yaml"
+# A peer and a port stated with no app: no provider is called, so no rule, and a refusal is no pass either.
+if "$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
+    $(overlay_for notifications) --set networkPolicy.push.port=8443 >"$OUT/notifications-push-noapp.yaml" 2>&1; then
+    check 'notifications: a push port stated with no app renders no rule' \
+        sh -c '! grep -q "port: 8443" "$0"' "$OUT/notifications-push-noapp.yaml"
+else
+    fail 'notifications: a push port stated with no app fails the render — it must render no rule'
+fi
 check 'notifications: the chart as shipped renders no push key' outside_configmap "$N" '^ *(Push|Fcm|Apns)__'
 check 'notifications: the chart as shipped mounts no signing key' sh -c '! grep -q "PrivateKey" "$0"' "$N"
 check 'notifications: the chart as shipped opens no push egress' sh -c '! grep -q "10.90.0.0/16" "$0"' "$N"
