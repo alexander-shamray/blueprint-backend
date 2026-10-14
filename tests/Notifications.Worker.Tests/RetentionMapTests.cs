@@ -2,7 +2,7 @@ using System.Reflection;
 using Common.TestSupport;
 using Notifications.Application.Contacts;
 using Notifications.Infrastructure.Delivery;
-using Notifications.Infrastructure.Devices;
+using Notifications.Application.Devices;
 using Notifications.Infrastructure.Jurisdiction;
 using Notifications.Infrastructure.Retention;
 using Shouldly;

@@ -2,6 +2,7 @@ using Common.Application;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Contacts;
+using Notifications.Application.Devices;
 using Notifications.Application.Intake;
 
 namespace Notifications.Application;
@@ -36,6 +37,9 @@ public static class DependencyInjection
 
         // ADR-052's two freshness numbers, registered rather than const so the service can change them.
         services.AddSingleton(new ContactOptions());
+
+        // ADR-117's window and caps, registered for the same reason; both hosts read them.
+        services.AddSingleton(new DeviceTokenOptions());
 
         // Ordered and explicit: registration order is pipeline order (§6.3). Idempotency sits inside validation,
         // so a malformed command claims no key, and outside the transaction, so the claim precedes any work.

@@ -2,7 +2,6 @@ using Common.Infrastructure.Transport;
 using Notifications.Application;
 using Notifications.Application.Contacts;
 using Notifications.Application.Devices;
-using Notifications.Infrastructure.Devices;
 using Notifications.Application.Privacy;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
@@ -65,13 +64,7 @@ public static class DependencyInjection
         services.AddSingleton(new InboxTable(schema));
         services.AddSingleton(new IdempotencyMarkerTable(schema));
 
-        // ADR-117's device rows: the API writes them and the worker's stale pass and erasure clear them, both under
-        // the window and caps bound here (§15.4).
-        services
-            .AddOptions<DeviceTokenOptions>()
-            .BindConfiguration(DeviceTokenOptions.SectionName)
-            .ValidateOnStart();
-        services.AddSingleton<IValidateOptions<DeviceTokenOptions>, DeviceTokenOptionsValidator>();
+        // ADR-117's device rows: the API writes them, and the worker's stale pass and erasure clear them.
         services.AddScoped<IDeviceStore, SqlDeviceStore>();
 
         // §6.5's read side, a singleton as E.2.6's sample has it, on §7.1's runtime key.

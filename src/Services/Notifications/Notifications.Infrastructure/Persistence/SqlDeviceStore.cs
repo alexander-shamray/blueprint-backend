@@ -2,11 +2,9 @@ using System.Data.Common;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.Extensions.Options;
 using Notifications.Application.Devices;
 using Notifications.Application.Devices.RegisterDevice;
 using Notifications.Application.Devices.SignOutDevice;
-using Notifications.Infrastructure.Devices;
 
 namespace Notifications.Infrastructure.Persistence;
 
@@ -15,7 +13,7 @@ namespace Notifications.Infrastructure.Persistence;
 /// UPDLOCK and HOLDLOCK take the installation's key, or its range when it has no row yet, so two requests for one
 /// installation run one after the other, as do two that name one token (ADR-118).
 /// </remarks>
-internal sealed class SqlDeviceStore(NotificationsDbContext db, IOptions<DeviceTokenOptions> options) : IDeviceStore
+internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptions options) : IDeviceStore
 {
     // What a sign-out leaves of a row: its installation id, its sequence and when it was last seen (ADR-117).
     private const string Cleared =
@@ -123,8 +121,8 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, IOptions<DeviceT
                 Token = Ansi(command.Token, DeviceLimits.MaxTokenLength),
                 command.Sequence,
                 Now = now,
-                options.Value.MaxSequenceStep,
-                options.Value.MaxPerSubject
+                options.MaxSequenceStep,
+                options.MaxPerSubject
             },
             ct);
 
@@ -137,7 +135,7 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, IOptions<DeviceT
                 command.SubjectId,
                 command.Sequence,
                 Now = now,
-                options.Value.MaxSequenceStep
+                options.MaxSequenceStep
             },
             ct);
 
