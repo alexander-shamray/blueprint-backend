@@ -30,7 +30,7 @@
   <ItemGroup>
     <!-- The journey reads the retry ladder's first rung and delivers the saga's expiries (§12.1). -->
     <InternalsVisibleTo Include="Platform.IntegrationTests" />
-    <!-- RetryPolicy is internal, and the saga rescue test bounds its wait by the ladder rather than a copy of it. -->
+    <!-- RetryPolicy and Endpoints are internal, and the saga endpoint tests cite them rather than copy them. -->
     <InternalsVisibleTo Include="Ordering.Api.Tests" />
   </ItemGroup>
 
