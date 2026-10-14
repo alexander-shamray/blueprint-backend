@@ -122,18 +122,19 @@ helm upgrade --install platform deploy/helm/platform \
     --set-string web-bff.image.tag="$BFF_SHA"
 ```
 
-**Payments' provider address is required and is deliberately NOT on that
-command line.** The chart ships no default a cluster could use — §3.2's
-provider is a real third party and Compose's simulator is not one — so the
-render is refused until an environment names it, and the values file is where
-it belongs. Shipping's carrier address and its two retention windows are the
-same case for the same reason — a third party's address and a jurisdiction's
-statute are facts about one deployment, and ADR-053 says a window is refused
-rather than guessed. Notifications' relay, sender and relay user, Keycloak's
-admin base, and its language set, zone and windows are the same case: the
-relay is a processor the deployment chooses and the rest are facts about where
-it runs (ADR-053), and the language set is a list, which is the other reason it
-belongs in a values file rather than behind `--set-string`'s comma.
+**Payments' provider address is required and is deliberately NOT on that command
+line.** The chart ships no default a cluster could use — §3.2's provider is a
+real third party and Compose's simulator is not one — so the render is refused
+until an environment names it, and the values file is where it belongs.
+Shipping's carrier address and its two retention windows are the same case for
+the same reason — a third party's address and a jurisdiction's statute are facts
+about one deployment, and ADR-053 says a window is refused rather than guessed.
+Notifications' relay, sender and relay user, its push providers' ids once an app
+names their platform, Keycloak's admin base, and its language set, zone and
+windows are the same case: the relay and the push providers are processors the
+deployment chooses, and the rest are facts about where it runs (ADR-053), and
+the language set is a list, which is the other reason it belongs in a values
+file rather than behind `--set-string`'s comma.
 
 `--set-string` is the wrong door for it, and this is the hazard
 `.github/workflows/deploy.yml` already spells out for the image tag: Helm
@@ -195,6 +196,20 @@ notifications:
     host: smtp.staging.example.com
     from: "Commerce <no-reply@staging.example.com>"
     userName: notifications
+  push:
+    # ADR-117's apps; the BFF states the same list, so every token it
+    # registers has a provider here.
+    apps: &apps
+      - { appId: com.example.shop, platform: fcm }
+      - { appId: com.example.shop.ios, platform: apns }
+  fcm:
+    # Required while an app names fcm; its key is notifications-fcm.
+    projectId: commerce-staging
+    clientEmail: notifications@commerce-staging.iam.gserviceaccount.com
+  apns:
+    # Required while an app names apns; its key is notifications-apns.
+    teamId: ABCDE12345
+    keyId: FGHIJ67890
   contactSource:
     # Keycloak's admin base; its realm is the authority's, which the chart
     # refuses to differ.
@@ -220,6 +235,10 @@ notifications-api:
   jurisdiction:
     # The same list, which the API host reads to show and refuse a duty.
     required: *required
+web-bff:
+  push:
+    # The same apps, which a registration must name (ADR-117).
+    apps: *apps
 ```
 
 ## What is deliberately not here

@@ -134,6 +134,22 @@ spec:
     {{- if (.Values.mail).enabled }}
     {{- include "commerce.networkPolicyEgress" (list ($np.mail).to "mail.to" "mail.enabled says this host submits to the relay." (($np.mail).port | default .Values.mail.port | toString)) | nindent 4 }}
     {{- end }}
+    {{- /* Each port read from the provider addresses the worker is given, as ADR-065 reads every third
+    party's, so an address on another port moves its rule; one stated wins, and duplicates are one rule. */}}
+    {{- $providers := splitList "," (include "commerce.pushProviders" .) }}
+    {{- $pushPorts := list }}
+    {{- if has "fcm" $providers }}
+    {{- $pushPorts = append (append $pushPorts (include "commerce.urlPort" .Values.fcm.baseUrl)) (include "commerce.urlPort" .Values.fcm.tokenUri) }}
+    {{- end }}
+    {{- if has "apns" $providers }}
+    {{- $pushPorts = append $pushPorts (include "commerce.urlPort" .Values.apns.baseUrl) }}
+    {{- end }}
+    {{- if ($np.push).port }}
+    {{- $pushPorts = list (($np.push).port | toString) }}
+    {{- end }}
+    {{- range $port := uniq $pushPorts }}
+    {{- include "commerce.networkPolicyEgress" (list ($np.push).to "push.to" "push.apps names a platform whose provider this host calls (ADR-118)." $port) | nindent 4 }}
+    {{- end }}
     {{- range $np.egressTo }}
     - to:
         - podSelector:

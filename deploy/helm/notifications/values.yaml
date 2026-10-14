@@ -145,6 +145,30 @@ mail:
     name: notifications-mail
     key: password
 
+# ADR-117's apps, the list web-bff's push.apps names, so every token the BFF
+# registers has a provider here. Empty, the worker registers no provider and
+# sends no push; an app of a platform makes that provider's block below
+# required. Each key is a Secret reference, never a value (§15.4).
+push:
+  apps: []
+
+fcm:
+  baseUrl: https://fcm.googleapis.com/
+  tokenUri: https://oauth2.googleapis.com/token
+  projectId: ""
+  clientEmail: ""
+  privateKeySecretRef:
+    name: notifications-fcm
+    key: private-key
+
+apns:
+  baseUrl: https://api.push.apple.com/
+  teamId: ""
+  keyId: ""
+  privateKeySecretRef:
+    name: notifications-apns
+    key: private-key
+
 # ADR-052's contact read. Keycloak can serve its admin API on a hostname of its
 # own, so the base is the deployment's to state rather than derived from the
 # authority; the realm must be the authority's, and the render refuses it
@@ -200,6 +224,9 @@ networkPolicy:
   broker: { port: 5671, to: [] }   # amqps, as ADR-079 requires; a broker named plaintext dials 5672
   # Unless a port is stated, it is mail.port, so the rule follows the relay's.
   mail: { to: [] }
+  # FCM, Google's token endpoint and APNs while an app names their platform, each on the port its address
+  # dials unless one is stated here.
+  push: { to: [] }
 
 # ADR-079's opt-out: the connection names this deployment runs in plaintext,
 # such as RabbitMq. Empty, the host refuses every hop not encrypted and
