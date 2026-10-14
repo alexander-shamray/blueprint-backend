@@ -93,12 +93,12 @@ graph LR
 The shape of the pattern, not this platform's topology: a second BFF per client
 type is what the pattern looks like at scale, and the fan-out to two services is
 what [§9.7](09-messaging.md) permits. What is actually built here is one
-`Web.Bff` making one call to one service
+`Web.Bff` calling two services, one per request
 ([§2.2](02-architecture-at-a-glance.md), §9.7; in the reference domain
 [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)
 is the roster and
 [E.6.1](appendix-e-reference-domain.md#e61-the-gateway-routes) names the
-call) — the diagram is the ceiling, not the inventory.
+calls) — the diagram is the ceiling, not the inventory.
 
 **Aggregation is shaped for the screen, and the screen's question is the whole
 of the request.** A BFF that computes a figure the client cannot render has
@@ -697,8 +697,9 @@ and nothing that crosses a process boundary.
 
 Asynchronously that is enough: [§9.1](09-messaging.md)'s envelope carries
 `CorrelationId` as a member, so a message takes the ID with it by construction.
-Synchronously there is nothing to carry it, and the one synchronous call with
-an inbound request behind it is the BFF's hop to the one service it calls
+Synchronously there is nothing to carry it, and the synchronous calls with an
+inbound request behind them are the BFF's hops, one per request, to the
+services it calls
 ([§9.7](09-messaging.md), [ADR-017](adr/ADR-017-one-synchronous-hop.md),
 [Appendix E.6.1](appendix-e-reference-domain.md#e61-the-gateway-routes)).
 Without a header on it the callee mints an ID from its own trace, and one
@@ -825,6 +826,7 @@ no host can take the one without the others.
 | A request under this key is still in flight | 409 | From `ConcurrentRequestException` ([§8.5](08-caching-redis.md)), `code` `request.in_progress`. Deliberately not a status of its own: 425 is about replayed TLS early data and 503 says the service is unavailable when it is serving everyone else. This one and the row above both say *retry*, and their `detail` is what separates them |
 | The command under this key has already been applied | 409 | From `CommandAlreadyCommittedException` ([§8.5](08-caching-redis.md), [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md), [ADR-059](adr/ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md)), `code` `command.already_committed`. A 409 that does **not** say retry, which is why the `detail` carries the whole difference: the work is durable and its result cannot be handed back — never recorded on the lost-acknowledgement path, recorded and expired on the commoner one, recorded with no fingerprint to show it is this request's on the third — so a retry meets this same refusal for as long as the entry or the marker lasts. Read the resource. 200 with an empty body is the tempting alternative and is worse — a success-shaped answer to a request whose result this service cannot produce |
 | The command identifier was already used for a different request | 409 | From `CommandIdReusedException` ([§8.5](08-caching-redis.md), [ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)), `code` `command.id_reused`. It does **not** say retry either: the key's entry holds another command's result, so this request, sent again under the same identifier, meets this refusal for as long as that entry lives. A changed request is a new request and takes a new identifier. 200 with the stored result would be a success-shaped answer to a request that was never applied |
+| An installation's sequence is out of order | 409 | From the BFF's device registration (§10.10, [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), `code` `device.stale_sequence`, with a `sequence` member carrying the row's. It says retry, but not as sent: the app sets its counter one past `sequence` and sends its present state again |
 | `If-Match` / `If-Unmodified-Since` failed | **412** | The client *did* send a precondition and it did not hold. Distinguishing this from 409 tells the client whether retrying with a fresh ETag is the fix |
 | Request body past the edge's ceiling | **413** | The gateway only (§10.1). Kestrel's `BadHttpRequestException` is answered inside the forwarder, which sets this status and writes no body, so it never reaches `UseExceptionHandler` and `UseStatusCodePages` writes the shape. `ExceptionHandlerMiddleware` reads no status off an exception — one that escapes is the unreadable-request row's, at its own status |
 | Domain rule violated | 422 | The request was well-formed but not allowed |
@@ -1019,9 +1021,10 @@ definition, so a client switching on it is parsing English, and the producers
 of this status do not all say the same thing: some say *retry* and some the
 opposite. So each names itself in the extension member §10.5 reserves for
 exactly this: `request.concurrency_conflict`, `request.in_progress`,
-`command.already_committed`, and `command.id_reused` for
+`command.already_committed`, `command.id_reused` for
 `CommandIdReusedException`
-([ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)).
+([ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)),
+and `device.stale_sequence` for §10.10's out-of-order registration.
 The `Error` path carries a `code` on the same terms.
 
 **The 409s from §8.5 share one status, and that is the design rather than a
@@ -1511,6 +1514,72 @@ already one of the holders an erasure request waits on
 so the responder set does not change. The address is never a log attribute, a
 span attribute or part of an exception's message
 ([§13.4](13-observability.md)).
+
+## 10.10 The device registration
+
+[ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)
+decides that an app registers its installation's push token through
+`Web.Bff`, and that Notifications owns the row. What follows is the wire
+contract, which the app builds against.
+
+| | Path |
+|---|---|
+| Client calls | `PUT` and `DELETE /bff/v1/devices/{installationId}` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
+| Service receives | `/v1/devices/{installationId}` |
+
+It needs no gateway change, as §10.9 needs none. The installation id is the
+UUID the app minted once per install; a path segment that is not one matches
+no route and answers 404. **The subject is the caller's**, taken by
+Notifications from the access token the BFF forwards, and no request names
+one.
+
+**A `PUT` registers**, on every start of the app and on every rotation, with
+a body of `platform` (`fcm` or `apns`), `appId`, `token` and `sequence`. **A
+`DELETE` signs out**, with the sequence as its one query parameter,
+`?sequence=`, and no body. The sequence is the installation's counter, raised
+by the app before every request. Either answers 204 when Notifications applies
+it or when it repeats the write before it, and a sign-out answers 204 whether
+or not there was a row to clear, and whatever its sequence when the row is
+another subject's
+([ADR-121](adr/ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md)).
+One out of order answers §10.5's 409 with the `code` `device.stale_sequence`
+and a `sequence` member holding the row's; the app sets its counter one past
+it and sends its present state again. Both
+routes are `Convergent` ([§8.5](08-caching-redis.md)), so neither takes an
+idempotency key.
+
+**The BFF refuses a malformed request before the hop**, with §10.5's 400
+naming the field and never repeating the value: a platform outside the pair,
+an app id that `PushOptions.Apps` does not name for that platform, a token
+that is empty, longer than `DeviceRules.MaxTokenLength` or outside printable
+ASCII, and a sequence of zero or below. A sequence that does not bind as an
+integer, or a `DELETE` with none, is §10.5's unreadable-request 400 instead.
+`PushOptions` is bound from the `Push` section, and an empty list is a
+deployment that sends no push and refuses every registration.
+Notifications checks the same shapes again, because the BFF is not all that
+can reach its method.
+
+**One hop, under the caller's own token.** The BFF calls Notifications.Api
+over gRPC ([§9.7](09-messaging.md), `NotificationsHop`), with
+`CallerTokenHandler` copying the inbound `Authorization` header unchanged and
+no client-credentials handler, so no credential the BFF holds can register a
+device to anybody else ([§11.5](11-identity-authorization.md)). Notifications
+refusing a token the BFF has already validated is a 500, as Catalog refusing
+the BFF's own is, and its unavailability is §10.5's 503. A reply
+`devices.proto` forbids — an outcome left unset, an applied or repeated write
+carrying a sequence other than the request's, or a stale one carrying none —
+is a 500, by §9.7's sixth rule.
+
+**The cluster half is ADR-118's.** The hop resolves `notifications-api:8081`
+under Compose; in Kubernetes it also needs Notifications.Api's chart, whose
+Service carries that name, and the `web-bff` egress row ADR-065's table gains
+for it, both of which land with that host's chart.
+
+**Retention and erasure are ADR-117's**: a row not seen for
+`DeviceTokenOptions.StaleAfter` is deleted, and an erasure clears every row of
+the subject. The token is never a log attribute, a span attribute or part of
+an exception's message ([§13.4](13-observability.md)).
 
 ---
 

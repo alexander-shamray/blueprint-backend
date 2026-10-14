@@ -83,8 +83,8 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │                                   it proves is realm configuration, so
 │   │                                   nothing compiles differently when it is
 │   │                                   missing
-│   ├── Web.Bff.TestSupport/            The stub of the callee, the SERVER half
-│   │                                   of pricing.proto with it, and the
+│   ├── Web.Bff.TestSupport/            The stubs of the callees, each with the
+│   │                                   SERVER half of its .proto, and the
 │   │                                   PricingContract — the BFF's expectations
 │   │                                   of §9.7's hop (§12.6), authored here
 │   │                                   because only a consumer can write one,

@@ -138,10 +138,11 @@ services, so it belongs to all of them; owned by none, it would run for none.
 
 **Two filters reach into another service's tree, and each names a file its
 deployable compiles.** In the reference domain, Web.Bff compiles Catalog's
-`pricing.proto` as a linked source file (§9.7) and its Dockerfile copies that
-path, so a proto-only change alters what the BFF ships while matching only
-`catalog`; Shipping's images copy Ordering's `Protos/` on the same terms, and
-its filter names that path too
+`pricing.proto` and Notifications' `devices.proto` as linked source files
+(§9.7) and its Dockerfile copies both paths, so a proto-only change alters
+what the BFF ships while matching only `catalog` or `notifications`;
+Shipping's images copy Ordering's `Protos/` on the same terms, and its filter
+names that path too
 ([Appendix E.9](appendix-e-reference-domain.md#e9-15-cicd-and-deployment)).
 That is the filter rule stated below — a file that can change what a
 service ships belongs in its filter — applied to the hosts that compile
@@ -1192,7 +1193,7 @@ the default, which is not a deployment decision to leave to a cluster. `tls`
 is required too, and the chart refuses to render without it: TLS terminates
 here (§10.1), and three arguments rest on that — the gateway rewrites
 `Request.Scheme` from this hop's header, ADR-020's compression decision reads
-that scheme, and §9.7's pricing hop uses plain `http://` *because* the
+that scheme, and §9.7's hops use plain `http://` *because* the
 encrypted hop ended at this object. An overlay clearing it would render a valid
 plaintext Ingress and falsify all three silently.
 
@@ -1298,9 +1299,12 @@ not — which in this blueprint is **every host but the BFF and the workers
 gives a read**. The gateway forwards the caller's token rather than minting
 its own; every other service exchanges events over the broker and reads local
 projections ([§6.4](06-cqrs.md), ADR-002). One set of credentials per such
-host, and the number is the point: it is the number of synchronous couplings,
-and it moves only by a decision that says what each new one reads when it is
-stolen. Supplying the rest "for
+host, and the number is the point: it is the number of synchronous couplings
+made under a grant, and it moves only by a decision that says what each new
+one reads when it is stolen. The BFF's device registration is a coupling it
+does not count, because it forwards the caller's token and holds no secret for
+it
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)). Supplying the rest "for
 consistency" is not harmless padding — it provisions a Keycloak client, a
 secret in the vault and a mount, all of which must be rotated and audited, for
 credentials no code path ever sends. Over-supply has no failing test to catch

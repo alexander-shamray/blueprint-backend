@@ -33,7 +33,7 @@ graph TB
     end
 
     subgraph Services
-        API[Service APIs<br/>one per context with a public API]
+        API[Service APIs<br/>one per context a caller reaches]
         WRK[Service workers<br/>no public API]
     end
 
@@ -56,7 +56,7 @@ graph TB
     GW --> API
     GW --> BFF
 
-    BFF -->|gRPC, a read| API
+    BFF -->|gRPC, a read and a registration| API
 
     WRK -->|gRPC, a read| API
     WRK -.->|client credentials| IDP

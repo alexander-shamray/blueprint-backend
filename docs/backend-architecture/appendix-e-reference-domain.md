@@ -90,6 +90,7 @@ graph TB
         PAY[Payments API]
         SHP[Shipping worker]
         NOT[Notifications worker]
+        NAPI[Notifications API]
         PRV[Privacy API]
     end
 
@@ -118,6 +119,7 @@ graph TB
     GW --> BFF
 
     BFF -->|gRPC, pricing| CAT
+    BFF -->|gRPC, device registration| NAPI
 
     SHP -->|gRPC, the address read| ORD
     SHP -.->|client credentials| IDP
@@ -134,6 +136,7 @@ graph TB
     INV -.-> IDP
     PAY -.-> IDP
     PRV -.-> IDP
+    NAPI -.-> IDP
 
     CAT --> SQL
     ORD --> SQL
@@ -141,6 +144,7 @@ graph TB
     PAY --> SQL
     SHP --> SQL
     NOT --> SQL
+    NAPI --> SQL
     PRV --> SQL
     BFF --> SQL
 
@@ -167,6 +171,7 @@ graph TB
     PAY --> OTEL
     SHP --> OTEL
     NOT --> OTEL
+    NAPI --> OTEL
     PRV --> OTEL
     GW  --> OTEL
     BFF --> OTEL
@@ -248,9 +253,9 @@ Infrastructure project one with `AddOrderingInfrastructure(config)`, and
 Shipping and Notifications expose no public API but still own schemas:
 `Shipment` and `TrackingEvent`, and `NotificationLog`, respectively
 ([§3.2](03-bounded-contexts.md)). Notifications' API host shares the worker's
-database and migrator and serves health alone until ADR-117's and ADR-120's
-methods land, which are the BFF's alone to call, on a port no gateway route
-reaches
+database and migrator and serves ADR-117's device registration, and ADR-120's
+methods once they land, which are the BFF's alone to call, on a port no
+gateway route reaches
 ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
 `tools/new-service` refuses Shipping without `--worker` and Notifications
 without `--pure-consumer`, so that it renders Shipping only in the shape §4.1
@@ -630,8 +635,9 @@ which `InternalsVisibleTo` would have to list.
 - **A gRPC service in its own namespace.** Ordering's `DeliveryAddressService`
   is in `.Grpc` (ADR-052), outside `.Endpoints`, which is why a namespace
   selector would miss it.
-- **The callee of the BFF's hop.** The stub that `Web.Bff.TestSupport` holds
-  is Catalog's, with the server half of `pricing.proto`, and the
+- **The callees of the BFF's hops.** The stubs that `Web.Bff.TestSupport`
+  holds are Catalog's, with the server half of `pricing.proto`, and
+  Notifications', with the server half of `devices.proto`; the
   `PricingContract` is linked into `Catalog.Api.Tests`.
 - **A bound only one service enforces.** Catalog's id ceiling, which
   `GetPricesValidator` holds, is the case to compare against
@@ -965,16 +971,21 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 | Hop | Caller | Callee | Registered and sized in |
 |---|---|---|---|
 | Pricing | `Web.Bff` | Catalog, `pricing.proto` | `src/BFF/Web.Bff/PricingHop.cs` |
+| Device registration | `Web.Bff` | Notifications.Api, `devices.proto` | `src/BFF/Web.Bff/NotificationsHop.cs` |
 | Delivery address | Shipping's worker | Ordering | `Shipping.Infrastructure/Addresses/AddressHop.cs` |
 | Contact | Notifications' worker | Keycloak's admin API | `Notifications.Infrastructure/Contacts/ContactHop.cs` |
 | Payment provider | Payments' consumers | the provider | `Payments.Infrastructure/Provider/ProviderHop.cs` |
 | Carrier | Shipping's worker | the carrier | `Shipping.Infrastructure/Carrier/CarrierHop.cs` |
 | Mail relay | Notifications' worker | the relay | `Notifications.Infrastructure/Mail/MailHop.cs` |
 
-Catalog owns `pricing.proto` in `Catalog.Api/Protos`, and `Web.Bff` links it.
-The command path never calls Catalog: it reads Ordering's price projection.
-The deepest chain on a request path is `Client → Gateway → BFF → Catalog`, and
-Catalog calls nobody. The two worker reads of the address and the contact are
+Catalog owns `pricing.proto` in `Catalog.Api/Protos`, and `Web.Bff` links it;
+Notifications owns `devices.proto` in `Notifications.Api/Protos`, and
+`Web.Bff` links it too. The command path never calls Catalog: it reads
+Ordering's price projection. The deepest chains on a request path are
+`Client → Gateway → BFF → Catalog` and `Client → Gateway → BFF →
+Notifications.Api`, and neither callee calls anybody. The registration carries
+the caller's own token and no client credentials
+([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)). The two worker reads of the address and the contact are
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s,
 the contact only for a verified email
 ([ADR-086](adr/ADR-086-an-unverified-email-is-no-contact.md)), and they spend
@@ -1039,10 +1050,10 @@ routes, by cluster and policy:
 **Catalog's write side is `catalog-write`**: the endpoint still requires
 `catalog:write`, and the route's `authenticated` is the edge's coarser check.
 
-**The BFF makes one synchronous call, to Catalog**
+**The BFF makes two synchronous calls, to Catalog and to Notifications.Api**
 ([§2.2](02-architecture-at-a-glance.md), [§9.7](09-messaging.md),
-[ADR-017](adr/ADR-017-one-synchronous-hop.md)), so that hop is the one
-`CorrelationIdHandler` is registered on.
+[ADR-017](adr/ADR-017-one-synchronous-hop.md)), each its own request's one
+hop, so those two are the hops `CorrelationIdHandler` is registered on.
 
 ### E.6.2 Error catalogue and refusals
 
@@ -1242,7 +1253,7 @@ The outbound-hop row of §12.1 has three suites in the reference domain:
 
 | Suite | What it holds |
 |---|---|
-| `Web.Bff.Tests` | §9.7's pricing hop: the timeout hierarchy, the credential handler's position and the realm |
+| `Web.Bff.Tests` | §9.7's pricing hop: the timeout hierarchy, the credential handler's position and the realm; and the registration hop of [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md): its timeout hierarchy, and the caller's own token in place of a credential handler, against a stub Notifications on loopback |
 | `Shipping.Worker.Tests` | The first two properties, for the address read of [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md), against a stub Ordering on loopback |
 | `Notifications.Worker.Tests` | All three, for the contact read the same record adds: the first two against a stub Keycloak on loopback, and the realm against a real one, which is also the owner the read asks |
 
@@ -1355,6 +1366,16 @@ ceiling at all.
 The address read of ADR-052 is Shipping's worker asking Ordering, and
 Ordering's API suite pins each of the statuses the worker tells apart against
 the real provider. `StubOrdering` is still a hand-written stub.
+
+The registration hop of
+[ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)
+is the BFF asking Notifications.Api, and `StubNotifications` stands in for it
+in `Web.Bff.Tests`. It applies every write unless told otherwise and models
+none of the ordering, because the BFF computes nothing over a reply: it maps
+the outcome to a status, checks the sequence against the one it sent, and
+relays a stale reply's sequence. Notifications' `DeviceRegistrationTests` pins
+each outcome and its sequence against the real store, and `DevicesService`
+maps them onto the reply one to one.
 
 ## E.8 §13 and §14: observability and local development
 
@@ -1662,7 +1683,7 @@ The two filters that reach into another service's tree:
 
 | Filter | Extra path | Why |
 |---|---|---|
-| `bff` | `src/Services/Catalog/Catalog.Api/Protos/**` | Web.Bff compiles Catalog's `pricing.proto` as a linked source file (§9.7) and its Dockerfile copies that path |
+| `bff` | `src/Services/Catalog/Catalog.Api/Protos/**` and `src/Services/Notifications/Notifications.Api/Protos/**` | Web.Bff compiles Catalog's `pricing.proto` and Notifications' `devices.proto` as linked source files (§9.7) and its Dockerfile copies both paths |
 | `shipping` | `src/Services/Ordering/Ordering.Api/Protos/**` | Shipping's images copy Ordering's `Protos/` for the delivery-address contract, on the BFF's terms |
 
 `tests/Ordering.*/**` covers `Ordering.TestSupport` as well as Ordering's three
@@ -1770,6 +1791,7 @@ code reads it, and the host refuses to start without a required one.
 | `Mail__Password` | Secret | Helm `mail.passwordSecretRef` → External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
 | `ProductImages__Store__Endpoint`, `__Bucket`, `__Region`, `__PathStyle` | Config | Helm `objectStore.*` → ConfigMap | ✓ — **Web.Bff and Catalog only**; the object store of [ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md), refused at start when missing. The BFF's endpoint is the address a client reaches, since it signs the URL the client uploads to, and Catalog's is the one that service reaches |
 | `ProductImages__Store__PublicBaseUrl` | Config | Helm `objectStore.publicBaseUrl` → ConfigMap | ✓ — **Catalog only**; where `products/` is served from, the absolute base every stored image URL is built from (its scheme is [§10.8](10-api-gateway.md)'s rule), and short enough that it and the longest destination key fit `ThumbnailUrl` ([§10.8](10-api-gateway.md)) |
+| `Push__Apps__0…n__AppId`, `__Platform` | Config | Helm `push.apps` → ConfigMap, empty in the chart | — **Web.Bff only**; [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)'s apps, each an app id and its platform, which a registration must match (§10.10). The host refuses an app id named twice or a platform outside `fcm` and `apns` at start, and an empty list refuses every registration |
 | `ProductImages__Store__AccessKey`, `__SecretKey` | Secret | Helm `objectStore.secretRef` → External Secrets | ✓ — **Web.Bff and Catalog only**; one pair per host, never shared: the BFF's writes `uploads/` and nothing else, and Catalog's reads `uploads/` and writes `products/` (§10.8) |
 | `ContactSource__BaseUrl` | Config | Helm `contactSource.baseUrl` → ConfigMap | ✓ — **Notifications only**; Keycloak's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s contact read, HTTPS outside Development, and the host refuses to start without it |
 | `ContactSource__Realm` | Config | Helm `contactSource.realm` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; the realm whose users are read, the one that issues this host's token, and the host refuses to start without it |

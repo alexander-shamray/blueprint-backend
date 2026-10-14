@@ -317,7 +317,9 @@ Its pricing hop is made per request and is outside its readiness set (§13.5),
 and §14.3's start order runs the dependency the other way. The hop is over
 `catalog-api:8081` — a second, HTTP/2-only Kestrel endpoint, because a
 cleartext port cannot serve HTTP/1.1 and h2c at once — and that port is
-published to no host and reached by no route.
+published to no host and reached by no route. Its registration hop to
+`notifications-api:8081` is made per request too, kept out of readiness, and
+over the same kind of port, and it takes no `depends_on` either.
 
 **A mail relay that is a sink binds both its ports to loopback alone.**
 Mailpit runs in the unit of the worker that submits to it,
