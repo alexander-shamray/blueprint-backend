@@ -178,7 +178,7 @@ public static class DependencyInjection
         // removes it by, so its start-up pass never races a seed.
         services.AddHostedService<NotificationsRetentionService>();
 
-        // The one retention service §9.5 asks for, registered last so it is stopped first.
+        // The one retention service §9.5 asks for; this host stops its services concurrently (Program).
         services.AddHostedService<RetentionPurgeService>();
 
         // ADR-052's contact row, the one table here a mailbox lands in.
