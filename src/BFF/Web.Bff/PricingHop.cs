@@ -1,6 +1,6 @@
 namespace Web.Bff;
 
-/// <summary>This host's synchronous downstream hop, named in one place (§9.7, ADR-017).</summary>
+/// <summary>This host's pricing hop to Catalog, named in one place (§9.7, ADR-017).</summary>
 public static class PricingHop
 {
     /// <summary>Explicit, because the resilience options are registered under a name derived from it.</summary>

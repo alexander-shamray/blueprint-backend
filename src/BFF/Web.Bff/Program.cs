@@ -6,6 +6,7 @@ using Microsoft.Extensions.Http.Resilience;
 using Polly;
 using Web.Bff;
 using Web.Bff.Addresses;
+using Web.Bff.Devices;
 using Web.Bff.Endpoints;
 using Web.Bff.Messaging;
 using Web.Bff.Orders;
@@ -23,7 +24,7 @@ builder.Host.UseDefaultServiceProvider(o =>
 
 builder.AddCommonWebDefaults();                 // §13.2
 
-// §9.7's fallback for this host's outbound call, so it lives here rather than in Common.Web.
+// §9.7's fallback for this host's outbound calls, so it lives here rather than in Common.Web.
 builder.Services.AddExceptionHandler<UpstreamExceptionHandler>();
 
 // §6.4's validator; with no handler pipeline in this host, the endpoint calls it itself.
@@ -97,6 +98,9 @@ builder.Services.AddSingleton<OrderEventStream>();
 builder.Services.AddSingleton<SavedAddressStore>();
 builder.Services.AddSingleton<IValidator<SavedAddress>, SavedAddressValidator>();
 
+// §10.10's registration: ADR-117's hop to Notifications, under the caller's token rather than this host's.
+builder.Services.AddDeviceRegistration();
+
 // §10.8's upload: the store it signs for, and the permission that gates it (§11.4).
 builder.Services.AddProductImageUploads();
 builder.Services
@@ -116,12 +120,13 @@ app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4
 
-// SQL and the bus gate readiness (§13.5); Catalog is left out, or its outage would unready this host too.
+// SQL and the bus gate readiness (§13.5); neither hop's service does, or its outage would unready this host too.
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapCheckoutEndpoints();
 app.MapOrderEndpoints();          // §10.7 — ADR-051's projection, no hop
 app.MapSavedAddressEndpoints();   // §10.9 — ADR-107's saved address, no hop
 app.MapProductImageEndpoints();   // §10.8 — signs a URL locally, no hop
+app.MapDeviceEndpoints();         // §10.10 — ADR-117's registration, one hop to Notifications
 
 app.Run();
 

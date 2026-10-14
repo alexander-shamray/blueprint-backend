@@ -573,7 +573,8 @@ jobs:
               - *shared
               - 'src/Gateway/**'
             # The BFF is a deployable too, and §15.1 argues why its filter
-            # reaches into Catalog's tree for the proto Web.Bff compiles.
+            # reaches into Catalog's and Notifications' trees for the protos
+            # Web.Bff compiles.
             # `pipeline-gate filters` cannot see that case, because it asks
             # whether a deployable is reachable rather than whether a filter is
             # complete.
@@ -581,6 +582,7 @@ jobs:
               - *shared
               - 'src/BFF/**'
               - 'src/Services/Catalog/Catalog.Api/Protos/**'
+              - 'src/Services/Notifications/Notifications.Api/Protos/**'
             # A chart or values change produces no new image and must still
             # reach the cluster (§15.1's "a config-only deploy needs a tag it
             # did not build"). deploy/compose/** is excluded because it reaches

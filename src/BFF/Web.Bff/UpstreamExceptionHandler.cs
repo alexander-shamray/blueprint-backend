@@ -7,6 +7,7 @@ using Polly.Timeout;
 namespace Web.Bff;
 
 /// <summary>§9.7's third rule for this host: a clear error for an upstream failure, decided in advance.</summary>
+/// <remarks>One table for both hops, so no title names a service: the route says which one was asked (§10.5).</remarks>
 internal sealed class UpstreamExceptionHandler(IProblemDetailsService problemDetails) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
@@ -18,7 +19,7 @@ internal sealed class UpstreamExceptionHandler(IProblemDetailsService problemDet
             return false;
 
         // A buyer who left cancels the call: answered as the host answers an aborted request, a 499 and no error
-        // line (§13.2). Only then, so a status Catalog itself sent while the buyer still waits is left to the switch.
+        // line (§13.2). Only then, so a status the peer itself sent while the buyer still waits is left to the switch.
         if (rpc.StatusCode == StatusCode.Cancelled && httpContext.RequestAborted.IsCancellationRequested)
         {
             httpContext.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
@@ -27,19 +28,19 @@ internal sealed class UpstreamExceptionHandler(IProblemDetailsService problemDet
 
         (int status, string title) = rpc.StatusCode switch
         {
-            // The BFF built the request from the caller's own basket, so the caller has to change something.
-            StatusCode.InvalidArgument => (StatusCodes.Status400BadRequest, "Invalid pricing request"),
+            // The BFF built the request from the caller's own input, so the caller has to change something.
+            StatusCode.InvalidArgument => (StatusCodes.Status400BadRequest, "Invalid request"),
 
             // 503 rather than 502, because it is the status that says "try again later".
             StatusCode.Unavailable or StatusCode.DeadlineExceeded =>
-                (StatusCodes.Status503ServiceUnavailable, "Pricing is temporarily unavailable"),
+                (StatusCodes.Status503ServiceUnavailable, "A service this request needs is temporarily unavailable"),
 
             // A failure in the client pipeline has no gRPC status: Grpc.Net.Client raises Internal and keeps the
             // cause in Status.DebugException.
             StatusCode.Internal when IsTransient(rpc.Status.DebugException) =>
-                (StatusCodes.Status503ServiceUnavailable, "Pricing is temporarily unavailable"),
+                (StatusCodes.Status503ServiceUnavailable, "A service this request needs is temporarily unavailable"),
 
-            _ => (StatusCodes.Status500InternalServerError, "Pricing failed")
+            _ => (StatusCodes.Status500InternalServerError, "Upstream call failed")
         };
 
         // Left unhandled rather than written as a 500, so it is logged and reaches §13.2's error metrics.

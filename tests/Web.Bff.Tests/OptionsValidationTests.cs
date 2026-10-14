@@ -2,6 +2,7 @@ using Common.Infrastructure.Identity;
 using Common.Web;
 using Microsoft.Extensions.Options;
 using Shouldly;
+using Web.Bff.Devices;
 using Web.Bff.ProductImages;
 using Xunit;
 
@@ -46,18 +47,51 @@ public class OptionsValidationTests
         refusal.Message.ShouldContain(member);
     }
 
+    /// <summary>ADR-117's app list: a registration cannot be checked against one that names an app ambiguously.</summary>
+    [Theory]
+    [InlineData("com.example.shop", "fcm", "com.example.shop", "apns", "2 times")]
+    [InlineData("com.example.shop", "fcm", "com.example.shop.ios", "huawei", "not fcm or apns")]
+    [InlineData("com.example.shop", "fcm", "com example", "apns", "printable ASCII")]
+    public void The_host_refuses_to_start_on_an_app_list_it_cannot_check_against(
+        string firstApp,
+        string firstPlatform,
+        string secondApp,
+        string secondPlatform,
+        string reason)
+    {
+        OptionsValidationException refusal = Refusal(
+                () => new PushAppsFactory((firstApp, firstPlatform), (secondApp, secondPlatform)))
+            .ShouldBeOfType<OptionsValidationException>();
+
+        refusal.OptionsType.ShouldBe(typeof(PushOptions));
+        refusal.Message.ShouldContain(reason);
+    }
+
+    [Fact]
+    public void The_host_starts_with_no_app_to_push_to()
+    {
+        // A deployment that sends no push is one, so the refusals above are about the list's shape, not its size.
+        using PushAppsFactory factory = new();
+        using HttpClient client = factory.CreateClient();
+
+        client.ShouldNotBeNull();
+    }
+
+    private static Exception Refusal(string section, string member) =>
+        Refusal(() => new MissingSettingFactory($"{section}:{member}"));
+
     /// <summary>Starts hosts missing one credential until one says why, not that its provider is disposed.</summary>
     /// <remarks>
     /// A failed start can dispose the provider the factory still reads, reporting <see cref="ObjectDisposedException"/>
     /// with no inner exception; only a failed start does that, so a re-ask cannot invent a refusal.
     /// </remarks>
-    private static Exception Refusal(string section, string member)
+    private static Exception Refusal(Func<BffFactory> unstartable)
     {
         Exception? refusal = null;
 
         for (int attempt = 0; attempt < StartAttempts; attempt++)
         {
-            using MissingSettingFactory factory = new($"{section}:{member}");
+            using BffFactory factory = unstartable();
 
             // The factory builds the host on first use.
             refusal = Record.Exception(() => factory.CreateClient())
@@ -80,6 +114,21 @@ public class OptionsValidationTests
         using HttpClient client = factory.CreateClient();
 
         client.ShouldNotBeNull();
+    }
+
+    /// <summary>The fixture's settings with the app list replaced by the one given.</summary>
+    private sealed class PushAppsFactory(params (string AppId, string Platform)[] apps) : BffFactory
+    {
+        protected override IEnumerable<KeyValuePair<string, string?>> Settings =>
+        [
+            .. base.Settings.Where(setting =>
+                !setting.Key.StartsWith(PushOptions.SectionName + ":", StringComparison.Ordinal)),
+            .. apps.SelectMany((app, i) => new KeyValuePair<string, string?>[]
+            {
+                new($"{PushOptions.SectionName}:Apps:{i}:AppId", app.AppId),
+                new($"{PushOptions.SectionName}:Apps:{i}:Platform", app.Platform)
+            })
+        ];
     }
 
     /// <summary>One member blanked rather than unset, so an exported environment variable cannot refill it.</summary>

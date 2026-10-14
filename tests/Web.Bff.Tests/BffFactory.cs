@@ -8,11 +8,12 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Web.Bff.Devices;
 using Web.Bff.ProductImages;
 
 namespace Web.Bff.Tests;
 
-/// <summary>The real BFF host (§12.4), with the identity provider and Catalog stood in for.</summary>
+/// <summary>The real BFF host (§12.4), with the identity provider, Catalog and Notifications stood in for.</summary>
 /// <remarks>Fake <c>Identity:Client</c> values, as <c>ValidateOnStart</c> needs them to boot (§15.4).</remarks>
 public class BffFactory : WebApplicationFactory<Program>
 {
@@ -34,7 +35,15 @@ public class BffFactory : WebApplicationFactory<Program>
 
     public const string StoreBucket = "product-images";
 
+    /// <summary>The app the fixture's deployment pushes to on FCM (ADR-117).</summary>
+    public const string FcmApp = "com.example.shop";
+
+    /// <summary>The app the fixture's deployment pushes to on APNs.</summary>
+    public const string ApnsApp = "com.example.shop.ios";
+
     public Uri? PricingAddress { get; set; }
+
+    public Uri? NotificationsAddress { get; set; }
 
     /// <summary>The runtime key (§7.1), which <c>BffServiceFixture</c> points at its container.</summary>
     public string DatabaseConnectionString { get; set; } = UnreachableDatabase;
@@ -54,7 +63,11 @@ public class BffFactory : WebApplicationFactory<Program>
         new($"{ServiceIdentityOptions.SectionName}:Scope", Scope),
         new("ConnectionStrings:Bff", DatabaseConnectionString),
         new("ConnectionStrings:RabbitMq", BrokerConnectionString),
-        .. StoreSettings
+        .. StoreSettings,
+        new($"{PushOptions.SectionName}:Apps:0:AppId", FcmApp),
+        new($"{PushOptions.SectionName}:Apps:0:Platform", "fcm"),
+        new($"{PushOptions.SectionName}:Apps:1:AppId", ApnsApp),
+        new($"{PushOptions.SectionName}:Apps:1:Platform", "apns")
     ];
 
     /// <summary>ADR-106's store, which the host validates at start (§15.4).</summary>
@@ -94,6 +107,13 @@ public class BffFactory : WebApplicationFactory<Program>
                 services.Configure<GrpcClientFactoryOptions>(
                     PricingHop.ClientName,
                     o => o.Address = PricingAddress);
+            }
+
+            if (NotificationsAddress is not null)
+            {
+                services.Configure<GrpcClientFactoryOptions>(
+                    NotificationsHop.ClientName,
+                    o => o.Address = NotificationsAddress);
             }
         });
     }

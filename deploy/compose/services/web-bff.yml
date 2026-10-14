@@ -1,5 +1,6 @@
 # The BFF: POST /v1/checkout/quote (ADR-045), minting its own token (§11.5),
-# and ADR-051's order projection, migrated by the one-shot beside it.
+# ADR-117's device registration under the caller's token, and ADR-051's order
+# projection, migrated by the one-shot beside it.
 services:
   # §14.1's pair rule: a migrator one-shot and the host it gates, on
   # `condition: service_completed_successfully`, because no host may migrate
@@ -69,6 +70,12 @@ services:
       ProductImages__Store__PathStyle: "true"
       ProductImages__Store__AccessKey: "bff-images-svc"
       ProductImages__Store__SecretKey: "local-dev-bff-images"
+      # ADR-117's app list, which a registration's app id and platform must match (§10.10). Placeholder ids: an
+      # adopter names its own apps.
+      Push__Apps__0__AppId: "com.example.shop"
+      Push__Apps__0__Platform: "fcm"
+      Push__Apps__1__AppId: "com.example.shop.ios"
+      Push__Apps__1__Platform: "apns"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     ports: [ "127.0.0.1:5200:8080" ]
     # §13.5's readiness, asked by the host itself through HealthProbe, because
@@ -89,3 +96,4 @@ services:
       keycloak: { condition: service_healthy }
       # No catalog-api: the pricing hop is made per request and kept out of
       # readiness (§13.5), and Catalog's seed waits on this host instead (§14.3).
+      # No notifications-api, on the same terms for the registration hop.
