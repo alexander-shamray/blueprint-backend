@@ -20,7 +20,7 @@ public class EndErasedSubjectHandlerTests
 
         result.IsSuccess.ShouldBeTrue();
         store.Calls.ShouldBe(
-            ["waiting", "ended", "orders", "contact"],
+            ["waiting", "ended", "waiting deliveries", "ended deliveries", "orders", "contact"],
             "a notice sent before the check keeps the customer's id until it is anonymised, and the notices are " +
             "found through the order records, so those go after them");
         store.Subjects.ShouldAllBe(s => s == Subject);
@@ -35,6 +35,12 @@ public class EndErasedSubjectHandlerTests
         public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, CancellationToken ct) => Run("waiting", subjectId);
 
         public Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, CancellationToken ct) => Run("ended", subjectId);
+
+        public Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
+            Run("waiting deliveries", subjectId);
+
+        public Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
+            Run("ended deliveries", subjectId);
 
         public Task<int> DeleteOrderRecordsAsync(Guid subjectId, CancellationToken ct) => Run("orders", subjectId);
 

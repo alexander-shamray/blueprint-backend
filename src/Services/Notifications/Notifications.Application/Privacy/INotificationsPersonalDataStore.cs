@@ -9,6 +9,12 @@ public interface INotificationsPersonalDataStore
     /// <summary>Takes the subject's id and the message's values off the ended notices, keeping the evidence (ADR-053).</summary>
     Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, CancellationToken ct);
 
+    /// <summary>Deletes the subject's push deliveries still pending, so none is sent after the erasure.</summary>
+    Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, CancellationToken ct);
+
+    /// <summary>Takes the subject's id and languages off the ended deliveries, keeping the evidence.</summary>
+    Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, CancellationToken ct);
+
     /// <summary>Deletes the subject's order records, which the notices above are found through.</summary>
     Task<int> DeleteOrderRecordsAsync(Guid subjectId, CancellationToken ct);
 

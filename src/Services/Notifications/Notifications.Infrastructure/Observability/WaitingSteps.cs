@@ -12,5 +12,14 @@ public static class WaitingSteps
     /// <summary>The relay, once the intent is stamped.</summary>
     public const string Relay = "relay";
 
-    public static IReadOnlyList<string> All { get; } = [OrderRecord, Contact, Relay];
+    /// <summary>A push notice's devices or language, before it fans out (the push design's section 4).</summary>
+    public const string Devices = "devices";
+
+    /// <summary>A delivery to an FCM device, which waits on Google's provider.</summary>
+    public const string Fcm = "fcm";
+
+    /// <summary>A delivery to an APNs device, which waits on Apple's provider.</summary>
+    public const string Apns = "apns";
+
+    public static IReadOnlyList<string> All { get; } = [OrderRecord, Contact, Relay, Devices, Fcm, Apns];
 }

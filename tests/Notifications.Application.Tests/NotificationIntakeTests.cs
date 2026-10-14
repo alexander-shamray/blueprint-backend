@@ -1,6 +1,8 @@
 using Common.Contracts.Ordering.V1;
 using Microsoft.Extensions.Logging;
+using Notifications.Application.Delivery;
 using Notifications.Application.Intake;
+using Notifications.Application.Preferences;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 using Shouldly;
@@ -21,7 +23,8 @@ public class NotificationIntakeTests
     private readonly FakeOrderRecords _orders = new();
     private readonly CapturingLogger<RecordNotificationHandler> _log = new();
 
-    private RecordNotificationHandler Handler() => new(_notifications, _orders, new FixedClock(Now), _log);
+    private RecordNotificationHandler Handler(bool push = false) =>
+        new(_notifications, _orders, new DeliveryChannels(push), new FixedClock(Now), _log);
 
     private static NotificationParameters For(Guid order) => new() { OrderId = order, OccurredAt = Now };
 
@@ -241,12 +244,48 @@ public class NotificationIntakeTests
         record.CancelOrigin.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task With_no_push_app_named_an_event_owes_its_mail_notice_alone()
+    {
+        await Handler().HandleAsync(Placed(Guid.CreateVersion7(), Guid.CreateVersion7()), Ct);
+
+        _notifications.Added.ShouldHaveSingleItem().Channel.ShouldBe(ConsentVocabulary.Email);
+    }
+
+    [Fact]
+    public async Task With_a_push_app_named_an_event_owes_a_notice_on_each_channel_with_one_set_of_values()
+    {
+        RecordNotificationCommand placed = Placed(Guid.CreateVersion7(), Guid.CreateVersion7());
+
+        await Handler(push: true).HandleAsync(placed, Ct);
+
+        _notifications.Added.Select(n => n.Channel).ShouldBe([ConsentVocabulary.Email, ConsentVocabulary.Push]);
+        _notifications.Added.ShouldAllBe(n => n.EventId == placed.EventId && n.Status == NotificationStatus.Pending);
+        _notifications.Added[1].Parameters.ShouldBe(_notifications.Added[0].Parameters);
+        _notifications.Added[1].CorrelationId.ShouldBe(_notifications.Added[0].CorrelationId);
+    }
+
+    [Fact]
+    public async Task A_redelivery_after_the_first_push_app_is_named_writes_the_push_notice_alone()
+    {
+        RecordNotificationCommand placed = Placed(Guid.CreateVersion7(), Guid.CreateVersion7());
+        await Handler().HandleAsync(placed, Ct);
+
+        await Handler(push: true).HandleAsync(placed, Ct);
+        await Handler(push: true).HandleAsync(placed, Ct);
+
+        _notifications.Added.Select(n => n.Channel).ShouldBe([ConsentVocabulary.Email, ConsentVocabulary.Push]);
+    }
+
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
     private sealed class FakeNotifications : INotificationRepository
     {
         public List<Notification> Added { get; } = [];
 
-        public Task<bool> ExistsAsync(Guid eventId, string templateKey, CancellationToken ct) =>
-            Task.FromResult(Added.Exists(n => n.EventId == eventId && n.TemplateKey == templateKey));
+        public Task<bool> ExistsAsync(Guid eventId, string templateKey, string channel, CancellationToken ct) =>
+            Task.FromResult(
+                Added.Exists(n => n.EventId == eventId && n.TemplateKey == templateKey && n.Channel == channel));
 
         public Task<Notification?> GetAsync(Guid notificationId, CancellationToken ct) =>
             Task.FromResult(Added.Find(n => n.NotificationId == notificationId));

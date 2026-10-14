@@ -3,10 +3,12 @@ using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Notifications.Application.Privacy;
+using Notifications.Infrastructure.Push;
 
 namespace Notifications.Infrastructure.Persistence;
 
-internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext db) : INotificationsPersonalDataStore
+internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext db, PushMetrics metrics)
+    : INotificationsPersonalDataStore
 {
     // A notice names its customer only once the worker has resolved it, so a waiting one is found through its order.
     private const string SubjectsOrders =
@@ -27,6 +29,18 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         SET CustomerId = NULL, Languages = NULL, Parameters = ''
         WHERE Status <> 'Pending'
             AND (CustomerId = @SubjectId OR OrderId IN ({SubjectsOrders}));
+        """;
+
+    // A delivery carries its customer from the fan-out, so it is found by it and never through its notice.
+    private const string DeleteWaitingDeliveriesSql =
+        "DELETE FROM notifications.PushDeliveries WHERE Status = 'Pending' AND CustomerId = @SubjectId;";
+
+    // As the ended notices: the row keeps what shows a push was sent, and loses whom to and in which language.
+    private const string AnonymiseEndedDeliveriesSql =
+        """
+        UPDATE notifications.PushDeliveries
+        SET CustomerId = NULL, Languages = NULL
+        WHERE Status <> 'Pending' AND CustomerId = @SubjectId;
         """;
 
     private const string DeleteOrderRecordsSql =
@@ -59,14 +73,27 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
     public Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(AnonymiseEndedSql, subjectId, ct);
 
+    public Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
+        ExecuteAsync(DeleteWaitingDeliveriesSql, subjectId, ct);
+
+    public Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
+        ExecuteAsync(AnonymiseEndedDeliveriesSql, subjectId, ct);
+
     public Task<int> DeleteOrderRecordsAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(DeleteOrderRecordsSql, subjectId, ct);
 
     public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(DeleteContactSql, subjectId, ct);
 
-    public Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct) =>
-        ExecuteAsync(ClearDevicesSql, subjectId, ct);
+    // Counted at the statement, inside the unit's transaction: a rolled-back erasure is retried and counts again,
+    // which over-reads a series whose job is to show that removals happen (the push design's section 9).
+    public async Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct)
+    {
+        int cleared = await ExecuteAsync(ClearDevicesSql, subjectId, ct);
+        metrics.DevicesRemoved(PushMetrics.Erased, cleared);
+
+        return cleared;
+    }
 
     public Task<int> AnonymiseConsentAsync(Guid subjectId, DateTimeOffset now, CancellationToken ct) =>
         ExecuteAsync(AnonymiseConsentSql, new { SubjectId = subjectId, Now = now }, ct);

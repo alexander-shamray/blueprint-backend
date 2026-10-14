@@ -109,6 +109,14 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                     b.Property<int>("Attempts")
                         .HasColumnType("int");
 
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(8)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(8)")
+                        .HasDefaultValue("email");
+
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset(7)");
 
@@ -195,13 +203,13 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_NotificationLog_SendClaim")
                         .HasFilter("[Status] = 'Pending'");
 
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("NextAttemptAt"), new[] { "LockedUntil" });
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("NextAttemptAt"), new[] { "LockedUntil", "Channel" });
 
                     b.HasIndex("OrderId")
                         .HasDatabaseName("IX_NotificationLog_PendingOrder")
                         .HasFilter("[Status] = 'Pending'");
 
-                    b.HasIndex("EventId", "TemplateKey")
+                    b.HasIndex("EventId", "TemplateKey", "Channel")
                         .IsUnique();
 
                     b.ToTable("NotificationLog", "notifications");
@@ -240,6 +248,104 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                     b.HasIndex("RecordedAt");
 
                     b.ToTable("OrderRecords", "notifications");
+                });
+
+            modelBuilder.Entity("Notifications.Application.Records.PushDelivery", b =>
+                {
+                    b.Property<Guid>("DeliveryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<Guid?>("ConsentEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InstallationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Languages")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(8)");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTimeOffset?>("SendStartedAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<int?>("TemplateVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(55)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(55)");
+
+                    b.Property<string>("TraceState")
+                        .HasMaxLength(512)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(512)");
+
+                    b.HasKey("DeliveryId");
+
+                    b.HasIndex("ConsentEntryId")
+                        .HasDatabaseName("IX_PushDeliveries_ConsentEntry")
+                        .HasFilter("[ConsentEntryId] IS NOT NULL");
+
+                    b.HasIndex("CustomerId")
+                        .HasDatabaseName("IX_PushDeliveries_Customer")
+                        .HasFilter("[CustomerId] IS NOT NULL");
+
+                    b.HasIndex("NextAttemptAt")
+                        .HasDatabaseName("IX_PushDeliveries_SendClaim")
+                        .HasFilter("[Status] = 'Pending'");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("NextAttemptAt"), new[] { "LockedUntil", "Platform" });
+
+                    b.HasIndex("NotificationId", "InstallationId")
+                        .IsUnique();
+
+                    b.ToTable("PushDeliveries", "notifications");
                 });
 
             modelBuilder.Entity("Notifications.Infrastructure.Persistence.ConsentEntryRow", b =>
@@ -366,6 +472,15 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                         .HasFilter("[Token] IS NOT NULL");
 
                     b.ToTable("DeviceInstallations", "notifications");
+                });
+
+            modelBuilder.Entity("Notifications.Application.Records.PushDelivery", b =>
+                {
+                    b.HasOne("Notifications.Application.Records.Notification", null)
+                        .WithMany()
+                        .HasForeignKey("NotificationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -2,6 +2,7 @@ using System.Data;
 using Common.Application;
 using Common.Infrastructure.Outbox;
 using Dapper;
+using Notifications.Application.Preferences;
 
 namespace Notifications.Infrastructure.Delivery;
 
@@ -18,22 +19,24 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
 
     // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's. An empty
     // CorrelationId is the column's default, left by a version that predates it while both run (§7.4), so the row's
-    // order stands in, as AddNotificationCorrelationId's backfill argues.
+    // order stands in, as AddNotificationCorrelationId's backfill argues. An open relay leaves the mail notices out,
+    // so push notices still fan out while the relay is down (the push design's section 1).
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
             SELECT TOP ({SendWorker.ClaimBatchSize}) *
             FROM notifications.NotificationLog WITH (UPDLOCK, READPAST, ROWLOCK)
             WHERE {Claimable}
+                AND (@MailParked = 0 OR Channel <> '{ConsentVocabulary.Email}')
             ORDER BY NextAttemptAt
         )
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {SendWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
         OUTPUT inserted.NotificationId, inserted.EventId,
             COALESCE(NULLIF(inserted.CorrelationId, '{Guid.Empty:D}'), inserted.OrderId) AS CorrelationId,
-            inserted.OrderId, inserted.CustomerId, inserted.TemplateKey, inserted.Parameters, inserted.CreatedAt,
-            inserted.SendStartedAt, inserted.TemplateVersion, inserted.Languages, inserted.TraceParent,
-            inserted.TraceState, inserted.LockedUntil;
+            inserted.OrderId, inserted.CustomerId, inserted.TemplateKey, inserted.Channel, inserted.Parameters,
+            inserted.CreatedAt, inserted.SendStartedAt, inserted.TemplateVersion, inserted.Languages,
+            inserted.TraceParent, inserted.TraceState, inserted.LockedUntil;
         """;
 
     // The dispatcher's ladder, read from its constants so the two cannot drift; the lease drops with it. No count
@@ -54,12 +57,17 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
         WHERE NotificationId = @NotificationId AND Status = 'Pending' AND LockedUntil = @Lease;
         """;
 
-    public async Task<IReadOnlyList<SendWork>> ClaimAsync(CancellationToken ct)
+    /// <summary>Leases due notices; with <paramref name="mailParked"/>, push notices alone.</summary>
+    public async Task<IReadOnlyList<SendWork>> ClaimAsync(bool mailParked, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
 
         // CommandDefinition, so a shutdown's token can interrupt a blocked claim.
-        return [.. await connection.QueryAsync<SendWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
+        return
+        [
+            .. await connection.QueryAsync<SendWork>(
+                new CommandDefinition(ClaimSql, new { MailParked = mailParked }, cancellationToken: ct))
+        ];
     }
 
     /// <summary>Backs the row off, if it is still under <paramref name="lease"/>; true when it was.</summary>

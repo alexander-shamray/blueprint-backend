@@ -41,7 +41,8 @@ public class NotificationsWorkerFactory(
     string giveUpAge = NotificationsWorkerFactory.InventedGiveUpAge,
     string consentRetention = NotificationsWorkerFactory.InventedConsentRetention,
     IReadOnlyList<string>? required = null,
-    bool consumes = true)
+    bool consumes = true,
+    IReadOnlyDictionary<string, string?>? settings = null)
     : WebApplicationFactory<Program>
 {
     /// <summary>The authority every host must name (§11.3); <c>.invalid</c> never resolves.</summary>
@@ -99,7 +100,13 @@ public class NotificationsWorkerFactory(
     public CapturedLogs CapturedLogs { get; } = new();
 
     /// <summary>The settings a worker needs to start; the host must not read <c>NotificationsMigrator</c>.</summary>
-    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        // Host settings, not app configuration: AddPushChannel reads its apps before the host is built, and only
+        // a host setting is in builder.Configuration by then.
+        foreach ((string key, string? value) in settings ?? new Dictionary<string, string?>())
+            builder.UseSetting(key, value);
+
         builder
             .UseSetting("ConnectionStrings:Notifications", connectionString)
             .UseSetting("ConnectionStrings:RabbitMq", rabbitConnectionString)
@@ -152,6 +159,14 @@ public class NotificationsWorkerFactory(
 
                 services.AddSingleton<SendWorker>();
 
+                // The push pass, by the same match and for the same reason.
+                ServiceDescriptor push = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(PushSendWorker));
+                services.Remove(push);
+
+                services.AddSingleton<PushSendWorker>();
+
                 // The statutory windows' pass, by the same match and for the same reason.
                 ServiceDescriptor retention = services.Single(d =>
                     d.ServiceType == typeof(IHostedService) &&
@@ -167,6 +182,7 @@ public class NotificationsWorkerFactory(
             .ConfigureTestServices(services =>
                 services.ConfigureDbContext<NotificationsDbContext>(o =>
                     o.AddInterceptors(CommitFaults, CommitFaults.Acknowledgements)));
+    }
 
     private static IEnumerable<KeyValuePair<string, string?>> Indexed(string member, IReadOnlyList<string> values) =>
         values.Select((value, index) =>

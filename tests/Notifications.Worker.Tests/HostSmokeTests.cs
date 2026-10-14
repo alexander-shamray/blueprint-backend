@@ -35,6 +35,14 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     }
 
     [Fact]
+    public void The_host_stops_its_two_send_passes_together_so_each_drains_inside_the_one_timeout()
+    {
+        // In sequence, the push pass's drain would spend the 30 seconds the send pass's needs (§15.3).
+        factory.Services.GetRequiredService<IOptions<Microsoft.Extensions.Hosting.HostOptions>>()
+            .Value.ServicesStopConcurrently.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Live_probe_returns_200()
     {
         // Also that readiness has not leaked into liveness (§13.5): every check this host registers is unreachable.

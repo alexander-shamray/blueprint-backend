@@ -168,20 +168,23 @@ public sealed class ServiceFixture()
 
     /// <summary>A second host over the same database and stubs, with a breaker of its own and no consumers.</summary>
     /// <param name="required">The pairs this host's jurisdiction requires, each <c>topic/channel</c> (ADR-120).</param>
+    /// <param name="settings">Further keys, such as the push apps and providers a push host names.</param>
     /// <remarks>A consumer here would take a share of <see cref="DeliverAsync{T}"/>'s messages, round robin.</remarks>
     public NotificationsWorkerFactory NewWorkerHost(
         string? relayHost = null,
         int? relayPort = null,
-        IReadOnlyList<string>? required = null) =>
-        Host(relayHost, relayPort, required, consumes: false);
+        IReadOnlyList<string>? required = null,
+        IReadOnlyDictionary<string, string?>? settings = null) =>
+        Host(relayHost, relayPort, required, consumes: false, settings);
 
-    protected override NotificationsWorkerFactory CreateFactory() => Host(null, null, null, consumes: true);
+    protected override NotificationsWorkerFactory CreateFactory() => Host(null, null, null, consumes: true, null);
 
     private NotificationsWorkerFactory Host(
         string? relayHost,
         int? relayPort,
         IReadOnlyList<string>? required,
-        bool consumes) =>
+        bool consumes,
+        IReadOnlyDictionary<string, string?>? settings) =>
         new(
             ConnectionString,
             BrokerConnectionString,
@@ -189,7 +192,8 @@ public sealed class ServiceFixture()
             mailPort: relayPort ?? Relay.Port,
             contactSourceBaseUrl: Keycloak.Urls[0] + "/",
             required: required,
-            consumes: consumes);
+            consumes: consumes,
+            settings: settings);
 
     protected override async Task StartStubsAsync()
     {
@@ -295,14 +299,25 @@ public sealed class ServiceFixture()
         Keycloak.LogEntries.Count(e => e.RequestMessage!.Path == UserPath(customer));
 
     /// <summary>A notice owed and due, as a consumer writes one, half a minute old on the host's clock.</summary>
-    public async Task<Notification> PendingAsync(string templateKey, Guid order, string? storedParameters = null)
+    public async Task<Notification> PendingAsync(
+        string templateKey,
+        Guid order,
+        string? storedParameters = null,
+        string channel = "email")
     {
         DateTimeOffset created = DateTimeOffset.UtcNow.AddSeconds(-30);
         string parameters = storedParameters ?? ParametersFormat.Write(
             new NotificationParameters { OrderId = order, OccurredAt = created });
 
         Notification notification =
-            Notification.Pending(Guid.CreateVersion7(), Guid.CreateVersion7(), templateKey, order, parameters, created);
+            Notification.Pending(
+                Guid.CreateVersion7(),
+                Guid.CreateVersion7(),
+                templateKey,
+                channel,
+                order,
+                parameters,
+                created);
 
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         NotificationsDbContext db = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();

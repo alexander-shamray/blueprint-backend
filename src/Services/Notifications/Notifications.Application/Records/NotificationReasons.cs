@@ -15,7 +15,23 @@ public static class NotificationReasons
     /// <summary>A suppressed row's reason when the journal withdrew its pair (ADR-120); never undeliverable.</summary>
     public const string OptedOut = "opted_out";
 
-    /// <summary>Every reason an undeliverable row may carry, so a typo is refused rather than stored.</summary>
+    /// <summary>A push notice whose subject holds no device, or a delivery whose device left it (ADR-117).</summary>
+    public const string NoDevice = "no_device";
+
+    /// <summary>A provider's <c>PushRefusal.Unregistered</c>, the one answer that deletes the device row.</summary>
+    public const string Unregistered = "unregistered";
+
+    /// <summary>A provider's <c>PushRefusal.InvalidToken</c>, which keeps the device row (ADR-121).</summary>
+    public const string InvalidToken = "invalid_token";
+
+    /// <summary>Every reason an undeliverable notice may carry, so a typo is refused rather than stored.</summary>
     public static IReadOnlySet<string> All { get; } =
-        new HashSet<string>(StringComparer.Ordinal) { NoSuchCustomer, RecipientRefused, NotAMailbox, GaveUp, Erased };
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            NoSuchCustomer, RecipientRefused, NotAMailbox, GaveUp, Erased, NoDevice
+        };
+
+    /// <summary>Every reason an undeliverable push delivery may carry (the push design's section 3).</summary>
+    public static IReadOnlySet<string> Delivery { get; } =
+        new HashSet<string>(StringComparer.Ordinal) { Unregistered, InvalidToken, NoDevice, GaveUp };
 }

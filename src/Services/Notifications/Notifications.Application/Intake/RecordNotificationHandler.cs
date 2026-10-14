@@ -1,5 +1,6 @@
 using Common.Application;
 using Microsoft.Extensions.Logging;
+using Notifications.Application.Delivery;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 
@@ -13,6 +14,7 @@ namespace Notifications.Application.Intake;
 public sealed class RecordNotificationHandler(
     INotificationRepository notifications,
     IOrderRecordRepository orders,
+    DeliveryChannels channels,
     TimeProvider clock,
     ILogger<RecordNotificationHandler> log)
     : ICommandHandler<RecordNotificationCommand, Result>
@@ -24,11 +26,11 @@ public sealed class RecordNotificationHandler(
             new EventId(1, nameof(Dropped)),
             "Dropped {Member} of event {EventId} for {TemplateKey}: it failed the intake's check and was dropped.");
 
-    private static readonly Action<ILogger, Guid, string, Exception?> AlreadyOwed =
-        LoggerMessage.Define<Guid, string>(
+    private static readonly Action<ILogger, Guid, string, string, Exception?> AlreadyOwed =
+        LoggerMessage.Define<Guid, string, string>(
             LogLevel.Information,
             new EventId(2, nameof(AlreadyOwed)),
-            "Event {EventId} already owes {TemplateKey}; a redelivery past the inbox records nothing.");
+            "Event {EventId} already owes {TemplateKey} by {Channel}; a redelivery past the inbox records nothing.");
 
     private static readonly Action<ILogger, Guid, Exception?> CancellationKept =
         LoggerMessage.Define<Guid>(
@@ -45,21 +47,28 @@ public sealed class RecordNotificationHandler(
         if (command.Order is OrderFact order)
             await RecordOrderAsync(command, orderId, order, now, ct);
 
-        if (await notifications.ExistsAsync(command.EventId, command.TemplateKey, ct))
+        string? parameters = null;
+
+        // One notice per channel, each asked alone, so a redelivery after the push channel was named still writes it.
+        foreach (string channel in channels.All)
         {
-            AlreadyOwed(log, command.EventId, command.TemplateKey, null);
-            return Result.Success();
+            if (await notifications.ExistsAsync(command.EventId, command.TemplateKey, channel, ct))
+            {
+                AlreadyOwed(log, command.EventId, command.TemplateKey, channel, null);
+                continue;
+            }
+
+            parameters ??= ParametersFormat.Write(Checked(command));
+            notifications.Add(
+                Notification.Pending(
+                    command.EventId,
+                    command.CorrelationId,
+                    command.TemplateKey,
+                    channel,
+                    orderId,
+                    parameters,
+                    now));
         }
-
-        Notification pending = Notification.Pending(
-            command.EventId,
-            command.CorrelationId,
-            command.TemplateKey,
-            orderId,
-            ParametersFormat.Write(Checked(command)),
-            now);
-
-        notifications.Add(pending);
 
         return Result.Success();
     }

@@ -1,3 +1,5 @@
+using Notifications.Application.Preferences;
+
 namespace Notifications.Application.Records;
 
 /// <summary>One row of §3.2's <c>NotificationLog</c>: a notice owed for one event, and what became of it.</summary>
@@ -16,6 +18,9 @@ public sealed class Notification
     public Guid CorrelationId { get; private set; }
 
     public string TemplateKey { get; private set; } = "";
+
+    /// <summary><c>email</c> or <c>push</c>: one notice per event, key and channel (the push design).</summary>
+    public string Channel { get; private set; } = "";
 
     public Guid OrderId { get; private set; }
 
@@ -58,6 +63,7 @@ public sealed class Notification
         Guid eventId,
         Guid correlationId,
         string templateKey,
+        string channel,
         Guid orderId,
         string parameters,
         DateTimeOffset now)
@@ -66,6 +72,7 @@ public sealed class Notification
         EventId = eventId;
         CorrelationId = correlationId;
         TemplateKey = templateKey;
+        Channel = channel;
         OrderId = orderId;
         Parameters = parameters;
         Status = NotificationStatus.Pending;
@@ -73,11 +80,12 @@ public sealed class Notification
         NextAttemptAt = now;
     }
 
-    /// <summary>An event's consumer owes a notice: the record's first row.</summary>
+    /// <summary>An event's consumer owes a notice on one channel: the record's first row.</summary>
     public static Notification Pending(
         Guid eventId,
         Guid correlationId,
         string templateKey,
+        string channel,
         Guid orderId,
         string parameters,
         DateTimeOffset now)
@@ -88,7 +96,10 @@ public sealed class Notification
         Require(templateKey, NotificationLimits.MaxTemplateKeyLength, nameof(templateKey));
         Require(parameters, NotificationLimits.MaxParametersLength, nameof(parameters));
 
-        return new Notification(eventId, correlationId, templateKey, orderId, parameters, now);
+        if (!ConsentVocabulary.IsChannel(channel))
+            throw new ArgumentOutOfRangeException(nameof(channel), channel, "Not one of ConsentVocabulary.Channels.");
+
+        return new Notification(eventId, correlationId, templateKey, channel, orderId, parameters, now);
     }
 
     /// <summary>The order record named the customer; a second answer does not overwrite the first.</summary>
@@ -156,6 +167,22 @@ public sealed class Notification
         Languages = languages;
         ConsentEntryId = consentEntryId;
         SendStartedAt = now;
+        return true;
+    }
+
+    /// <summary>A push notice fanned out to its deliveries, whose outcomes are now its own (the push design).</summary>
+    /// <remarks>Stamped with the entry the fan-out was decided under, as a send's intent is (ADR-120).</remarks>
+    public bool Dispatch(string languages, Guid? consentEntryId, DateTimeOffset now)
+    {
+        Require(languages, NotificationLimits.MaxLanguagesLength, nameof(languages));
+
+        if (Status != NotificationStatus.Pending || Channel != ConsentVocabulary.Push)
+            return false;
+
+        Status = NotificationStatus.Dispatched;
+        Languages = languages;
+        ConsentEntryId = consentEntryId;
+        CompletedAt = now;
         return true;
     }
 

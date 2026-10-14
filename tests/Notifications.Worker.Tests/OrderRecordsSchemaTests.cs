@@ -76,6 +76,7 @@ public sealed class OrderRecordsSchemaTests(ServiceFixture fixture) : IAsyncLife
                     eventId,
                     Guid.CreateVersion7(),
                     "order-placed",
+                    "email",
                     Guid.CreateVersion7(),
                     """{"v":1}""",
                     Now));
@@ -85,10 +86,12 @@ public sealed class OrderRecordsSchemaTests(ServiceFixture fixture) : IAsyncLife
         await using AsyncServiceScope reading = fixture.Factory.Services.CreateAsyncScope();
         INotificationRepository notifications = reading.ServiceProvider.GetRequiredService<INotificationRepository>();
 
-        (await notifications.ExistsAsync(eventId, "order-placed", TestContext.Current.CancellationToken))
+        (await notifications.ExistsAsync(eventId, "order-placed", "email", TestContext.Current.CancellationToken))
             .ShouldBeTrue();
-        (await notifications.ExistsAsync(eventId, "order-confirmed", TestContext.Current.CancellationToken))
-            .ShouldBeFalse("the key is the event and the template together");
+        (await notifications.ExistsAsync(eventId, "order-confirmed", "email", TestContext.Current.CancellationToken))
+            .ShouldBeFalse("the key is the event, the template and the channel together");
+        (await notifications.ExistsAsync(eventId, "order-placed", "push", TestContext.Current.CancellationToken))
+            .ShouldBeFalse("a push notice of the same event is a row of its own");
     }
 
     private async Task SaveAsync(OrderRecord record)
