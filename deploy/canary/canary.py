@@ -1856,6 +1856,18 @@ def _rollout_follows_the_migrator(workloads: dict, workflow: Path = WORKFLOW) ->
     return []
 
 
+def _pinned_keys(lines: list[str]) -> set[str]:
+    """Every values path a `--set` flag in `lines` assigns, quoted or not, each of a comma-joined list."""
+    keys = set()
+    flags = re.findall(r"--set(?:-string|-json|-file|-literal)?(?:=|\s+)('[^']*'|\"[^\"]*\"|\S+)", "\n".join(lines))
+    for argument in flags:
+        for part in re.split(r"(?<!\\),", argument.strip("'\"")):
+            key = part.split("=", 1)[0].strip("'\"")
+            if "=" in part and re.fullmatch(r"[\w.-]+", key):
+                keys.add(key)
+    return keys
+
+
 def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> list[str]:
     """Check 14: where a descriptor names `sharesValues`, the rollout asks for the pairs and compares each one.
 
@@ -1876,7 +1888,7 @@ def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> 
             "that disagree (ADR-125)"
         ]
     # A key the rollout sets itself is installed past the candidate values, so comparing them would hold nothing.
-    pinned = set(re.findall(r"--set(?:-string|-json|-file)?[ =]([\w.]+)=", "\n".join(live)))
+    pinned = _pinned_keys(live)
     # A malformed declaration is check 4's refusal; this one reads only what check 4 would admit.
     shared = {
         (name, key)

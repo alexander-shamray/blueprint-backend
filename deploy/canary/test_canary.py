@@ -1952,6 +1952,21 @@ class SharedValuesTests(unittest.TestCase):
                 self.assertIn(f"names {key}, which", failures[0])
                 self.assertIn("own command line", failures[0])
 
+    def test_a_key_pinned_quoted_literal_or_after_a_comma_is_refused(self) -> None:
+        for flag, key in [
+            ("--set-string 'jurisdiction.required={a,b}'", "jurisdiction.required"),
+            ("--set image.pullPolicy=Always,push.apps={a}", "push.apps"),
+            ('--set-literal "push.apps=a"', "push.apps"),
+            ("--set-json=push.apps='[1, 2]'", "push.apps"),
+        ]:
+            with self.subTest(flag=flag):
+                pinned = self.shipped + f"\n          helm upgrade x deploy/helm/x {flag}\n"
+
+                failures = canary._rollout_holds_shared_values(self.workloads, self._workflow(pinned))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn(f"names {key}, which", failures[0])
+
     def test_a_comparison_of_the_running_values_is_refused(self) -> None:
         """The running values carry the old chart's defaults, so a changed default would pass unseen."""
         running = self.shipped.replace('--values "$RUNNER_TEMP/candidate.json"', '--values "$RUNNER_TEMP/stable.json"')
