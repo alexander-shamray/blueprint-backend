@@ -129,10 +129,11 @@ def without_infra_only_pair(repo_root: Path, names: Names, plan: Plan) -> str | 
     if not dropped:
         plan.absent.append(f"{INFRA_ONLY}: no {names.lower}-* pair")
         return None
-    if sorted(dropped) not in (["api", "migrator"], ["migrator", "worker"]):
+    # A service with both hosts gates both on its one migrator (§14.1, ADR-118), so all three go together.
+    if sorted(dropped) not in (["api", "migrator"], ["migrator", "worker"], ["api", "migrator", "worker"]):
         raise ScaffoldError(
             f"{INFRA_ONLY}: found {sorted(dropped)} for {names.lower}; §14.1's pair rule makes it "
-            f"a migrator and one host, and this script will not remove half of one")
+            f"a migrator and its hosts, and this script will not remove half of one")
     return restore("\n".join(kept), newline)
 
 

@@ -266,6 +266,36 @@ class RoundTripTests(unittest.TestCase):
         with self.assertRaisesRegex(ScaffoldError, "will not remove half of one"):
             remove_service.plan(root, PROBE)
 
+    def _with_a_second_host(self, root: Path) -> Path:
+        """The rendered override with a worker's entry beside the api's, as a service with both hosts has."""
+        override = root / "deploy" / "compose" / "docker-compose.infra-only.yml"
+        override.write_bytes(re.sub(
+            rb'(?m)^(  zulu-api:(\r?\n)    profiles: \[ "excluded" \]\r?\n)',
+            lambda m: m.group(1) + b'  zulu-worker:' + m.group(2) + b'    profiles: [ "excluded" ]' + m.group(2),
+            override.read_bytes()))
+        return override
+
+    def test_a_migrator_with_both_hosts_goes_whole(self):
+        # ADR-118: the second host is gated on the one migrator, so the three are one unit to remove.
+        root = self.fresh_root()
+        render_into(root, PROBE, SHAPES["api"])
+        self._with_a_second_host(root)
+
+        rendered = remove_service.plan(root, PROBE)
+
+        remaining = rendered.updated["deploy/compose/docker-compose.infra-only.yml"]
+        self.assertNotIn("zulu-", remaining)
+
+    def test_both_hosts_without_their_migrator_are_refused(self):
+        root = self.fresh_root()
+        render_into(root, PROBE, SHAPES["api"])
+        override = self._with_a_second_host(root)
+        override.write_bytes(
+            re.sub(rb'(?m)^  zulu-migrator:\r?\n    profiles: \[ "excluded" \]\r?\n', b"", override.read_bytes()))
+
+        with self.assertRaisesRegex(ScaffoldError, r"found \['api', 'worker'\] for zulu"):
+            remove_service.plan(root, PROBE)
+
 
 class RefusalTests(unittest.TestCase):
     def setUp(self):
