@@ -31,6 +31,11 @@
       Include="..\..\src\Services\Notifications\Notifications.Api\Protos\devices.proto"
       Link="Protos\devices.proto"
       GrpcServices="Server" />
+    <!-- And of preferences.proto, for ADR-120's routes. -->
+    <Protobuf
+      Include="..\..\src\Services\Notifications\Notifications.Api\Protos\preferences.proto"
+      Link="Protos\preferences.proto"
+      GrpcServices="Server" />
   </ItemGroup>
 
 </Project>

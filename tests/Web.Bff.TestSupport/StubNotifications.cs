@@ -5,18 +5,23 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.Extensions.Logging;
 using Notifications.Devices.V1;
+using Notifications.Preferences.V1;
 using Xunit;
 using DevicesGrpc = Notifications.Devices.V1.Devices;
+using PreferencesGrpc = Notifications.Preferences.V1.Preferences;
 
 namespace Web.Bff.TestSupport;
 
-/// <summary>A real gRPC server on a loopback port, standing in for Notifications.Api on ADR-117's hop.</summary>
+/// <summary>A real gRPC server on a loopback port, standing in for Notifications.Api on the BFF's hop.</summary>
 /// <remarks>Driven through its own surface, as <see cref="StubCatalog"/> is: a test sees no generated type.</remarks>
 public sealed class StubNotifications : IAsyncLifetime
 {
     private readonly ConcurrentQueue<Call> _calls = new();
+
+    private readonly ConcurrentQueue<PreferenceCall> _preferenceCalls = new();
 
     private WebApplication? _app;
 
@@ -28,6 +33,15 @@ public sealed class StubNotifications : IAsyncLifetime
 
     /// <summary>Answers for the next calls, one per call; with none queued a write is applied.</summary>
     public ConcurrentQueue<Answer> AnswerNextWith { get; } = new();
+
+    /// <summary>Every preferences call this stub has received, in order, recorded before it is answered.</summary>
+    public IReadOnlyCollection<PreferenceCall> PreferenceCalls => _preferenceCalls;
+
+    /// <summary>What a preferences read answers.</summary>
+    public IReadOnlyList<PreferenceRow> Preferences { get; set; } = [];
+
+    /// <summary>Answers for the next preference writes; with none queued, one is applied anew.</summary>
+    public ConcurrentQueue<SetAnswer> AnswerNextSetWith { get; } = new();
 
     /// <summary>Statuses to fail the next calls with, one per call, before answering normally.</summary>
     public ConcurrentQueue<StatusCode> FailNextWith { get; } = new();
@@ -48,6 +62,7 @@ public sealed class StubNotifications : IAsyncLifetime
 
         _app = builder.Build();
         _app.MapGrpcService<StubDevicesService>();
+        _app.MapGrpcService<StubPreferencesService>();
 
         await _app.StartAsync();
 
@@ -66,6 +81,34 @@ public sealed class StubNotifications : IAsyncLifetime
     /// <summary>One reply; a null sequence answers with the request's own.</summary>
     public sealed record Answer(Outcome Outcome, long? Sequence = null);
 
+    /// <summary>The sources preferences.proto names, and the unset one no reply may send.</summary>
+    public enum Source { Unspecified, Required, Default, Set }
+
+    /// <summary>The write outcomes preferences.proto names, and the unset one no reply may send.</summary>
+    public enum SetOutcome { Unspecified, Applied, Repeated, PreconditionFailed, Required }
+
+    /// <summary>One pair as a reply carries it; an empty version and a null time are the wire's unset.</summary>
+    public sealed record PreferenceRow(
+        string Topic,
+        string Channel,
+        bool OptedIn,
+        Source Source,
+        DateTimeOffset? SetAt = null,
+        string Version = "");
+
+    /// <summary>One write's reply; a null preference is the wire's unset.</summary>
+    public sealed record SetAnswer(SetOutcome Outcome, PreferenceRow? Preference);
+
+    /// <summary>One preferences call as it arrived; a read's pair and value are empty.</summary>
+    public sealed record PreferenceCall(
+        string Method,
+        string Topic,
+        string Channel,
+        bool OptedIn,
+        string ReadVersion,
+        string? Authorization,
+        string? CorrelationId);
+
     /// <summary>One call as it arrived; a sign-out's platform, app id and token are empty.</summary>
     public sealed record Call(
         string Method,
@@ -76,6 +119,88 @@ public sealed class StubNotifications : IAsyncLifetime
         long Sequence,
         string? Authorization,
         string? CorrelationId);
+
+    // The fault queues the device stub drains, shared, so a test fails the next call to either service alike.
+    private void Fail(ServerCallContext context)
+    {
+        if (AbortNextCalls > 0)
+        {
+            AbortNextCalls--;
+            context.GetHttpContext().Abort();
+
+            throw new RpcException(new Status(StatusCode.Aborted, "connection aborted"));
+        }
+
+        if (FailNextWith.TryDequeue(out StatusCode failure))
+            throw new RpcException(new Status(failure, "stubbed failure"));
+    }
+
+    private static Preference Wire(PreferenceRow row) =>
+        new()
+        {
+            Topic = row.Topic,
+            Channel = row.Channel,
+            OptedIn = row.OptedIn,
+            Source = (Preference.Types.Source)row.Source,
+            SetAt = row.SetAt is { } setAt ? Timestamp.FromDateTimeOffset(setAt) : null,
+            Version = row.Version
+        };
+
+    private sealed class StubPreferencesService(StubNotifications stub) : PreferencesGrpc.PreferencesBase
+    {
+        public override Task<PreferencesReply> Get(GetPreferencesRequest request, ServerCallContext context)
+        {
+            Record(context, nameof(Get), "", "", false, "");
+            stub.Fail(context);
+
+            PreferencesReply reply = new();
+            reply.Preferences.AddRange(stub.Preferences.Select(Wire));
+
+            return Task.FromResult(reply);
+        }
+
+        public override Task<SetPreferenceReply> Set(SetPreferenceRequest request, ServerCallContext context)
+        {
+            Record(context, nameof(Set), request.Topic, request.Channel, request.OptedIn, request.ReadVersion);
+            stub.Fail(context);
+
+            SetAnswer answer = stub.AnswerNextSetWith.TryDequeue(out SetAnswer? queued)
+                ? queued
+                : new SetAnswer(
+                    SetOutcome.Applied,
+                    new PreferenceRow(
+                        request.Topic,
+                        request.Channel,
+                        request.OptedIn,
+                        Source.Set,
+                        DateTimeOffset.UtcNow,
+                        Guid.CreateVersion7().ToString("D")));
+
+            return Task.FromResult(
+                new SetPreferenceReply
+                {
+                    Outcome = (SetPreferenceReply.Types.Outcome)answer.Outcome,
+                    Preference = answer.Preference is { } row ? Wire(row) : null
+                });
+        }
+
+        private void Record(
+            ServerCallContext context,
+            string method,
+            string topic,
+            string channel,
+            bool optedIn,
+            string readVersion) =>
+            stub._preferenceCalls.Enqueue(
+                new PreferenceCall(
+                    method,
+                    topic,
+                    channel,
+                    optedIn,
+                    readVersion,
+                    context.RequestHeaders.GetValue("authorization"),
+                    context.RequestHeaders.GetValue("x-correlation-id")));
+    }
 
     private sealed class StubDevicesService(StubNotifications stub) : DevicesGrpc.DevicesBase
     {
@@ -113,16 +238,7 @@ public sealed class StubNotifications : IAsyncLifetime
                     // Lower-cased, as Metadata is an ordinal list and HTTP/2 names are lower-case on the wire.
                     context.RequestHeaders.GetValue("x-correlation-id")));
 
-            if (stub.AbortNextCalls > 0)
-            {
-                stub.AbortNextCalls--;
-                context.GetHttpContext().Abort();
-
-                throw new RpcException(new Status(StatusCode.Aborted, "connection aborted"));
-            }
-
-            if (stub.FailNextWith.TryDequeue(out StatusCode failure))
-                throw new RpcException(new Status(failure, "stubbed failure"));
+            stub.Fail(context);
 
             Answer answer = stub.AnswerNextWith.TryDequeue(out Answer? queued) ? queued : new(Outcome.Applied);
 

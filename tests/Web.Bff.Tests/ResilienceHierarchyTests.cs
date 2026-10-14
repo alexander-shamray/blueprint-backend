@@ -13,7 +13,12 @@ namespace Web.Bff.Tests;
 public class ResilienceHierarchyTests
 {
     /// <summary>Each hop by the name its options are registered under; a hop this host gains is added here.</summary>
-    public static TheoryData<string> Hops => [PricingHop.ResilienceOptionsName, NotificationsHop.ResilienceOptionsName];
+    public static TheoryData<string> Hops =>
+    [
+        PricingHop.ResilienceOptionsName,
+        NotificationsHop.ResilienceOptionsName,
+        NotificationsHop.PreferencesResilienceOptionsName
+    ];
 
     private static HttpStandardResilienceOptions Configured(string hop)
     {

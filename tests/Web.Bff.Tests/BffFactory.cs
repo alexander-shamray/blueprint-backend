@@ -114,6 +114,9 @@ public class BffFactory : WebApplicationFactory<Program>
                 services.Configure<GrpcClientFactoryOptions>(
                     NotificationsHop.ClientName,
                     o => o.Address = NotificationsAddress);
+                services.Configure<GrpcClientFactoryOptions>(
+                    NotificationsHop.PreferencesClientName,
+                    o => o.Address = NotificationsAddress);
             }
         });
     }

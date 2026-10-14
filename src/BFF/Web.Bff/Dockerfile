@@ -50,7 +50,8 @@ COPY src/BFF/ src/BFF/
 # src/Services/Catalog that the reader will go looking for in a Dockerfile that
 # builds no Catalog project at all. A Catalog *rename* breaks it the same way.
 COPY src/Services/Catalog/Catalog.Api/Protos/ src/Services/Catalog/Catalog.Api/Protos/
-# Notifications' devices.proto, on the same terms, for ADR-117's registration.
+# Notifications' devices.proto and preferences.proto, on the same terms, for ADR-117's
+# registration and ADR-120's preferences.
 COPY src/Services/Notifications/Notifications.Api/Protos/ src/Services/Notifications/Notifications.Api/Protos/
 
 RUN dotnet publish src/BFF/Web.Bff/Web.Bff.csproj \
