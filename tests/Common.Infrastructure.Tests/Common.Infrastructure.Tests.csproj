@@ -28,6 +28,8 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <!-- Reads the Redis client spans back out of a real tracer (§13.2). -->
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+    <!-- Sdk, MetricPoint and HistogramBucket, which the messaging meter tests name. -->
+    <PackageReference Include="OpenTelemetry" />
   </ItemGroup>
 
   <ItemGroup>

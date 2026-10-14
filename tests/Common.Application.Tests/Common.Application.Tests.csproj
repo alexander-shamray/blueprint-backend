@@ -20,6 +20,8 @@
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <!-- Reads the exported histogram bounds back out of a real meter provider (§13.3). -->
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+    <!-- Sdk, MetricPoint and HistogramBucket, which the request meter tests name. -->
+    <PackageReference Include="OpenTelemetry" />
   </ItemGroup>
 
   <ItemGroup>

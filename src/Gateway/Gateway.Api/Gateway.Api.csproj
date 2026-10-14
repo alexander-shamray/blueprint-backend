@@ -5,6 +5,8 @@
   <ItemGroup>
     <!-- §10.2's routing; the pin is central (§4.4). -->
     <PackageReference Include="Yarp.ReverseProxy" />
+    <!-- Sdk.SetDefaultTextMapPropagator, OpenTelemetry's half of ADR-083's root trace per request. -->
+    <PackageReference Include="OpenTelemetry" />
   </ItemGroup>
 
   <ItemGroup>
