@@ -17,7 +17,7 @@ public class WriteEndpointRuleTests(NotificationsApiFactory factory) : IClassFix
     public void Every_write_endpoint_is_keyed_or_declares_why_a_repeat_is_harmless()
     {
         WriteEndpointRule
-            .Offenders(Endpoints, typeof(Program).Assembly)
+            .Offenders(Endpoints, typeof(Notifications.Application.DependencyInjection).Assembly)
             .ShouldBeEmpty();
     }
 
