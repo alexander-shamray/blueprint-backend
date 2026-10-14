@@ -181,7 +181,7 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
 
         (await SignOutAsync(Guid.CreateVersion7(), installation, 2)).Outcome.ShouldBe(DeviceWriteOutcome.Applied);
         (await SignOutAsync(owner, Guid.CreateVersion7(), 1))
-            .Outcome.ShouldBe(DeviceWriteOutcome.Applied, "no row is answered as one cleared would be");
+            .Outcome.ShouldBe(DeviceWriteOutcome.Applied, "a sign-out finding no row writes nothing");
 
         (await TokenAsync(installation)).ShouldBe("token-a");
         (await SequenceAsync(installation)).ShouldBe(1);
