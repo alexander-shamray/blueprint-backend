@@ -1897,6 +1897,9 @@ class SharedValuesTests(unittest.TestCase):
             self.assertEqual(1, canary.main([*argv, "--values", str(same), "--peer", str(other)]))
             self.assertEqual(2, canary.main([*argv, "--values", str(same), "--peer", str(broken)]))
             self.assertEqual(2, canary.main(
+                ["canary", "values-agree", "--key", "push.app", "--peer-name", "web-bff",
+                 "--values", str(same), "--peer", str(same)]))
+            self.assertEqual(2, canary.main(
                 ["canary", "values-agree", "--key", "push..apps", "--peer-name", "web-bff",
                  "--values", str(same), "--peer", str(same)]))
         self.assertIn("push.apps differs from web-bff's", err.getvalue())
