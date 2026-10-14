@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+// Notifications owns this file, because Notifications.Api serves the RPCs.
+// Web.Bff links it rather than copying it (§4.3), as it links Catalog's
+// pricing.proto: one contract, two generated halves.
+package notifications.devices.v1;
+
+option csharp_namespace = "Notifications.Devices.V1";
+
+// ADR-117's registration, made by the BFF with the caller's own access token,
+// so the subject is the token's and no request names one. Both methods are
+// convergent: the installation's sequence orders them, and a stale one is
+// answered with the row's sequence rather than refused as an error.
+service Devices {
+  // An app's start or token rotation.
+  rpc Register (RegisterRequest) returns (DeviceReply);
+
+  // An app's sign-out, naming the row by installation alone.
+  rpc SignOut (SignOutRequest) returns (DeviceReply);
+}
+
+message RegisterRequest {
+  // The UUID the app minted once per install, in its canonical text form.
+  string installation_id = 1;
+  // fcm or apns.
+  string platform = 2;
+  string app_id = 3;
+  // Personal data (ADR-117): never logged, traced or put in a message.
+  string token = 4;
+  // The installation's counter, raised by the app before every request.
+  int64 sequence = 5;
+}
+
+message SignOutRequest {
+  string installation_id = 1;
+  int64 sequence = 2;
+}
+
+message DeviceReply {
+  enum Outcome {
+    // Unset on the wire, which no reply sends.
+    OUTCOME_UNSPECIFIED = 0;
+    APPLIED = 1;
+    REPEATED = 2;
+    // Nothing changed; the app sets its counter one past `sequence`.
+    STALE = 3;
+  }
+
+  Outcome outcome = 1;
+  // The row's sequence after the request: the request's own unless STALE.
+  int64 sequence = 2;
+}

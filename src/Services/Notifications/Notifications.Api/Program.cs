@@ -1,3 +1,5 @@
+using Notifications.Api.Grpc;
+using Notifications.Application;
 using Notifications.Infrastructure;
 using Common.Web;
 
@@ -14,8 +16,12 @@ builder.Host.UseDefaultServiceProvider(o =>
 
 builder.AddCommonWebDefaults();                 // §13.2
 
-// The database the worker migrates and nothing else of the worker's: no consumer, no loop, no meter (ADR-118).
+// This host's half of each layer and nothing else of the worker's: no consumer, no loop, no meter (ADR-118).
+builder.Services.AddNotificationsApplication(NotificationsHost.Api);   // §6.2
 builder.Services.AddNotificationsInfrastructure(builder.Configuration, NotificationsHost.Api);   // §4.2
+
+// §9.7's server half. The interceptor keeps a malformed request from reaching the BFF as Unknown, its 500.
+builder.Services.AddGrpc(o => o.Interceptors.Add<ValidationInterceptor>());
 
 WebApplication app = builder.Build();
 
@@ -31,8 +37,11 @@ app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4 — evaluates the permission policies
 
-// §13.5's probes, on the Http1 endpoint; the Http2 one waits for the BFF's methods (ADR-117).
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
+
+// ADR-117. Reachable only on the Http2 endpoint appsettings.json declares; both methods are ordered by the
+// installation's sequence, so a repeat is answered as the first was and a stale one changes nothing.
+app.MapGrpcService<DevicesService>().RetrySafe(RetrySafety.Convergent);
 
 app.Run();
 
