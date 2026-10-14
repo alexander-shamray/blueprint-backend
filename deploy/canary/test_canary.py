@@ -1958,6 +1958,8 @@ class SharedValuesTests(unittest.TestCase):
             ("--set image.pullPolicy=Always,push.apps={a}", "push.apps"),
             ('--set-literal "push.apps=a"', "push.apps"),
             ("--set-json=push.apps='[1, 2]'", "push.apps"),
+            ("--set push.apps[0]=a", "push.apps"),
+            ("--set-string jurisdiction.required[1].topic=x", "jurisdiction.required"),
         ]:
             with self.subTest(flag=flag):
                 pinned = self.shipped + f"\n          helm upgrade x deploy/helm/x {flag}\n"
