@@ -3,6 +3,7 @@ using Notifications.Infrastructure;
 using Notifications.Infrastructure.Contacts;
 using Notifications.Infrastructure.Mail;
 using Notifications.Infrastructure.Observability;
+using Notifications.Infrastructure.Push;
 using Notifications.TestSupport;
 using Common.Application;
 using Common.Infrastructure.Messaging;
@@ -66,6 +67,7 @@ public class MetricsRegistrationTests
         registered.ShouldContain(typeof(MessagingMetrics));
         registered.ShouldContain(typeof(RequestMetrics));
         registered.ShouldContain(typeof(MailMetrics));
+        registered.ShouldContain(typeof(PushMetrics));
         registered.ShouldContain(typeof(ContactMetrics));
         registered.ShouldContain(typeof(NotificationMetrics));
     }
@@ -109,6 +111,7 @@ public class MetricsRegistrationTests
         services.AddNotificationsApplication(NotificationsHost.Worker);
         services.AddNotificationsInfrastructure(configuration, NotificationsHost.Worker);
         services.AddMailChannel(configuration, new TestEnvironment());
+        services.AddPushChannel(configuration, new TestEnvironment());
         services.AddContactSource(configuration, new TestEnvironment());
 
         return services;

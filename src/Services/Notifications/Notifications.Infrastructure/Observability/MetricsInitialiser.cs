@@ -3,6 +3,7 @@ using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Hosting;
 using Notifications.Infrastructure.Contacts;
 using Notifications.Infrastructure.Mail;
+using Notifications.Infrastructure.Push;
 
 namespace Notifications.Infrastructure.Observability;
 
@@ -14,12 +15,14 @@ public sealed class MetricsInitialiser : IHostedService
         MessagingMetrics messaging,
         RequestMetrics requests,
         MailMetrics mail,
+        PushMetrics push,
         ContactMetrics contact,
         NotificationMetrics notifications)
     {
         ArgumentNullException.ThrowIfNull(messaging);
         ArgumentNullException.ThrowIfNull(requests);
         ArgumentNullException.ThrowIfNull(mail);
+        ArgumentNullException.ThrowIfNull(push);
         ArgumentNullException.ThrowIfNull(contact);
         ArgumentNullException.ThrowIfNull(notifications);
     }
