@@ -127,6 +127,7 @@ decision looks wrong.
 | **ADR-118** | [Notifications gains an API host for device registration and preferences, and the push adapters stay in the worker (#474)](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md) |
 | **ADR-119** | [An operator switches a gateway route from a file that reloads, and the gateway's chart renders it (#1022)](adr/ADR-119-an-operator-switches-a-gateway-route-from-a-file-that-reloads-and-the-gateway-chart-renders-it-1022.md) |
 | **ADR-120** | [Channel preferences are a consent journal Notifications keeps per subject, topic and channel, and an erasure anonymises it (#474)](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md) |
+| **ADR-121** | [A sign-out above a cleared device row moves its sequence whoever sends it, and an invalid-token answer keeps the row (#1034, #474)](adr/ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md) |
 
 ---
 
