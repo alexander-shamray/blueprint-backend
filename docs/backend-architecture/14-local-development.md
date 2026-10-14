@@ -275,6 +275,7 @@ that waits on a peer with `service_healthy` waits on that same answer.
 | Grafana | http://localhost:3000 |
 | Mail sink (Mailpit) | http://localhost:8025 — every message the stack sends; no login |
 | Mail relay (SMTP) | `localhost:1025` — plain and unauthenticated, Development's alone |
+| Push simulator | http://localhost:5192/__admin — FCM, Google's token endpoint and APNs, scripted by the device token |
 
 > **Every published port binds `127.0.0.1`, not `0.0.0.0`.** The credentials
 > in the table above are development defaults on purpose, which makes the
@@ -335,6 +336,19 @@ submission, and plain, unauthenticated submission is Development's alone —
 the host refuses either anywhere else ([§15.4](15-cicd-deployment.md)). The
 image's tag is the unit file's, and the suite starts the same one, so the
 sink a person watches is the sink the tests read.
+
+**The push providers are one simulator that verifies nothing, on loopback
+alone.** A WireMock.Net server in the same unit serves FCM's send path,
+Google's token endpoint and APNs' device path on `push-simulator:80`, and
+publishes `127.0.0.1:5192` for its request log, the endpoint table's row. It
+answers by the device token's prefix, from the mappings the adapters' tests
+load (`deploy/compose/push-simulator/README.md`). Its local defaults are
+`Fcm__BaseUrl` and `Apns__BaseUrl` on that address over plain HTTP, with no
+`Fcm__PrivateKey` and no `Apns__PrivateKey`: in Development the worker
+generates each signing key itself, since the simulator checks no signature,
+and anywhere else the host refuses plain HTTP and a missing key
+([§15.4](15-cicd-deployment.md)). The image's tag is the WireMock.Net pin, and
+a test holds the two equal.
 
 The collector's mounted configuration, `deploy/compose/otel/config.yaml`, is
 OTLP in on both protocols, a scrape of the broker's exporter on metrics, a

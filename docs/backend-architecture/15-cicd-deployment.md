@@ -1429,7 +1429,8 @@ names them). Unbound, the BFF would request a token with an empty scope and get
 
 **Every options type in the solution earns it.**
 `Identity:Client` holds a secret that differs per environment, `Mail` holds
-the mail relay and its credential on the same terms, `ProductImages:Store`
+the mail relay and its credential on the same terms, `Fcm` and `Apns` each
+hold a push provider and its signing key on them too, `ProductImages:Store`
 holds the object store's address and credential pair on them too
 ([§10.8](10-api-gateway.md)), `Jurisdiction`
 holds what

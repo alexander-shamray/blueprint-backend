@@ -87,7 +87,9 @@ registration method admits `web-bff` on `grpc`, and `web-bff` reaches it there.
 which names the workload ADR-117's edge was left waiting for:
 `notifications-api` admits `web-bff` on `grpc` and reaches its stores, and
 `web-bff` reaches `notifications-api` on `grpc`. `notifications` still admits
-nothing.
+nothing, and since its push adapters are its own, it reaches each push
+provider whose platform the deployment's apps name, by `networkPolicy.push`,
+as it reaches the relay.
 
 **Amended by [ADR-124](ADR-124-the-notifications-worker-reaches-each-push-provider-an-app-names-on-the-port-its-address-dials-474.md)**,
 which adds the push providers to the worker's row: `notifications` reaches each
