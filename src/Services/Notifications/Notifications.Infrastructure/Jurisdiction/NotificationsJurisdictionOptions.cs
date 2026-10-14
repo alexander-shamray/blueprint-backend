@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Notifications.Infrastructure.Jurisdiction;
 
-/// <summary>ADR-053's one options class for this service: the language set, the zone and three windows.</summary>
+/// <summary>ADR-053's one options class here: the language set, the zone, four windows and duties.</summary>
 /// <remarks>
 /// Every member is a value the deployment is given and is refused at start rather than clamped (ADR-053 rule 1);
 /// <see cref="NotificationsJurisdictionValidator"/> holds the rules no annotation can state.
@@ -42,4 +42,16 @@ public sealed class NotificationsJurisdictionOptions
     [Required]
     [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
     public TimeSpan? OrderRetention { get; init; }
+
+    /// <summary>The pairs the service must send, each <c>topic/channel</c>, which take no preference.</summary>
+    /// <remarks>
+    /// Absent reads as none, since configuration binds no key for an empty list; the charts refuse a values file
+    /// that leaves it unstated (ADR-120). Both hosts read it, and <see cref="RequiredPairsRule"/> refuses each pair.
+    /// </remarks>
+    public IReadOnlyList<string>? Required { get; init; }
+
+    /// <summary>How long a journal entry is kept once no longer current: statutory, as it is evidence.</summary>
+    [Required]
+    [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
+    public TimeSpan? ConsentRetention { get; init; }
 }

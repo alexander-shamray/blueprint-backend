@@ -11,7 +11,7 @@ using Notifications.Infrastructure.Jurisdiction;
 
 namespace Notifications.Infrastructure.Retention;
 
-/// <summary>ADR-053's three windows, applied, and ADR-117's stale window over the device rows.</summary>
+/// <summary>ADR-053's three windows, ADR-117's stale window over the device rows and ADR-120's journal.</summary>
 /// <remarks>
 /// Apart from <c>RetentionPurgeService</c>, whose windows are housekeeping (ADR-053). An order record goes only once
 /// no pending notice names its order, since that notice waits on it.
@@ -102,6 +102,36 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
     private const string DeleteDevices =
         "DELETE FROM notifications.DeviceInstallations WHERE InstallationId IN @Keys AND LastSeenAt < @Before;";
 
+    // When an entry stopped being current: superseded, or anonymised while it was the newest (ADR-120).
+    private const string EndedAt = "COALESCE(s.WrittenAt, e.AnonymisedAt)";
+
+    // No kept send names it or the entry it ended, and the entry it ended is gone, so a chain goes from its oldest
+    // end and the entry after one still deleted is never read as the pair's newest (ADR-120).
+    private const string ConsentReleased =
+        """
+        NOT EXISTS (SELECT 1 FROM notifications.ConsentEntries p WHERE p.EntryId = e.SupersedesEntryId)
+            AND NOT EXISTS (
+                SELECT 1 FROM notifications.NotificationLog n
+                WHERE n.ConsentEntryId = e.EntryId OR n.ConsentEntryId = e.SupersedesEntryId)
+        """;
+
+    private const string ExpiredConsent =
+        $"""
+        SELECT TOP (@BatchSize) e.EntryId
+        FROM notifications.ConsentEntries e
+        LEFT JOIN notifications.ConsentEntries s ON s.SupersedesEntryId = e.EntryId
+        WHERE {EndedAt} < @Before AND {ConsentReleased}
+        ORDER BY {EndedAt};
+        """;
+
+    // Asked again, so a send the pass stamped since the select keeps the entry it names.
+    private const string DeleteConsent =
+        $"""
+        DELETE e FROM notifications.ConsentEntries e
+        LEFT JOIN notifications.ConsentEntries s ON s.SupersedesEntryId = e.EntryId
+        WHERE e.EntryId IN @Keys AND {EndedAt} < @Before AND {ConsentReleased};
+        """;
+
     private static readonly Action<ILogger, int, string, Exception?> Purged =
         LoggerMessage.Define<int, string>(
             LogLevel.Information,
@@ -160,8 +190,9 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    /// <summary>One pass over the four tables, public so tests drive it rather than race a timer (§12.4).</summary>
-    public async Task<(int Notifications, int Contacts, int Orders, int Devices)> PurgeAsync(CancellationToken ct)
+    /// <summary>One pass over the five tables, public so tests drive it rather than race a timer (§12.4).</summary>
+    public async Task<(int Notifications, int Contacts, int Orders, int Devices, int Consent)> PurgeAsync(
+        CancellationToken ct)
     {
         await using AsyncServiceScope scope = _scopes.CreateAsyncScope();
 
@@ -208,7 +239,17 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
             ct);
         Purged(_log, devices, "device installations", null);
 
-        return (notifications, contacts, orders, devices);
+        // After the log's own window, so an entry the pass just freed of its last send goes in the same pass.
+        int consent = await PurgeWindowAsync(
+            connection,
+            ExpiredConsent,
+            DeleteConsent,
+            now - _windows.ConsentRetention!.Value,
+            null,
+            ct);
+        Purged(_log, consent, "consent entries", null);
+
+        return (notifications, contacts, orders, devices, consent);
     }
 
     /// <summary>Selected, then deleted by key, so a delete locks nothing the select did not choose.</summary>

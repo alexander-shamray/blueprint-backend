@@ -28,6 +28,7 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
             [
                 "Attempts",
                 "CompletedAt",
+                "ConsentEntryId",
                 "CorrelationId",
                 "CreatedAt",
                 "CustomerId",

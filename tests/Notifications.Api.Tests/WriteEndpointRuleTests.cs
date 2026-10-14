@@ -28,7 +28,9 @@ public class WriteEndpointRuleTests(NotificationsApiFactory factory) : IClassFix
         Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(
             [
                 "gRPC - /notifications.devices.v1.Devices/Register",
-                "gRPC - /notifications.devices.v1.Devices/SignOut"
+                "gRPC - /notifications.devices.v1.Devices/SignOut",
+                "gRPC - /notifications.preferences.v1.Preferences/Get",
+                "gRPC - /notifications.preferences.v1.Preferences/Set"
             ]);
 
         // What the selection leaves out by shape, named, so a route this host maps that way is not left out too.
@@ -38,6 +40,7 @@ public class WriteEndpointRuleTests(NotificationsApiFactory factory) : IClassFix
                 "Health checks",
                 "Health checks",
                 "gRPC - Unimplemented method for notifications.devices.v1.Devices",
+                "gRPC - Unimplemented method for notifications.preferences.v1.Preferences",
                 "gRPC - Unimplemented service"
             ]);
     }

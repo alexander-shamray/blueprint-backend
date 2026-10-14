@@ -268,7 +268,7 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
             "WHERE InstallationId = {0}",
             fresher);
 
-        (_, _, _, int devices) = await fixture.PurgeNotificationsRetentionAsync();
+        (_, _, _, int devices, _) = await fixture.PurgeNotificationsRetentionAsync();
 
         devices.ShouldBe(1, "thirty days is DeviceTokenOptions.StaleAfter's default");
         (await fixture.ScalarAsync<int>(

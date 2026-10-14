@@ -36,6 +36,12 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
             .HasDatabaseName("IX_NotificationLog_CompletedAt")
             .HasFilter("[CompletedAt] IS NOT NULL");
 
+        // ConsentRetention's floor: a journal entry a kept row names, or the one that ended it, stays (ADR-120).
+        builder
+            .HasIndex(n => n.ConsentEntryId)
+            .HasDatabaseName("IX_NotificationLog_ConsentEntry")
+            .HasFilter("[ConsentEntryId] IS NOT NULL");
+
         builder.Property(n => n.TemplateKey).HasMaxLength(NotificationLimits.MaxTemplateKeyLength);
         builder.Property(n => n.Languages).HasMaxLength(NotificationLimits.MaxLanguagesLength);
         builder.Property(n => n.Parameters).HasMaxLength(NotificationLimits.MaxParametersLength);

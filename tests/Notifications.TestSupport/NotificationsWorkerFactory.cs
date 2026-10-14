@@ -37,7 +37,9 @@ public class NotificationsWorkerFactory(
     string logRetention = NotificationsWorkerFactory.InventedLogRetention,
     string contactRetention = NotificationsWorkerFactory.InventedContactRetention,
     string orderRetention = NotificationsWorkerFactory.InventedOrderRetention,
-    string giveUpAge = NotificationsWorkerFactory.InventedGiveUpAge)
+    string giveUpAge = NotificationsWorkerFactory.InventedGiveUpAge,
+    string consentRetention = NotificationsWorkerFactory.InventedConsentRetention,
+    IReadOnlyList<string>? required = null)
     : WebApplicationFactory<Program>
 {
     /// <summary>The authority every host must name (§11.3); <c>.invalid</c> never resolves.</summary>
@@ -57,6 +59,9 @@ public class NotificationsWorkerFactory(
 
     /// <inheritdoc cref="InventedLogRetention"/>
     public const string InventedOrderRetention = "71.00:00:00";
+
+    /// <inheritdoc cref="InventedLogRetention"/>
+    public const string InventedConsentRetention = "1103.00:00:00";
 
     /// <summary>A give-up age no deployment would choose, inside <c>RetentionPolicy.InboxWindow</c>'s week.</summary>
     public const string InventedGiveUpAge = "2.07:00:00";
@@ -113,15 +118,15 @@ public class NotificationsWorkerFactory(
             .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:ContactRetention", contactRetention)
             .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:OrderRetention", orderRetention)
             .UseSetting($"{DeliveryOptions.SectionName}:GiveUpAge", giveUpAge)
-            // A list binds by index, and an empty one sets no key at all, which is the refusal a test asks for.
+            .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:ConsentRetention", consentRetention)
+            // A list binds by index, and an empty one sets no key at all, which is the refusal a test asks for. No
+            // pair is required unless a test names one, so a mail notice reaches the journal (ADR-120).
             .ConfigureAppConfiguration(configuration =>
                 configuration.AddInMemoryCollection(
-                    (languages ?? InventedLanguages)
-                        .Select((language, index) =>
-                            new KeyValuePair<string, string?>(
-                                $"{NotificationsJurisdictionOptions.SectionName}:Languages:" +
-                                index.ToString(CultureInfo.InvariantCulture),
-                                language))))
+                    [
+                        .. Indexed("Languages", languages ?? InventedLanguages),
+                        .. Indexed("Required", required ?? [])
+                    ]))
             .ConfigureLogging(logging => logging.AddProvider(CapturedLogs))
             .ConfigureServices(services =>
             {
@@ -156,6 +161,13 @@ public class NotificationsWorkerFactory(
             .ConfigureTestServices(services =>
                 services.ConfigureDbContext<NotificationsDbContext>(o =>
                     o.AddInterceptors(CommitFaults, CommitFaults.Acknowledgements)));
+
+    private static IEnumerable<KeyValuePair<string, string?>> Indexed(string member, IReadOnlyList<string> values) =>
+        values.Select((value, index) =>
+            new KeyValuePair<string, string?>(
+                $"{NotificationsJurisdictionOptions.SectionName}:{member}:" +
+                index.ToString(CultureInfo.InvariantCulture),
+                value));
 
     /// <summary>Swaps the JWT scheme for <see cref="TestAuthHandler"/> (§12.4); a host may override it.</summary>
     protected virtual void ConfigureAuthentication(IServiceCollection services)

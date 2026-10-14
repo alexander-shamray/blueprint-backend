@@ -28,16 +28,18 @@ public class ErasePersonalDataHandlerTests
         _store.Orders = 3;
         _store.Contacts = 1;
         _store.Devices = 2;
+        _store.Consent = 4;
 
         Result<int> result = await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
 
-        result.Value.ShouldBe(9);
+        result.Value.ShouldBe(13);
         _store.Calls.ShouldBe(
-            ["waiting", "ended", "orders", "contact", "devices"],
+            ["waiting", "ended", "orders", "contact", "devices", "consent"],
             "the notices are found through the order records, so those go after them");
         PersonalDataErasure row = _erasures.Added.ShouldHaveSingleItem();
         row.Id.ShouldBe(Request);
-        row.Count.ShouldBe(9);
+        row.Count.ShouldBe(13);
+        _store.ConsentStampedAt.ShouldBe(Now, "ADR-120: the anonymising stamps when it ran");
         row.SubjectHash.ShouldBe(PersonalDataErasure.HashSubject(Request, Subject));
     }
 
@@ -77,6 +79,10 @@ public class ErasePersonalDataHandlerTests
 
         public int Devices { get; set; }
 
+        public int Consent { get; set; }
+
+        public DateTimeOffset? ConsentStampedAt { get; private set; }
+
         public List<string> Calls { get; } = [];
 
         public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, CancellationToken ct) => Run("waiting", Waiting);
@@ -88,6 +94,12 @@ public class ErasePersonalDataHandlerTests
         public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) => Run("contact", Contacts);
 
         public Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct) => Run("devices", Devices);
+
+        public Task<int> AnonymiseConsentAsync(Guid subjectId, DateTimeOffset now, CancellationToken ct)
+        {
+            ConsentStampedAt = now;
+            return Run("consent", Consent);
+        }
 
         private Task<int> Run(string call, int rows)
         {

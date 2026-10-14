@@ -12,7 +12,10 @@ public static class NotificationReasons
     public const string GaveUp = "gave_up";
     public const string Erased = "erased";
 
-    /// <summary>Every reason a row may carry, so a caller's typo is refused rather than stored.</summary>
+    /// <summary>A suppressed row's reason when the journal withdrew its pair (ADR-120); never undeliverable.</summary>
+    public const string OptedOut = "opted_out";
+
+    /// <summary>Every reason an undeliverable row may carry, so a typo is refused rather than stored.</summary>
     public static IReadOnlySet<string> All { get; } =
         new HashSet<string>(StringComparer.Ordinal) { NoSuchCustomer, RecipientRefused, NotAMailbox, GaveUp, Erased };
 }

@@ -18,7 +18,9 @@
       "jurisdiction.timeZone=Europe/London",
       "jurisdiction.logRetention=2190.00:00:00",
       "jurisdiction.contactRetention=30.00:00:00",
-      "jurisdiction.orderRetention=90.00:00:00"
+      "jurisdiction.orderRetention=90.00:00:00",
+      "jurisdiction.consentRetention=2190.00:00:00",
+      "jurisdiction.required={order-placed/email}"
     ]
   }
 }

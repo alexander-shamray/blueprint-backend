@@ -112,6 +112,9 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("datetimeoffset(7)");
 
+                    b.Property<Guid?>("ConsentEntryId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid>("CorrelationId")
                         .HasColumnType("uniqueidentifier");
 
@@ -184,6 +187,10 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_NotificationLog_CompletedAt")
                         .HasFilter("[CompletedAt] IS NOT NULL");
 
+                    b.HasIndex("ConsentEntryId")
+                        .HasDatabaseName("IX_NotificationLog_ConsentEntry")
+                        .HasFilter("[ConsentEntryId] IS NOT NULL");
+
                     b.HasIndex("NextAttemptAt")
                         .HasDatabaseName("IX_NotificationLog_SendClaim")
                         .HasFilter("[Status] = 'Pending'");
@@ -233,6 +240,59 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                     b.HasIndex("RecordedAt");
 
                     b.ToTable("OrderRecords", "notifications");
+                });
+
+            modelBuilder.Entity("Notifications.Infrastructure.Persistence.ConsentEntryRow", b =>
+                {
+                    b.Property<Guid>("EntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset?>("AnonymisedAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(8)");
+
+                    b.Property<string>("Client")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<bool>("OptedIn")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("SubjectId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SupersedesEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Topic")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<DateTimeOffset>("WrittenAt")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.HasKey("EntryId");
+
+                    b.HasIndex(new[] { "SubjectId", "Topic", "Channel" }, "IX_ConsentEntries_SubjectPair");
+
+                    b.HasIndex(new[] { "SubjectId", "Topic", "Channel" }, "UX_ConsentEntries_FirstEntry")
+                        .IsUnique()
+                        .HasFilter("[SupersedesEntryId] IS NULL AND [SubjectId] IS NOT NULL");
+
+                    b.HasIndex(new[] { "SupersedesEntryId" }, "UX_ConsentEntries_Supersedes")
+                        .IsUnique()
+                        .HasFilter("[SupersedesEntryId] IS NOT NULL");
+
+                    b.ToTable("ConsentEntries", "notifications");
                 });
 
             modelBuilder.Entity("Notifications.Infrastructure.Persistence.ContactRecordRow", b =>

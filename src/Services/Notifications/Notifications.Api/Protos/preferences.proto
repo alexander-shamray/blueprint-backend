@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+// Notifications owns this file, because Notifications.Api serves the RPCs; Web.Bff links it, as it links
+// devices.proto (§4.3).
+package notifications.preferences.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "Notifications.Preferences.V1";
+
+// ADR-120's consent journal, read and written by the BFF with the caller's own access token, so the subject is
+// the token's and no request names one, and each entry records the token's client.
+service Preferences {
+  // Every topic and channel pair of the vocabulary, in the vocabulary's order.
+  rpc Get (GetPreferencesRequest) returns (PreferencesReply);
+
+  // One pair's opt-in or withdrawal, appended only while the entry the caller read is still the newest.
+  rpc Set (SetPreferenceRequest) returns (SetPreferenceReply);
+}
+
+message GetPreferencesRequest {
+}
+
+message PreferencesReply {
+  repeated Preference preferences = 1;
+}
+
+message Preference {
+  enum Source {
+    // Unset on the wire, which no reply sends.
+    SOURCE_UNSPECIFIED = 0;
+    // The deployment is obliged to send it; it takes no entry and cannot be set.
+    REQUIRED = 1;
+    // No entry yet: on for a service topic, off for any other class.
+    DEFAULT = 2;
+    // The subject's newest entry.
+    SET = 3;
+  }
+
+  string topic = 1;
+  // email or push.
+  string channel = 2;
+  bool opted_in = 3;
+  Source source = 4;
+  // When the newest entry was written; unset unless SET.
+  google.protobuf.Timestamp set_at = 5;
+  // The newest entry's id in canonical text form, the ETag a write names; empty unless SET.
+  string version = 6;
+}
+
+message SetPreferenceRequest {
+  string topic = 1;
+  string channel = 2;
+  bool opted_in = 3;
+  // The version the caller read, from If-Match; empty for If-None-Match: *, a pair with no entry yet.
+  string read_version = 4;
+}
+
+message SetPreferenceReply {
+  enum Outcome {
+    // Unset on the wire, which no reply sends.
+    OUTCOME_UNSPECIFIED = 0;
+    APPLIED = 1;
+    // The newest entry already holds the value asked for and supersedes the version read.
+    REPEATED = 2;
+    // Another write landed since the caller's read; `preference` is the pair as it now stands.
+    PRECONDITION_FAILED = 3;
+    // The deployment requires the pair, so it takes no preference.
+    REQUIRED = 4;
+  }
+
+  Outcome outcome = 1;
+  Preference preference = 2;
+}

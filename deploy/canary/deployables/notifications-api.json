@@ -10,6 +10,8 @@
     "database": true,
     "autoscaled": true,
     "capabilities": [],
-    "overlay": []
+    "overlay": [
+      "jurisdiction.required={order-placed/email}"
+    ]
   }
 }

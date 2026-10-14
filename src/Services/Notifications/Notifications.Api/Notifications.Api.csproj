@@ -9,6 +9,7 @@
   <ItemGroup>
     <!-- Both halves, as Catalog.Api generates its own: the server here, the client for this host's own suite. -->
     <Protobuf Include="Protos\devices.proto" GrpcServices="Both" />
+    <Protobuf Include="Protos\preferences.proto" GrpcServices="Both" />
   </ItemGroup>
 
   <ItemGroup>

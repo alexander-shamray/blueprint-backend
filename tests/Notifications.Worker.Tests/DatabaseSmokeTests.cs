@@ -30,7 +30,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
 
         // Named and ordered, since a count passes on a shorter prefix applied twice.
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(14);
+        applied.Length.ShouldBe(15);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddInbox");
         applied[2].ShouldEndWith("_AddIdempotencyMarkers");
@@ -45,6 +45,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[11].ShouldEndWith("_AddPersonalDataErasures");
         applied[12].ShouldEndWith("_AddOrderRecordErasedUnder");
         applied[13].ShouldEndWith("_AddDeviceInstallations");
+        applied[14].ShouldEndWith("_AddConsentEntries");
     }
 
     [Fact]

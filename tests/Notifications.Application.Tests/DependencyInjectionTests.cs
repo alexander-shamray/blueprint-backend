@@ -139,7 +139,7 @@ public class DependencyInjectionTests
     }
 
     [Fact]
-    public void The_api_host_keeps_the_device_handlers_and_none_of_the_workers()
+    public void The_api_host_keeps_the_device_and_preference_handlers_and_none_of_the_workers()
     {
         // ADR-118: the worker's handlers need the bus and stores the API never registers, which ValidateOnBuild
         // would refuse; so the selection, not a hope, is what lets the second host start.
@@ -158,7 +158,8 @@ public class DependencyInjectionTests
                 .Order(StringComparer.Ordinal)
         ];
 
-        Handlers(api).ShouldBe(["RegisterDeviceHandler", "SignOutDeviceHandler"]);
+        Handlers(api).ShouldBe(
+            ["GetPreferencesHandler", "RegisterDeviceHandler", "SetPreferenceHandler", "SignOutDeviceHandler"]);
         Handlers(worker).ShouldContain("OrderPlacedHandler");
         Handlers(worker).ShouldContain("RegisterDeviceHandler", "the store is shared, so the worker may dispatch both");
         api.ShouldNotContain(d => d.ServiceType == typeof(Intake.ErasedIntake));

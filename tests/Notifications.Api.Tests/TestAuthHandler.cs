@@ -19,14 +19,20 @@ public sealed class TestAuthHandler(
     public const string SchemeName = "Test";
     public const string UserHeader = "X-Test-User";
 
+    /// <summary>The client the token names in <c>azp</c>, which a preference write records (ADR-120).</summary>
+    public const string ClientHeader = "X-Test-Client";
+
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         // No header means anonymous, not authenticated as nobody.
         if (!Request.Headers.TryGetValue(UserHeader, out StringValues userId))
             return Task.FromResult(AuthenticateResult.NoResult());
 
-        ClaimsPrincipal principal = new(
-            new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId.ToString())], SchemeName));
+        List<Claim> claims = [new(ClaimTypes.NameIdentifier, userId.ToString())];
+        if (Request.Headers.TryGetValue(ClientHeader, out StringValues client))
+            claims.Add(new Claim("azp", client.ToString()));
+
+        ClaimsPrincipal principal = new(new ClaimsIdentity(claims, SchemeName));
 
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName)));
     }

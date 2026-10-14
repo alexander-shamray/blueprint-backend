@@ -43,6 +43,10 @@ app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no to
 // installation's sequence, so a repeat is answered as the first was and a stale one changes nothing.
 app.MapGrpcService<DevicesService>().RetrySafe(RetrySafety.Convergent);
 
+// ADR-120. A write is appended only while the entry it read is the newest, so its repeat is answered as it was;
+// the read beside it writes nothing, which is convergent too, and one declaration covers the service.
+app.MapGrpcService<PreferencesService>().RetrySafe(RetrySafety.Convergent);
+
 app.Run();
 
 // Top-level statements compile to an internal Program, which WebApplicationFactory<Program> cannot see (§12.4).
