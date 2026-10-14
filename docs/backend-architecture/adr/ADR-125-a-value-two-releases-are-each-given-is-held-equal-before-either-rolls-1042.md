@@ -44,8 +44,8 @@ configuration and not secrets. `jurisdiction.required`'s chart default is
 null, which the charts refuse as unstated, and they take an empty list as
 none ([Appendix E](../appendix-e-reference-domain.md)'s
 `Jurisdiction__Required` row), so a release that leaves it unstated does not
-agree with one that states none. A third shared value is one more key in a descriptor, and the
-workflow needs no change.
+agree with one that states none. A third shared value is one more key in a
+descriptor, and the workflow needs no change.
 
 ---
 
