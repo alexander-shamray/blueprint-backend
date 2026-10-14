@@ -195,8 +195,8 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
         raise ScaffoldError(f"'{host}' is not a host this script renders; §4.1 names {HOSTS}")
     if pure_consumer and host != WORKER_HOST:
         raise ScaffoldError(
-            "--pure-consumer implies --worker: a service that publishes nothing and accepts "
-            "no command has no API to serve (§3.2)")
+            "--pure-consumer implies --worker: the mode renders a worker, and a host a caller "
+            "reaches is added beside the render rather than by it (ADR-118)")
 
     # The name before the port, because the name decides the host and the host
     # decides whether a port is owed. The narrower refusal first: Notifications
