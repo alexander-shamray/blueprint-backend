@@ -9,7 +9,7 @@ public enum PreferenceSource
 }
 
 /// <summary>One pair as the subject is shown it and as a send is decided under it (ADR-120).</summary>
-/// <remarks><c>Version</c> is the id of the pair's newest entry, null with <c>SetAt</c> unless it was set.</remarks>
+/// <remarks><c>Version</c> is the pair's newest entry's id, null with <c>SetAt</c> unless set (§10.11).</remarks>
 public sealed record PreferenceState(
     string Topic,
     string Channel,

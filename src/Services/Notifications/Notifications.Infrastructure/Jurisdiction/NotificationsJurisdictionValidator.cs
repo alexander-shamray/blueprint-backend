@@ -7,9 +7,8 @@ namespace Notifications.Infrastructure.Jurisdiction;
 
 /// <summary>Refuses at start a jurisdiction the templates, the runtime or the contact rules cannot serve.</summary>
 /// <remarks>
-/// The annotations, then the rules between members and the files: every template the language set needs, a
-/// culture for each language, an IANA zone, the required pairs (ADR-120), and a contact window no shorter than its
-/// stale ceiling (ADR-052, ADR-053).
+/// The annotations, then the rules between members and the files: every template and a culture per language, an IANA
+/// zone, the required pairs (ADR-120), and a contact window no shorter than its stale ceiling (ADR-052, ADR-053).
 /// </remarks>
 internal sealed class NotificationsJurisdictionValidator(ContactOptions contacts)
     : IValidateOptions<NotificationsJurisdictionOptions>
