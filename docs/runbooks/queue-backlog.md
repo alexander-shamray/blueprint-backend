@@ -135,8 +135,8 @@ Three things before raising it:
   call twice; it does nothing for a limit. A count past the limit turns a slow
   processor into a throttled one.
 - **Rule the dependency out.** A worker held to its timeout by a slow carrier,
-  relay or Keycloak shows the same overdue climb, and more replicas wait on it
-  faster; the sections below say how to tell.
+  relay, push provider or Keycloak shows the same overdue climb, and more
+  replicas wait on it faster; the sections below say how to tell.
 - **Not during a rollout.** §15.5's first rung scales the stable Deployment
   for its weight and, when it ends, restores the count it found on a rollback
   and the promoted release's declared count on a promotion, so a change made
@@ -174,17 +174,22 @@ the carrier healthy, the answer is `replicaCount`, as the paragraph on a
 worker's replica count above says.
 
 **Notifications is the same shape, and its lag ends even earlier.** Its seven
-consumers write a `Pending` row in `NotificationLog` — and, for Ordering's
-three events, the order record — and acknowledge. Everything that leaves the
-service, the contact read and the send, is the send worker's. So
-`messaging.delivery.lag` for `Notifications.Worker` stops when a consumer
-starts and never sees the worker's wait on Keycloak or on the relay, and
-`notifications-events` stays shallow while every notification waits behind a
-relay that is down: its breaker parks the queue of rows rather than the
-messages, so nothing piles up on the broker and nothing reaches `_error`.
+consumers write a `Pending` row in `NotificationLog` for each channel the
+deployment sends on — and, for Ordering's three events, the order record —
+and acknowledge. Everything that leaves the service is a worker's: the
+contact read and the mail are the send worker's, which also fans a push
+notice out into one `PushDeliveries` row per device, and each push is the
+push send worker's. So `messaging.delivery.lag` for `Notifications.Worker`
+stops when a consumer starts and never sees a wait on Keycloak, the relay or
+a push provider, and `notifications-events` stays shallow while every
+notification waits behind a relay that is down: its breaker parks the queue
+of rows rather than the messages, so nothing piles up on the broker and
+nothing reaches `_error`. The relay's breaker parks mail notices alone, and a
+push provider's parks its own platform's deliveries alone.
 
-Its signal is `notifications.waiting`, the gauge of `Pending` rows past their
-first backoff, by the `step` they wait on. Read the step before anything else:
+Its signal is `notifications.waiting`, the gauge of `Pending` notices and
+deliveries past their first backoff, by the `step` they wait on. Read the step
+before anything else:
 
 - **`order_record`** — the event reached Notifications before its order's
   `OrderPlaced`, which §9.4 does not order, or a decline is waiting for the
@@ -203,11 +208,28 @@ first backoff, by the `step` they wait on. Read the step before anything else:
   by `cause` tells an outage (`transient`, `unconfirmed`) from somebody's
   decision (`tls`, `credential`, `rejected`), which backs off and waits for a
   fix rather than clearing on its own.
+- **`devices`** — a push notice past its order record that has not fanned
+  out: its device rows or, for the language, the contact read. With Keycloak
+  healthy this is the database, and the worker's "failed; the row backs off"
+  lines name the rows.
+- **`fcm`** or **`apns`** — a delivery waiting on that platform's provider.
+  `notifications.push.unavailable` by `provider` and `cause` reads as the
+  relay's counter does: `credential` is a signing key to fix, as
+  [`docs/secrets.md`](../secrets.md) says, and `rejected` a payload or an
+  app id the provider will not take. A provider that answers and refuses is
+  not a wait at all: `notifications.push.refused` by `reason` counts the
+  deliveries ended `unregistered` or `invalid_token`, and a burst of
+  `invalid_token` across one platform is a deployment sending to the wrong
+  sender or environment rather than devices going away.
 
 ```promql
 max by (step) (notifications_waiting)
 
 sum by (cause) (rate(notifications_mail_unavailable_total[10m]))
+
+sum by (provider, cause) (rate(notifications_push_unavailable_total[10m]))
+
+sum by (provider, reason) (rate(notifications_push_refused_total[10m]))
 
 sum(rate(notifications_contact_refused_total[10m]))
 ```
@@ -216,22 +238,27 @@ sum(rate(notifications_contact_refused_total[10m]))
 the same rows. **Waiting has an end**: a row `Pending` past
 `DeliveryOptions.GiveUpAge` becomes `Undeliverable: gave_up`, so a waiting set
 that falls without the dependency recovering is notifications given up rather
-than sent, and the rows' `Reason` says which. A rising `order_record` alone
-during an Ordering backlog is the one step that clears itself when upstream
-does.
+than sent, and the rows' `Reason` says which. A delivery's age is its
+notice's, so a push is never later than its mail could be. A rising
+`order_record` alone during an Ordering backlog is the one step that clears
+itself when upstream does.
 
 **The overdue gauge is the one that says three replicas are too few.**
 `notifications.overdue` is how long rows due for a pass have gone unclaimed
 past two ticks, in `shipping.shipments.overdue`'s form, and it sees the row no
 pass has reached yet, which the waiting gauge cannot: that one counts only
-rows a pass has already backed off. Healthy, it stays near zero. One that
-climbs while the relay and Keycloak both answer promptly is a send worker that
-cannot keep up with its population, and the answer is `replicaCount`, as the
-paragraph on a worker's replica count above says. One that climbs with either
-slow is a dependency holding every pass to its budget, so read those first:
-for Keycloak, the `contact` step above and the worker's outbound HTTP request
-duration by `server_address`. `notifications.contact.refused` counts a refusal
-and never a slow answer, so a flat one does not clear Keycloak. The relay is
+rows a pass has already backed off. It reads the notices and the push
+deliveries at once, so it climbs for either worker. Healthy, it stays near
+zero. One that climbs while the relay, Keycloak and both push providers
+answer promptly is a send or push send worker that cannot keep up with its
+population, and the answer is `replicaCount`, as the paragraph on a worker's
+replica count above says. One that climbs with any of them slow is a
+dependency holding every pass to its budget, so read those first: for
+Keycloak and the push providers, the `contact`, `fcm` and `apns` steps above
+and the worker's outbound HTTP request duration by `server_address`.
+`notifications.contact.refused` and `notifications.push.unavailable` count a
+refusal or a fault and never a slow answer, so a flat one clears neither
+Keycloak nor a provider. The relay is
 not HTTP and no instrument times a submission: `notifications.mail.unavailable`
 counts a fault and never a slow answer either, so a relay that answers slowly
 inside `MailHop`'s budget shows in none of these, and is ruled out at the relay

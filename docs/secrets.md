@@ -261,12 +261,12 @@ Confirm the same way for both. For Payments, `payments.provider.unavailable`
 stays flat while authorisations succeed; for Shipping,
 `shipping.carrier.unavailable` stays flat while shipments are booked; for
 Notifications, `notifications.mail.unavailable` with `cause=credential` stays
-flat while notifications leave `Pending`. A push key has no such signal while no
-send calls the push channel: a clean start checks only that the key parses. Once
-one does, `notifications.push.unavailable` with `cause=credential` and the key's
-`provider` stays flat while pushes are accepted. A flat count is also what a
-host that has called nothing since its restart shows, so the work moving is the
-positive signal. **After a leak, the overlap is the leak's window**: §15.3's
+flat while notifications leave `Pending`; and for a push key,
+`notifications.push.unavailable` with `cause=credential` and the key's
+`provider` stays flat while that platform's push deliveries leave `Pending`,
+since a clean start checks only that the key parses. A flat count is also what
+a host that has called nothing since its restart shows, so the work moving is
+the positive signal. **After a leak, the overlap is the leak's window**: §15.3's
 order keeps the old key live until the restart, so run the two-key route's steps
 without pause, or take the one-key route's outage to close it sooner.
 
