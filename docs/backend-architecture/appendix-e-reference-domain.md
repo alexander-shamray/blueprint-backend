@@ -978,6 +978,8 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 | Payment provider | Payments' consumers | the provider | `Payments.Infrastructure/Provider/ProviderHop.cs` |
 | Carrier | Shipping's worker | the carrier | `Shipping.Infrastructure/Carrier/CarrierHop.cs` |
 | Mail relay | Notifications' worker | the relay | `Notifications.Infrastructure/Mail/MailHop.cs` |
+| FCM | Notifications' worker | FCM, and Google's token endpoint | `Notifications.Infrastructure/Push/FcmHop.cs` |
+| APNs | Notifications' worker | APNs | `Notifications.Infrastructure/Push/ApnsHop.cs` |
 
 Catalog owns `pricing.proto` in `Catalog.Api/Protos`, and `Web.Bff` links it;
 Notifications owns `devices.proto` and `preferences.proto` in
@@ -1003,6 +1005,10 @@ receive endpoints when the provider is unavailable. Catalog's `Money` refuses a
 negative amount, which the BFF's quote does not rely on. The consumer-driven
 contract's two suites are `tests/Web.Bff.Tests` (`UpstreamRetryTests`,
 `ResilienceHierarchyTests`) and Catalog's own.
+
+The two push hops are registered for each platform an app names, and no send
+calls them yet. Each is a third party behind its own breaker, so one provider's
+outage parks its own platform and neither mail nor the other provider.
 
 ### E.5.5 The retry ladders
 
@@ -1772,6 +1778,7 @@ with an empty scope and get 401s it would read as Catalog's fault.
 
 The options types that earn a binding in the reference domain beyond
 `Identity:Client`: `Mail` holds Notifications' relay and its credential,
+`Push` its apps, and `Fcm` and `Apns` each push provider and its signing key,
 `Jurisdiction` holds the statutory windows and, for Notifications, the
 language set and the time zone, and `Fulfilment` (Shipping) and `Delivery`
 (Notifications) each hold the give-up age of
@@ -1807,7 +1814,7 @@ code reads it, and the host refuses to start without a required one.
 | `Mail__Password` | Secret | Helm `mail.passwordSecretRef` → External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
 | `ProductImages__Store__Endpoint`, `__Bucket`, `__Region`, `__PathStyle` | Config | Helm `objectStore.*` → ConfigMap | ✓ — **Web.Bff and Catalog only**; the object store of [ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md), refused at start when missing. The BFF's endpoint is the address a client reaches, since it signs the URL the client uploads to, and Catalog's is the one that service reaches |
 | `ProductImages__Store__PublicBaseUrl` | Config | Helm `objectStore.publicBaseUrl` → ConfigMap | ✓ — **Catalog only**; where `products/` is served from, the absolute base every stored image URL is built from (its scheme is [§10.8](10-api-gateway.md)'s rule), and short enough that it and the longest destination key fit `ThumbnailUrl` ([§10.8](10-api-gateway.md)) |
-| `Push__Apps__0…n__AppId`, `__Platform` | Config | Helm `push.apps` → ConfigMap, empty in the chart | — **Web.Bff only**; [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)'s apps, each an app id and its platform, which a registration must match (§10.10). The host refuses an app id named twice or a platform outside `fcm` and `apns` at start, and an empty list refuses every registration |
+| `Push__Apps__0…n__AppId`, `__Platform` | Config | Helm `push.apps` → ConfigMap, empty in both charts | — **Web.Bff and Notifications' worker**; the worker registers a provider for each platform the list names, and the two charts state the same list. [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)'s apps, each an app id and its platform, which a registration must match (§10.10). The host refuses an app id named twice or a platform outside `fcm` and `apns` at start, and an empty list refuses every registration |
 | `ProductImages__Store__AccessKey`, `__SecretKey` | Secret | Helm `objectStore.secretRef` → External Secrets | ✓ — **Web.Bff and Catalog only**; one pair per host, never shared: the BFF's writes `uploads/` and nothing else, and Catalog's reads `uploads/` and writes `products/` (§10.8) |
 | `ContactSource__BaseUrl` | Config | Helm `contactSource.baseUrl` → ConfigMap | ✓ — **Notifications only**; Keycloak's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s contact read, HTTPS outside Development, and the host refuses to start without it |
 | `ContactSource__Realm` | Config | Helm `contactSource.realm` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; the realm whose users are read, the one that issues this host's token, and the host refuses to start without it |
@@ -1818,6 +1825,12 @@ code reads it, and the host refuses to start without a required one.
 | `Jurisdiction__OrderRetention` | Config | Helm `jurisdiction.orderRetention` → ConfigMap | ✓ — **Notifications only**; the order record's window, and the host refuses to start without it |
 | `Jurisdiction__ConsentRetention` | Config | Helm `jurisdiction.consentRetention` → ConfigMap | ✓ — **Notifications' worker only**; [ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)'s statutory window for a consent entry once it stops being current, kept longer while a kept send names it or the entry it ended, and the host refuses to start without it |
 | `Jurisdiction__Required__0…n` | Config | Helm `jurisdiction.required` → ConfigMap, in both Notifications charts | ✓ **in the chart** — **Notifications only, both hosts**; ADR-120's topic/channel pairs the deployment is obliged to send, which take no preference. The charts refuse it unstated and take `[]` as none; a host reads it absent as none, since configuration binds no key for an empty list, and refuses a pair outside the vocabulary or the service class at start. The reference values require the email of all seven topics |
+| `Fcm__BaseUrl`, `__TokenUri` | Config | Helm `fcm.baseUrl`, `fcm.tokenUri` → ConfigMap, defaulted in the chart to Google's | ✓ **while an `fcm` app is named** — **Notifications' worker only**; FCM's API and the token endpoint the signed assertion is exchanged at, HTTPS outside Development |
+| `Fcm__ProjectId`, `__ClientEmail` | Config | Helm `fcm.projectId`, `fcm.clientEmail` → ConfigMap | ✓ **while an `fcm` app is named** — **Notifications' worker only**; the Firebase project sent to and the service account the assertion is issued by |
+| `Fcm__PrivateKey` | Secret | Helm `fcm.privateKeySecretRef` → External Secrets | ✓ **outside Development, while an `fcm` app is named** — **Notifications' worker only**; the service account's RSA key, generated by the worker in Development and absent in Compose |
+| `Apns__BaseUrl` | Config | Helm `apns.baseUrl` → ConfigMap, defaulted in the chart to Apple's production host | ✓ **while an `apns` app is named** — **Notifications' worker only**; HTTPS and HTTP/2 outside Development |
+| `Apns__TeamId`, `__KeyId` | Config | Helm `apns.teamId`, `apns.keyId` → ConfigMap | ✓ **while an `apns` app is named** — **Notifications' worker only**; the provider token's issuer and its signing key's id |
+| `Apns__PrivateKey` | Secret | Helm `apns.privateKeySecretRef` → External Secrets | ✓ **outside Development, while an `apns` app is named** — **Notifications' worker only**; the team's P-256 signing key, generated by the worker in Development and absent in Compose |
 | `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a notification still pending, past which it is undeliverable with the reason `NotificationReasons.GaveUp`; the host refuses to start without it, or with one longer than `RetentionPolicy.InboxWindow` |
 
 ---

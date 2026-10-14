@@ -3093,15 +3093,16 @@ configuration-validation test at startup.
 ### Rules for every synchronous call
 
 1. **Timeout.** One to two seconds per attempt, per the table above; never
-   infinite. Where in that band is decided by the arithmetic below, not by
-   taste — the attempts plus their backoff have to fit the client total. A
-   third party sits outside the band, and `ProviderHop`, `CarrierHop` and
-   `MailHop` are each sized to theirs: a third party's latency is not a
-   peer's, and none of the three calls has a waiting caller — the provider's
-   fits the saga's payment wait (§9.6), and the carrier's and the relay's a
-   worker's leased row. So the hierarchy's "< service operation" does not
-   bind them: `ServiceOptions.OperationTimeout` is a request's deadline, and
-   a hop no request waits on answers to its own caller's budget instead.
+   infinite. Where in that band is decided by the arithmetic below, not by taste
+   — the attempts plus their backoff have to fit the client total. A third party
+   sits outside the band, and `ProviderHop`, `CarrierHop`, `MailHop`, `FcmHop`
+   and `ApnsHop` are each sized to theirs: a third party's latency is not a
+   peer's, and none of the five calls has a waiting caller — the provider's fits
+   the saga's payment wait (§9.6), and the carrier's, the relay's and the push
+   providers' a worker's leased row. So the hierarchy's "< service operation"
+   does not bind them: `ServiceOptions.OperationTimeout` is a request's
+   deadline, and a hop no request waits on answers to its own caller's budget
+   instead.
 2. **Circuit breaker.** After a threshold of failures, fail fast rather than
    queueing threads against a dead service. Each hop sizes its breaker to the
    rate it is really called at: one paced by a worker's tick or by a saga's
@@ -3147,8 +3148,9 @@ both off every request path, and `ContactHop` sits inside the band because
 Keycloak is the deployment's own and no third party. The outbound clients of the
 other kind call third parties — Payments' `ProviderHop`, behind the
 anti-corruption layer that, in the reference domain, [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map) gives Payments, Shipping's `CarrierHop`, to the
-carrier, and Notifications' `MailHop`, to its relay — and each is registered by
-the service that makes the call. A call under the caller's own token is a
+carrier, and Notifications' `MailHop`, to its relay, and `FcmHop` and
+`ApnsHop`, to the two push providers — and each is registered by the service
+that makes the call. A call under the caller's own token is a
 third kind, and §4.2's helper registers none of it either: in the reference
 domain the BFF's hop to Notifications forwards the buyer's access token
 unchanged and holds no grant for it

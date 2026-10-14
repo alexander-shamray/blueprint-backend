@@ -92,6 +92,8 @@ with the adopter, not this platform's.
 |---|---|---|
 | The carrier | A shipment's id and its postal address, with no name — `BookingRequest` | `carrier.baseUrl`, `deploy/helm/shipping/values.yaml` |
 | The mail relay | The mailbox and the rendered message | `mail.host`, `deploy/helm/notifications/values.yaml` |
+| FCM | A device's token, a push's title and body, the order's id and the template key — `OutboundPush` | `fcm.baseUrl`, `deploy/helm/notifications/values.yaml` |
+| APNs | The same, for an iOS device | `apns.baseUrl`, `deploy/helm/notifications/values.yaml` |
 | The payment provider | The order's id, the payer's id — the customer's — an amount and a currency, and never card data (ADR-053) — `AuthorisationRequest` | `paymentProvider.baseUrl`, `deploy/helm/payments/values.yaml` |
 
 ## Keeping it true

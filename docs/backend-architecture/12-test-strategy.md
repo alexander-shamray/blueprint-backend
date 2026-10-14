@@ -2090,6 +2090,7 @@ which point Pact is the answer after all.
 | Another service (HTTP) | WireMock.Net — a real HTTP server with stubbed responses |
 | Third-party API | WireMock.Net, plus a nightly contract test against their sandbox |
 | Third-party relay (SMTP) | Mailpit — a real SMTP server in a container, read back through its HTTP API |
+| Push provider (FCM, APNs) | WireMock.Net loading the Compose simulator's own mappings; each signed token verified against a key the test generates |
 | Clock | `FakeTimeProvider` from `Microsoft.Extensions.TimeProvider.Testing` |
 | Random / GUIDs | Inject a seam; never call `Guid.NewGuid()` where the value is asserted |
 

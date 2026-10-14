@@ -119,8 +119,10 @@ gives a read of its own
 ([§11.5](backend-architecture/11-identity-authorization.md)),
 `PaymentProvider__ApiKey`, for Payments' provider behind §3.2's
 anti-corruption layer, `Carrier__ApiKey`, for Shipping's carrier behind the
-same, and `Mail__Password`, for Notifications' relay
-([§15.4](backend-architecture/15-cicd-deployment.md)).
+same, `Mail__Password`, for Notifications' relay, and `Fcm__PrivateKey` and
+`Apns__PrivateKey`, for its push providers
+([§15.4](backend-architecture/15-cicd-deployment.md)). The push keys are the
+worker's alone, and never the BFF's.
 
 **The realm-check subsection below is not a host's, and that is why the
 sentence above names the ones that reach one.** Since ADR-042 this repository
@@ -222,13 +224,15 @@ that claims an idempotency key (§8.5).
 
 ### A provider, carrier or relay credential
 
-`PaymentProvider__ApiKey`, `Carrier__ApiKey` and `Mail__Password`, each in a
-Secret its own chart names: `paymentProvider.apiKeySecretRef` in Payments'
-(`payments-provider` by default), `carrier.apiKeySecretRef` in Shipping's
-(`shipping-carrier`) and `mail.passwordSecretRef` in Notifications'
-(`notifications-mail`). A third party issues each, so **whether two can be
-live at once is that party's answer, not this repository's**, and it decides
-the procedure:
+`PaymentProvider__ApiKey`, `Carrier__ApiKey`, `Mail__Password`,
+`Fcm__PrivateKey` and `Apns__PrivateKey`, each in a Secret its own chart names:
+`paymentProvider.apiKeySecretRef` in Payments' (`payments-provider` by default),
+`carrier.apiKeySecretRef` in Shipping's (`shipping-carrier`), and
+`mail.passwordSecretRef`, `fcm.privateKeySecretRef` and
+`apns.privateKeySecretRef` in Notifications' (`notifications-mail`,
+`notifications-fcm` and `notifications-apns`). A third party issues each, so
+**whether two can be live at once is that party's answer, not this
+repository's**, and it decides the procedure:
 
 - **Where the provider can issue a second key beside the first**, rotate as
   for a client secret: issue the new key, update the vault entry, wait for
@@ -243,16 +247,27 @@ the procedure:
   workers back the row off, and Payments' kill switch stops its endpoint once
   enough messages have exhausted their retries. Notifications alone counts the
   refusal apart from an outage, as `cause=credential`. Keep that gap short.
+- **The push keys take the first route.** A service account holds more than
+  one key in Google's console, and a team holds two APNs keys in Apple's, so
+  each is issued beside the old one. An APNs key comes with its own id, which
+  is a chart value and not part of the Secret, so its restart is a Helm
+  upgrade: update the vault, wait for External Secrets to reconcile, then
+  upgrade with the new `apns.keyId`, which rolls the pods onto both at once.
+  An upgrade made first signs under the new id with the old key, and APNs
+  refuses every push until the Secret follows.
 
 Confirm the same way for both. For Payments, `payments.provider.unavailable`
 stays flat while authorisations succeed; for Shipping,
 `shipping.carrier.unavailable` stays flat while shipments are booked; for
 Notifications, `notifications.mail.unavailable` with `cause=credential` stays
-flat while notifications leave `Pending`. A flat count is also what a host that
-has called nothing since its restart shows, so the work moving is the positive
-signal. **After a leak, the overlap is the leak's window**: §15.3's order keeps
-the old key live until the restart, so run the two-key route's steps without
-pause, or take the one-key route's outage to close it sooner.
+flat while notifications leave `Pending`. A push key has no such signal while no
+send calls the push channel: a clean start checks only that the key parses. Once
+one does, `notifications.push.unavailable` with `cause=credential` and the key's
+`provider` stays flat while pushes are accepted. A flat count is also what a
+host that has called nothing since its restart shows, so the work moving is the
+positive signal. **After a leak, the overlap is the leak's window**: §15.3's
+order keeps the old key live until the restart, so run the two-key route's steps
+without pause, or take the one-key route's outage to close it sooner.
 
 ### A realm-check credential
 
@@ -516,6 +531,12 @@ Mailpit takes unauthenticated submission and the host allows that in
 Development alone, so `Mail__UserName` and `Mail__Password` are absent from
 the unit rather than defaulted, and the one place a relay password is a fake
 is the test fixture, for the hosts it runs as Production.
+
+**The push providers have no row either, because Compose carries no signing
+key.** The worker generates each itself in Development, and the simulator
+checks no signature, so `Fcm__PrivateKey` and `Apns__PrivateKey` are absent
+from the unit rather than defaulted, and the tests sign with keys they
+generate.
 
 Note how the connection strings nest — `${CATALOG_CONNECTION:-…Password=${SQL_PASSWORD:-…}…}`
 — so overriding the password alone keeps every connection string correct. That
