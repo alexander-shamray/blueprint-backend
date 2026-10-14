@@ -2248,7 +2248,7 @@ for chart in $SERVICE_CHARTS; do
     project="$(find "$(src_of "$chart")" -name "$(field "$chart" host).csproj" -not -path '*/bin/*' \
         -not -path '*/obj/*' | head -n 1)"
     if [ -z "$project" ]; then
-        fail "$chart's host $(field "$chart" host) has no project under its source — the search, not the chart, is wrong"
+        fail "$chart's host $(field "$chart" host) has no project under its source — the search is wrong"
         continue
     fi
     settings="$(grep -rl '"Kestrel"' --include=appsettings.json --exclude-dir=bin --exclude-dir=obj \

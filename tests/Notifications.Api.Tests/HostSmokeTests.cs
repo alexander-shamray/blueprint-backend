@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Notifications.Api.Tests;
 
-/// <summary>The host builds under <c>ValidateOnBuild</c>, serves its probes and runs none of the worker's work.</summary>
+/// <summary>The host builds under <c>ValidateOnBuild</c>, serves its probes and runs none of the worker's.</summary>
 public class HostSmokeTests(NotificationsApiFactory factory) : IClassFixture<NotificationsApiFactory>
 {
     [Fact]
