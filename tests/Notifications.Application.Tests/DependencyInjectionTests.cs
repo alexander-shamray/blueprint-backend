@@ -14,7 +14,7 @@ public class DependencyInjectionTests
     {
         ServiceCollection services = new();
 
-        services.AddNotificationsApplication();
+        services.AddNotificationsApplication(NotificationsHost.Worker);
 
         ServiceDescriptor dispatcher = services
             .Where(d => d.ServiceType == typeof(IDispatcher))
@@ -27,7 +27,7 @@ public class DependencyInjectionTests
     {
         ServiceCollection services = new();
 
-        services.AddNotificationsApplication();
+        services.AddNotificationsApplication(NotificationsHost.Worker);
 
         ServiceDescriptor clock = services
             .Where(d => d.ServiceType == typeof(TimeProvider))
@@ -41,7 +41,7 @@ public class DependencyInjectionTests
     {
         ServiceCollection services = new();
 
-        services.AddNotificationsApplication();
+        services.AddNotificationsApplication(NotificationsHost.Worker);
 
         ServiceDescriptor metrics = services
             .Where(d => d.ServiceType == typeof(RequestMetrics))
@@ -55,7 +55,7 @@ public class DependencyInjectionTests
         // Named, since §4.1 gives this service no Domain project and the real one would not resolve (§7.5).
         ServiceCollection services = new();
 
-        services.AddNotificationsApplication();
+        services.AddNotificationsApplication(NotificationsHost.Worker);
 
         ServiceDescriptor dispatcher = services
             .Where(d => d.ServiceType == typeof(IDomainEventDispatcher))
@@ -73,7 +73,7 @@ public class DependencyInjectionTests
     {
         ServiceCollection services = new();
 
-        services.AddNotificationsApplication();
+        services.AddNotificationsApplication(NotificationsHost.Worker);
 
         IEnumerable<Type?> behaviours = services
             .Where(d => d.ServiceType == typeof(IPipelineBehavior<,>))
@@ -96,7 +96,7 @@ public class DependencyInjectionTests
     {
         ServiceCollection services = new();
 
-        services.AddNotificationsApplication();
+        services.AddNotificationsApplication(NotificationsHost.Worker);
 
         ServiceDescriptor carrier = services
             .Where(d => d.ServiceType == typeof(IdempotencyContext))
@@ -112,7 +112,7 @@ public class DependencyInjectionTests
     {
         ServiceCollection services = new();
 
-        services.AddNotificationsApplication();
+        services.AddNotificationsApplication(NotificationsHost.Worker);
 
         ServiceDescriptor options = services
             .Where(d => d.ServiceType == typeof(ContactOptions))
@@ -122,4 +122,30 @@ public class DependencyInjectionTests
     }
 
     // The first handler of either kind and the first validator each bring back their own registration test (§6.2).
+
+    [Fact]
+    public void The_api_host_keeps_the_device_handlers_and_none_of_the_workers()
+    {
+        // ADR-118: the worker's handlers need the bus and stores the API never registers, which ValidateOnBuild
+        // would refuse; so the selection, not a hope, is what lets the second host start.
+        ServiceCollection api = new();
+        ServiceCollection worker = new();
+
+        api.AddNotificationsApplication(NotificationsHost.Api);
+        worker.AddNotificationsApplication(NotificationsHost.Worker);
+
+        string[] Handlers(ServiceCollection services) =>
+        [
+            .. services
+                .Where(d => d.ServiceType.IsGenericType &&
+                    PluggableInterfaces.All.Contains(d.ServiceType.GetGenericTypeDefinition()))
+                .Select(d => d.ImplementationType!.Name)
+                .Order(StringComparer.Ordinal)
+        ];
+
+        Handlers(api).ShouldBe(["RegisterDeviceHandler", "SignOutDeviceHandler"]);
+        Handlers(worker).ShouldContain("OrderPlacedHandler");
+        Handlers(worker).ShouldContain("RegisterDeviceHandler", "the store is shared, so the worker may dispatch both");
+        api.ShouldNotContain(d => d.ServiceType == typeof(Intake.ErasedIntake));
+    }
 }

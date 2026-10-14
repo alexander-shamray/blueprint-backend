@@ -9,16 +9,26 @@ namespace Notifications.Application;
 /// <summary>The one registration method this layer exposes (§4.2), and the assembly's <c>typeof</c> anchor.</summary>
 public static class DependencyInjection
 {
-    public static IServiceCollection AddNotificationsApplication(this IServiceCollection services)
+    /// <param name="host">
+    /// The API host keeps only the handlers it serves (ADR-118): the worker's need the bus and the stores only the
+    /// worker registers, which <c>ValidateOnBuild</c> would refuse to find in the second process.
+    /// </param>
+    public static IServiceCollection AddNotificationsApplication(
+        this IServiceCollection services,
+        NotificationsHost host)
     {
         services.AddPluggableFrom(typeof(DependencyInjection).Assembly);   // §6.2
+        if (host == NotificationsHost.Api)
+            KeepOnlyTheApisHandlers(services);
+
         services.AddDispatcher();
 
         // §7.5's dispatcher for a service §4.1 gives no Domain project, where nothing raises an event.
         services.AddScoped<IDomainEventDispatcher, NoDomainEventDispatcher>();
 
         // The three order events record, then ask the audit rows whether their customer was erased (ADR-097).
-        services.AddScoped<ErasedIntake>();
+        if (host == NotificationsHost.Worker)
+            services.AddScoped<ErasedIntake>();
 
         // The clock (§5.4) and the request histogram (§13.3), which LoggingBehavior injects.
         services.AddSingleton(TimeProvider.System);
@@ -41,5 +51,23 @@ public static class DependencyInjection
         // E.2.6's sample line, over the assembly until the first validator gives it a type.
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
         return services;
+    }
+
+    /// <summary>The namespaces whose handlers the API host serves: ADR-117's device rows.</summary>
+    public static readonly IReadOnlyList<string> ApiNamespaces = ["Notifications.Application.Devices"];
+
+    private static void KeepOnlyTheApisHandlers(IServiceCollection services)
+    {
+        ServiceDescriptor[] others =
+        [
+            .. services.Where(d =>
+                d.ServiceType.IsGenericType &&
+                PluggableInterfaces.All.Contains(d.ServiceType.GetGenericTypeDefinition()) &&
+                !ApiNamespaces.Any(ns =>
+                    d.ImplementationType?.Namespace?.StartsWith(ns, StringComparison.Ordinal) is true))
+        ];
+
+        foreach (ServiceDescriptor descriptor in others)
+            services.Remove(descriptor);
     }
 }
