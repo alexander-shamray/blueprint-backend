@@ -37,7 +37,7 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
     [Fact]
     public void Every_synchronous_call_a_consumer_reaches_is_declared()
     {
-        // Both hops are endpoints' (§9.7), so the projection's consumers reach none of these.
+        // Every hop is an endpoint's (§9.7), so the projection's consumers reach none of these.
         ConsumerCallRule.Offenders(factory.Composition, Host, []).ShouldBeEmpty();
     }
 

@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§9.7's timeout hierarchy, read off the built host's named options for each of its two hops.</summary>
+/// <summary>§9.7's timeout hierarchy, read off the built host's named options for each hop.</summary>
 public class ResilienceHierarchyTests
 {
     /// <summary>Each hop by the name its options are registered under; a hop this host gains is added here.</summary>

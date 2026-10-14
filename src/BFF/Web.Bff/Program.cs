@@ -120,7 +120,7 @@ app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4
 
-// SQL and the bus gate readiness (§13.5); neither hop's service does, or its outage would unready this host too.
+// SQL and the bus gate readiness (§13.5); no hop's service does, or its outage would unready this host too.
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapCheckoutEndpoints();
 app.MapOrderEndpoints();          // §10.7 — ADR-051's projection, no hop

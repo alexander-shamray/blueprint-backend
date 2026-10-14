@@ -7,7 +7,7 @@ using Polly.Timeout;
 namespace Web.Bff;
 
 /// <summary>§9.7's third rule for this host: a clear error for an upstream failure, decided in advance.</summary>
-/// <remarks>One table for both hops, so no title names a service: the route says which one was asked (§10.5).</remarks>
+/// <remarks>One table for every hop, so no title names a service: the route says which one was asked (§10.5).</remarks>
 internal sealed class UpstreamExceptionHandler(IProblemDetailsService problemDetails) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
