@@ -206,6 +206,20 @@ notifications:
     logRetention: "2190.00:00:00"
     contactRetention: "30.00:00:00"
     orderRetention: "90.00:00:00"
+    consentRetention: "2190.00:00:00"
+    # ADR-120's duties, which take no preference; [] states none.
+    required: &required
+      - order-placed/email
+      - order-confirmed/email
+      - order-cancelled/email
+      - payment-declined/email
+      - payment-refunded/email
+      - shipment-dispatched/email
+      - shipment-delivered/email
+notifications-api:
+  jurisdiction:
+    # The same list, which the API host reads to show and refuse a duty.
+    required: *required
 ```
 
 ## What is deliberately not here
