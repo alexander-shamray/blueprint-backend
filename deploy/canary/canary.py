@@ -1442,7 +1442,8 @@ def smoke_cases(workloads: dict) -> list[str]:
     lines = []
     for name, entry in workloads.items():
         lines += _smoke_case(name, entry)
-        migrator = workloads.get(entry.get("migratedBy"))
+        named = entry.get("migratedBy")
+        migrator = workloads.get(named) if isinstance(named, str) else None
         if isinstance(migrator, dict) and isinstance(migrator.get("chart"), str):
             lines.append(f"{entry['chart']} migratedBy {migrator['chart']}")
     return lines
@@ -1457,7 +1458,10 @@ def migrated_by(workload: str, plan_document: dict) -> str | None:
     workloads = entries(plan_document["workloads"])
     if workload not in workloads:
         raise PlanError(f"no workload {workload!r} in the plan")
-    return workloads[workload].get("migratedBy")
+    named = workloads[workload].get("migratedBy")
+    if named is not None and not isinstance(named, str):
+        raise PlanError(f"workloads.{workload}.migratedBy is {named!r}, which names no workload")
+    return named
 
 
 def _migrated_by_reads(name: str, workloads: dict) -> list[str]:

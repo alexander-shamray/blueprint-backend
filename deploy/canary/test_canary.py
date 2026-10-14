@@ -1655,6 +1655,19 @@ class DescriptorTests(unittest.TestCase):
 
                 self.assertEqual((0, printed), (code, out.getvalue()))
 
+    def test_a_migrated_by_that_is_not_a_name_is_refused_rather_than_raised(self) -> None:
+        """Check 4 refuses it, smoke-cases prints no line for it, and the rollout's question fails closed."""
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        workloads["notifications-api"]["migratedBy"] = ["notifications"]
+
+        cases = canary.smoke_cases(workloads)
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertFalse(any(" migratedBy " in case for case in cases), cases)
+        self.assertTrue(any("notifications-api.migratedBy" in f for f in failures), failures)
+        with self.assertRaisesRegex(canary.PlanError, "names no workload"):
+            canary.migrated_by("notifications-api", {"workloads": workloads})
+
     def test_migrated_by_refuses_a_workload_the_plan_does_not_describe(self) -> None:
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
