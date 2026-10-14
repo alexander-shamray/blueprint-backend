@@ -1979,6 +1979,10 @@ class SharedValuesTests(unittest.TestCase):
                 self.assertIn("push.apps", canary._pinned_keys([f"helm upgrade r c --set {argument}"]))
         continued = ["helm upgrade r c --set " + chr(92), "  push.apps=x --wait"]
         self.assertIn("push.apps", canary._pinned_keys(continued))
+        folded = ["helm upgrade r c --set", "  push.apps=x", "  --wait"]
+        self.assertIn("push.apps", canary._pinned_keys(folded))
+        self.assertIn("push.apps", canary._pinned_keys(["helm upgrade r c --set a=x--y,push.apps=z"]))
+        self.assertEqual(set(), canary._pinned_keys(["helm upgrade r c -f values.yaml"]))
         self.assertEqual({"image.tag"}, canary._pinned_keys(['helm upgrade r c --set-string image.tag="$TAG"']))
 
     def test_a_comparison_of_the_running_values_is_refused(self) -> None:
