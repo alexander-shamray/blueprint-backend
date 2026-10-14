@@ -1022,10 +1022,10 @@ on any of them would publish a second door past the rate limiting, the CORS
 policy and the forwarded-header handling that live there. A second host that
 serves the BFF alone is reached through the BFF, behind that same edge, and has
 no route at all
-([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)). Against a service, a
-worker differs by `service.enabled` alone **among these two keys**, which is
-what this paragraph is about; a worker's chart differs in more than them, and
-the next paragraph says how.
+([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
+Against a service, a worker differs by `service.enabled` alone **among these
+two keys**, which is what this paragraph is about; a worker's chart differs in
+more than them, and the next paragraph says how.
 
 **A worker's replica count is a decision and not a copy.** CPU utilisation is
 the wrong signal for a host that waits on a queue and on a third party — it
