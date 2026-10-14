@@ -1564,14 +1564,14 @@ that can reach its method.
 
 **One hop, under the caller's own token.** The BFF calls the owning service's
 API host over gRPC ([§9.7](09-messaging.md), `NotificationsHop`), with
-`CallerTokenHandler` copying the inbound `Authorization` header unchanged and
-no client-credentials handler, so no credential the BFF holds can register a
-device to anybody else ([§11.5](11-identity-authorization.md)). The callee
-refusing a token the BFF has already validated is a 500, as the pricing hop's
-callee refusing the BFF's own is, and its unavailability is §10.5's 503. A
-reply `devices.proto` forbids — an outcome left unset, an applied or repeated write
-carrying a sequence other than the request's, or a stale one carrying none —
-is a 500, by §9.7's sixth rule.
+`CallerTokenHandler` copying the inbound `Authorization` header unchanged and no
+client-credentials handler, so no credential the BFF holds can register a device
+to anybody else ([§11.5](11-identity-authorization.md)). The callee refusing a
+token the BFF has already validated is a 500, as the pricing hop's callee
+refusing the BFF's own is, and its unavailability is §10.5's 503. A reply
+`devices.proto` forbids — an outcome left unset, an applied or repeated write
+carrying a sequence other than the request's, or a stale one carrying none — is
+a 500, by §9.7's sixth rule.
 
 **The cluster half is ADR-118's.** The hop resolves `notifications-api:8081`
 under Compose; in Kubernetes it also needs the API host's own chart, whose
