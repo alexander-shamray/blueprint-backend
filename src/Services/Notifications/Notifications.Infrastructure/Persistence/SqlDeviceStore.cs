@@ -15,7 +15,7 @@ namespace Notifications.Infrastructure.Persistence;
 /// </remarks>
 internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptions options) : IDeviceStore
 {
-    // What a sign-out leaves of a row: its installation id, its sequence and when it was last seen (ADR-117).
+    // What a sign-out leaves of a row: its installation id and sequence (ADR-117), and its last-seen time (ADR-118).
     private const string Cleared =
         "SubjectId = NULL, Platform = NULL, AppId = NULL, Token = NULL, RegisteredAt = NULL";
 
