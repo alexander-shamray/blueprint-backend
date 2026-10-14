@@ -50,6 +50,17 @@ public static class TemplateKeys
                 PlaceholderNames.TrackingNumber),
         };
 
+    /// <summary>What each key's push template may name: the order's reference and nothing else personal.</summary>
+    /// <remarks>
+    /// A subset of the mail key's, as the push design's section 5 asks: a push is shown on a lock screen to whoever
+    /// holds the device, and both providers see its whole content, so it carries no amount and no tracking number.
+    /// </remarks>
+    public static IReadOnlyDictionary<string, IReadOnlySet<string>> PushPlaceholders { get; } =
+        Placeholders.Keys.ToDictionary(
+            key => key,
+            IReadOnlySet<string> (_) => Set(PlaceholderNames.OrderId),
+            StringComparer.Ordinal);
+
     /// <summary>The codes a cancellation's map phrases: <see cref="CancelReasons"/>' five, Ordering's.</summary>
     public static IReadOnlyList<string> CancellationCodes { get; } =
     [

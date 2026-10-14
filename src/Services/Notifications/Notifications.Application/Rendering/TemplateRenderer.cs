@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Notifications.Application.Preferences;
 using Notifications.Application.Records;
 
 namespace Notifications.Application.Rendering;
@@ -103,7 +104,42 @@ public sealed class TemplateRenderer
     {
         ArgumentNullException.ThrowIfNull(parameters);
 
-        return Compose(templateKey, parameters, _templates.CurrentVersion(templateKey), LanguagesFor(locale));
+        return Compose(
+            templateKey,
+            ConsentVocabulary.Email,
+            parameters,
+            _templates.CurrentVersion(templateKey),
+            [.. LanguagesFor(locale)]);
+    }
+
+    /// <summary>A push's first send, at its key's current push version, in the languages its fan-out chose.</summary>
+    public RenderedMessage RenderPush(
+        string templateKey,
+        NotificationParameters parameters,
+        IReadOnlyList<string> languages)
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(languages);
+
+        return Compose(
+            templateKey,
+            ConsentVocabulary.Push,
+            parameters,
+            _templates.CurrentVersion(templateKey, ConsentVocabulary.Push),
+            [.. languages]);
+    }
+
+    /// <summary>A push resend, at the version its delivery's intent stamped (ADR-053 rule 4).</summary>
+    public RenderedMessage RenderPush(
+        string templateKey,
+        NotificationParameters parameters,
+        int version,
+        IReadOnlyList<string> languages)
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(languages);
+
+        return Compose(templateKey, ConsentVocabulary.Push, parameters, version, [.. languages]);
     }
 
     /// <summary>A resend, at the version and in the languages the row's intent stamped (ADR-053 rule 4).</summary>
@@ -116,11 +152,12 @@ public sealed class TemplateRenderer
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(languages);
 
-        return Compose(templateKey, parameters, version, [.. languages]);
+        return Compose(templateKey, ConsentVocabulary.Email, parameters, version, [.. languages]);
     }
 
     private RenderedMessage Compose(
         string templateKey,
+        string channel,
         NotificationParameters parameters,
         int version,
         string[] languages)
@@ -135,8 +172,8 @@ public sealed class TemplateRenderer
                 throw new InvalidOperationException($"{language} is not in the deployment's language set.");
 
             // Create checks current versions only, so a miss is another build's stamp or a set changed under the host.
-            Template template = _templates.Find(templateKey, version, language) ??
-                throw new InvalidOperationException($"{templateKey} v{version} has no {language} template.");
+            Template template = _templates.Find(templateKey, version, language, channel) ??
+                throw new InvalidOperationException($"{templateKey} v{version} has no {language} {channel} template.");
 
             subjects.Add(template.Subject);
             bodies.Add(Fill(template, parameters));
@@ -162,8 +199,9 @@ public sealed class TemplateRenderer
         }
     }
 
-    // The locale's primary subtag, so a realm's "ru-RU" selects a deployment's "ru".
-    private string[] LanguagesFor(string? locale)
+    /// <summary>The locale's language when the set holds it, else the whole set in its order (ADR-053).</summary>
+    /// <remarks>The locale's primary subtag, so a realm's "ru-RU" selects a deployment's "ru".</remarks>
+    public IReadOnlyList<string> LanguagesFor(string? locale)
     {
         if (string.IsNullOrWhiteSpace(locale))
             return _languages;

@@ -239,8 +239,11 @@ public class TemplateRendererTests
     {
         IReadOnlyList<string> refusals = TemplateRenderer.Refusals(TemplateSet.Embedded, ["en", "de"], "UTC");
 
-        refusals.Count.ShouldBe(TemplateKeys.Placeholders.Count + 1, "seven templates and the cancellation's map");
+        refusals.Count.ShouldBe(
+            (TemplateKeys.Placeholders.Count * 2) + 1,
+            "seven mail templates, seven pushes and the cancellation's map");
         refusals.ShouldContain("Templates/order-placed.v1.de.txt is missing, and the language set requires it.");
+        refusals.ShouldContain("Templates/order-placed.v1.de.push.txt is missing, and the language set requires it.");
         refusals.ShouldContain(
             "Templates/order-cancelled.v1.de.reasons.txt is missing, and the language set requires it.");
     }
@@ -272,6 +275,8 @@ public class TemplateRendererTests
         [
             .. TemplateKeys.Placeholders.Keys.Select(key =>
                 new TemplateFile($"Templates/{key}.v1.en.txt", "Subject: One\n\nOrder {OrderId}.\n")),
+            .. TemplateKeys.Placeholders.Keys.Select(key =>
+                new TemplateFile($"Templates/{key}.v1.en.push.txt", "Title: One\n\nOrder {OrderId}.\n")),
             new TemplateFile("Templates/order-placed.v2.en.txt", "Subject: Two\n\nOrder {OrderId}, again.\n"),
             new TemplateFile(
                 "Templates/order-cancelled.v1.en.reasons.txt",
@@ -285,5 +290,65 @@ public class TemplateRendererTests
 
         message.TemplateVersion.ShouldBe(2);
         message.Subject.ShouldBe("Two");
+    }
+
+    /// <summary>Well under both providers' 4 KB payload, leaving the envelope and the data fields their room.</summary>
+    private const int PushTextBudgetBytes = 3072;
+
+    [Theory]
+    [MemberData(nameof(EveryKeyInEveryLanguage))]
+    public void A_push_names_its_order_and_nothing_else_personal(string key, string language)
+    {
+        RenderedMessage push = Renderer([language]).RenderPush(key, Everything, [language]);
+
+        push.Body.ShouldContain(Everything.OrderId.ToString("D"));
+        push.Body.ShouldNotContain("KZT", Case.Sensitive, "the push design's section 5: no amount on a lock screen");
+        push.Body.ShouldNotContain("KZ-0042", Case.Sensitive, "nor a tracking number");
+        push.Subject.ShouldBe(TemplateSet.Embedded.Find(key, 1, language, "push")!.Subject);
+    }
+
+    [Fact]
+    public void A_push_in_every_language_joins_its_titles_and_its_bodies_as_mail_does()
+    {
+        RenderedMessage push = Renderer(["kk", "ru", "en"]).RenderPush(
+            TemplateKeys.ShipmentDispatched,
+            Everything,
+            ["kk", "ru", "en"]);
+
+        push.Subject.Split(TemplateRenderer.SubjectSeparator).Length.ShouldBe(3);
+        push.Body.Split(TemplateRenderer.LanguageRule).Length.ShouldBe(3);
+        push.Languages.ShouldBe(["kk", "ru", "en"]);
+    }
+
+    [Fact]
+    public void The_longest_push_in_every_language_at_once_stays_under_the_payload_budget()
+    {
+        // The worst case: a customer with no usable locale is sent the whole set, here in Kazakh and Russian script.
+        TemplateRenderer renderer = Renderer(["kk", "ru", "en"]);
+
+        int longest = TemplateKeys.Placeholders.Keys
+            .Select(key => renderer.RenderPush(key, Everything, ["kk", "ru", "en"]))
+            .Max(push => System.Text.Encoding.UTF8.GetByteCount(push.Subject + push.Body));
+
+        longest.ShouldBeLessThan(PushTextBudgetBytes);
+    }
+
+    [Fact]
+    public void A_push_resend_renders_the_version_its_intent_stamped()
+    {
+        RenderedMessage again = Renderer(["en"]).RenderPush(TemplateKeys.OrderPlaced, Everything, 1, ["en"]);
+
+        again.TemplateVersion.ShouldBe(1);
+        Should.Throw<InvalidOperationException>(
+            () => Renderer(["en"]).RenderPush(TemplateKeys.OrderPlaced, Everything, 2, ["en"]));
+    }
+
+    [Theory]
+    [InlineData("ru-RU", new[] { "ru" })]
+    [InlineData("de", new[] { "kk", "ru", "en" })]
+    [InlineData(null, new[] { "kk", "ru", "en" })]
+    public void The_fan_out_chooses_the_locale_s_language_or_the_whole_set(string? locale, string[] expected)
+    {
+        Renderer(["kk", "ru", "en"]).LanguagesFor(locale).ShouldBe(expected);
     }
 }

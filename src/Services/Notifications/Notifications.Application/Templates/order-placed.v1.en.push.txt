@@ -1,0 +1,4 @@
+Title: We have received your order
+
+We are checking your order and will confirm it soon.
+Order: {OrderId}
