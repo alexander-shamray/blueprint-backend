@@ -163,7 +163,7 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   `MAPPER_CONFIG`), each scope's name, the scope mappings' subjects and role
   names, each role's name and the role names it composes, and each worker's
   effective scope. So the rest of a mapper's configuration, the users and
-  their role mappings, the two development logins and every client secret
+  their role mappings, the development logins and every client secret
   are not in the object at all. Those belong
   to `tests/Common.Web.Tests/RealmImportTests.cs`, which is not superseded.
   The projection is also why no message here can leak a credential: there is

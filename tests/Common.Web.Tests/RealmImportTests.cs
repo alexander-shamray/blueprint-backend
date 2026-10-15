@@ -212,7 +212,7 @@ public class RealmImportTests
     }
 
     [Fact]
-    public void Both_development_logins_hold_exactly_what_the_readme_says()
+    public void The_development_logins_hold_exactly_what_the_readme_says()
     {
         // `browser` proves §11.5's refusal only while it holds nothing.
         JsonElement users = Root.GetProperty("users");
@@ -234,6 +234,9 @@ public class RealmImportTests
             ["catalog:write", "orders:write", "orders:cancel", "inventory:admin", "payments:admin"],
             ignoreOrder: true);
 
+        // Held by this login alone, so demo's list above stays the one that cannot destroy a customer's records.
+        Permissions("privacy").ShouldBe(["privacy:erase"]);
+
         JsonElement browser = users
             .EnumerateArray()
             .Single(u => u.GetProperty("username").GetString() == "browser");
@@ -243,7 +246,7 @@ public class RealmImportTests
             .ShouldBeFalse("'browser' exists to prove a refusal, so it must hold no client role at all");
 
         // Pinned, because §14.1's development defaults are documented ones.
-        foreach (string username in (string[])["demo", "browser"])
+        foreach (string username in (string[])["demo", "privacy", "browser"])
         {
             JsonElement user = users
                 .EnumerateArray()
@@ -252,7 +255,7 @@ public class RealmImportTests
             user
                 .GetProperty("enabled")
                 .GetBoolean()
-                .ShouldBeTrue($"'{username}' is one of §11.5's two documented logins");
+                .ShouldBeTrue($"'{username}' is one of §14.1's documented logins");
 
             JsonElement credential = user
                 .GetProperty("credentials")
@@ -316,7 +319,7 @@ public class RealmImportTests
         ];
 
         // The whole set: orders:admin is read by CancelOrderHandler, and no endpoint names it. privacy:erase is
-        // grantable and held by nobody, as that one is (ADR-092).
+        // held by the privacy login alone (ADR-092).
         roles.ShouldBe(
             [
                 "catalog:write",

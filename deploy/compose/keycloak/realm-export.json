@@ -471,7 +471,7 @@
         {
           "id": "d2a6f813-5e47-4b09-a1c3-8f70e4b29d65",
           "name": "privacy:erase",
-          "description": "Raise a personal-data erasure request and read where it stands (ADR-092). Grantable and held by nobody, as orders:admin is: it destroys a customer's records, so a login that can do it is a decision and not a default.",
+          "description": "Raise a personal-data erasure request and read where it stands (ADR-092). Held only by the privacy login, never by demo: it destroys a customer's records, so a login that can do it is a decision and not a default.",
           "composite": false,
           "clientRole": true,
           "containerId": "e55a8854-8088-495c-8db4-331d4b5eb68e",
@@ -2842,6 +2842,29 @@
           "temporary": false
         }
       ],
+      "realmRoles": [
+        "default-roles-commerce"
+      ]
+    },
+    {
+      "username": "privacy",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Privacy",
+      "lastName": "Officer",
+      "email": "privacy@example.invalid",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "privacy",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "commerce-api": [
+          "privacy:erase"
+        ]
+      },
       "realmRoles": [
         "default-roles-commerce"
       ]

@@ -253,7 +253,7 @@ exclusions below and its `.env.example` variables.
 The realm file, `deploy/compose/keycloak/realm-export.json`, is a full Keycloak
 export: it holds the `commerce-api` client scope with its audience and
 permission mappers, the `commerce-api` client holding the permission vocabulary
-as client roles, a browser client, and two development logins. **A full export
+as client roles, a browser client, and the development logins. **A full export
 rather than a readable summary, and [§11.5](11-identity-authorization.md)
 argues why** — Keycloak treats a `clientScopes` array as the complete set, so a
 trimmed file silently drops the built-in scopes and with them `sub`.
@@ -286,16 +286,18 @@ that waits on a peer with `service_healthy` waits on that same answer.
 > it. Every URL in the table is already a `localhost` one, so the prefix takes
 > nothing away from the workflow this chapter documents.
 
-The realm's own logins are `demo/demo`, which holds every permission a shipped
-endpoint requires — `deploy/compose/README.md` carries the current list rather
-than this sentence, because a subset named here goes stale with each service —
-and `browser/browser`, which holds nothing and is the account a refusal is
-proved against. `orders:admin` is grantable and held by neither, deliberately:
-it overrides §11.4's ownership check, which stays demonstrable only while no
-shipped login can bypass it. Both are development defaults on the same terms as
-the credentials the callout above names — the deliberate local-development
-exception to §11.6, which every deployed environment replaces with real users
-out of a directory.
+The realm's own logins are `demo/demo`, which holds the permissions a shipped
+endpoint requires for everyday use — `deploy/compose/README.md` carries the
+current list rather than this sentence, because a subset named here goes stale
+with each service — `privacy/privacy`, which holds `privacy:erase` alone
+because that permission destroys a customer's records, and `browser/browser`,
+which holds nothing and is the account a refusal is proved against.
+`orders:admin` is grantable and held by none of them, deliberately: it
+overrides §11.4's ownership check, which stays demonstrable only while no
+shipped login can bypass it. All three are development defaults on the same
+terms as the credentials the callout above names — the deliberate
+local-development exception to §11.6, which every deployed environment replaces
+with real users out of a directory.
 
 `deploy/compose/README.md` is the keyboard inventory of what runs — every port
 and credential of the seven infrastructure services, beside the file it
