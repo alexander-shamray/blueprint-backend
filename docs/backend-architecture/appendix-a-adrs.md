@@ -133,6 +133,7 @@ decision looks wrong.
 | **ADR-124** | [The Notifications worker reaches each push provider an app names, on the port its address dials (#474)](adr/ADR-124-the-notifications-worker-reaches-each-push-provider-an-app-names-on-the-port-its-address-dials-474.md) |
 | **ADR-125** | [A value two releases are each given is held equal before either rolls (#1042)](adr/ADR-125-a-value-two-releases-are-each-given-is-held-equal-before-either-rolls-1042.md) |
 | **ADR-126** | [The rollout keeps a values path empty while either track serves a revision older than the one its descriptor names (#1059)](adr/ADR-126-the-rollout-keeps-a-values-path-empty-while-either-track-serves-a-revision-older-than-the-one-its-descriptor-names-1059.md) |
+| **ADR-127** | [A release does not roll back across a revision its descriptor holds a value empty until (#1060)](adr/ADR-127-a-release-does-not-roll-back-across-a-revision-its-descriptor-holds-a-value-empty-until-1060.md) |
 
 ---
 

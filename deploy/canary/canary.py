@@ -2038,13 +2038,31 @@ def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> l
         'if git merge-base --is-ancestor "$SINCE" "$STABLE_REVISION" '
         '&& git merge-base --is-ancestor "$SINCE" "$REVISION"; then'
     )
-    if not any(
-        line.strip() == both and index + 1 < len(live) and live[index + 1].strip() == "continue"
-        for index, line in enumerate(live)
-    ):
+    skips = [
+        index for index, line in enumerate(live)
+        if line.strip() == both and index + 1 < len(live) and live[index + 1].strip() == "continue"
+    ]
+    if not skips:
         return [
             f"{WORKFLOW_PATH} skips a key `canary.py empty-until` names without both tracks carrying its "
             "revision, so a track older than it is never refused (ADR-126)"
+        ]
+    # A stable track carrying the revision may have left rows the values no longer show, so an older tag is refused.
+    # Inside the loop and past the skip, where the stable track's test alone means the tag lacks the revision.
+    back = 'if git merge-base --is-ancestor "$SINCE" "$STABLE_REVISION"; then'
+    ends = [index for index, line in enumerate(live) if line.strip() == 'done < "$RUNNER_TEMP/empty-until.txt"']
+    refused = False
+    for index, line in enumerate(live):
+        if line.strip() != back or not any(skip < index < end for skip in skips for end in ends):
+            continue
+        for body in live[index + 1:]:
+            if body.strip() == "fi":
+                break
+            refused = refused or body.strip() == "exit 1"
+    if not refused:
+        return [
+            f"{WORKFLOW_PATH} never refuses a tag older than the revision `canary.py empty-until` names while "
+            "the stable track carries it, so an older worker inherits the rows it left (ADR-127)"
         ]
     failures = _candidate_values_failures(live, "ADR-126")
     if failures:
