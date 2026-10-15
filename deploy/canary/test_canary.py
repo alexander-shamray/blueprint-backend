@@ -2157,10 +2157,29 @@ class EmptyUntilTests(unittest.TestCase):
         self.assertEqual(1, len(failures), failures)
         self.assertIn("will be installed with", failures[0])
 
+    def test_candidate_values_are_held_to_their_source_without_check_14(self) -> None:
+        """Check 14 is silent with no `sharesValues` declared, so check 15 cannot lean on it."""
+        workloads = self.workloads
+        del workloads["notifications"]["sharesValues"]
+        self.assertEqual([], canary._rollout_holds_shared_values(workloads, self._workflow("")))
+        for mutation, message in [
+            (('-n "$NAMESPACE" -o yaml > "$RUNNER_TEMP/overrides.yaml"',
+              '-n "$NAMESPACE" --all -o yaml > "$RUNNER_TEMP/overrides.yaml"'), "own overrides"),
+            (('cp "deploy/helm/$CHART/values.yaml"', 'touch "deploy/helm/$CHART/values.yaml"'), "checked-out chart's"),
+        ]:
+            with self.subTest(mutation=mutation[0]):
+                self.assertIn(mutation[0], self.shipped)
+                failures = canary._rollout_keeps_values_empty(
+                    workloads, self._workflow(self.shipped.replace(*mutation)))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn(message, failures[0])
+                self.assertIn("(ADR-126)", failures[0])
+
     def test_a_step_moved_above_the_candidate_values_is_refused(self) -> None:
         lines = self.shipped.splitlines()
-        written = next(i for i, line in enumerate(lines) if '> "$RUNNER_TEMP/candidate.json"' in line)
-        moved = [line for line in lines if '> "$RUNNER_TEMP/candidate.json"' not in line] + [lines[written]]
+        asked = next(i for i, line in enumerate(lines) if "canary.py values-empty" in line)
+        moved = lines[asked:asked + 2] + lines[:asked] + lines[asked + 2:]
 
         failures = canary._rollout_keeps_values_empty(self.workloads, self._workflow("\n".join(moved)))
 
