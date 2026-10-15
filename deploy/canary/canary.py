@@ -629,6 +629,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
         failures += _smoke_reads(name, entry, root)
         failures += _migrated_by_reads(name, workloads)
         failures += _shared_values_reads(name, workloads)
+        failures += _empty_until_reads(name, workloads)
     charts = [entry.get("chart") for entry in workloads.values()]
     for chart in sorted({chart for chart in charts if chart and charts.count(chart) > 1}):
         failures.append(f"two descriptors name the chart {chart!r}, and smoke.sh renders a chart once")
@@ -709,6 +710,10 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     # 14. A value two releases are each given is equal in both before either
     #     rolls (ADR-125); the rollout asks the descriptors which values.
     failures += _rollout_holds_shared_values(workloads)
+
+    # 15. A value earlier revisions misread stays empty while either track
+    #     serves one (ADR-126); the rollout asks the descriptors which values.
+    failures += _rollout_keeps_values_empty(workloads)
 
     return failures
 
@@ -1611,6 +1616,50 @@ def values_agree(key: str, values: dict, peer_values: dict, peer: str) -> list[s
     return [f"{key} is {mine} in this release and {theirs} in {peer}'s"]
 
 
+def empty_until(workload: str, plan_document: dict) -> list[tuple[str, str]]:
+    """Each (key, revision) `workload`'s release keeps empty while either track serves an older revision (ADR-126)."""
+    workloads = entries(plan_document["workloads"])
+    if workload not in workloads:
+        raise PlanError(f"no workload {workload!r} in the plan")
+    declared = workloads[workload].get("emptyUntil")
+    if not isinstance(declared, dict):
+        return []
+    return sorted((key, revision) for key, revision in declared.items() if isinstance(revision, str))
+
+
+def _empty_until_reads(name: str, workloads: dict) -> list[str]:
+    """Check 4 for `emptyUntil`: each key a values path and each revision a commit object name."""
+    declared = workloads[name].get("emptyUntil")
+    if declared is None:
+        return []
+    if not isinstance(declared, dict) or not declared:
+        return [f"workloads.{name}.emptyUntil is {declared!r}, which names no key"]
+    failures = []
+    for key, revision in declared.items():
+        if not SHARED_KEY.fullmatch(key):
+            failures.append(f"workloads.{name}.emptyUntil names {key!r}, which is not a dotted values path")
+        # Whole, since `git merge-base` resolves an abbreviation that a later commit can make ambiguous.
+        if not isinstance(revision, str) or not IMAGE_REVISION.fullmatch(revision):
+            failures.append(
+                f"workloads.{name}.emptyUntil.{key} is {revision!r}, which is not a whole commit object name"
+            )
+    return failures
+
+
+def values_named(key: str, values: dict) -> list[str]:
+    """What `key` names in the values the release will be installed with, or none where it is empty (ADR-126).
+
+    A path the values do not hold raises: they carry every chart default, so it is misspelt, never empty.
+    """
+    value = _value_at(values, key)
+    if value is _ABSENT:
+        raise PlanError(f"{key} is a path the values do not hold, so nothing was read")
+    if value is None or value == "" or value == [] or value == {}:
+        return []
+    named = value if isinstance(value, list) else [value]
+    return sorted({json.dumps(member, sort_keys=True) for member in named})
+
+
 def _smoke_reads(name: str, entry: dict, root: Path) -> list[str]:
     """Check 4 for smoke.sh: the cases parse, and the source holds the host."""
     try:
@@ -1936,6 +1985,62 @@ def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> 
     return []
 
 
+def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> list[str]:
+    """Check 15: where a descriptor names `emptyUntil`, the rollout asks for the keys and refuses on each one.
+
+    Only while one does: with none, there is nothing to hold empty.
+    """
+    if not any(entry.get("emptyUntil") for entry in workloads.values()):
+        return []
+    try:
+        text = workflow.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"{WORKFLOW_PATH} is not readable, so ADR-126's empty values are unchecked: {error}"]
+    live = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+    if not any(_argument("--workload", "WORKLOAD") in run for run in _invocations(live, "canary.py empty-until")):
+        return [
+            f"{WORKFLOW_PATH} runs no `canary.py empty-until` for the dispatched "
+            f"{_argument('--workload', 'WORKLOAD')}, so a release can roll naming a value "
+            "the other track's workers misread (ADR-126)"
+        ]
+    # As check 14 argues: a key the rollout sets itself is installed past the values held empty.
+    pinned = _pinned_keys(live)
+    held = {
+        (name, key)
+        for name, entry in workloads.items()
+        if isinstance(entry.get("emptyUntil"), dict)
+        for key in entry["emptyUntil"]
+        if any(key == p or key.startswith(p + ".") or p.startswith(key + ".") for p in pinned)
+    }
+    if held:
+        return [
+            f"workloads.{name}.emptyUntil names {key}, which {WORKFLOW_PATH} sets on the upgrade's own "
+            "command line, so the values held empty are not the ones installed (ADR-126)"
+            for name, key in sorted(held)
+        ]
+    # Each track's revision against the one named: a candidate older than it misreads the stable track's rows.
+    for track in ("STABLE_REVISION", "REVISION"):
+        if not any(f'git merge-base --is-ancestor "$SINCE" "${track}"' in line for line in live):
+            return [
+                f'{WORKFLOW_PATH} never asks whether "${track}" carries the revision `canary.py empty-until` '
+                "names, so a track older than it is never found (ADR-126)"
+            ]
+    # After the candidate values are written, so a step moved above them reads nothing or a stale file.
+    written = [index for index, line in enumerate(live) if '> "$RUNNER_TEMP/candidate.json"' in line]
+    held_empty = [
+        index for index, line in enumerate(live)
+        if "canary.py values-empty" in line
+        and '--values "$RUNNER_TEMP/candidate.json"' in _invocations(live[index:], "canary.py values-empty")[0]
+    ]
+    if not written or not any(written[0] < index for index in held_empty):
+        return [
+            f"{WORKFLOW_PATH} asks `canary.py empty-until` and never holds the values the release will be "
+            'installed with, "$RUNNER_TEMP/candidate.json" once written, to empty through '
+            "`canary.py values-empty`, so the answer refuses nothing (ADR-126)"
+        ]
+    return []
+
+
 def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
     """The rollout hands each image's tree to everything that reads `src/`.
 
@@ -2127,6 +2232,17 @@ def main(argv: list[str]) -> int:
     agreeing.add_argument("--peer", required=True, type=Path, help="the peer's `helm get values --all -o json`")
     agreeing.add_argument("--peer-name", required=True)
 
+    # ADR-126's keys, "key revision" one per line and none for a release that
+    # holds none empty, for the rollout's shell loop.
+    holding = sub.add_parser("empty-until", help="the keys this release keeps empty, and the revision each waits on")
+    holding.add_argument("--workload", required=True)
+
+    # Silent and 0 when the key is empty; what it names on stderr and 1 when not; 2 when it cannot read it.
+    emptying = sub.add_parser("values-empty", help="whether one key is empty in a release's values")
+    emptying.add_argument("--key", required=True)
+    emptying.add_argument(
+        "--values", required=True, type=Path, help="the values this release will be installed with, as JSON")
+
     # One name per line, for the shell loop in which `realm.yml`'s scheduled
     # job judges each release's realm (ADR-043).
     sub.add_parser("workloads", help="every workload in the plan, one per line")
@@ -2276,6 +2392,31 @@ def main(argv: list[str]) -> int:
         for difference in differences:
             print(f"canary: {difference} (ADR-125)", file=sys.stderr)
         return 1 if differences else 0
+
+    if args.command == "empty-until":
+        try:
+            for key, revision in empty_until(args.workload, document):
+                print(f"{key} {revision}")
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        return 0
+
+    if args.command == "values-empty":
+        if not SHARED_KEY.fullmatch(args.key):
+            print(f"canary: {args.key!r} is not a dotted values path", file=sys.stderr)
+            return 2
+        try:
+            named = values_named(args.key, json.loads(args.values.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"canary: {args.values} is not readable JSON: {error}", file=sys.stderr)
+            return 2
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 2
+        if named:
+            print(f"canary: {args.key} names {', '.join(named)} (ADR-126)", file=sys.stderr)
+        return 1 if named else 0
 
     if args.command == "workloads":
         for name in entries(document["workloads"]):

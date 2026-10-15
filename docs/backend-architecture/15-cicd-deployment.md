@@ -1196,6 +1196,11 @@ given is held equal before either rolls**: a descriptor's `sharesValues`
 names the pair and the values path, and the rollout refuses either release
 while the values it would be installed with differ from the ones the other
 runs ([ADR-125](adr/ADR-125-a-value-two-releases-are-each-given-is-held-equal-before-either-rolls-1042.md)).
+**A value whose rows an earlier revision misreads stays empty while either
+track serves one**: a descriptor's `emptyUntil` names the path and the
+revision, and the rollout refuses the release while the path names anything
+and either track's revision is older
+([ADR-126](adr/ADR-126-the-rollout-keeps-a-values-path-empty-while-either-track-serves-a-revision-older-than-the-one-its-descriptor-names-1059.md)).
 **The gateway's probes are a service's three, and its readiness set is empty
 on purpose.** It
 proxies four services and depends on all of them; what it does not do is

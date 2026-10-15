@@ -8,6 +8,9 @@
     "notifications-api": ["jurisdiction.required"],
     "web-bff": ["push.apps"]
   },
+  "emptyUntil": {
+    "push.apps": "19ff224ff02274f4c9b33b2685f197f3005ca7f1"
+  },
   "smoke": {
     "migrator": true,
     "database": true,

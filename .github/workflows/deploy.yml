@@ -402,6 +402,42 @@ jobs:
         env:
           WORKLOAD: ${{ inputs.workload }}
 
+      # ADR-126: a value whose rows an earlier revision misreads names nothing
+      # while either track serves one. Both tracks claim from one table for
+      # every rung, so an older candidate misreads the stable track's rows as
+      # surely as an older stable track misreads the candidate's. Read from the
+      # values the step above wrote, which are the ones the upgrade installs.
+      - name: A value older workers misread stays empty while either track runs one
+        run: |
+          set -euo pipefail
+          python deploy/canary/canary.py empty-until --workload "$WORKLOAD" > "$RUNNER_TEMP/empty-until.txt"
+          STABLE_TAG=$(python deploy/canary/canary.py installed-tag --values "$RUNNER_TEMP/stable.json")
+          STABLE_REVISION=$(python deploy/canary/canary.py revision --value "$STABLE_TAG")
+          REVISION=$(python deploy/canary/canary.py revision --value "$TAG")
+          while read -r KEY SINCE; do
+            if ! git cat-file -e "$SINCE^{commit}" 2>/dev/null; then
+              echo "::error::$WORKLOAD keeps $KEY empty until $SINCE, which is not a commit in this repository, so neither track can be compared with it (ADR-126)."
+              exit 1
+            fi
+            if git merge-base --is-ancestor "$SINCE" "$STABLE_REVISION" && git merge-base --is-ancestor "$SINCE" "$REVISION"; then
+              continue
+            fi
+            EMPTY=0
+            python deploy/canary/canary.py values-empty --key "$KEY" \
+              --values "$RUNNER_TEMP/candidate.json" || EMPTY=$?
+            if [ "$EMPTY" -eq 1 ]; then
+              echo "::error::$WORKLOAD would roll naming $KEY while a track serves a revision older than $SINCE, whose workers misread what it makes this release write. Roll with $KEY empty until both tracks serve $SINCE or later (ADR-126)."
+              exit 1
+            fi
+            if [ "$EMPTY" -ne 0 ]; then
+              echo "::error::$KEY could not be read from the values $WORKLOAD will be installed with; canary.py says why above (ADR-126)."
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/empty-until.txt"
+        env:
+          WORKLOAD: ${{ inputs.workload }}
+          TAG: ${{ inputs.tag }}
+
       # The same gate the `check` job ran, over the image's tree instead of
       # the checkout's (ADR-050), and over the release it replaces as well.
       # `--workload` scopes the first: a tag names one workload's image, and
