@@ -33,7 +33,9 @@ service level is the statutory clock, and the adopter's reading of it is
 
 ## Find the cause
 
-Which holder is silent, and what has Privacy seen of it:
+Which holder is silent, and what has Privacy seen of it. `$STAFF_TOKEN` is a
+`commerce-api` token holding `privacy:erase`; on a local stack it is the
+`privacy` login's, taken as `deploy/compose/README.md` shows:
 
 ```bash
 curl -H "Authorization: Bearer $STAFF_TOKEN" \
