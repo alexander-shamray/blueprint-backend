@@ -2055,11 +2055,12 @@ def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> l
     for index, line in enumerate(live):
         if line.strip() != back or not any(skip < index < end for skip in skips for end in ends):
             continue
-        # The block's own lines alone: `else`, `elif` or `fi` at the `if`'s indent ends it; a nested block is deeper.
+        # The block's own lines alone. Bash reads no indent, so an `else`, `elif` or `fi` ends it at any depth, as
+        # does a line back at the `if`'s; an `exit 1` deeper than the block's first line is a nested block's.
         indent, first = len(line) - len(line.lstrip()), None
         for body in live[index + 1:]:
             depth = len(body) - len(body.lstrip())
-            if depth <= indent:
+            if depth <= indent or body.strip() in ("else", "fi") or body.strip().startswith("elif "):
                 break
             first = depth if first is None else first
             refused = refused or (depth == first and body.strip() == "exit 1")
