@@ -80,6 +80,48 @@ network and the edge's as the base of every URL it stores. `Platform.Integration
 starts the same image with the same files and policies, so what it proves is
 what `up` runs.
 
+**A developer attaches an image by hand in four calls, and a console that
+drives the platform does the same four.** The wire contract is
+[§10.8](10-api-gateway.md#108-the-product-image-upload)'s and the sizes and
+types it allows are not repeated here; this is the order, the hosts and the
+readiness each step waits on. The token is the realm's `demo` login, whose
+password grant `deploy/compose/README.md` shows in bash and which is the same
+call here:
+
+```powershell
+$body = @{ grant_type = 'password'; client_id = 'web-app'; username = 'demo'; password = 'demo' }
+$token = (Invoke-RestMethod http://localhost:8080/realms/commerce/protocol/openid-connect/token -Method Post -Body $body).access_token
+$auth = @{ Authorization = "Bearer $token" }
+
+# 1. Ask the BFF for a pre-signed PUT, through the gateway.
+$size = (Get-Item .\desk.png).Length
+$up = Invoke-RestMethod http://localhost:5000/bff/v1/product-images -Method Post -Headers $auth `
+  -ContentType 'application/json' -Body (@{ contentType = 'image/png'; sizeBytes = $size } | ConvertTo-Json)
+
+# 2. PUT the bytes to the object store, which uploadUrl names, with the type the signature covers.
+Invoke-RestMethod $up.uploadUrl -Method Put -InFile .\desk.png -ContentType $up.headers.'Content-Type'
+
+# 3. Publish with the key, never a URL; the product service copies it to products/.
+$id = Invoke-RestMethod http://localhost:5000/api/v1/catalog/products -Method Post -Headers $auth `
+  -ContentType 'application/json' -Body (@{
+    commandId = [guid]::NewGuid(); name = 'Walnut desk'; imageKey = $up.key; amount = 19.99; currency = 'EUR'
+  } | ConvertTo-Json)
+
+# 4. Read it back: thumbnailUrl is on image-edge.
+$p = Invoke-RestMethod "http://localhost:5000/api/v1/catalog/products/$id"
+Invoke-WebRequest $p.thumbnailUrl -Method Head
+```
+
+Step 1 states the file's own size, because the signature covers it
+([§10.8](10-api-gateway.md#108-the-product-image-upload)), and a step 2 that
+outlives the response's `expiresAt` asks step 1 again. The store is ready when
+`object-store` and `image-edge` report healthy and `object-store-init`, which
+`docker compose ps` omits once it has exited, shows as exited in
+`docker compose ps -a`. The BFF's saved delivery address
+([§10.9](10-api-gateway.md#109-the-saved-delivery-address)) is a `PUT` of its
+fields to `/bff/v1/saved-address` with the same token, and a `GET` there reads
+it back.
+
 **The broker is built rather than pulled, and it is the one infrastructure
 service that is.** `deploy/compose/rabbitmq/Dockerfile` adds the delayed
 message exchange plugin §9.6's saga timeouts are scheduled through
