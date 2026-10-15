@@ -370,10 +370,10 @@ class Latency(unittest.TestCase):
         self.assertIn(squash(module.FIRST_QUERY), squash(runbook("latency.md")))
         self.assertIn(squash(module.SERVICE_QUERY) + ">1", squash(RULES))
 
-    def test_the_cache_is_left_unrun_only_while_the_runbook_says_nothing_reads_it(self):
-        self.assertIn(squash("what no code path does is *read* one"), squash(runbook("latency.md")))
+    def test_the_cache_is_left_unrun_only_while_the_runbook_names_its_one_reader(self):
+        self.assertIn(squash("This branch has one reader."), squash(runbook("latency.md")))
         source = Path(self.module().__file__).read_text(encoding="utf-8")
-        self.assertIn("no code path reads HybridCache", source)
+        self.assertIn("only Catalog's one-product read goes through HybridCache", source)
 
     def test_it_reads_a_quiet_quantile_before_it_pauses_sql(self):
         stack = self.stack(query=lambda expression: [{"metric": {"service_name": "Ordering.Api"}, "value": [1, "0.2"]}])
