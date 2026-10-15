@@ -200,9 +200,10 @@ call — a small thing that matters on a hot path.
 read whose row carries a value that a projection writes, and for which nothing
 invalidates the entry (a `Local` row, or the projection's own drop, §8.4),
 would serve from a cached copy a value no event removes, so it stays where the
-listing is: Dapper over the tables, at level 1. This sample is the shape the first cached read takes once its
-invalidation exists. The case in the reference domain, where the invalidation
-now exists, is in [E.3.3](appendix-e-reference-domain.md#e33-8-caching).
+listing is: Dapper over the tables, at level 1. This sample is the shape the
+first cached read takes once its invalidation exists. The case in the
+reference domain, where the invalidation now exists, is in
+[E.3.3](appendix-e-reference-domain.md#e33-8-caching).
 
 ## 8.3 Key naming
 
