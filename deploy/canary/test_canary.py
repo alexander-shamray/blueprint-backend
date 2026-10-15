@@ -2180,6 +2180,21 @@ class EmptyUntilTests(unittest.TestCase):
                 self.assertEqual(1, len(failures), failures)
                 self.assertIn(f'"${track}"', failures[0])
 
+    def test_a_key_skipped_on_either_track_alone_is_refused(self) -> None:
+        conjunction = '"$STABLE_REVISION" && git merge-base'
+        for mutation in [
+            (conjunction, '"$STABLE_REVISION" || git merge-base'),
+            ("            if git merge-base --is-ancestor \"$SINCE\" \"$STABLE_REVISION\"",
+             "            if true || git merge-base --is-ancestor \"$SINCE\" \"$STABLE_REVISION\""),
+        ]:
+            with self.subTest(mutation=mutation[1]):
+                self.assertIn(mutation[0], self.shipped)
+                failures = canary._rollout_keeps_values_empty(
+                    self.workloads, self._workflow(self.shipped.replace(*mutation)))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("without both tracks", failures[0])
+
     def test_a_key_the_rollout_sets_itself_is_refused(self) -> None:
         workloads = self.workloads
         workloads["notifications"]["emptyUntil"]["image.tag"] = self.PUSH_DELIVERIES
