@@ -12,22 +12,24 @@ internal sealed class HybridProductReadCache(HybridCache cache) : IProductReadCa
         Func<CancellationToken, ValueTask<ProductSummaryDto?>> load,
         CancellationToken ct)
     {
-        string key = ProductCacheKeys.Key(productId);
-
-        ProductSummaryDto? product = await cache.GetOrCreateAsync(
-            key,
-            load,
-            static (loader, token) => loader(token),
-            tags: [ProductCacheKeys.Tag(productId), "catalog"],
-            cancellationToken: ct);
-
-        // An id anyone can send must not fill the cache with misses, and no event removes an unknown id's.
-        if (product is null)
-            await cache.RemoveAsync(key, ct);
-
-        return product;
+        try
+        {
+            return await cache.GetOrCreateAsync(
+                ProductCacheKeys.Key(productId),
+                load,
+                static async (loader, token) => await loader(token) ?? throw new MissSignal(),
+                tags: [ProductCacheKeys.Tag(productId), "catalog"],
+                cancellationToken: ct);
+        }
+        catch (MissSignal)
+        {
+            // A throwing factory stores nothing, so an id anyone can send leaves no entry, and no event removes one.
+            return null;
+        }
     }
 
     public ValueTask InvalidateAsync(Guid productId, CancellationToken ct) =>
         cache.RemoveByTagAsync(ProductCacheKeys.Tag(productId), ct);
+
+    private sealed class MissSignal : Exception;
 }

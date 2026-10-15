@@ -8,7 +8,7 @@ namespace Catalog.Application.Products.GetProduct;
 /// <remarks>As fresh as its invalidators, which E.3.3 lists (§8.4).</remarks>
 public interface IProductReadCache
 {
-    /// <summary>The cached row, else <paramref name="load"/>'s; a miss (<c>null</c>) is removed once stored (§8.2).</summary>
+    /// <summary>The cached row, else <paramref name="load"/>'s; a miss (<c>null</c>) is never stored (§8.2).</summary>
     ValueTask<ProductSummaryDto?> GetOrLoadAsync(
         Guid productId,
         Func<CancellationToken, ValueTask<ProductSummaryDto?>> load,
