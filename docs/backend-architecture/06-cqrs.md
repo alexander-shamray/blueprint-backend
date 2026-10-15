@@ -187,10 +187,11 @@ public IServiceCollection AddPluggableFrom(Assembly assembly) =>
 ```
 
 **Each layer scans itself.** Handlers do not all live in Application: the
-projections in §6.6 write SQL, the cache invalidator [§8.4](08-caching-redis.md)
-describes will sit beside them in Infrastructure when its first reader brings
-it, and the command mappers convert wire contracts. Scanning one assembly
-registers some handlers and silently skips the rest, which is the §6.2 trap
+projections in §6.6 write SQL, the cache invalidators
+[§8.4](08-caching-redis.md) describes sit beside them in Infrastructure,
+brought by the first cached read (Catalog's, in E.3.3), and the command mappers
+convert wire contracts. Scanning one assembly registers some handlers and
+silently skips the rest, which is the §6.2 trap
 with a wider blast radius — so both registration methods call it:
 
 ```csharp
@@ -1228,8 +1229,9 @@ step. `QuantityAvailable` keeps the listing's meaning —
 `code` ([§10.5](10-api-gateway.md)), and so is a withdrawn product: both
 reads hide one, and only its seller's own list still shows it
 ([ADR-074](adr/ADR-074-a-seller-reads-their-own-products-and-withdraws-one-and-a-withdrawal-is-final.md)).
-It is uncached, as the listing is, for the reason
-[§8.2](08-caching-redis.md) gives.
+It is cached, unlike the listing, because its row has invalidators for
+everything it carries; [§8.2](08-caching-redis.md) gives the rule and
+[E.3.3](appendix-e-reference-domain.md#e33-8-caching) the three.
 
 **Here, in the reference domain, Catalog's listing takes a search and a
 closed sort, and its cursor carries both**

@@ -27,10 +27,10 @@
 > cache stack and the two Redis rows are required. **Registering is not
 > constructing**, and an earlier revision of this callout said a `HybridCache`
 > was constructed in each: DI builds a singleton when something resolves it,
-> and nothing in `src/` injects one. So there are three states here, not two —
-> no caller, a caller, and a cache anything actually reads — and the alert is
-> waiting on none of them. A meter with no publisher reports nothing whichever
-> state holds.
+> and only Catalog's one-product read adapter injects one. So there are three
+> states here, not two — no caller, a caller, and a cache something actually
+> reads, which Catalog now is — and the alert is waiting on none of them. A
+> meter with no publisher reports nothing whichever state holds.
 >
 > So the signal needs an **instrument**: an EventCounters-to-OTel bridge, or a
 > package version that publishes a meter. Taking the cache was necessary and

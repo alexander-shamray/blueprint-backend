@@ -133,9 +133,10 @@ same key execute the factory once rather than N times.
 
 Registered inside `AddRedisConnections` — the same helper that supplies the two
 connections of §8.1 — rather than as a separate call somebody has to remember.
-No service reads `HybridCache`; the first handler that injects it — §8.4 names
-the shape — is registered by the [§6.2](06-cqrs.md) scan, so an unregistered
-cache is then a service that will not start.
+Catalog's one-product read is the one reader (E.3.3), through an adapter its
+Infrastructure registers beside the call. A handler that injects `HybridCache`
+is registered by the [§6.2](06-cqrs.md) scan, so an unregistered cache is then
+a service that will not start.
 
 The helper reads both connection strings eagerly, so a host missing either
 fails at startup, and registers §8.1's two keyed `IConnectionMultiplexer`s,
@@ -197,11 +198,11 @@ call — a small thing that matters on a hot path.
 
 **A real one-product read may not be this handler, and may cache nothing.** A
 read whose row carries a value that a projection writes, and for which nothing
-stages a `Local` invalidation (§8.4), would serve from a cached copy a value
-no event removes, so it stays where the listing is: Dapper over the tables, at
-level 1. This sample is the shape the first cached read takes once its
-invalidation exists. The case in the reference domain is in
-[E.3.3](appendix-e-reference-domain.md#e33-8-caching).
+invalidates the entry (a `Local` row, or the projection's own drop, §8.4),
+would serve from a cached copy a value no event removes, so it stays where the
+listing is: Dapper over the tables, at level 1. This sample is the shape the first cached read takes once its
+invalidation exists. The case in the reference domain, where the invalidation
+now exists, is in [E.3.3](appendix-e-reference-domain.md#e33-8-caching).
 
 ## 8.3 Key naming
 
@@ -314,7 +315,11 @@ it — in `Service.Infrastructure` beside the projection, registered by the same
 pins no order between the two, and the consumer runs handlers in registration
 order, so whether the cache is emptied before or after the table is updated is
 a decision that reader takes with its handler, not one this chapter can
-promise. This is that handler:
+promise. The alternative is one handler: the projection drops the key itself,
+after its upsert. That fixes the order, and a redelivery whose upsert changed
+nothing still drops the key, which retries a drop that was lost. A projection
+stages no `Local` row to do it, since it runs outside any write transaction
+(§6.6, §7.5). The two-handler shape is this:
 
 ```csharp
 namespace Service.Infrastructure.Caching;
