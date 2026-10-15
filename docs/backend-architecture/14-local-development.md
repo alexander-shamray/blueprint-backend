@@ -90,8 +90,8 @@ call here:
 
 ```powershell
 $body = @{ grant_type = 'password'; client_id = 'web-app'; username = 'demo'; password = 'demo' }
-$tokenUrl = 'http://localhost:8080/realms/commerce/protocol/openid-connect/token'
-$token = (Invoke-RestMethod $tokenUrl -Method Post -Body $body).access_token
+$realm = 'http://localhost:8080/realms/commerce'
+$token = (Invoke-RestMethod "$realm/protocol/openid-connect/token" -Method Post -Body $body).access_token
 $auth = @{ Authorization = "Bearer $token" }
 
 # 1. Ask the BFF for a pre-signed PUT, through the gateway.
