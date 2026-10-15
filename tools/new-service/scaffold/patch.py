@@ -179,6 +179,15 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ("using Catalog.Domain.Products;\n", "using Catalog.Domain;\n"),
         # ADR-106's store is the product images', and a rendered service holds none.
         ("using Catalog.Infrastructure.ProductImages;\n", ""),
+        # The one-product read's cache goes with the read, registration and both usings.
+        ("using Catalog.Application.Products.GetProduct;\n", ""),
+        ("using Catalog.Infrastructure.Caching;\n", ""),
+        (
+            "\n"
+            "        // The one-product read's cache (§8.2), over the HybridCache the call above registers.\n"
+            "        services.AddSingleton<IProductReadCache, HybridProductReadCache>();\n",
+            "",
+        ),
         (
             "        // ADR-106's object store, left out of readiness: a store outage fails an image publish and nothing else.\n"
             "        services.AddProductImageStore();\n"

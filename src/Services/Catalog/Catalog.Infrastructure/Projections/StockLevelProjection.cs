@@ -1,4 +1,5 @@
 using System.Data;
+using Catalog.Application.Products.GetProduct;
 using Common.Application;
 using Common.Contracts.Inventory.V1;
 using Dapper;
@@ -10,7 +11,7 @@ namespace Catalog.Infrastructure.Projections;
 /// Public, since §6.2's scan skips internal types; on its own connection, since §6.6 and §7.5 keep a
 /// projection out of the write transaction.
 /// </remarks>
-public sealed class StockLevelProjection(IDbConnectionFactory connections)
+public sealed class StockLevelProjection(IDbConnectionFactory connections, IProductReadCache cache)
     : IIntegrationEventHandler<StockLevelChanged>
 {
     // HOLDLOCK, or two first deliveries both take NOT MATCHED; the guard is strict, as §6.6's price upsert's is.
@@ -35,5 +36,9 @@ public sealed class StockLevelProjection(IDbConnectionFactory connections)
                 UpsertSql,
                 new { integrationEvent.ProductId, integrationEvent.QuantityAvailable, integrationEvent.OccurredAt },
                 cancellationToken: ct));
+
+        // After the upsert in this one handler, so no read refills the cache from the old row (§8.4's ordering
+        // question); a redelivery whose MERGE changed nothing still drops the key, which is what retries a lost drop.
+        await cache.InvalidateAsync(integrationEvent.ProductId, ct);
     }
 }

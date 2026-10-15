@@ -2,6 +2,7 @@ using System.Text.Json;
 using Catalog.Application.Products;
 using Catalog.Application.Products.PublishProduct;
 using Catalog.Application.Products.WithdrawProduct;
+using Catalog.Domain.Products;
 using Catalog.TestSupport;
 using Common.Application;
 using Common.Contracts.Catalog.V1;
@@ -62,9 +63,13 @@ public sealed class WithdrawProductHandlerTests(ServiceFixture fixture) : IAsync
             "SELECT Value = WithdrawnAt FROM catalog.Products WHERE Id = {0}",
             productId);
 
-        // The Broker lane carries the contract, and nothing reaches the Local lane (§9.3, §9.4).
-        OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
-        row.Lane.ShouldBe(OutboxLane.Broker);
+        // The Broker lane carries the contract, and the Local lane the cache's drop, staged because the event now
+        // has a projection (§8.4, §9.3, §9.4).
+        IReadOnlyList<OutboxMessage> rows = await fixture.OutboxAsync();
+        rows.Count.ShouldBe(2);
+        rows.Single(r => r.Lane == OutboxLane.Local).MessageType
+            .ShouldBe(typeof(ProductDiscontinuedDomainEvent).FullName);
+        OutboxMessage row = rows.Single(r => r.Lane == OutboxLane.Broker);
         row.MessageType.ShouldBe(typeof(ProductDiscontinued).FullName);
         row.CorrelationId.ShouldBe(productId);
 

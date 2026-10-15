@@ -194,6 +194,12 @@ OMITTED = frozenset(
         # slice's: a rendered service consumes nothing and projects nothing.
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/StockLevelConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Projections/StockLevelProjection.cs",
+        # The one-product read's cache (§8.2) goes with the read, and the Program-side registration with the patch.
+        "src/Services/Catalog/Catalog.Application/Products/GetProduct/IProductReadCache.cs",
+        "src/Services/Catalog/Catalog.Application/Products/GetProduct/ProductCacheKeys.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Caching/HybridProductReadCache.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Caching/ProductPriceCacheInvalidator.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Caching/ProductWithdrawalCacheInvalidator.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Messaging/StockLevelConsumer.cs",
         # §14.3's rows are the slice's products. The hook is not: MigratorHost
         # and MigrationRunner travel, and STAND_INS renders this file empty.

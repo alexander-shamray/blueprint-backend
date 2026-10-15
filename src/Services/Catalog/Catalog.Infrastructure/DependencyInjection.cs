@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
+using Catalog.Application.Products.GetProduct;
 using Catalog.Domain.Products;
+using Catalog.Infrastructure.Caching;
 using Catalog.Infrastructure.Messaging;
 using Catalog.Infrastructure.Observability;
 using Catalog.Infrastructure.Persistence;
@@ -101,6 +103,9 @@ public static class DependencyInjection
         // §8's two connections, one call by design (§8.2). Both strings are read eagerly, so a missing key
         // stops the host.
         services.AddRedisConnections(configuration);
+
+        // The one-product read's cache (§8.2), over the HybridCache the call above registers.
+        services.AddSingleton<IProductReadCache, HybridProductReadCache>();
 
         // ADR-106's object store, left out of readiness: a store outage fails an image publish and nothing else.
         services.AddProductImageStore();
