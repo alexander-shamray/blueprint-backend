@@ -58,6 +58,7 @@ deploy/compose/README.md | credential-assignment | 91c4c7dd2ba5 | The host-run c
 deploy/compose/rabbitmq/test_check_permissions.py | credential-assignment | 3c8acf667613 | A placeholder in a gate mutation; no broker ever reads it.
 deploy/compose/README.md | credential-assignment | eb26d4a9a0ef | Section 11.5's local BFF client default in the same recipe.
 deploy/compose/README.md | connection-string-password | 2a97516c354b | Keycloak's demo user in the token-fetch recipe, realm-export seeded.
+deploy/compose/README.md | connection-string-password | a4cc6bc01a92 | Keycloak's privacy user in the erasure recipe, realm-export seeded.
 deploy/compose/README.md | credential-assignment | 3ca2bbaf7358 | Payments' local connection recipe against a published port.
 deploy/compose/README.md | credential-assignment | 3e7bc4243142 | The host-run broker recipe for Payments, its own service account.
 deploy/compose/README.md | credential-assignment | 9f5482218873 | Section 14.1's local provider key in the host-run recipe; the simulator ignores it.
