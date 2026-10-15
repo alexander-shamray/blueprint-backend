@@ -189,9 +189,9 @@ public IServiceCollection AddPluggableFrom(Assembly assembly) =>
 **Each layer scans itself.** Handlers do not all live in Application: the
 projections in §6.6 write SQL, the cache invalidators
 [§8.4](08-caching-redis.md) describes sit beside them in Infrastructure,
-brought by the first cached read (Catalog's, in E.3.3), and the command mappers
-convert wire contracts. Scanning one assembly registers some handlers and
-silently skips the rest, which is the §6.2 trap
+brought by the first cached read (the reference domain's is in E.3.3), and
+the command mappers convert wire contracts. Scanning one assembly registers
+some handlers and silently skips the rest, which is the §6.2 trap
 with a wider blast radius — so both registration methods call it:
 
 ```csharp

@@ -133,7 +133,7 @@ same key execute the factory once rather than N times.
 
 Registered inside `AddRedisConnections` — the same helper that supplies the two
 connections of §8.1 — rather than as a separate call somebody has to remember.
-Catalog's one-product read is the one reader (E.3.3), through an adapter its
+The reference domain has one reader (E.3.3), through an adapter its
 Infrastructure registers beside the call. A handler that injects `HybridCache`
 is registered by the [§6.2](06-cqrs.md) scan, so an unregistered cache is then
 a service that will not start.
