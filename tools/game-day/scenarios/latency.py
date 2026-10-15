@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import harness
 
-# Not run: a cold cache, because no code path reads HybridCache, so pausing redis-cache could not slow a request
-# (latency.md, *A cold or missing cache*).
+# Not run: a cold cache, because only Catalog's one-product read goes through HybridCache, which this scenario's
+# probes do not request (latency.md, *A cold or missing cache*).
 # Translated: `kubectl top pods` is `docker stats`, `top nodes` the engine's CPU and memory (one node, shared by every
 # container), and the jsonpath on `.spec.containers[*].resources` the container's HostConfig limits.
 
