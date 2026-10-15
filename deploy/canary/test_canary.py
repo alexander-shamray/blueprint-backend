@@ -2225,16 +2225,23 @@ class EmptyUntilTests(unittest.TestCase):
         self.assertIn(done, self.shipped)
         self.assertEqual(1, self.shipped.count(skip))
         without = self.shipped.replace(refusal, "")
-        for mutated in [
-            without,
-            self.shipped.replace(refusal, refusal.replace("exit 1", "true")),
-            self.shipped.replace(refusal, refusal.replace("exit 1", "# exit 1")),
+        refuses = "              exit 1\n"
+        self.assertEqual(1, refusal.count(refuses))
+        for name, mutated in {
+            "removed": without,
+            "exit 1 made true": self.shipped.replace(refusal, refusal.replace("exit 1", "true")),
+            "exit 1 commented out": self.shipped.replace(refusal, refusal.replace("exit 1", "# exit 1")),
             # Past the loop, an empty $SINCE is no commit's ancestor, so the refusal never fires.
-            without.replace(done, done + refusal),
+            "past the loop": without.replace(done, done + refusal),
             # Above the skip, it refuses every rollout once the stable track carries the revision.
-            without.replace(skip, refusal + skip),
-        ]:
-            with self.subTest(mutated=mutated.count("exit 1")):
+            "above the skip": without.replace(skip, refusal + skip),
+            # The branch that runs when the stable track carries the revision must be the one that exits.
+            "exit 1 under else": self.shipped.replace(
+                refusal, refusal.replace(refuses, "              true\n            else\n" + refuses)),
+            "exit 1 in a nested block": self.shipped.replace(
+                refusal, refusal.replace(refuses, "              if false; then\n  " + refuses + "              fi\n")),
+        }.items():
+            with self.subTest(name):
                 self.assertNotEqual(self.shipped, mutated)
                 failures = canary._rollout_keeps_values_empty(self.workloads, self._workflow(mutated))
 

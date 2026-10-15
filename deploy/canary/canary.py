@@ -2055,10 +2055,14 @@ def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> l
     for index, line in enumerate(live):
         if line.strip() != back or not any(skip < index < end for skip in skips for end in ends):
             continue
+        # The block's own lines alone: `else`, `elif` or `fi` at the `if`'s indent ends it; a nested block is deeper.
+        indent, first = len(line) - len(line.lstrip()), None
         for body in live[index + 1:]:
-            if body.strip() == "fi":
+            depth = len(body) - len(body.lstrip())
+            if depth <= indent:
                 break
-            refused = refused or body.strip() == "exit 1"
+            first = depth if first is None else first
+            refused = refused or (depth == first and body.strip() == "exit 1")
     if not refused:
         return [
             f"{WORKFLOW_PATH} never refuses a tag older than the revision `canary.py empty-until` names while "
