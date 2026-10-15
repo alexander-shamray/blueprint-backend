@@ -2025,6 +2025,19 @@ def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> l
                 f'{WORKFLOW_PATH} never asks whether "${track}" carries the revision `canary.py empty-until` '
                 "names, so a track older than it is never found (ADR-126)"
             ]
+    # Both, on the one line that skips the key: either alone would admit the other track's older revision.
+    both = (
+        'if git merge-base --is-ancestor "$SINCE" "$STABLE_REVISION" '
+        '&& git merge-base --is-ancestor "$SINCE" "$REVISION"; then'
+    )
+    if not any(
+        line.strip() == both and index + 1 < len(live) and live[index + 1].strip() == "continue"
+        for index, line in enumerate(live)
+    ):
+        return [
+            f"{WORKFLOW_PATH} skips a key `canary.py empty-until` names without both tracks carrying its "
+            "revision, so a track older than it is never refused (ADR-126)"
+        ]
     # After the candidate values are written, so a step moved above them reads nothing or a stale file.
     written = [index for index, line in enumerate(live) if '> "$RUNNER_TEMP/candidate.json"' in line]
     held_empty = [
