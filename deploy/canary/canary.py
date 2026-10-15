@@ -2055,12 +2055,14 @@ def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> l
     for index, line in enumerate(live):
         if line.strip() != back or not any(skip < index < end for skip in skips for end in ends):
             continue
-        # The block's own lines alone. Bash reads no indent, so the scan ends at any `else`, `elif` or `fi` token or a
-        # line back at the `if`'s indent. A nested block's `fi` ends it early, which refuses rather than admits.
+        # The block's own lines alone. Bash reads no indent, so the scan ends at a line that is `else` or `fi` or opens
+        # `elif`, a trailing `;` or comment aside, at any indent, or at a line back at the `if`'s. A nested block's
+        # `fi` ends it early, which refuses rather than admits.
         indent, first = len(line) - len(line.lstrip()), None
         for body in live[index + 1:]:
             depth = len(body) - len(body.lstrip())
-            if depth <= indent or body.strip() in ("else", "fi") or body.strip().startswith("elif "):
+            word = body.split("#", 1)[0].strip().rstrip(";").strip()
+            if depth <= indent or word in ("else", "fi") or word.startswith("elif "):
                 break
             first = depth if first is None else first
             refused = refused or (depth == first and body.strip() == "exit 1")

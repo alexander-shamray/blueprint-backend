@@ -2241,6 +2241,8 @@ class EmptyUntilTests(unittest.TestCase):
             # Bash reads no indent, so an `else` at the body's depth still starts a branch.
             "exit 1 under an else at the body's depth": self.shipped.replace(
                 refusal, refusal.replace(refuses, "              true\n              else\n" + refuses)),
+            "exit 1 under an else with a trailing comment": self.shipped.replace(
+                refusal, refusal.replace(refuses, "              true\n              else  # note\n" + refuses)),
             "exit 1 in a nested block": self.shipped.replace(
                 refusal, refusal.replace(refuses, "              if false; then\n  " + refuses + "              fi\n")),
         }.items():
