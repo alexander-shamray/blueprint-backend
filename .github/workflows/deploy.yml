@@ -403,10 +403,10 @@ jobs:
           WORKLOAD: ${{ inputs.workload }}
 
       # ADR-126: a value whose rows an earlier revision misreads names nothing
-      # while either track serves one. Both tracks claim from one table for
-      # every rung, so an older candidate misreads the stable track's rows as
-      # surely as an older stable track misreads the candidate's. Read from the
-      # values the step above wrote, which are the ones the upgrade installs.
+      # while either track serves one, since both tracks claim from one table
+      # for every rung. ADR-127: a tag older than the revision never replaces a
+      # stable track that carries it, whose rows may still be pending. Read from
+      # the values the step above wrote, which are the ones the upgrade installs.
       - name: A value older workers misread stays empty while either track runs one
         run: |
           set -euo pipefail
@@ -421,6 +421,10 @@ jobs:
             fi
             if git merge-base --is-ancestor "$SINCE" "$STABLE_REVISION" && git merge-base --is-ancestor "$SINCE" "$REVISION"; then
               continue
+            fi
+            if git merge-base --is-ancestor "$SINCE" "$STABLE_REVISION"; then
+              echo "::error::$WORKLOAD at $REVISION is older than $SINCE, which the stable track carries, so rows it wrote while $KEY named anything may still be pending for a worker that misreads them. Roll a tag at $SINCE or later (ADR-127)."
+              exit 1
             fi
             EMPTY=0
             python deploy/canary/canary.py values-empty --key "$KEY" \

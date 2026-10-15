@@ -1199,8 +1199,10 @@ runs ([ADR-125](adr/ADR-125-a-value-two-releases-are-each-given-is-held-equal-be
 **A value whose rows an earlier revision misreads stays empty while either
 track serves one**: a descriptor's `emptyUntil` names the path and the
 revision, and the rollout refuses the release while the path names anything
-and either track's revision is older
-([ADR-126](adr/ADR-126-the-rollout-keeps-a-values-path-empty-while-either-track-serves-a-revision-older-than-the-one-its-descriptor-names-1059.md)).
+and either track's revision is older, and refuses a tag older than the
+revision while the stable track serves it or later
+([ADR-126](adr/ADR-126-the-rollout-keeps-a-values-path-empty-while-either-track-serves-a-revision-older-than-the-one-its-descriptor-names-1059.md),
+[ADR-127](adr/ADR-127-a-release-does-not-roll-back-across-a-revision-its-descriptor-holds-a-value-empty-until-1060.md)).
 **The gateway's probes are a service's three, and its readiness set is empty
 on purpose.** It
 proxies four services and depends on all of them; what it does not do is

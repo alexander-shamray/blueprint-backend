@@ -75,7 +75,7 @@ entries in lists kept separately, which §15.3 names with their owners.
 | `httpExemption`, `consumeExemption`, `sagaExemption` | The argument for a signal check 9 finds owed and the workload does not declare |
 | `migratedBy` | The workload whose chart's hook migrates this one's schema, named exactly when `smoke.database` is true and `smoke.migrator` false; the rollout refuses a tag whose revision is not the one that release serves (ADR-118, ADR-122), and that release's tag while this one serves any revision but its own (ADR-122) |
 | `sharesValues` | The workloads whose release is given a value this one is too, each with the dotted values paths both read, declared on one of the two descriptors; the rollout refuses either release while the two differ (ADR-125) |
-| `emptyUntil` | Each dotted values path whose rows a revision older than the one named, a whole commit object name, misreads; the rollout refuses this release while the path names anything and either track serves an older revision (ADR-126) |
+| `emptyUntil` | Each dotted values path whose rows a revision older than the one named, a whole commit object name, misreads; the rollout refuses this release while the path names anything and either track serves an older revision (ADR-126), and refuses an older tag while the stable track serves that revision or later (ADR-127) |
 | `smoke.migrator` | Whether the chart renders §7.4's migration Job |
 | `smoke.database` | Whether the chart mounts a database connection, with a Job or, under `migratedBy`, without one |
 | `smoke.autoscaled` | Whether the chart runs an HPA or a fixed replica count (§15.3) |
@@ -158,11 +158,13 @@ because a branch driven by the file it judges asserts nothing. Every value
 15. While any descriptor names `emptyUntil`, `deploy.yml` asks
     `canary.py empty-until` for the dispatched workload, holds the named
     revision to both the stable track's and the tag's by ancestry, and
-    where either lacks it holds the key empty in the values check 14
-    compares, after they are written, through `canary.py values-empty`
-    (ADR-126), and refuses a key the rollout sets with its own `--set`. So
-    a release never names a value while a worker that misreads its rows
-    claims from the same table.
+    refuses a tag that lacks it while the stable track carries it
+    (ADR-127). Where either track lacks it otherwise, it holds the key empty
+    in the values check 14 compares, after they are written, through
+    `canary.py values-empty` (ADR-126), and refuses a key the rollout sets
+    with its own `--set`. So a release never names a value while a worker
+    that misreads its rows claims from the same table, and never rolls back
+    to such a worker past rows it may have left.
 
 ## What a workload is judged on
 

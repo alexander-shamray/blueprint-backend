@@ -44,6 +44,11 @@ worker to claim. A revision named that is not a commit in the checkout fails
 the step rather than passing it, and a path the values do not hold is refused
 as misspelt rather than read as empty.
 
+**Amended by [ADR-127](ADR-127-a-release-does-not-roll-back-across-a-revision-its-descriptor-holds-a-value-empty-until-1060.md)**,
+which refuses a tag older than the revision while the stable track serves it
+or later, so the rows already written that this record's refusal does not see
+are never left for an older worker.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

@@ -2214,6 +2214,33 @@ class EmptyUntilTests(unittest.TestCase):
                 self.assertEqual(1, len(failures), failures)
                 self.assertIn("without both tracks", failures[0])
 
+    def test_a_workflow_that_rolls_back_across_the_revision_is_refused(self) -> None:
+        """ADR-127: the rows a stable track left are not in the values, so the refusal reads revisions alone."""
+        back = '            if git merge-base --is-ancestor "$SINCE" "$STABLE_REVISION"; then\n'
+        self.assertIn(back, self.shipped)
+        start = self.shipped.index(back)
+        refusal = self.shipped[start:self.shipped.index("            fi\n", start) + len("            fi\n")]
+        done = '          done < "$RUNNER_TEMP/empty-until.txt"\n'
+        skip = '            if git merge-base --is-ancestor "$SINCE" "$STABLE_REVISION" && '
+        self.assertIn(done, self.shipped)
+        self.assertEqual(1, self.shipped.count(skip))
+        without = self.shipped.replace(refusal, "")
+        for mutated in [
+            without,
+            self.shipped.replace(refusal, refusal.replace("exit 1", "true")),
+            self.shipped.replace(refusal, refusal.replace("exit 1", "# exit 1")),
+            # Past the loop, an empty $SINCE is no commit's ancestor, so the refusal never fires.
+            without.replace(done, done + refusal),
+            # Above the skip, it refuses every rollout once the stable track carries the revision.
+            without.replace(skip, refusal + skip),
+        ]:
+            with self.subTest(mutated=mutated.count("exit 1")):
+                self.assertNotEqual(self.shipped, mutated)
+                failures = canary._rollout_keeps_values_empty(self.workloads, self._workflow(mutated))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn("(ADR-127)", failures[0])
+
     def test_a_key_the_rollout_sets_itself_is_refused(self) -> None:
         workloads = self.workloads
         workloads["notifications"]["emptyUntil"]["image.tag"] = self.PUSH_DELIVERIES
