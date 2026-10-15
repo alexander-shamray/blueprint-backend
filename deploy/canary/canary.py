@@ -1962,6 +1962,14 @@ def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> 
             "values the release will be installed with to a peer's through `canary.py values-agree`, "
             "so the answer refuses nothing (ADR-125)"
         ]
+    return _candidate_values_failures(live, "ADR-125")
+
+
+def _candidate_values_failures(live: list[str], adr: str) -> list[str]:
+    """Checks 14 and 15: `$RUNNER_TEMP/candidate.json` holds the values the upgrade installs.
+
+    Asked by each check that reads the file, so neither leans on the other being active.
+    """
     # Overrides alone, as the upgrade applies them: `--all` would carry the old chart's defaults over the new.
     overrides = _invocations(live, "helm get values")
     if not any(
@@ -1972,7 +1980,7 @@ def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> 
         return [
             f"{WORKFLOW_PATH} never reads the release's own overrides into "
             '"$RUNNER_TEMP/overrides.yaml" without `--all`, so the values compared are not the ones '
-            "the upgrade installs (ADR-125)"
+            f"the upgrade installs ({adr})"
         ]
     if not any('cp "deploy/helm/$CHART/values.yaml"' in line for line in live) or not any(
         '-f "$RUNNER_TEMP/overrides.yaml"' in run and '> "$RUNNER_TEMP/candidate.json"' in run
@@ -1980,7 +1988,7 @@ def _rollout_holds_shared_values(workloads: dict, workflow: Path = WORKFLOW) -> 
     ):
         return [
             f"{WORKFLOW_PATH} never coalesces the overrides over the checked-out chart's "
-            'values into "$RUNNER_TEMP/candidate.json", so a changed chart default is never compared (ADR-125)'
+            f'values into "$RUNNER_TEMP/candidate.json", so a changed chart default is never compared ({adr})'
         ]
     return []
 
@@ -2038,6 +2046,9 @@ def _rollout_keeps_values_empty(workloads: dict, workflow: Path = WORKFLOW) -> l
             f"{WORKFLOW_PATH} skips a key `canary.py empty-until` names without both tracks carrying its "
             "revision, so a track older than it is never refused (ADR-126)"
         ]
+    failures = _candidate_values_failures(live, "ADR-126")
+    if failures:
+        return failures
     # After the candidate values are written, so a step moved above them reads nothing or a stale file.
     written = [index for index, line in enumerate(live) if '> "$RUNNER_TEMP/candidate.json"' in line]
     held_empty = [
