@@ -210,17 +210,20 @@ fallback is what ended that, because a route saying nothing now inherits the
 fallback and answers 401. The route says what it means instead — which is the
 same reason the OpenAPI documents above changed and this one did not.
 
-The realm ships two logins, both development defaults in the sense §14.1
+The realm ships three logins, all development defaults in the sense §14.1
 already uses for `admin/admin` and the broker's service accounts:
 
 | User | Password | Holds |
 |---|---|---|
 | `demo` | `demo` | `catalog:write`, `orders:write`, `orders:cancel`, `inventory:admin`, `payments:admin` |
+| `privacy` | `privacy` | `privacy:erase` and nothing else |
 | `browser` | `browser` | nothing — the account that proves a refusal |
 
 `orders:admin` is grantable and held by **nobody**, deliberately: it overrides
 §11.4's ownership check, and the 404 that hides another customer's order stays
-demonstrable only while no shipped login can bypass it.
+demonstrable only while no shipped login can bypass it. `privacy:erase` is held
+by `privacy` alone and not by `demo`, because it destroys a customer's records
+and a login that can do it is a decision and not a default.
 
 ```bash
 TOKEN=$(curl -s http://localhost:8080/realms/commerce/protocol/openid-connect/token \
@@ -236,6 +239,26 @@ curl -X POST http://localhost:5102/v1/catalog/products \
 The same call as `browser` is a 403 and the same call with no header is a 401.
 Both are worth running once: they are the difference between a token being
 *checked* and a token being *carried*.
+
+Raising an erasure request takes `privacy`, because the gateway's
+`/api/v1/privacy/` route guards it with `privacy:erase` and `demo` does not hold
+that ([ADR-092](../../docs/backend-architecture/adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)).
+Sign in as `privacy` with the same password grant, then raise one request
+through the gateway for any subject id:
+
+```bash
+PRIVACY_TOKEN=$(curl -s http://localhost:8080/realms/commerce/protocol/openid-connect/token \
+    -d grant_type=password -d client_id=web-app \
+    -d username=privacy -d password=privacy |
+    python -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+
+curl -X POST http://localhost:5000/api/v1/privacy/erasure-requests \
+    -H "Authorization: Bearer $PRIVACY_TOKEN" -H 'Content-Type: application/json' \
+    -d '{"subjectId":"'"$(uuidgen)"'"}'
+```
+
+The answer carries the request id; `GET` the same path with `/<id>` appended
+shows every holder answering. The same call with the `demo` token is a 403.
 
 Ordering takes the same token, and **every** one of its routes needs one —
 there is no anonymous half, because an order belongs to somebody where a
