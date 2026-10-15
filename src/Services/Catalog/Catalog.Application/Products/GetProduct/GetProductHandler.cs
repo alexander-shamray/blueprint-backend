@@ -9,10 +9,7 @@ namespace Catalog.Application.Products.GetProduct;
 /// §6.5's read side over the write tables: the listing's select, narrowed to one id, so a withdrawn product is the
 /// same 404 as an unknown one (ADR-074).
 /// </summary>
-/// <remarks>
-/// Through <see cref="IProductReadCache"/> (§8.2), unlike the listing: this row's invalidators are the price and
-/// withdrawal projections and <c>StockLevelProjection</c> (§8.4, E.3.3).
-/// </remarks>
+/// <remarks>Cached, unlike the listing: <see cref="IProductReadCache"/> names this row's invalidators.</remarks>
 public sealed class GetProductHandler(IDbConnectionFactory connections, IProductReadCache cache)
     : IQueryHandler<GetProductQuery, Result<ProductSummaryDto>>
 {
