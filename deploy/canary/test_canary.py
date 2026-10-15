@@ -23,6 +23,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import canary
 import read_prometheus
@@ -2030,6 +2031,177 @@ class SharedValuesTests(unittest.TestCase):
         del workloads["notifications"]["sharesValues"]
 
         self.assertEqual([], canary._rollout_holds_shared_values(workloads, self._workflow("")))
+
+
+class EmptyUntilTests(unittest.TestCase):
+    """ADR-126: a value earlier revisions misread stays empty while either track serves one; check 15 holds it."""
+
+    PUSH_DELIVERIES = "19ff224ff02274f4c9b33b2685f197f3005ca7f1"
+
+    @property
+    def workloads(self) -> dict:
+        return json.loads(json.dumps(canary.entries(canary.load_plan()["workloads"])))
+
+    def _checked(self, workloads: dict) -> list[str]:
+        return canary.check({**canary.load_plan(), "workloads": workloads})
+
+    def _workflow(self, text: str) -> Path:
+        path = Path(tempfile.mkdtemp()) / "deploy.yml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    @property
+    def shipped(self) -> str:
+        return canary.WORKFLOW.read_text(encoding="utf-8")
+
+    def test_the_shipped_key_waits_on_the_last_commit_of_push_deliveries(self) -> None:
+        plan = canary.load_plan()
+
+        self.assertEqual([("push.apps", self.PUSH_DELIVERIES)], canary.empty_until("notifications", plan))
+        self.assertEqual([], canary.empty_until("web-bff", plan))
+
+    def test_the_cli_prints_one_key_a_line_and_refuses_an_unknown_workload(self) -> None:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = canary.main(["canary", "empty-until", "--workload", "notifications"])
+        self.assertEqual((0, f"push.apps {self.PUSH_DELIVERIES}\n"), (code, out.getvalue()))
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(1, canary.main(["canary", "empty-until", "--workload", "nobody"]))
+
+    def test_the_shipped_descriptors_pass_check_4(self) -> None:
+        self.assertEqual([], [f for f in self._checked(self.workloads) if "emptyUntil" in f])
+
+    def test_a_declaration_check_4_refuses(self) -> None:
+        cases = {
+            "which names no key": {},
+            "which is not a dotted values path": {"push..apps": self.PUSH_DELIVERIES},
+            "which is not a whole commit object name": {"push.apps": self.PUSH_DELIVERIES[:12]},
+        }
+        for message, declared in cases.items():
+            with self.subTest(message):
+                workloads = self.workloads
+                workloads["notifications"]["emptyUntil"] = declared
+
+                self.assertTrue(any(message in f for f in self._checked(workloads)), self._checked(workloads))
+
+    def test_a_malformed_declaration_is_refused_and_not_a_crash(self) -> None:
+        for declared in [["push.apps"], {"push.apps": 1}]:
+            with self.subTest(declared=declared):
+                plan = canary.load_plan()
+                plan["workloads"]["notifications"]["emptyUntil"] = declared
+
+                self.assertTrue(any("emptyUntil" in failure for failure in canary.check(plan)))
+
+    def test_empty_names_nothing_and_a_member_is_named(self) -> None:
+        for empty in [[], None, "", {}]:
+            with self.subTest(empty=empty):
+                self.assertEqual([], canary.values_named("push.apps", {"push": {"apps": empty}}))
+        named = canary.values_named("push.apps", {"push": {"apps": [{"appId": "a", "platform": "fcm"}]}})
+
+        self.assertEqual(['{"appId": "a", "platform": "fcm"}'], named)
+
+    def test_a_path_the_values_do_not_hold_is_refused_and_not_empty(self) -> None:
+        """The values carry every chart default, so a misspelt key would otherwise let every rollout through."""
+        with self.assertRaisesRegex(canary.PlanError, "push.app is a path the values do not hold"):
+            canary.values_named("push.app", {"push": {"apps": []}})
+
+    def test_the_cli_exits_by_the_answer(self) -> None:
+        folder = Path(tempfile.mkdtemp())
+        empty, named, broken = folder / "empty.json", folder / "named.json", folder / "broken.json"
+        empty.write_text(json.dumps({"push": {"apps": []}}), encoding="utf-8")
+        named.write_text(json.dumps({"push": {"apps": [{"appId": "a", "platform": "fcm"}]}}), encoding="utf-8")
+        broken.write_text("{", encoding="utf-8")
+        argv = ["canary", "values-empty", "--key"]
+
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(0, canary.main([*argv, "push.apps", "--values", str(empty)]))
+            self.assertEqual(1, canary.main([*argv, "push.apps", "--values", str(named)]))
+            self.assertEqual(2, canary.main([*argv, "push.apps", "--values", str(broken)]))
+            self.assertEqual(2, canary.main([*argv, "push.app", "--values", str(empty)]))
+            self.assertEqual(2, canary.main([*argv, "push..apps", "--values", str(empty)]))
+        self.assertIn('push.apps names {"appId": "a", "platform": "fcm"} (ADR-126)', err.getvalue())
+
+    def test_the_shipped_workflow_holds_the_keys_empty(self) -> None:
+        self.assertEqual([], canary._rollout_keeps_values_empty(self.workloads))
+
+    def test_check_runs_check_15(self) -> None:
+        with mock.patch.object(canary, "_rollout_keeps_values_empty", return_value=["check 15 refused"]):
+            self.assertIn("check 15 refused", canary.check(canary.load_plan()))
+
+    def test_a_workflow_that_never_asks_is_refused(self) -> None:
+        without = "\n".join(line for line in self.shipped.splitlines() if "canary.py empty-until" not in line)
+
+        failures = canary._rollout_keeps_values_empty(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("runs no `canary.py empty-until`", failures[0])
+
+    def test_an_answer_that_holds_nothing_empty_is_refused(self) -> None:
+        without = "\n".join(line for line in self.shipped.splitlines() if "canary.py values-empty" not in line)
+
+        failures = canary._rollout_keeps_values_empty(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("refuses nothing", failures[0])
+
+    def test_holding_the_running_values_empty_is_refused(self) -> None:
+        """The running values are the stable track's, not the ones the candidate is installed with."""
+        running = self.shipped.replace(
+            'values-empty --key "$KEY" ' + chr(92) + '\n              --values "$RUNNER_TEMP/candidate.json"',
+            'values-empty --key "$KEY" ' + chr(92) + '\n              --values "$RUNNER_TEMP/stable.json"')
+        self.assertNotEqual(self.shipped, running)
+
+        failures = canary._rollout_keeps_values_empty(self.workloads, self._workflow(running))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("will be installed with", failures[0])
+
+    def test_a_step_moved_above_the_candidate_values_is_refused(self) -> None:
+        lines = self.shipped.splitlines()
+        written = next(i for i, line in enumerate(lines) if '> "$RUNNER_TEMP/candidate.json"' in line)
+        moved = [line for line in lines if '> "$RUNNER_TEMP/candidate.json"' not in line] + [lines[written]]
+
+        failures = canary._rollout_keeps_values_empty(self.workloads, self._workflow("\n".join(moved)))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("once written", failures[0])
+
+    def test_a_track_never_compared_with_the_revision_is_refused(self) -> None:
+        """An older candidate misreads the stable track's rows, so each track is asked, not only the stable one."""
+        for track in ["STABLE_REVISION", "REVISION"]:
+            with self.subTest(track=track):
+                asked = f'git merge-base --is-ancestor "$SINCE" "${track}"'
+                self.assertIn(asked, self.shipped)
+                without = self.shipped.replace(asked, "true")
+
+                failures = canary._rollout_keeps_values_empty(self.workloads, self._workflow(without))
+
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn(f'"${track}"', failures[0])
+
+    def test_a_key_the_rollout_sets_itself_is_refused(self) -> None:
+        workloads = self.workloads
+        workloads["notifications"]["emptyUntil"]["image.tag"] = self.PUSH_DELIVERIES
+
+        failures = canary._rollout_keeps_values_empty(workloads, self._workflow(self.shipped))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("names image.tag, which", failures[0])
+
+    def test_a_commented_out_question_is_no_question(self) -> None:
+        commented = self.shipped.replace(
+            "python deploy/canary/canary.py empty-until", "# python deploy/canary/canary.py empty-until")
+
+        failures = canary._rollout_keeps_values_empty(self.workloads, self._workflow(commented))
+
+        self.assertEqual(1, len(failures), failures)
+
+    def test_with_no_key_declared_there_is_nothing_to_hold(self) -> None:
+        workloads = self.workloads
+        del workloads["notifications"]["emptyUntil"]
+
+        self.assertEqual([], canary._rollout_keeps_values_empty(workloads, self._workflow("")))
 
 
 class SourceInputTests(unittest.TestCase):
