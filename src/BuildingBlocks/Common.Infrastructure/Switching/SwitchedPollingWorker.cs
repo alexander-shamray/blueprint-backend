@@ -24,7 +24,7 @@ public abstract class SwitchedPollingWorker(OperatorSwitches? switches) : Backgr
     /// <summary>The token a pass gives its rows: the stop's own, or one that fires <see cref="StopDrain"/> after it.</summary>
     protected CancellationToken Drain { get; private set; }
 
-    /// <summary>One pass. A stop ends the loop and starts no pass, so a pass under way is the only one it meets.</summary>
+    /// <summary>One pass. A stop seen at a tick starts none, so a pass under way is the only one it meets.</summary>
     protected abstract Task RunPassAsync(CancellationToken stoppingToken);
 
     /// <summary>Logs a pass that threw while the host was running; the loop swallows it and ticks again.</summary>
