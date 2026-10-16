@@ -1,9 +1,8 @@
-# §14.1's by-hand lever for §9.6's five waits: the saga's delays, cut from
-# minutes and days to seconds, so a developer reaches each expiry branch of
-# the compensation journey without the test hook. Not part of `up`; add it to
-# the full-stack command deploy/compose/README.md gives, never to the
-# infra-only one, whose Ordering runs on the host. Ordering reads these as
-# OrderFulfilmentTimeouts (ADR-128) and refuses a value under a second.
+# §14.1's by-hand lever for §9.6's five waits, cut to seconds so each expiry
+# branch is reached without the test hook. Not part of `up`: add it to the
+# full-stack command deploy/compose/README.md gives, never to the infra-only
+# one, whose Ordering runs on the host. OrderFulfilmentTimeouts reads these
+# (ADR-128) and refuses a value under a second.
 services:
   ordering-api:
     environment:
