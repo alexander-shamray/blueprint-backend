@@ -98,7 +98,7 @@ consumers apply what it sends, through the same handlers and the same inbox as
 live traffic. Live events arriving during a repair are harmless — the
 projection never overwrites an order's fact, and a product's name only
 with a later publish
-([§10.7](../../docs/backend-architecture/10-api-gateway.md)) — so a repair
+([E.6.10](../../docs/backend-architecture/appendix-e-reference-domain.md#e610-the-buyers-order-read)) — so a repair
 needs no maintenance window.
 
 **`--reset` needs the BFF's consumption stopped.** Scale the `web-bff`
