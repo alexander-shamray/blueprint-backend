@@ -14,6 +14,8 @@
     <!-- Used directly, so referenced directly: E.2.6's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <!-- FlagOrderForReviewHandler's LoggerMessage.Define, which CA1848 requires under ADR-019. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>
