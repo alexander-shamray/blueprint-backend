@@ -1123,545 +1123,247 @@ Where the line goes is stated with the rest of the pipeline in §4.2:
 outermost, above `UseExceptionHandler`, so nothing below it can answer without
 the header.
 
-## 10.7 The buyer's order read
+## 10.7 A projection read and its event stream
 
 [ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
-decides where this read is served from: a projection `Web.Bff` owns, and no
-synchronous call. What follows is its wire contract, which the one consumer
-helped write and builds against.
+decides that a read the BFF serves is served from a projection it owns, with no
+synchronous call to the service that owns the facts. In the reference domain
+the contract is
+[Appendix E.6.10](appendix-e-reference-domain.md#e610-the-buyers-order-read);
+this section is the mechanism that contract uses.
 
-Two routes, because a list and a detail answer different questions and §10.1's
-rule is that the screen's question is the whole of the request (a third, the
-detail's event stream, follows the fields):
-
-| | Path |
-|---|---|
-| Client calls | `/bff/v1/orders?cursor=&limit=` |
-| Gateway matches | `/bff/v1/{**catch-all}` |
-| Gateway strips | `/bff` |
-| Service receives | `/v1/orders` |
-| Service maps | `MapGroup("/v1/orders")` |
-
-The detail route is that group's `/{id:guid}`. Neither needs a gateway change:
-§10.2's `web-bff` route already matches the BFF's whole `/bff/v1` API. The path
-repeats the service's own `/v1/orders` deliberately — §10.2 strips a different prefix
-to reach each, and `/api` and `/bff` are the two namespaces that distinction
-exists to keep apart.
+**A BFF route needs no gateway change.** §10.2's `web-bff` route already
+matches the BFF's whole `/bff/v1` API, and the service's own path repeats its
+`/v1` prefix deliberately: §10.2 strips a different prefix to reach each, and
+`/api` and `/bff` are the two namespaces that distinction exists to keep apart.
+A feature added to the BFF is a service route, its contract and its test.
 
 **The subject is bound from the principal and never from the request** —
 §11.4's rule, which §6.5 states for a read in the words that matter here: a
-customer a caller could name returns a page of somebody else's history. An
-order another buyer owns answers **404 rather than 403**, as cancel already
-does, because 403 confirms that the order exists.
+customer a caller could name returns a page of somebody else's history. A row
+another subject owns answers **404 rather than 403**, because 403 confirms that
+the row exists. A list returns `CursorPage<T>`; pagination is mandatory and
+cursor-based by default (§6.5, ADR-016), and `limit` is clamped server-side.
 
-The list returns `CursorPage<T>`; pagination is mandatory and cursor-based by
-default (§6.5, ADR-016), and `limit` is clamped server-side to
-`OrderPage.MaxLimit`.
-
-### The status a buyer is shown
-
-A closed vocabulary, for the reason §10.5 gives for `Error`'s: a client that
-switches on a string needs the set enumerable and stable, and an open set
+**A status a client switches on is a closed vocabulary**, for the reason §10.5
+gives for `Error`'s: the set must be enumerable and stable, and an open set
 makes every unknown member a rendering fault met in production.
 
-| Status | Reached by |
-|---|---|
-| `placed` | `OrderPlaced` |
-| `confirmed` | `OrderConfirmed` |
-| `dispatched` | `ShipmentDispatched` |
-| `cancelled` | `OrderCancelled`, below |
-| `out_of_stock` | `OrderCancelled`, below |
-| `declined` | `OrderCancelled`, below |
-| `delivered` | `ShipmentDelivered` |
+**A projection fed by several streams ranks and never overwrites.** Its status
+is the highest-ranked member it has absorbed, not the latest, because §9.4
+orders nothing between consumers: an event arriving before one it follows is
+ordinary, and so is a redelivery. Ranking is what makes both harmless. §6.6's
+`UpdatedAt < @OccurredAt` guard cannot be copied here: its timestamps are
+minted by one service's clock, while these are minted by several hosts, and a
+rank is monotonic without a clock. The projection exposes its staleness
+(§6.6) as `asOf`, its own clock at the last write: it says when the projection
+last learned something and **not** that nothing has happened since. Money is
+the server's numbers, an amount and a currency; the client formats and never
+computes, which is §10.1's rule against aggregating a figure the client has to
+redo.
 
-**The status is the highest-ranked member the projection has absorbed, never
-the latest one.** Rank rises as the table reads, `placed` lowest and
-`delivered` highest, with the three `OrderCancelled` members sharing one rank
-because one event decides between them; `BuyerStatus.Of` is the order. §9.4
-orders nothing between consumers, so `ShipmentDispatched` arriving before
-`OrderConfirmed` is ordinary rather than exotic, and a redelivery of either is
-ordinary too. Ranking rather than overwriting is what makes both harmless.
-§6.6 buys the same property for `ordering.OrderSummaries` with
-`UpdatedAt < @OccurredAt`, and **that guard cannot be copied here**: its
-timestamps are minted by the order service's one clock, while these are minted by four
-hosts. A rank is monotonic without a clock, which is why this projection uses
-one.
+**A hint is not an authority.** A field computed from a projection that lags
+the rule it hints at can read true while the command would be refused, so a
+client keeps its handling of the refusal and uses the field to choose what to
+offer, never to predict what will be accepted.
 
-A cancellation therefore outranks a despatch, and the case is real rather
-than defensive. `Order.Cancel` refuses once the order is `Shipped`, so an
-`OrderCancelled` on the wire is proof the order was cancelled before
-despatch; §9.6's compensation can still leave a `ShipmentDispatched` behind
-it, which is the interleaving `MarkOrderShippedHandler` answers without
-shipping anything. Showing the later event would tell a buyer their cancelled
-order is on its way.
+**A row no owner has claimed is never returned.** An event that carries an id
+and no subject is attributed by joining to a row an event that does carry one
+created, and §9.4 does not promise that one did. So the projection inserts on a
+missing row rather than dropping the event — §6.6's own remedy — and a row with
+no owner is invisible to every caller until an event supplies the subject. An
+unattributable row shown to the wrong subject is the one outcome §11.4's rule
+cannot absorb, and a best guess does not satisfy it.
 
-#### Which cancellation a buyer is told about
-
-**Keyed on `Origin` first and `Reason` second**, because `Reason` alone is
-wrong. `Order.Cancel` records the origin and never checks it, and although the
-cancel endpoint takes `customer_request` alone
-([ADR-087](adr/ADR-087-a-caller-cancels-an-order-only-as-a-customer-request.md)),
-an `OrderCancelled` recorded before that rule can pair a user origin with a
-workflow code, and an error queue or a replay can still deliver one — and a
-`Reason`-only map answers a buyer who cancelled with `payment_declined` by
-telling them their card was refused.
-
-| `Origin` | `Reason` | Status |
-|---|---|---|
-| `user` | any | `cancelled` |
-| `workflow` | `out_of_stock`, `stock_timeout` | `out_of_stock` |
-| `workflow` | `payment_declined`, `payment_timeout` | `declined` |
-| `workflow` | `customer_request` | `cancelled` |
-| absent | any | `cancelled` |
-
-`Origin` is optional and additive under §9.2: absent means the payload
-predates the field, which an error queue or a replay can deliver at any time.
-It reads as `cancelled` because that is the member that claims least — an
-absent origin is no evidence that the platform refused anything, and
-inventing a refusal is the harmful direction of a wrong guess.
-
-The two collapses are the platform's distinctions rather than the buyer's:
-stock that was never there and stock that did not answer in time are both
-`out_of_stock`, and an authorisation declined and one that timed out are both
-`declined`. A payment provider's own decline reasons never travel — they are
-its codes and an open set (ADR-049) — so they stop at the service that owns
-them.
-
-**Neither the saga's states nor `OrderStatus` reaches the client**, and the
-two do not agree with one another in any case (§9.6, §5.4). `AwaitingStock`
-and `AwaitingPayment` are both `placed` to a buyer, which is also forced:
-`OrderStockConfirmedDomainEvent` is not on the order service's publish allow-list, so
-no consumer can tell them apart. `Compensating` has no buyer meaning at all —
-what the buyer is owed is the outcome it works towards, and that arrives as
-`OrderCancelled`.
-
-> **`dispatched` and `delivered` are the shipping service's.** In the
-> reference domain Shipping publishes both
-> ([Appendix E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table))
-> and its spec is written against this contract
-> ([Appendix E.6.4](appendix-e-reference-domain.md#e64-the-buyer-order-read)).
-
-### The fields both routes carry
-
-- **`asOf`**, the BFF's own clock at the last write to this order's row. One
-  value from one clock, which is what makes it well defined when four streams
-  feed the row; it says when the projection last learned something and **not**
-  that nothing has happened since. §6.6 requires the API to expose staleness
-  rather than hide it, and the BFF has no write model to read a consistent
-  status from the way §6.6's own remedy assumes.
-- **`refunded`**, a flag and a timestamp beside the status rather than a
-  member of it. `Refund.Voided` has one caller, the handler for
-  `OrderCancelled`, and it runs only where an authorisation exists — so every
-  refund follows a cancellation, and a refund as a status would overwrite the
-  `out_of_stock` and `declined` distinction the table above exists to draw.
-- **`cancellable`**, **a hint and not an authority.** Only the order service knows:
-  the rule is `Order.Cancel`'s, the field is computed from a projection that
-  lags it, and during the window between a despatch reaching the saga and
-  reaching this queue the hint reads `true` while the command would answer
-  422. The client keeps its `order.already_shipped` handling and uses the
-  field to choose what to offer, never to predict what will be accepted.
-- **A timestamp per status reached**, so a timeline is drawn from facts rather
-  than from arithmetic on the client. Every event named above carries
-  `OccurredAt`. They come from four hosts, so they order a timeline a person
-  reads and never a decision the code makes — the rank above is what decides.
-- **Money as the server's numbers**, an amount and a currency per line and in
-  total. The client formats and never computes: §10.1's rule against
-  aggregating a figure the client has to redo is the same rule one field down.
-  **An order no placed or confirmed event has reached has no lines and a null
-  total**: `OrderCancelled` supplies the customer and nothing priced, and the
-  row it created is shown as far as the projection knows it rather than
-  hidden until it knows more.
-
-The detail route adds the quantity and unit price each line was placed with,
-and the payment outcome where there is one to give — an authorisation or a
-refund. A declined payment has none: `PaymentDeclined` carries only a reason
-that may not travel, so the order's own status is what says so.
-
-**`productName` is nullable, and the null is not an edge case.** The name is
-resolved on read from the product service's stream, not snapshotted with the
-line, so a product published before this projection's queue was declared has
-no name to resolve — the broker drops what no queue is bound for. §6.6
-documents the same gap for `ordering.Products`, including its rebuild, which
-in the reference domain is the product service's republish
-([Appendix E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild)),
-and that `PriceChanged` is no back door because it carries no name. Here the
-consequence is softer than the order service's 422 and quieter for it:
-a blank line in order history with no error anywhere, which is why the
-contract names it rather than leaving a client to meet it.
-
-### An order the projection cannot yet attribute
-
-Both shipment events and the payment events ADR-051 lists carry an order id
-and no customer, the payments by ADR-028's decision that a money movement
-carries no subject. They are attributed by joining to a row one of the order
-service's three events created, and §9.4 does not promise that one did.
-
-**So the projection inserts on a missing row rather than dropping the event**
-— §6.6's own remedy, whose absence it names as a defect that leaves an order
-reading one status for ever with no error anywhere — **and a row with no
-owner is never returned by either route.** It is invisible to everyone until
-an order-service event supplies the customer, and if none ever arrives it stays
-invisible. That is the correct failure: an unattributable order shown to the
-wrong buyer is the one outcome this contract must not produce, and §11.4's
-subject rule is not satisfied by a best guess. ADR-051's rebuild replays
-the publishers' outboxes, so an order whose `OrderPlaced` has aged out and
-whose `ShipmentDelivered` has not is exactly such a row. RabbitMQ keeps
-nothing a consumer has acknowledged, so the last copy of a delivered event is
-its publisher's processed outbox row, kept for `RetentionPolicy.OutboxWindow`
-(§9.4), and `tools/bff-replay` replays those rows to this projection's queue
-alone.
-
-> **What Shipping settled, and what it was not asked for.** In the reference
-> domain ([Appendix E.6.4](appendix-e-reference-domain.md#e64-the-buyer-order-read))
-> the shipment half of the detail route is as rich as Shipping's published
-> events, and
-> [E.5.1](appendix-e-reference-domain.md#e51-the-contracts) names two, and
-> the payloads in `Common.Contracts.Shipping.V1` carry an order id and a
-> tracking number between them.
-> So a buyer sees despatch, delivery and a number to take to the carrier, and
-> **no tracking feed**: Shipping publishes no tracking event, and the two
-> milestones are the timeline (its spec, which E.6.4 names).
-> What its spec was **not** asked for is a read endpoint — ADR-051 exists so
-> that it is not, and E.1.1, §4.1, §13 and §15 all describe a Shipping that
-> has none.
-
-### The order's event stream
-
+**An event stream is a convenience over a read, never a second source.**
 [ADR-108](adr/ADR-108-the-buyers-order-has-a-server-sent-event-stream-that-polls-its-row-and-ends-inside-the-deadline-475.md)
-adds a third route to the group, for a client that would otherwise poll the
-detail route: `GET /bff/v1/orders/{id}/events`, which the gateway matches and
-strips as it does the other two, so it needs no gateway change either. It
-answers `text/event-stream`, with `Cache-Control: no-store` and
-`X-Accel-Buffering: no`, and carries the same subject rule as the detail
-route: **another buyer's order, and an unknown one, answer the same 404 before
-any stream is opened.**
+adds `text/event-stream` to the same group, matched and stripped as the read
+is, with the read's subject rule: **another subject's row, and an unknown one,
+answer the same 404 before any stream is opened.** The first event is the row as
+it stands, so opening a stream is also a read; later ones are sent when the
+row's `asOf` differs from the last one sent, and an event's `id` is that
+`asOf`, so a reconnect carrying `Last-Event-ID` is sent nothing until the row
+moves. A heartbeat comment serves the proxies that close a connection they see
+idle, and a `retry` field has the server and not each client's default pace a
+reconnect. The stream ends by itself, after a lifetime inside
+`ServiceOptions.OperationTimeout` (§9.7) and so inside every layer above it, at
+once on a terminal status and when the row is gone. A client that wants more
+reconnects, and one that missed an event reads the read. Each open stream reads
+its one row by key every poll interval and holds nothing between reads, so any
+replica serves any stream: the row is shared and the stream is its own whole
+state. The gateway's `authenticated` limiter (§10.3) counts each connect as a
+request, which bounds how often a subject may reopen one.
 
-- **`order` events.** `data` is the detail route's `OrderDetail`, byte for byte
-  the shape it returns, and `id` is that row's `asOf`. The first event of a
-  stream is the row as it stands, so opening the stream is also a read; later
-  ones are sent when `asOf` differs from the last one sent.
-- **Heartbeat.** A comment line, `: keep-alive`, after
-  `OrderEventStream.HeartbeatInterval` with nothing sent, for the proxies that
-  close a connection they see idle.
-- **Reconnection.** A request carrying `Last-Event-ID` equal to the row's `asOf`
-  is sent nothing until the row moves. The stream names
-  `OrderEventStream.RetryAfter` in a `retry` field, so a reconnect is paced by
-  the server and not by each client's default.
-- **The stream ends by itself.** After `OrderEventStream.Lifetime`, which is
-  inside `ServiceOptions.OperationTimeout` (§9.7) and so inside every layer
-  above it; at once on a delivered order, the one status nothing follows; and
-  when the row is gone, as an erasure removes it. A client that wants more
-  reconnects, and **a stream is a convenience over the read, never a second
-  source**: a client that missed an event reads the detail route.
-
-Each open stream reads its one row by key every `OrderEventStream.PollInterval`
-and holds nothing between reads, which is why three replicas serve one buyer's
-stream as well as one does: the row is shared and the stream is its own whole
-state. An update reaches the client one interval after the projection writes it.
-The gateway's `authenticated` limiter (§10.3) counts each connect as a request,
-which is the bound on how often a buyer may reopen one.
-
-## 10.8 The product image upload
+## 10.8 A client-supplied file
 
 [ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)
-decides that the bytes of an image go from the client to an S3-compatible store
-and through no service. What follows is the wire contract and the rules that
-make a client-supplied file safe to publish; the consumer builds against it.
+decides that the bytes of a client-supplied file go from the client to an
+S3-compatible store and through no service. In the reference domain the
+contract is
+[Appendix E.6.11](appendix-e-reference-domain.md#e611-the-product-image-upload);
+this section is the rules that make such a file safe to publish.
 
-| | Path |
-|---|---|
-| Client calls | `POST /bff/v1/product-images` |
-| Gateway matches | `/bff/v1/{**catch-all}` |
-| Service receives | `/v1/product-images` |
+**The request names a type from a closed list and a size, and the server
+chooses everything else.** A type that is a document able to carry script is
+deliberately absent, and nothing argues it back in. The key is minted by the
+BFF and the client never supplies a path segment. The signature covers the
+method, the key, the content type and the length, so the URL cannot be reused
+for a different object or a larger body, and a value outside either bound is a
+400 in §10.5's `Error` vocabulary. A pre-signed `PUT` cannot make the store
+inspect what arrives, which is why the next rule exists.
 
-Like §10.7, it needs no gateway change: §10.2's `web-bff` route already
-matches the BFF's whole `/bff/v1` API. The caller is an authenticated seller,
-holding the permission that publishing a product already requires
-([§11.4](11-identity-authorization.md)); the seller is bound from the
-principal, and the request names none.
+**Attaching takes the key and never a URL.** The service that owns the
+attaching record checks that the key sits under the caller's own prefix, reads
+the object's first bytes and refuses one whose signature does not match its
+stored type, then copies it inside the store to a destination key derived from
+the source key, so a retried attach copies to the same place. The copy has a
+fixed `Content-Type` and cache header, and the client's object metadata is
+discarded. Trust in the key is the trust in the BFF's issue of it, and the
+prefix check is what stops one subject attaching another's upload. **A key that
+cannot be attached is a 422, and each refusal has its own code** — a key of the
+wrong shape or prefix, a key with no object behind it, and an object that
+disagrees with its type — none of which stores anything.
 
-**The request carries two values and the server chooses everything else.**
-`contentType` is one of `image/jpeg`, `image/png` and `image/webp`, a closed
-list in which SVG is deliberately absent: an SVG is a document that can carry
-script, and nothing here argues it back in. `sizeBytes` is at most 5 MiB. A
-value outside either answers 400 in §10.5's `Error` vocabulary.
-
-**The response is the URL and what the client must send with it:**
-
-| Field | Meaning |
-|---|---|
-| `uploadUrl` | A pre-signed `PUT` for one key, expiring after five minutes |
-| `headers` | The `Content-Type` and `Content-Length` the signature covers, which the store refuses a request without |
-| `key` | The key the server chose, `uploads/{sellerId}/{guid}.{ext}` with the extension taken from the allowed type |
-| `expiresAt` | When `uploadUrl` stops working |
-
-The key is minted by the BFF and the client never supplies a path segment. The
-signature covers the method, the key, the content type and the length, so the
-URL cannot be reused for a different object or a larger body. Pre-signed `PUT`
-cannot make the store inspect what arrives, which is why the next paragraph
-exists.
-
-**Publishing attaches the image; the request does not send a URL.**
-`PublishProduct` carries the `key` the upload returned. The service that owns
-products checks that the key sits under the caller's own `uploads/{sellerId}/`
-prefix, reads the
-object's first bytes and refuses one whose signature does not match its stored
-content type, then copies it inside the store to
-`products/{sellerId}/{guid}.{ext}` with a fixed `Content-Type`,
-`Cache-Control: public, max-age=31536000, immutable` and the client's object
-metadata discarded, and stores the public URL it builds from the configured
-base and the destination key. The destination key is derived from the source
-key, so a retried publish copies to the same place. A URL from the client is
-not accepted: the request's `ThumbnailUrl` is replaced by the `key`, and a
-product published without one has no image, as a null `ThumbnailUrl` already
-means. [ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)'s `https`
-rule becomes a rule about the configured base, which is an absolute `https` URL
-(`http` for a loopback host alone, which Compose's local edge is) short enough
-that the base and the longest destination key (87 characters) fit
-`ThumbnailUrl`'s 400, both checked when the host starts. Trust in the key is
-the trust in the BFF's issue of it, and the prefix check is what stops a seller
-attaching another seller's upload.
-
-**A key that cannot be attached is a 422, and each refusal has its own code.**
-`product.image_key_invalid` is a key that is not the shape the BFF mints, is
-under another seller's prefix, or arrived with no principal;
-`product.image_not_uploaded` is a key with no object behind it, because the
-upload was never made or has expired; `product.image_not_an_image` is an object
-whose first bytes, or whose stored type, disagree with the type its key
-carries. None of them stores a product. A key longer than the longest
-destination key is a 400 before any of that, from the validator.
-
-**An upload that is never attached is expired, not swept.** The `uploads/`
-prefix carries a lifecycle rule that deletes objects after one day, set by the
-deployment and stated in the chart's values. `products/` has none. A copy whose
-publish transaction then fails leaves one object nothing names, which the
-retry reuses ([ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)).
+**An upload that is never attached is expired, not swept.** The upload prefix
+carries a lifecycle rule set by the deployment and stated in the chart's
+values, and the published prefix has none.
 
 **The store has two credential pairs and neither is the other's.** The BFF's
-can write under `uploads/` and nothing else; the product service's can read
-`uploads/` and write `products/`. Neither can list a bucket or delete.
-Compose's local
-store, its credentials and the chart's store values follow
+can write under the upload prefix and nothing else; the attaching service's can
+read it and write the published prefix. Neither can list a bucket or delete.
+Compose's local store, its credentials and the chart's store values follow
 [§14.1](14-local-development.md), [§15.4](15-cicd-deployment.md) and
-`docs/secrets.md`'s exception table, and this section owns only the permissions
-above. The local store holds each pair to a policy that allows the writes and
-reads above and nothing else, so a delete is refused there as a list is, and
-`ProductImageStoreTests` proves both. A deployed store is run outside this
-repository, so holding it to the sentence above is the deployment's to do, and
-`object-store.yml` checks that it has, in a deployment that has opted in
+`docs/secrets.md`'s exception table, and the local store holds each pair to a
+policy that allows the writes and reads above and nothing else. A deployed
+store is run outside this repository, so holding it to the same sentence is the
+deployment's to do, and `object-store.yml` checks that it has, in a deployment
+that has opted in
 ([ADR-110](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)):
 each pair is asked to delete and to list on a daily schedule, and a store that
 allows either fails the run.
 
-**The image is served by the store, or a CDN in front of it, from `products/`
-alone.** It is not served through the gateway, because the gateway would then
-carry the bytes ADR-106 keeps out of every service. The fronting layer sets
-`X-Content-Type-Options: nosniff` ([§10.6](#106-response-security-headers)),
-as that section's reasoning requires of whoever serves content a caller
-supplied; a repository can state this and cannot enforce it, so
-`ProductImageStoreTests` reads the header off the local edge, the one Compose
-puts in front of the store.
+**The file is served by the store, or a CDN in front of it, from the published
+prefix alone.** It is not served through the gateway, because the gateway would
+then carry the bytes ADR-106 keeps out of every service. The fronting layer sets
+`X-Content-Type-Options: nosniff` ([§10.6](#106-response-security-headers)), as
+that section's reasoning requires of whoever serves content a caller supplied;
+a repository can state this and cannot enforce it, so the local edge's header is
+read by a test.
 
-## 10.9 The saved delivery address
+## 10.9 A per-subject resource
 
 [ADR-107](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md)
-decides that `Web.Bff` keeps one delivery address per customer, as a prefill
-for the checkout. What follows is the wire contract, which the one consumer
-builds against.
+decides that the BFF keeps a resource of which each subject has one. In the
+reference domain that is the saved delivery address, whose contract is
+[Appendix E.6.12](appendix-e-reference-domain.md#e612-the-saved-delivery-address);
+this section is the shape of any such resource.
 
-| | Path |
-|---|---|
-| Client calls | `GET`, `PUT` and `DELETE /bff/v1/saved-address` |
-| Gateway matches | `/bff/v1/{**catch-all}` |
-| Service receives | `/v1/saved-address` |
+**The path is singular, because a subject has one resource and no id to name.**
+The subject is the principal's (§11.4) and no request names one, so there is no
+route to another subject's resource and no 403 to confirm that one exists. A
+`PUT` replaces whatever was saved and answers with the resource as stored; a
+`GET` answers it, or 404 with a code when the caller has saved none, has deleted
+it, or was erased — three states a client cannot and need not tell apart; a
+`DELETE` answers 204 whether or not there was one to delete. A `PUT` and a
+`DELETE` repeated leave the state the first left (§8.5).
 
-It needs no gateway change, as §10.7 and §10.8 need none: §10.2's `web-bff`
-route already matches the BFF's whole `/bff/v1` API. The path is singular
-because a customer has one resource and no id to name. **The subject is the
-principal's** ([§11.4](11-identity-authorization.md)), and no request names
-one, so there is no route to another customer's address and no 403 to
-confirm that one exists.
+**The body is validated by the rule the dependent write applies and by no
+more**, so a value that saves is one that write accepts. A format no value
+set shares is never checked, and a value outside the rule answers 400 in §10.5's
+`Error` vocabulary, naming the field and never repeating the value.
 
-**The body is the order request's own address**, so a client prefills the
-checkout by copying it across: `line1`, `line2`, `city`, `postalCode` and
-`country`. `PUT` replaces whatever was saved and answers 200 with the address
-as stored; `GET` answers 200 with it, or 404 with the code `address.not_found`
-when the caller has saved none, has deleted it, or was erased, three states a
-client cannot and need not tell apart; `DELETE` answers 204 whether or not
-there was one to delete. A `PUT` and a `DELETE` repeated leave the state the
-first left ([§8.5](08-caching-redis.md)).
+**A prefill is an input to nothing.** The dependent write still carries the
+value in its own request and its contract does not change, so a saved value that
+has gone stale cannot redirect a write the subject did not confirm. No service
+reads it.
 
-**The address is validated by the rule an order applies and by no more.** A
-`line1`, a `city` and a `postalCode` are present, a `country` is two ASCII
-letters (ISO 3166-1 alpha-2, in either case, stored in upper case), and each
-part fits the width the order's own validator admits, so an address that saves
-is one an order accepts. A postcode's format is never checked, because no
-format is every country's. A value outside the rule answers 400 in §10.5's
-`Error` vocabulary, naming the field and never repeating the value. A `line2`
-that is blank is stored as none, and every part is trimmed, as an order stores
-an address.
-
-**It is a prefill and an input to nothing.** Placing an order still carries
-the address in the order request, and the order's contract does not change, so
-a saved address that has gone stale cannot redirect an order the customer did
-not confirm. No service reads it.
-
-**Retention and erasure are written here, beside the creation.** The row has
-no window: it lasts until the customer replaces or deletes it, or an erasure
-request deletes it ([§11.7](11-identity-authorization.md)). The BFF's handler
-for `PersonalDataDeleteRequested` deletes the subject's row in the transaction
-that deletes their orders and counts it in the request's audit row; the BFF was
-already one of the holders an erasure request waits on
+**Retention and erasure are written beside the creation.** The row has no
+window: it lasts until the subject replaces or deletes it, or an erasure request
+deletes it (§11.7). The BFF's handler for `PersonalDataDeleteRequested` deletes
+the subject's row in the transaction that deletes their other rows and counts it
+in the request's audit row; the BFF was already one of the holders an erasure
+request waits on
 ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
-so the responder set does not change. The address is never a log attribute, a
-span attribute or part of an exception's message
-([§13.4](13-observability.md)).
+so the responder set does not change. The value is never a log attribute, a span
+attribute or part of an exception's message (§13.4).
 
-## 10.10 The device registration
+## 10.10 A write forwarded to the owning service
 
 [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)
-decides that an app registers its installation's push token through
-`Web.Bff`, and that the service that sends to the token owns the row — in the
-reference domain Notifications, whose API host the BFF calls
-([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)). What
-follows is the wire contract, which the app builds against.
+decides that a client registers a contact through the BFF and that the service
+that sends to it owns the row. In the reference domain that is a device's push
+token, whose contract is
+[Appendix E.6.13](appendix-e-reference-domain.md#e613-the-device-registration);
+this section is the forwarding.
 
-| | Path |
-|---|---|
-| Client calls | `PUT` and `DELETE /bff/v1/devices/{installationId}` |
-| Gateway matches | `/bff/v1/{**catch-all}` |
-| Service receives | `/v1/devices/{installationId}` |
-
-It needs no gateway change, as §10.9 needs none. The installation id is the
-UUID the app minted once per install; a path segment that is not one matches
-no route and answers 404. **The subject is the caller's**, taken by the
-owning service from the access token the BFF forwards, and no request names
-one.
-
-**A `PUT` registers**, on every start of the app and on every rotation, with
-a body of `platform` (`fcm` or `apns`), `appId`, `token` and `sequence`. **A
-`DELETE` signs out**, with the sequence as its one query parameter,
-`?sequence=`, and no body. The sequence is the installation's counter, raised
-by the app before every request. Either answers 204 when the owning service
-applies it or when it repeats the write before it, and a sign-out answers
-204 whether or not there was a row to clear, and whatever its sequence when
-the row is another subject's
+**The subject is the caller's**, taken by the owning service from the access
+token the BFF forwards, and no request names one. A write carries the client's
+own counter, raised before every request, and an out-of-order write answers
+§10.5's 409 with a `code` and the counter the row holds, so the client sets its
+counter one past it and sends its present state again
 ([ADR-121](adr/ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md)).
-One out of order answers §10.5's 409 with the `code` `device.stale_sequence`
-and a `sequence` member holding the row's; the app sets its counter one past
-it and sends its present state again. Both
-routes are `Convergent` ([§8.5](08-caching-redis.md)), so neither takes an
-idempotency key.
+A route that is `Convergent` ([§8.5](08-caching-redis.md)) takes no idempotency
+key.
 
-**The BFF refuses a malformed request before the hop**, with §10.5's 400
-naming the field and never repeating the value: a platform outside the pair,
-an app id that `PushOptions.Apps` does not name for that platform, a token
-that is empty, longer than `DeviceRules.MaxTokenLength` or outside printable
-ASCII, and a sequence of zero or below. A sequence that does not bind as an
-integer, or a `DELETE` with none, is §10.5's unreadable-request 400 instead.
-`PushOptions` is bound from the `Push` section, and an empty list is a
-deployment that sends no push and refuses every registration.
-The owning service checks the same shapes again, because the BFF is not all
-that can reach its method.
+**The BFF refuses a malformed request before the hop**, with §10.5's 400 naming
+the field and never repeating the value, and the owning service checks the same
+shapes again, because the BFF is not all that can reach its method. A value that
+does not bind as the type it should be is §10.5's unreadable-request 400
+instead.
 
 **One hop, under the caller's own token.** The BFF calls the owning service's
-API host over gRPC ([§9.7](09-messaging.md), `NotificationsHop`), with
-`CallerTokenHandler` copying the inbound `Authorization` header unchanged and no
-client-credentials handler, so no credential the BFF holds can register a device
-to anybody else ([§11.5](11-identity-authorization.md)). The callee refusing a
-token the BFF has already validated is a 500, as the pricing hop's callee
-refusing the BFF's own is, and its unavailability is §10.5's 503. A reply
-`devices.proto` forbids — an outcome left unset, an applied or repeated write
-carrying a sequence other than the request's, or a stale one carrying none — is
-a 500, by §9.7's sixth rule.
-
-**The cluster half is ADR-118's.** The hop resolves `notifications-api:8081`
-under Compose and in Kubernetes alike: there it is the Service of the API
-host's own chart, `deploy/helm/notifications-api/`, which admits `web-bff` on
-`grpc`, and `web-bff`'s policy reaches it there, the edge ADR-118 adds to
+API host over gRPC ([§9.7](09-messaging.md)), with the inbound `Authorization`
+header copied unchanged and no client-credentials handler, so no credential the
+BFF holds can act for anybody else ([§11.5](11-identity-authorization.md)). The
+callee refusing a token the BFF has already validated is a 500, as the pricing
+hop's callee refusing the BFF's own is, and its unavailability is §10.5's 503. A
+reply the `.proto` forbids is a 500, by §9.7's sixth rule. The cluster half is
+[ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)'s,
+where the hop is an edge
 [ADR-065](adr/ADR-065-every-workload-is-fenced-by-a-default-deny-networkpolicy.md)'s
-table.
+table admits.
 
-**Retention and erasure are ADR-117's**: a row not seen for
-`DeviceTokenOptions.StaleAfter` is deleted, and an erasure clears every row of
-the subject. The token is never a log attribute, a span attribute or part of
-an exception's message ([§13.4](13-observability.md)).
+**Retention and erasure are the owner's** (ADR-117). The value is never a log
+attribute, a span attribute or part of an exception's message
+([§13.4](13-observability.md)).
 
-## 10.11 The notification preferences
+## 10.11 A versioned write under a precondition
 
 [ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)
-decides that which messages a subject may be sent, on which channel, is a
-journal of the subject's own acts, kept by the service that sends them, and
-that the journal is the consent record. The client reads and writes it
-through `Web.Bff`, which calls that service's API host as §10.10's
-registration does: in the reference domain Notifications.Api
-([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)). What
-follows is the wire contract.
+decides that a record of a subject's own acts is a journal kept by the service
+that acts on it, and that the journal is the consent record. In the reference
+domain that is the notification preferences, whose contract is
+[Appendix E.6.14](appendix-e-reference-domain.md#e614-the-notification-preferences);
+the hop is §10.10's.
 
-| | Path |
-|---|---|
-| Client calls | `GET /bff/v1/notification-preferences` and `PUT /bff/v1/notification-preferences/{topic}/{channel}` |
-| Gateway matches | `/bff/v1/{**catch-all}` |
-| Service receives | `/v1/notification-preferences` and `/v1/notification-preferences/{topic}/{channel}` |
+**A write carries one precondition**: `If-Match` with the entry's `version` as
+a strong entity tag, or `If-None-Match: *` for an entry the read showed with
+none. It answers 200 with the entry as it now stands and an `ETag` carrying its
+new version, both when the owning service appends and when the request repeats
+the write before it. **A write that lost a race** answers §10.5's 412 with a
+`code`, a member holding the entry as it now stands and that entry's `ETag`
+when it has one, so
+the client shows that state and asks again, and a decision made on one device
+never undoes one made on another. The route is `Convergent` (§8.5), so it takes
+no idempotency key.
 
-It needs no gateway change, as §10.10 needs none. A topic is one of the seven
-order events, by its template key — `order-placed`, `order-confirmed`,
-`order-cancelled`, `payment-declined`, `payment-refunded`, `shipment-dispatched`
-and `shipment-delivered` — and a channel is `email` or `push`. The owning
-service's `ConsentVocabulary` holds the list, and `PreferenceRules` is the BFF's
-check against it. **The subject is the caller's**, as on §10.10's routes.
+**The BFF refuses a malformed precondition before the hop**: none, or both; an
+`If-None-Match` other than `*`; an `If-Match` that is not one strong tag holding
+a version, so a
+weak tag, a list and `*` are refused. The owning service decides, under the lock
+its append takes, whether the precondition held.
 
-**A `GET` reads every pair**, topic by topic in that order and each topic's
-two channels, as `{ "preferences": [ … ] }`. A pair carries `topic`,
-`channel`, `optedIn` and `source`: `required` for a pair the deployment is
-obliged to send, `default` for one with no entry, and `set` for one the
-subject set. A set pair alone carries `setAt` and `version`, the id of its
-newest entry; any other carries both as `null`. A required pair is always
-opted in, and the read says so rather than offering a switch that would do
-nothing.
+**One hop under the caller's own token, as §10.10's.** The owning service
+records the token's `azp` claim as the client each entry was written through,
+and a reply its `.proto` forbids is a 500, by §9.7's sixth rule.
 
-**A `PUT` sets one pair**, with a body of `{ "optedIn": <bool> }` and one
-precondition: `If-Match` carrying the pair's `version` as a strong entity tag,
-`"<version>"`, or `If-None-Match: *` for a pair the read showed with none. It
-answers 200 with the pair as it now stands, in the read's shape, and an `ETag`
-carrying its new version, both when the owning service appends an entry and
-when the request repeats the write before it. **A write that lost a race**,
-because another device's write landed since this one's read, answers §10.5's
-412 with the `code` `preference.precondition_failed`, a `preference` member
-holding the pair as it now stands, and that pair's `ETag` when it has one; the
-app shows that state and asks again, so an opt-in made on one device never
-undoes a withdrawal made on another. A pair the deployment requires answers
-§10.5's 422 with the `code` `preference.required`. The route is `Convergent`
-([§8.5](08-caching-redis.md)), so it takes no idempotency key.
-
-**The BFF refuses a malformed request before the hop**, with §10.5's 400
-naming the field and never repeating the value: no precondition, or both; an
-`If-None-Match` other than `*`; an `If-Match` that is not one strong tag
-holding a version, so a weak tag, a list and `*` are refused; a topic or
-channel outside the vocabulary; and a body without `optedIn`.
-`PreconditionFilter` reads the two headers, and the owning service decides,
-under the lock its append takes, whether the precondition held.
-
-**One hop, under the caller's own token**, as §10.10's: `NotificationsHop`
-registers the preferences client on the same numbers with its own breaker,
-and `CallerTokenHandler` copies the inbound `Authorization` header unchanged.
-The owning service records the token's `azp` claim as the client each entry
-was written through. The callee's refusals and its unavailability are
-answered as §10.10's are, and a reply `preferences.proto` forbids — an
-outcome or a source left unset, a set pair without its version and time,
-another pair with either, a pair outside the vocabulary, or a write applied
-to a pair or value other than the one asked — is a 500, by §9.7's sixth rule.
-
-**What is sent is decided at the send**, not at the write: the send pass reads
-the pair's requirement, its newest entry or its default when it makes a send,
-and the record of the send names the entry it was decided under. A send whose
-intent committed before a withdrawal is still made, and resent under that intent
-until it ends, without being decided again
+**What is sent is decided at the send, not at the write**: the send pass reads
+the requirement, the newest entry or the default when it makes a send, and the
+record of the send names the entry it was decided under. A send whose intent
+committed before a withdrawal is still made, and resent under that intent until
+it ends, without being decided again
 ([ADR-123](adr/ADR-123-a-send-is-decided-once-by-the-pass-that-commits-its-intent-and-a-resend-under-that-intent-is-not-decided-again-1041-474.md)).
-Retention and erasure are ADR-120's: an entry no longer current is kept for
-`NotificationsJurisdictionOptions.ConsentRetention` and for as long as a kept
-send names it or the entry it ended, and an erasure anonymises every entry of
-the subject and keeps it.
+Retention and erasure are ADR-120's.
 
 ---
 

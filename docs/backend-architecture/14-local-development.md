@@ -82,7 +82,7 @@ what `up` runs.
 
 **A developer attaches an image by hand in four calls, and a console that
 drives the platform does the same four.** The wire contract is
-[§10.8](10-api-gateway.md#108-the-product-image-upload)'s and the sizes and
+[Appendix E.6.11](appendix-e-reference-domain.md#e611-the-product-image-upload)'s and the sizes and
 types it allows are not repeated here; this is the order, the hosts and the
 readiness each step waits on. The token is the realm's `demo` login, whose
 password grant `deploy/compose/README.md` shows in bash and which is the same
@@ -114,12 +114,12 @@ Invoke-WebRequest $p.thumbnailUrl -Method Head
 ```
 
 Step 1 states the file's own size, because the signature covers it
-([§10.8](10-api-gateway.md#108-the-product-image-upload)), and a step 2 that
+([§10.8](10-api-gateway.md#108-a-client-supplied-file)), and a step 2 that
 outlives the response's `expiresAt` asks step 1 again. The store is ready when
 `object-store` and `image-edge` report healthy and `object-store-init`, which
 `docker compose ps` omits once it has exited, shows as exited in
 `docker compose ps -a`. The BFF's saved delivery address
-([§10.9](10-api-gateway.md#109-the-saved-delivery-address)) is a `PUT` of its
+([Appendix E.6.12](appendix-e-reference-domain.md#e612-the-saved-delivery-address)) is a `PUT` of its
 fields to `/bff/v1/saved-address` with the same token, and a `GET` there reads
 it back.
 
