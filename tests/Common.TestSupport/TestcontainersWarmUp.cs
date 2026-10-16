@@ -50,7 +50,7 @@ public static class TestcontainersWarmUp
         }
     }
 
-    /// <summary>Matches an image reference once, so the engine's first-use cost is not spent inside Testcontainers' timeout.</summary>
+    /// <summary>Matches an image reference once, so Testcontainers' timeout does not meet the engine cold.</summary>
     /// <returns>The tag it matched, which the test reads to show the pattern still accepts a reference.</returns>
     public static string WarmRegexEngine() =>
         new Regex(ImageReferencePattern, RegexOptions.None, TimeSpan.FromSeconds(30))
