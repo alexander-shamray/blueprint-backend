@@ -53,7 +53,7 @@ public class OrderFulfilmentSagaAwaitingStockTests
     public async Task A_configured_stock_delay_expires_the_wait_by_itself()
     {
         // Nothing publishes the expiry: the scheduler does, after the two seconds configuration gave it, which is
-        // the lever ง14.1 hands a developer who cannot wait five minutes.
+        // the lever ยง14.1 hands a developer who cannot wait five minutes.
         (ServiceProvider provider, ITestHarness harness) = await StartHarnessAsync(
             new OrderFulfilmentTimeouts { StockTimeoutDelay = TimeSpan.FromSeconds(2) });
         await using (provider)
