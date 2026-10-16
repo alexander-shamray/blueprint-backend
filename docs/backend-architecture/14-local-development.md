@@ -467,9 +467,9 @@ dotnet run --project src/Services/<Service>/<Service>.Api
 each expiry branch of the compensation journey without the test hook that
 publishes it: `docker-compose.short-timeouts.yml` sets the `Saga` section's
 five delays on `ordering-api`, and it is added to the full-stack `up`, never
-to the one above, whose host-run Ordering reads no container `environment:`.
+to the one above, whose host-run saga host reads no container `environment:`.
 It is a lever for a laptop and for nothing else — no chart sets the section,
-and a shortened wait outruns what Shipping's give-up age and Payments'
+and a shortened wait outruns what the despatch give-up age and the payment
 redelivery ladder are sized to
 ([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)).
 
