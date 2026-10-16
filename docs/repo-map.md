@@ -163,9 +163,10 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              want of a cluster, and a pipeline red by design
                              trains everyone to ignore it. Its `check` job DOES
                              run on pull requests, and reaches outside its
-                             tree: deploy/helm/**, src/** and
-                             deploy/observability/**, declared as SOURCE_INPUTS
-                             in canary.py. A trigger assertion cannot see a
+                             tree: deploy/helm/**, src/**,
+                             deploy/observability/** and
+                             deploy/workflow_paths/**, declared as
+                             SOURCE_INPUTS in canary.py. A trigger assertion cannot see a
                              read it was never told about, so a test over
                              the reads is what keeps that list complete, not
                              a more careful list
@@ -251,6 +252,11 @@ deploy/canary/               §15.5's rollout — the ladder as JSON, the weight
                              is one descriptor per deployable, the list the
                              workflows and the Helm smoke run read, beside
                              the canary because its row was the first
+deploy/workflow_paths/       the one reader of a workflow's `paths:` filter and
+                             the check that it covers a gate's inputs, which
+                             the four Python gates import and `smoke.sh`
+                             calls (ADR-132). Stdlib Python with a suite, run
+                             by the `pipeline-gate` job
 tools/new-service/           §4.5's scaffold — see the notes below
 tools/bff-replay/            ADR-051's rebuild — a console replaying the
                              publishers' processed outbox rows to the BFF's

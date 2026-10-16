@@ -138,6 +138,7 @@ decision looks wrong.
 | **ADR-129** | [A carrier booking carries its order's id beside the shipment's (#1074)](adr/ADR-129-a-carrier-booking-carries-its-orders-id-beside-the-shipments-1074.md) |
 | **ADR-130** | [The options validator is held once in Common.Infrastructure (#1075), superseding ADR-128's sentence that the Ordering validator is a copy of Shipping's](adr/ADR-130-the-options-validator-is-held-once-in-commoninfrastructure-1075-superseding-adr-128s-sentence-that-the-ordering-validator-is-a-copy-of-shippings.md) |
 | **ADR-131** | [The switched polling loop is held once in Common.Infrastructure.Switching.SwitchedPollingWorker (#1083), adding to ADR-113](adr/ADR-131-the-switched-polling-loop-is-held-once-in-commoninfrastructureswitchingswitchedpollingworker-1083-adding-to-adr-113.md) |
+| **ADR-132** | [The workflow-paths-cover-inputs check is held once in deploy/workflow_paths (#1082), used by four Python gates and smoke.sh](adr/ADR-132-the-workflow-paths-cover-inputs-check-is-held-once-in-deploy-workflow_paths-1082-used-by-four-python-gates-and-smokesh.md) |
 
 ---
 
