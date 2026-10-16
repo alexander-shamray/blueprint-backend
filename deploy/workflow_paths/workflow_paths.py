@@ -1,8 +1,7 @@
 """A workflow's `paths:` filter, read once, and the two checks on it (ADR-132).
 
-Text rather than YAML, one trigger's own entries only. smoke.sh calls the
-command line on stdin: `trigger-paths <trigger>`, `covered <entry>` and
-`undeclared <declared>...`.
+Text, one trigger's own entries only. smoke.sh calls `trigger-paths`,
+`covered` and `undeclared` on stdin.
 """
 from __future__ import annotations
 
@@ -64,9 +63,8 @@ def _entry(value: str) -> str:
 def covers(path: str, entry: str) -> bool:
     """Does one `paths:` glob cover the whole of an input a gate reads?
 
-    Only `/**` covers a directory, since `*` does not cross a separator, and
-    only from the entry or an ancestor of it: `src/Services/Ordering/**` does
-    not cover `src`, as an earlier copy had it.
+    Only `/**` covers a directory (`*` stops at a separator), and only from
+    the entry or an ancestor: `src/Services/Ordering/**` does not cover `src`.
     """
     if path == "**":
         return True
@@ -84,10 +82,10 @@ def covered(entry: str, patterns: list[str]) -> bool:
 
 def check_workflow_covers_inputs(
         workflow: Path, required: list[str], *, reader: str, label: str | None = None) -> list[str]:
-    """Both triggers of `workflow` carry a filter covering every entry of `required`.
+    """Both triggers of `workflow` carry a filter covering every `required` entry.
 
-    A missing trigger or an empty filter fails, since a parser that read nothing
-    would agree with any list. `reader` names the gate in a message.
+    A missing trigger or empty filter fails: a parser that read nothing would
+    agree with any list. `reader` names the gate in a message.
     """
     label = label or workflow.name
     try:
