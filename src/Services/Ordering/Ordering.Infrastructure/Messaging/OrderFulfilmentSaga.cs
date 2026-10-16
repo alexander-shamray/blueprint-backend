@@ -3,6 +3,7 @@ using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
 using Common.Contracts.Shipping.V1;
 using MassTransit;
+using Microsoft.Extensions.Options;
 using static Ordering.Infrastructure.Messaging.Endpoints;
 
 namespace Ordering.Infrastructure.Messaging;
@@ -55,8 +56,16 @@ public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmen
     public Schedule<OrderFulfilmentState, DespatchExpired> DespatchTimeout { get; private set; } = null!;
     public Schedule<OrderFulfilmentState, StockReleaseExpired> ReleaseTimeout { get; private set; } = null!;
 
+    /// <summary>The saga on §9.6's own delays, which every test and the diagram's reader assume.</summary>
     public OrderFulfilmentSaga()
+        : this(Options.Create(new OrderFulfilmentTimeouts()))
     {
+    }
+
+    /// <summary>The saga on the delays configuration bound, each defaulting to the constant above.</summary>
+    public OrderFulfilmentSaga(IOptions<OrderFulfilmentTimeouts> timeouts)
+    {
+        OrderFulfilmentTimeouts delays = timeouts.Value;
         InstanceState(x => x.CurrentState);
 
         // No catch-all: an event with no transition in its state faults, and every legitimate arrival is written
@@ -95,7 +104,7 @@ public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmen
             x => x.StockTimeoutTokenId,
             s =>
             {
-                s.Delay = StockTimeoutDelay;
+                s.Delay = delays.StockTimeoutDelay;
                 s.Received = e => e.CorrelateById(m => m.Message.OrderId);
             });
 
@@ -104,7 +113,7 @@ public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmen
             x => x.PaymentTimeoutTokenId,
             s =>
             {
-                s.Delay = PaymentTimeoutDelay;
+                s.Delay = delays.PaymentTimeoutDelay;
                 s.Received = e => e.CorrelateById(m => m.Message.OrderId);
             });
 
@@ -117,7 +126,7 @@ public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmen
             x => x.ConfirmationTimeoutTokenId,
             s =>
             {
-                s.Delay = ConfirmationTimeoutDelay;
+                s.Delay = delays.ConfirmationTimeoutDelay;
                 s.Received = e => e.CorrelateById(m => m.Message.OrderId);
             });
 
@@ -127,7 +136,7 @@ public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmen
             x => x.DespatchTimeoutTokenId,
             s =>
             {
-                s.Delay = DespatchTimeoutDelay;
+                s.Delay = delays.DespatchTimeoutDelay;
                 s.Received = e => e.CorrelateById(m => m.Message.OrderId);
             });
 
@@ -136,7 +145,7 @@ public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmen
             x => x.ReleaseTimeoutTokenId,
             s =>
             {
-                s.Delay = ReleaseTimeoutDelay;
+                s.Delay = delays.ReleaseTimeoutDelay;
                 s.Received = e => e.CorrelateById(m => m.Message.OrderId);
             });
 

@@ -12,6 +12,7 @@ using MassTransit;
 using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Ordering.Application.Orders.CancelOrder;
 using Ordering.Application.Orders.ConfirmOrder;
 using Ordering.Application.Orders.FlagOrderForReview;
@@ -53,6 +54,16 @@ public static class DependencyInjection
             throw new InvalidOperationException(
                 "ConnectionStrings:RabbitMq is not configured. The bus cannot start without it (§13.5).");
         }
+
+        // Validated at start, as every host's options are (§15.4); a deployed host sets none, so each wait keeps
+        // §9.6's own delay.
+        services
+            .AddOptions<OrderFulfilmentTimeouts>()
+            .Bind(configuration.GetSection(OrderFulfilmentTimeouts.SectionName))
+            .ValidateOnStart();
+        services.AddSingleton<
+            IValidateOptions<OrderFulfilmentTimeouts>,
+            AnnotatedOptionsValidator<OrderFulfilmentTimeouts>>();
 
         services.AddMassTransit(x =>
         {
