@@ -2927,9 +2927,10 @@ so the two are separate sources and can differ.
 
 **No row is a 404 for two facts at once.** A finalised saga deletes its
 instance (`SetCompletedWhenFinalized`), so a shipped, cancelled or escalated
-order and an order the saga never saw read alike. **`startedAt` is when the instance began,
-not when it entered `currentState`**: the table stores no time of entering a
-state, and a consumer needing one adds the column rather than inferring it.
+order and an order the saga never saw read alike. **`startedAt` is when the
+instance began, not when it entered `currentState`**: the table stores no time
+of entering a state, and a consumer needing one adds the column rather than
+inferring it.
 
 **Where the two vocabularies meet, read the row as a difference of
 vocabulary and anything else as a difference of fact.** The buyer's status is
