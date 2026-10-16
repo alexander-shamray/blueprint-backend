@@ -136,6 +136,7 @@ decision looks wrong.
 | **ADR-127** | [A release does not roll back across a revision its descriptor holds a value empty until (#1060)](adr/ADR-127-a-release-does-not-roll-back-across-a-revision-its-descriptor-holds-a-value-empty-until-1060.md) |
 | **ADR-128** | [The saga's five timeout delays are options bound from configuration, defaulting to §9.6's constants, with a Compose override that shortens them (#1072)](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md) |
 | **ADR-129** | [A carrier booking carries its order's id beside the shipment's (#1074)](adr/ADR-129-a-carrier-booking-carries-its-orders-id-beside-the-shipments-1074.md) |
+| **ADR-130** | [The options validator is held once in Common.Infrastructure (#1075), superseding ADR-128's sentence that the Ordering validator is a copy of Shipping's](adr/ADR-130-the-options-validator-is-held-once-in-commoninfrastructure-1075-superseding-adr-128s-sentence-that-the-ordering-validator-is-a-copy-of-shippings.md) |
 
 ---
 
