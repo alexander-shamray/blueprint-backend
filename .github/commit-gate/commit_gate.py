@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Every commit a pull request carries names that pull request and keeps /commit's form.
-
 The rules are .github/commit-gate/README.md's; run it as
 py -3.12 .github/commit-gate/commit_gate.py --pr <n> <base> <head>.
 """
