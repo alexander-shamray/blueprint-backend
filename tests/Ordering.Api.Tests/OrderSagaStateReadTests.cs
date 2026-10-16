@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>#1092's read of the saga's own state over HTTP, against the table the saga writes (§9.6).</summary>
+/// <summary>The read of the saga's own state over HTTP, against the table the saga writes (§9.6).</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OrderSagaStateReadTests(ServiceFixture fixture) : IAsyncLifetime
 {
