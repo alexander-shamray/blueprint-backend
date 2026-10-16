@@ -135,6 +135,7 @@ decision looks wrong.
 | **ADR-126** | [The rollout keeps a values path empty while either track serves a revision older than the one its descriptor names (#1059)](adr/ADR-126-the-rollout-keeps-a-values-path-empty-while-either-track-serves-a-revision-older-than-the-one-its-descriptor-names-1059.md) |
 | **ADR-127** | [A release does not roll back across a revision its descriptor holds a value empty until (#1060)](adr/ADR-127-a-release-does-not-roll-back-across-a-revision-its-descriptor-holds-a-value-empty-until-1060.md) |
 | **ADR-128** | [The saga's five timeout delays are options bound from configuration, defaulting to §9.6's constants, with a Compose override that shortens them (#1072)](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md) |
+| **ADR-129** | [A carrier booking carries its order's id beside the shipment's (#1074)](adr/ADR-129-a-carrier-booking-carries-its-orders-id-beside-the-shipments-1074.md) |
 
 ---
 

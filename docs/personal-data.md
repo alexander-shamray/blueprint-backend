@@ -91,7 +91,7 @@ with the adopter, not this platform's.
 
 | Processor | Shown | Named by |
 |---|---|---|
-| The carrier | A shipment's id and its postal address, with no name — `BookingRequest` | `carrier.baseUrl`, `deploy/helm/shipping/values.yaml` |
+| The carrier | A shipment's id, its order's id and its postal address, with no name — `BookingRequest` ([ADR-129](backend-architecture/adr/ADR-129-a-carrier-booking-carries-its-orders-id-beside-the-shipments-1074.md)) | `carrier.baseUrl`, `deploy/helm/shipping/values.yaml` |
 | The mail relay | The mailbox and the rendered message | `mail.host`, `deploy/helm/notifications/values.yaml` |
 | FCM | A device's token, a push's title and body, the order's id and the template key — `OutboundPush` | `fcm.baseUrl`, `deploy/helm/notifications/values.yaml` |
 | APNs | The same, for an iOS device | `apns.baseUrl`, `deploy/helm/notifications/values.yaml` |

@@ -48,3 +48,13 @@ read the fulfilment and tracking workers' logs:
 
 The server's own view is at `http://localhost:5191/__admin/mappings` and
 `/__admin/requests`.
+
+## Reading a booking back to its order
+
+A booking's body is `shipmentId`, `orderId` and the address. The
+`orderId` is the order's id, so the `POST /v1/shipments` entry in
+`/__admin/requests` for an order is the one whose body carries it, rather than
+the one nearest in time to its postal code, which two orders to one code at
+once cannot tell apart. The mappings match on `postalCode` alone and ignore
+the field; `HttpCarrierGatewayTests` pins the body's whole shape, so a field
+added to it fails there first.
