@@ -186,78 +186,13 @@ public sealed class SendWorker(
     // A stop starts no claim, and never cuts a claim or rows under way: theirs fires DrainBudget after it.
     protected override TimeSpan? StopDrain => DrainBudget;
 
-    protected override Task RunPassAsync(CancellationToken stoppingToken) => RunOnceAsync(stoppingToken, Drain);
+    protected override Task RunPassAsync(CancellationToken stoppingToken) =>
+        new MailRows(this, scopes, log).RunAsync(stoppingToken, Drain);
 
     protected override void OnPassFailed(Exception exception) => ClaimFailed(log, exception);
 
     /// <summary>One claim-and-send pass, public so tests drive it rather than race a timer (§12.4).</summary>
-    public Task<SendPass> RunOnceAsync(CancellationToken ct) => RunOnceAsync(ct, ct);
-
-    // A stop before the claim leases nothing; the claim itself runs on the drain's token, because a read cancelled
-    // after its lease commits strands the rows until the lease lapses (§15.3).
-    private async Task<SendPass> RunOnceAsync(CancellationToken claim, CancellationToken rows)
-    {
-        await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
-        MailPipeline relay = claimScope.ServiceProvider.GetRequiredService<MailPipeline>();
-
-        // An open breaker parks the mail notices, so they keep their backoff and nothing reaches a queue (§9.7), and a
-        // push notice still fans out. Past the break a pass claims as usual; its first send probes.
-        bool mailParked = relay.IsOpen;
-        if (mailParked)
-            Parked(log, relay.ParkedUntil, null);
-
-        SendClaims claims = claimScope.ServiceProvider.GetRequiredService<SendClaims>();
-        claim.ThrowIfCancellationRequested();
-        IReadOnlyList<SendWork> claimed = await claims.ClaimAsync(mailParked, rows);
-
-        // Every row at once, so a pass lasts one row's calls and the lease bounds it; WhenAll, so one row's fault
-        // leaves the others to finish.
-        ContactReads reads = new();
-        bool[] finished = await Task.WhenAll(claimed.Select(work => SendOrBackOffAsync(claims, work, reads, rows)));
-
-        return new SendPass(claimed.Count, finished.Count(f => f));
-    }
-
-    private async Task<bool> SendOrBackOffAsync(
-        SendClaims claims,
-        SendWork work,
-        ContactReads reads,
-        CancellationToken ct)
-    {
-        // A child of the intake that wrote the row, so the contact read and the relay's send join the order's trace;
-        // parent rather than link, as the outbox argues, the wait in the table being real (§9.4).
-        using Activity? span = new StagedTrace(work.TraceParent, work.TraceState).StartClaimed("notification send");
-        span?.SetTag("notifications.notification.id", work.NotificationId);
-
-        try
-        {
-            // A scope per row, so a row that throws mid-write hands the next none of its tracked state.
-            await using AsyncServiceScope row = scopes.CreateAsyncScope();
-
-            return await SendAsync(row.ServiceProvider, claims, work, reads, ct);
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            span?.SetStatus(ActivityStatusCode.Error);
-
-            // Logged before the backoff is written, so a database fault there cannot hide this one.
-            Fault(work, ex);
-
-            try
-            {
-                // False when another pass took the row once this one's lease lapsed: the line above is then not true.
-                if (!await claims.BackOffAsync(work.NotificationId, work.LockedUntil, ct))
-                    Outgrown(log, work.NotificationId, work.OrderId, null);
-            }
-            catch (Exception backOff) when (!ct.IsCancellationRequested)
-            {
-                // The claim held, so the loop's line would be false; the lease lapses and a later pass reclaims it.
-                BackOffFailed(log, work.NotificationId, work.OrderId, backOff);
-            }
-
-            return false;
-        }
-    }
+    public Task<SendPass> RunOnceAsync(CancellationToken ct) => new MailRows(this, scopes, log).RunAsync(ct, ct);
 
     /// <summary>One leased row, step by step; true when it reached an outcome (ADR-049, ADR-052).</summary>
     internal async Task<bool> SendAsync(
@@ -584,6 +519,57 @@ public sealed class SendWorker(
                 break;
         }
     }
+
+    /// <summary>The mail pass's steps for <see cref="ClaimPass{TWork, TClaims, TState}"/>.</summary>
+    private sealed class MailRows(SendWorker worker, IServiceScopeFactory scopes, ILogger log)
+        : ClaimPass<SendWork, SendClaims, MailPass>(scopes)
+    {
+        // An open breaker parks the mail notices, so they keep their backoff and nothing reaches a queue (§9.7), and a
+        // push notice still fans out. Past the break a pass claims as usual; its first send probes.
+        protected override MailPass Begin(IServiceProvider claimScope)
+        {
+            MailPipeline relay = claimScope.GetRequiredService<MailPipeline>();
+            bool mailParked = relay.IsOpen;
+            if (mailParked)
+                Parked(log, relay.ParkedUntil, null);
+
+            return new MailPass(mailParked, new ContactReads());
+        }
+
+        protected override Task<IReadOnlyList<SendWork>> ClaimAsync(
+            SendClaims claims,
+            MailPass state,
+            CancellationToken rows) => claims.ClaimAsync(state.MailParked, rows);
+
+        // A child of the intake that wrote the row, so the contact read and the relay's send join the order's trace;
+        // parent rather than link, as the outbox argues, the wait in the table being real (§9.4).
+        protected override Activity? StartSpan(SendWork work)
+        {
+            Activity? span = new StagedTrace(work.TraceParent, work.TraceState).StartClaimed("notification send");
+            span?.SetTag("notifications.notification.id", work.NotificationId);
+
+            return span;
+        }
+
+        protected override Task<bool> SendAsync(
+            IServiceProvider row,
+            SendClaims claims,
+            MailPass state,
+            SendWork work,
+            CancellationToken ct) => worker.SendAsync(row, claims, work, state.Reads, ct);
+
+        protected override Task<bool> BackOffAsync(SendClaims claims, SendWork work, CancellationToken ct) =>
+            claims.BackOffAsync(work.NotificationId, work.LockedUntil, ct);
+
+        protected override void LogFault(SendWork work, Exception exception) => worker.Fault(work, exception);
+
+        protected override void LogOutgrown(SendWork work) => Outgrown(log, work.NotificationId, work.OrderId, null);
+
+        protected override void LogBackOffFailed(SendWork work, Exception exception) =>
+            BackOffFailed(log, work.NotificationId, work.OrderId, exception);
+    }
+
+    private readonly record struct MailPass(bool MailParked, ContactReads Reads);
 
     /// <summary>One of the record's moves, committed; false when the row had outgrown it and nothing changed.</summary>
     private static Task<bool> CommitAsync(
