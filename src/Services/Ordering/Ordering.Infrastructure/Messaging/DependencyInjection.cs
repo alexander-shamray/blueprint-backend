@@ -8,6 +8,7 @@ using Common.Contracts.Privacy.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Transport;
+using Common.Infrastructure.Validation;
 using MassTransit;
 using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.Extensions.Configuration;

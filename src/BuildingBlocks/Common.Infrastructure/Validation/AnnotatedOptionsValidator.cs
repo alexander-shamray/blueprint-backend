@@ -1,10 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Options;
 
-namespace Ordering.Infrastructure.Messaging;
+namespace Common.Infrastructure.Validation;
 
 /// <summary>Runs an options class's annotations at start (§15.4), without the package that ships its twin.</summary>
-internal sealed class AnnotatedOptionsValidator<TOptions> : IValidateOptions<TOptions>
+public sealed class AnnotatedOptionsValidator<TOptions> : IValidateOptions<TOptions>
     where TOptions : class
 {
     public ValidateOptionsResult Validate(string? name, TOptions options)
