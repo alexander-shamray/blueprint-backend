@@ -87,7 +87,8 @@ services:
       Jurisdiction__TrackingRetention: "23.00:00:00"
       # ADR-052's give-up age, required by ValidateOnStart (§15.4), and the
       # chart's value rather than a made-up one: it is sized to reach
-      # OrderFulfilmentSaga.DespatchTimeoutDelay, which a laptop shares.
+      # OrderFulfilmentSaga.DespatchTimeoutDelay, which a laptop shares until
+      # docker-compose.short-timeouts.yml shortens it (ADR-128).
       Fulfilment__GiveUpAge: "3.00:00:00"
     # §13.5's readiness, asked by the host itself through HealthProbe, because
     # the image has no shell or HTTP client; the timeout outlasts the probe's.
