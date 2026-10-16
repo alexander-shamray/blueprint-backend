@@ -27,7 +27,7 @@ namespace Notifications.Infrastructure.Delivery;
 public sealed class SendWorker(
     IServiceScopeFactory scopes,
     ILogger<SendWorker> log,
-    OperatorSwitches? switches = null) : BackgroundService, ISwitchedWorker
+    OperatorSwitches? switches = null) : SwitchedPollingWorker(switches)
 {
     /// <summary>The name an operator lists to switch the send pass off (ADR-113).</summary>
     public const string Name = "send-worker";
@@ -179,33 +179,16 @@ public sealed class SendWorker(
             new EventId(20, nameof(Dispatched)),
             "Push notification {NotificationId} on order {OrderId} fanned out to {Devices} device(s).");
 
-    public string SwitchName => Name;
+    public override string SwitchName => Name;
 
-    // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using PeriodicTimer timer = new(MailHop.SendTick);
+    protected override TimeSpan PassInterval => MailHop.SendTick;
 
-        // A stop ends the loop and starts no claim, never a claim or rows under way: theirs fires DrainBudget after it.
-        using CancellationTokenSource drain = new();
-        using CancellationTokenRegistration stopping = stoppingToken.Register(() => drain.CancelAfter(DrainBudget));
+    // A stop starts no claim, and never cuts a claim or rows under way: theirs fires DrainBudget after it.
+    protected override TimeSpan? StopDrain => DrainBudget;
 
-        while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
-        {
-            if (switches?.IsOff(Name) == true)
-                continue;
+    protected override Task RunPassAsync(CancellationToken stoppingToken) => RunOnceAsync(stoppingToken, Drain);
 
-            try
-            {
-                await RunOnceAsync(stoppingToken, drain.Token);
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                // The token, not the type: a call's own deadline throws the same type, and an escape stops the host.
-                ClaimFailed(log, ex);
-            }
-        }
-    }
+    protected override void OnPassFailed(Exception exception) => ClaimFailed(log, exception);
 
     /// <summary>One claim-and-send pass, public so tests drive it rather than race a timer (§12.4).</summary>
     public Task<SendPass> RunOnceAsync(CancellationToken ct) => RunOnceAsync(ct, ct);

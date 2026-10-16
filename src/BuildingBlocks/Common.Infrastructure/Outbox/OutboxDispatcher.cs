@@ -15,7 +15,7 @@ using Microsoft.Extensions.Logging;
 namespace Common.Infrastructure.Outbox;
 
 /// <summary>§9.4's dispatcher: an atomic claim that leases a batch, then delivery that fails per row.</summary>
-public sealed class OutboxDispatcher : BackgroundService, ISwitchedWorker
+public sealed class OutboxDispatcher : SwitchedPollingWorker
 {
     /// <summary>The name an operator lists to switch the dispatcher off (ADR-113).</summary>
     public const string Name = "outbox-dispatcher";
@@ -59,7 +59,6 @@ public sealed class OutboxDispatcher : BackgroundService, ISwitchedWorker
 
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<OutboxDispatcher> _log;
-    private readonly OperatorSwitches? _switches;
 
     // Composed once from the registered table, which is why these are fields, not consts.
     private readonly string _claimSql;
@@ -71,10 +70,10 @@ public sealed class OutboxDispatcher : BackgroundService, ISwitchedWorker
         OutboxTable table,
         ILogger<OutboxDispatcher> log,
         OperatorSwitches? switches = null)
+        : base(switches)
     {
         _scopes = scopes;
         _log = log;
-        _switches = switches;
 
         // Selects and leases in one statement, so two replicas cannot take the same row.
         _claimSql =
@@ -126,29 +125,13 @@ public sealed class OutboxDispatcher : BackgroundService, ISwitchedWorker
             """;
     }
 
-    public string SwitchName => Name;
+    public override string SwitchName => Name;
 
-    // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using PeriodicTimer timer = new(PollInterval);
+    protected override TimeSpan PassInterval => PollInterval;
 
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
-            if (_switches?.IsOff(Name) == true)
-                continue;
+    protected override Task RunPassAsync(CancellationToken stoppingToken) => ProcessBatchAsync(stoppingToken);
 
-            try
-            {
-                await ProcessBatchAsync(stoppingToken);
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                // The claim failed. The token, not the type: a projection's own deadline throws the same type.
-                ClaimFailed(_log, ex);
-            }
-        }
-    }
+    protected override void OnPassFailed(Exception exception) => ClaimFailed(_log, exception);
 
     /// <summary>One claim-and-deliver pass, public so tests drive it rather than race a timer (§12.4).</summary>
     public async Task<int> ProcessBatchAsync(CancellationToken ct)

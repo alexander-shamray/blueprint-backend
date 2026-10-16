@@ -13,7 +13,7 @@ namespace Common.Infrastructure.Messaging;
 
 /// <summary>§9.4's, §9.5's and §8.5's retention purges, in one hosted service (§9.5).</summary>
 /// <remarks>A marker goes once <see cref="IIdempotencyStore"/> lets its claim go (ADR-039, ADR-041).</remarks>
-public sealed class RetentionPurgeService : BackgroundService, ISwitchedWorker
+public sealed class RetentionPurgeService : SwitchedPollingWorker
 {
     /// <summary>The name an operator lists to switch the purge off (ADR-113).</summary>
     public const string Name = "retention-purge";
@@ -40,7 +40,6 @@ public sealed class RetentionPurgeService : BackgroundService, ISwitchedWorker
     private readonly IServiceScopeFactory _scopes;
     private readonly RetentionPolicy _policy;
     private readonly ILogger<RetentionPurgeService> _log;
-    private readonly OperatorSwitches? _switches;
 
     // Null when no OutboxTable is registered, as for §4.1's pure consumer (§9.5).
     private readonly string? _outboxSql;
@@ -58,9 +57,8 @@ public sealed class RetentionPurgeService : BackgroundService, ISwitchedWorker
         IdempotencyMarkerTable? markers = null,
         IIdempotencyStore? claims = null,
         OperatorSwitches? switches = null)
+        : base(switches)
     {
-        _switches = switches;
-
         // A marker table with no store to ask could only be purged by guessing whether its claim is gone (ADR-039).
         if ((markers is null) != (claims is null))
         {
@@ -108,29 +106,13 @@ public sealed class RetentionPurgeService : BackgroundService, ISwitchedWorker
                 claims!);
     }
 
-    public string SwitchName => Name;
+    public override string SwitchName => Name;
 
-    // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using PeriodicTimer timer = new(_policy.Interval);
+    protected override TimeSpan PassInterval => _policy.Interval;
 
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
-            if (_switches?.IsOff(Name) == true)
-                continue;
+    protected override Task RunPassAsync(CancellationToken stoppingToken) => PurgeAsync(stoppingToken);
 
-            try
-            {
-                await PurgeAsync(stoppingToken);
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                // Swallowed, since an exception out of ExecuteAsync stops the host; a live token means a failure.
-                PurgeFailed(_log, ex);
-            }
-        }
-    }
+    protected override void OnPassFailed(Exception exception) => PurgeFailed(_log, exception);
 
     /// <summary>One purge pass over every table, public so tests drive it rather than race a timer (§9.5).</summary>
     public async Task<(int Outbox, int Inbox, int Idempotency)> PurgeAsync(CancellationToken ct)
