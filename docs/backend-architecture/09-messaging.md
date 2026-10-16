@@ -2783,6 +2783,10 @@ public sealed class OrderFulfilmentState : SagaStateMachineInstance
     public string Currency { get; set; } = null!;
     public DateTimeOffset StartedAt { get; set; }
 
+    // When the instance entered CurrentState; set on every entry, NULL on an
+    // instance a release without the column wrote.
+    public DateTimeOffset? StateEnteredAt { get; set; }
+
     // Set on entry to Compensating, read by its two stock exits.
     public string CancelReason { get; set; } = null!;
 
@@ -2855,6 +2859,14 @@ CREATE TABLE ordering.OrderFulfilmentStates
     Total                      DECIMAL(19,4)    NOT NULL,
     Currency                   CHAR(3)          NOT NULL,
     StartedAt                  DATETIMEOFFSET   NOT NULL,
+    -- When the instance entered CurrentState. NULL, with no default, which is
+    -- what makes it safe to add under §15.5: the previous release does not
+    -- name it in its INSERT or its UPDATE, and any value SQL Server supplied
+    -- would be a time the order never entered anything. A NULL is an instance
+    -- that release wrote; every transition of this one sets it. While both
+    -- releases serve, one of that release's transitions leaves the value it
+    -- finds, so a stamp can be older than the state it sits beside.
+    StateEnteredAt             DATETIMEOFFSET   NULL,
     -- Why the saga is compensating; NULL until it is. VARCHAR because it holds
     -- a CancelReasons code (§9.6), the same vocabulary the wire uses.
     CancelReason               VARCHAR(32)      NULL,
@@ -2918,9 +2930,9 @@ dual write.
 ### Reading the saga's state
 
 `GET /v1/orders/{id}/saga` answers the instance's own word about one order:
-`orderId`, `currentState`, `startedAt` and `cancelReason`, which is `null`
-until the saga compensates. It requires `orders:saga-read` (Appendix E.6.5)
-and nothing else, because the instance holds no customer (ADR-028) to check a
+`orderId`, `currentState`, `startedAt`, `stateEnteredAt` and `cancelReason`,
+which is `null` until the saga compensates. It requires `orders:saga-read`
+(Appendix E.6.5) and nothing else, because the instance holds no customer (ADR-028) to check a
 caller against; the permission is staff's, not a buyer's. The BFF's
 `/bff/v1/orders/{id}` ([E.6.10](appendix-e-reference-domain.md#e610-the-buyers-order-read)) is the buyer's word and a projection of events,
 so the two are separate sources and can differ.
@@ -2928,9 +2940,17 @@ so the two are separate sources and can differ.
 **No row is a 404 for two facts at once.** A finalised saga deletes its
 instance (`SetCompletedWhenFinalized`), so a shipped, cancelled or escalated
 order and an order the saga never saw read alike. **`startedAt` is when the
-instance began, not when it entered `currentState`**: the table stores no time
-of entering a state, and a consumer needing one adds the column rather than
-inferring it.
+instance began, not when it entered `currentState`**: `stateEnteredAt` is
+that, set by every transition on the saga's own clock, including the first.
+It is `null` for an instance a release without the column wrote, and a
+reader treats `null` as unknown, never as `startedAt`: the instance may have
+sat in its state for most of the time since it began. Through a rolling
+deploy (§15.5) it can also be stale: a replica without the column that moves
+an instance leaves whatever the column held, so a value older than the
+instance's last transition is possible until the next transition of the new
+release, and only once every replica writes it is the value the state's own. An
+event that leaves the state as it was, such as the early `StockReleased`
+recorded in place, does not move it.
 
 **Where the two vocabularies meet, read the row as a difference of
 vocabulary and anything else as a difference of fact.** The buyer's status is

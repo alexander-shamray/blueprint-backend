@@ -20,7 +20,10 @@ public sealed class OrderSagaStateReadTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_reader_gets_the_state_the_saga_row_holds()
     {
-        Guid order = await SeedSagaAsync("AwaitingPayment", cancelReason: null);
+        Guid order = await SeedSagaAsync(
+            "AwaitingPayment",
+            cancelReason: null,
+            stateEnteredAt: "2026-10-16T08:20:00+00:00");
 
         HttpResponseMessage response = await GetAsync(order, OrderingPermissions.SagaRead);
 
@@ -30,6 +33,22 @@ public sealed class OrderSagaStateReadTests(ServiceFixture fixture) : IAsyncLife
         view.OrderId.ShouldBe(order);
         view.CurrentState.ShouldBe("AwaitingPayment");
         view.CancelReason.ShouldBeNull();
+        view.StartedAt.ShouldBe(new DateTimeOffset(2026, 10, 16, 8, 0, 0, TimeSpan.Zero));
+        view.StateEnteredAt.ShouldBe(new DateTimeOffset(2026, 10, 16, 8, 20, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task An_instance_an_older_release_wrote_has_no_time_of_entering_its_state()
+    {
+        // NULL is the column's one honest value for a row written before it existed (§9.6).
+        Guid order = await SeedSagaAsync("Confirmed", cancelReason: null);
+
+        HttpResponseMessage response = await GetAsync(order, OrderingPermissions.SagaRead);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        SagaStateView view = (await response.Content.ReadFromJsonAsync<SagaStateView>(
+            TestContext.Current.CancellationToken))!;
+        view.StateEnteredAt.ShouldBeNull();
         view.StartedAt.ShouldBe(new DateTimeOffset(2026, 10, 16, 8, 0, 0, TimeSpan.Zero));
     }
 
@@ -79,19 +98,20 @@ public sealed class OrderSagaStateReadTests(ServiceFixture fixture) : IAsyncLife
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
 
-    private async Task<Guid> SeedSagaAsync(string state, string? cancelReason)
+    private async Task<Guid> SeedSagaAsync(string state, string? cancelReason, string? stateEnteredAt = null)
     {
         Guid order = Guid.CreateVersion7();
 
         await fixture.ExecuteAsync(
             """
             INSERT INTO ordering.OrderFulfilmentStates
-                (CorrelationId, CurrentState, OrderId, Total, Currency, StartedAt, CancelReason)
-            VALUES ({0}, {1}, {0}, 10.0000, 'EUR', '2026-10-16T08:00:00+00:00', NULLIF({2}, ''))
+                (CorrelationId, CurrentState, OrderId, Total, Currency, StartedAt, CancelReason, StateEnteredAt)
+            VALUES ({0}, {1}, {0}, 10.0000, 'EUR', '2026-10-16T08:00:00+00:00', NULLIF({2}, ''), NULLIF({3}, ''))
             """,
             order,
             state,
-            cancelReason ?? string.Empty);
+            cancelReason ?? string.Empty,
+            stateEnteredAt ?? string.Empty);
 
         return order;
     }

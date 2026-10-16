@@ -21,9 +21,15 @@ internal static class OrderFulfilmentSagaHarness
 
     /// <summary>The registration every test shares, with production's two scheduler lines (ADR-021).</summary>
     /// <remarks><c>Initially</c> arms <c>StockTimeout</c>, so without one <c>OrderPlaced</c> faults (§9.6).</remarks>
-    internal static ServiceProvider BuildProvider(OrderFulfilmentTimeouts? timeouts = null) =>
-        new ServiceCollection()
-            .AddSingleton(Options.Create(timeouts ?? new OrderFulfilmentTimeouts()))
+    internal static ServiceProvider BuildProvider(OrderFulfilmentTimeouts? timeouts = null, TimeProvider? clock = null)
+    {
+        IOptions<OrderFulfilmentTimeouts> options = Options.Create(timeouts ?? new OrderFulfilmentTimeouts());
+
+        // The system clock stays the container's, because MassTransit reads it for its own bounds, and a moved one
+        // takes the inactivity bound with it; a test's clock goes to the saga alone, registered last so it wins.
+        return new ServiceCollection()
+            .AddSingleton(options)
+            .AddSingleton(TimeProvider.System)
             .AddMassTransitTestHarness(x =>
             {
                 x.SetTestTimeouts(TestTimeout, InactivityTimeout);
@@ -37,12 +43,15 @@ internal static class OrderFulfilmentSagaHarness
                     cfg.ConfigureEndpoints(context);
                 });
             })
+            .AddSingleton(new OrderFulfilmentSaga(options, clock ?? TimeProvider.System))
             .BuildServiceProvider(true);
+    }
 
     internal static async Task<(ServiceProvider Provider, ITestHarness Harness)> StartHarnessAsync(
-        OrderFulfilmentTimeouts? timeouts = null)
+        OrderFulfilmentTimeouts? timeouts = null,
+        TimeProvider? clock = null)
     {
-        ServiceProvider provider = BuildProvider(timeouts);
+        ServiceProvider provider = BuildProvider(timeouts, clock);
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
 

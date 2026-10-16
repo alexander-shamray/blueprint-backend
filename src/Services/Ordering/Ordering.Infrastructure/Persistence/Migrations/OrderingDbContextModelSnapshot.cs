@@ -510,6 +510,9 @@ namespace Ordering.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("datetimeoffset(7)");
 
+                    b.Property<DateTimeOffset?>("StateEnteredAt")
+                        .HasColumnType("datetimeoffset(7)");
+
                     b.Property<bool>("StockReleaseSettled")
                         .HasColumnType("bit");
 
