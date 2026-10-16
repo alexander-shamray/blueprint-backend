@@ -346,13 +346,16 @@ restated, `deploy/compose/keycloak/realm-export.json`, because that file is
 its subject in CI, and `deploy/canary/**`, because its scheduled job loops
 over the plan's workloads to find every release it judges
 ([ADR-043](adr/ADR-043-the-deployed-realm-is-checked-between-rollouts.md)).
+The observability, canary, realm and Helm filters, and the broker gate's, also
+name `deploy/workflow_paths/**`, the reader their gates import.
 **None of the four keeps that list in its own YAML**, and the sixth filter
 names its own tree and its workflow alone, because its gate reads nothing
 else.
 `smoke.sh`, `check.py`, `canary.py` and `realm_check.py` each declare
 `SOURCE_INPUTS` beside the reads, and each asserts that both of its workflow's
 triggers cover every entry — a copy of a list drifts exactly as a copy of a
-number does. All four gates also assert the reads direction — every file the
+number does, and the assertion itself is held once, in `deploy/workflow_paths`
+([ADR-132](adr/ADR-132-the-workflow-paths-cover-inputs-check-is-held-once-in-deploy-workflow_paths-1082-used-by-four-python-gates-and-smokesh.md)). All four gates also assert the reads direction — every file the
 gate opens is in the list, the canary's in its suite, `test_canary.py` — which
 is the shape the second callout below argues for.
 
