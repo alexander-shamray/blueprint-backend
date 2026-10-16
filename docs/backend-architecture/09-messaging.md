@@ -2943,7 +2943,7 @@ saga's state by the time the saga takes to consume the same event:
 | `AwaitingConfirmation` | `placed` | `confirmed` on `OrderConfirmed`; `dispatched` on `ShipmentDispatched`; `cancelled` on `OrderCancelled` |
 | `Confirmed` | `confirmed` | `dispatched` on `ShipmentDispatched`; `cancelled` on `OrderCancelled` |
 | `Compensating` | `placed` or `confirmed` | `cancelled`, `out_of_stock` or `declined` by `cancelReason` as §10.7 maps it, once the `OrderCancelled` is projected |
-| *no row* | `dispatched`, `delivered` or a cancellation; `placed` for an order the saga has yet to consume | `confirmed` beside an escalation: a confirmation or despatch timeout, or a cancellation after confirmation, finalises the saga and leaves a review row for a person |
+| *no row* | `dispatched`, `delivered` or a cancellation; `placed` for an order the saga has yet to consume | `confirmed` beside an escalation: a despatch timeout or a cancellation after confirmation finalises the saga and leaves a review row for a person; a confirmation timeout does the same with `placed` or `confirmed`, by whether the BFF absorbed `OrderConfirmed` |
 
 A pair outside its row (`Compensating` beside `confirmed` for longer than a
 projection takes, or a row beside `delivered`) is a fact to chase, and
