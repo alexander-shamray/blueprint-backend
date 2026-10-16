@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Negative cases for the commit gate, each beside a positive control.
-
-The last class runs `collect` against a throwaway repository, because the
-trailer is read by git and not by a regex.
-"""
+"""Negative cases for the commit gate, each beside a positive control."""
 
 from __future__ import annotations
 
