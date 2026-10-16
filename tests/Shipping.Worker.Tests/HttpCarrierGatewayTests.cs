@@ -60,8 +60,11 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     private ICarrierGateway Carrier() =>
         _factory.Services.CreateScope().ServiceProvider.GetRequiredService<ICarrierGateway>();
 
-    private static BookingRequest Booking(string postalCode, ShipmentId? shipment = null) =>
-        new(shipment ?? ShipmentId.New(), new DeliveryAddress("1 Abay Avenue", null, "Almaty", postalCode, "KZ"));
+    private static BookingRequest Booking(string postalCode, ShipmentId? shipment = null, OrderId? order = null) =>
+        new(
+            shipment ?? ShipmentId.New(),
+            order ?? new OrderId(Guid.CreateVersion7()),
+            new DeliveryAddress("1 Abay Avenue", null, "Almaty", postalCode, "KZ"));
 
     private int Calls(string path) =>
         _server.LogEntries.Count(e => e.RequestMessage!.Path == path);
@@ -82,22 +85,26 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     }
 
     [Fact]
-    public async Task The_carrier_is_shown_the_address_and_the_shipments_id_and_nothing_else()
+    public async Task The_carrier_is_shown_the_address_and_the_shipments_and_orders_ids_and_nothing_else()
     {
         ShipmentId shipment = ShipmentId.New();
+        OrderId order = new(Guid.CreateVersion7());
 
-        await Carrier().BookAsync(Booking("050000", shipment), TestContext.Current.CancellationToken);
+        await Carrier().BookAsync(Booking("050000", shipment, order), TestContext.Current.CancellationToken);
 
         ILogEntry call = _server.LogEntries.ShouldHaveSingleItem();
         using JsonDocument body = JsonDocument.Parse(call.RequestMessage!.Body!);
         JsonElement root = body.RootElement;
 
         // The whole shape, since a field added to the body is a fact the carrier is shown.
-        root.EnumerateObject().Select(p => p.Name).ShouldBe(["shipmentId", "address"], ignoreOrder: true);
+        root.EnumerateObject().Select(p => p.Name).ShouldBe(
+            ["shipmentId", "orderId", "address"],
+            ignoreOrder: true);
         root.GetProperty("address").EnumerateObject().Select(p => p.Name).ShouldBe(
             ["line1", "line2", "city", "postalCode", "country"],
             ignoreOrder: true);
         root.GetProperty("shipmentId").GetGuid().ShouldBe(shipment.Value);
+        root.GetProperty("orderId").GetGuid().ShouldBe(order.Value);
         root.GetProperty("address").GetProperty("line1").GetString().ShouldBe("1 Abay Avenue");
         call.RequestMessage.Headers!["Authorization"]
             .Single()

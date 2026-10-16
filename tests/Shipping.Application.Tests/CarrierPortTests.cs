@@ -14,7 +14,7 @@ public class CarrierPortTests
     {
         ShipmentId shipment = ShipmentId.New();
 
-        string book = new BookingRequest(shipment, Address()).IdempotencyKey;
+        string book = new BookingRequest(shipment, new OrderId(Guid.CreateVersion7()), Address()).IdempotencyKey;
         string cancel = new CancellationRequest(shipment, "crr_x").IdempotencyKey;
 
         book.ShouldBe($"book:{shipment.Value}");

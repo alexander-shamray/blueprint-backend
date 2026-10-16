@@ -31,7 +31,10 @@ public sealed class CarrierFaultTests : IDisposable
         Server.LogEntries.Count(e => e.RequestMessage!.Path == path);
 
     private static BookingRequest Booking(string postalCode) =>
-        new(ShipmentId.New(), new DeliveryAddress("1 Abay Avenue", null, "Almaty", postalCode, "KZ"));
+        new(
+            ShipmentId.New(),
+            new OrderId(Guid.CreateVersion7()),
+            new DeliveryAddress("1 Abay Avenue", null, "Almaty", postalCode, "KZ"));
 
     private static string StallMapping() => Path.Combine(SimulatorMappings.Directory(), "book-stalled.json");
 

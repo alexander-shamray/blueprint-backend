@@ -15,7 +15,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
 
     private sealed record AddressBody(string Line1, string? Line2, string City, string PostalCode, string Country);
 
-    private sealed record BookBody(Guid ShipmentId, AddressBody Address);
+    private sealed record BookBody(Guid ShipmentId, Guid OrderId, AddressBody Address);
 
     private sealed record BookAnswer(string Status, string? Reference, string? TrackingNumber, string? Code);
 
@@ -34,6 +34,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
             Content = JsonContent.Create(
                 new BookBody(
                     request.ShipmentId.Value,
+                    request.OrderId.Value,
                     new AddressBody(address.Line1, address.Line2, address.City, address.PostalCode, address.Country)))
         };
         message.Headers.Add(KeyHeader, request.IdempotencyKey);
