@@ -66,6 +66,12 @@ public class TestcontainersWarmUpTests
     }
 
     [Fact]
+    public void The_regex_warm_up_matches_an_image_reference_and_returns_its_tag()
+    {
+        TestcontainersWarmUp.WarmRegexEngine().ShouldBe("0.11.0");
+    }
+
+    [Fact]
     public void The_real_initialisers_run_without_a_daemon()
     {
         Should.NotThrow(TestcontainersWarmUp.Ensure);
