@@ -231,7 +231,14 @@ public class RealmImportTests
 
         // Not orders:admin, so the ownership 404 stays demonstrable with the logins shipped.
         Permissions("demo").ShouldBe(
-            ["catalog:write", "orders:write", "orders:cancel", "inventory:admin", "payments:admin"],
+            [
+                "catalog:write",
+                "orders:write",
+                "orders:cancel",
+                "inventory:admin",
+                "payments:admin",
+                "orders:saga-read"
+            ],
             ignoreOrder: true);
 
         // Held by this login alone, so demo's list above stays the one that cannot destroy a customer's records.
@@ -329,6 +336,7 @@ public class RealmImportTests
                 "orders:cancel",
                 "orders:admin",
                 "orders:delivery-address",
+                "orders:saga-read",
                 "privacy:erase"
             ],
             ignoreOrder: true);

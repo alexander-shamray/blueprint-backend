@@ -32,6 +32,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
         // Not vacuous: the loop below passes trivially over a set missing a policy.
         named.ShouldContain(OrderingPermissions.Write);
         named.ShouldContain(OrderingPermissions.Cancel);
+        named.ShouldContain(OrderingPermissions.SagaRead);
         named.ShouldContain(
             OrderingPermissions.DeliveryAddress,
             "ADR-052's method is the first in this service behind a policy no endpoint route names");

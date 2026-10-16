@@ -2,6 +2,7 @@ using Common.Application;
 using Common.Web;
 using Ordering.Application.Orders;
 using Ordering.Application.Orders.CancelOrder;
+using Ordering.Application.Orders.GetSagaState;
 using Ordering.Application.Orders.PlaceOrder;
 using Ordering.Domain.Orders;
 
@@ -85,6 +86,22 @@ public static class OrderEndpoints
             .RetrySafe(RetrySafety.Convergent)
             .WithRequestExample(new CancelOrderRequest(CancellationReasons.ToCode(CancellationReason.CustomerRequest)))
             .WithName("CancelOrder");
+
+        // The saga's own word, not the buyer's: no customer is on the instance (ADR-028), so a staff permission
+        // stands where an ownership check cannot, and no row is 404 for a finalised saga and an unknown order alike.
+        group
+            .MapGet(
+                "/{id:guid}/saga",
+                async (Guid id, IDispatcher dispatcher, CancellationToken ct) =>
+                {
+                    SagaStateView? state = await dispatcher.QueryAsync(new GetSagaStateQuery(id), ct);
+
+                    return state is null ? Results.NotFound() : Results.Ok(state);
+                })
+            .RequireAuthorization(OrderingPermissions.SagaRead)
+            .Produces<SagaStateView>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetOrderSagaState");
     }
 }
 
