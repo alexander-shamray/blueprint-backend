@@ -30,7 +30,13 @@ IFS=$'\t' read -r state head_branch base cross <<<"${row%$'\r'}"
 git fetch --quiet origin main "$branch"
 remote=$(git rev-parse "refs/remotes/origin/$branch")
 tip=$(git rev-parse HEAD)
-[ "$remote" = "$tip" ] || { echo "origin/$branch is $remote, not the local $tip: push or pull first" >&2; exit 4; }
+# A rewrite whose push failed leaves the same trees under new messages, so origin's tip is then the lease to
+# publish against. Any other difference is work this checkout lacks or has not pushed.
+if [ "$remote" != "$tip" ]; then
+  [ "$(git rev-parse "$remote^{tree}")" = "$(git rev-parse "$tip^{tree}")" ] &&
+    [ "$(git rev-list --count "origin/main..$remote")" = "$(git rev-list --count origin/main..HEAD)" ] ||
+    { echo "origin/$branch is $remote, not the local $tip: push or pull first" >&2; exit 4; }
+fi
 
 base_oid=$(git merge-base origin/main HEAD)
 merges=$(git rev-list --merges "$base_oid..HEAD")
@@ -49,15 +55,19 @@ for sha in $(git rev-list "$base_oid..HEAD"); do
   fi
 done
 total=$(git rev-list --count "$base_oid..HEAD")
-[ "$owned" -lt "$total" ] || { echo "every commit already carries $wanted"; exit 0; }
-
-# The exec skips a commit that has the trailer, so a rerun after a failed push changes nothing already done.
-exec_cmd="git log -1 --format=%B | git interpret-trailers --parse | grep -qx '$wanted' || git commit --amend --no-edit --trailer '$wanted'"
-if ! GIT_SEQUENCE_EDITOR=true git rebase --quiet -x "$exec_cmd" "$base_oid"; then
-  git rebase --abort || true
-  echo "adding the trailer failed; the branch is as it was" >&2; exit 6
+if [ "$owned" -eq "$total" ] && [ "$remote" = "$tip" ]; then
+  echo "every commit already carries $wanted"; exit 0
 fi
 
-git push --quiet --force-with-lease="refs/heads/$branch:$tip" origin "HEAD:refs/heads/$branch" ||
+# The exec skips a commit that has the trailer, so a rerun after a failed push changes nothing already done.
+if [ "$owned" -lt "$total" ]; then
+  exec_cmd="git log -1 --format=%B | git interpret-trailers --parse | grep -qx '$wanted' || git commit --amend --no-edit --trailer '$wanted'"
+  if ! GIT_SEQUENCE_EDITOR=true git rebase --quiet -x "$exec_cmd" "$base_oid"; then
+    git rebase --abort || true
+    echo "adding the trailer failed; the branch is as it was" >&2; exit 6
+  fi
+fi
+
+git push --quiet --force-with-lease="refs/heads/$branch:$remote" origin "HEAD:refs/heads/$branch" ||
   { echo "the push failed; the local branch carries the trailers, origin's does not. Rerun once origin answers" >&2; exit 7; }
 echo "added $wanted to $((total - owned)) commit(s) and published $branch at $(git rev-parse HEAD)"

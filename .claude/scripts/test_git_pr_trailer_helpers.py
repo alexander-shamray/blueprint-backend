@@ -103,6 +103,18 @@ class TrailerHelper(Fixture):
             "Co-Authored-By: C <c@example.invalid>\nPR: #7",
             "\n".join(message.splitlines()[-2:]))
 
+    def test_a_rerun_after_a_failed_push_publishes_the_rewrite(self):
+        self.two_commit_branch()
+        hook = '$ROOT/remote.git/hooks/pre-receive'
+        self.assertEqual(0, sh(f'printf "#!/bin/sh\\nexit 1\\n" > "{hook}" && chmod +x "{hook}"', ROOT=self.root).returncode)
+        failed = self.run_helper(TRAILER)
+        self.assertEqual(7, failed.returncode, failed.stderr)
+        self.assertNotEqual(self.git('rev-parse', 'HEAD'), self.git('rev-parse', 'origin/feat/x'))
+        self.assertEqual(0, sh(f'rm "{hook}"', ROOT=self.root).returncode)
+        again = self.run_helper(TRAILER)
+        self.assertEqual(0, again.returncode, again.stderr)
+        self.assertEqual(self.git('rev-parse', 'HEAD'), self.git('ls-remote', 'origin', 'feat/x').split()[0])
+
     def test_a_second_run_changes_nothing_and_publishes_nothing(self):
         self.two_commit_branch()
         self.assertEqual(0, self.run_helper(TRAILER).returncode)
@@ -182,7 +194,7 @@ class TrailerHelper(Fixture):
 
     def test_the_helper_spells_its_rewrite_and_its_lease_itself(self):
         code = "\n".join(code_lines(TRAILER.read_text(encoding="utf-8")))
-        self.assertIn('--force-with-lease="refs/heads/$branch:$tip"', code)
+        self.assertIn('--force-with-lease="refs/heads/$branch:$remote"', code)
         self.assertNotIn("git push --force ", code)
         self.assertNotIn("git push -f", code)
 
