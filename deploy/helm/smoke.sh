@@ -108,6 +108,7 @@ src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
 src/BuildingBlocks/Common.Web/HealthProbe.cs
 .gitattributes
 deploy/canary
+deploy/workflow_paths
 $(awk '$2 == "source" { print $3 }' "$CASES")
 "
 SOURCE_INPUTS="$(printf '%s\n' $SOURCE_INPUTS | sort -u)"
@@ -392,52 +393,46 @@ section 'The workflow watches everything this script reads'
 # --------------------------------------------------------------------------
 # Both triggers, because a merged change that skips the gate on `main` is the
 # same defect one branch later.
+#
+# The reader and the glob test are workflow_paths.py's, the one the Python
+# gates import, so a form one misreads is not read differently here. Its
+# interpreter writes carriage returns on Windows, and its input comes on stdin
+# because a path this shell makes up is not always one a native interpreter opens.
+workflow_paths() { $PYTHON "$ROOT/deploy/workflow_paths/workflow_paths.py" "$@"; }
 covered() {
-    # covered <path> <trigger-block> -> exit 0 when some filter entry matches
-    awk -v want="$1" '
-        { sub(/^ *- /, ""); gsub(/'"'"'/, "") }
-        $0 == want { found = 1 }
-        /\/\*\*$/ {
-            prefix = substr($0, 1, length($0) - 3)
-            if (want == prefix || index(want, prefix "/") == 1) { found = 1 }
-        }
-        END { exit found ? 0 : 1 }
-    ' "$2"
+    # covered <path> <entries-file> -> exit 0 when some filter entry matches
+    workflow_paths covered "$1" <"$2"
 }
-
-# One trigger's own `paths:` entries and nothing else, ended by the next key at
-# its depth: a renamed `paths-ignore:` or a step list later in the file is not a
-# filter, and reading either as one passed an inverted or narrowed trigger.
 trigger_paths() {
     # trigger_paths <trigger> <workflow>
-    awk -v trigger="$1" '
-        /^  [^ ]/ { in_trigger = ($0 ~ "^  " trigger ":"); in_paths = 0; next }
-        in_trigger && /^    [^ ]/ { in_paths = ($0 ~ /^    paths:[ ]*$/); next }
-        in_paths && /^      - / { print }
-    ' "$2"
+    workflow_paths trigger-paths "$1" <"$2" | tr -d '\r'
 }
 
 trigger_paths pull_request "$ROOT/.github/workflows/helm.yml" >"$OUT/pr-paths.txt"
 trigger_paths push "$ROOT/.github/workflows/helm.yml" >"$OUT/push-paths.txt"
 
-# The reader's own cases, so a change to it cannot quietly read nothing.
+# The reader's own cases live in its suite; these prove the shell reaches it and
+# reads what it prints.
 printf '%s\n' 'on:' '  pull_request:' '    paths-ignore:' "      - 'deploy/helm/**'" \
     >"$OUT/inverted.yml"
 printf '%s\n' 'on:' '  push:' '    paths:' "      - 'other/**'" 'jobs:' '  smoke:' '    steps:' \
     "      - 'deploy/helm/**'" >"$OUT/steps.yml"
-printf '%s\n' "      - 'src/BFF/Web/**'" >"$OUT/narrowed.txt"
+printf '%s\n' 'src/BFF/Web/**' >"$OUT/narrowed.txt"
 printf '%s\n' 'on:' '  pull_request:' '    paths:' "      - 'a/**'" '  push:' '    paths:' "      - 'b/**'" \
     >"$OUT/two-triggers.yml"
+trigger_paths pull_request "$OUT/two-triggers.yml" >"$OUT/two-triggers-pr.txt"
+trigger_paths pull_request "$OUT/inverted.yml" >"$OUT/inverted-pr.txt"
+trigger_paths push "$OUT/steps.yml" >"$OUT/steps-push.txt"
 not_covered() { ! covered "$@"; }
 check "one trigger's filter is not read as the other's" \
-    not_covered b/x <(trigger_paths pull_request "$OUT/two-triggers.yml")
+    not_covered b/x "$OUT/two-triggers-pr.txt"
 check 'a paths-ignore list is not read as a paths filter' \
-    test -z "$(trigger_paths pull_request "$OUT/inverted.yml")"
+    test ! -s "$OUT/inverted-pr.txt"
 check 'a step list after the trigger is not read as its filter' \
-    not_covered deploy/helm <(trigger_paths push "$OUT/steps.yml")
+    not_covered deploy/helm "$OUT/steps-push.txt"
 check 'an entry narrowed to a sibling directory does not cover the input' \
     not_covered src/BFF/Web.Bff "$OUT/narrowed.txt"
-check 'the push reader still finds a filter entry' covered other/x <(trigger_paths push "$OUT/steps.yml")
+check 'the push reader still finds a filter entry' covered other/x "$OUT/steps-push.txt"
 
 # The workflow's own path and this gate's own tree are both on the list:
 # without the first, a change to the trigger lists does not run the gate
@@ -462,18 +457,18 @@ if [ ! -s "$OUT/reads.txt" ]; then
     # all.
     fail 'found no $ROOT-relative reads in smoke.sh — the scan is broken, not the list'
 else
+    grep -vE '/$|^deploy/helm($|/)|^\.github/workflows/helm\.yml$' "$OUT/reads.txt" >"$OUT/judged-reads.txt" || true
+    # Exit 1 is "some are undeclared" and names them; any other non-zero is the
+    # reader failing, and it fails the section rather than reading as complete.
+    undeclared_status=0
+    workflow_paths undeclared $SOURCE_INPUTS <"$OUT/judged-reads.txt" | tr -d '\r' >"$OUT/undeclared.txt" ||
+        undeclared_status=$?
+    check 'the declaration check ran over the reads it was given' \
+        test -s "$OUT/judged-reads.txt" -a "$undeclared_status" -le 1
     while read -r path; do
-        case "$path" in
-            */|deploy/helm|deploy/helm/*|.github/workflows/helm.yml) continue ;;
-        esac
-        matched=no
-        for input in $SOURCE_INPUTS; do
-            case "$path" in
-                "$input"|"$input"/*) matched=yes ;;
-            esac
-        done
-        check "SOURCE_INPUTS declares $path, which this script reads" test "$matched" = yes
-    done <"$OUT/reads.txt"
+        check "SOURCE_INPUTS declares $path, which this script reads" \
+            awk -v want="$path" '$0 == want { found = 1 } END { exit found ? 1 : 0 }' "$OUT/undeclared.txt"
+    done <"$OUT/judged-reads.txt"
 fi
 
 # --------------------------------------------------------------------------

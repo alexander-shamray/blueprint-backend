@@ -30,7 +30,10 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
-ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "workflow_paths"))
+import workflow_paths  # noqa: E402  (ADR-132 holds the workflow-filter checks there)
+
+ROOT =Path(__file__).resolve().parents[2]
 
 LIFETIME_SOURCE = "src/BuildingBlocks/Common.Web/AuthenticationExtensions.cs"
 
@@ -66,7 +69,8 @@ DEPLOY_WORKFLOW = ".github/workflows/deploy.yml"
 # and a subtree the triggers do not name reaches `main` with the gate skipped.
 CANARY_PLAN = "deploy/canary"
 
-SOURCE_INPUTS = [LIFETIME_SOURCE, GRANT_SOURCE, COMPOSE_REALM, CHART_VALUES, DEPLOY_WORKFLOW, CANARY_PLAN]
+SOURCE_INPUTS = [LIFETIME_SOURCE, GRANT_SOURCE, COMPOSE_REALM, CHART_VALUES, DEPLOY_WORKFLOW, CANARY_PLAN,
+                 workflow_paths.HOME]
 
 WORKFLOW_PATH = ".github/workflows/realm.yml"
 
@@ -90,9 +94,6 @@ PATH_LITERAL = r'"((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+)"'
 # `root / CONSTANT` and `root / module.CONSTANT` alike, because the qualified
 # form is how a sibling module names one of this file's paths.
 ROOT_USE = r"(?:^|[^A-Za-z0-9_.])(?:ROOT|root)\s*/\s*(?:[a-z_][A-Za-z0-9_]*\.)?([A-Z_][A-Z0-9_]*)"
-
-# The two triggers `realm.yml` must carry, named so a failure can say which.
-TRIGGERS = ("pull_request", "push")
 
 # `web-app` is §11.2's browser client, restated here rather than inferred from
 # its flags: every flag that would identify it is one of the settings judged
@@ -1751,19 +1752,8 @@ def check_source_inputs_covers_reads() -> list[str]:
 
     reads = {r for r in quoted | used
              if r != WORKFLOW_PATH and r != OWN_TREE and not r.startswith(f"{OWN_TREE}/")}
-    if not reads:
-        return problems + [
-            "the self-check found no path literal and no root-joined constant "
-            "anywhere in deploy/keycloak, so it is the scan that is broken "
-            "rather than the list that is complete"
-        ]
-
-    for read in sorted(reads):
-        if not any(read == entry or read.startswith(f"{entry}/") for entry in SOURCE_INPUTS):
-            problems.append(
-                f"{read} is read by this gate and covered by no SOURCE_INPUTS "
-                f"entry, so {WORKFLOW_PATH} will not run on a change to it")
-    return problems
+    return problems + workflow_paths.check_reads_declared(
+        reads, SOURCE_INPUTS, reader="deploy/keycloak", label=WORKFLOW_PATH)
 
 
 def check_workflow_covers_inputs(root: Path = ROOT) -> list[str]:
@@ -1771,36 +1761,13 @@ def check_workflow_covers_inputs(root: Path = ROOT) -> list[str]:
 
     Both, and each named: a merged change that skips the gate on `main` is the
     same defect one branch later, and anchoring each `paths:` block to its
-    event is what lets a failure name the event instead of a position. Text
-    rather than YAML, on the licence gate's terms; the cost is that only the
-    quoting styles below are recognised, and it is paid as a refusal rather
-    than a pass.
+    event is what lets a failure name the event instead of a position. The
+    reader is `workflow_paths`'s, which refuses what it cannot read rather
+    than passing it.
     """
-    workflow = root / WORKFLOW_PATH
-    try:
-        text = workflow.read_text(encoding="utf-8")
-    except OSError as error:
-        return [f"{WORKFLOW_PATH} is not readable: {error}"]
-
-    problems = []
-    for event in TRIGGERS:
-        block = re.search(
-            rf"^  {event}:\s*\n(?:(?!^  \S).)*?^    paths:\s*\n((?:^ *-[^\n]*\n)+)",
-            text, re.MULTILINE | re.DOTALL)
-        if block is None:
-            problems.append(
-                f"{WORKFLOW_PATH} has no {event} trigger with a paths list this "
-                "check can read. That is not the same as saying its inputs are "
-                "covered, so it is reported rather than skipped")
-            continue
-
-        patterns = re.findall(r"-\s*['\"]?([^'\"\s#]+)['\"]?", block.group(1))
-        for entry in SOURCE_INPUTS + [OWN_TREE, WORKFLOW_PATH]:
-            if not any(p == entry or p == f"{entry}/**" for p in patterns):
-                problems.append(
-                    f"{WORKFLOW_PATH}'s {event} trigger does not cover {entry}, "
-                    "so a change to it would not run this gate")
-    return problems
+    return workflow_paths.check_workflow_covers_inputs(
+        root / WORKFLOW_PATH, SOURCE_INPUTS + [OWN_TREE, WORKFLOW_PATH],
+        reader="deploy/keycloak", label=WORKFLOW_PATH)
 
 
 def load_realm(path: Path) -> dict:
