@@ -1,28 +1,8 @@
-"""The one reader of a workflow's `paths:` filter, and the two checks built on it.
+"""A workflow's `paths:` filter, read once, and the two checks on it (ADR-132).
 
-Every gate under `deploy/` proves two things about its own workflow: that each
-trigger's filter covers every path the gate reads, so a change to an input
-cannot skip the gate, and that no path the gate reads is missing from the list
-it declares. This module is where that is held, once; a gate keeps its own
-SOURCE_INPUTS and its own scan of what it reads, and asks here whether the
-workflow and the list agree.
-
-The reader is text rather than YAML, because the standard library has none, and
-it reads one trigger's own `paths:` entries and nothing else. Reading a
-trigger's whole remaining text instead lets a gate certify a filter that skips
-it: `push` is the last trigger, so its "body" ran to the end of the file and
-included the step that runs the gate, and deleting the entry left that
-substring behind. **A gate that reads more than the thing it is judging can be
-satisfied by something that is not the thing.**
-
-`smoke.sh` reaches the same functions through the command line below, so the
-shell and the Python gates cannot read a form differently. Each takes its
-input on stdin, because a path the shell hands a native interpreter is not
-always one it can open:
-
-    workflow_paths.py trigger-paths <trigger>       (a workflow)
-    workflow_paths.py covered <entry>               (filter entries, one a line)
-    workflow_paths.py undeclared <declared>...      (reads, one a line)
+Text rather than YAML, one trigger's own entries only. smoke.sh calls the
+command line on stdin: `trigger-paths <trigger>`, `covered <entry>` and
+`undeclared <declared>...`.
 """
 from __future__ import annotations
 
@@ -38,12 +18,10 @@ TRIGGERS = ("pull_request", "push")
 
 
 def trigger_paths(text: str, trigger: str) -> list[str] | None:
-    """The `paths:` entries of one trigger, or None when the workflow has none.
+    """The `paths:` entries of one trigger, or None when the workflow lacks it.
 
-    A trigger whose `paths:` key is absent, or spelled `paths-ignore:`, yields
-    an empty list: it is a trigger that filters nothing in, which is not the
-    same as not having the trigger. A sibling key ends the list, so
-    `branches:` after `paths:` is not read as entries.
+    A trigger with no `paths:` key, or `paths-ignore:`, yields an empty list,
+    and a sibling key ends the list.
     """
     lines = text.splitlines()
 
@@ -84,17 +62,11 @@ def _entry(value: str) -> str:
 
 
 def covers(path: str, entry: str) -> bool:
-    """Does one `paths:` glob cover the WHOLE of an input a gate reads?
+    """Does one `paths:` glob cover the whole of an input a gate reads?
 
-    Only `/**` covers a directory — GitHub's `*` does not cross a separator, so
-    `src/*` matches the files directly under `src` and none of the C# beneath
-    them, and a filter narrowed that way would skip every source change while
-    this check called it covered.
-
-    The direction matters: a glob covers an entry when the glob's literal
-    prefix is the entry or an ancestor of it, never the other way round. An
-    earlier copy had it backwards and read `src/Services/Ordering/**` as
-    covering `src`, approving a filter that skips every other service.
+    Only `/**` covers a directory, since `*` does not cross a separator, and
+    only from the entry or an ancestor of it: `src/Services/Ordering/**` does
+    not cover `src`, as an earlier copy had it.
     """
     if path == "**":
         return True
@@ -112,13 +84,10 @@ def covered(entry: str, patterns: list[str]) -> bool:
 
 def check_workflow_covers_inputs(
         workflow: Path, required: list[str], *, reader: str, label: str | None = None) -> list[str]:
-    """Both triggers of `workflow` carry a filter that covers every entry of `required`.
+    """Both triggers of `workflow` carry a filter covering every entry of `required`.
 
-    Both, and each named: anchoring a `paths:` list to its event is what lets a
-    failure name the event instead of a position. An empty filter and a missing
-    trigger are failures rather than passes, because a parser that read nothing
-    would otherwise agree with any list at all. `reader` names the gate, for
-    the message; `label` is how the workflow is spelled in it.
+    A missing trigger or an empty filter fails, since a parser that read nothing
+    would agree with any list. `reader` names the gate in a message.
     """
     label = label or workflow.name
     try:
@@ -145,13 +114,9 @@ def check_workflow_covers_inputs(
 
 def check_reads_declared(
         reads: set[str], declared: list[str], *, reader: str, label: str) -> list[str]:
-    """Every path in `reads` is `declared`, whole or as a directory prefix, never as a substring.
+    """Every read is declared, whole or as a directory prefix, never a substring.
 
-    The other direction from the workflow check, and the one that stays green
-    when the list is short rather than wrong: a workflow can only be asked
-    about entries the list already contains, so a read nobody declared is
-    invisible from that side. An empty `reads` is a failure, because a scan
-    that found nothing would pass this loop against any list at all.
+    The workflow check cannot see a read the list omits; an empty `reads` fails.
     """
     if not reads:
         return [f"{reader}: found no reads in its own source — the scan is broken, not the list"]

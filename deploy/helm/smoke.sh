@@ -392,12 +392,8 @@ check 'ATTACHES_CREDENTIALS refuses a handler whose name only ends in the word' 
 section 'The workflow watches everything this script reads'
 # --------------------------------------------------------------------------
 # Both triggers, because a merged change that skips the gate on `main` is the
-# same defect one branch later.
-#
-# The reader and the glob test are workflow_paths.py's, the one the Python
-# gates import, so a form one misreads is not read differently here. Its
-# interpreter writes carriage returns on Windows, and its input comes on stdin
-# because a path this shell makes up is not always one a native interpreter opens.
+# same defect one branch later. The reader is workflow_paths.py's, as the
+# Python gates use it; input on stdin, carriage returns dropped (ADR-132).
 workflow_paths() { $PYTHON "$ROOT/deploy/workflow_paths/workflow_paths.py" "$@"; }
 covered() {
     # covered <path> <entries-file> -> exit 0 when some filter entry matches
