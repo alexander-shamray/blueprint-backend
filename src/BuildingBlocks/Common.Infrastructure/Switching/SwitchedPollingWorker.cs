@@ -5,7 +5,7 @@ namespace Common.Infrastructure.Switching;
 /// <summary>The timer loop every <see cref="ISwitchedWorker"/> shares: tick, skip while off, run a pass (ADR-113).</summary>
 /// <remarks>
 /// A worker supplies its interval, its pass and what a failed pass logs; it does not write the loop, so a change to
-/// what a switched-off tick or a failed pass does is made here once.
+/// what a switched-off tick or a failed pass does is made here once (ADR-131).
 /// </remarks>
 public abstract class SwitchedPollingWorker(OperatorSwitches? switches) : BackgroundService, ISwitchedWorker
 {
