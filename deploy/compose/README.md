@@ -335,6 +335,13 @@ apply the override (§14.1):
 docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.infra-only.yml up -d --wait
 ```
 
+To watch each of the saga's five expiry branches by hand, add the override
+that cuts its waits to seconds (§14.1, ADR-128); never to a deployed release:
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.short-timeouts.yml up -d --wait
+```
+
 The host process reads none of the `environment:` blocks above, so every key
 Catalog and Ordering refuse to start without, which §14.1 names, has to reach
 them another way. Same values, host names in place of service names, and the
