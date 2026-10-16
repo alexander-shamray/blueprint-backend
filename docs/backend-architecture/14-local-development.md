@@ -180,6 +180,19 @@ Without a healthcheck `up --wait` returns when the process launches rather
 than when the realm is importable, and the first token request races the
 import.
 
+**An Android emulator reaches Keycloak as `localhost:8080`, through
+`adb reverse tcp:8080 tcp:8080`, and not as `10.0.2.2:8080`.** Keycloak's
+issuer is its frontend URL, so no setting serves the browser-facing endpoints
+from the request host while the tokens keep one issuer: dropping the pin to
+let `10.0.2.2` through puts `10.0.2.2` into the issuer, and `ValidateIssuer`
+rejects the token. Left as it is, the login page loads at `10.0.2.2:8080`, its
+form posts to `localhost:8080`, which inside the emulator is the emulator, and
+the session cookie set for `10.0.2.2` does not travel with it. The reverse
+makes the emulator's `localhost:8080` the host's, so every URL Keycloak names
+resolves and the cookie and the form share a host. The client's authority is
+`http://localhost:8080/realms/commerce`, the file that says so is the client
+repository's, and the pin above does not move.
+
 **The pair rule: every service's unit is a pair**, a `{service}-migrator`
 one-shot and the service itself, gated on
 `condition: service_completed_successfully`. Every service owns a database and
