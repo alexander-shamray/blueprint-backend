@@ -738,6 +738,42 @@ jobs:
           path: TestResults
           if-no-files-found: error
 
+  # Rebase landing puts every commit on main, and `build` compiles only the
+  # head. A commit that does not compile costs a `git bisect` its whole range,
+  # so each one before the head is built here; a red test in one costs a
+  # single step, so tests are not run. A pull request of one commit has
+  # nothing to build and passes.
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Every commit before the head builds
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mapfile -t shas < <(git rev-list --reverse "$BASE_SHA..$HEAD_SHA" | grep -vx "$HEAD_SHA" || true)
+          echo "${#shas[@]} commit(s) besides the head"
+          for sha in "${shas[@]}"; do
+            echo "::group::$sha"
+            git checkout --quiet --detach "$sha"
+            git clean -fdxq
+            dotnet restore Platform.slnx
+            dotnet build Platform.slnx --no-restore -c Release
+            echo "::endgroup::"
+          done
+
   # The integration stage, one shard per runner. The filters are a cascade:
   # each shard excludes every shard above it and `rest` excludes them all, so
   # the shards are disjoint and exhaustive whatever a namespace contains, and

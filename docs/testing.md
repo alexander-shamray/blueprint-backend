@@ -218,6 +218,14 @@ The second reads the paginated files endpoint rather than
 [its README](../.github/locality-gate/README.md)'s. It judges ignored paths
 against the checkout it runs in, so run it on the pull request's branch.
 
+**The commit gate needs a pull request's number and a base**, and reads git
+rather than `gh`, so a branch can run it once its pull request exists:
+
+```bash
+git fetch origin main
+py -3.12 .github/commit-gate/commit_gate.py --pr <n> origin/main HEAD
+```
+
 **The comment gate needs only a base**, because it diffs the checkout's own
 history, so a branch can run it before it has a pull request:
 

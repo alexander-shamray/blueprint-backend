@@ -1,0 +1,69 @@
+name: Commit gate
+
+# Rebase landing leaves no merge commit to name the pull request, so each
+# commit carries it as a trailer. `.github/commit-gate/README.md` owns the
+# rules; this file only runs them. No `edited` trigger: a body edit changes
+# no commit.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commit-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  commit-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The range is base..head and the enforcing copy is read from the
+          # base commit, so history is needed (closure-gate.yml's reasoning).
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test the proposed gate
+        working-directory: .github/commit-gate
+        run: python -m unittest
+
+      # The base copy judges, as in closure-gate.yml. The one difference is
+      # the pull request that introduces the gate: its base carries none, so
+      # it is judged by its own copy, with a notice. A base that predates the
+      # gate while the head also lacks it still fails.
+      - name: Take the enforcing gate from the base commit
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GATE: .github/commit-gate/commit_gate.py
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/commit-gate"
+          if git cat-file -e "$BASE_SHA:$GATE" 2>/dev/null; then
+            git show "$BASE_SHA:$GATE" > "$RUNNER_TEMP/commit-gate/commit_gate.py"
+            echo "enforcing with the gate as of $BASE_SHA"
+          elif [ -f "$GATE" ]; then
+            cp "$GATE" "$RUNNER_TEMP/commit-gate/commit_gate.py"
+            echo "::notice::the base carries no gate; this pull request introduces it and is judged by its own copy"
+          else
+            echo "::error::neither $BASE_SHA nor the head carries $GATE"
+            exit 1
+          fi
+          if [ ! -s "$RUNNER_TEMP/commit-gate/commit_gate.py" ]; then
+            echo "::error::the enforcing gate is empty"
+            exit 1
+          fi
+
+      - name: Every commit names this pull request and keeps the form
+        shell: bash
+        run: |
+          python "$RUNNER_TEMP/commit-gate/commit_gate.py" \
+            --pr "${{ github.event.pull_request.number }}" \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"
