@@ -743,7 +743,7 @@ must be resolved before `helm lint` or `helm template` will run. `charts/` and
 > Helm's `fullname` is `{{ .Release.Name }}-{{ .Chart.Name }}`, and that is
 > wrong here: §10.2's route file resolves `http://catalog-api:8080/`,
 > [§9.7](09-messaging.md)'s pricing hop `http://catalog-api:8081` and
-> [§10.10](10-api-gateway.md)'s and §10.11's hop `http://notifications-api:8081`,
+> [E.6.13](appendix-e-reference-domain.md#e613-the-device-registration)'s hop `http://notifications-api:8081`,
 > all as literals in source, on the stated grounds that the host *is* the
 > Kubernetes Service name. A release-derived name makes that false the moment
 > the umbrella installs the same workload under its own release name, and the

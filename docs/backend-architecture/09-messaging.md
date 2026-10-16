@@ -2922,7 +2922,7 @@ dual write.
 until the saga compensates. It requires `orders:saga-read` (Appendix E.6.5)
 and nothing else, because the instance holds no customer (ADR-028) to check a
 caller against; the permission is staff's, not a buyer's. The BFF's
-`/bff/v1/orders/{id}` (§10.7) is the buyer's word and a projection of events,
+`/bff/v1/orders/{id}` ([E.6.10](appendix-e-reference-domain.md#e610-the-buyers-order-read)) is the buyer's word and a projection of events,
 so the two are separate sources and can differ.
 
 **No row is a 404 for two facts at once.** A finalised saga deletes its
