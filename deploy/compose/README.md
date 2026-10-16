@@ -303,8 +303,9 @@ curl http://localhost:5000/api/v1/orders/$ORDER/saga \
     -H "Authorization: Bearer $TOKEN"
 ```
 
-It answers `currentState`, `startedAt` and `cancelReason`. A 404 is a finalised
-saga or an order it never saw, since MassTransit deletes the instance on
+It answers `currentState`, `startedAt`, `stateEnteredAt` and `cancelReason`.
+A 404 is a finalised saga or an order it never saw, since MassTransit deletes
+the instance on
 finalising. [§9.6](../../docs/backend-architecture/09-messaging.md)'s *Reading
 the saga's state* maps each state to the buyer status the BFF should be
 showing, so a difference of vocabulary is told from a difference of fact.

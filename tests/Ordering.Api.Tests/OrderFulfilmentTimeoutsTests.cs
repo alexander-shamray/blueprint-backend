@@ -47,6 +47,17 @@ public class OrderFulfilmentTimeoutsTests
         bound.PaymentTimeoutDelay.ShouldBe(OrderFulfilmentSaga.PaymentTimeoutDelay);
     }
 
+    [Fact]
+    public void The_container_can_satisfy_the_saga_constructor_that_takes_the_bound_delays()
+    {
+        // The saga has a constructor without options, which the container takes whenever it cannot satisfy the
+        // other. A TimeProvider left unregistered would drop every bound delay and fail nothing above.
+        using ServiceProvider provider = Provider(("Saga:StockTimeoutDelay", "00:00:07"));
+
+        provider.GetRequiredService<TimeProvider>().ShouldBeSameAs(TimeProvider.System);
+        provider.GetRequiredService<OrderFulfilmentSaga>().ShouldNotBeNull();
+    }
+
     [Theory]
     [InlineData("Saga:StockTimeoutDelay", "00:00:00")]
     [InlineData("Saga:PaymentTimeoutDelay", "-00:00:05")]
