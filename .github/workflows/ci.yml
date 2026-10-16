@@ -245,6 +245,13 @@ jobs:
         working-directory: .github/output-gate
         run: python -m unittest
 
+      # The reader of every gate's workflow filter, and the workflow files it
+      # reads, which this job sees on every pull request where the gates'
+      # own workflows see only theirs (ADR-132).
+      - name: Test the workflow-filter reader
+        working-directory: deploy/workflow_paths
+        run: python -m unittest
+
       - name: Every deployable is matched by a path filter
         run: python .github/pipeline-gate/pipeline_gate.py filters
 

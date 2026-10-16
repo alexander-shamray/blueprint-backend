@@ -18,6 +18,7 @@ on:
     paths:
       - 'deploy/helm/**'
       - '.github/workflows/helm.yml'
+      - 'deploy/workflow_paths/**'
       - '.gitattributes'
       - 'src/Gateway/Gateway.Api/**'
       - 'src/BFF/Web.Bff/**'
@@ -30,6 +31,7 @@ on:
     paths:
       - 'deploy/helm/**'
       - '.github/workflows/helm.yml'
+      - 'deploy/workflow_paths/**'
       - '.gitattributes'
       - 'src/Gateway/Gateway.Api/**'
       - 'src/BFF/Web.Bff/**'
