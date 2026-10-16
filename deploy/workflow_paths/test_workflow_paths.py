@@ -192,12 +192,10 @@ class TheCommandLine(unittest.TestCase):
 
 
 class TheWorkflowFilesThemselves(unittest.TestCase):
-    """The subject: the files the reader exists to read, counted without it.
+    """The subject: the workflow files, counted without the reader.
 
-    A reader that returned nothing would agree with every list, so each
-    workflow's filter entries are counted here by the one property that holds
-    before its `jobs:` key — a list item six spaces in — and the reader is held
-    to that count.
+    Entries are the list items six spaces in before `jobs:`, and the reader
+    is held to that count, since one that read nothing agrees with any list.
     """
 
     def filtered(self) -> dict[str, str]:

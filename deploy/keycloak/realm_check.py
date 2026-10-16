@@ -1759,11 +1759,8 @@ def check_source_inputs_covers_reads() -> list[str]:
 def check_workflow_covers_inputs(root: Path = ROOT) -> list[str]:
     """Both of the workflow's triggers cover every declared input.
 
-    Both, and each named: a merged change that skips the gate on `main` is the
-    same defect one branch later, and anchoring each `paths:` block to its
-    event is what lets a failure name the event instead of a position. The
-    reader is `workflow_paths`'s, which refuses what it cannot read rather
-    than passing it.
+    Both, because a change that skips the gate on `main` is the same defect
+    one branch later; the reader is `workflow_paths`'s.
     """
     return workflow_paths.check_workflow_covers_inputs(
         root / WORKFLOW_PATH, SOURCE_INPUTS + [OWN_TREE, WORKFLOW_PATH],

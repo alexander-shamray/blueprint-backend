@@ -1249,15 +1249,9 @@ def _masstransit_pin_is_verified(root: Path) -> list[str]:
 
 
 def _workflow_covers_inputs() -> list[str]:
-    """Both of the deploy workflow's triggers cover every SOURCE_INPUTS entry.
-
-    A merged change that skips the gate on `main` is the same defect one branch
-    later, which is why both triggers are checked rather than the first.
-    """
-    # The workflow's own path and this gate's own tree are both required:
-    # without the first, a change to the trigger lists runs no gate that
-    # validates them; without `deploy/canary`, an edit to canary.py,
-    # canary.json or the suite runs none either.
+    """Both of the deploy workflow's triggers cover every SOURCE_INPUTS entry."""
+    # The workflow's own path and `deploy/canary` are required too: without
+    # them an edit to the trigger lists, canary.py or the suite runs no gate.
     return workflow_paths.check_workflow_covers_inputs(
         WORKFLOW, SOURCE_INPUTS + ["deploy/canary", WORKFLOW_PATH],
         reader="deploy/canary/canary.py", label=WORKFLOW_PATH)
