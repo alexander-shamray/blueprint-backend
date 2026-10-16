@@ -17,6 +17,7 @@ on:
     paths:
       - 'deploy/observability/**'
       - '.github/workflows/observability.yml'
+      - 'deploy/workflow_paths/**'
       - 'docs/runbooks/**'
       - 'src/**'
       - 'docs/backend-architecture/13-observability.md'
@@ -25,6 +26,7 @@ on:
     paths:
       - 'deploy/observability/**'
       - '.github/workflows/observability.yml'
+      - 'deploy/workflow_paths/**'
       - 'docs/runbooks/**'
       - 'src/**'
       - 'docs/backend-architecture/13-observability.md'

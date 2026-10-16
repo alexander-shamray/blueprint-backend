@@ -14,6 +14,7 @@ on:
     paths:
       - 'deploy/compose/rabbitmq/**'
       - '.github/workflows/broker-permissions.yml'
+      - 'deploy/workflow_paths/**'
       - 'src/Services/**'
       - 'src/BFF/**'
       - 'src/BuildingBlocks/Common.Contracts/**'
@@ -23,6 +24,7 @@ on:
     paths:
       - 'deploy/compose/rabbitmq/**'
       - '.github/workflows/broker-permissions.yml'
+      - 'deploy/workflow_paths/**'
       - 'src/Services/**'
       - 'src/BFF/**'
       - 'src/BuildingBlocks/Common.Contracts/**'

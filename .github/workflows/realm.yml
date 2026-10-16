@@ -26,6 +26,7 @@ on:
       - '.github/workflows/deploy.yml'
       - 'deploy/canary/**'
       - '.github/workflows/realm.yml'
+      - 'deploy/workflow_paths/**'
   push:
     branches: [main]
     paths:
@@ -37,6 +38,7 @@ on:
       - '.github/workflows/deploy.yml'
       - 'deploy/canary/**'
       - '.github/workflows/realm.yml'
+      - 'deploy/workflow_paths/**'
   # Hourly, and off the hour. The window is the time between a realm edit and
   # the next rollout, and a schedule bounds it to its own cadence at the cost
   # of a few reads and a runner minute. Minute 17 rather than 0 because GitHub
