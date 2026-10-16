@@ -1135,7 +1135,7 @@ code is the owner of the strings, and this section the owner of the reasons.
 
 | Service | Constants | Why this set |
 |---|---|---|
-| Ordering | `orders:write`, `orders:cancel`, `orders:delivery-address` | There is no `orders:read`, because nothing in Ordering requires it |
+| Ordering | `orders:write`, `orders:cancel`, `orders:delivery-address`, `orders:saga-read` | There is no `orders:read`, because nothing in Ordering requires one for an order's own data; `orders:saga-read` is staff's, since the saga instance holds no customer (ADR-028) to check a caller against |
 | Catalog | `catalog:write` | Its listing is anonymous (§10.2), so there is no `catalog:read` |
 | Inventory | `inventory:admin` | Registered at the gateway as well (§10.2) |
 | Payments | `payments:admin` | Registered at the gateway as well (§10.2) |
@@ -1153,7 +1153,8 @@ builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(OrderingPermissions.Write, p => p.RequirePermission(OrderingPermissions.Write))
     .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel))
-    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress));
+    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress))
+    .AddPolicy(OrderingPermissions.SagaRead, p => p.RequirePermission(OrderingPermissions.SagaRead));
 ```
 
 Ordering's constants are
@@ -1165,6 +1166,7 @@ public static class OrderingPermissions
     public const string Write = "orders:write";
     public const string Cancel = "orders:cancel";
     public const string DeliveryAddress = "orders:delivery-address";
+    public const string SagaRead = "orders:saga-read";
 }
 ```
 

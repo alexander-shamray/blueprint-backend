@@ -215,7 +215,7 @@ already uses for `admin/admin` and the broker's service accounts:
 
 | User | Password | Holds |
 |---|---|---|
-| `demo` | `demo` | `catalog:write`, `orders:write`, `orders:cancel`, `inventory:admin`, `payments:admin` |
+| `demo` | `demo` | `catalog:write`, `orders:write`, `orders:cancel`, `inventory:admin`, `payments:admin`, `orders:saga-read` |
 | `privacy` | `privacy` | `privacy:erase` and nothing else |
 | `browser` | `browser` | nothing — the account that proves a refusal |
 
@@ -293,6 +293,21 @@ its own account (ADR-036).
 is a JSON *string* with the quotes still on it, which `{id:guid}` cannot bind,
 so interpolating it into `/v1/orders/$ORDER/cancel` needs `| jq -r .` — a
 shell trick rather than the service.
+
+**The saga's own word on an order** is a read, and `demo` holds its permission
+(`orders:saga-read`, a staff one: the saga instance carries no customer to
+check a caller against). Through the gateway, with `$ORDER` the order's id:
+
+```bash
+curl http://localhost:5000/api/v1/orders/$ORDER/saga \
+    -H "Authorization: Bearer $TOKEN"
+```
+
+It answers `currentState`, `startedAt` and `cancelReason`. A 404 is a finalised
+saga or an order it never saw, since MassTransit deletes the instance on
+finalising. [§9.6](../../docs/backend-architecture/09-messaging.md)'s *Reading
+the saga's state* maps each state to the buyer status the BFF should be
+showing, so a difference of vocabulary is told from a difference of fact.
 
 ## Walking an order
 
