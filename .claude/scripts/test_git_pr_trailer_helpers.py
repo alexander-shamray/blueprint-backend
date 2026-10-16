@@ -115,6 +115,14 @@ class TrailerHelper(Fixture):
         self.assertEqual(0, again.returncode, again.stderr)
         self.assertEqual(self.git('rev-parse', 'HEAD'), self.git('ls-remote', 'origin', 'feat/x').split()[0])
 
+    def test_a_remote_with_other_intermediate_trees_refuses_though_the_tip_tree_matches(self):
+        self.two_commit_branch()
+        self.git('reset', '-q', '--hard', 'main')
+        self.commit('two', 'docs: two', push=False)
+        self.commit('one', 'feat(x): one', push=False)
+        out = self.run_helper(TRAILER)
+        self.assertEqual(4, out.returncode, out.stderr)
+
     def test_a_second_run_changes_nothing_and_publishes_nothing(self):
         self.two_commit_branch()
         self.assertEqual(0, self.run_helper(TRAILER).returncode)

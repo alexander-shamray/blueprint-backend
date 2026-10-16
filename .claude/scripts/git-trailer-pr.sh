@@ -30,11 +30,10 @@ IFS=$'\t' read -r state head_branch base cross <<<"${row%$'\r'}"
 git fetch --quiet origin main "$branch"
 remote=$(git rev-parse "refs/remotes/origin/$branch")
 tip=$(git rev-parse HEAD)
-# A rewrite whose push failed leaves the same trees under new messages, so origin's tip is then the lease to
-# publish against. Any other difference is work this checkout lacks or has not pushed.
+# A rewrite whose push failed leaves the same trees, commit for commit, under new messages, so origin's tip is
+# then the lease to publish against. Any other difference is work this checkout lacks or has not pushed.
 if [ "$remote" != "$tip" ]; then
-  [ "$(git rev-parse "$remote^{tree}")" = "$(git rev-parse "$tip^{tree}")" ] &&
-    [ "$(git rev-list --count "origin/main..$remote")" = "$(git rev-list --count origin/main..HEAD)" ] ||
+  [ "$(git log --reverse --format=%T "origin/main..$remote")" = "$(git log --reverse --format=%T origin/main..HEAD)" ] ||
     { echo "origin/$branch is $remote, not the local $tip: push or pull first" >&2; exit 4; }
 fi
 
