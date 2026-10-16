@@ -223,8 +223,13 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              daily and on dispatch under the production
                              Environment, opted in by the repository variable
                              OBJECT_STORE_CHECK_SCHEDULED
+.github/workflows/commit-gate.yml  the commit gate's run: every commit of a
+                             pull request names it in a `PR: #<n>` trailer.
+                             No `edited` trigger, because a body edit changes
+                             no commit
 .github/<gate>/              one directory per gate — licence-gate,
-                             secret-scan, closure-gate, locality-gate,
+                             secret-scan, closure-gate, commit-gate,
+                             locality-gate,
                              pipeline-gate, output-gate, comment-gate,
                              messaging-gate, plan-size-gate,
                              domain-name-gate —
