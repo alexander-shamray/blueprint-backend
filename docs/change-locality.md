@@ -269,6 +269,13 @@ Beside those, how a change is made here:
   a symbol, a behaviour — and leaves the aphorism to the body. A
   `Closes #n` in a commit body fires on merge whatever the description says,
   so the description is reconciled to the commits and never the reverse.
+- **Every commit carries `PR: #<n>`, and every intermediate commit
+  builds.** A pull request lands by rebase, so the trailer is the only
+  record of which pull request a commit on `main` came from; `/pr` adds it
+  once the number exists, `/commit` writes it after, and the commit gate
+  refuses a range without it. The `commits` job builds each commit but the
+  head, which `build` covers, so `git bisect` meets only commits that
+  compile. Reverting a pull request is `git-revert-pr.sh <n>`.
 - **The issue vocabulary is wider than the label helper**: kind is
   `security`, `bug` or `documentation`, and the helper does not create the
   last. A `## Severity` in the body and the label both have to say it.
