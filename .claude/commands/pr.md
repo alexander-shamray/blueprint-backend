@@ -1,7 +1,7 @@
 ---
 description: Open a pull request with a body in the house form
 argument-hint: "[title — omit to derive it from the commits]"
-allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*)
+allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*)
 ---
 
 Open a PR for the current branch. Title: $1 — if empty, derive it from the
@@ -29,7 +29,9 @@ happening silently.
 **Two kinds of push are denied in `.claude/settings.json`, and neither is a
 step to work around:** rewriting history (`--force`, `-f`, `--force-with-lease`,
 `--delete`) and anything landing on `main`. A branch wanting either is raising
-a decision — stop and say so. Do not reach for `gh pr create`'s own offer to
+a decision — stop and say so. The trailer helper in *Steps* is not a way
+round the first: it carries its own lease (`docs/harness-boundaries.md`).
+Do not reach for `gh pr create`'s own offer to
 push either: it is the same action by a route that skips the upstream check
 above, so it pushes without ever reporting that it did.
 
@@ -164,7 +166,19 @@ through `gh` mangle the wrapping. Then:
 gh pr create --base main --title "<title>" --body-file <path>
 ```
 
+Then stamp the number `gh pr create` printed on the branch's commits,
+before anything reviews them:
+
+```bash
+bash .claude/scripts/git-trailer-pr.sh <n>
+```
+
+It adds `PR: #<n>` to each commit lacking it and publishes under a lease,
+so the SHAs change once, here, and no review round has to be repeated for
+it. A branch whose commits all carry it is left alone.
+
 ## Report
 
-The PR URL, its title, and the commits it carries. If any check you named above
+The PR URL, its title, the commits it carries and whether the trailer
+helper rewrote any. If any check you named above
 was skipped, say which.

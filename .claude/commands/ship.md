@@ -1,7 +1,7 @@
 ---
 description: Start from a clean main, fork a worktree where one can be forked, branch, commit, push and open a PR, run the local review until a round has nothing open, then merge the PR and tear the workspace down. Decides for itself rather than stopping to ask
 argument-hint: "[what the change does] [--sleep] — omit and each step derives its own"
-allowed-tools: Read, Grep, Glob, Write, Skill, Agent(branch-reviewer), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(bash .claude/scripts/git-worktree-remove.sh:*), Bash(git worktree prune:*), Bash(bash .claude/scripts/pr-locality.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/system-sleep.sh)
+allowed-tools: Read, Grep, Glob, Write, Skill, Agent(branch-reviewer), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(bash .claude/scripts/git-worktree-remove.sh:*), Bash(git worktree prune:*), Bash(bash .claude/scripts/pr-locality.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/system-sleep.sh)
 ---
 
 Take the working tree from wherever it is to a merged PR. Description:
@@ -292,7 +292,9 @@ branch is.
    line in the report whether or not it did anything. `/pr` stops on an open
    PR already existing from this branch; inside this chain step 5 has made
    that decision, and pushes that close review findings update the PR without
-   asking. (why: docs/commands/ship.md, *Step 4: push, then /pr*)
+   asking. `/pr` also stamps the PR's number on the branch's commits, before
+   the first round, so the rewrite never forces a recheck.
+   (why: docs/commands/ship.md, *Step 4: push, then /pr*)
 
 5. **The local review.** Once the PR is open, review the branch in rounds
    of one `branch-reviewer` agent each (`.claude/agents/branch-reviewer.md`)
@@ -391,8 +393,9 @@ branch is.
      given the PR number only, runs the `gh pr checks` line and returns its
      exit and the failing checks; this session never holds the wait itself.
      The wait passes only when the list names `changes`, `build`,
-     `closure-gate` and `locality-gate` and `mergeable` reads `MERGEABLE`;
-     a list missing one fails it, whatever the exit.
+     `closure-gate`, `locality-gate`, `commits` and `commit-gate` and
+     `mergeable` reads `MERGEABLE`; a list missing one fails it, whatever
+     the exit.
      (why: docs/commands/ship.md, *Step 6: the wait*)
    - **Read `state` on every pass of the poll, before `mergeable`.**
      `CLOSED` is the closed-unmerged stop. `MERGED` means another route got
