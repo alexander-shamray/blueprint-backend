@@ -28,6 +28,7 @@ public class ArchitectureTests
             "FluentValidation",
             "FluentValidation.DependencyInjectionExtensions",
             "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "Microsoft.Extensions.Logging.Abstractions",
             "Ordering.Domain",
             "System.Collections",
             "System.Collections.Immutable",
