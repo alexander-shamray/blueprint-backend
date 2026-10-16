@@ -98,6 +98,19 @@ rows** — a release timeout raises `stock_not_released` beside whatever cancell
 the order. Two rows for one order is not a duplicate; two rows with the same
 pair is impossible.
 
+Without a SQL prompt, the flagging is also a log line from `Ordering.Api`,
+at Information, written as the row is: `Order {OrderId} flagged for review:
+{Reason}.` Loki finds it by order id, and a script can assert on it:
+
+```logql
+{service_name="Ordering.Api"} |= "flagged for review" |= "<order id>"
+```
+
+The line is a trace and the table is the queue. It is said again on a
+redelivery, since the insert reports no row count, and it is gone with the log's
+retention while the row waits to be deleted, so the queue above is still what
+says whether an order is *still* awaiting review.
+
 **The pairing worth recognising is `cancelled_after_confirmation` followed by
 `stock_not_released`.** The first, raised from `Compensating`, means a release
 went out for stock that may be being picked; the second means that release
