@@ -42,6 +42,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "workflow_paths"))
+import workflow_paths  # noqa: E402  (ADR-132 holds the workflow-filter checks there)
+
 ROOT = Path(__file__).resolve().parents[2]
 OBSERVABILITY = ROOT / "deploy" / "observability"
 RUNBOOKS = ROOT / "docs" / "runbooks"
@@ -62,6 +65,7 @@ SOURCE_INPUTS = [
     "src",
     "docs/runbooks",
     "docs/backend-architecture/13-observability.md",
+    workflow_paths.HOME,
 ]
 
 # The one file under docs/runbooks that is not a runbook. Declared rather than
@@ -676,77 +680,6 @@ def check_outbox_metrics_per_service() -> None:
             f"either publishes outbox gauges now or hosts no dispatcher. Remove the entry")
 
 
-def trigger_paths(text: str, trigger: str) -> list[str] | None:
-    """The `paths:` entries of one trigger, and nothing else in the workflow.
-
-    Reading the trigger's whole remaining text instead — which an earlier
-    version did — lets the gate certify a filter that skips it: `push` is the
-    last trigger, so its "body" ran to the end of the file and included the
-    `python deploy/observability/check.py` run step. Deleting
-    `deploy/observability/**` from `paths` left that substring behind and the
-    check stayed green. **A gate that reads more than the thing it is judging
-    can be satisfied by something that is not the thing.**
-    """
-    lines = text.splitlines()
-
-    for index, line in enumerate(lines):
-        if line.rstrip() != f"  {trigger}:":
-            continue
-
-        paths: list[str] = []
-        in_paths = False
-        for following in lines[index + 1:]:
-            stripped = following.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            indent = len(following) - len(following.lstrip())
-            if indent <= 2:                      # the next trigger, or `jobs:`
-                break
-            if stripped.startswith("paths:"):
-                in_paths = True
-                continue
-            if in_paths and stripped.startswith("- "):
-                paths.append(stripped[2:].strip().strip("'\""))
-                continue
-            if in_paths:                         # a sibling key ends the list
-                in_paths = False
-
-        return paths
-
-    return None
-
-
-def covers(path: str, entry: str) -> bool:
-    """Does one `paths:` glob cover the WHOLE of an input this gate reads?
-
-    The direction matters and an earlier version had it backwards: it accepted
-    any path *under* the entry, so `src/Services/Ordering/**` was read as
-    covering `src`. That approves a filter which skips every source change
-    outside one service — precisely the drift check 7 exists to catch, waved
-    through by check 7.
-
-    Coverage runs the other way. A glob covers an entry when the glob's literal
-    prefix is the entry or an ancestor of it: `src/**` covers `src`, and
-    `docs/runbooks/**` covers `docs/runbooks` but not `docs`.
-    """
-    # ONLY `/**` COVERS A DIRECTORY. GitHub's `*` does not cross a separator, so
-    # `src/*` matches the files directly under `src` and none of the C# beneath
-    # them — a filter narrowed that way would skip every source change while
-    # this check called it covered. `**` is the only recursive form, and an
-    # exact literal covers exactly itself.
-    if path == "**":                     # the whole repository
-        return True
-
-    if path.endswith("/**"):
-        prefix = path[: -len("/**")].rstrip("/")
-        return bool(prefix) and (entry == prefix or entry.startswith(prefix + "/"))
-
-    if "*" in path:                      # `src/*`, `*.md`, anything non-recursive
-        return False
-
-    return entry == path
-
-
 def check_chapter_inventories(runbooks: set[str]) -> None:
     """§13.6's Runbook columns and §13.9's table, against the runbooks on disk.
 
@@ -844,48 +777,18 @@ def check_source_inputs_covers_reads() -> None:
         # would look covered while watching nineteen files too many.
         reads.add("/".join(part for part in segments if part))
 
-    # Subject first. A regex that matched nothing would pass the loop below
-    # against any list at all, which is this gate's own most-repeated failure
-    # turned on itself.
-    if not reads:
-        fail("check.py: found no ROOT-relative reads in its own source — "
-             "the scan is broken, not the list")
-        return
-
-    declared = SOURCE_INPUTS + ["deploy/observability"]
-    for entry in sorted(reads):
-        if not any(entry == path or entry.startswith(f"{path}/") for path in declared):
-            fail(f"check.py opens `{entry}` and SOURCE_INPUTS does not declare it, "
-                 f"so observability.yml's triggers do not watch it: {SOURCE_INPUTS}")
+    for problem in workflow_paths.check_reads_declared(
+            reads, SOURCE_INPUTS + ["deploy/observability"], reader="check.py", label=WORKFLOW.name):
+        fail(problem)
 
 
 def check_workflow_covers_inputs() -> None:
-    text = read(WORKFLOW)
-
-    for name in ("push", "pull_request"):
-        paths = trigger_paths(text, name)
-
-        if paths is None:
-            fail(f"{WORKFLOW.name}: no `{name}` trigger — the gate must run on both")
-            continue
-
-        # Subject: a parser that returned an empty list would pass nothing and
-        # fail everything, which is safe — but one that returned entries for
-        # the wrong trigger would not. Both triggers must actually list paths.
-        if not paths:
-            fail(f"{WORKFLOW.name}: the `{name}` trigger lists no paths — the parser, or the file")
-            continue
-
-        # The workflow itself is on the list because the gate READS it — check 7
-        # is an assertion about this file, so a filter that does not rebuild on
-        # a change to it can let the filter rot untested.
-        required = SOURCE_INPUTS + ["deploy/observability", WORKFLOW_PATH]
-
-        for entry in required:
-            if not any(covers(path, entry) for path in paths):
-                fail(
-                    f"{WORKFLOW.name}: the `{name}` trigger does not cover `{entry}`, "
-                    f"which check.py reads. A change to it would skip this gate")
+    # The workflow itself is on the list because the gate READS it — check 7
+    # is an assertion about this file, so a filter that does not rebuild on
+    # a change to it can let the filter rot untested.
+    for problem in workflow_paths.check_workflow_covers_inputs(
+            WORKFLOW, SOURCE_INPUTS + ["deploy/observability", WORKFLOW_PATH], reader="check.py"):
+        fail(problem)
 
 
 def report() -> int:

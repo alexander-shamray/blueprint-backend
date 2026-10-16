@@ -13,6 +13,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "workflow_paths"))
+import workflow_paths  # noqa: E402  (ADR-132 holds the workflow-filter checks there)
+
 ROOT = Path(__file__).resolve().parents[2]
 CANARY = Path(__file__).resolve().parent
 PLAN_PATH = CANARY / "canary.json"
@@ -33,6 +36,7 @@ SOURCE_INPUTS = [
     "deploy/observability",
     # Check 5 holds the MassTransit pin to the version its series were read from.
     "Directory.Packages.props",
+    workflow_paths.HOME,
 ]
 
 WORKFLOW_PATH = ".github/workflows/deploy.yml"
@@ -1250,35 +1254,13 @@ def _workflow_covers_inputs() -> list[str]:
     A merged change that skips the gate on `main` is the same defect one branch
     later, which is why both triggers are checked rather than the first.
     """
-    try:
-        text = WORKFLOW.read_text(encoding="utf-8")
-    except OSError as error:
-        return [f"{WORKFLOW_PATH} is not readable: {error}"]
-
-    # `on:` has one `paths:` per trigger. Anything else means the workflow was
-    # restructured and this check no longer knows what it is reading.
-    blocks = re.findall(r"paths:\s*\n((?:\s*-\s*'[^']+'\s*\n)+)", text)
-    if len(blocks) != 2:
-        return [
-            f"{WORKFLOW_PATH} has {len(blocks)} path lists, expected two (one per "
-            "trigger). This check cannot say whether the gate's inputs are "
-            "covered, which is not the same as saying they are"
-        ]
-
-    failures = []
-    for index, block in enumerate(blocks):
-        patterns = re.findall(r"-\s*'([^']+)'", block)
-        # The workflow's own path and this gate's own tree are both required:
-        # without the first, a change to the trigger lists runs no gate that
-        # validates them; without `deploy/canary`, an edit to canary.py,
-        # canary.json or the suite runs none either.
-        for entry in SOURCE_INPUTS + ["deploy/canary", WORKFLOW_PATH]:
-            if not any(p == entry or p == f"{entry}/**" for p in patterns):
-                failures.append(
-                    f"{WORKFLOW_PATH} trigger {index + 1} does not cover "
-                    f"{entry!r}, which deploy/canary/canary.py reads"
-                )
-    return failures
+    # The workflow's own path and this gate's own tree are both required:
+    # without the first, a change to the trigger lists runs no gate that
+    # validates them; without `deploy/canary`, an edit to canary.py,
+    # canary.json or the suite runs none either.
+    return workflow_paths.check_workflow_covers_inputs(
+        WORKFLOW, SOURCE_INPUTS + ["deploy/canary", WORKFLOW_PATH],
+        reader="deploy/canary/canary.py", label=WORKFLOW_PATH)
 
 
 SMOKE_PATH = "deploy/helm/smoke.sh"

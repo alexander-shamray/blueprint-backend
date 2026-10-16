@@ -40,6 +40,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "workflow_paths"))
+import workflow_paths  # noqa: E402  (ADR-132 holds the workflow-filter checks there)
+
 ROOT = Path(__file__).resolve().parents[3]
 HERE = ROOT / "deploy" / "compose" / "rabbitmq"
 DEFINITIONS = HERE / "definitions.json"
@@ -73,6 +76,7 @@ SOURCE_INPUTS = [
     "src/BFF",
     "src/BuildingBlocks/Common.Contracts",
     "tests",
+    workflow_paths.HOME,
 ]
 
 # A service's broker account is its name plus this suffix, and the contract
@@ -885,61 +889,16 @@ def check_source_inputs_covers_reads() -> None:
         if segments:
             reads.add("/".join(segments))
 
-    if not reads:
-        fail("check_permissions.py: found no ROOT-relative reads in its own source — "
-             "the scan is broken, not the list")
-        return
-
-    declared = SOURCE_INPUTS + ["deploy/compose/rabbitmq", WORKFLOW_PATH]
-    for entry in sorted(reads):
-        if not any(entry == path or entry.startswith(f"{path}/") for path in declared):
-            fail(f"check_permissions.py opens `{entry}` and SOURCE_INPUTS does not "
-                 f"declare it, so broker-permissions.yml's filters do not watch it: "
-                 f"{SOURCE_INPUTS}")
-
-
-def trigger_paths(text: str, trigger: str) -> list[str] | None:
-    match = re.search(rf"^  {trigger}:\n(.*?)(?=^  \w|\Z)", text, re.S | re.M)
-    if not match:
-        return None
-    return re.findall(r"^\s*-\s*'([^']+)'", match.group(1), re.M)
-
-
-def covers(path: str, entry: str) -> bool:
-    """Does one `paths:` glob cover the WHOLE of an input this gate reads?
-
-    Only `/**` covers a directory — GitHub's `*` does not cross a separator —
-    and the direction matters: a glob covers an entry when the glob's literal
-    prefix is the entry or an ancestor of it, never the other way round. An
-    earlier copy of this had it backwards and read `src/Services/Ordering/**`
-    as covering `src`, approving a filter that skips every other service.
-    """
-    if path == "**":
-        return True
-    if path.endswith("/**"):
-        prefix = path[: -len("/**")].rstrip("/")
-        return bool(prefix) and (entry == prefix or entry.startswith(prefix + "/"))
-    if "*" in path:
-        return False
-    return entry == path
+    for problem in workflow_paths.check_reads_declared(
+            reads, SOURCE_INPUTS + ["deploy/compose/rabbitmq", WORKFLOW_PATH],
+            reader="check_permissions.py", label=WORKFLOW.name):
+        fail(problem)
 
 
 def check_workflow_covers_inputs() -> None:
-    text = read(WORKFLOW)
-
-    for name in ("push", "pull_request"):
-        paths = trigger_paths(text, name)
-        if paths is None:
-            fail(f"{WORKFLOW.name}: no `{name}` trigger — the gate must run on both")
-            continue
-        if not paths:
-            fail(f"{WORKFLOW.name}: the `{name}` trigger lists no paths — the parser, or the file")
-            continue
-
-        for entry in SOURCE_INPUTS + ["deploy/compose/rabbitmq", WORKFLOW_PATH]:
-            if not any(covers(path, entry) for path in paths):
-                fail(f"{WORKFLOW.name}: the `{name}` trigger does not cover `{entry}`, "
-                     f"which check_permissions.py reads. A change to it would skip this gate")
+    for problem in workflow_paths.check_workflow_covers_inputs(
+            WORKFLOW, SOURCE_INPUTS + ["deploy/compose/rabbitmq", WORKFLOW_PATH], reader="check_permissions.py"):
+        fail(problem)
 
 
 def report() -> int:
