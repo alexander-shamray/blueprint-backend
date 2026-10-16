@@ -433,6 +433,15 @@
           "attributes": {}
         },
         {
+          "id": "6b2f8d14-3e97-4c0a-9a15-d7e4c1b08f63",
+          "name": "orders:saga-read",
+          "description": "Read an order's fulfilment saga state through GET /v1/orders/{id}/saga (§9.6). Granted to demo locally, beside payments:admin, because the saga holds no customer, so the route has no ownership check to override (§14.1).",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "e55a8854-8088-495c-8db4-331d4b5eb68e",
+          "attributes": {}
+        },
+        {
           "id": "3f9c2e81-7d64-4a05-b1e8-5c0a9f27d4b6",
           "name": "orders:write",
           "description": "Place an order (§11.4). Required by POST /v1/orders and granted to demo, so the inner loop the compose README documents actually works.",
@@ -2821,7 +2830,8 @@
           "orders:write",
           "orders:cancel",
           "inventory:admin",
-          "payments:admin"
+          "payments:admin",
+          "orders:saga-read"
         ]
       },
       "realmRoles": [

@@ -32,7 +32,8 @@ builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(OrderingPermissions.Write, p => p.RequirePermission(OrderingPermissions.Write))
     .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel))
-    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress));
+    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress))
+    .AddPolicy(OrderingPermissions.SagaRead, p => p.RequirePermission(OrderingPermissions.SagaRead));
 
 WebApplication app = builder.Build();
 
