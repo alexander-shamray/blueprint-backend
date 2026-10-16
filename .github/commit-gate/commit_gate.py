@@ -1,27 +1,7 @@
 #!/usr/bin/env python3
 """Every commit a pull request carries names that pull request and keeps /commit's form.
 
-Pull requests land by rebase, so the commits reach `main` as they were pushed
-and no merge commit records which pull request they came from. The `PR: #<n>`
-trailer is that record, and this gate holds it, together with the two
-properties of a pushed range that only prose held until now: no merge commit,
-and a subject in `/commit`'s form that is not a `fixup!`, `squash!`, `amend!`
-or `wip` leftover.
-
-The trailer is read from `git interpret-trailers --parse`, never from a
-substring: `PR: #12` quoted in a body paragraph is not a trailer, and a
-substring match would accept it. A commit naming another pull request fails as
-well as one naming none, because a trailer that is present and wrong is the
-one a revert helper would act on.
-
-A range of no commits is refused rather than passed: a gate that read nothing
-and reported a pass is the silent failure this repository's gates are built
-against.
-
-Stdlib only. The deciding (`check`) takes parsed commits and is pure; the
-reading (`collect`) is the only part that runs git, so the suite tests the
-judgement without a repository and the reading against a throwaway one.
-
+The rules, and why the trailer is read by git, are .github/commit-gate/README.md's.
     py -3.12 .github/commit-gate/commit_gate.py --pr <n> <base> <head>
 """
 
