@@ -337,7 +337,8 @@ public sealed class SendWorker(
 
         if (work.SendStartedAt is null)
         {
-            PreferenceState consent = await ConsentAsync(sp, customer, work.TemplateKey, ConsentVocabulary.Email, ct);
+            PreferenceState consent =
+                await ConsentChecks.StateAsync(sp, customer, work.TemplateKey, ConsentVocabulary.Email, ct);
 
             if (!consent.OptedIn)
             {
@@ -428,7 +429,8 @@ public sealed class SendWorker(
         ContactReads reads,
         CancellationToken ct)
     {
-        PreferenceState consent = await ConsentAsync(sp, customer, work.TemplateKey, ConsentVocabulary.Push, ct);
+        PreferenceState consent =
+            await ConsentChecks.StateAsync(sp, customer, work.TemplateKey, ConsentVocabulary.Push, ct);
 
         if (!consent.OptedIn)
         {
@@ -501,25 +503,6 @@ public sealed class SendWorker(
         return dispatched;
     }
 
-    /// <summary>One pair under its requirement, the customer's newest entry or its default (ADR-120).</summary>
-    internal static async Task<PreferenceState> ConsentAsync(
-        IServiceProvider sp,
-        Guid customer,
-        string topic,
-        string channel,
-        CancellationToken ct)
-    {
-        ConsentPair pair = new(topic, channel);
-        RequiredPairs required = sp.GetRequiredService<RequiredPairs>();
-
-        // A required pair takes no entry, so the journal is not asked for one.
-        ConsentEntry? newest = required.Contains(pair)
-            ? null
-            : await sp.GetRequiredService<IConsentJournal>().NewestAsync(customer, pair, ct);
-
-        return ConsentRules.StateOf(pair, required, newest);
-    }
-
     /// <summary>The customer's contact, read once a pass for all their rows (ADR-052).</summary>
     private async Task<ContactLookup> ContactAsync(
         IServiceProvider sp,
@@ -530,62 +513,12 @@ public sealed class SendWorker(
     {
         // The row whose read is kept awaits it in its own scope, so no read outlives the scope it runs in.
         (ContactLookup answer, Exception? stale) =
-            await reads.GetOrStart(customer, () => ReadContactAsync(sp, customer, ct));
+            await reads.GetOrStart(customer, () => ContactReader.ReadAsync(sp, customer, ct));
 
         if (stale is not null)
             ServedStale(log, work.NotificationId, work.OrderId, customer, stale);
 
         return answer;
-    }
-
-    /// <summary>
-    /// ADR-052's five outcomes over the stored row and the owner; a stale row is served on any fault but a refusal,
-    /// and every other fault throws.
-    /// </summary>
-    private static async Task<(ContactLookup Answer, Exception? Stale)> ReadContactAsync(
-        IServiceProvider sp,
-        Guid customer,
-        CancellationToken ct)
-    {
-        IContactStore store = sp.GetRequiredService<IContactStore>();
-        TimeProvider clock = sp.GetRequiredService<TimeProvider>();
-
-        ContactRecord? stored = await store.GetAsync(customer, ct);
-        ContactAge age = SendRules.AgeOf(stored, clock.GetUtcNow(), sp.GetRequiredService<ContactOptions>());
-
-        if (age == ContactAge.Fresh)
-            return (new ContactLookup.Found(stored!.Email, stored.Locale), null);
-
-        ContactLookup answer;
-
-        try
-        {
-            answer = await sp.GetRequiredService<IContactSource>().GetAsync(customer, ct);
-        }
-        // An owner that cannot answer is served a stale row; a refused credential never is (ADR-052).
-        catch (Exception ex) when (
-            ex is not ContactSourceRefusedException && age == ContactAge.Stale && !ct.IsCancellationRequested)
-        {
-            return (new ContactLookup.Found(stored!.Email, stored.Locale), ex);
-        }
-
-        // Kept before the send, so a pass repeated after a crash reads it from the row and not the owner (ADR-052).
-        if (answer is ContactLookup.Found found)
-        {
-            await store.SaveAsync(customer, found, clock.GetUtcNow(), ct);
-
-            // An erasure since the intake's check finds this row or is seen here, so it is not written back (ADR-100).
-            // Asked without an order's requests, since this read serves all the customer's rows (ADR-101), so an order
-            // ADR-099 kept loses only a row the next read fetches again; the pass still sends.
-            if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(customer, [], ct))
-                await store.DeleteAsync(customer, ct);
-        }
-        else
-        {
-            await store.DeleteAsync(customer, ct);
-        }
-
-        return (answer, null);
     }
 
     private async Task<bool> CompleteAsync(IServiceProvider sp, SendWork work)
@@ -653,27 +586,17 @@ public sealed class SendWorker(
     }
 
     /// <summary>One of the record's moves, committed; false when the row had outgrown it and nothing changed.</summary>
-    private static async Task<bool> CommitAsync(
+    private static Task<bool> CommitAsync(
         IServiceProvider sp,
         SendWork work,
         Func<Notification, DateTimeOffset, bool> move,
-        CancellationToken ct)
-    {
-        IUnitOfWork unitOfWork = sp.GetRequiredService<IUnitOfWork>();
-
-        return await unitOfWork.ExecuteAsync(
+        CancellationToken ct) =>
+        RowCommit.ExecuteAsync(
+            sp,
             async inner =>
-            {
-                Notification notification =
-                    await sp.GetRequiredService<INotificationRepository>().GetAsync(work.NotificationId, inner) ??
-                    throw new InvalidOperationException(
-                        $"Notification {work.NotificationId} was claimed and is now absent.");
-
-                bool moved = move(notification, sp.GetRequiredService<TimeProvider>().GetUtcNow());
-                await unitOfWork.SaveChangesAsync(inner);
-
-                return moved;
-            },
+                await sp.GetRequiredService<INotificationRepository>().GetAsync(work.NotificationId, inner) ??
+                throw new InvalidOperationException(
+                    $"Notification {work.NotificationId} was claimed and is now absent."),
+            (notification, now, _) => Task.FromResult(move(notification, now)),
             ct);
-    }
 }

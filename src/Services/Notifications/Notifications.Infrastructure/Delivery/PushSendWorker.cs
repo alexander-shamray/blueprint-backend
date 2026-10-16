@@ -250,7 +250,7 @@ public sealed class PushSendWorker(
 
         if (work.SendStartedAt is null)
         {
-            PreferenceState consent = await SendWorker.ConsentAsync(
+            PreferenceState consent = await ConsentChecks.StateAsync(
                 sp,
                 customer,
                 notice.TemplateKey,
@@ -430,29 +430,15 @@ public sealed class PushSendWorker(
         CommitAsync(sp, work, (d, now, _) => Task.FromResult(move(d, now)), ct);
 
     /// <summary>One of the delivery's moves, committed; false when the row outgrew it or an erasure took it.</summary>
-    private static async Task<bool> CommitAsync(
+    private static Task<bool> CommitAsync(
         IServiceProvider sp,
         PushWork work,
         Func<PushDelivery, DateTimeOffset, CancellationToken, Task<bool>> move,
-        CancellationToken ct)
-    {
-        IUnitOfWork unitOfWork = sp.GetRequiredService<IUnitOfWork>();
-
-        return await unitOfWork.ExecuteAsync(
-            async inner =>
-            {
-                // An erasure deletes a pending delivery under the pass, which then has nothing to move (§11.7).
-                PushDelivery? delivery =
-                    await sp.GetRequiredService<IPushDeliveryRepository>().GetAsync(work.DeliveryId, inner);
-
-                if (delivery is null)
-                    return false;
-
-                bool moved = await move(delivery, sp.GetRequiredService<TimeProvider>().GetUtcNow(), inner);
-                await unitOfWork.SaveChangesAsync(inner);
-
-                return moved;
-            },
+        CancellationToken ct) =>
+        // An erasure deletes a pending delivery under the pass, which then has nothing to move (§11.7).
+        RowCommit.ExecuteAsync(
+            sp,
+            async inner => await sp.GetRequiredService<IPushDeliveryRepository>().GetAsync(work.DeliveryId, inner),
+            move,
             ct);
-    }
 }
