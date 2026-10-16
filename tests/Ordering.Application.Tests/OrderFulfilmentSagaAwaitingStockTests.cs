@@ -50,6 +50,24 @@ public class OrderFulfilmentSagaAwaitingStockTests
     }
 
     [Fact]
+    public async Task A_configured_stock_delay_expires_the_wait_by_itself()
+    {
+        // Nothing publishes the expiry: the scheduler does, after the two seconds configuration gave it, which is
+        // the lever §14.1 hands a developer who cannot wait five minutes.
+        (ServiceProvider provider, ITestHarness harness) = await StartHarnessAsync(
+            new OrderFulfilmentTimeouts { StockTimeoutDelay = TimeSpan.FromSeconds(2) });
+        await using (provider)
+        {
+            var orderId = Guid.CreateVersion7();
+
+            await Publish(harness, SagaContracts.OrderPlaced(orderId, Customer));
+
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.StockTimeout))
+                .ShouldBeTrue();
+        }
+    }
+
+    [Fact]
     public async Task A_cancellation_while_awaiting_stock_requests_release_and_sends_no_authorisation()
     {
         // ReserveStock is in flight, so Compensating releases whatever may exist and waits (ADR-024).

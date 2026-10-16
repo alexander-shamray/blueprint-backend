@@ -2,6 +2,7 @@ using Common.Contracts;
 using MassTransit;
 using MassTransit.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Ordering.Infrastructure.Messaging;
 using Shouldly;
 using Xunit;
@@ -20,8 +21,9 @@ internal static class OrderFulfilmentSagaHarness
 
     /// <summary>The registration every test shares, with production's two scheduler lines (ADR-021).</summary>
     /// <remarks><c>Initially</c> arms <c>StockTimeout</c>, so without one <c>OrderPlaced</c> faults (§9.6).</remarks>
-    internal static ServiceProvider BuildProvider() =>
+    internal static ServiceProvider BuildProvider(OrderFulfilmentTimeouts? timeouts = null) =>
         new ServiceCollection()
+            .AddSingleton(Options.Create(timeouts ?? new OrderFulfilmentTimeouts()))
             .AddMassTransitTestHarness(x =>
             {
                 x.SetTestTimeouts(TestTimeout, InactivityTimeout);
@@ -37,9 +39,10 @@ internal static class OrderFulfilmentSagaHarness
             })
             .BuildServiceProvider(true);
 
-    internal static async Task<(ServiceProvider Provider, ITestHarness Harness)> StartHarnessAsync()
+    internal static async Task<(ServiceProvider Provider, ITestHarness Harness)> StartHarnessAsync(
+        OrderFulfilmentTimeouts? timeouts = null)
     {
-        ServiceProvider provider = BuildProvider();
+        ServiceProvider provider = BuildProvider(timeouts);
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
 
