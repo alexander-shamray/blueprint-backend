@@ -17,7 +17,7 @@ namespace Notifications.Infrastructure.Retention;
 /// Apart from <c>RetentionPurgeService</c>, whose windows are housekeeping (ADR-053). An order record goes only once
 /// no pending notice names its order, since that notice waits on it; a push delivery ages with its notice.
 /// </remarks>
-public sealed class NotificationsRetentionService : BackgroundService, ISwitchedWorker
+public sealed class NotificationsRetentionService : SwitchedPollingWorker
 {
     /// <summary>The name an operator lists to switch the windows' pass off (ADR-113).</summary>
     public const string Name = "notifications-retention";
@@ -185,7 +185,6 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
     private readonly DeviceTokenOptions _devices;
     private readonly PushMetrics _metrics;
     private readonly ILogger<NotificationsRetentionService> _log;
-    private readonly OperatorSwitches? _switches;
 
     public NotificationsRetentionService(
         IServiceScopeFactory scopes,
@@ -194,40 +193,25 @@ public sealed class NotificationsRetentionService : BackgroundService, ISwitched
         PushMetrics metrics,
         ILogger<NotificationsRetentionService> log,
         OperatorSwitches? switches = null)
+        : base(switches)
     {
         _scopes = scopes;
         _windows = windows.Value;
         _devices = devices;
         _metrics = metrics;
         _log = log;
-        _switches = switches;
     }
 
-    public string SwitchName => Name;
+    public override string SwitchName => Name;
 
-    // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using PeriodicTimer timer = new(Interval);
+    protected override TimeSpan PassInterval => Interval;
 
-        // A pass at start, or a deployment restarting more often than Interval would never apply ADR-053's windows.
-        do
-        {
-            if (_switches?.IsOff(Name) == true)
-                continue;
+    // A pass at start, or a deployment restarting more often than Interval would never apply ADR-053's windows.
+    protected override bool PassAtStart => true;
 
-            try
-            {
-                await PurgeAsync(stoppingToken);
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                // Swallowed, since an exception out of ExecuteAsync stops the host; the token, for §9.4's reason.
-                PurgeFailed(_log, ex);
-            }
-        }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
-    }
+    protected override Task RunPassAsync(CancellationToken stoppingToken) => PurgeAsync(stoppingToken);
+
+    protected override void OnPassFailed(Exception exception) => PurgeFailed(_log, exception);
 
     /// <summary>One pass over the five tables, public so tests drive it rather than race a timer (§12.4).</summary>
     public async Task<(int Notifications, int Contacts, int Orders, int Devices, int Consent)> PurgeAsync(

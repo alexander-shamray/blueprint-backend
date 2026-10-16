@@ -20,7 +20,7 @@ namespace Shipping.Infrastructure.Tracking;
 public sealed class TrackingWorker(
     IServiceScopeFactory scopes,
     ILogger<TrackingWorker> log,
-    OperatorSwitches? switches = null) : BackgroundService, ISwitchedWorker
+    OperatorSwitches? switches = null) : SwitchedPollingWorker(switches)
 {
     /// <summary>The name an operator lists to switch the carrier poll off (ADR-113).</summary>
     public const string Name = "tracking-worker";
@@ -61,30 +61,14 @@ public sealed class TrackingWorker(
             new EventId(4, nameof(BackOffFailed)),
             "Backing off shipment {ShipmentId} of order {OrderId} failed; it is polled again when its lease lapses.");
 
-    public string SwitchName => Name;
+    public override string SwitchName => Name;
 
-    // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        // Shorter than the poll interval, since NextPollAt falls part-way into a tick; it bounds how late a row is.
-        using PeriodicTimer timer = new(CarrierHop.TrackingTick);
+    // Shorter than the poll interval, since NextPollAt falls part-way into a tick; it bounds how late a row is.
+    protected override TimeSpan PassInterval => CarrierHop.TrackingTick;
 
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
-            if (switches?.IsOff(Name) == true)
-                continue;
+    protected override Task RunPassAsync(CancellationToken stoppingToken) => ProcessBatchAsync(stoppingToken);
 
-            try
-            {
-                await ProcessBatchAsync(stoppingToken);
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                // The token, not the type: a call's own deadline throws the same type.
-                ClaimFailed(log, ex);
-            }
-        }
-    }
+    protected override void OnPassFailed(Exception exception) => ClaimFailed(log, exception);
 
     /// <summary>One claim-and-poll pass, public so tests drive it rather than race a timer (§12.4).</summary>
     public async Task<int> ProcessBatchAsync(CancellationToken ct)

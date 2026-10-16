@@ -25,7 +25,7 @@ namespace Shipping.Infrastructure.Fulfilment;
 public sealed class FulfilmentWorker(
     IServiceScopeFactory scopes,
     ILogger<FulfilmentWorker> log,
-    OperatorSwitches? switches = null) : BackgroundService, ISwitchedWorker
+    OperatorSwitches? switches = null) : SwitchedPollingWorker(switches)
 {
     /// <summary>The name an operator lists to switch the booking pass off (ADR-113).</summary>
     public const string Name = "fulfilment-worker";
@@ -99,29 +99,13 @@ public sealed class FulfilmentWorker(
             "Shipment {ShipmentId} on order {OrderId} was voided during its booking, and carrier booking " +
             "{CarrierReference} was not handed back yet; it is kept as booked with its cancellation requested.");
 
-    public string SwitchName => Name;
+    public override string SwitchName => Name;
 
-    // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using PeriodicTimer timer = new(CarrierHop.FulfilmentTick);
+    protected override TimeSpan PassInterval => CarrierHop.FulfilmentTick;
 
-        while (await timer.WaitForNextTickAsync(stoppingToken))
-        {
-            if (switches?.IsOff(Name) == true)
-                continue;
+    protected override Task RunPassAsync(CancellationToken stoppingToken) => RunOnceAsync(stoppingToken);
 
-            try
-            {
-                await RunOnceAsync(stoppingToken);
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                // The token, not the type: a gateway's own deadline throws the same type, and an escape stops the host.
-                ClaimFailed(log, ex);
-            }
-        }
-    }
+    protected override void OnPassFailed(Exception exception) => ClaimFailed(log, exception);
 
     /// <summary>One claim-and-fulfil pass, public so tests drive it rather than race a timer (§12.4).</summary>
     public async Task<int> RunOnceAsync(CancellationToken ct)
