@@ -285,7 +285,7 @@ public sealed class FulfilmentWorker(
             return erased.Moved;
         }
 
-        BookingResult booking = await carrier.BookAsync(new BookingRequest(id, address), ct);
+        BookingResult booking = await carrier.BookAsync(new BookingRequest(id, order, address), ct);
 
         if (booking is BookingResult.Refused refused)
         {
