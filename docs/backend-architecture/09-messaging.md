@@ -2643,8 +2643,8 @@ one thing both times. What does not follow from it is where the saga is, or
 whether there is one: the `Compensating` raising does not finalise, and on
 the decline and payment-timeout doors the row precedes the cancellation it is
 named after, because `CancelOrder` goes on that state's exit. So the row is
-all an operator gets: `ordering.OrderReviews` persists (OrderId, Reason,
-RaisedAt), the saga has usually finalised before the alert, and the two
+all that persists of where the saga was: `ordering.OrderReviews` keeps (OrderId,
+Reason, RaisedAt), the saga has usually finalised before the alert, and the two
 procedures differ at the first step.
 
 > **The money is the invariant; the order's state is not.** A reason code is
@@ -2678,8 +2678,9 @@ CREATE INDEX IX_OrderReviews_RaisedAt ON ordering.OrderReviews (RaisedAt);
 Here, in the reference domain, `FlagOrderForReviewHandler` in
 `Ordering.Application/Orders/FlagOrderForReview`
 ([E.5.3](appendix-e-reference-domain.md#e53-the-fulfilment-saga))
-is one statement, and the shape of the statement is the decision. The
-`UPDLOCK, HOLDLOCK` hints make its `NOT EXISTS` read a range lock, so a
+is one statement and a log line, and the shape of the statement is the
+decision. The `UPDLOCK, HOLDLOCK` hints make its `NOT EXISTS` read a range
+lock, so a
 second delivery waits for the first to commit and then sees the row; an
 `IF NOT EXISTS … INSERT` reads and then writes too, so it races, and the
 loser violates the primary key rather than being absorbed — §6.6's `MERGE`
@@ -2709,6 +2710,11 @@ await unitOfWork.ExecuteRawAsync(
     new { command.OrderId, command.Reason, RaisedAt = clock.GetUtcNow() },
     ct);
 ```
+
+After the statement the handler says the order id and the reason once, at
+Information (§13.4), so a flag can be found in Loki by order id without a SQL
+prompt. The line is a trace and the row stays the queue: it repeats on a
+redelivery, which the insert cannot report, and it ages out with the log.
 
 > **The rule this illustrates: a command handler writes through `IUnitOfWork`
 > and nothing else.** Repositories for aggregates, `ExecuteRawAsync` for the
