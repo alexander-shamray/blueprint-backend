@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Negative cases for the commit gate, each beside a positive control.
 
-A range that carries every trailer passes, which says nothing about what the
-gate would catch. Each case below is a defect the gate has to find, or a
-non-defect it must not invent, and the last class runs `collect` against a
-throwaway repository because the trailer is read by git and not by a regex.
+The last class runs `collect` against a throwaway repository, because the
+trailer is read by git and not by a regex.
 """
 
 from __future__ import annotations
