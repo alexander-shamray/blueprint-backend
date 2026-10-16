@@ -775,7 +775,20 @@ every guard in that list is a fact about the checkout. Which is the general
 form — where the safety is a property of the state rather than of the words,
 the grant has to be a helper.
 
-**Some of its edges are accepted rather than guarded.** A replay amended after
+**A second helper rewrites published commits, and is a second force push.**
+`git-trailer-pr.sh` adds `PR: #<n>` to the commits of the branch checked out,
+which changes their SHAs, so it leases its push as the rebase helper does.
+It takes one number and spells the `git rebase -x` command itself, so no
+`-x` grant stands beside it. It refuses a pull request that is not an open,
+same-repository one into `main` for this branch, a dirty tree, a remote that
+differs from the checkout in either direction, a merge commit, and a commit
+that already names another pull request. Its residual is a push that fails
+after the rewrite: the local branch then carries the trailers and origin's
+does not, and a rerun finishes it, because a commit that has the trailer is
+skipped. `git-revert-pr.sh` writes no remote; it reads trailers off
+`origin/main` and reverts on the current branch, so its grant is a plain one.
+
+**Some of the rebase helper's edges are accepted rather than guarded.** A replay amended after
 a failed push no longer descends from the commit `publish` recorded, so
 `publish` refuses it and names the tip to reset the branch to by hand:
 resetting it for the caller would discard the amend, which is the work. And

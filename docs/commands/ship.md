@@ -500,6 +500,12 @@ Updating it is a decision, not a default — and inside this chain, step 5
 is that decision already made: pushes that close review findings update
 the PR without asking again.
 
+**`/pr` also stamps the PR's number on the branch's commits**, straight
+after creating it, through `git-trailer-pr.sh`. It runs before the first
+review round so that the SHA rewrite never forces a recheck; a round's own
+fix commits carry the trailer from `/commit`, which reads the number from
+`pr-for-branch.sh`.
+
 ## Step 5: the local review
 
 **First, once, synchronise the branch with its remote**, because the
@@ -715,8 +721,9 @@ compacting first, is the owner's command, which this chain cannot type.
 `mergeable` reads `CONFLICTING`, GitHub starts none of the `pull_request`
 workflows, so the list holds only the CodeQL checks and `--fail-fast` exits 0
 with nothing failing (#936, found shipping PR 934). The wait therefore
-passes only when the list names the `changes`, `build`, `closure-gate` and
-`locality-gate` checks and `mergeable` reads `MERGEABLE`; an absent check is
+passes only when the list names the `changes`, `build`, `closure-gate`,
+`locality-gate`, `commits` and `commit-gate` checks and `mergeable` reads
+`MERGEABLE`; an absent check is
 a failure of the wait, reported as what it is.
 
 **The agent only waits.** It decides nothing: a red check is fixed here, in
