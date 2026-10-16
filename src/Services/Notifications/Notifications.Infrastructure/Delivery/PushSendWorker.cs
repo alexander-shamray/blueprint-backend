@@ -147,74 +147,13 @@ public sealed class PushSendWorker(
     // A stop starts no claim, and never cuts rows under way: theirs fires DrainBudget after it.
     protected override TimeSpan? StopDrain => DrainBudget;
 
-    protected override Task RunPassAsync(CancellationToken stoppingToken) => RunOnceAsync(stoppingToken, Drain);
+    protected override Task RunPassAsync(CancellationToken stoppingToken) =>
+        new PushRows(this, scopes, log).RunAsync(stoppingToken, Drain);
 
     protected override void OnPassFailed(Exception exception) => ClaimFailed(log, exception);
 
     /// <summary>One claim-and-send pass, public so tests drive it rather than race a timer (§12.4).</summary>
-    public Task<SendPass> RunOnceAsync(CancellationToken ct) => RunOnceAsync(ct, ct);
-
-    // The claim runs on the drain's token, for SendWorker's reason: a read cancelled after its lease commits strands
-    // the rows until the lease lapses (§15.3).
-    private async Task<SendPass> RunOnceAsync(CancellationToken claim, CancellationToken rows)
-    {
-        await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
-
-        // An open breaker parks its platform's rows, so they keep their backoff (§9.7); past the break a pass claims
-        // them again, and its first send probes.
-        List<string> parked = [];
-        foreach (IPushProvider provider in claimScope.ServiceProvider.GetServices<IPushProvider>())
-        {
-            if (!provider.Pipeline.IsOpen)
-                continue;
-
-            parked.Add(provider.Platform);
-            Parked(log, provider.Platform, provider.Pipeline.ParkedUntil, null);
-        }
-
-        PushClaims claims = claimScope.ServiceProvider.GetRequiredService<PushClaims>();
-        claim.ThrowIfCancellationRequested();
-        IReadOnlyList<PushWork> claimed = await claims.ClaimAsync(parked, rows);
-
-        // Every row at once, so a pass lasts one row's call and the lease bounds it.
-        bool[] finished = await Task.WhenAll(claimed.Select(work => SendOrBackOffAsync(claims, work, rows)));
-
-        return new SendPass(claimed.Count, finished.Count(f => f));
-    }
-
-    private async Task<bool> SendOrBackOffAsync(PushClaims claims, PushWork work, CancellationToken ct)
-    {
-        // A child of the fan-out that wrote the row, so the provider's call joins the order's trace (§9.4).
-        using Activity? span = new StagedTrace(work.TraceParent, work.TraceState).StartClaimed("push send");
-        span?.SetTag("notifications.delivery.id", work.DeliveryId);
-
-        try
-        {
-            // A scope per row, so a row that throws mid-write hands the next none of its tracked state.
-            await using AsyncServiceScope row = scopes.CreateAsyncScope();
-
-            return await SendAsync(row.ServiceProvider, work, ct);
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            span?.SetStatus(ActivityStatusCode.Error);
-
-            // Logged before the backoff is written, so a database fault there cannot hide this one.
-            Fault(work, ex);
-
-            try
-            {
-                if (!await claims.BackOffAsync(work.DeliveryId, work.LockedUntil, ct))
-                    Outgrown(log, work.DeliveryId, null);
-            }
-            catch (Exception backOff) when (!ct.IsCancellationRequested)
-            {
-                BackOffFailed(log, work.DeliveryId, backOff);
-            }
-
-            return false;
-        }
-    }
+    public Task<SendPass> RunOnceAsync(CancellationToken ct) => new PushRows(this, scopes, log).RunAsync(ct, ct);
 
     /// <summary>One leased delivery, step by step; true when it reached an outcome (the push design).</summary>
     internal async Task<bool> SendAsync(IServiceProvider sp, PushWork work, CancellationToken ct)
@@ -420,6 +359,59 @@ public sealed class PushSendWorker(
                 PassFailed(log, work.DeliveryId, work.NotificationId, ex);
                 break;
         }
+    }
+
+    /// <summary>The push pass's steps for <see cref="ClaimPass{TWork, TClaims, TState}"/>.</summary>
+    private sealed class PushRows(PushSendWorker worker, IServiceScopeFactory scopes, ILogger log)
+        : ClaimPass<PushWork, PushClaims, IReadOnlyList<string>>(scopes)
+    {
+        // An open breaker parks its platform's rows, so they keep their backoff (§9.7); past the break a pass claims
+        // them again, and its first send probes.
+        protected override IReadOnlyList<string> Begin(IServiceProvider claimScope)
+        {
+            List<string> parked = [];
+            foreach (IPushProvider provider in claimScope.GetServices<IPushProvider>())
+            {
+                if (!provider.Pipeline.IsOpen)
+                    continue;
+
+                parked.Add(provider.Platform);
+                Parked(log, provider.Platform, provider.Pipeline.ParkedUntil, null);
+            }
+
+            return parked;
+        }
+
+        protected override Task<IReadOnlyList<PushWork>> ClaimAsync(
+            PushClaims claims,
+            IReadOnlyList<string> state,
+            CancellationToken rows) => claims.ClaimAsync(state, rows);
+
+        // A child of the fan-out that wrote the row, so the provider's call joins the order's trace (§9.4).
+        protected override Activity? StartSpan(PushWork work)
+        {
+            Activity? span = new StagedTrace(work.TraceParent, work.TraceState).StartClaimed("push send");
+            span?.SetTag("notifications.delivery.id", work.DeliveryId);
+
+            return span;
+        }
+
+        protected override Task<bool> SendAsync(
+            IServiceProvider row,
+            PushClaims claims,
+            IReadOnlyList<string> state,
+            PushWork work,
+            CancellationToken ct) => worker.SendAsync(row, work, ct);
+
+        protected override Task<bool> BackOffAsync(PushClaims claims, PushWork work, CancellationToken ct) =>
+            claims.BackOffAsync(work.DeliveryId, work.LockedUntil, ct);
+
+        protected override void LogFault(PushWork work, Exception exception) => worker.Fault(work, exception);
+
+        protected override void LogOutgrown(PushWork work) => Outgrown(log, work.DeliveryId, null);
+
+        protected override void LogBackOffFailed(PushWork work, Exception exception) =>
+            BackOffFailed(log, work.DeliveryId, exception);
     }
 
     private static Task<bool> CommitAsync(
