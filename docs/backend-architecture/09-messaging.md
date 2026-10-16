@@ -2915,6 +2915,41 @@ where the other endpoints take `UseInMemoryOutbox` (§9.8). Without it the
 instance commits and its `Send`s and `Schedule`s are still in a buffer — a
 dual write.
 
+### Reading the saga's state
+
+`GET /v1/orders/{id}/saga` answers the instance's own word about one order:
+`orderId`, `currentState`, `startedAt` and `cancelReason`, which is `null`
+until the saga compensates. It requires `orders:saga-read` (Appendix E.6.5)
+and nothing else, because the instance holds no customer (ADR-028) to check a
+caller against; the permission is staff's, not a buyer's. The BFF's
+`/bff/v1/orders/{id}` (§10.7) is the buyer's word and a projection of events,
+so the two are separate sources and can differ.
+
+**No row is a 404 for two facts at once.** A finalised saga deletes its
+instance (`SetCompletedWhenFinalized`), so a shipped, cancelled or escalated
+order and an order the saga never saw read alike. **`startedAt` is when the instance began,
+not when it entered `currentState`**: the table stores no time of entering a
+state, and a consumer needing one adds the column rather than inferring it.
+
+**Where the two vocabularies meet, read the row as a difference of
+vocabulary and anything else as a difference of fact.** The buyer's status is
+§10.7's rank over events the BFF has absorbed, and the saga and the BFF each
+consume an event on their own clock, so a buyer status can run ahead of the
+saga's state by the time the saga takes to consume the same event:
+
+| Saga `currentState` | Buyer status at rest | Ahead of the saga, until it consumes the event |
+|---|---|---|
+| `AwaitingStock`, `AwaitingPayment` | `placed` | `cancelled`, on a customer's `OrderCancelled` |
+| `AwaitingConfirmation` | `placed` | `confirmed` on `OrderConfirmed`; `dispatched` on `ShipmentDispatched`; `cancelled` on `OrderCancelled` |
+| `Confirmed` | `confirmed` | `dispatched` on `ShipmentDispatched`; `cancelled` on `OrderCancelled` |
+| `Compensating` | `placed` or `confirmed` | `cancelled`, `out_of_stock` or `declined` by `cancelReason` as §10.7 maps it, once the `OrderCancelled` is projected |
+| *no row* | `dispatched`, `delivered` or a cancellation; `placed` for an order the saga has yet to consume | `confirmed` beside an escalation: a confirmation or despatch timeout, or a cancellation after confirmation, finalises the saga and leaves a review row for a person |
+
+A pair outside its row (`Compensating` beside `confirmed` for longer than a
+projection takes, or a row beside `delivered`) is a fact to chase, and
+[the stuck-saga runbook](../runbooks/stuck-saga.md) says how; the escalated
+order is [the order-review runbook](../runbooks/order-review.md)'s.
+
 ### The scheduler is a registration
 
 The `Schedule` declarations above need something to deliver a message at a
