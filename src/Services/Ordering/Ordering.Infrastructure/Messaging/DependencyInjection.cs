@@ -13,6 +13,7 @@ using MassTransit;
 using MassTransit.EntityFrameworkCoreIntegration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Ordering.Application.Orders.CancelOrder;
 using Ordering.Application.Orders.ConfirmOrder;
@@ -65,6 +66,10 @@ public static class DependencyInjection
         services.AddSingleton<
             IValidateOptions<OrderFulfilmentTimeouts>,
             AnnotatedOptionsValidator<OrderFulfilmentTimeouts>>();
+
+        // The saga stamps each state it enters from this clock (§9.6); the container would otherwise pick the
+        // parameterless constructor and drop the delays bound above.
+        services.TryAddSingleton(TimeProvider.System);
 
         services.AddMassTransit(x =>
         {

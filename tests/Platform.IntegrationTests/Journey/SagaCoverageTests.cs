@@ -22,6 +22,9 @@ public sealed class SagaCoverageTests
     /// <summary>MassTransit's own event on every schedule, which only discards a message from a stale token.</summary>
     private const string AnyReceivedSuffix = ".AnyReceived";
 
+    /// <summary>The lifecycle event <c>BeforeEnterAny</c> binds to stamp <c>StateEnteredAt</c>; nothing arrives.</summary>
+    private const string BeforeEnterSuffix = ".BeforeEnter";
+
     /// <summary>Transitions an arrival race or a duplicate causes, each with the suite that drives it.</summary>
     private static readonly Dictionary<(string State, string Event), string> InMemory = new()
     {
@@ -110,7 +113,8 @@ public sealed class SagaCoverageTests
         {
             foreach (Event @event in saga.NextEvents(state))
             {
-                if (!@event.Name.EndsWith(AnyReceivedSuffix, StringComparison.Ordinal))
+                if (!@event.Name.EndsWith(AnyReceivedSuffix, StringComparison.Ordinal) &&
+                    !@event.Name.EndsWith(BeforeEnterSuffix, StringComparison.Ordinal))
                     declared.Add((state.Name, @event.Name));
             }
         }

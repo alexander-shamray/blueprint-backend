@@ -43,8 +43,8 @@ either, because that timeout is what creates the review row. So:
 ## Find them
 
 **For one order, ask the service first**: `GET /api/v1/orders/{id}/saga` with
-an `orders:saga-read` token answers the row's `currentState`, `startedAt` and
-`cancelReason` without database access, and
+an `orders:saga-read` token answers the row's `currentState`, `startedAt`,
+`stateEnteredAt` and `cancelReason` without database access, and
 [§9.6](../backend-architecture/09-messaging.md)'s *Reading the saga's state*
 says which buyer status agrees with each state. The query below is for the
 many, and for the flags that read does not carry.

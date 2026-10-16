@@ -37,6 +37,10 @@ internal sealed class OrderFulfilmentStateConfiguration : IEntityTypeConfigurati
             .Property<Guid>("CustomerId")
             .HasDefaultValue(Guid.Empty);
 
+        // No default and nullable: the release beside this one does not write it, and a stamp SQL Server invented
+        // for its rows would be a time the order never entered anything (§9.6).
+        builder.Property(s => s.StateEnteredAt);
+
         // Nullable here and not on the instance: a saga that never compensates stores NULL.
         builder
             .Property(s => s.CancelReason)

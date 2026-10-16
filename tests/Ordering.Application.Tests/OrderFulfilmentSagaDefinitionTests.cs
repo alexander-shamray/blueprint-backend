@@ -75,11 +75,13 @@ public class OrderFulfilmentSagaDefinitionTests
                 "every event this machine declares must be classified as reachable in " +
                 "Compensating or not; an event in neither list is one nobody decided about (§9.6).");
 
-        // .AnyReceived is MassTransit's own, accepted in every state, so it says nothing about a branch.
+        // .AnyReceived is MassTransit's own, accepted in every state, so it says nothing about a branch; nor does
+        // .BeforeEnter, which BeforeEnterAny binds to stamp StateEnteredAt.
         saga
             .NextEvents(saga.Compensating)
             .Select(e => e.Name)
             .Where(n => !n.EndsWith(".AnyReceived", StringComparison.Ordinal))
+            .Where(n => !n.EndsWith(".BeforeEnter", StringComparison.Ordinal))
             .OrderBy(n => n, StringComparer.Ordinal)
             .ShouldBe(
                 reachableHere.OrderBy(n => n, StringComparer.Ordinal),
@@ -190,6 +192,8 @@ public class OrderFulfilmentSagaDefinitionTests
             .NextEvents(state)
             .Select(e => e.Name)
             .Where(n => !n.EndsWith(".AnyReceived", StringComparison.Ordinal))
+            // The lifecycle event BeforeEnterAny binds to each state: stamping StateEnteredAt, not an arrival.
+            .Where(n => !n.EndsWith(".BeforeEnter", StringComparison.Ordinal))
             .OrderBy(n => n, StringComparer.Ordinal)
             .ShouldBe(
                 expected.OrderBy(n => n, StringComparer.Ordinal),

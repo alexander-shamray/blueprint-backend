@@ -17,6 +17,7 @@ public sealed class GetSagaStateHandler(IDbConnectionFactory connections)
         SELECT s.OrderId,
                s.CurrentState,
                s.StartedAt,
+               s.StateEnteredAt,
                s.CancelReason
         FROM ordering.OrderFulfilmentStates s
         WHERE s.CorrelationId = @OrderId;

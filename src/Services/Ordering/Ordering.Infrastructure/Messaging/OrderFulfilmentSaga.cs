@@ -58,15 +58,19 @@ public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmen
 
     /// <summary>The saga on §9.6's own delays, which every test and the diagram's reader assume.</summary>
     public OrderFulfilmentSaga()
-        : this(Options.Create(new OrderFulfilmentTimeouts()))
+        : this(Options.Create(new OrderFulfilmentTimeouts()), TimeProvider.System)
     {
     }
 
     /// <summary>The saga on the delays configuration bound, each defaulting to the constant above.</summary>
-    public OrderFulfilmentSaga(IOptions<OrderFulfilmentTimeouts> timeouts)
+    public OrderFulfilmentSaga(IOptions<OrderFulfilmentTimeouts> timeouts, TimeProvider clock)
     {
         OrderFulfilmentTimeouts delays = timeouts.Value;
         InstanceState(x => x.CurrentState);
+
+        // Every entry to a state, the first included, stamps it, so the read can say how long an order has sat in
+        // one (§9.6). Final is stamped too, on an instance SetCompletedWhenFinalized is about to delete.
+        BeforeEnterAny(entering => entering.Then(ctx => ctx.Saga.StateEnteredAt = clock.GetUtcNow()));
 
         // No catch-all: an event with no transition in its state faults, and every legitimate arrival is written
         // out with an Ignore or a recording branch (§9.6).
