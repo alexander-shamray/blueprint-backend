@@ -1890,6 +1890,10 @@ would multiply inside the drawing:
 | `ReleaseTimeout` | `ReleaseTimeoutDelay` | A `ReleaseStock` this saga sent while compensating |
 | `DespatchTimeout` | `DespatchTimeoutDelay` | Despatch, once the order is confirmed — days, because the far end is a warehouse |
 
+Each delay is a default: Ordering binds the `Saga` section over them, and a
+laptop's Compose override shortens all five so an expiry can be watched by hand
+([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)).
+
 `ConfirmationTimeoutDelay` is the one set against this repository's own
 mechanisms rather than against a peer — `RetryPolicy`'s ladder on
 `ordering-commands` and §9.4's dispatcher backoff. Which of the two decides it,

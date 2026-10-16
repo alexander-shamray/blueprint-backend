@@ -1465,9 +1465,12 @@ a key that never varies has nothing to validate.
 > environments.** If every value in it would be the same in Compose, in the test
 > fixture and in production, it is not configuration — it is a constant that has
 > been given a deployment obligation and every place it can be forgotten.
-> `MaxAttempts` (§9.4), the dispatcher's tick, the saga's schedule delays
-> (§9.6) and `ServiceOptions.OperationTimeout` are all constants for exactly
-> this reason.
+> `MaxAttempts` (§9.4), the dispatcher's tick and
+> `ServiceOptions.OperationTimeout` are constants for exactly this reason.
+> The saga's schedule delays (§9.6) pass on a developer's word instead: a
+> developer's stack differs from production in them, because a wait of minutes
+> cannot be watched by hand, and no deployed value is set
+> ([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)).
 > `Identity:Client` earns its options type by holding a secret that must differ
 > per environment, and `Jurisdiction` earns one because a statutory window, the
 > languages a customer is owed and the zone their dates are read in are facts

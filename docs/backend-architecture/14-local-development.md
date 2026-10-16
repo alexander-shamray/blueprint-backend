@@ -463,6 +463,16 @@ docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-com
 dotnet run --project src/Services/<Service>/<Service>.Api
 ```
 
+**A second override cuts §9.6's five waits to seconds**, so a developer reaches
+each expiry branch of the compensation journey without the test hook that
+publishes it: `docker-compose.short-timeouts.yml` sets the `Saga` section's
+five delays on `ordering-api`, and it is added to the full-stack `up`, never
+to the one above, whose host-run Ordering reads no container `environment:`.
+It is a lever for a laptop and for nothing else — no chart sets the section,
+and a shortened wait outruns what Shipping's give-up age and Payments'
+redelivery ladder are sized to
+([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)).
+
 **A host process reads none of the container `environment:` blocks, so every
 key a service throws without has to be supplied to it.** **Five** do that, each
 named by the registration that reads it — `ConnectionStrings__<Service>`
