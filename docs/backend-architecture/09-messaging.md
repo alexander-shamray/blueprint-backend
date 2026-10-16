@@ -1395,7 +1395,7 @@ between publishing and marking processed republishes the message. This is
 correct and expected — which is why consumers must be idempotent.
 
 Retain processed rows for a few days, for debugging and as the last copy of
-a delivered event that [§10.7](10-api-gateway.md)'s rebuild replays, then
+a delivered event that [E.6.10](appendix-e-reference-domain.md#e610-the-buyers-order-read)'s rebuild replays, then
 delete them on a schedule. An outbox table nobody prunes grows without bound
 and eventually degrades the filtered index scan.
 
@@ -2943,7 +2943,7 @@ saga's state by the time the saga takes to consume the same event:
 | `AwaitingStock`, `AwaitingPayment` | `placed` | `cancelled`, on a customer's `OrderCancelled` |
 | `AwaitingConfirmation` | `placed` | `confirmed` on `OrderConfirmed`; `dispatched` on `ShipmentDispatched`; `cancelled` on `OrderCancelled` |
 | `Confirmed` | `confirmed` | `dispatched` on `ShipmentDispatched`; `cancelled` on `OrderCancelled` |
-| `Compensating` | `placed` or `confirmed` | `cancelled`, `out_of_stock` or `declined` by `cancelReason` as §10.7 maps it, once the `OrderCancelled` is projected |
+| `Compensating` | `placed` or `confirmed` | `cancelled`, `out_of_stock` or `declined` by `cancelReason` as [E.6.10](appendix-e-reference-domain.md#e610-the-buyers-order-read) maps it, once the `OrderCancelled` is projected |
 | *no row* | `dispatched`, `delivered` or a cancellation; `placed` for an order the saga has yet to consume | `confirmed` beside an escalation: a despatch timeout or a cancellation after confirmation finalises the saga and leaves a review row for a person; a confirmation timeout does the same with `placed` or `confirmed`, by whether the BFF absorbed `OrderConfirmed` |
 
 A pair outside its row (`Compensating` beside `confirmed` for longer than a

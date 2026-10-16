@@ -789,7 +789,7 @@ and `ProductDiscontinued` keep current. The gRPC pricing client of
 [§9.7](09-messaging.md) is a different caller, the BFF's.
 `PublishProductValidator` and its rule for a name are
 [ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)'s, and its rule for an image is
-a key's bound, which [§10.8](10-api-gateway.md) and
+a key's bound, which [E.6.11](#e611-the-product-image-upload) and
 [ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)
 own.
 
@@ -1123,10 +1123,10 @@ Payments, the stock service is Inventory, the shipping service is Shipping,
 the notification service is Notifications and the privacy service is
 Privacy**.
 
-Shipping's spec, written against §10's contract, is
-`docs/superpowers/specs/2026-09-22-shipping-service-design.md`; the events it
-publishes are those of [E.5.1](#e51-the-contracts), and §10 states what that
-settles for the buyer's read.
+Shipping's spec, written against [E.6.10](#e610-the-buyers-order-read)'s
+contract, is `docs/superpowers/specs/2026-09-22-shipping-service-design.md`; the
+events it publishes are those of [E.5.1](#e51-the-contracts), and E.6.10 states
+what that settles for the buyer's read.
 
 ### E.6.5 Permissions and policies
 
@@ -1248,6 +1248,445 @@ raised
 ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md));
 `OrderConfirmed` carries no postal address although Shipping cannot act without
 one, which Shipping reads from its owner instead (ADR-052).
+
+### E.6.10 The buyer's order read
+
+[ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
+decides where this read is served from: a projection `Web.Bff` owns, and no
+synchronous call. What follows is its wire contract, which the one consumer
+helped write and builds against.
+
+Two routes, because a list and a detail answer different questions and §10.1's
+rule is that the screen's question is the whole of the request (a third, the
+detail's event stream, follows the fields):
+
+| | Path |
+|---|---|
+| Client calls | `/bff/v1/orders?cursor=&limit=` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
+| Gateway strips | `/bff` |
+| Service receives | `/v1/orders` |
+| Service maps | `MapGroup("/v1/orders")` |
+
+The detail route is that group's `/{id:guid}`. Neither needs a gateway change,
+the subject is the principal's, and an order another buyer owns answers 404 and
+not 403, as cancel already does, all by
+[§10.7](10-api-gateway.md#107-a-projection-read-and-its-event-stream). The
+list's `limit` is clamped server-side to `OrderPage.MaxLimit`.
+
+#### The status a buyer is shown
+
+A closed vocabulary, for [§10.7](10-api-gateway.md#107-a-projection-read-and-its-event-stream)'s
+reason.
+
+| Status | Reached by |
+|---|---|
+| `placed` | `OrderPlaced` |
+| `confirmed` | `OrderConfirmed` |
+| `dispatched` | `ShipmentDispatched` |
+| `cancelled` | `OrderCancelled`, below |
+| `out_of_stock` | `OrderCancelled`, below |
+| `declined` | `OrderCancelled`, below |
+| `delivered` | `ShipmentDelivered` |
+
+**The status is ranked, as §10.7 requires.** Rank rises as the table reads,
+`placed` lowest and `delivered` highest, with the three `OrderCancelled` members
+sharing one rank because one event decides between them; `BuyerStatus.Of` is
+the order. `ShipmentDispatched` arriving before `OrderConfirmed` is ordinary
+rather than exotic. §6.6 buys the same property for `ordering.OrderSummaries`
+with `UpdatedAt < @OccurredAt`, which §10.7 says cannot be copied: four hosts
+mint these timestamps.
+
+A cancellation therefore outranks a despatch, and the case is real rather
+than defensive. `Order.Cancel` refuses once the order is `Shipped`, so an
+`OrderCancelled` on the wire is proof the order was cancelled before
+despatch; §9.6's compensation can still leave a `ShipmentDispatched` behind
+it, which is the interleaving `MarkOrderShippedHandler` answers without
+shipping anything. Showing the later event would tell a buyer their cancelled
+order is on its way.
+
+##### Which cancellation a buyer is told about
+
+**Keyed on `Origin` first and `Reason` second**, because `Reason` alone is
+wrong. `Order.Cancel` records the origin and never checks it, and although the
+cancel endpoint takes `customer_request` alone
+([ADR-087](adr/ADR-087-a-caller-cancels-an-order-only-as-a-customer-request.md)),
+an `OrderCancelled` recorded before that rule can pair a user origin with a
+workflow code, and an error queue or a replay can still deliver one — and a
+`Reason`-only map answers a buyer who cancelled with `payment_declined` by
+telling them their card was refused.
+
+| `Origin` | `Reason` | Status |
+|---|---|---|
+| `user` | any | `cancelled` |
+| `workflow` | `out_of_stock`, `stock_timeout` | `out_of_stock` |
+| `workflow` | `payment_declined`, `payment_timeout` | `declined` |
+| `workflow` | `customer_request` | `cancelled` |
+| absent | any | `cancelled` |
+
+`Origin` is optional and additive under §9.2: absent means the payload
+predates the field, which an error queue or a replay can deliver at any time.
+It reads as `cancelled` because that is the member that claims least — an
+absent origin is no evidence that the platform refused anything, and
+inventing a refusal is the harmful direction of a wrong guess.
+
+The two collapses are the platform's distinctions rather than the buyer's:
+stock that was never there and stock that did not answer in time are both
+`out_of_stock`, and an authorisation declined and one that timed out are both
+`declined`. A payment provider's own decline reasons never travel — they are
+its codes and an open set (ADR-049) — so they stop at the service that owns
+them.
+
+**Neither the saga's states nor `OrderStatus` reaches the client**, and the
+two do not agree with one another in any case (§9.6, §5.4). `AwaitingStock`
+and `AwaitingPayment` are both `placed` to a buyer, which is also forced:
+`OrderStockConfirmedDomainEvent` is not on the order service's publish allow-list, so
+no consumer can tell them apart. `Compensating` has no buyer meaning at all —
+what the buyer is owed is the outcome it works towards, and that arrives as
+`OrderCancelled`.
+
+> **`dispatched` and `delivered` are the shipping service's.** In the
+> reference domain Shipping publishes both
+> ([Appendix E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table))
+> and its spec is written against this contract
+> ([Appendix E.6.4](appendix-e-reference-domain.md#e64-the-buyer-order-read)).
+
+#### The fields both routes carry
+
+- **`asOf`**, the BFF's own clock at the last write to this order's row. One
+  value from one clock, which is what makes it well defined when four streams
+  feed the row; §10.7 states what it does and does not say, and the BFF has no
+  write model to read a consistent status from the way §6.6's own remedy
+  assumes.
+- **`refunded`**, a flag and a timestamp beside the status rather than a
+  member of it. `Refund.Voided` has one caller, the handler for
+  `OrderCancelled`, and it runs only where an authorisation exists — so every
+  refund follows a cancellation, and a refund as a status would overwrite the
+  `out_of_stock` and `declined` distinction the table above exists to draw.
+- **`cancellable`**, a hint as §10.7 words it. Only the order service knows:
+  the rule is `Order.Cancel`'s, and during the window between a despatch
+  reaching the saga and reaching this queue the hint reads `true` while the
+  command would answer 422, so the client keeps its `order.already_shipped`
+  handling.
+- **A timestamp per status reached**, so a timeline is drawn from facts rather
+  than from arithmetic on the client. Every event named above carries
+  `OccurredAt`. They come from four hosts, so they order a timeline a person
+  reads and never a decision the code makes — the rank above is what decides.
+- **Money as the server's numbers**, an amount and a currency per line and in
+  total, as §10.7 requires. **An order no placed or confirmed event has reached
+  has no lines and a null total**: `OrderCancelled` supplies the customer and
+  nothing priced, and the row it created is shown as far as the projection knows
+  it rather than hidden until it knows more.
+
+The detail route adds the quantity and unit price each line was placed with,
+and the payment outcome where there is one to give — an authorisation or a
+refund. A declined payment has none: `PaymentDeclined` carries only a reason
+that may not travel, so the order's own status is what says so.
+
+**`productName` is nullable, and the null is not an edge case.** The name is
+resolved on read from the product service's stream, not snapshotted with the
+line, so a product published before this projection's queue was declared has
+no name to resolve — the broker drops what no queue is bound for. §6.6
+documents the same gap for `ordering.Products`, including its rebuild, which
+in the reference domain is the product service's republish
+([Appendix E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild)),
+and that `PriceChanged` is no back door because it carries no name. Here the
+consequence is softer than the order service's 422 and quieter for it:
+a blank line in order history with no error anywhere, which is why the
+contract names it rather than leaving a client to meet it.
+
+#### An order the projection cannot yet attribute
+
+Both shipment events and the payment events ADR-051 lists carry an order id
+and no customer, the payments by ADR-028's decision that a money movement
+carries no subject. They are attributed by joining to a row one of the order
+service's three events created, and §9.4 does not promise that one did.
+
+**§10.7's rule applies to both routes**: the projection inserts on a missing
+row rather than dropping the event, and a row with no owner is never returned.
+It stays invisible until an order-service event supplies the customer, and if
+none ever arrives it stays invisible; §6.6 names the dropped event as a defect
+that leaves an order reading one status for ever with no error anywhere.
+ADR-051's rebuild replays the publishers' outboxes, so an order whose
+`OrderPlaced` has aged out and whose `ShipmentDelivered` has not is exactly such
+a row. RabbitMQ keeps
+nothing a consumer has acknowledged, so the last copy of a delivered event is
+its publisher's processed outbox row, kept for `RetentionPolicy.OutboxWindow`
+(§9.4), and `tools/bff-replay` replays those rows to this projection's queue
+alone.
+
+> **What Shipping settled, and what it was not asked for.** In the reference
+> domain ([Appendix E.6.4](appendix-e-reference-domain.md#e64-the-buyer-order-read))
+> the shipment half of the detail route is as rich as Shipping's published
+> events, and
+> [E.5.1](appendix-e-reference-domain.md#e51-the-contracts) names two, and
+> the payloads in `Common.Contracts.Shipping.V1` carry an order id and a
+> tracking number between them.
+> So a buyer sees despatch, delivery and a number to take to the carrier, and
+> **no tracking feed**: Shipping publishes no tracking event, and the two
+> milestones are the timeline (its spec, which E.6.4 names).
+> What its spec was **not** asked for is a read endpoint — ADR-051 exists so
+> that it is not, and E.1.1, §4.1, §13 and §15 all describe a Shipping that
+> has none.
+
+#### The order's event stream
+
+[ADR-108](adr/ADR-108-the-buyers-order-has-a-server-sent-event-stream-that-polls-its-row-and-ends-inside-the-deadline-475.md)
+adds a third route to the group, for a client that would otherwise poll the
+detail route: `GET /bff/v1/orders/{id}/events`. It answers `text/event-stream`,
+with `Cache-Control: no-store` and `X-Accel-Buffering: no`, and
+[§10.7](10-api-gateway.md#107-a-projection-read-and-its-event-stream) states
+the rules it keeps. The names those rules use here:
+
+- **`order` events.** `data` is the detail route's `OrderDetail`, byte for byte
+  the shape it returns, and `id` is that row's `asOf`.
+- **Heartbeat.** A comment line, `: keep-alive`, after
+  `OrderEventStream.HeartbeatInterval` with nothing sent.
+- **Reconnection.** The stream names `OrderEventStream.RetryAfter` in its
+  `retry` field.
+- **The stream ends by itself.** After `OrderEventStream.Lifetime`, which is
+  inside `ServiceOptions.OperationTimeout`; at once on a delivered order, the
+  one status nothing follows; and when the row is gone, as an erasure removes
+  it.
+
+Each open stream reads its one row by key every `OrderEventStream.PollInterval`,
+so an update reaches the client one interval after the projection writes it.
+
+### E.6.11 The product image upload
+
+[ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)
+decides that the bytes of an image go from the client to an S3-compatible store
+and through no service. What follows is the wire contract the consumer builds
+against; [§10.8](10-api-gateway.md#108-a-client-supplied-file) states the rules
+that make a client-supplied file safe to publish.
+
+| | Path |
+|---|---|
+| Client calls | `POST /bff/v1/product-images` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
+| Service receives | `/v1/product-images` |
+
+It needs no gateway change, as §10.7 states. The caller is an authenticated
+seller, holding the permission that publishing a product already requires
+([§11.4](11-identity-authorization.md)); the seller is bound from the
+principal, and the request names none.
+
+**The request carries two values and the server chooses everything else.**
+`contentType` is one of `image/jpeg`, `image/png` and `image/webp`, a closed
+list in which SVG is deliberately absent: an SVG is a document that can carry
+script. `sizeBytes` is at most 5 MiB. A value outside either answers 400 in
+§10.5's `Error` vocabulary.
+
+**The response is the URL and what the client must send with it:**
+
+| Field | Meaning |
+|---|---|
+| `uploadUrl` | A pre-signed `PUT` for one key, expiring after five minutes |
+| `headers` | The `Content-Type` and `Content-Length` the signature covers, which the store refuses a request without |
+| `key` | The key the server chose, `uploads/{sellerId}/{guid}.{ext}` with the extension taken from the allowed type |
+| `expiresAt` | When `uploadUrl` stops working |
+
+**Publishing attaches the image; the request does not send a URL.**
+`PublishProduct` carries the `key` the upload returned. The service that owns
+products checks the key against the caller's own `uploads/{sellerId}/` prefix
+and copies the object to `products/{sellerId}/{guid}.{ext}` with
+`Cache-Control: public, max-age=31536000, immutable`, as §10.8 requires, and
+stores the public URL it builds from the configured base and the destination
+key. A URL from the client is not accepted: the request's `ThumbnailUrl` is
+replaced by the `key`, and a product published without one has no image, as a
+null `ThumbnailUrl` already means. [ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)'s `https`
+rule becomes a rule about the configured base, which is an absolute `https` URL
+(`http` for a loopback host alone, which Compose's local edge is) short enough
+that the base and the longest destination key (87 characters) fit
+`ThumbnailUrl`'s 400, both checked when the host starts.
+
+**A key that cannot be attached is a 422, and each refusal has its own code.**
+`product.image_key_invalid` is a key that is not the shape the BFF mints, is
+under another seller's prefix, or arrived with no principal;
+`product.image_not_uploaded` is a key with no object behind it, because the
+upload was never made or has expired; `product.image_not_an_image` is an object
+whose first bytes, or whose stored type, disagree with the type its key
+carries. None of them stores a product. A key longer than the longest
+destination key is a 400 before any of that, from the validator.
+
+**The expiry rule is on `uploads/`.** Its lifecycle rule deletes objects after
+one day, and `products/` has none. A copy whose publish transaction then fails
+leaves one object nothing names, which the retry reuses
+([ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)).
+
+**The two credential pairs are the BFF's, which writes under `uploads/`, and the
+product service's, which reads `uploads/` and writes `products/`.** Compose's
+local store, its credentials and the chart's store values follow
+[§14.1](14-local-development.md), [§15.4](15-cicd-deployment.md) and
+`docs/secrets.md`'s exception table, and this section owns only the permissions
+above. The local store holds each pair to the policy
+[§10.8](10-api-gateway.md#108-a-client-supplied-file) states, so a delete is
+refused there as a list is, and `ProductImageStoreTests` proves both.
+
+**The image is served from `products/` alone**, and
+`ProductImageStoreTests` reads `X-Content-Type-Options: nosniff` off the local
+edge, the one Compose puts in front of the store.
+
+### E.6.12 The saved delivery address
+
+[ADR-107](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md)
+decides that `Web.Bff` keeps one delivery address per customer, as a prefill
+for the checkout. What follows is the wire contract, which the one consumer
+builds against.
+
+| | Path |
+|---|---|
+| Client calls | `GET`, `PUT` and `DELETE /bff/v1/saved-address` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
+| Service receives | `/v1/saved-address` |
+
+It needs no gateway change, and the path is singular, the subject is the
+principal's and a repeated `PUT` or `DELETE` leaves the state the first left,
+all by [§10.9](10-api-gateway.md#109-a-per-subject-resource).
+
+**The body is the order request's own address**, so a client prefills the
+checkout by copying it across: `line1`, `line2`, `city`, `postalCode` and
+`country`. `PUT` answers 200 with the address as stored; `GET` answers 200 with
+it, or 404 with the code `address.not_found`; `DELETE` answers 204.
+
+**The address is validated by the rule an order applies and by no more.** A
+`line1`, a `city` and a `postalCode` are present, a `country` is two ASCII
+letters (ISO 3166-1 alpha-2, in either case, stored in upper case), and each
+part fits the width the order's own validator admits, so an address that saves
+is one an order accepts. A postcode's format is never checked, because no
+format is every country's. A `line2` that is blank is stored as none, and every
+part is trimmed, as an order stores an address.
+
+**It is a prefill and an input to nothing**: placing an order still carries the
+address in the order request, and no service reads the saved one.
+
+**Erasure is the BFF's handler for `PersonalDataDeleteRequested`**, which
+deletes the subject's row in the transaction that deletes their orders and
+counts it in the request's audit row; the responder set does not change, since
+the BFF was already one of the holders an erasure request waits on
+([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)).
+
+### E.6.13 The device registration
+
+[ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)
+decides that an app registers its installation's push token through
+`Web.Bff`, and that the service that sends to the token owns the row — in the
+reference domain Notifications, whose API host the BFF calls
+([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)). What
+follows is the wire contract, which the app builds against.
+
+| | Path |
+|---|---|
+| Client calls | `PUT` and `DELETE /bff/v1/devices/{installationId}` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
+| Service receives | `/v1/devices/{installationId}` |
+
+It needs no gateway change. The installation id is the UUID the app minted
+once per install; a path segment that is not one matches no route and answers
+404. The subject is the caller's, as [§10.10](10-api-gateway.md#1010-a-write-forwarded-to-the-owning-service)
+states.
+
+**A `PUT` registers**, on every start of the app and on every rotation, with
+a body of `platform` (`fcm` or `apns`), `appId`, `token` and `sequence`. **A
+`DELETE` signs out**, with the sequence as its one query parameter,
+`?sequence=`, and no body. The sequence is the installation's counter, raised
+by the app before every request. Either answers 204 when the owning service
+applies it or when it repeats the write before it, and a sign-out answers
+204 whether or not there was a row to clear, and whatever its sequence when
+the row is another subject's
+([ADR-121](adr/ADR-121-a-sign-out-above-a-cleared-device-row-moves-its-sequence-whoever-sends-it-and-an-invalid-token-answer-keeps-the-row-1034-474.md)).
+One out of order answers 409 with the `code` `device.stale_sequence` and a
+`sequence` member holding the row's. Both routes are `Convergent`.
+
+**The BFF refuses a malformed request before the hop**, with 400: a platform
+outside the pair,
+an app id that `PushOptions.Apps` does not name for that platform, a token
+that is empty, longer than `DeviceRules.MaxTokenLength` or outside printable
+ASCII, and a sequence of zero or below. A sequence that does not bind as an
+integer, or a `DELETE` with none, is §10.5's unreadable-request 400 instead.
+`PushOptions` is bound from the `Push` section, and an empty list is a
+deployment that sends no push and refuses every registration.
+
+**The hop is `NotificationsHop`, with `CallerTokenHandler`** copying the inbound
+`Authorization` header, as §10.10 states. A reply `devices.proto` forbids — an
+outcome left unset, an applied or repeated write carrying a sequence other than
+the request's, or a stale one carrying none — is a 500.
+
+**The cluster half is ADR-118's.** The hop resolves `notifications-api:8081`
+under Compose and in Kubernetes alike: there it is the Service of the API
+host's own chart, `deploy/helm/notifications-api/`, which admits `web-bff` on
+`grpc`, and `web-bff`'s policy reaches it there, the edge ADR-118 adds to
+[ADR-065](adr/ADR-065-every-workload-is-fenced-by-a-default-deny-networkpolicy.md)'s
+table.
+
+**Retention and erasure are ADR-117's**: a row not seen for
+`DeviceTokenOptions.StaleAfter` is deleted, and an erasure clears every row of
+the subject. The token is never a log attribute, a span attribute or part of
+an exception's message ([§13.4](13-observability.md)).
+
+### E.6.14 The notification preferences
+
+[ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)
+decides that which messages a subject may be sent, on which channel, is a
+journal of the subject's own acts, kept by the service that sends them, and
+that the journal is the consent record. The client reads and writes it
+through `Web.Bff`, which calls that service's API host as §10.10's
+registration does: in the reference domain Notifications.Api
+([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)). What
+follows is the wire contract.
+
+| | Path |
+|---|---|
+| Client calls | `GET /bff/v1/notification-preferences` and `PUT /bff/v1/notification-preferences/{topic}/{channel}` |
+| Gateway matches | `/bff/v1/{**catch-all}` |
+| Service receives | `/v1/notification-preferences` and `/v1/notification-preferences/{topic}/{channel}` |
+
+It needs no gateway change. A topic is one of the seven order events, by its
+template key — `order-placed`, `order-confirmed`, `order-cancelled`,
+`payment-declined`, `payment-refunded`, `shipment-dispatched` and
+`shipment-delivered` — and a channel is `email` or `push`. The owning service's
+`ConsentVocabulary` holds the list, and `PreferenceRules` is the BFF's check
+against it. The subject is the caller's, as on
+[§10.10](10-api-gateway.md#1010-a-write-forwarded-to-the-owning-service)'s routes.
+
+**A `GET` reads every pair**, topic by topic in that order and each topic's
+two channels, as `{ "preferences": [ … ] }`. A pair carries `topic`,
+`channel`, `optedIn` and `source`: `required` for a pair the deployment is
+obliged to send, `default` for one with no entry, and `set` for one the
+subject set. A set pair alone carries `setAt` and `version`, the id of its
+newest entry; any other carries both as `null`. A required pair is always
+opted in, and the read says so rather than offering a switch that would do
+nothing.
+
+**A `PUT` sets one pair**, with a body of `{ "optedIn": <bool> }` and one
+precondition: `If-Match` carrying the pair's `version` as a strong entity tag,
+`"<version>"`, or `If-None-Match: *` for a pair the read showed with none. It
+answers 200 with the pair as it now stands, in the read's shape, and an `ETag`
+carrying its new version. A write that lost a race, because another device's
+write landed since this one's read, answers 412 with the `code`
+`preference.precondition_failed` and a `preference` member holding the pair as
+it now stands, so an opt-in made on one device never undoes a withdrawal made
+on another
+([§10.11](10-api-gateway.md#1011-a-versioned-write-under-a-precondition)). A
+pair the deployment requires answers 422 with the `code`
+`preference.required`.
+
+**The BFF refuses a malformed request before the hop**, with 400: a topic or
+channel outside the vocabulary, and a body without `optedIn`, beside the
+precondition shapes §10.11 lists. `PreconditionFilter` reads the two headers.
+
+**The hop is `NotificationsHop`**, which registers the preferences client on
+the same numbers as the devices client with its own breaker, and
+`CallerTokenHandler` copies the inbound `Authorization` header unchanged. A
+reply `preferences.proto` forbids — an outcome or a source left unset, a set
+pair without its version and time, another pair with either, a pair outside the
+vocabulary, or a write applied to a pair or value other than the one asked — is
+a 500.
+
+**Retention and erasure are ADR-120's**: an entry no longer current is kept for
+`NotificationsJurisdictionOptions.ConsentRetention` and for as long as a kept
+send names it or the entry it ended, and an erasure anonymises every entry of
+the subject and keeps it.
 
 ## E.7 §12: the test strategy
 
@@ -1820,7 +2259,7 @@ code reads it, and the host refuses to start without a required one.
 | `Mail__UserName` | Config | Helm `mail.userName` → ConfigMap | ✓ **outside Development** — **Notifications only**; set with the password or not at all |
 | `Mail__Password` | Secret | Helm `mail.passwordSecretRef` → External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
 | `ProductImages__Store__Endpoint`, `__Bucket`, `__Region`, `__PathStyle` | Config | Helm `objectStore.*` → ConfigMap | ✓ — **Web.Bff and Catalog only**; the object store of [ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md), refused at start when missing. The BFF's endpoint is the address a client reaches, since it signs the URL the client uploads to, and Catalog's is the one that service reaches |
-| `ProductImages__Store__PublicBaseUrl` | Config | Helm `objectStore.publicBaseUrl` → ConfigMap | ✓ — **Catalog only**; where `products/` is served from, the absolute base every stored image URL is built from (its scheme is [§10.8](10-api-gateway.md)'s rule), and short enough that it and the longest destination key fit `ThumbnailUrl` ([§10.8](10-api-gateway.md)) |
+| `ProductImages__Store__PublicBaseUrl` | Config | Helm `objectStore.publicBaseUrl` → ConfigMap | ✓ — **Catalog only**; where `products/` is served from, the absolute base every stored image URL is built from (its scheme is [E.6.11](#e611-the-product-image-upload)'s rule), and short enough that it and the longest destination key fit `ThumbnailUrl` ([E.6.11](#e611-the-product-image-upload)) |
 | `Push__Apps__0…n__AppId`, `__Platform` | Config | Helm `push.apps` → ConfigMap, empty in both charts | — **Web.Bff and Notifications' worker**; the worker registers a provider for each platform the list names, and writes a push notice beside each mail notice only once it names an app, since no device row can exist before; the two charts state the same list. The rollout refuses the notifications release while the list names an app and either track serves a revision from before push deliveries landed, whose workers claim a push notice as mail ([ADR-126](adr/ADR-126-the-rollout-keeps-a-values-path-empty-while-either-track-serves-a-revision-older-than-the-one-its-descriptor-names-1059.md)), so the first app is named once a release from push deliveries onward is the stable track. Each entry is one of [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)'s apps, each an app id and its platform, which a registration must match (§10.10). The host refuses an app id named twice or a platform outside `fcm` and `apns` at start, and an empty list refuses every registration |
 | `ProductImages__Store__AccessKey`, `__SecretKey` | Secret | Helm `objectStore.secretRef` → External Secrets | ✓ — **Web.Bff and Catalog only**; one pair per host, never shared: the BFF's writes `uploads/` and nothing else, and Catalog's reads `uploads/` and writes `products/` (§10.8) |
 | `ContactSource__BaseUrl` | Config | Helm `contactSource.baseUrl` → ConfigMap | ✓ — **Notifications only**; Keycloak's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s contact read, HTTPS outside Development, and the host refuses to start without it |

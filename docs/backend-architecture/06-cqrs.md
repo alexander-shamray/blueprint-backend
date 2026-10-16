@@ -1055,7 +1055,7 @@ invisible or broken character
 ([ADR-085](adr/ADR-085-a-published-products-name-is-visible-text-and-its-thumbnail-is-https-from-a-host-the-seller-chooses.md)).
 The request carries an image key and no URL, so the `https` rule is about the
 configured base the service builds the stored URL from
-([§10.8](10-api-gateway.md),
+([E.6.11](appendix-e-reference-domain.md#e611-the-product-image-upload),
 [ADR-106](adr/ADR-106-an-s3-compatible-object-store-for-product-images-the-bff-issues-a-pre-signed-upload-url-472.md)).
 
 ## 6.5 A query
