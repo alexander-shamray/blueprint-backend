@@ -245,7 +245,7 @@ STRVALS_METACHARACTERS = ",\\{}[]="
 
 # The environment `read_admin.py` reads, declared here and imported there —
 # `deploy/canary`'s direction, where `read_prometheus.py` imports from
-# `canary.py` and never the reverse — because the ones `authority` writes
+# `analysis.py` and `descriptor_model.py` and never the reverse — because the ones `authority` writes
 # have to be one statement with the ones the fetcher reads. Named in a tuple
 # and unpacked, because a credential-shaped constant assigned a literal is the
 # shape §15.1's secret scan exists to catch, and these hold names, never

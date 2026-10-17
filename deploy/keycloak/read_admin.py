@@ -18,7 +18,7 @@ from pathlib import Path
 
 # The names of the four environment variables this reads, declared in the file
 # that DECIDES rather than here — `deploy/canary`'s direction, where
-# `read_prometheus.py` imports from `canary.py` and never the reverse. Two of
+# `read_prometheus.py` imports from `analysis.py` and never the reverse. Two of
 # the four are what `realm_check.py authority` writes into `$GITHUB_ENV`, and a
 # writer and a reader spelling a variable separately agree right up until one
 # of them is edited.
