@@ -351,12 +351,12 @@ name `deploy/workflow_paths/**`, the reader their gates import.
 **None of the four keeps that list in its own YAML**, and the sixth filter
 names its own tree and its workflow alone, because its gate reads nothing
 else.
-`smoke.sh`, `check.py`, `canary.py` and `realm_check.py` each declare
-`SOURCE_INPUTS` beside the reads, and each asserts that both of its workflow's
+`smoke.sh`, `check.py`, the canary's `repo_gate.py` and `realm_check.py` each
+declare `SOURCE_INPUTS` beside the reads, and each asserts that both of its workflow's
 triggers cover every entry — a copy of a list drifts exactly as a copy of a
 number does, and the assertion itself is held once, in `deploy/workflow_paths`
 ([ADR-132](adr/ADR-132-the-workflow-paths-cover-inputs-check-is-held-once-in-deploy-workflow_paths-1082-used-by-four-python-gates-and-smokesh.md)). All four gates also assert the reads direction — every file the
-gate opens is in the list, the canary's in its suite, `test_canary.py` — which
+gate opens is in the list, the canary's in its suite, `test_repo_gate.py` — which
 is the shape the second callout below argues for.
 
 > **A fifth copy of that pattern exists and is not one of the four above, which
@@ -1565,7 +1565,7 @@ Service name, so an edge weight cannot canary a service at all.
 **Two things the ladder above does not say.**
 
 **The weights are ceilings, not targets, because a replica ratio is
-quantised.** `deploy/canary/canary.py` takes the largest canary that stays
+quantised.** `deploy/canary/analysis.py` takes the largest canary that stays
 within the requested weight and **refuses** where even one pod overshoots,
 naming the stable replica count that would satisfy the step. At §15.3's
 `replicaCount: 3` a single canary pod already serves 25%, so the 5% rung above

@@ -28,14 +28,27 @@ gate's terms, which is why the gate can run before anything is built.
 `deploy/helm/smoke.sh` covers the other half: it renders the canary track of
 every chart and asserts what comes out.
 
+### Layout
+
+`canary.py` is the one command line the workflow calls; what each subcommand
+answers lives in a module cut by the reason it changes. A module imports only
+from those above it, and `test_canary.py` holds the table's order to that.
+
 | File | What it is |
 |---|---|
 | `canary.json` | §15.5's ladder and the thresholds |
 | `deployables/` | One descriptor per deployable, which the section below owns |
-| `canary.py` | The weight arithmetic, the signals and their PromQL templates, the promote/rollback verdict, the gate over `canary.json` and the descriptors, and the rollout's digest and image-name reads (`validate-digest`, `verified-digest`, `images`) |
-| `read_prometheus.py` | The one file that talks to anything. Runs `canary.py`'s queries for the signals a workload declares and writes what came back |
+| `descriptor_model.py` | `canary.json` and the descriptors as data: loading them, and what the rollout asks of them (`chart`, `images`, `migrated-by`, `migrates`, `shared-values`, `values-agree`, `empty-until`, `values-empty`) |
+| `release_inputs.py` | The release inputs refused before Helm reads them (`validate-tag`, `validate-digest`, `verified-digest`, `revision`, `installed-tag`) |
+| `csharp_sources.py` | What the rollout reads out of `src/`: host assemblies, consumer and saga registrations, health routes. Under `analysis.py` because the `http` query excludes the probe routes it finds |
+| `analysis.py` | The weight arithmetic (`required`, `plan`), the signals and their PromQL templates, and the promote/rollback verdict (`analyse`) |
+| `workflow_reads.py` | How `deploy.yml` and `smoke.sh` read the descriptors (`smoke-cases`) |
+| `rollout_gate.py` | Checks 12 to 15: what the rollout's steps do with the facts the descriptors give them |
+| `repo_gate.py` | `check`: the plan and the descriptors held against the sources, the alerts, the charts, `smoke.sh` and the workflow, and `SOURCE_INPUTS` |
+| `canary.py` | The command line: arguments and exit codes |
+| `read_prometheus.py` | The one file that talks to anything. Runs `analysis.py`'s queries for the signals a workload declares and writes what came back |
 | `fixtures/` | Output a tool really printed, which the suite reads: `cosign verify -o json` for `catalog-api`, what `verified-digest` is tested against |
-| `test_canary.py` | The suite. It is the whole of the assurance the rollout has |
+| `test_*.py` | One suite per module, named for it; `test_canary.py` holds the command line and the layering. Together they are the whole of the assurance the rollout has. `canary_testing.py` holds what more than one of them builds |
 
 ## A deployable is one descriptor
 
@@ -45,7 +58,7 @@ for its Helm release: `deployables/catalog-api.json` is the release
 
 - `deploy.yml` holds a dispatch to its descriptor through `canary.py chart`,
   and `realm.yml`'s scheduled job loops over `canary.py workloads`;
-- `canary.py` plans, checks and judges each one;
+- `canary.py` plans, checks and judges each one, through the modules above;
 - `deploy/helm/smoke.sh` takes its cases from `canary.py smoke-cases`.
 
 None of them lists a deployable by hand. Check 8 and the suite hold the
@@ -71,7 +84,7 @@ entries in lists kept separately, which §15.3 names with their owners.
 | `serviceName` | The entry assembly, which §13.2 makes the `service_name` every query selects on — not the chart's name, because a query spelled in the deployment's vocabulary matches no series and an empty result rolls every canary back |
 | `chart` | The directory under `deploy/helm` the release installs; one descriptor per chart |
 | `source` | The host's tree under `src/`, which `smoke.sh` holds the chart to |
-| `signals` | What the workload is judged on, from `canary.py`'s `SIGNALS` (ADR-047) |
+| `signals` | What the workload is judged on, from `analysis.py`'s `SIGNALS` (ADR-047) |
 | `httpExemption`, `consumeExemption`, `sagaExemption` | The argument for a signal check 9 finds owed and the workload does not declare |
 | `migratedBy` | The workload whose chart's hook migrates this one's schema, named exactly when `smoke.database` is true and `smoke.migrator` false; the rollout refuses a tag whose revision is not the one that release serves (ADR-118, ADR-122), and that release's tag while this one serves any revision but its own (ADR-122) |
 | `sharesValues` | The workloads whose release is given a value this one is too, each with the dotted values paths both read, declared on one of the two descriptors; the rollout refuses either release while the two differ (ADR-125) |
@@ -120,7 +133,7 @@ because a branch driven by the file it judges asserts nothing. Every value
    every deployable it can roll is one `smoke.sh` renders — read through
    `canary.py smoke-cases`, with no hand list in a form
    [the descriptor section](#a-deployable-is-one-descriptor) says it finds.
-9. Every workload declares at least one signal `canary.py` defines; and a
+9. Every workload declares at least one signal `analysis.py` defines; and a
    service whose tree registers a MassTransit
    consumer declares `consume`, and one that registers a saga declares `saga`,
    or carries a non-empty `consumeExemption` or `sagaExemption` — which fails
@@ -171,7 +184,7 @@ because a branch driven by the file it judges asserts nothing. Every value
 [ADR-047](../../docs/backend-architecture/adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md)
 is the decision; this is where it lives. A workload declares `signals` in its
 descriptor, and `read_prometheus.py` fetches those and no others. The
-signals and their thresholds are `canary.py`'s `SIGNALS`, and their queries
+signals and their thresholds are `analysis.py`'s `SIGNALS`, and their queries
 are `queries()`, one template per signal and role, which the suite pins as
 golden strings:
 

@@ -3,8 +3,8 @@ name: Deploy
 # §15.5's canary, and §15.1's production leg of the pipeline. It reaches no
 # cluster: no environment, no kubeconfig. It does reach a registry, to verify
 # what CI pushed and pin the digest it verified (ADR-109). What is asserted
-# about it is asserted by `deploy/canary/canary.py`, whose suite runs on every
-# change to this tree, and by the `check` job below, which reads this file.
+# about it is asserted by `deploy/canary/canary.py` and the modules beside it,
+# whose suites run on every change to this tree, and by the `check` job below, which reads this file.
 
 # `workflow_dispatch` only, and the reason is `main` staying green: a canary on
 # `push` would fail on every merge for want of a cluster, which trains everyone
@@ -26,7 +26,7 @@ on:
         type: string
   # The gate runs on its own inputs, so a change to the plan, the script or
   # this file is checked without a deploy. The paths below are not maintained
-  # here: `canary.py` declares them as SOURCE_INPUTS beside the reads that need
+  # here: `repo_gate.py` declares them as SOURCE_INPUTS beside the reads that need
   # them, and asserts that both lists cover every entry.
   pull_request:
     paths:

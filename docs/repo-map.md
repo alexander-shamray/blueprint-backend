@@ -166,7 +166,7 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              tree: deploy/helm/**, src/**,
                              deploy/observability/** and
                              deploy/workflow_paths/**, declared as
-                             SOURCE_INPUTS in canary.py. A trigger assertion cannot see a
+                             SOURCE_INPUTS in repo_gate.py. A trigger assertion cannot see a
                              read it was never told about, so a test over
                              the reads is what keeps that list complete, not
                              a more careful list
@@ -251,9 +251,11 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              reports and never fails on a figure
 deploy/canary/               §15.5's rollout — the ladder as JSON, the weight
                              arithmetic and the promote/rollback verdict as
-                             tested stdlib Python, and one file that reads
-                             Prometheus. It reaches no cluster; the deciding
-                             is tested and the acting is not. `deployables/`
+                             tested stdlib Python behind one command line,
+                             cut by the reason to change (its README, Layout),
+                             and one file that reads Prometheus. It reaches
+                             no cluster; the deciding is tested and the
+                             acting is not. `deployables/`
                              is one descriptor per deployable, the list the
                              workflows and the Helm smoke run read, beside
                              the canary because its row was the first
