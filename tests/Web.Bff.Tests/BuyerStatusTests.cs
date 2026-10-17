@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§10.7's rank over every subset of the five steps: the highest absorbed, never the latest.</summary>
+/// <summary>E.6.10's rank over every subset of the five steps: the highest absorbed, never the latest.</summary>
 public sealed class BuyerStatusTests
 {
     private static readonly DateTimeOffset At = new(2026, 10, 3, 9, 0, 0, TimeSpan.Zero);
@@ -58,7 +58,7 @@ public sealed class BuyerStatusTests
     public void A_cancellation_outranks_a_despatch_and_reads_as_its_stored_member(string member) =>
         BuyerStatus.Of(new OrderSteps(At, At, At.AddHours(1), null, At.AddMinutes(30), member)).ShouldBe(
             member,
-            "Order.Cancel refuses a shipped order, so a cancellation on the wire preceded the despatch (§10.7)");
+            "Order.Cancel refuses a shipped order, so a cancellation on the wire preceded the despatch (E.6.10)");
 
     [Fact]
     public void Delivery_outranks_a_cancellation() =>

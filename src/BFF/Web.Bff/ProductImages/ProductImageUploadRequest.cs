@@ -3,7 +3,7 @@ using FluentValidation;
 
 namespace Web.Bff.ProductImages;
 
-/// <summary>The two values the client chooses (§10.8); the server chooses everything else.</summary>
+/// <summary>The two values the client chooses (E.6.11); the server chooses everything else.</summary>
 /// <remarks>Nullable, so an omitted size is §10.8's 400 rather than a bound 0 and a zero-byte upload.</remarks>
 public sealed record ProductImageUploadRequest(string? ContentType, long? SizeBytes);
 

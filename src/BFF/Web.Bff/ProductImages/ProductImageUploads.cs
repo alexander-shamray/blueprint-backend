@@ -11,11 +11,11 @@ public sealed record ProductImageUpload(
     string Key,
     DateTimeOffset ExpiresAt);
 
-/// <summary>§10.8's issue of a pre-signed <c>PUT</c>, and nothing else: it reads no store and writes none.</summary>
+/// <summary>E.6.11's issue of a pre-signed <c>PUT</c>, and nothing else: it reads no store and writes none.</summary>
 /// <remarks>A singleton, since it holds only options and a clock (§10.8).</remarks>
 public sealed class ProductImageUploads(IOptions<ObjectStoreOptions> options, TimeProvider clock)
 {
-    /// <summary>Five minutes, §10.8's expiry: long enough to send 5 MiB from a phone, short enough to lose.</summary>
+    /// <summary>Five minutes, E.6.11's expiry: long enough to send 5 MiB from a phone, short enough to lose.</summary>
     public static readonly TimeSpan UrlLifetime = TimeSpan.FromMinutes(5);
 
     /// <summary>Mints the key and signs the <c>PUT</c> for it; the caller has checked the type and the size.</summary>

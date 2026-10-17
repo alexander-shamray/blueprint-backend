@@ -11,7 +11,7 @@ using Source = Web.Bff.TestSupport.StubNotifications.Source;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§10.11's preferences, driven end to end over a real gRPC server standing in for Notifications.</summary>
+/// <summary>E.6.14's preferences, driven end to end over a real gRPC server standing in for Notifications.</summary>
 public sealed class PreferenceEndpointTests : IAsyncLifetime
 {
     private const string CallerHeader = "Bearer caller-access-token";

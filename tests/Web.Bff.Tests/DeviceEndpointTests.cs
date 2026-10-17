@@ -11,7 +11,7 @@ using Outcome = Web.Bff.TestSupport.StubNotifications.Outcome;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§10.10's registration, driven end to end over a real gRPC server standing in for Notifications.</summary>
+/// <summary>E.6.13's registration, driven end to end over a real gRPC server standing in for Notifications.</summary>
 public sealed class DeviceEndpointTests : IAsyncLifetime
 {
     private static readonly Guid Installation = Guid.Parse("0f8fad5b-d9cb-469f-a165-70867728950e");

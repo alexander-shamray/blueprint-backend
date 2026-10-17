@@ -3,7 +3,7 @@ using PreferencesGrpc = Notifications.Preferences.V1.Preferences;
 
 namespace Web.Bff.Preferences;
 
-/// <summary>§10.11's preferences: the validator, the precondition filter and the hop (ADR-120).</summary>
+/// <summary>E.6.14's preferences: the validator, the precondition filter and the hop (ADR-120).</summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddNotificationPreferences(this IServiceCollection services)

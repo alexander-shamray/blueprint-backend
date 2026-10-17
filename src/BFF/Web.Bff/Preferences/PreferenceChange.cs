@@ -2,7 +2,7 @@ using FluentValidation;
 
 namespace Web.Bff.Preferences;
 
-/// <summary>A <c>PUT</c>'s body (§10.11): whether the subject opts in to the route's pair.</summary>
+/// <summary>A <c>PUT</c>'s body (E.6.14): whether the subject opts in to the route's pair.</summary>
 /// <remarks>Nullable, so a body that omits it is §10.5's 400 naming it rather than a silent withdrawal.</remarks>
 public sealed record PreferenceChange(bool? OptedIn);
 

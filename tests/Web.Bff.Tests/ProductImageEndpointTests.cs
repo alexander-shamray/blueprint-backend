@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§10.8's route through the real host: who may call, what is refused, and what the server chooses.</summary>
+/// <summary>E.6.11's route through the real host: who may call, what is refused, and what the server chooses.</summary>
 public sealed class ProductImageEndpointTests(BffFactory factory) : IClassFixture<BffFactory>
 {
     private const string Route = "/v1/product-images";

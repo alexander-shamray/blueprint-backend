@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace Web.Bff.Devices;
 
-/// <summary>A <c>PUT</c>'s body (§10.10): the installation's provider, app and token, and its sequence.</summary>
+/// <summary>A <c>PUT</c>'s body (E.6.13): the installation's provider, app and token, and its sequence.</summary>
 /// <remarks>The token is personal data (ADR-117): never logged, traced or quoted in a refusal (§13.4).</remarks>
 public sealed record DeviceRegistration(string Platform, string AppId, string Token, long Sequence);
 

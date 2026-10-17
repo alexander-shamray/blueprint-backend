@@ -76,7 +76,7 @@ public class ShippingIntegrationEventMapperTests
     [Fact]
     public void The_registry_is_exactly_the_publishes_column()
     {
-        // §3.2 gives Shipping two published contracts and §10.7 no tracking event; asserted over the registry, as a
+        // §3.2 gives Shipping two published contracts and E.6.10 no tracking event; asserted over the registry, as a
         // Map over a hand-written list finds only the entries the list names.
         ShippingIntegrationEventMapper.RegisteredEvents.ShouldBe(
             [typeof(ShipmentDispatchedDomainEvent), typeof(ShipmentDeliveredDomainEvent)],

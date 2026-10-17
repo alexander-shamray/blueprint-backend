@@ -5,7 +5,7 @@ using Dapper;
 
 namespace Web.Bff.Orders;
 
-/// <summary>§10.7's two reads over ADR-051's projection, bound to a customer the caller never names.</summary>
+/// <summary>E.6.10's two reads over ADR-051's projection, bound to a customer the caller never names.</summary>
 public sealed class OrderReader(IDbConnectionFactory connections)
 {
     /// <summary>The columns both reads select, so the two routes cannot read different facts about one row.</summary>

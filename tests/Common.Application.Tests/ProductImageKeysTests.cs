@@ -3,7 +3,7 @@ using Xunit;
 
 namespace Common.Application.Tests;
 
-/// <summary>§10.8's key shapes, which the BFF mints and the product service accepts.</summary>
+/// <summary>E.6.11's key shapes, which the BFF mints and the product service accepts.</summary>
 public class ProductImageKeysTests
 {
     private static readonly Guid Seller = new("0199b0c4-1a2b-7c3d-8e4f-5a6b7c8d9e0f");
