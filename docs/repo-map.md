@@ -276,7 +276,8 @@ tools/dead-letters/          the dead-letter queues' hands: list, inspect,
                              account that is not a service's. Stdlib Python
                              with a suite; the runbooks name it at each step
 tools/game-day/              the runbooks' proof: causes each alert on the
-                             Compose stack and runs the runbook's first step.
+                             Compose stack and runs the runbook's first step,
+                             or causes and restores it apart for a console.
                              One script per runbook, a coverage test that
                              holds every runbook to a script or a reason;
                              stdlib Python with a suite

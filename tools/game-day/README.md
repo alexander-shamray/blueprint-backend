@@ -9,6 +9,8 @@ what the harness does and what a pass proves.
 docker compose -f deploy/compose/docker-compose.yml up -d --wait
 py -3.12 tools/game-day/game_day.py outbox-broker      # or any runbook --list shows a script for
 py -3.12 tools/game-day/game_day.py --list             # a script, or why the runbook has none
+py -3.12 tools/game-day/game_day.py outbox-broker --cause     # cause and leave
+py -3.12 tools/game-day/game_day.py outbox-broker --restore   # put the stack back
 cd tools/game-day && py -3.12 -m unittest              # the suite; needs no Docker
 ```
 
@@ -32,10 +34,10 @@ not a failure.
 | File | Owns |
 |---|---|
 | `harness.py` | Compose control (`stop`, `start`, `restart`, `pause`, `exec_sql`, `exec_redis`, `rabbitmqctl`, `logs`, `stats`, `host`, `limits`), a token and an order, alert state, labels and PromQL (`Alerts`), Loki (`Logs`), a service account's Keycloak grants (`Realm`, `Grant`), the request generator (`Traffic`), the broker as `dead-letter-operator` (`Broker`), `wait_until` and `Deadline` |
-| `game_day.py` | The runner: quiet start, cause, wait, first step, restore, in that order, then the scenario's `NEXT` if it has one; and `--matrix`, the CI dispatch's plan |
+| `game_day.py` | The runner: quiet start, cause, wait, first step, restore, in that order, then the scenario's `NEXT` if it has one; `--cause` and `--restore`, the two halves apart; `--list --json`, the console's catalogue; and `--matrix`, the CI dispatch's plan |
 | `scenarios/<runbook>.py` | One runbook, named for it with `-` as `_` |
 | `runbook_coverage.py` | `NOT_ON_COMPOSE`, and the rules that hold every runbook to a script or a reason and every loaded rule to a script that causes it |
-| `test_harness.py`, `test_refused_reads.py`, `test_sustained_traffic.py`, `test_broker_queues.py`, `test_coverage.py` | The suite, run in CI by `.github/workflows/game-day.yml` |
+| `test_harness.py`, `test_refused_reads.py`, `test_sustained_traffic.py`, `test_broker_queues.py`, `test_standalone.py`, `test_coverage.py` | The suite, run in CI by `.github/workflows/game-day.yml` |
 
 ## The shape of a script
 
@@ -45,13 +47,17 @@ Every script is a module that follows this, and the coverage test holds it:
   A cause forced through SQL says `Forced through SQL` and gives the organic
   route and its wall-clock time; a first step written for a cluster says
   `Translated`.
-- `RUNBOOK`, `ALERT` and `DEADLINE`, and the calls `cause(world)`,
+- `RUNBOOK`, `ALERT`, `DEADLINE` and `IMPACT`, and the calls `cause(world)`,
   `first_step(world) -> (ok, detail)`, `restore(world)` and
-  `settled(world) -> (ok, observed)`.
+  `settled(world) -> (ok, observed)`. `SUSTAINED = True` where the cause has
+  to stay alive to be one.
 
 `restore` runs whatever the cause did, including when the cause raised
-half-way, and must be safe to run twice. A restore that does not settle is a
-finding, because the next scenario would start poisoned by it.
+half-way, and must be safe to run twice. **It also finds what to undo in the
+stack and not in the process**, because `--restore` is a process that caused
+nothing: a module-level list of what `cause` sent is a restore that `--restore`
+cannot run. A restore that does not settle is a finding, because the next
+scenario would start poisoned by it.
 
 A rule over a window (`increase(...[30m]) > 0`) stays true until the last
 sample leaves it, which the cause's sum does not bound, so such a script names
@@ -107,6 +113,70 @@ The runbooks' `kubectl port-forward` is the one translation: Compose publishes
 harness and the tool at a broker published elsewhere. The tool itself runs as
 written, from `py -3.12` with `--json`, and the password reaches it through its
 environment, as the runbooks' `read -s` gives it, and never through an argv.
+
+## Cause and restore apart
+
+A console that offers *Cause* and *Undo* runs the two halves as two commands.
+No flag is still the full run above, unchanged.
+
+| Command | Does | Does not |
+|---|---|---|
+| `RUNBOOK --cause` | The quiet start (the rule is loaded and `inactive`), then the cause, then exits. The stack stays broken | Wait for the alert, run the first step or restore |
+| `RUNBOOK --cause --phase ALERT` | The same for the alert of a runbook's second rule (`ErrorRateService`, `QueueBacklogGrowing`); without it the first | |
+| `RUNBOOK --restore` | Ends what `--cause` left running, then restores every phase, last first. Safe twice, and safe if `--cause` never ran | Wait for the alert to resolve |
+| `--list --json` | Every runbook: its alerts, whether a script causes them, and for each phase its `impact`, `confirmation`, `sustained`, `fires_within_seconds` and `clears_within_seconds`; a runbook with no script carries its `reason` | |
+
+Each ends on one line, `game day: cause OK in 0m05s` or `game day: restore
+FAILED in 0m12s`, with a `FINDING:` line on stderr for each. Exit 0 is a pass,
+1 a finding, 2 a refusal (no such script, no such phase, flags that do not go
+together).
+
+**`--restore` returns when the stack is back, not when the alert is.** A rule
+over a window clears on its own time, which the full run waits for because the
+next scenario cannot start on it. A console cannot hold a button for half an
+hour, so `--restore` says each alert's state and, where the rule reads a
+window, how long it takes (`clears_within_seconds`). The restore itself waits
+only for what the stack needs, such as `sql` accepting a login.
+
+**A cause that has to stay alive is held by a detached child.** A traffic loop
+(`error-rate`, `latency`), a top-up of rows or messages (`outbox-growth`, the
+backlog half of `queue-backlog`) and the lag half's rounds of pause and unpause
+end with the process that runs them, so `--cause` starts
+`game_day.py RUNBOOK --hold` detached, with its output in
+`artifacts/game-day/<runbook>.log` and its pid beside it, and returns at once.
+Those causes take minutes to land (a traffic loop waits for its window to
+fill), so the log is where a failure of the cause is reported. `--restore` ends
+the child and its tree before it restores, and checks the pid is a
+`game_day.py` first, because a pid file outlives a reboot. The child ends by
+itself at `HOLD_LIMIT_SECONDS`.
+
+**What a restore cannot take back.** The stack's state returns; these stay:
+the orders `outbox-broker`, `projection-lag`, `address-refused`,
+`contact-refused` and the lag half of `queue-backlog` placed, which Ordering
+and its consumers keep as any order; `contact-refused`'s stored contacts, which
+are read from Keycloak again on the next send; and the alert's own window.
+Every script has a restore that works from a fresh process, so none is hidden
+from a console for want of one.
+
+**Two restores read the stack to know whether the cause ran.** A grant still
+held means `address-refused` and `contact-refused` took nothing, and the worker
+is not restarted for nothing. A running `web-bff` means the backlog half never
+stopped it, and the queue is not purged, because the purge takes every message
+and a stack nobody broke has real ones. `error-queue` and `skipped-queue` find
+their messages by the envelope's `sourceAddress`, which only `Broker.publish`
+sets, and leave the queue's others.
+
+**Impact says what the cause costs, and the console asks accordingly.** It is
+`IMPACT` in each phase, and `confirmation` in the catalogue:
+
+| `impact` | `confirmation` | Meaning | Phases |
+|---|---|---|---|
+| `none` | none | Plants or sends synthetic rows and messages, removes them by id | `error-queue`, `skipped-queue`, `outbox-abandoned`, `unscanned-shipment`, `unattributed-order`, `erasure-overdue` |
+| `outage` | confirm | Stops, pauses or cuts a grant from something the rest of the stack uses | `outbox-broker`, `outbox-growth` (the broker); `projection-lag` (a table renamed); `address-refused` (a worker and a grant); `error-rate`, `latency` (`ordering-api`, `sql`); `queue-backlog`'s lag half (`web-bff`) |
+| `data` | typed | Deletes or purges what the game day did not put there | `contact-refused` (every stored contact); `queue-backlog`'s backlog half (restore purges `bff-order-events`) |
+
+`typed` is the confirmation `down -v` takes: the console asks for the runbook's
+name before it runs the command. The suite fails a phase with no `impact`.
 
 ## Waits are predicates with deadlines
 
