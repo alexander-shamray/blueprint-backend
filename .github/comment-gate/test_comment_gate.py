@@ -381,10 +381,14 @@ class TheRemarksRule(unittest.TestCase):
                                              "ADR or cref")])
 
     def test_a_section_an_adr_or_a_cref_is_a_citation(self):
-        for cited in ("Per §9.4.", "ADR-019 says so.",
+        for cited in ("Per §9.4.", "ADR-019 says so.", "Per E.6.13.",
                       'See <see cref="Outbox"/>.'):
             with self.subTest(cited=cited):
                 self.assertEqual(judged("A.cs", self.remarks(cited)), [])
+
+    def test_a_word_ending_in_e_and_numbers_is_not_an_appendix_section(self):
+        found = judged("A.cs", self.remarks("Because the SQLITE.6.13 is."))
+        self.assertEqual(len(found), 1)
 
     def test_a_one_line_remarks_is_judged_too(self):
         self.assertEqual(len(judged("A.cs", "/// <remarks>So.</remarks>\n")),

@@ -20,8 +20,9 @@ from pathlib import Path, PurePosixPath
 
 BLOCK_LIMIT = 5
 
-# A section, an ADR or a symbol: the owners a `<remarks>` may exist to cite.
-CITATION = re.compile(r"§|\bADR-[0-9]+|\bcref=")
+# A section, an Appendix E section, an ADR or a symbol: the owners a
+# `<remarks>` may exist to cite.
+CITATION = re.compile(r"§|\bE\.[0-9]+\.[0-9]+|\bADR-[0-9]+|\bcref=")
 
 # The languages whose added lines the report weighs, comment against code.
 REPORTED = {"C#": (".cs",), "scripts": (".py", ".sh")}
