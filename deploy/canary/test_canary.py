@@ -81,11 +81,9 @@ class PlanDocumentTests(unittest.TestCase):
 
     def test_every_threshold_analyse_reads_is_present(self) -> None:
         """`analyse` indexes these rather than `.get`-ing them, so a missing
-        key is a KeyError mid-rollout with a canary already serving traffic.
-
-        Every signal analysis.py defines is read, and the verdict has to be a
-        promotion: an early rollback returns before any threshold is indexed,
-        and would pass this vacuously."""
+        key is a KeyError mid-rollout. Every signal analysis.py defines is read,
+        and the verdict has to be a promotion: an early rollback returns before
+        any threshold is indexed, and would pass this vacuously."""
         verdict = analysis.analyse(
             readings(signals=tuple(analysis.SIGNALS)),
             descriptor_model.entries(self.document["thresholds"]),

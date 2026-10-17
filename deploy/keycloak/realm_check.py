@@ -243,13 +243,11 @@ REALMS_SEGMENT = "/realms/"
 # does for the tag.
 STRVALS_METACHARACTERS = ",\\{}[]="
 
-# The environment `read_admin.py` reads, declared here and imported there —
-# `deploy/canary`'s direction, where `read_prometheus.py` imports from
-# `analysis.py` and `descriptor_model.py` and never the reverse — because the ones `authority` writes
-# have to be one statement with the ones the fetcher reads. Named in a tuple
-# and unpacked, because a credential-shaped constant assigned a literal is the
-# shape §15.1's secret scan exists to catch, and these hold names, never
-# values.
+# The environment `read_admin.py` reads, declared here and imported there, as
+# in `deploy/canary`: `read_prometheus.py` imports from `analysis.py` and
+# `descriptor_model.py`, never the reverse. What `authority` writes is one
+# statement with what the fetcher reads, named in a tuple and unpacked, since
+# a credential-shaped literal is what §15.1's secret scan catches (names only).
 ENVIRONMENT = (
     "KEYCLOAK_BASE_URL",
     "KEYCLOAK_REALM",
