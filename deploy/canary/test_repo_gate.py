@@ -1,4 +1,4 @@
-"""The repository gate behind `canary.py check`, and the command line's whole-plan cases."""
+"""The repository gate behind `canary.py check`."""
 
 from __future__ import annotations
 

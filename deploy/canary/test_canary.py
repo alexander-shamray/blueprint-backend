@@ -83,7 +83,7 @@ class PlanDocumentTests(unittest.TestCase):
         """`analyse` indexes these rather than `.get`-ing them, so a missing
         key is a KeyError mid-rollout with a canary already serving traffic.
 
-        Every signal canary.py defines is read, and the verdict has to be a
+        Every signal analysis.py defines is read, and the verdict has to be a
         promotion: an early rollback returns before any threshold is indexed,
         and would pass this vacuously."""
         verdict = analysis.analyse(

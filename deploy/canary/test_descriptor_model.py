@@ -1,4 +1,4 @@
-"""The descriptor model: canary.json, the descriptors under deployables/ and their queries."""
+"""The descriptor model: canary.json, the descriptors under deployables/ and what the rollout asks of them."""
 
 from __future__ import annotations
 
