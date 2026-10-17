@@ -70,7 +70,10 @@ class Stack:
             def start(self, service): outer._set(service, "running")
             def restart(self, service): outer._set(service, "running", "restart")
             def pause(self, service): outer._set(service, "paused")
-            def unpause(self, service): outer._set(service, "running")
+            def unpause(self, service):
+                # Docker refuses to unpause what is not paused, and the harness lets that pass.
+                if outer.services[service] == "paused":
+                    outer._set(service, "running")
             def running(self, service): return outer.services[service] == "running"
             def logs(self, service, since): return ""
             def exec_sql(self, sql, database="Ordering"): return outer._sql(sql)
@@ -193,13 +196,16 @@ class Apart(unittest.TestCase):
 
     def roundtrip(self, name, index):
         stack = Stack()
+        dying = (name, index) == ("queue_backlog", 0)
+        if dying:
+            # A real message the lag half's restore must not purge, which a paused consumer would otherwise invite.
+            stack.queues[BACKLOG_QUEUE] = [("real-3", "elsewhere")]
         before = stack.snapshot()
         module = fresh(name)
         phase = game_day.phases(module)[index]
         # The cause the detached child would run, in this process and not waiting for the alert.
         spawn = lambda runbook, alert: self.child(phase, stack) or 4242
         # The lag half's cause is a loop of pauses, and --restore exists for the process killed inside the first.
-        dying = (name, index) == ("queue_backlog", 0)
         patches = [mock.patch.object(module, "SUSTAIN_SECONDS", 1e9 if dying else 0, create=True),
                    mock.patch.object(harness.time, "sleep", side_effect=Killed if dying else None)]
         with patches[0], patches[1]:
@@ -250,12 +256,33 @@ class Apart(unittest.TestCase):
                 stack = self.roundtrip(name, 0)
                 self.assertEqual([real], [ident for ident, _ in stack.queues[queue]])
 
+    def test_a_grant_whose_read_back_fails_still_restarts_the_worker_the_retry_would_skip(self):
+        for name in ("address_refused", "contact_refused"):
+            with self.subTest(name):
+                stack = Stack()
+                module = fresh(name)
+                stack.roles[(module.GRANT.account, module.GRANT.client)] = set()
+                stack.world.realm.grant = lambda account, client, role: stack.roles[(account, client)].update(
+                    {role, "wider"})
+                with self.assertRaises(harness.GameDayError):
+                    module.restore(stack.world)
+                self.assertIn(("restart", module.WORKER), stack.calls)
+
     def test_a_grant_that_was_never_taken_restarts_no_worker(self):
         for name in ("address_refused", "contact_refused"):
             with self.subTest(name):
                 stack = Stack()
                 game_day.restore_only(fresh(name), stack.world, end=lambda runbook: None)
                 self.assertNotIn("restart", stack.verbs())
+
+    def test_a_restore_after_the_lag_half_was_killed_mid_pause_unpauses_and_purges_nothing(self):
+        stack = Stack()
+        stack.queues[BACKLOG_QUEUE] = [("real-3", "elsewhere")]
+        stack.services["web-bff"] = "paused"
+        game_day.restore_only(fresh("queue_backlog"), stack.world, end=lambda runbook: None)
+        self.assertEqual("running", stack.services["web-bff"])
+        self.assertEqual([("real-3", "elsewhere")], stack.queues[BACKLOG_QUEUE])
+        self.assertNotIn("purge", stack.verbs())
 
     def test_a_backlog_restore_purges_only_when_the_cause_stopped_the_consumer(self):
         stack = Stack()
@@ -420,6 +447,22 @@ class Holding(unittest.TestCase):
             else:
                 killpg.assert_called_once()
 
+    def test_a_holder_that_ended_on_its_own_before_the_kill_is_not_an_error(self):
+        if os.name == "nt":
+            self.skipTest("taskkill reports it in the exit code, which is not read")
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            (state / "latency.pid").write_text("5150", encoding="utf-8")
+            with mock.patch.object(game_day, "_is_ours", return_value=True),                     mock.patch.object(game_day.os, "killpg", side_effect=ProcessLookupError):
+                self.assertIn("5150", game_day.release("latency", state, run=mock.Mock()))
+
+    def test_a_process_is_ours_by_its_command_line_and_not_by_being_python(self):
+        for shown, ours in (("python -u C:/x/game_day.py latency --hold --phase Latency", True),
+                            ("python -m http.server", False), ("", False)):
+            with self.subTest(shown):
+                run = mock.Mock(return_value=types.SimpleNamespace(stdout=shown))
+                self.assertEqual(ours, game_day._is_ours(5150, run))
+
     def test_a_stale_pid_file_is_removed_and_nothing_is_killed(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
@@ -473,6 +516,12 @@ class Inspected(unittest.TestCase):
         others = json.dumps({"sourceAddress": "rabbitmq://rabbitmq/ordering-api"})
         found = self.broker([("a", ours), ("b", others), ("c", "not json"), ("d", None), ("e", "[1]"), ("f", ours)])
         self.assertEqual(["a", "f"], found.ours("q"))
+
+    def test_a_queue_as_deep_as_the_inspect_limit_is_an_error_and_not_a_clean_restore(self):
+        full = [(str(n), json.dumps({"sourceAddress": "elsewhere"})) for n in range(harness.INSPECT_LIMIT)]
+        with self.assertRaises(harness.GameDayError) as caught:
+            self.broker(full).ours("q")
+        self.assertIn("unseen", str(caught.exception))
 
     def test_the_source_is_what_publish_sends(self):
         sent = {}

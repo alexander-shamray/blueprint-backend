@@ -6,6 +6,7 @@ cause and leave, and --restore to put the stack back. The stack must be up; READ
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib
 import json
 import os
@@ -155,10 +156,11 @@ def _pid_file(runbook: str, state: Path) -> Path:
 def _is_ours(pid: int, run=subprocess.run) -> bool:
     """Whether `pid` is a live game_day.py, because a pid file outlives a reboot and the number may be anyone's."""
     if os.name == "nt":
-        shown = run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], capture_output=True, text=True,
-                    encoding="utf-8", errors="replace", check=False).stdout
-        return "python" in shown.lower()
-    shown = run(["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True, check=False).stdout
+        argv = ["powershell", "-NoProfile", "-Command",
+                f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"]
+    else:
+        argv = ["ps", "-p", str(pid), "-o", "command="]
+    shown = run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False).stdout
     return "game_day.py" in shown
 
 
@@ -196,7 +198,9 @@ def release(runbook: str, state: Path = STATE, run=subprocess.run) -> str | None
     if os.name == "nt":
         run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, check=False)
     else:
-        os.killpg(pid, signal.SIGTERM)
+        # It may have ended on its own between the read above and this.
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(pid, signal.SIGTERM)
     return f"ended the process (pid {pid}) that was holding the cause"
 
 

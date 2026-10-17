@@ -512,6 +512,7 @@ MASSTRANSIT_JSON = "application/vnd.masstransit+json"
 # The envelope's sourceAddress on everything `Broker.publish` sends, which is how a restore run by a process that
 # sent nothing finds the game day's messages among a queue's others.
 SOURCE_ADDRESS = "rabbitmq://rabbitmq/game-day"
+INSPECT_LIMIT = 1000
 
 
 class Broker:
@@ -597,11 +598,14 @@ class Broker:
 
     def ours(self, queue: str) -> list[str]:
         """The ids of the game day's own messages on `queue`: the envelopes `publish` sent, by their source."""
-        code, document = self.tool("inspect", queue, "--limit", "100")
+        code, document = self.tool("inspect", queue, "--limit", str(INSPECT_LIMIT))
         if "error" in document:
             raise GameDayError(f"dead_letters.py inspect {queue} was refused: {document['error']}")
+        messages = document.get("messages", [])
+        if len(messages) >= INSPECT_LIMIT:
+            raise GameDayError(f"{queue} holds {INSPECT_LIMIT} or more messages, so some of the game day's may be unseen")
         found = []
-        for message in document.get("messages", []):
+        for message in messages:
             try:
                 envelope = json.loads(message.get("body") or "")
             except ValueError:
