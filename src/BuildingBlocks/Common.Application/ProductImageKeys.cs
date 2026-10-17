@@ -1,7 +1,7 @@
 namespace Common.Application;
 
 /// <summary>The object keys, content types and size of a product image, which two hosts share (E.6.11).</summary>
-/// <remarks>One owner (E.6.11), so the host that mints a key and the host that accepts one cannot differ.</remarks>
+/// <remarks>One owner (§10.8), so the host that mints a key and the host that accepts one cannot differ.</remarks>
 public static class ProductImageKeys
 {
     /// <summary>Five MiB, E.6.11's ceiling on the body the signature allows.</summary>
