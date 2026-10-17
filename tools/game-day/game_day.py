@@ -256,8 +256,9 @@ def cause_only(scenario: ModuleType, world: harness.World, *, spawn=spawn_hold, 
                landed=await_landing) -> list[str]:
     """--cause: the quiet start and the cause, then out. The stack stays broken until --restore.
 
-    A cause that has to stay alive to be one (SUSTAINED) is handed to a detached child and this returns at once; the
-    others have done their work when `cause` returns. Neither waits for the alert, runs the step or restores.
+    A cause that has to stay alive to be one (SUSTAINED) is handed to a detached child and this returns once the child
+    says it landed; the others have done their work when `cause` returns. Neither waits for the alert, runs the step
+    or restores.
     """
     alert = scenario.ALERT
     refused = quiet_start(world, alert)
