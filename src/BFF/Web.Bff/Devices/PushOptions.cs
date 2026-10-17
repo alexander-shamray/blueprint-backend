@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 namespace Web.Bff.Devices;
 
 /// <summary>The apps this deployment pushes to, the list ADR-117's check on a registration reads.</summary>
-/// <remarks>Empty is a deployment that sends no push, and every registration is then refused (§10.10).</remarks>
+/// <remarks>Empty is a deployment that sends no push, and every registration is then refused (E.6.13).</remarks>
 public sealed class PushOptions
 {
     public const string SectionName = "Push";
