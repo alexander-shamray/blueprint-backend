@@ -60,5 +60,5 @@ A booking's body is `shipmentId`, `orderId` and the address. The
 `/__admin/requests` for an order is the one whose body carries it, rather than
 the one nearest in time to its postal code, which two orders to one code at
 once cannot tell apart. The mappings match on `postalCode` alone, and only
-`SIM-STRANGE`'s answer reads the field; `HttpCarrierGatewayTests` pins the body's whole shape, so a field
-added to it fails there first.
+`SIM-STRANGE`'s answer reads the field; `HttpCarrierGatewayTests` pins the
+body's whole shape, so a field added to it fails there first.
