@@ -4,6 +4,7 @@ services:
   # gated on `condition: service_completed_successfully` — every service owns
   # a database and none may migrate at startup (§4.1, ADR-007).
   payments-migrator:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/payments-migrator:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Payments/Payments.Migrator/Dockerfile
@@ -37,6 +38,7 @@ services:
     ports: [ "127.0.0.1:5190:80" ]
 
   payments-api:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/payments-api:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Payments/Payments.Api/Dockerfile

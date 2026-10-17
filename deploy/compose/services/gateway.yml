@@ -4,6 +4,7 @@ services:
   # and no pair rule: the gateway owns no database, so there is nothing to
   # migrate and nothing to gate a start on.
   gateway:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/gateway:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Gateway/Gateway.Api/Dockerfile

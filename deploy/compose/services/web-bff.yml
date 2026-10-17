@@ -6,6 +6,7 @@ services:
   # `condition: service_completed_successfully`, because no host may migrate
   # at startup (§4.1, ADR-007). Named bff-migrator for the key it reads.
   bff-migrator:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/bff-migrator:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/BFF/Web.Bff.Migrator/Dockerfile
@@ -29,6 +30,7 @@ services:
   # the destination by hostname, so the container name is the routing
   # configuration.
   web-bff:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/web-bff:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/BFF/Web.Bff/Dockerfile

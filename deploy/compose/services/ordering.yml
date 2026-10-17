@@ -1,6 +1,7 @@
 # Ordering: /v1/orders, where no route is anonymous (ADR-030).
 services:
   ordering-migrator:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/ordering-migrator:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Ordering/Ordering.Migrator/Dockerfile
@@ -22,6 +23,7 @@ services:
     restart: "no"
 
   ordering-api:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/ordering-api:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Ordering/Ordering.Api/Dockerfile

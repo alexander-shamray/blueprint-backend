@@ -4,6 +4,7 @@ services:
   # gated on `condition: service_completed_successfully` — every service owns
   # a database and none may migrate at startup (§4.1, ADR-007).
   shipping-migrator:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/shipping-migrator:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Shipping/Shipping.Migrator/Dockerfile
@@ -37,6 +38,7 @@ services:
     ports: [ "127.0.0.1:5191:80" ]
 
   shipping-worker:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/shipping-worker:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Shipping/Shipping.Worker/Dockerfile

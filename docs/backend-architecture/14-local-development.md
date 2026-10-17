@@ -207,6 +207,7 @@ the reference domain's case is in [E.8](appendix-e-reference-domain.md#e8-13-and
 
 ```yaml
 <service>-migrator:
+  image: ${BLUEPRINT_REGISTRY:-commerce}/<service>-migrator:${BLUEPRINT_TAG:-local}
   build:
     context: ../../..
     dockerfile: src/Services/<Service>/<Service>.Migrator/Dockerfile
@@ -220,6 +221,7 @@ the reference domain's case is in [E.8](appendix-e-reference-domain.md#e8-13-and
   restart: "no"
 
 <service>-api:
+  image: ${BLUEPRINT_REGISTRY:-commerce}/<service>-api:${BLUEPRINT_TAG:-local}
   build:
     context: ../../..
     dockerfile: src/Services/<Service>/<Service>.Api/Dockerfile
@@ -247,6 +249,15 @@ Every container a unit builds from `src/` — each migrator and each host — ru
 read-only, with a tmpfs at `/tmp`, as the chart's pods do
 ([ADR-082](adr/ADR-082-every-pod-meets-pod-security-restricted-with-a-read-only-root-filesystem.md)),
 so the Compose workflow's `up --wait` proves the images run that way.
+
+**Each image is named, so a consumer can pull it instead of building it.**
+A unit's `image:` is the name `ci.yml`'s `images` matrix pushes it under, and
+`build:` stays beside it, so a local `up` builds and tags the image under that
+name. A consumer that wants the platform running and not rebuilt sets
+`BLUEPRINT_REGISTRY` to the registry address
+([§15.2](15-cicd-deployment.md)) and `BLUEPRINT_TAG` to `main`, then runs
+`docker compose pull` and `up --no-build`; the broker is the one image it still
+builds ([ADR-134](adr/ADR-134-each-image-has-a-main-tag-that-names-its-newest-signed-build-and-compose-names-the-image-beside-its-build-1111-adding-to-adr-109.md)).
 
 The migrator reads §7.1's migrator key, which may issue DDL, and the API reads
 the runtime key and never the migrator's. Locally both resolve to the one `sa`

@@ -5,6 +5,7 @@ services:
   # gated on `condition: service_completed_successfully` — every service owns
   # a database and none may migrate at startup (§4.1, ADR-007).
   notifications-migrator:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/notifications-migrator:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Notifications/Notifications.Migrator/Dockerfile
@@ -46,6 +47,7 @@ services:
     ports: [ "127.0.0.1:5192:80" ]
 
   notifications-worker:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/notifications-worker:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Notifications/Notifications.Worker/Dockerfile
@@ -137,6 +139,7 @@ services:
   # It reads the database the migrator above owns and nothing else of the worker's, so it takes no broker, relay,
   # contact source or windows.
   notifications-api:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/notifications-api:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Notifications/Notifications.Api/Dockerfile
