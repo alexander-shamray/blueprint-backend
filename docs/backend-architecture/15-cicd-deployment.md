@@ -352,9 +352,10 @@ name `deploy/workflow_paths/**`, the reader their gates import.
 names its own tree and its workflow alone, because its gate reads nothing
 else.
 `smoke.sh`, `check.py`, the canary's `repo_gate.py` and `realm_check.py` each
-declare `SOURCE_INPUTS` beside the reads, and each asserts that both of its workflow's
-triggers cover every entry — a copy of a list drifts exactly as a copy of a
-number does, and the assertion itself is held once, in `deploy/workflow_paths`
+declare `SOURCE_INPUTS` beside the reads, and each asserts that both of its
+workflow's triggers cover every entry — a copy of a list drifts exactly as a
+copy of a number does, and the assertion itself is held once, in
+`deploy/workflow_paths`
 ([ADR-132](adr/ADR-132-the-workflow-paths-cover-inputs-check-is-held-once-in-deploy-workflow_paths-1082-used-by-four-python-gates-and-smokesh.md)). All four gates also assert the reads direction — every file the
 gate opens is in the list, the canary's in its suite, `test_repo_gate.py` — which
 is the shape the second callout below argues for.
