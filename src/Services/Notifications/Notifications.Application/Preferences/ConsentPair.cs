@@ -3,7 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace Notifications.Application.Preferences;
 
 /// <summary>One key of ADR-120's journal: a topic and the channel it reaches the subject on.</summary>
-/// <remarks>Written <c>topic/channel</c>, the order the preferences route names them in (§10.11).</remarks>
+/// <remarks>Written <c>topic/channel</c>, the order the preferences route names them in (E.6.14).</remarks>
 public readonly record struct ConsentPair(string Topic, string Channel)
 {
     public const char Separator = '/';
