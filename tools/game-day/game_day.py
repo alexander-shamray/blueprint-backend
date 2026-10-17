@@ -243,9 +243,8 @@ def hold(scenario: ModuleType, world: harness.World, *, sleep=time.sleep, clock=
 def restore_only(scenario: ModuleType, world: harness.World, *, end=release) -> list[str]:
     """--restore: end what --cause left running and put the stack back, whether or not --cause ever ran.
 
-    Every phase restores, last first, because the runbook's second alert is caused on top of the first. A restore
-    that raises is a finding and the others still run. Nothing waits for an alert to resolve: the stack is back
-    when this returns, and a rule over a window clears on its own time, which is reported and not waited on.
+    Every phase restores, last first, because the second alert is caused on top of the first; one that raises is a
+    finding and the others still run. It does not wait for an alert to resolve, only reports where it stands.
     """
     findings: list[str] = []
     ended = end(scenario.RUNBOOK)
