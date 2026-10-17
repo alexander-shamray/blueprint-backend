@@ -1029,8 +1029,12 @@ jobs:
             *) echo "::error::needs.changes.outputs[${{ matrix.filter }}] is not true/false. The images matrix names a filter the changes job does not output, so this image would never be built."; exit 1 ;;
           esac
 
+      # The whole history, because the main tag moves only forward in it
+      # (ADR-134) and the step that decides needs `git merge-base`.
       - uses: actions/checkout@v4
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
+        with:
+          fetch-depth: 0
 
       # The build context is the repository root, exactly as §14.1's Compose
       # file sets it — these Dockerfiles copy csproj files from across the
@@ -1045,6 +1049,7 @@ jobs:
           --tag ${{ matrix.image }}:${{ github.sha }}
           --tag "$REGISTRY/${{ matrix.image }}:${{ github.sha }}"
           --label org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
           .
 
       # ADR-071: an SBOM from the built image, as SPDX JSON in a workflow
@@ -1118,14 +1123,33 @@ jobs:
           push-to-registry: true
 
       # The moving tag (ADR-134): the signed digest above under a second name,
-      # moved only after the attestations, so one reference names the newest
-      # build of this image. A leg that built nothing leaves it where it was,
-      # still the newest; a dispatch gives an image no push has touched its first.
+      # moved only after the attestations, and only forward: runs finish out of
+      # order (ADR-109), so the commit the tag names now must be an ancestor of
+      # this one. A leg that built nothing leaves the tag where it was, and a
+      # dispatch gives an image no push has touched its first.
       - name: Move the main tag of ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main' }}
         run: |
           set -euo pipefail
-          docker tag "$REGISTRY/${{ matrix.image }}:${{ github.sha }}" "$REGISTRY/${{ matrix.image }}:main"
+          tag="$REGISTRY/${{ matrix.image }}:main"
+          if config=$(docker buildx imagetools inspect "$tag" --format '{{json .Image}}' 2>&1); then
+            named=$(printf '%s' "$config" | jq -r '.config.Labels["org.opencontainers.image.revision"] // ""')
+          elif printf '%s' "$config" | grep -Eqi 'not found|manifest unknown'; then
+            named=""
+          else
+            echo "::error::The main tag of ${{ matrix.image }} could not be read, so it is not known to be older than this build: $config"
+            exit 1
+          fi
+          if [ -n "$named" ]; then
+            ancestor=0
+            git merge-base --is-ancestor "$named" "$GITHUB_SHA" || ancestor=$?
+            case "$ancestor" in
+              0) ;;
+              1) echo "::notice::The main tag of ${{ matrix.image }} names $named, which is not an ancestor of $GITHUB_SHA; a newer build finished first and the tag stays."; exit 0 ;;
+              *) echo "::error::Could not compare $named with $GITHUB_SHA."; exit 1 ;;
+            esac
+          fi
+          docker tag "$REGISTRY/${{ matrix.image }}:${{ github.sha }}" "$tag"
           docker push "$REGISTRY/${{ matrix.image }}:main"
           moved=$(docker inspect --format '{{json .RepoDigests}}' "$REGISTRY/${{ matrix.image }}:main")
           if ! printf '%s' "$moved" | grep -Fq "@$DIGEST"; then
