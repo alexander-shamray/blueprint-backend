@@ -4,6 +4,7 @@ services:
   # gated on `condition: service_completed_successfully` — every service owns
   # a database and none may migrate at startup (§4.1, ADR-007).
   inventory-migrator:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/inventory-migrator:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Inventory/Inventory.Migrator/Dockerfile
@@ -26,6 +27,7 @@ services:
     restart: "no"
 
   inventory-api:
+    image: ${BLUEPRINT_REGISTRY:-commerce}/inventory-api:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Inventory/Inventory.Api/Dockerfile
