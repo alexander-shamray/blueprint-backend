@@ -220,7 +220,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     for key in sorted(set(entries(plan_document)) - PLAN_KEYS):
         failures.append(
             f"canary.json has a top-level {key!r}, which the plan does not "
-            "hold: the queries and each signal's thresholds are canary.py's "
+            "hold: the queries and each signal's thresholds are analysis.py's "
             "(ADR-047)"
         )
 
@@ -268,7 +268,7 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict,
             if signal not in signals:
                 failures.append(
                     f"workloads.{name} declares the signal {signal!r}, which "
-                    f"canary.py does not define: {', '.join(sorted(signals))}"
+                    f"analysis.py does not define: {', '.join(sorted(signals))}"
                 )
 
         # Every workload is an ASP.NET Core host, so its HTTP traffic is
@@ -452,7 +452,7 @@ def _masstransit_pin_is_verified(root: Path) -> list[str]:
                 "cannot be held to one"]
     if pin.group(1) != MASSTRANSIT_VERIFIED:
         return [
-            f"{props.name} pins MassTransit {pin.group(1)}, and canary.py's "
+            f"{props.name} pins MassTransit {pin.group(1)}, and analysis.py's "
             f"EXPORTED_SERIES was verified against {MASSTRANSIT_VERIFIED}. Re-read "
             "the package's instrument names and units, correct the table and "
             "the queries, then move MASSTRANSIT_VERIFIED"
