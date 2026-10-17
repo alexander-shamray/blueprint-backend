@@ -133,6 +133,12 @@ SIGNING_STEPS = f"""\
           subject-digest: ${{{{ steps.push.outputs.digest }}}}
           sbom-path: sbom-${{{{ matrix.image }}}}.spdx.json
           push-to-registry: true
+
+      - name: Move the main tag of ${{{{ matrix.image }}}}
+        if: {MAIN_PUSH}
+        run: |
+          docker tag "$REGISTRY/${{{{ matrix.image }}}}:${{{{ github.sha }}}}" "$REGISTRY/${{{{ matrix.image }}}}:main"
+          docker push "$REGISTRY/${{{{ matrix.image }}}}:main"
 """
 
 WORKFLOW = WORKFLOW_HEAD + SBOM_STEP + SIGNING_STEPS
@@ -503,6 +509,32 @@ class SupplyChainTests(Fixture):
 
         self.assertEqual(len(problems), 1)
         self.assertIn("no `cosign sign`", problems[0])
+
+    def test_a_build_whose_main_tag_never_moves_is_caught(self) -> None:
+        """ADR-134: the moving tag is what a consumer pulls, so a leg without it leaves a stale set."""
+        problems = self.broken(':main"\n', ':next"\n')
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no push of the main tag", problems[0])
+
+    def test_a_main_tag_moved_off_main_is_caught(self) -> None:
+        move = SIGNING_STEPS.split("      - name: Move the main tag")[1]
+        self.write(WORKFLOW.replace(move, move.replace(MAIN_PUSH, "${{ always() }}")))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("the push of the main tag does not run under the main-push condition", problems[0])
+
+    def test_a_main_tag_moved_before_its_attestations_is_caught(self) -> None:
+        move = "      - name: Move the main tag" + SIGNING_STEPS.split("      - name: Move the main tag")[1]
+        self.write(WORKFLOW.replace(move, "").replace(
+            "      - name: Provenance", move + "\n      - name: Provenance", 1))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 2)
+        self.assertIn("the main tag names an image before its", problems[0])
 
     def test_a_build_that_is_never_pushed_is_caught(self) -> None:
         problems = self.broken("docker push", "docker tag")

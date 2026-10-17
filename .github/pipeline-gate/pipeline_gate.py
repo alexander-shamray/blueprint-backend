@@ -385,6 +385,7 @@ LOGIN_ACTION = "docker/login-action@"
 COSIGN_ACTION = "sigstore/cosign-installer@"
 PROVENANCE_ACTION = "actions/attest-build-provenance@"
 SBOM_ATTESTATION_ACTION = "actions/attest-sbom@"
+MOVING_TAG_PUSH = r'\bdocker push\s+"\$REGISTRY/[^"]*:main"'
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
 HELM_COMMAND = re.compile(r"(?:^|[\s;&|(`])helm\s+[a-z]")
 HELM_UPGRADE = re.compile(r"(?:^|[\s;&|(`])helm\s+upgrade\b")
@@ -477,6 +478,7 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
             "`cosign sign`": _located(steps, window, run=r"\bcosign sign\b"),
             "provenance attestation": _located(steps, window, uses=PROVENANCE_ACTION),
             "SBOM attestation": _located(steps, window, uses=SBOM_ATTESTATION_ACTION),
+            "push of the main tag": _located(steps, window, run=MOVING_TAG_PUSH),
         }
         missing = [name for name, where in found.items() if where is None]
         if missing:
@@ -487,7 +489,7 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
             )
             continue
 
-        login, push, installer, sign, provenance, attestation = found.values()
+        login, push, installer, sign, provenance, attestation, moved = found.values()
         for name, where in found.items():
             if not _on_main_push(steps[where]):
                 problems.append(
@@ -501,6 +503,8 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
             (installer, sign, "cosign is not on the runner before its installer"),
             (push, provenance, "there is no digest to attest before the push"),
             (push, attestation, "there is no digest to attest before the push"),
+            (provenance, moved, "the main tag names an image before its provenance exists"),
+            (attestation, moved, "the main tag names an image before its SBOM attestation exists"),
         ):
             if earlier > later:
                 problems.append(f"{subject}: a step runs before the one it needs, because {why}")
