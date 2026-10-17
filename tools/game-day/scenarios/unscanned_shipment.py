@@ -9,6 +9,7 @@ from __future__ import annotations
 import harness
 
 RUNBOOK = "unscanned-shipment.md"
+IMPACT = "none"
 ALERT = "UnscannedShipments"
 FORCED_THROUGH_SQL = True
 # A count of rows already past their age, so it reads above zero once ShipmentStats' 5s cache lets it be asked.

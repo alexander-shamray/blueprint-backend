@@ -11,6 +11,8 @@ import threading
 import harness
 
 RUNBOOK = "outbox-growth.md"
+IMPACT = "outage"
+SUSTAINED = True
 ALERT = "OutboxGrowth"
 COMPANION = "OutboxBrokerLaneStalled"
 FORCED_THROUGH_SQL = True

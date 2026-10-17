@@ -9,6 +9,7 @@ from __future__ import annotations
 import harness
 
 RUNBOOK = "unattributed-order.md"
+IMPACT = "none"
 ALERT = "UnattributedOrders"
 FORCED_THROUGH_SQL = True
 # The row is not backdated: the gauge is its age, and the rule fires past 900s of it.

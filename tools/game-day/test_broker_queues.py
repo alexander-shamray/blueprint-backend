@@ -191,6 +191,15 @@ class Broker:
         self.calls.append(("publish", exchange, message_type, message))
         return "m1"
 
+    def discard_ours(self, queue):
+        # The real one asks the queue which messages are the game day's; this double's queue holds what was published.
+        sent = ["m1" for call in self.calls if call[0] == "publish"]
+        self.open()
+        try:
+            return self.discard(queue, sent)
+        finally:
+            self.close()
+
     def tool(self, *args):
         self.calls.append(("tool",) + args)
         return 0, self.listed if args[0] == "list" else self.inspected

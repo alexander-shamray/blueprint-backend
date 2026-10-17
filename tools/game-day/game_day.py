@@ -1,6 +1,6 @@
 """Cause a runbook's alert on the Compose stack and check the runbook's first step.
-Usage: py -3.12 tools/game-day/game_day.py outbox-broker (or --list, or --matrix all for CI's plan). The stack must be
-up; README.md owns the rest.
+Usage: py -3.12 tools/game-day/game_day.py outbox-broker (or --list, or --matrix all for CI's plan); add --cause to
+cause and leave, and --restore to put the stack back. The stack must be up; README.md owns the rest.
 """
 
 from __future__ import annotations
@@ -8,7 +8,11 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import os
+import signal
+import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from types import ModuleType
@@ -26,6 +30,16 @@ def load(runbook: str) -> ModuleType:
     return importlib.import_module(f"scenarios.{name}")
 
 
+def quiet_start(world: harness.World, alert: str) -> str | None:
+    """Why the cause must not start, or None. A rule nobody loaded is also quiet, and a quiet start is what makes
+    "it fired" mean the cause did it."""
+    if not world.alerts.loaded(alert):
+        return f"{alert}: Prometheus has no such rule loaded, so it cannot fire"
+    if world.alerts.state(alert) != "inactive":
+        return f"{alert}: already {world.alerts.state(alert)} before the cause; restore the stack and rerun"
+    return None
+
+
 def run(scenario: ModuleType, world: harness.World, *, clock=time.monotonic, sleep=time.sleep) -> list[str]:
     """One scenario, start to restore. Returns the findings; an empty list is a pass.
 
@@ -37,11 +51,9 @@ def run(scenario: ModuleType, world: harness.World, *, clock=time.monotonic, sle
     alert = scenario.ALERT
     fired = False
 
-    # A rule nobody loaded is also quiet, and a quiet start is what makes "it fired" mean the cause did it.
-    if not world.alerts.loaded(alert):
-        return [f"{alert}: Prometheus has no such rule loaded, so it cannot fire"]
-    if world.alerts.state(alert) != "inactive":
-        return [f"{alert}: already {world.alerts.state(alert)} before the cause; restore the stack and rerun"]
+    refused = quiet_start(world, alert)
+    if refused:
+        return [refused]
 
     try:
         say(f"{scenario.RUNBOOK}: causing {alert}; deadline {scenario.DEADLINE.derivation}")
@@ -110,10 +122,175 @@ def _restore(scenario: ModuleType, world: harness.World, fired: bool, clock, sle
     return []
 
 
-def verdict(findings: list[str], seconds: float) -> str:
+def phases(scenario: ModuleType) -> list:
+    """The scenario and each phase its NEXT hands on to, in the order a full run causes them."""
+    found = []
+    while scenario is not None:
+        found.append(scenario)
+        scenario = getattr(scenario, "NEXT", None)
+    return found
+
+
+def phase_of(scenario: ModuleType, alert: str | None):
+    if alert is None:
+        return scenario
+    for phase in phases(scenario):
+        if phase.ALERT == alert:
+            return phase
+    raise harness.GameDayError(
+        f"{scenario.RUNBOOK}: no phase causes {alert}; it has {', '.join(p.ALERT for p in phases(scenario))}")
+
+
+# --cause and --restore are two processes, so a cause that has to stay alive (a traffic loop, a top-up) is a detached
+# child of the first and the second ends it. README.md, *Cause and restore apart*, owns the argument.
+STATE = harness.ROOT / "artifacts" / "game-day"
+HOLD_LIMIT_SECONDS = 2 * 60 * 60
+HOLD_POLL_SECONDS = 2.0
+
+
+def _pid_file(runbook: str, state: Path) -> Path:
+    return state / f"{coverage.module_name(runbook)}.pid"
+
+
+def _is_ours(pid: int, run=subprocess.run) -> bool:
+    """Whether `pid` is a live game_day.py, because a pid file outlives a reboot and the number may be anyone's."""
+    if os.name == "nt":
+        shown = run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"], capture_output=True, text=True,
+                    encoding="utf-8", errors="replace", check=False).stdout
+        return "python" in shown.lower()
+    shown = run(["ps", "-p", str(pid), "-o", "command="], capture_output=True, text=True, check=False).stdout
+    return "game_day.py" in shown
+
+
+def holder(runbook: str, state: Path = STATE, run=subprocess.run) -> int | None:
+    """The detached child a sustained --cause left running, if there is one."""
+    try:
+        pid = int(_pid_file(runbook, state).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+    return pid if _is_ours(pid, run) else None
+
+
+def spawn_hold(runbook: str, alert: str, state: Path = STATE, popen=subprocess.Popen) -> int:
+    """Start `game_day.py RUNBOOK --hold` detached, its output in artifacts/game-day/<name>.log."""
+    state.mkdir(parents=True, exist_ok=True)
+    options: dict = {}
+    if os.name == "nt":
+        options["creationflags"] = (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                                    | subprocess.CREATE_NO_WINDOW)
+    else:
+        options["start_new_session"] = True
+    with (state / f"{coverage.module_name(runbook)}.log").open("ab") as log:
+        child = popen([sys.executable, "-u", str(Path(__file__).resolve()), runbook, "--hold", "--phase", alert],
+                      stdin=subprocess.DEVNULL, stdout=log, stderr=log, close_fds=True, **options)
+    _pid_file(runbook, state).write_text(str(child.pid), encoding="utf-8")
+    return child.pid
+
+
+def release(runbook: str, state: Path = STATE, run=subprocess.run) -> str | None:
+    """End the detached child, whole tree, and forget it. Returns what was done, or None when nothing was held."""
+    pid = holder(runbook, state, run)
+    _pid_file(runbook, state).unlink(missing_ok=True)
+    if pid is None:
+        return None
+    if os.name == "nt":
+        run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, check=False)
+    else:
+        os.killpg(pid, signal.SIGTERM)
+    return f"ended the process (pid {pid}) that was holding the cause"
+
+
+def cause_only(scenario: ModuleType, world: harness.World, *, spawn=spawn_hold, held=holder) -> list[str]:
+    """--cause: the quiet start and the cause, then out. The stack stays broken until --restore.
+
+    A cause that has to stay alive to be one (SUSTAINED) is handed to a detached child and this returns at once; the
+    others have done their work when `cause` returns. Neither waits for the alert, runs the step or restores.
+    """
+    alert = scenario.ALERT
+    refused = quiet_start(world, alert)
+    if refused:
+        return [refused]
+    world.say(f"{scenario.RUNBOOK}: causing {alert}; it fires within {scenario.DEADLINE.seconds}s once caused")
+    if getattr(scenario, "SUSTAINED", False):
+        if held(scenario.RUNBOOK) is not None:
+            return [f"{scenario.RUNBOOK}: a cause is already being held; --restore first"]
+        pid = spawn(scenario.RUNBOOK, alert)
+        world.say(f"{alert}: the cause is running in the background (pid {pid}); --restore ends it")
+        return []
+    world.caused_at = time.time()
+    try:
+        scenario.cause(world)
+    except harness.GameDayError as error:
+        return [f"the cause failed half-way, and --restore puts back what it did: {error}"]
+    return []
+
+
+def hold(scenario: ModuleType, world: harness.World, *, sleep=time.sleep, clock=time.monotonic,
+         limit: float = HOLD_LIMIT_SECONDS) -> list[str]:
+    """--hold, the detached child: the cause, then alive for as long as a thread of the cause's has work to do."""
+    world.caused_at = time.time()
+    try:
+        scenario.cause(world)
+    except harness.GameDayError as error:
+        return [f"the cause failed half-way, and --restore puts back what it did: {error}"]
+    started = clock()
+    while clock() - started < limit and any(
+            thread.is_alive() and thread.name.startswith("game-day-") for thread in threading.enumerate()):
+        sleep(HOLD_POLL_SECONDS)
+    return []
+
+
+def restore_only(scenario: ModuleType, world: harness.World, *, end=release) -> list[str]:
+    """--restore: end what --cause left running and put the stack back, whether or not --cause ever ran.
+
+    Every phase restores, last first, because the runbook's second alert is caused on top of the first. A restore
+    that raises is a finding and the others still run. Nothing waits for an alert to resolve: the stack is back
+    when this returns, and a rule over a window clears on its own time, which is reported and not waited on.
+    """
+    findings: list[str] = []
+    ended = end(scenario.RUNBOOK)
+    if ended:
+        world.say(ended)
+    for phase in reversed(phases(scenario)):
+        try:
+            phase.restore(world)
+        except Exception as error:  # noqa: BLE001 - a restore that fails for any reason is the finding
+            findings.append(f"{phase.ALERT}: the restore failed, so the stack is not back: {error}")
+    for phase in phases(scenario):
+        try:
+            window = getattr(phase, "SETTLE", None)
+            clears = f"; its window clears it within {window.seconds}s" if window else ""
+            world.say(f"{phase.ALERT} is {world.alerts.state(phase.ALERT)} after the restore{clears}")
+        except harness.GameDayError as error:
+            world.say(f"{phase.ALERT}: its state could not be read ({str(error)[:120]})")
+    return findings
+
+
+def catalog() -> list[dict]:
+    """Every runbook, for a console: its alerts, whether a script causes them, and what causing them costs."""
+    rules = coverage.all_rules()
+    rows = []
+    for name in sorted(coverage.runbooks()):
+        row: dict = {"runbook": name.removesuffix(".md"), "file": name, "alerts": sorted(rules.get(name, ()))}
+        if coverage.module_name(name) in coverage.scripts():
+            row["script"] = True
+            row["phases"] = [
+                {"alert": phase.ALERT, "impact": phase.IMPACT, "confirmation": harness.CONFIRMATION[phase.IMPACT],
+                 "sustained": bool(getattr(phase, "SUSTAINED", False)),
+                 "fires_within_seconds": phase.DEADLINE.seconds,
+                 "clears_within_seconds": getattr(phase, "SETTLE", phase.DEADLINE).seconds}
+                for phase in phases(load(name))]
+        else:
+            row["script"] = False
+            row["reason"] = coverage.NOT_ON_COMPOSE.get(name, "?")
+        rows.append(row)
+    return rows
+
+
+def verdict(findings: list[str], seconds: float, mode: str | None = None) -> str:
     """The last line: the outcome and the whole run's wall clock, in the form README.md's Runtime column holds."""
     minutes, rest = divmod(round(seconds), 60)
-    return f"game day: {'FAILED' if findings else 'OK'} in {minutes}m{rest:02d}s"
+    return f"game day: {mode + ' ' if mode else ''}{'FAILED' if findings else 'OK'} in {minutes}m{rest:02d}s"
 
 
 def matrix(names: str) -> list[str]:
@@ -135,7 +312,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("runbook", nargs="?", help="a file name from docs/runbooks/, with or without .md")
     parser.add_argument("--list", action="store_true", help="the runbooks that have a script, and why the rest do not")
     parser.add_argument("--matrix", metavar="NAMES", help="print the workflow's matrix for `all` or named runbooks")
+    parser.add_argument("--json", action="store_true", help="with --list: one JSON document, for a console")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--cause", action="store_true", help="quiet start and cause, then exit; the stack stays broken")
+    mode.add_argument("--restore", action="store_true", help="put the stack back; safe twice, and if --cause never ran")
+    mode.add_argument("--hold", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--phase", metavar="ALERT", help="with --cause: the alert of a runbook's second rule")
     args = parser.parse_args(argv)
+    if args.phase and not (args.cause or args.hold):
+        parser.error("--phase belongs to --cause")
+    if args.json and not args.list:
+        parser.error("--json belongs to --list")
 
     if args.matrix is not None:
         try:
@@ -143,6 +330,9 @@ def main(argv: list[str] | None = None) -> int:
         except harness.GameDayError as error:
             print(f"game day: {error}", file=sys.stderr)
             return 2
+        return 0
+    if args.list and args.json:
+        print(json.dumps(catalog(), indent=2))
         return 0
     if args.list:
         for message in coverage.check():
@@ -159,13 +349,40 @@ def main(argv: list[str] | None = None) -> int:
     compose = harness.Compose()
     world = harness.World(compose, harness.Alerts(), orders, harness.Logs(), print, realm=harness.Realm(),
                           traffic=harness.Traffic(token=orders.token), broker=harness.Broker(compose))
+    label = "cause" if args.cause else "restore" if args.restore else None
     started = time.monotonic()
-    findings = run(load(args.runbook), world)
+    if args.hold:
+        return _held(args, world)
+    if label:
+        try:
+            scenario = load(args.runbook)
+            if args.cause:
+                findings = cause_only(phase_of(scenario, args.phase), world)
+            else:
+                findings = restore_only(scenario, world)
+        except harness.GameDayError as error:
+            print(f"game day: {error}", file=sys.stderr)
+            return 2
+    else:
+        findings = run(load(args.runbook), world)
     elapsed = time.monotonic() - started
     for finding in findings:
         print(f"FINDING: {finding}", file=sys.stderr)
-    print(verdict(findings, elapsed))
+    print(verdict(findings, elapsed, label))
     return 1 if findings else 0
+
+
+def _held(args: argparse.Namespace, world: harness.World) -> int:
+    """The detached child's whole life: the cause, the wait, and its pid file removed on the way out."""
+    try:
+        for finding in hold(phase_of(load(args.runbook), args.phase), world):
+            print(f"FINDING: {finding}", file=sys.stderr)
+    finally:
+        pid_file = _pid_file(args.runbook, STATE)
+        # Only its own: a --restore and a new --cause may have put another child's there already.
+        if pid_file.exists() and pid_file.read_text(encoding="utf-8").strip() == str(os.getpid()):
+            pid_file.unlink()
+    return 0
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from __future__ import annotations
 import harness
 
 RUNBOOK = "erasure-overdue.md"
+IMPACT = "none"
 ALERT = "ErasureRequestsOverdue"
 FORCED_THROUGH_SQL = True
 # OverdueSweepService.Interval is a minute, and the gauge reads the table on every collection.

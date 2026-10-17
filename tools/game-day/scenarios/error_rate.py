@@ -11,6 +11,8 @@ from types import SimpleNamespace
 import harness
 
 RUNBOOK = "error-rate.md"
+IMPACT = "outage"
+SUSTAINED = True
 ALERT = "ErrorRateGateway"
 GATEWAY = "Gateway.Api"
 # The rules are `> 0.01` over a 5-minute `rate`, `for: 5m`. The ratio crosses 1% within the first export of failures:
@@ -122,5 +124,5 @@ def _service_settled(world: harness.World) -> tuple[bool, str]:
 
 
 NEXT = SimpleNamespace(
-    RUNBOOK=RUNBOOK, ALERT="ErrorRateService", DEADLINE=DEADLINE, SETTLE=SETTLE, cause=_service_cause,
-    first_step=_service_first_step, restore=_service_restore, settled=_service_settled)
+    RUNBOOK=RUNBOOK, IMPACT=IMPACT, SUSTAINED=SUSTAINED, ALERT="ErrorRateService", DEADLINE=DEADLINE, SETTLE=SETTLE,
+    cause=_service_cause, first_step=_service_first_step, restore=_service_restore, settled=_service_settled)

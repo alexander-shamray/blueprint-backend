@@ -14,6 +14,8 @@ import harness
 # container), and the jsonpath on `.spec.containers[*].resources` the container's HostConfig limits.
 
 RUNBOOK = "latency.md"
+IMPACT = "outage"
+SUSTAINED = True
 ALERT = "Latency"
 FOR_SECONDS = 600
 # A request held by a paused database ends when its command times out (30 seconds), and the quantile needs two of them

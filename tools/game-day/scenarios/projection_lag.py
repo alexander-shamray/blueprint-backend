@@ -9,6 +9,7 @@ from __future__ import annotations
 import harness
 
 RUNBOOK = "projection-lag.md"
+IMPACT = "outage"
 ALERT = "OutboxLocalLaneStalled"
 FORCED_THROUGH_SQL = True
 DEADLINE = harness.Deadline(signal_seconds=30)

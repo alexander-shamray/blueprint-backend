@@ -13,6 +13,8 @@ from types import SimpleNamespace
 import harness
 
 RUNBOOK = "queue-backlog.md"
+IMPACT = "outage"
+SUSTAINED = True
 ALERT = "DeliveryLagHigh"
 CONSUMER = "web-bff"
 LOG_SERVICE = "Web.Bff"
@@ -159,9 +161,11 @@ def _backlog_restore(world: harness.World) -> None:
     if _top_up.thread is not None:
         _top_up.thread.join(60)
     try:
-        # Before the consumer starts, so web-bff never reads a synthetic message and parks it in _skipped.
-        world.broker.purge(QUEUE)
-        world.compose.start(CONSUMER)
+        # Only a stopped consumer says the cause ran: the purge takes every message, and a stack nobody broke has real
+        # ones. Before the consumer starts, so web-bff never reads a synthetic message and parks it in _skipped.
+        if not world.compose.running(CONSUMER):
+            world.broker.purge(QUEUE)
+            world.compose.start(CONSUMER)
     finally:
         world.broker.close()
 
@@ -174,5 +178,5 @@ def _backlog_settled(world: harness.World) -> tuple[bool, str]:
 
 
 NEXT = SimpleNamespace(
-    RUNBOOK=RUNBOOK, ALERT=BACKLOG_ALERT, DEADLINE=DEADLINE, cause=_backlog_cause, first_step=_backlog_first_step,
-    restore=_backlog_restore, settled=_backlog_settled)
+    RUNBOOK=RUNBOOK, IMPACT="data", SUSTAINED=True, ALERT=BACKLOG_ALERT, DEADLINE=DEADLINE, cause=_backlog_cause,
+    first_step=_backlog_first_step, restore=_backlog_restore, settled=_backlog_settled)

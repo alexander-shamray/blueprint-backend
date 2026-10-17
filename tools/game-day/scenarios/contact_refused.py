@@ -9,6 +9,7 @@ from __future__ import annotations
 import harness
 
 RUNBOOK = "contact-refused.md"
+IMPACT = "data"
 ALERT = "ContactReadRefused"
 # The order has to reach Notifications and a send tick has to claim its row before the counter moves.
 DEADLINE = harness.Deadline(signal_seconds=120)
@@ -50,8 +51,11 @@ def first_step(world: harness.World) -> tuple[bool, str]:
 
 
 def restore(world: harness.World) -> None:
+    # A grant still held means the cause never took it, and a worker restarted for nothing is a disruption.
+    lost = not GRANT.held(world.realm)
     GRANT.give_back(world.realm)
-    world.compose.restart(WORKER)
+    if lost:
+        world.compose.restart(WORKER)
 
 
 def settled(world: harness.World) -> tuple[bool, str]:

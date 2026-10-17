@@ -9,6 +9,7 @@ from __future__ import annotations
 import harness
 
 RUNBOOK = "skipped-queue.md"
+IMPACT = "none"
 ALERT = "SkippedQueueDepth"
 ENDPOINT = "ordering-stock-events"
 QUEUE = f"{ENDPOINT}_skipped"
@@ -45,12 +46,8 @@ def first_step(world: harness.World) -> tuple[bool, str]:
 
 
 def restore(world: harness.World) -> None:
-    # Opened again, because a cause that raised before its open leaves the tool no password to run with.
-    world.broker.open()
-    try:
-        world.broker.discard(QUEUE, list(_sent))
-    finally:
-        world.broker.close()
+    # Not `_sent`: --restore is a process that sent nothing, so the queue says which messages are the game day's.
+    world.broker.discard_ours(QUEUE)
 
 
 def settled(world: harness.World) -> tuple[bool, str]:

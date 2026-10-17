@@ -9,6 +9,7 @@ from __future__ import annotations
 import harness
 
 RUNBOOK = "outbox-broker.md"
+IMPACT = "outage"
 ALERT = "OutboxBrokerLaneStalled"
 # The age must read above 120s; the rule has no `for:`.
 DEADLINE = harness.Deadline(signal_seconds=120)
