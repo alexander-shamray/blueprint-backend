@@ -3,7 +3,12 @@
 **Decision.** Each leg of the `images` job that builds and signs an image on
 `main` moves the tag `main` of that image to the digest it just signed, in a
 step of its own after both attestations, and reads the tag back to confirm it
-names that digest. A leg that built nothing does not touch the tag, so it keeps
+names that digest. The move is forward only (#1112): every build carries its
+commit as the `org.opencontainers.image.revision` label, and the step reads
+that label from the image `main` names now and moves the tag only when that
+commit is an ancestor of its own, by `git merge-base --is-ancestor` on a
+checkout of the whole history. A tag that does not exist, or names an image
+built before the label, is moved. A leg that built nothing does not touch the tag, so it keeps
 naming the newest build of that image, whichever commit made it. The image
 set at `main` is then `$REGISTRY/<image>:main` for every entry of the matrix,
 and a dispatch of `ci.yml` is what gives an image no push has touched its first
@@ -36,11 +41,14 @@ every commit pay for every image and gives each a new digest for unchanged
 source, which is the cost the filters exist to avoid. The `compose.yml`
 workflow stays cold because it tests the pull request's sources: pulling
 `main` there would run the images the change is trying to replace.
-**Consequences.** The tag is moved by the run that finishes last, and a burst
-of merges runs in parallel (ADR-109), so two builds of one image can finish out
-of order and leave `main` on the earlier one until the next build of that image;
-the `<sha>` tag stays exact, and a consumer that needs one commit's set reads
-those. The tag moves after the attestations, so a run that fails between them
+**Consequences.** A burst of merges runs in parallel (ADR-109), so two builds
+of one image can finish out of order; the older then finds a newer commit on
+the tag and leaves it. A guard on the tip of `main` would not do, because a
+newer commit that did not rebuild the image would strand the tag on the build
+before. The read and the push are two calls, so two runs that read within the
+same moment can still cross; the window is a registry round trip, and the next
+build of that image closes it. The `<sha>` tag stays exact, and a consumer
+that needs one commit's set reads those. The tag moves after the attestations, so a run that fails between them
 leaves it on the previous build, which is the safe side. A consumer's
 `BLUEPRINT_TAG=main` is a moving target by design, so a pinned set is a
 digest. `rabbitmq` is built from `deploy/compose/rabbitmq/Dockerfile` and is
