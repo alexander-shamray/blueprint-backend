@@ -9,6 +9,7 @@ from __future__ import annotations
 import harness
 
 RUNBOOK = "outbox-abandoned.md"
+IMPACT = "none"
 ALERT = "OutboxAbandonedRows"
 FORCED_THROUGH_SQL = True
 # The gauge reads above zero as soon as it is published.

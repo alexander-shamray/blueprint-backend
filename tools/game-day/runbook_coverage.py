@@ -38,14 +38,25 @@ def not_a_runbook() -> set[str]:
     return set(_gate().NOT_A_RUNBOOK)
 
 
-def loaded_rules() -> dict[str, set[str]]:
-    """Each runbook a rule the Compose Prometheus loads names, and those rules, through check.py's own parser."""
+def _rules_in(*paths: Path) -> dict[str, set[str]]:
     gate = _gate()
     found: dict[str, set[str]] = {}
-    for rule in gate.parse_rules(gate.LOADED_RULES):
-        if rule["runbook"]:
-            found.setdefault(Path(str(rule["runbook"])).name, set()).add(str(rule["alert"]))
+    for path in paths:
+        for rule in gate.parse_rules(path):
+            if rule["runbook"]:
+                found.setdefault(Path(str(rule["runbook"])).name, set()).add(str(rule["alert"]))
     return found
+
+
+def loaded_rules() -> dict[str, set[str]]:
+    """Each runbook a rule the Compose Prometheus loads names, and those rules, through check.py's own parser."""
+    return _rules_in(_gate().LOADED_RULES)
+
+
+def all_rules() -> dict[str, set[str]]:
+    """The same for every rule there is, the awaiting-signal ones included: the alert a runbook with no script has."""
+    gate = _gate()
+    return _rules_in(gate.LOADED_RULES, gate.AWAITING_RULES)
 
 
 def caused(script_names: set[str]) -> dict[str, set[str]]:

@@ -11,6 +11,7 @@ import uuid
 import harness
 
 RUNBOOK = "error-queue.md"
+IMPACT = "none"
 ALERT = "ErrorQueueDepth"
 ENDPOINT = "ordering-commands"
 QUEUE = f"{ENDPOINT}_error"
@@ -51,12 +52,8 @@ def first_step(world: harness.World) -> tuple[bool, str]:
 
 
 def restore(world: harness.World) -> None:
-    # Opened again, because a cause that raised before its open leaves the tool no password to run with.
-    world.broker.open()
-    try:
-        world.broker.discard(QUEUE, list(_sent))
-    finally:
-        world.broker.close()
+    # Not `_sent`: --restore is a process that sent nothing, so the queue says which messages are the game day's.
+    world.broker.discard_ours(QUEUE)
 
 
 def settled(world: harness.World) -> tuple[bool, str]:

@@ -60,6 +60,12 @@ TRAFFIC_MAX_IN_FLIGHT = 40
 TRAFFIC_LOGIN_REFRESH_SECONDS = 120
 
 
+# What a cause does to the stack, and the confirmation a console asks before running it; README.md owns the argument.
+# `none` plants or sends synthetic rows and messages and removes them by id; `outage` stops, pauses or cuts a grant
+# from something the rest of the stack uses; `data` deletes or purges what the game day did not put there.
+CONFIRMATION = {"none": "none", "outage": "confirm", "data": "typed"}
+
+
 class GameDayError(Exception):
     """A step that did not do what its scenario said it would."""
 
@@ -485,6 +491,9 @@ class Grant:
     def take(self, realm: Realm) -> None:
         realm.revoke(self.account, self.client, self.role)
 
+    def held(self, realm: Realm) -> bool:
+        return self.role in realm.roles(self.account, self.client)
+
     def give_back(self, realm: Realm) -> None:
         """Restore the grant, then read the account back: the realm export gives it this role and no other."""
         realm.grant(self.account, self.client, self.role)
@@ -500,6 +509,9 @@ DEAD_LETTERS = ROOT / "tools" / "dead-letters" / "dead_letters.py"
 OPERATOR = "dead-letter-operator"
 # MassTransit's default envelope, which this platform keeps (skipped-queue.md says why the type is in the body).
 MASSTRANSIT_JSON = "application/vnd.masstransit+json"
+# The envelope's sourceAddress on everything `Broker.publish` sends, which is how a restore run by a process that
+# sent nothing finds the game day's messages among a queue's others.
+SOURCE_ADDRESS = "rabbitmq://rabbitmq/game-day"
 
 
 class Broker:
@@ -534,7 +546,7 @@ class Broker:
         message_id, correlation_id = str(uuid.uuid4()), str(uuid.uuid4())
         envelope = {
             "messageId": message_id, "correlationId": correlation_id, "conversationId": str(uuid.uuid4()),
-            "sourceAddress": "rabbitmq://rabbitmq/game-day", "destinationAddress": f"rabbitmq://rabbitmq/{exchange}",
+            "sourceAddress": SOURCE_ADDRESS, "destinationAddress": f"rabbitmq://rabbitmq/{exchange}",
             "messageType": [message_type], "message": message, "headers": {},
             "sentTime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
         body = json.dumps({
@@ -582,6 +594,29 @@ class Broker:
         if failed or set(message_ids) - set(discarded) - set(document["not_found"]):
             raise GameDayError(f"dead_letters.py discard {queue} exited {code}: {document['actions']}")
         return discarded
+
+    def ours(self, queue: str) -> list[str]:
+        """The ids of the game day's own messages on `queue`: the envelopes `publish` sent, by their source."""
+        code, document = self.tool("inspect", queue, "--limit", "100")
+        if "error" in document:
+            raise GameDayError(f"dead_letters.py inspect {queue} was refused: {document['error']}")
+        found = []
+        for message in document.get("messages", []):
+            try:
+                envelope = json.loads(message.get("body") or "")
+            except ValueError:
+                continue
+            if isinstance(envelope, dict) and envelope.get("sourceAddress") == SOURCE_ADDRESS:
+                found.append(message["message_id"])
+        return found
+
+    def discard_ours(self, queue: str) -> list[str]:
+        """The runbooks' Discard of what this tool sent to `queue` and nothing else, with the password cleared after."""
+        self.open()
+        try:
+            return self.discard(queue, self.ours(queue))
+        finally:
+            self.close()
 
     def queues(self) -> dict[str, tuple[int, int]]:
         """Each queue's depth and consumer count, through the container rather than any account."""
