@@ -115,7 +115,7 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
     [Fact]
     public async Task A_refund_recorded_before_any_authorisation_is_kept()
     {
-        // §9.4 orders nothing, so the refund can arrive first; §10.7's detail route shows its half alone.
+        // §9.4 orders nothing, so the refund can arrive first; E.6.10's detail route shows its half alone.
         Guid orderId = Guid.CreateVersion7();
 
         await fixture.ExecuteAsync(

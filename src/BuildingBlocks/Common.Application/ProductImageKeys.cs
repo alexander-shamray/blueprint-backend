@@ -1,16 +1,16 @@
 namespace Common.Application;
 
-/// <summary>The object keys, content types and size of a product image, which two hosts share (§10.8).</summary>
+/// <summary>The object keys, content types and size of a product image, which two hosts share (E.6.11).</summary>
 /// <remarks>One owner (§10.8), so the host that mints a key and the host that accepts one cannot differ.</remarks>
 public static class ProductImageKeys
 {
-    /// <summary>Five MiB, §10.8's ceiling on the body the signature allows.</summary>
+    /// <summary>Five MiB, E.6.11's ceiling on the body the signature allows.</summary>
     public const long MaxSizeBytes = 5 * 1024 * 1024;
 
-    /// <summary>Where an upload waits to be attached, and the prefix the lifecycle rule expires (§10.8).</summary>
+    /// <summary>Where an upload waits to be attached, and the prefix the lifecycle rule expires (E.6.11).</summary>
     public const string UploadPrefix = "uploads/";
 
-    /// <summary>Where a published image lives, and the only prefix the public host serves (§10.8).</summary>
+    /// <summary>Where a published image lives, and the only prefix the public host serves (E.6.11).</summary>
     public const string ProductPrefix = "products/";
 
     /// <summary>The longest destination key: <c>products/</c>, two GUIDs, a slash, a dot and <c>webp</c>.</summary>
@@ -35,11 +35,11 @@ public static class ProductImageKeys
     public static string? ContentTypeFor(string extension) =>
         ExtensionsByType.FirstOrDefault(pair => pair.Value == extension).Key;
 
-    /// <summary>The key the BFF mints for one upload; the client never supplies a segment of it (§10.8).</summary>
+    /// <summary>The key the BFF mints for one upload; the client never supplies a segment of it (E.6.11).</summary>
     public static string UploadKey(Guid seller, Guid image, string extension) =>
         $"{UploadPrefix}{seller:D}/{image:D}.{extension}";
 
-    /// <summary>The key a published image is copied to, derived from the upload's (§10.8).</summary>
+    /// <summary>The key a published image is copied to, derived from the upload's (E.6.11).</summary>
     public static string ProductKey(Guid seller, Guid image, string extension) =>
         $"{ProductPrefix}{seller:D}/{image:D}.{extension}";
 

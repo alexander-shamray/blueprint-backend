@@ -8,6 +8,6 @@ public static class OrderPage
 
     public const int MaxLimit = 50;
 
-    /// <summary>Clamped, never refused, as §10.7 says of <c>limit</c>.</summary>
+    /// <summary>Clamped, never refused, as E.6.10 says of <c>limit</c>.</summary>
     public static int Clamp(int limit) => Math.Clamp(limit, 1, MaxLimit);
 }

@@ -5,7 +5,7 @@ using Web.Bff.Orders;
 
 namespace Web.Bff.Endpoints;
 
-/// <summary>§10.7's buyer order read, served from ADR-051's projection and calling nothing.</summary>
+/// <summary>E.6.10's buyer order read, served from ADR-051's projection and calling nothing.</summary>
 public static class OrderEndpoints
 {
     public static void MapOrderEndpoints(this IEndpointRouteBuilder app)

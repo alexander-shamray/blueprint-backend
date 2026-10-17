@@ -3,7 +3,7 @@ using Web.Bff.Persistence;
 
 namespace Web.Bff.Addresses;
 
-/// <summary>The caller's saved delivery address, as it is sent and as it is read back (§10.9).</summary>
+/// <summary>The caller's saved delivery address, as it is sent and as it is read back (E.6.12).</summary>
 /// <remarks>
 /// The fields are the order request's own, so a client prefills the checkout by copying them across. The subject is
 /// never a member: it is the principal's (§11.4).

@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>The list's bounds: clamped rather than refused (§10.7), small because a row carries its lines.</summary>
+/// <summary>The list's bounds: clamped rather than refused (E.6.10), small because a row carries its lines.</summary>
 public sealed class OrderPageTests
 {
     [Theory]

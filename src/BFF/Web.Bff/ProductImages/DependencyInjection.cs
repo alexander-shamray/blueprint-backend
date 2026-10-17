@@ -2,7 +2,7 @@ using FluentValidation;
 
 namespace Web.Bff.ProductImages;
 
-/// <summary>§10.8's upload: its store options, its signer and its validator.</summary>
+/// <summary>E.6.11's upload: its store options, its signer and its validator.</summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddProductImageUploads(this IServiceCollection services)

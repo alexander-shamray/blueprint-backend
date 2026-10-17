@@ -11,19 +11,19 @@ namespace Web.Bff.Orders;
 /// <summary>ADR-108's stream over the order read: the row polled by key, and nothing held between polls.</summary>
 public sealed class OrderEventStream(OrderReader orders, TimeProvider clock, IOptions<JsonOptions> json)
 {
-    /// <summary>The event name a client listens for (§10.7).</summary>
+    /// <summary>The event name a client listens for (E.6.10).</summary>
     public const string EventName = "order";
 
     /// <summary>How often an open stream reads its row; an update reaches the client this much after the write.</summary>
     public static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
 
-    /// <summary>Silence a proxy that closes an idle connection would not survive (§10.7).</summary>
+    /// <summary>Silence a proxy that closes an idle connection would not survive (E.6.10).</summary>
     public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(10);
 
     /// <summary>Inside <c>ServiceOptions.OperationTimeout</c>, so the stream ends before the deadline answers 504.</summary>
     public static readonly TimeSpan Lifetime = ServiceOptions.OperationTimeout - TimeSpan.FromSeconds(5);
 
-    /// <summary>The reconnection delay the stream asks of a client, so the server paces it (§10.7).</summary>
+    /// <summary>The reconnection delay the stream asks of a client, so the server paces it (E.6.10).</summary>
     public static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(1);
 
     /// <summary>The event id: the row's <c>AsOf</c>, which a reconnecting client sends back as <c>Last-Event-ID</c>.</summary>

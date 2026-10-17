@@ -127,6 +127,6 @@ public sealed class BffOrderEventsTests(BffServiceFixture fixture) : IAsyncLifet
 
         ProjectedOrder row = (await fixture.OrderAsync(order)).ShouldNotBeNull();
         row.CancelOutcome.ShouldBe(BuyerStatuses.Declined);
-        row.RefundedAt.ShouldBe(At.AddMinutes(3), "a refund is a flag beside the status, never a member of it (§10.7)");
+        row.RefundedAt.ShouldBe(At.AddMinutes(3), "a refund is a flag beside the status, never a member of it (E.6.10)");
     }
 }

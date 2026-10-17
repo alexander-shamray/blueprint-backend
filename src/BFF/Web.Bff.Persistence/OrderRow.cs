@@ -1,6 +1,6 @@
 namespace Web.Bff.Persistence;
 
-/// <summary>One order as the projection knows it: a column per fact §10.7 returns, each set once (ADR-051).</summary>
+/// <summary>One order as the projection knows it: a column per fact E.6.10 returns, each set once (ADR-051).</summary>
 /// <remarks>
 /// Written and read through SQL, never through this type, which exists to define the table (§7.2). Every column
 /// but the key and the two BFF instants is nullable, because any of the seven order events can create it.

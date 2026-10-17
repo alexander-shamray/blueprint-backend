@@ -4,7 +4,7 @@ using FluentValidation;
 
 namespace Web.Bff.ProductImages;
 
-/// <summary>§10.8's upload endpoint: a pre-signed <c>PUT</c> for one key the server chose.</summary>
+/// <summary>E.6.11's upload endpoint: a pre-signed <c>PUT</c> for one key the server chose.</summary>
 public static class ProductImageEndpoints
 {
     public static void MapProductImageEndpoints(this IEndpointRouteBuilder app)

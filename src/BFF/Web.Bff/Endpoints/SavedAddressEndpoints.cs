@@ -5,7 +5,7 @@ using Web.Bff.Addresses;
 
 namespace Web.Bff.Endpoints;
 
-/// <summary>§10.9's saved delivery address, the caller's own and served from this host's schema.</summary>
+/// <summary>E.6.12's saved delivery address, the caller's own and served from this host's schema.</summary>
 public static class SavedAddressEndpoints
 {
     public static void MapSavedAddressEndpoints(this IEndpointRouteBuilder app)

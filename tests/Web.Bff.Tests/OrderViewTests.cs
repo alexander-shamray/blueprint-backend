@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§10.7's response rules over the rows alone, so none of them needs a database to hold.</summary>
+/// <summary>E.6.10's response rules over the rows alone, so none of them needs a database to hold.</summary>
 public sealed class OrderViewTests
 {
     private static readonly DateTimeOffset At = new(2026, 10, 3, 9, 0, 0, TimeSpan.Zero);
@@ -98,7 +98,7 @@ public sealed class OrderViewTests
 
         OrderSummary order = OrderView.Summary(row, [Line()]);
 
-        order.Status.ShouldBe(BuyerStatuses.Cancelled, "a cancellation outranks a despatch (§10.7)");
+        order.Status.ShouldBe(BuyerStatuses.Cancelled, "a cancellation outranks a despatch (E.6.10)");
         order.Cancellable.ShouldBeFalse();
         order.Timeline.ShouldBe(new OrderTimeline(At, At.AddMinutes(1), At.AddMinutes(2), null, At.AddMinutes(3)));
     }

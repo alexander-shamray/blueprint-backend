@@ -7,7 +7,7 @@ using PreferencesGrpc = Notifications.Preferences.V1.Preferences;
 
 namespace Web.Bff.Endpoints;
 
-/// <summary>§10.11's preferences read and write: one hop each, under the caller's token (ADR-120).</summary>
+/// <summary>E.6.14's preferences read and write: one hop each, under the caller's token (ADR-120).</summary>
 public static class PreferenceEndpoints
 {
     /// <summary>The 412's code: the pair changed since the client read it; the body carries it now.</summary>

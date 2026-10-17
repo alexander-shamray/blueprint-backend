@@ -109,7 +109,7 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
         await ApplyAsync(
             OrderEvents.Cancelled(order, _customer, At, CancelReasons.OutOfStock, CancelOrigins.Workflow));
         ProjectedOrder cancelled = (await fixture.OrderAsync(order)).ShouldNotBeNull();
-        cancelled.TotalAmount.ShouldBeNull("OrderCancelled carries no total, which the read reports as null (§10.7)");
+        cancelled.TotalAmount.ShouldBeNull("OrderCancelled carries no total, which the read reports as null (E.6.10)");
         (await fixture.LinesAsync(order)).ShouldBeEmpty();
 
         await ApplyAsync(OrderEvents.Placed(order, _customer, At.AddMinutes(-1)));
@@ -384,7 +384,7 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
             OrderEvents.Published(product, new string('n', ProjectionLimits.ProductNameMaxLength + 1), At));
 
         (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM bff.Products WHERE ProductId = {0}", product))
-            .ShouldBe(0, "a line with no name reads productName null (§10.7), which beats a stalled endpoint");
+            .ShouldBe(0, "a line with no name reads productName null (E.6.10), which beats a stalled endpoint");
     }
 
     /// <summary>SQL Server's deadlock-victim error, which the endpoint's retry absorbs.</summary>

@@ -6,7 +6,7 @@ using DevicesGrpc = Notifications.Devices.V1.Devices;
 
 namespace Web.Bff.Endpoints;
 
-/// <summary>§10.10's device registration: one hop to Notifications, under the caller's own token (ADR-117).</summary>
+/// <summary>E.6.13's device registration: one hop to Notifications, under the caller's own token (ADR-117).</summary>
 public static class DeviceEndpoints
 {
     /// <summary>The 409's code, which tells an app to set its counter one past the reply's sequence (§10.5).</summary>

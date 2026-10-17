@@ -1,6 +1,6 @@
 namespace Web.Bff.Orders;
 
-/// <summary>§10.7's wire shape from the projection's rows: every rule the response states, and no query.</summary>
+/// <summary>E.6.10's wire shape from the projection's rows: every rule the response states, and no query.</summary>
 public static class OrderView
 {
     public static OrderSummary Summary(OrderReadRow row, IReadOnlyList<OrderLineReadRow> lines)

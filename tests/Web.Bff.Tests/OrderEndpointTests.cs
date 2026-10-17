@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§10.7's routes through the real host: the subject from the principal, the 404, the wire's names.</summary>
+/// <summary>E.6.10's routes through the real host: the subject from the principal, the 404, the wire's names.</summary>
 [Collection(nameof(BffIntegrationCollection))]
 public sealed class OrderEndpointTests(BffServiceFixture fixture) : IAsyncLifetime
 {

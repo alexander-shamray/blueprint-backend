@@ -89,23 +89,23 @@ pricing.AddHttpMessageHandler<CorrelationIdHandler>();
 builder.Services.AddOrderProjection();
 builder.Services.AddMassTransitMessaging(builder.Configuration);
 
-// §10.7's read over the projection; a singleton, as the connection factory it holds is (§6.5).
+// E.6.10's read over the projection; a singleton, as the connection factory it holds is (§6.5).
 builder.Services.AddSingleton<OrderReader>();
 
 // ADR-108's stream over that read; it holds no state of its own between polls, so a singleton is safe.
 builder.Services.AddSingleton<OrderEventStream>();
 
-// §10.9's saved address, in this host's own schema (ADR-107); the validator is called by the endpoint (§6.4).
+// E.6.12's saved address, in this host's own schema (ADR-107); the validator is called by the endpoint (§6.4).
 builder.Services.AddSingleton<SavedAddressStore>();
 builder.Services.AddSingleton<IValidator<SavedAddress>, SavedAddressValidator>();
 
-// §10.10's registration: ADR-117's hop to Notifications, under the caller's token rather than this host's.
+// E.6.13's registration: ADR-117's hop to Notifications, under the caller's token rather than this host's.
 builder.Services.AddDeviceRegistration();
 
-// §10.11's preferences: ADR-120's journal on the same hop, under the caller's token too.
+// E.6.14's preferences: ADR-120's journal on the same hop, under the caller's token too.
 builder.Services.AddNotificationPreferences();
 
-// §10.8's upload: the store it signs for, and the permission that gates it (§11.4).
+// E.6.11's upload: the store it signs for, and the permission that gates it (§11.4).
 builder.Services.AddProductImageUploads();
 builder.Services
     .AddAuthorizationBuilder()
@@ -127,11 +127,11 @@ app.UseAuthorization();           // §11.4
 // SQL and the bus gate readiness (§13.5); no hop's service does, or its outage would unready this host too.
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapCheckoutEndpoints();
-app.MapOrderEndpoints();          // §10.7 — ADR-051's projection, no hop
-app.MapSavedAddressEndpoints();   // §10.9 — ADR-107's saved address, no hop
-app.MapProductImageEndpoints();   // §10.8 — signs a URL locally, no hop
-app.MapDeviceEndpoints();         // §10.10 — ADR-117's registration, one hop to Notifications
-app.MapPreferenceEndpoints();     // §10.11 — ADR-120's journal, one hop to Notifications
+app.MapOrderEndpoints();          // E.6.10 — ADR-051's projection, no hop
+app.MapSavedAddressEndpoints();   // E.6.12 — ADR-107's saved address, no hop
+app.MapProductImageEndpoints();   // E.6.11 — signs a URL locally, no hop
+app.MapDeviceEndpoints();         // E.6.13 — ADR-117's registration, one hop to Notifications
+app.MapPreferenceEndpoints();     // E.6.14 — ADR-120's journal, one hop to Notifications
 
 app.Run();
 

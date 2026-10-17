@@ -6,7 +6,7 @@ using Web.Bff.Persistence;
 
 namespace Web.Bff.Orders;
 
-/// <summary>The names a line resolves on read (§10.7), from Catalog's <c>ProductPublished</c>.</summary>
+/// <summary>The names a line resolves on read (E.6.10), from Catalog's <c>ProductPublished</c>.</summary>
 /// <remarks>Public, because §6.2's scan is public-only.</remarks>
 public sealed class ProductNameProjection(IDbConnectionFactory connections, ILogger<ProductNameProjection> log)
     : IIntegrationEventHandler<ProductPublished>
@@ -33,7 +33,7 @@ public sealed class ProductNameProjection(IDbConnectionFactory connections, ILog
 
     public async Task HandleAsync(ProductPublished integrationEvent, CancellationToken ct)
     {
-        // A line with no name reads productName null (§10.7), which beats an endpoint stalled on one message.
+        // A line with no name reads productName null (E.6.10), which beats an endpoint stalled on one message.
         if (string.IsNullOrWhiteSpace(integrationEvent.Name) ||
             integrationEvent.Name.Length > ProjectionLimits.ProductNameMaxLength)
         {

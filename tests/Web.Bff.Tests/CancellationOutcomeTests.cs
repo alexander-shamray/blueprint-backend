@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§10.7's table, a row per line, keyed on <c>Origin</c> before <c>Reason</c>.</summary>
+/// <summary>E.6.10's table, a row per line, keyed on <c>Origin</c> before <c>Reason</c>.</summary>
 public sealed class CancellationOutcomeTests
 {
     [Theory]
@@ -33,7 +33,7 @@ public sealed class CancellationOutcomeTests
     public void A_reason_outside_the_vocabulary_claims_least_under_every_origin(string? origin) =>
         CancellationOutcome.Of(origin, "fraud_suspected").ShouldBe(
             BuyerStatuses.Cancelled,
-            "a code a newer publisher adds is no evidence the platform refused anything (§10.7)");
+            "a code a newer publisher adds is no evidence the platform refused anything (E.6.10)");
 
     [Theory]
     [InlineData(CancelReasons.OutOfStock)]
@@ -45,5 +45,5 @@ public sealed class CancellationOutcomeTests
     public void A_buyer_who_typed_the_saga_s_reason_is_not_told_their_card_was_refused() =>
         CancellationOutcome.Of(CancelOrigins.User, CancelReasons.PaymentDeclined).ShouldBe(
             BuyerStatuses.Cancelled,
-            "Reason alone answers the wrong question (§10.7)");
+            "Reason alone answers the wrong question (E.6.10)");
 }

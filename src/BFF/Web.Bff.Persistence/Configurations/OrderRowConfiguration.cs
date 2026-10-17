@@ -20,14 +20,14 @@ internal sealed class OrderRowConfiguration : IEntityTypeConfiguration<OrderRow>
                 table.HasCheckConstraint("CK_Orders_Refund", Together("RefundedAt", "RefundedAmount"));
 
                 // An amount is a number the client cannot render without its currency, and the currency is written by
-                // the same statement as the first amount, so it is present exactly when either amount is (§10.7).
+                // the same statement as the first amount, so it is present exactly when either amount is (E.6.10).
                 table.HasCheckConstraint(
                     "CK_Orders_PaymentCurrency",
                     "([PaymentCurrency] IS NULL AND [AuthorisedAmount] IS NULL AND [RefundedAmount] IS NULL) OR " +
                     "([PaymentCurrency] IS NOT NULL AND " +
                     "([AuthorisedAmount] IS NOT NULL OR [RefundedAmount] IS NOT NULL))");
 
-                // §10.7's closed vocabulary; a NULL passes, as a CHECK on an unknown does.
+                // E.6.10's closed vocabulary; a NULL passes, as a CHECK on an unknown does.
                 table.HasCheckConstraint(
                     "CK_Orders_CancelOutcome",
                     $"[CancelOutcome] IN (N'{CancelOutcomes.Cancelled}', N'{CancelOutcomes.OutOfStock}', " +

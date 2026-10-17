@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§10.9's three routes through the real host: the subject from the principal, the 404, the rules.</summary>
+/// <summary>E.6.12's three routes through the real host: the subject from the principal, the 404, the rules.</summary>
 [Collection(nameof(BffIntegrationCollection))]
 public sealed class SavedAddressEndpointTests(BffServiceFixture fixture) : IAsyncLifetime
 {

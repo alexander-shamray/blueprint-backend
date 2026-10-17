@@ -4,7 +4,7 @@ using DevicesGrpc = Notifications.Devices.V1.Devices;
 
 namespace Web.Bff.Devices;
 
-/// <summary>§10.10's registration: the app list, the validators and the hop to Notifications (ADR-117).</summary>
+/// <summary>E.6.13's registration: the app list, the validators and the hop to Notifications (ADR-117).</summary>
 public static class DependencyInjection
 {
     public static IServiceCollection AddDeviceRegistration(this IServiceCollection services)
