@@ -256,8 +256,8 @@ A unit's `image:` is the name `ci.yml`'s `images` matrix pushes it under, and
 name. A consumer that wants the platform running and not rebuilt sets
 `BLUEPRINT_REGISTRY` to the registry address
 ([§15.2](15-cicd-deployment.md)) and `BLUEPRINT_TAG` to `main`, then runs
-`docker compose pull` and `up --no-build`; the broker is the one image it still
-builds ([ADR-134](adr/ADR-134-each-image-has-a-main-tag-that-names-its-newest-signed-build-and-compose-names-the-image-beside-its-build-1111-adding-to-adr-109.md)).
+`docker compose pull`, `docker compose build rabbitmq` and `up --no-build`; the
+broker is the one image it still builds ([ADR-134](adr/ADR-134-each-image-has-a-main-tag-that-names-its-newest-signed-build-and-compose-names-the-image-beside-its-build-1111-adding-to-adr-109.md)).
 
 The migrator reads §7.1's migrator key, which may issue DDL, and the API reads
 the runtime key and never the migrator's. Locally both resolve to the one `sa`
