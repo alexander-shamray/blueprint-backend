@@ -143,11 +143,15 @@ only for what the stack needs, such as `sql` accepting a login.
 backlog half of `queue-backlog`) and the lag half's rounds of pause and unpause
 end with the process that runs them, so `--cause` starts
 `game_day.py RUNBOOK --hold` detached, with its output in
-`artifacts/game-day/<runbook>.log` and its pid beside it, and returns at once.
-Those causes take minutes to land (a traffic loop waits for its window to
-fill), so the log is where a failure of the cause is reported. `--restore` ends
-the child and its tree before it restores, and checks the pid is a
-`game_day.py` first, because a pid file outlives a reboot. The child ends by
+`artifacts/game-day/<runbook>.log` and its pid beside it. The child writes
+`<runbook>.status` as soon as `cause` returns or raises, or after
+`LANDING_GRACE_SECONDS` of neither (the lag half's cause is the loop, so it
+never returns), and `--cause` waits for that, up to `LANDING_SECONDS`. A
+cause that failed, or a child that ended without saying, is a finding and
+exit 1; one that fails after the grace is in the log only. `--restore` ends
+the child and its tree before it restores, and checks the pid is that
+runbook's own `--hold` child first, because a pid file outlives a reboot and
+the number may now be a person's own `game_day.py` run. The child ends by
 itself at `HOLD_LIMIT_SECONDS`.
 
 **What a restore cannot take back.** The stack's state returns; these stay:
