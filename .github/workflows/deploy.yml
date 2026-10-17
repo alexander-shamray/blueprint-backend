@@ -2,10 +2,9 @@ name: Deploy
 
 # §15.5's canary, and §15.1's production leg of the pipeline. It reaches no
 # cluster: no environment, no kubeconfig. It does reach a registry, to verify
-# what CI pushed and pin the digest it verified (ADR-109). What is asserted
-# about it is asserted by `deploy/canary/canary.py` and the modules beside it,
-# whose suites run on every change to this tree, and by the `check` job below,
-# which reads this file.
+# what CI pushed and pin the digest it verified (ADR-109). The rest is
+# asserted by `deploy/canary/canary.py` and the modules beside it, whose suites
+# run on every change to this tree, and by the `check` job below.
 
 # `workflow_dispatch` only, and the reason is `main` staying green: a canary on
 # `push` would fail on every merge for want of a cluster, which trains everyone
