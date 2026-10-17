@@ -347,7 +347,7 @@ class VerdictTests(unittest.TestCase):
 
 
 class TemplateTests(unittest.TestCase):
-    """The PromQL canary.py generates, one template per signal and role.
+    """The PromQL analysis.py generates, one template per signal and role.
 
     The golden strings are the point: each is the whole meaning of its role,
     so any change to what a query measures is a change to one of them.
