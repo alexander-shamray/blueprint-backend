@@ -527,6 +527,25 @@ class SupplyChainTests(Fixture):
         self.assertEqual(len(problems), 1)
         self.assertIn("is an ancestor of this build's", problems[0])
 
+    def test_a_main_tag_that_asks_after_it_pushes_is_caught(self) -> None:
+        guard = '          git merge-base --is-ancestor "$named" "$GITHUB_SHA"' + chr(10)
+        push = '          docker push "$REGISTRY/${{ matrix.image }}:main"' + chr(10)
+        self.assertIn(guard, WORKFLOW)
+        self.assertIn(push, WORKFLOW)
+        self.write(WORKFLOW.replace(guard, "").replace(push, push + guard))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("before it pushes", problems[0])
+
+    def test_a_mention_of_the_guard_in_a_comment_is_caught(self) -> None:
+        guard = 'git merge-base --is-ancestor "$named" "$GITHUB_SHA"'
+
+        problems = self.broken(guard, "# " + guard)
+
+        self.assertEqual(len(problems), 1)
+
     def test_a_build_without_its_revision_label_is_caught(self) -> None:
         problems = self.broken("--label org.opencontainers.image.revision=", "--label org.example.rev=")
 
