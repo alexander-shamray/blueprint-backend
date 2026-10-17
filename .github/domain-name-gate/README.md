@@ -25,6 +25,11 @@ paragraph before it, blank lines inside the fence included.
 `src/Services/`, so one added by `tools/new-service` is covered the day it
 lands and a removed one leaves the set.
 
+**It sees a service's name and nothing else.** A block that specifies a
+reference feature in other nouns (buyer, device, preference) passes, because
+those are ordinary words in the chapters; [ADR-133](../../docs/backend-architecture/adr/ADR-133-the-domain-name-gate-matches-service-names-only-and-a-feature-written-in-other-nouns-is-caught-by-review-not-the-gate-1095-adding-to-adr-096.md)
+records why the gate does not match them, and that review is the defence.
+
 **The scanned set is every `*.md` under `docs/backend-architecture/` that a
 closed list does not name**: `adr/` and Appendices A to E, spelled out in the
 gate. A file not on the list is scanned, so a new chapter, and an Appendix F,

@@ -139,6 +139,7 @@ decision looks wrong.
 | **ADR-130** | [The options validator is held once in Common.Infrastructure (#1075), superseding ADR-128's sentence that the Ordering validator is a copy of Shipping's](adr/ADR-130-the-options-validator-is-held-once-in-commoninfrastructure-1075-superseding-adr-128s-sentence-that-the-ordering-validator-is-a-copy-of-shippings.md) |
 | **ADR-131** | [The switched polling loop is held once in Common.Infrastructure.Switching.SwitchedPollingWorker (#1083), adding to ADR-113](adr/ADR-131-the-switched-polling-loop-is-held-once-in-commoninfrastructureswitchingswitchedpollingworker-1083-adding-to-adr-113.md) |
 | **ADR-132** | [The workflow-paths-cover-inputs check is held once in deploy/workflow_paths (#1082), used by four Python gates and smoke.sh](adr/ADR-132-the-workflow-paths-cover-inputs-check-is-held-once-in-deploy-workflow_paths-1082-used-by-four-python-gates-and-smokesh.md) |
+| **ADR-133** | [The domain-name gate matches service names only, and a feature written in other nouns is caught by review, not the gate (#1095), adding to ADR-096](adr/ADR-133-the-domain-name-gate-matches-service-names-only-and-a-feature-written-in-other-nouns-is-caught-by-review-not-the-gate-1095-adding-to-adr-096.md) |
 
 ---
 
