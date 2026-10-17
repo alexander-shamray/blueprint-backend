@@ -20,7 +20,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from canary import ROOT, PlanError, entries, load_plan, queries
+from analysis import queries
+from descriptor_model import ROOT, PlanError, entries, load_plan
 
 TIMEOUT_SECONDS = 30
 
