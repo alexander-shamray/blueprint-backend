@@ -15,10 +15,6 @@ from descriptor_model import PlanError, ROOT, entries
 RELEASE_NAME = re.compile(r"^[a-z0-9]([-a-z0-9]{0,51}[a-z0-9])?$")
 
 
-# --------------------------------------------------------------------------
-# The weight arithmetic
-# --------------------------------------------------------------------------
-
 def migration_prefix(workload: str, plan_document: dict, root: Path = ROOT) -> str | None:
     """The `<workload>-migrate-` a Job name would start with, where there is one.
 
