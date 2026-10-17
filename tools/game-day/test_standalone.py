@@ -48,7 +48,7 @@ class Stack:
             self.roles[(module.GRANT.account, module.GRANT.client)] = {module.GRANT.role}
         self.queues = {"ordering-commands_error": [("real-1", "elsewhere")],
                        "ordering-stock-events_skipped": [("real-2", "elsewhere")], BACKLOG_QUEUE: []}
-        self.password = False
+        self.account_open = False
         self.orders = 0
         self.serial = 0
         self.world = harness.World(self.compose(), self.alerts(), self.order_book(), None, lambda message: None,
@@ -57,7 +57,7 @@ class Stack:
     def snapshot(self):
         return (dict(self.services), frozenset(self.rows), self.renamed,
                 {key: frozenset(value) for key, value in self.roles.items()},
-                {name: tuple(messages) for name, messages in self.queues.items()}, self.password)
+                {name: tuple(messages) for name, messages in self.queues.items()}, self.account_open)
 
     def verbs(self):
         return [call[0] for call in self.calls]
@@ -149,8 +149,8 @@ class Stack:
         outer = self
 
         class Broker:
-            def open(self): outer.password = True
-            def close(self): outer.password = False
+            def open(self): outer.account_open = True
+            def close(self): outer.account_open = False
 
             def publish(self, exchange, message_type, message):
                 outer.serial += 1
