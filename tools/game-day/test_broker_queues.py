@@ -119,8 +119,10 @@ class BrokerCalls(unittest.TestCase):
         run, calls = self.tool_run({"actions": [{"message_id": "a", "action": "discarded"}], "not_found": []})
         self.assertEqual(["a"], self.broker(run=run).discard("q_error", ["a"]))
         argv = calls[0][0]
-        self.assertEqual(["discard", "q_error", "--message-id", "a", "--execute", "--record"], argv[2:8])
-        self.assertFalse(os.path.exists(argv[8]))
+        # As deep as `ours` looks, or an id past the tool's default peek is reported not found and left on the queue.
+        self.assertEqual(["discard", "q_error", "--message-id", "a", "--limit", str(harness.INSPECT_LIMIT),
+                          "--execute", "--record"], argv[2:10])
+        self.assertFalse(os.path.exists(argv[10]))
 
     def test_a_discard_of_an_id_already_gone_is_not_an_error_so_a_restore_runs_twice(self):
         run, _ = self.tool_run({"actions": [], "not_found": ["a"]}, returncode=1)

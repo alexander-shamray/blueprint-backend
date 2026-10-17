@@ -584,7 +584,8 @@ class Broker:
         os.close(handle)
         try:
             selection = [part for message_id in message_ids for part in ("--message-id", message_id)]
-            code, document = self.tool("discard", queue, *selection, "--execute", "--record", record)
+            code, document = self.tool("discard", queue, *selection, "--limit", str(INSPECT_LIMIT), "--execute",
+                                       "--record", record)
         finally:
             # The record is the tool's last copy of a message, and these are the run's own synthetic ones.
             os.remove(record)
