@@ -9,9 +9,12 @@ set at `main` is then `$REGISTRY/<image>:main` for every entry of the matrix,
 and a dispatch of `ci.yml` is what gives an image no push has touched its first
 `main` tag. Each application service in `deploy/compose/services/` names its
 image beside its `build:` as
-`${BLUEPRINT_REGISTRY:-commerce}/<image>:${BLUEPRINT_TAG:-local}`, `<image>`
-being the matrix's name for that Dockerfile. A local `up` still builds, and
-tags what it builds with that name. A consumer sets
+`${BLUEPRINT_REGISTRY:-blueprint.local}/<image>:${BLUEPRINT_TAG:-local}`,
+`<image>` being the matrix's name for that Dockerfile. The default registry
+is `blueprint.local`, which resolves nowhere, so a `pull` with no registry
+set fails rather than pulling a same-named image from a public namespace. A
+local `up` still builds, and tags what it builds with that name. A consumer
+sets
 `BLUEPRINT_REGISTRY=ghcr.io/alexander-shamray/blueprint-backend` and
 `BLUEPRINT_TAG=main`, then runs `docker compose pull` and `up --no-build`.
 `pipeline-gate images` fails a leg that has no push of the `main` tag, one

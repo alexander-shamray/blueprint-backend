@@ -4,7 +4,7 @@ services:
   # gated on `condition: service_completed_successfully` — every service owns
   # a database and none may migrate at startup (§4.1, ADR-007).
   privacy-migrator:
-    image: ${BLUEPRINT_REGISTRY:-commerce}/privacy-migrator:${BLUEPRINT_TAG:-local}
+    image: ${BLUEPRINT_REGISTRY:-blueprint.local}/privacy-migrator:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Privacy/Privacy.Migrator/Dockerfile
@@ -27,7 +27,7 @@ services:
     restart: "no"
 
   privacy-api:
-    image: ${BLUEPRINT_REGISTRY:-commerce}/privacy-api:${BLUEPRINT_TAG:-local}
+    image: ${BLUEPRINT_REGISTRY:-blueprint.local}/privacy-api:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Privacy/Privacy.Api/Dockerfile

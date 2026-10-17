@@ -503,6 +503,7 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
             (installer, sign, "cosign is not on the runner before its installer"),
             (push, provenance, "there is no digest to attest before the push"),
             (push, attestation, "there is no digest to attest before the push"),
+            (sign, moved, "the main tag names an image before its signature exists"),
             (provenance, moved, "the main tag names an image before its provenance exists"),
             (attestation, moved, "the main tag names an image before its SBOM attestation exists"),
         ):

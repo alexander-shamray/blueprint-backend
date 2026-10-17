@@ -536,6 +536,15 @@ class SupplyChainTests(Fixture):
         self.assertEqual(len(problems), 2)
         self.assertIn("the main tag names an image before its", problems[0])
 
+    def test_a_main_tag_moved_before_the_signature_is_caught(self) -> None:
+        move = "      - name: Move the main tag" + SIGNING_STEPS.split("      - name: Move the main tag")[1]
+        self.write(WORKFLOW.replace(move, "").replace(
+            "      - name: Sign ${{ matrix.image }}", move + "\n      - name: Sign ${{ matrix.image }}", 1))
+
+        problems = pipeline_gate.check_images(self.root)
+
+        self.assertTrue(any("before its signature exists" in problem for problem in problems), problems)
+
     def test_a_build_that_is_never_pushed_is_caught(self) -> None:
         problems = self.broken("docker push", "docker tag")
 

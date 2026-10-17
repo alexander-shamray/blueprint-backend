@@ -4,7 +4,7 @@ services:
   # gated on `condition: service_completed_successfully` — every service owns
   # a database and none may migrate at startup (§4.1, ADR-007).
   catalog-migrator:
-    image: ${BLUEPRINT_REGISTRY:-commerce}/catalog-migrator:${BLUEPRINT_TAG:-local}
+    image: ${BLUEPRINT_REGISTRY:-blueprint.local}/catalog-migrator:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Catalog/Catalog.Migrator/Dockerfile
@@ -27,7 +27,7 @@ services:
     restart: "no"
 
   catalog-api:
-    image: ${BLUEPRINT_REGISTRY:-commerce}/catalog-api:${BLUEPRINT_TAG:-local}
+    image: ${BLUEPRINT_REGISTRY:-blueprint.local}/catalog-api:${BLUEPRINT_TAG:-local}
     build:
       context: ../../..
       dockerfile: src/Services/Catalog/Catalog.Api/Dockerfile

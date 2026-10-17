@@ -207,7 +207,7 @@ the reference domain's case is in [E.8](appendix-e-reference-domain.md#e8-13-and
 
 ```yaml
 <service>-migrator:
-  image: ${BLUEPRINT_REGISTRY:-commerce}/<service>-migrator:${BLUEPRINT_TAG:-local}
+  image: ${BLUEPRINT_REGISTRY:-blueprint.local}/<service>-migrator:${BLUEPRINT_TAG:-local}
   build:
     context: ../../..
     dockerfile: src/Services/<Service>/<Service>.Migrator/Dockerfile
@@ -221,7 +221,7 @@ the reference domain's case is in [E.8](appendix-e-reference-domain.md#e8-13-and
   restart: "no"
 
 <service>-api:
-  image: ${BLUEPRINT_REGISTRY:-commerce}/<service>-api:${BLUEPRINT_TAG:-local}
+  image: ${BLUEPRINT_REGISTRY:-blueprint.local}/<service>-api:${BLUEPRINT_TAG:-local}
   build:
     context: ../../..
     dockerfile: src/Services/<Service>/<Service>.Api/Dockerfile
