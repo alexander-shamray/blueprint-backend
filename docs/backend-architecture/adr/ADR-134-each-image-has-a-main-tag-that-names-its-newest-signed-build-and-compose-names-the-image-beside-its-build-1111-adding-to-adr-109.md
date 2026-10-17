@@ -16,7 +16,8 @@ set fails rather than pulling a same-named image from a public namespace. A
 local `up` still builds, and tags what it builds with that name. A consumer
 sets
 `BLUEPRINT_REGISTRY=ghcr.io/alexander-shamray/blueprint-backend` and
-`BLUEPRINT_TAG=main`, then runs `docker compose pull` and `up --no-build`.
+`BLUEPRINT_TAG=main`, then runs `docker compose pull`, `docker compose build
+rabbitmq` and `up --no-build`.
 `pipeline-gate images` fails a leg that has no push of the `main` tag, one
 that does not run under the main-push condition, and one that runs before the
 provenance or the SBOM attestation. The `compose.yml` workflow keeps building
