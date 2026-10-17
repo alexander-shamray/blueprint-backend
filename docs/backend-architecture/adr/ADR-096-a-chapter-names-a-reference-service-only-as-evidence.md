@@ -79,6 +79,9 @@ the fork's to supersede by ADR.
 **Superseded in part by ADR-102**: the Consequences' last sentence.
 The tool lists what still names a removed service and edits no document.
 
+**Added to by ADR-133**: part 5's gate matches service names only, and a
+feature written in other nouns is caught by review.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
