@@ -1116,3 +1116,21 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           sbom-path: sbom-${{ matrix.image }}.spdx.json
           push-to-registry: true
+
+      # The moving tag (ADR-134): the signed digest above under a second name,
+      # moved only after the attestations, so one reference names the newest
+      # build of this image. A leg that built nothing leaves it where it was,
+      # still the newest; a dispatch gives an image no push has touched its first.
+      - name: Move the main tag of ${{ matrix.image }}
+        if: ${{ needs.changes.outputs[matrix.filter] == 'true' && contains(fromJSON('["push","workflow_dispatch"]'), github.event_name) && github.ref == 'refs/heads/main' }}
+        run: |
+          set -euo pipefail
+          docker tag "$REGISTRY/${{ matrix.image }}:${{ github.sha }}" "$REGISTRY/${{ matrix.image }}:main"
+          docker push "$REGISTRY/${{ matrix.image }}:main"
+          moved=$(docker inspect --format '{{json .RepoDigests}}' "$REGISTRY/${{ matrix.image }}:main")
+          if ! printf '%s' "$moved" | grep -Fq "@$DIGEST"; then
+            echo "::error::The main tag of ${{ matrix.image }} was pushed but does not name the signed digest $DIGEST."
+            exit 1
+          fi
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
