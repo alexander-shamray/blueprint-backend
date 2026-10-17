@@ -58,6 +58,8 @@ SELECT
     CurrentState,
     StartedAt,
     AgeMinutes   = DATEDIFF(minute, StartedAt, SYSDATETIMEOFFSET()),
+    StateEnteredAt,
+    InStateMinutes = DATEDIFF(minute, StateEnteredAt, SYSDATETIMEOFFSET()),
     CancelReason,
     PaymentVerdictOutstanding,
     StockReleaseSettled,
@@ -69,6 +71,21 @@ WHERE (CurrentState <> 'Confirmed'
         AND DATEDIFF(minute, StartedAt, SYSDATETIMEOFFSET()) > 5760)
 ORDER BY StartedAt;
 ```
+
+**Read `AgeMinutes` as the order's age and `InStateMinutes` as how long it
+has sat in `CurrentState`.** The rows are selected, and the alert is defined, on
+the first; the second is the one to compare with the timeouts in the table below.
+`StateEnteredAt` is `NULL` for an instance an older release wrote, so
+`InStateMinutes` is `NULL` there too and means unknown, never `AgeMinutes`:
+the instance may have sat in its state for most of its life. Through a rolling
+deploy a non-null value can also be older than the last transition, until that
+instance's next transition under the new release
+([§9.6](../backend-architecture/09-messaging.md), *Reading the saga's state*).
+The alert stays on `StartedAt`: keying it on `StateEnteredAt` needs a rule for
+`NULL` rows and a new index, because the current one is on `StartedAt`, and
+that is a change to
+[§13.6](../backend-architecture/13-observability.md)'s row, not to this
+runbook.
 
 **Both branches, because the alert has both.** An earlier version of this query
 excluded `Confirmed` outright — so when the four-day branch paged, the first
