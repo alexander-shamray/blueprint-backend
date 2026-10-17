@@ -12,9 +12,8 @@ buyer's order read, the product image upload, the saved delivery address, the
 device registration and the notification preferences), and the chapter states
 the rule and cites the section. Second, the review of a chapter PR asks the
 question the gate cannot, whether a new section specifies a feature the
-reference domain owns, and moves it to Appendix E if so. The gate's README
-states the limit beside its claim, so that a green gate is not read as more
-than it checks.
+reference domain owns, and moves it to Appendix E if so. ADR-096 carries a
+note pointing here, so that a green gate is not read as more than it checks.
 **Why.** The nouns are ordinary words in the chapters. Counted on `21d346b0`
 over the 16 scanned files, as blocks (a paragraph, a table row or a heading)
 that hold the word and lack the marker: `buyer` 14 of 22, `device` 20 of 25,
