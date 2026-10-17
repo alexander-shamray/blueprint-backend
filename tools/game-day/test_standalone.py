@@ -209,7 +209,8 @@ class Apart(unittest.TestCase):
         patches = [mock.patch.object(module, "SUSTAIN_SECONDS", 1e9 if dying else 0, create=True),
                    mock.patch.object(harness.time, "sleep", side_effect=Killed if dying else None)]
         with patches[0], patches[1]:
-            self.assertEqual([], game_day.cause_only(phase, stack.world, spawn=spawn, held=lambda runbook: None))
+            self.assertEqual([], game_day.cause_only(phase, stack.world, spawn=spawn, held=lambda runbook: None,
+                                                     landed=lambda runbook: []))
         self.assertNotEqual(before, stack.snapshot(), f"{name}: the cause changed nothing")
         if hasattr(module, "_top_up"):
             self.addCleanup(module._top_up.halt.set)
@@ -305,7 +306,7 @@ class CauseOnly(unittest.TestCase):
                 spawn = lambda runbook, alert: handed.append((runbook, alert)) or 99
                 with mock.patch.object(module, "SUSTAIN_SECONDS", 0, create=True):
                     self.assertEqual([], game_day.cause_only(module, stack.world, spawn=spawn,
-                                                             held=lambda runbook: None))
+                                                             held=lambda runbook: None, landed=lambda runbook: []))
                 if getattr(module, "SUSTAINED", False):
                     self.assertEqual([(module.RUNBOOK, module.ALERT)], handed)
                     self.assertEqual([], stack.calls, "a sustained cause waits for its child")
@@ -453,15 +454,26 @@ class Holding(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
             (state / "latency.pid").write_text("5150", encoding="utf-8")
-            with mock.patch.object(game_day, "_is_ours", return_value=True),                     mock.patch.object(game_day.os, "killpg", side_effect=ProcessLookupError):
+            with mock.patch.object(game_day, "_is_ours", return_value=True), \
+                    mock.patch.object(game_day.os, "killpg", side_effect=ProcessLookupError):
                 self.assertIn("5150", game_day.release("latency", state, run=mock.Mock()))
 
     def test_a_process_is_ours_by_its_command_line_and_not_by_being_python(self):
-        for shown, ours in (("python -u C:/x/game_day.py latency --hold --phase Latency", True),
+        for shown, ours in (("python -u C:/x/game_day.py latency.md --hold --phase Latency", True),
+                            ('python.exe -u "C:\\a b\\game_day.py" latency.md --hold --phase Latency', True),
                             ("python -m http.server", False), ("", False)):
             with self.subTest(shown):
                 run = mock.Mock(return_value=types.SimpleNamespace(stdout=shown))
-                self.assertEqual(ours, game_day._is_ours(5150, run))
+                self.assertEqual(ours, game_day._is_ours(5150, "latency.md", run))
+
+    def test_a_reused_pid_that_is_another_game_day_is_not_ours(self):
+        for shown in ("python C:/x/game_day.py latency.md",  # a person's own full run
+                      "python C:/x/game_day.py error-rate.md --hold --phase ErrorRateService",
+                      "python C:/x/game_day.py latency.md --cause",
+                      "python C:/x/game_day.py not-latency.md --hold"):
+            with self.subTest(shown):
+                run = mock.Mock(return_value=types.SimpleNamespace(stdout=shown))
+                self.assertFalse(game_day._is_ours(5150, "latency.md", run))
 
     def test_a_stale_pid_file_is_removed_and_nothing_is_killed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -500,6 +512,111 @@ class Holding(unittest.TestCase):
             game_day.hold(module, Stack().world, sleep=lambda seconds: None, clock=lambda: next(clock), limit=2500)
         finally:
             release.set()
+
+
+class Landing(unittest.TestCase):
+    """--cause returns before a sustained cause has landed, so the child says whether it did."""
+
+    def test_the_child_reports_before_it_waits_and_a_failed_cause_is_reported_too(self):
+        reports = []
+        module = types.SimpleNamespace(cause=mock.Mock())
+        self.assertEqual([], game_day.hold(module, Stack().world, sleep=lambda s: None, report=reports.append))
+        self.assertEqual([[]], reports)
+
+        reports.clear()
+        module = types.SimpleNamespace(cause=mock.Mock(side_effect=harness.GameDayError("docker pause exited 1")))
+        found = game_day.hold(module, Stack().world, report=reports.append)
+        self.assertEqual([found], reports)
+        self.assertIn("docker pause exited 1", found[0])
+
+    def test_a_cause_that_raises_anything_else_is_reported_and_still_raises_into_the_log(self):
+        reports = []
+        module = types.SimpleNamespace(cause=mock.Mock(side_effect=KeyError("boom")))
+        with self.assertRaises(KeyError):
+            game_day.hold(module, Stack().world, report=reports.append)
+        self.assertEqual(1, len(reports))
+        self.assertIn("KeyError", reports[0][0])
+
+    def test_a_cause_that_is_a_loop_is_called_landed_after_the_grace_and_is_told_once(self):
+        import threading
+        landed, reports = threading.Event(), []
+
+        def loop(world):
+            self.assertTrue(landed.wait(5), "the grace never ran out while the cause was still going")
+            raise harness.GameDayError("died after it had landed")
+
+        def report(findings):
+            reports.append(findings)
+            landed.set()
+
+        module = types.SimpleNamespace(cause=loop)
+        found = game_day.hold(module, Stack().world, report=report, grace=0.05)
+        self.assertEqual([[]], reports)
+        self.assertIn("died after it had landed", found[0])
+
+    def test_a_report_is_read_back_whole_and_a_missing_one_is_not_a_landing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            game_day.report_landing("latency.md", ["the cause failed"], state)
+            self.assertEqual(["the cause failed"], game_day.await_landing("latency.md", state, alive=lambda r, s: 1))
+            game_day.report_landing("latency.md", [], state)
+            self.assertEqual([], game_day.await_landing("latency.md", state, alive=lambda r, s: 1))
+            self.assertEqual([], list(state.glob("*.tmp")))
+
+    def test_it_polls_until_the_child_reports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            polls = []
+
+            def sleep(seconds):
+                polls.append(seconds)
+                if len(polls) == 2:
+                    game_day.report_landing("latency.md", [], state)
+
+            found = game_day.await_landing("latency.md", state, sleep=sleep, alive=lambda r, s: 1)
+            self.assertEqual([], found)
+            self.assertEqual(2, len(polls))
+
+    def test_a_child_that_ended_without_reporting_is_a_finding_that_names_the_log(self):
+        with tempfile.TemporaryDirectory() as directory:
+            found = game_day.await_landing("latency.md", Path(directory), alive=lambda r, s: None)
+            self.assertIn("ended without saying it landed", found[0])
+            self.assertIn("latency.log", found[0])
+
+    def test_a_child_that_reports_and_ends_between_the_two_reads_has_landed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+
+            def gone(runbook, where):
+                game_day.report_landing(runbook, [], where)
+                return None
+
+            self.assertEqual([], game_day.await_landing("latency.md", state, alive=gone))
+
+    def test_a_child_that_never_reports_is_a_finding_at_the_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            clock = iter(range(0, 100000, 40))
+            found = game_day.await_landing("latency.md", Path(directory), sleep=lambda s: None,
+                                           clock=lambda: next(clock), alive=lambda r, s: 1, limit=100)
+            self.assertIn("has not landed after 100s", found[0])
+
+    def test_cause_returns_what_the_child_reported(self):
+        stack = Stack()
+        found = game_day.cause_only(fresh("latency"), stack.world, spawn=lambda runbook, alert: 5,
+                                    held=lambda runbook: None, landed=lambda runbook: ["the cause failed half-way"])
+        self.assertEqual(["the cause failed half-way"], found)
+
+    def test_a_new_child_and_a_release_clear_the_last_one_s_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            game_day.report_landing("error-rate.md", [], state)
+            popen = lambda argv, **options: types.SimpleNamespace(pid=9)
+            game_day.spawn_hold("error-rate.md", "ErrorRateService", state, popen)
+            self.assertFalse((state / "error_rate.status").exists())
+            game_day.report_landing("error-rate.md", [], state)
+            nobody = mock.Mock(return_value=types.SimpleNamespace(stdout=""))
+            self.assertIsNone(game_day.release("error-rate.md", state, run=nobody))
+            self.assertFalse((state / "error_rate.status").exists())
 
 
 class Inspected(unittest.TestCase):

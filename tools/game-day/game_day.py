@@ -10,6 +10,7 @@ import contextlib
 import importlib
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -147,21 +148,32 @@ def phase_of(scenario: ModuleType, alert: str | None):
 STATE = harness.ROOT / "artifacts" / "game-day"
 HOLD_LIMIT_SECONDS = 2 * 60 * 60
 HOLD_POLL_SECONDS = 2.0
+# --cause waits this long for the child to say its cause landed. A cause that is itself a loop (queue-backlog's lag
+# half) never returns to say so, so the child calls it landed once it has run this long without failing.
+LANDING_SECONDS = 120.0
+LANDING_GRACE_SECONDS = 20.0
+LANDING_POLL_SECONDS = 0.5
 
 
 def _pid_file(runbook: str, state: Path) -> Path:
     return state / f"{coverage.module_name(runbook)}.pid"
 
 
-def _is_ours(pid: int, run=subprocess.run) -> bool:
-    """Whether `pid` is a live game_day.py, because a pid file outlives a reboot and the number may be anyone's."""
+def _status_file(runbook: str, state: Path) -> Path:
+    return state / f"{coverage.module_name(runbook)}.status"
+
+
+def _is_ours(pid: int, runbook: str, run=subprocess.run) -> bool:
+    """Whether `pid` is this runbook's --hold child, because a pid file outlives a reboot and the number may be
+    anyone's, a person's own game_day.py run included."""
     if os.name == "nt":
         argv = ["powershell", "-NoProfile", "-Command",
                 f"(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine"]
     else:
         argv = ["ps", "-p", str(pid), "-o", "command="]
     shown = run(argv, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False).stdout
-    return "game_day.py" in shown
+    # Windows quotes the script's path when it holds a space, so a quote may sit between the script and its arguments.
+    return re.search(rf"game_day\.py\"?\s+{re.escape(runbook)}\s+--hold\b", shown) is not None
 
 
 def holder(runbook: str, state: Path = STATE, run=subprocess.run) -> int | None:
@@ -170,12 +182,14 @@ def holder(runbook: str, state: Path = STATE, run=subprocess.run) -> int | None:
         pid = int(_pid_file(runbook, state).read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return None
-    return pid if _is_ours(pid, run) else None
+    return pid if _is_ours(pid, runbook, run) else None
 
 
 def spawn_hold(runbook: str, alert: str, state: Path = STATE, popen=subprocess.Popen) -> int:
     """Start `game_day.py RUNBOOK --hold` detached, its output in artifacts/game-day/<name>.log."""
     state.mkdir(parents=True, exist_ok=True)
+    # A report left by an earlier child would be read as this one's.
+    _status_file(runbook, state).unlink(missing_ok=True)
     options: dict = {}
     if os.name == "nt":
         options["creationflags"] = (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
@@ -193,6 +207,7 @@ def release(runbook: str, state: Path = STATE, run=subprocess.run) -> str | None
     """End the detached child, whole tree, and forget it. Returns what was done, or None when nothing was held."""
     pid = holder(runbook, state, run)
     _pid_file(runbook, state).unlink(missing_ok=True)
+    _status_file(runbook, state).unlink(missing_ok=True)
     if pid is None:
         return None
     if os.name == "nt":
@@ -204,7 +219,41 @@ def release(runbook: str, state: Path = STATE, run=subprocess.run) -> str | None
     return f"ended the process (pid {pid}) that was holding the cause"
 
 
-def cause_only(scenario: ModuleType, world: harness.World, *, spawn=spawn_hold, held=holder) -> list[str]:
+def report_landing(runbook: str, findings: list[str], state: Path = STATE) -> None:
+    """The child's word to --cause: its cause landed (no findings) or failed. Written whole, then moved into place."""
+    state.mkdir(parents=True, exist_ok=True)
+    target = _status_file(runbook, state)
+    scratch = target.with_suffix(".status.tmp")
+    scratch.write_text(json.dumps({"findings": findings}), encoding="utf-8")
+    scratch.replace(target)
+
+
+def await_landing(runbook: str, state: Path = STATE, *, sleep=time.sleep, clock=time.monotonic,
+                  alive=holder, limit: float = LANDING_SECONDS) -> list[str]:
+    """What the detached child reports of its cause: no findings once it landed, else why it did not."""
+    def reported() -> list[str] | None:
+        try:
+            return list(json.loads(_status_file(runbook, state).read_text(encoding="utf-8"))["findings"])
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+
+    log = state / f"{coverage.module_name(runbook)}.log"
+    started = clock()
+    while clock() - started < limit:
+        found = reported()
+        if found is not None:
+            return found
+        if alive(runbook, state) is None:
+            # It may have reported and ended between the two reads above.
+            found = reported()
+            return found if found is not None else [
+                f"{runbook}: the background cause ended without saying it landed; --restore, and see {log}"]
+        sleep(LANDING_POLL_SECONDS)
+    return [f"{runbook}: the background cause has not landed after {limit:.0f}s; --restore, and see {log}"]
+
+
+def cause_only(scenario: ModuleType, world: harness.World, *, spawn=spawn_hold, held=holder,
+               landed=await_landing) -> list[str]:
     """--cause: the quiet start and the cause, then out. The stack stays broken until --restore.
 
     A cause that has to stay alive to be one (SUSTAINED) is handed to a detached child and this returns at once; the
@@ -220,7 +269,7 @@ def cause_only(scenario: ModuleType, world: harness.World, *, spawn=spawn_hold, 
             return [f"{scenario.RUNBOOK}: a cause is already being held; --restore first"]
         pid = spawn(scenario.RUNBOOK, alert)
         world.say(f"{alert}: the cause is running in the background (pid {pid}); --restore ends it")
-        return []
+        return landed(scenario.RUNBOOK)
     world.caused_at = time.time()
     try:
         scenario.cause(world)
@@ -230,13 +279,38 @@ def cause_only(scenario: ModuleType, world: harness.World, *, spawn=spawn_hold, 
 
 
 def hold(scenario: ModuleType, world: harness.World, *, sleep=time.sleep, clock=time.monotonic,
-         limit: float = HOLD_LIMIT_SECONDS) -> list[str]:
-    """--hold, the detached child: the cause, then alive for as long as a thread of the cause's has work to do."""
+         limit: float = HOLD_LIMIT_SECONDS, report=lambda findings: None,
+         grace: float = LANDING_GRACE_SECONDS) -> list[str]:
+    """--hold, the detached child: the cause, then alive for as long as a thread of the cause's has work to do.
+
+    `report` tells the --cause that started it whether the cause landed, once: when `cause` returns or raises, or
+    when it has run `grace` seconds without either. A failure after that is in the log and not the report.
+    """
+    lock = threading.Lock()
+    told: list[bool] = []
+
+    def tell(findings: list[str]) -> None:
+        with lock:
+            if not told:
+                told.append(True)
+                report(findings)
+
+    timer = threading.Timer(grace, tell, args=([],))
+    timer.daemon = True
+    timer.start()
     world.caused_at = time.time()
     try:
         scenario.cause(world)
     except harness.GameDayError as error:
-        return [f"the cause failed half-way, and --restore puts back what it did: {error}"]
+        failed = [f"the cause failed half-way, and --restore puts back what it did: {error}"]
+        tell(failed)
+        return failed
+    except Exception as error:  # noqa: BLE001 - anything else is a failed cause too, and the traceback goes to the log
+        tell([f"the cause raised {type(error).__name__}: {error}; --restore puts back what it did"])
+        raise
+    finally:
+        timer.cancel()
+    tell([])
     started = clock()
     while clock() - started < limit and any(
             thread.is_alive() and thread.name.startswith("game-day-") for thread in threading.enumerate()):
@@ -378,7 +452,8 @@ def main(argv: list[str] | None = None) -> int:
 def _held(args: argparse.Namespace, world: harness.World) -> int:
     """The detached child's whole life: the cause, the wait, and its pid file removed on the way out."""
     try:
-        for finding in hold(phase_of(load(args.runbook), args.phase), world):
+        for finding in hold(phase_of(load(args.runbook), args.phase), world,
+                            report=lambda found: report_landing(args.runbook, found)):
             print(f"FINDING: {finding}", file=sys.stderr)
     finally:
         pid_file = _pid_file(args.runbook, STATE)
