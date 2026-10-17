@@ -11,6 +11,7 @@ import json
 import sys
 from pathlib import Path
 
+from analysis import PROMOTE, SIGNALS, _shout, analyse, plan, required_stable
 from descriptor_model import (
     DEPLOYABLES, PlanError, SHARED_KEY, _ABSENT, _value_at, empty_until, entries, load_plan,
     migrated_by, migrates, shared_values, values_agree, values_named, workload_images,
@@ -19,7 +20,6 @@ from release_inputs import (
     image_revision, installed_tag, migration_prefix, validate_digest, validate_tag, verified_digest,
 )
 from repo_gate import check
-from analysis import PROMOTE, SIGNALS, _shout, analyse, plan, required_stable
 from workflow_reads import smoke_cases
 
 
@@ -365,7 +365,6 @@ def main(argv: list[str]) -> int:
     verdict = analyse(readings, entries(document["thresholds"]), declared)
     print(json.dumps(verdict, indent=2))
     return 0 if verdict["decision"] == PROMOTE else 2
-
 
 
 if __name__ == "__main__":
