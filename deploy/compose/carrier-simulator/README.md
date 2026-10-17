@@ -28,6 +28,10 @@ The simulator holds no state, so the booking's reference is literal per
 script — `crr_SIM-TRANSIT`, `crr_SIM-LATE`, and `crr_SIM-OK` for every
 unscripted code — and the events and cancel mappings match on that
 reference's path. The feed's timestamps are fixed for the same reason.
+`SIM-STRANGE` alone is not literal: its reference is `crr_SIM-STRANGE-` and
+the booking's `orderId`, so a client reads the polls of one order's feed at
+that order's own path. The feed also answers the bare `crr_SIM-STRANGE`, for a
+shipment booked before the reference carried the id.
 
 ## Watching each one
 
@@ -55,6 +59,6 @@ A booking's body is `shipmentId`, `orderId` and the address. The
 `orderId` is the order's id, so the `POST /v1/shipments` entry in
 `/__admin/requests` for an order is the one whose body carries it, rather than
 the one nearest in time to its postal code, which two orders to one code at
-once cannot tell apart. The mappings match on `postalCode` alone and ignore
-the field; `HttpCarrierGatewayTests` pins the body's whole shape, so a field
+once cannot tell apart. The mappings match on `postalCode` alone, and only
+`SIM-STRANGE`'s answer reads the field; `HttpCarrierGatewayTests` pins the body's whole shape, so a field
 added to it fails there first.

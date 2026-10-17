@@ -10,6 +10,7 @@
   "Response": {
     "StatusCode": 201,
     "Headers": { "Content-Type": "application/json" },
-    "BodyAsJson": { "status": "booked", "reference": "crr_SIM-STRANGE", "trackingNumber": "TRK-SIM-STRANGE" }
+    "Body": "{\"status\":\"booked\",\"reference\":\"crr_SIM-STRANGE-{{JsonPath.SelectToken request.bodyAsJson \"$.orderId\"}}\",\"trackingNumber\":\"TRK-SIM-STRANGE\"}",
+    "UseTransformer": true
   }
 }
