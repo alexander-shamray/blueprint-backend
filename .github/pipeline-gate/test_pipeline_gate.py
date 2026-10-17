@@ -71,6 +71,7 @@ jobs:
           --file ${{ matrix.dockerfile }}
           --tag ${{ matrix.image }}:${{ github.sha }}
           --tag $REGISTRY/${{ matrix.image }}:${{ github.sha }}
+          --label org.opencontainers.image.revision=${{ github.sha }}
           .
 
 """
@@ -137,6 +138,8 @@ SIGNING_STEPS = f"""\
       - name: Move the main tag of ${{{{ matrix.image }}}}
         if: {MAIN_PUSH}
         run: |
+          docker buildx imagetools inspect "$REGISTRY/${{{{ matrix.image }}}}:main"
+          git merge-base --is-ancestor "$named" "$GITHUB_SHA"
           docker tag "$REGISTRY/${{{{ matrix.image }}}}:${{{{ github.sha }}}}" "$REGISTRY/${{{{ matrix.image }}}}:main"
           docker push "$REGISTRY/${{{{ matrix.image }}}}:main"
 """
@@ -482,7 +485,7 @@ class SbomTests(Fixture):
         steps = pipeline_gate.read_job_steps(WORKFLOW_HEAD + SBOM_STEP, "images")
 
         self.assertEqual(len(steps), 3)
-        self.assertIn("--tag $REGISTRY/${{ matrix.image }}:${{ github.sha }} .", steps[1]["run"])
+        self.assertIn("--label org.opencontainers.image.revision=${{ github.sha }} .", steps[1]["run"])
         self.assertEqual(steps[2]["image"], "${{ matrix.image }}:${{ github.sha }}")
         self.assertNotIn("comment", " ".join(steps[1].values()))
 
@@ -516,6 +519,19 @@ class SupplyChainTests(Fixture):
 
         self.assertEqual(len(problems), 1)
         self.assertIn("no push of the main tag", problems[0])
+
+    def test_a_main_tag_that_may_move_back_is_caught(self) -> None:
+        """A late build must leave a newer tag alone, which takes the ancestry question."""
+        problems = self.broken("git merge-base --is-ancestor", "git log")
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("is an ancestor of this build's", problems[0])
+
+    def test_a_build_without_its_revision_label_is_caught(self) -> None:
+        problems = self.broken("--label org.opencontainers.image.revision=", "--label org.example.rev=")
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("labels no `org.opencontainers.image.revision=`", problems[0])
 
     def test_a_main_tag_moved_off_main_is_caught(self) -> None:
         move = SIGNING_STEPS.split("      - name: Move the main tag")[1]

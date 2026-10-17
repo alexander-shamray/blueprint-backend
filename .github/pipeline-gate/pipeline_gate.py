@@ -346,7 +346,7 @@ def check_sboms(workflow_text: str) -> list[str]:
     Dockerfiles, so one read of the reference a build tags covers every leg.
     """
     steps = read_job_steps(workflow_text, "images")
-    builds = [(index, step) for index, step in enumerate(steps) if "docker build" in step.get("run", "")]
+    builds = [(index, step) for index, step in enumerate(steps) if DOCKER_BUILD.search(step.get("run", ""))]
     if not builds:
         return [
             "found no `docker build` step in the images job: the SBOM check "
@@ -386,6 +386,10 @@ COSIGN_ACTION = "sigstore/cosign-installer@"
 PROVENANCE_ACTION = "actions/attest-build-provenance@"
 SBOM_ATTESTATION_ACTION = "actions/attest-sbom@"
 MOVING_TAG_PUSH = r'\bdocker push\s+"\$REGISTRY/[^"]*:main"'
+# `docker buildx imagetools inspect` reads a tag and builds nothing.
+DOCKER_BUILD = re.compile(r"\bdocker build\b")
+MOVING_TAG_GUARD = r"\bgit merge-base --is-ancestor\b"
+REVISION_LABEL = "org.opencontainers.image.revision="
 CI_IDENTITY = "/.github/workflows/ci.yml@refs/heads/main"
 HELM_COMMAND = re.compile(r"(?:^|[\s;&|(`])helm\s+[a-z]")
 HELM_UPGRADE = re.compile(r"(?:^|[\s;&|(`])helm\s+upgrade\b")
@@ -459,7 +463,7 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
     Coverage rather than findings: a job that stops signing is red.
     """
     steps = read_job_steps(workflow_text, "images")
-    builds = [(index, step) for index, step in enumerate(steps) if "docker build" in step.get("run", "")]
+    builds = [(index, step) for index, step in enumerate(steps) if DOCKER_BUILD.search(step.get("run", ""))]
     if not builds:
         return [
             "found no `docker build` step in the images job: the supply-chain check "
@@ -509,6 +513,18 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
         ):
             if earlier > later:
                 problems.append(f"{subject}: a step runs before the one it needs, because {why}")
+
+        if REVISION_LABEL not in build["run"]:
+            problems.append(
+                f"{subject} labels no `{REVISION_LABEL}`: the main tag's move reads the commit "
+                "the tag names from it, so without it nothing says which build is older (#1112)"
+            )
+        if not re.search(MOVING_TAG_GUARD, steps[moved]["run"]):
+            problems.append(
+                f"{subject}: the step that moves the main tag does not ask whether the commit "
+                "the tag names is an ancestor of this build's, so a build that finishes late "
+                "moves the tag back (#1112, ADR-134)"
+            )
 
         pushed = _reference(steps[push]["run"], "docker push")
         tagged = f"--tag {pushed}" in build["run"] or f'--tag "{pushed}"' in build["run"]
