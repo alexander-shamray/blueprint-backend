@@ -236,6 +236,26 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     }
 
     [Fact]
+    public async Task A_strange_booking_names_its_order_in_the_reference_and_so_in_the_feeds_path()
+    {
+        // A client scoping its reads to one order's polls needs a path no other order shares.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        OrderId first = new(Guid.CreateVersion7());
+        OrderId second = new(Guid.CreateVersion7());
+
+        BookingResult.Booked a = (await Carrier().BookAsync(Booking("SIM-STRANGE", order: first), ct))
+            .ShouldBeOfType<BookingResult.Booked>();
+        BookingResult.Booked b = (await Carrier().BookAsync(Booking("SIM-STRANGE", order: second), ct))
+            .ShouldBeOfType<BookingResult.Booked>();
+
+        a.Reference.ShouldBe($"crr_SIM-STRANGE-{first.Value}");
+        b.Reference.ShouldBe($"crr_SIM-STRANGE-{second.Value}");
+        await Should.ThrowAsync<CarrierUnavailableException>(() => Carrier().GetEventsAsync(a.Reference, ct));
+        Calls($"/v1/shipments/{a.Reference}/events").ShouldBe(1);
+        Calls($"/v1/shipments/{b.Reference}/events").ShouldBe(0);
+    }
+
+    [Fact]
     public async Task A_carrier_that_has_not_heard_of_the_booking_answers_an_empty_page_and_is_counted()
     {
         _server

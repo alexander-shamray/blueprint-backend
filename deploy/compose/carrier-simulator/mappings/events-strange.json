@@ -3,7 +3,7 @@
   "Title": "SIM-STRANGE: a status nobody agreed, a timestamp from the future, a link on a foreign host",
   "Priority": 1,
   "Request": {
-    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/shipments/crr_SIM-STRANGE/events" }] },
+    "Path": { "Matchers": [{ "Name": "RegexMatcher", "Pattern": "^/v1/shipments/crr_SIM-STRANGE(-[^/]+)?/events$" }] },
     "Methods": ["GET"]
   },
   "Response": {
