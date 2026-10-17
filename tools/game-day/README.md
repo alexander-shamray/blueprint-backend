@@ -171,7 +171,7 @@ sets, and leave the queue's others.
 
 | `impact` | `confirmation` | Meaning | Phases |
 |---|---|---|---|
-| `none` | none | Plants or sends synthetic rows and messages, removes them by id | `error-queue`, `skipped-queue`, `outbox-abandoned`, `unscanned-shipment`, `unattributed-order`, `erasure-overdue` |
+| `none` | none | Plants or sends synthetic rows and messages, removes them by id or by source | `error-queue`, `skipped-queue`, `outbox-abandoned`, `unscanned-shipment`, `unattributed-order`, `erasure-overdue` |
 | `outage` | confirm | Stops, pauses or cuts a grant from something the rest of the stack uses | `outbox-broker`, `outbox-growth` (the broker); `projection-lag` (a table renamed); `address-refused` (a worker and a grant); `error-rate`, `latency` (`ordering-api`, `sql`); `queue-backlog`'s lag half (`web-bff`) |
 | `data` | typed | Deletes or purges what the game day did not put there | `contact-refused` (every stored contact); `queue-backlog`'s backlog half (restore purges `bff-order-events`) |
 

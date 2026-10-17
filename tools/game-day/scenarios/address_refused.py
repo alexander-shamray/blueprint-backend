@@ -48,9 +48,12 @@ def first_step(world: harness.World) -> tuple[bool, str]:
 def restore(world: harness.World) -> None:
     # A grant still held means the cause never took it, and a worker restarted for nothing is a disruption.
     lost = not GRANT.held(world.realm)
-    GRANT.give_back(world.realm)
-    if lost:
-        world.compose.restart(WORKER)
+    try:
+        GRANT.give_back(world.realm)
+    finally:
+        # Even when the read-back raises, because a retry would find the grant held and skip it.
+        if lost:
+            world.compose.restart(WORKER)
 
 
 def settled(world: harness.World) -> tuple[bool, str]:

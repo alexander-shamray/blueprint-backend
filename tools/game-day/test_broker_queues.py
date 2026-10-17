@@ -42,6 +42,9 @@ class Compose:
     def running(self, service):
         return self.is_running
 
+    def unpause(self, service):
+        self.calls.append(("unpause", service))
+
 
 class BrokerCalls(unittest.TestCase):
     def broker(self, compose=None, send=None, run=None):
@@ -345,7 +348,8 @@ class Backlog(unittest.TestCase):
         broker.calls = calls
         compose.calls = calls
         self.backlog.restore(world(broker, Alerts(), compose))
-        self.assertEqual([("purge", queue_backlog.QUEUE), ("start", queue_backlog.CONSUMER), "close"], calls)
+        self.assertEqual([("unpause", queue_backlog.CONSUMER), ("purge", queue_backlog.QUEUE),
+                         ("start", queue_backlog.CONSUMER), "close"], calls)
 
     def test_the_depth_query_is_the_runbooks(self):
         runbook = (harness.ROOT / "docs" / "runbooks" / "queue-backlog.md").read_text(encoding="utf-8")

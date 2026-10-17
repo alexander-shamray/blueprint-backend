@@ -162,7 +162,9 @@ def _backlog_restore(world: harness.World) -> None:
         _top_up.thread.join(60)
     try:
         # Only a stopped consumer says the cause ran: the purge takes every message, and a stack nobody broke has real
-        # ones. Before the consumer starts, so web-bff never reads a synthetic message and parks it in _skipped.
+        # ones. A paused one is the lag half's, so it is unpaused first or it reads as stopped. Before the consumer
+        # starts, so web-bff never reads a synthetic message and parks it in _skipped.
+        world.compose.unpause(CONSUMER)
         if not world.compose.running(CONSUMER):
             world.broker.purge(QUEUE)
             world.compose.start(CONSUMER)
