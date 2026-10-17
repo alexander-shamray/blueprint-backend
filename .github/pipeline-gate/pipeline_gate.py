@@ -519,10 +519,15 @@ def check_supply_chain(workflow_text: str, deploy_text: str) -> list[str]:
                 f"{subject} labels no `{REVISION_LABEL}`: the main tag's move reads the commit "
                 "the tag names from it, so without it nothing says which build is older (#1112)"
             )
-        if not re.search(MOVING_TAG_GUARD, steps[moved]["run"]):
+        commands = chr(10).join(
+            line for line in steps[moved]["run"].splitlines() if not line.lstrip().startswith("#")
+        )
+        guard = re.search(MOVING_TAG_GUARD, commands)
+        move = re.search(MOVING_TAG_PUSH, commands)
+        if not guard or (move and guard.start() > move.start()):
             problems.append(
-                f"{subject}: the step that moves the main tag does not ask whether the commit "
-                "the tag names is an ancestor of this build's, so a build that finishes late "
+                f"{subject}: the step that moves the main tag does not ask, before it pushes, "
+                "whether the commit the tag names is an ancestor of this build's, so a build that finishes late "
                 "moves the tag back (#1112, ADR-134)"
             )
 
