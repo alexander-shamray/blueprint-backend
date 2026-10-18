@@ -324,18 +324,21 @@ exit 1 otherwise:
 ```bash
 token=$(curl -fsS http://localhost:8080/realms/commerce/protocol/openid-connect/token \
     -d grant_type=client_credentials -d client_id=slo-run --data-urlencode client_secret="$CLIENT_SECRET" \
-    | py -3.12 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')
+    | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
 echo "$token" | py -3.12 -c '
 import base64, json, sys, uuid
-part = sys.stdin.read().strip().split(".")[1]
-claims = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
 try:
-    guid = bool(uuid.UUID(claims["sub"]))
+    part = sys.stdin.read().strip().split(".")[1]
+    claims = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+except (IndexError, ValueError):
+    claims = {}
+perm, sub, iss = claims.get("permission", []), str(claims.get("sub", "")), claims.get("iss", "")
+try:
+    guid = bool(uuid.UUID(sub))
 except ValueError:
     guid = False
-ok = {"orders:write", "inventory:admin"} <= set(claims.get("permission", [])) and guid \
-    and claims["iss"] == "http://localhost:8080/realms/commerce"
-print("permission:", ",".join(claims.get("permission", [])), "| sub:", claims["sub"], "| iss:", claims["iss"])
+ok = {"orders:write", "inventory:admin"} <= set(perm) and guid and iss == "http://localhost:8080/realms/commerce"
+print("permission:", ",".join(perm), "| sub:", sub, "| iss:", iss)
 print("token check:", "pass" if ok else "fail")
 sys.exit(0 if ok else 1)'
 ```
