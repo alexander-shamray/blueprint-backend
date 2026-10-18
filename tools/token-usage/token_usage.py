@@ -76,7 +76,7 @@ class Addressed:
 @dataclass(frozen=True)
 class Grepped:
     """What a grep after a read printed of its span: the call's result, placed by its line numbers when the grep
-    numbered them, else by the lines of the span whose text it printed."""
+    numbered them, else by the lines of the span whose text it printed, in order."""
     within: Span
     numbered: bool
     text: str | None = None
@@ -519,7 +519,14 @@ def span_lines(span: Span, lines: list[str]) -> set[int]:
         if span.numbered:
             numbers = {int(match[1]) for line in printed if (match := NUMBERED_LINE.match(line))}
             return {within[n - 1] for n in numbers if 0 < n <= len(within)}
-        return {n for n in within if lines[n - 1] in set(printed)}
+        # grep prints in the file's order, so each printed line is the next line of the span with its text.
+        placed, at = set(), 0
+        for text in printed:
+            found = next((i for i in range(at, len(within)) if lines[within[i] - 1] == text), None)
+            if found is not None:
+                placed.add(within[found])
+                at = found + 1
+        return placed
     if span is None:
         return set()
     (first, last), size = span, len(lines)
