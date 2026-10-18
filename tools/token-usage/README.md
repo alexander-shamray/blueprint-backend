@@ -76,7 +76,7 @@ file's text as sed would; a later stage of the pipe that counts lines,
 `head`, `tail`, `sed -n` or `Select-Object`, narrows them, `cat` or
 another printer passes them on, a `grep` covers the lines its result
 printed, by the numbers `-n` gives or else by their text in order,
-unless the call opened anything else, whose output that result mixes in,
+unless the call ran another command that prints, as `cd` does not,
 and a stage the report cannot place, such as `sort`, covers none; and a
 call whose result was an error covers nothing, unless the error is a
 shell's non-zero exit, after which what the command printed still counts.

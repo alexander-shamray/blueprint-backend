@@ -47,6 +47,8 @@ SED_EXTENDED = re.compile(r"-[A-Za-z]*[Er][A-Za-z]*|--regexp-extended")
 SED_ADDRESS = r"\d+|\$|/(?:[^/\\]|\\.)*/"
 SED_LINES = re.compile(rf"({SED_ADDRESS})(?:,({SED_ADDRESS}))?p")
 GREPS = {"grep", "egrep", "fgrep"}
+# Commands that print nothing, so a call's result is still the grep's alone beside them.
+SILENT = {"cd", "export", "set"}
 GREP_NUMBERED = re.compile(r"-[A-Za-z]*n[A-Za-z0-9]*|--line-number")
 NUMBERED_LINE = re.compile(r"(\d+)[:-]")
 HEAD_TAIL_COUNT = re.compile(r"-(\d+)|-n(\+?\d+)|--lines=(\+?\d+)")
@@ -367,7 +369,8 @@ def markdown_read(tool: str, given) -> list[tuple[str, Span]]:
     if tool not in ("Bash", "PowerShell") or not isinstance(command, str):
         return []
     found: list[tuple[str, Span]] = []
-    for line in unquoted_split(SHELL_COMMAND, command):
+    lines = unquoted_split(SHELL_COMMAND, command)
+    for line in lines:
         piped: list[int] = []
         for stage in unquoted_split(SHELL_PIPE, line):
             words = [w.strip("\"'") for w in SHELL_WORD.findall(stage)]
@@ -386,6 +389,10 @@ def markdown_read(tool: str, given) -> list[tuple[str, Span]]:
             else:
                 found = [(path, narrowed(span, stage_span(words))) if i in piped else (path, span)
                          for i, (path, span) in enumerate(found)]
+    # One result holds every command's output, so a grep beside another that prints cannot be told apart in it.
+    printing = [line for line in lines if (first := SHELL_WORD.findall(line)) and first[0].lower() not in SILENT]
+    if len(printing) > 1:
+        found = [(path, None if isinstance(span, Grepped) else span) for path, span in found]
     return found
 
 

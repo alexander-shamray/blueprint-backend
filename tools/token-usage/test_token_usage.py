@@ -389,19 +389,25 @@ class DocsTests(unittest.TestCase):
                           ("b.md", Addressed(4, "^(x|y)$", extended=True)), ("c.md", (-1, None))])
         self.assertEqual(read("Bash", {"command": "sed -n '/a/,$p' a.md; sed -n '/a/Ip' b.md"}),
                          [("a.md", Addressed("a", None)), ("b.md", None)])
-        self.assertEqual(read("Bash", {"command": "sed -n '/x;y/p' a.md | grep -n 'p|q'; cat \"b|c.md\""}),
-                         [("a.md", Grepped(Addressed("x;y", None, single=True), True)), ("b|c.md", (1, None))])
+        self.assertEqual(read("Bash", {"command": "sed -n '/x;y/p' a.md | grep -n 'p|q'"}),
+                         [("a.md", Grepped(Addressed("x;y", None, single=True), True))])
+        self.assertEqual(read("Bash", {"command": "cat \"b|c.md\""}), [("b|c.md", (1, None))])
         self.assertEqual(read("PowerShell", {"command": "Get-Content a.md -TotalCount 9; gc b.md -Tail 3; gc c.md"}),
                          [("a.md", (1, 9)), ("b.md", (-3, None)), ("c.md", (1, None))])
 
     def test_a_pipe_narrows_what_its_first_stage_read(self):
         read = token_usage.markdown_read
-        self.assertEqual(read("Bash", {"command": "cat a.md | head -40; cat b.md | grep -n x; cat c.md | tail -5"}),
-                         [("a.md", (1, 40)), ("b.md", Grepped((1, None), True)), ("c.md", (-5, None))])
-        self.assertEqual(read("Bash", {"command": "sed -n 5,9p a.md | grep -A2 x | head -3; cat b.md | sort"}),
-                         [("a.md", Grepped((5, 9), False)), ("b.md", None)])
+        self.assertEqual(read("Bash", {"command": "cat a.md | head -40; cat b.md | sort; cat c.md | tail -5"}),
+                         [("a.md", (1, 40)), ("b.md", None), ("c.md", (-5, None))])
+        self.assertEqual(read("Bash", {"command": "cat b.md | grep -n x"}), [("b.md", Grepped((1, None), True))])
+        self.assertEqual(read("Bash", {"command": "sed -n 5,9p a.md | grep -A2 x | head -3"}),
+                         [("a.md", Grepped((5, 9), False))])
         self.assertEqual(read("Bash", {"command": "sed -n '/^## 2/,/^## 3/p' a.md | grep --line-number x"}),
                          [("a.md", Grepped(Addressed("^## 2", "^## 3"), True))])
+        self.assertEqual(read("Bash", {"command": "cat a.md | grep -n x; grep -n y b.md"}), [("a.md", None)])
+        self.assertEqual(read("Bash", {"command": "cat a.md | grep -n x && cat src/X.cs"}), [("a.md", None)])
+        self.assertEqual(read("Bash", {"command": "cd docs && set -e && cat a.md | grep -n x"}),
+                         [("a.md", Grepped((1, None), True))])
         piped = "sed -n '/a/,/b/p' a.md | head -3; head -40 b.md | sed -n '/x/p'; tail -50 c.md | head -10"
         self.assertEqual(read("Bash", {"command": piped}),
                          [("a.md", Piped(Addressed("a", "b"), (1, 3))),
@@ -453,7 +459,7 @@ class DocsTests(unittest.TestCase):
             files.write("s.jsonl", [ship(), call("Bash", call_id="c1", command="cat docs/a.md | grep -n x"),
                                     result("c1", "4:x"),
                                     call("Bash", call_id="c2",
-                                         command="cat docs/a.md | grep x; cat docs/b.md | grep x"),
+                                         command="cat docs/a.md docs/b.md | grep x"),
                                     result("c2", "x"), call("Bash", call_id="c3", command="cat docs/c.md"),
                                     result("c3", "whole"),
                                     call("Bash", call_id="c4", command="cat docs/d.md | grep -n x; cat docs/e.md"),
@@ -464,7 +470,7 @@ class DocsTests(unittest.TestCase):
                                                ("/r/repo/docs/a.md", "s", None), ("/r/repo/docs/b.md", "s", None),
                                                ("/r/repo/docs/c.md", "s", (1, None)),
                                                ("/r/repo/docs/d.md", "s", None), ("/r/repo/docs/e.md", "s", (1, None))])
-        self.assertEqual(report.printed, {"c1": "4:x", "c2": "x", "c4": "1:x\n1:e"})
+        self.assertEqual(report.printed, {"c1": "4:x", "c2": "x"})
 
     def test_a_read_is_placed_in_the_checkout_its_worktrees_and_forks_and_nowhere_else(self):
         inside = token_usage.repo_relative
