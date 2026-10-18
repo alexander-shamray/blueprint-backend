@@ -339,7 +339,8 @@ first cut dropped them, a rule kept being worth more than a byte saved.
 `test_command_runbooks.py` holds each runbook
 under a ceilings table and each citation to a heading that exists. The
 exit's figure counts the five files a run holds, three of which, `commit`,
-`pr` and `CLAUDE.md`, were never in this step's table; and what `ship`
+`pr` and `CLAUDE.md`, were never in this step's table, and the suite's
+`RESIDENT` table holds those three the same way; and what `ship`
 carries past its landed size is rules later PRs added, `/ship`'s `--sleep`,
 the CI wait handed to an agent and the audit dispatched rather than invoked
 among them, not its argument regrown, a rule kept being worth more than a
