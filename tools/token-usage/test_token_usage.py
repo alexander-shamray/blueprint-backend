@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 import token_usage
-from token_usage import MAIN, NO_COMMAND, SUBAGENT, Addressed, Grepped, Report
+from token_usage import MAIN, NO_COMMAND, SUBAGENT, Addressed, Grepped, Piped, Report
 
 RUNNER = importlib.util.spec_from_file_location(
     "quality_sets", Path(__file__).resolve().parents[1] / "quality-sets" / "quality_sets.py")
@@ -402,6 +402,11 @@ class DocsTests(unittest.TestCase):
                          [("a.md", Grepped((5, 9), False)), ("b.md", None)])
         self.assertEqual(read("Bash", {"command": "sed -n '/^## 2/,/^## 3/p' a.md | grep --line-number x"}),
                          [("a.md", Grepped(Addressed("^## 2", "^## 3"), True))])
+        piped = "sed -n '/a/,/b/p' a.md | head -3; head -40 b.md | sed -n '/x/p'; tail -50 c.md | head -10"
+        self.assertEqual(read("Bash", {"command": piped}),
+                         [("a.md", Piped(Addressed("a", "b"), (1, 3))),
+                          ("b.md", Piped((1, 40), Addressed("x", None, single=True))),
+                          ("c.md", Piped((-50, None), (1, 10)))])
         piped = "sed -n 100,300p a.md | head -50; sed -n 100,300p b.md | sed -n 5,9p"
         self.assertEqual(read("Bash", {"command": piped}),
                          [("a.md", (100, 149)), ("b.md", (104, 108))])
@@ -424,6 +429,9 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(cover(Addressed("^(x)$", None, single=True), lines), {9})
         self.assertEqual(cover(Addressed("[", None, single=True), lines), set())
         self.assertEqual(cover(Addressed("^zzz", "^## "), lines), set())
+        self.assertEqual(cover(Piped(Addressed("^## 9.8", "^## 9.9"), (1, 3)), lines), {2, 3, 4})
+        self.assertEqual(cover(Piped((1, 4), Addressed("^## ", None, single=True)), lines), {2})
+        self.assertEqual(cover(Piped((-3, None), (1, 2)), lines), {7, 8})
 
     def test_a_grep_after_a_read_covers_the_lines_its_result_printed(self):
         lines = ["a", "x1", "b", "x2", "c", "x1"]
