@@ -454,8 +454,9 @@ section's, and not met there.
 `/ship`, 7,914 of them, about 2.5M tokens; `Read` under no command, 733,
 about 0.8M; `Read` under `/ship`, 627, about 0.6M.
 
-**The forty costliest subagents**, from `--spawns 40`, are audit passes,
-review rounds and `Explore` searches of 0.4M to 1.5M each. No plan writer
+**The forty costliest subagents**, from `--spawns 40`, cost 0.4M to 1.5M
+each; all but two are audit passes, review rounds and `Explore` searches,
+the two a cold-start check and a flake's root cause. No plan writer
 and no implementer is among them, where on 2026-10-10 those two were 94.7M
 of the forty.
 
