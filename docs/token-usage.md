@@ -428,9 +428,10 @@ that set the step.
   dispatches the audit's passes and never invokes the command. Found by the
   task each `general-purpose` agent was given, 162 audit passes ran from 63
   sessions, for 40.7M over 2,750 calls; none was an implementer. The
-  passes of the two audit sessions of 2026-10-09 to 2026-10-10 came to
-  17.4M in two days, and those sessions to 40.6M in all, their own main
-  contexts included, which the dispatch no longer has. The main
+  agents the two audit sessions of 2026-10-09 to 2026-10-10 spawned,
+  implementers among them, came to 17.4M in two days, and those sessions
+  to 40.6M in all, their own main contexts included, which the dispatch no
+  longer has. The main
   sessions that dispatched them averaged 226k a call, 45 of their 94 rows
   under 150k, but that is the whole `/ship` context, not the audit's, so
   the exit's subject did not occur and is not read from this figure.
