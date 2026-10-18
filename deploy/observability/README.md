@@ -345,21 +345,26 @@ sys.exit(0 if ok else 1)'
 
 **4. Choose the product and the currency.** The scenario orders one product in
 one currency, and without a matching row in `ordering.ProductPrices` every
-order is a 422 (§6.6). The product is the first seeded one in
-[`deploy/compose/README.md`](../compose/README.md#seeded-products), whose table
-owns the id; its price ends in no pence the payment simulator scripts as a
-decline or a timeout, which would cancel the order. The currency is read from
-Ordering's own row rather than assumed, and `none` means Ordering has not
-received the product yet. The password is read inside the container, as its
-healthcheck reads it, so the command carries none:
+order is a 422 (§6.6). The read names no id. It takes the first seeded
+product, from the `5eed0000-` ids
+[`deploy/compose/README.md`](../compose/README.md#seeded-products)'s table
+owns, that Ordering holds as available. Its price must end in none of the
+pence the payment simulator scripts as a decline or a timeout
+([`psp-simulator/README.md`](../compose/psp-simulator/README.md)), because
+either would cancel the order. The currency comes from the same row, so a
+change to the seed moves both. `none` means Ordering has received no usable
+product yet. The password is read inside the container, as its healthcheck
+reads it, so the command carries none:
 
 ```bash
-product=5eed0000-0000-0000-0000-000000000001
-currency=$(docker exec commerce-sql-1 sh -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec "$@"' sh \
-    /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -d Ordering -h -1 -W \
-    -Q "SET NOCOUNT ON; SELECT Currency FROM ordering.ProductPrices WHERE ProductId = '$product' AND IsAvailable = 1" \
+row=$(docker exec commerce-sql-1 sh -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec "$@"' sh \
+    /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -d Ordering -h -1 -W -s , \
+    -Q "SET NOCOUNT ON; SELECT TOP 1 LOWER(CONVERT(char(36), ProductId)), Currency FROM ordering.ProductPrices
+        WHERE IsAvailable = 1 AND CONVERT(char(36), ProductId) LIKE '5EED0000-%'
+        AND CAST(ROUND(Amount * 100, 0) AS bigint) % 100 NOT IN (1, 2, 5, 9) ORDER BY CONVERT(char(36), ProductId)" \
     | tr -d '\r')
-echo "product: $product, currency: ${currency:-none}"
+IFS=, read -r product currency <<< "$row"
+echo "product: ${product:-none}, currency: ${currency:-none}"
 ```
 
 **4a. Restock the product.** The run places 540 single-unit orders and
