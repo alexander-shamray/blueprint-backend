@@ -69,10 +69,12 @@ runs from, with how often a main session and a subagent opened it — with
 in how many `contexts`, a main session or a subagent each, and in how many
 of those `over_half` of its lines were read: a `Read` covers its `offset`
 for its `limit`, 2,000 lines when none is named; `head`, `tail`, `sed -n`
-and a `Get-Content` count cover their lines; a later stage of the pipe,
-`head`, `tail`, `sed -n` or `Select-Object`, narrows them, and any other
-stage, such as `grep`, covers no line it can place; and a call whose result
-was an error covers nothing. Each file is grouped by who names it: an
+and a `Get-Content` count cover their lines; a later stage of the pipe
+that counts lines, `head`, `tail`, `sed -n` or `Select-Object`, narrows
+them, `cat` or another printer passes them on, and a stage the report
+cannot place, such as `grep`, covers none; and a call whose result was an
+error covers nothing, unless the error is a shell's non-zero exit, after
+which what the command printed still counts. Each file is grouped by who names it: an
 `entry point` is a command, an agent or a skill's `SKILL.md`;
 `named by entry` is a file one of them names; `CLAUDE.md only` is one
 only `CLAUDE.md` names; `none` is the rest. A name is a path from
