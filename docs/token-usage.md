@@ -468,3 +468,31 @@ of the forty.
 `15-cicd-deployment.md` 235, 159; `10-api-gateway.md` 191, 114;
 `09-messaging.md` 132, 88. These chapters, opened most by subagents, are
 the evidence #847 waits on to decide whether the plan gains a step 8.
+
+## 2026-10-18 — whole or ranged: how the chapters are opened
+
+Measured by the report at bcc177e8 with `--since 2026-10-11 --docs`, and
+the `ranged` column added with this section: an open that asked for part
+of a file, by `Read`'s offset or limit, `head`, `tail`, `sed -n` or a
+`Get-Content` count. The rows sum the report's rows under
+`docs/backend-architecture/`.
+
+| Files | Count | Opens | By subagents | Ranged | Whole |
+|---|---|---|---|---|---|
+| Chapters and appendices, outside `adr/` | 21 | 1,437 | 913 | 1,426 | 11 |
+| ADRs, under `adr/` | 134 | 247 | 200 | 64 | 183 |
+
+Every open of `15-cicd-deployment.md`, `10-api-gateway.md` and
+`09-messaging.md` asked for a range; eight of the eleven whole opens were
+`appendix-e-reference-domain.md`, at 136 KB. The section above counts
+opens, not what each returned, so the chapters it names lead that list by
+how often agents come back to them, not by how much an open reads. An ADR
+is one decision of a few kilobytes, and reading it whole costs little more
+than a range of it would.
+
+**What it decides for #847.** The issue's first two options, a brief that
+names a section and the index before `Read`, exist to turn whole-chapter
+reads into ranged ones, and the reads are already ranged. The third,
+splitting the largest chapters, is taken only if those two fail. None of
+the three has a whole-chapter read to cut, so `token-plan.md` gains no
+step 8.
