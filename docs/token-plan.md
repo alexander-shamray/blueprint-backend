@@ -95,7 +95,7 @@ every sweep's tooling row reads.
 | Where | Now | After |
 |---|---|---|
 | Every turn, everywhere | 3.9k + 1.2k | about 1.5k + 0.85k |
-| A `/ship` turn | about 45k resident | about 15k, step 6's restated exit |
+| A `/ship` turn | about 45k resident | about 15k |
 | Reviewing one PR | about 9M, carrying the triage chain over as is | about 0.8M |
 | A first sweep | up to about 185M | about 25M ending by round 3, about 40M at the seventh |
 | A repeat sweep | the same | about 2–4M |
@@ -337,16 +337,14 @@ because its frontmatter's deny list is 2 KB on its own, and `bug-sweep`,
 `branch` and `validate-blueprint` by the clauses review restored after the
 first cut dropped them, a rule kept being worth more than a byte saved.
 `test_command_runbooks.py` holds each runbook
-under a ceilings table and each citation to a heading that exists. Measured
-over the week after step 7, the end state holds and the resident text
-misses the 12k the exit first named (`token-usage.md`, 2026-10-18), so §2
-restates it rather than this step cutting again. The five files a run holds
-came to about 13.9k when this step landed, because `commit`, `pr` and
-`CLAUDE.md` were never in its table, and what `ship` has gained since is
-rules later PRs added, step 7's sleep, the CI wait handed to an agent and
-the audit dispatched rather than invoked among them, not its argument
-regrown: 12k is reached only by cutting rules, and a rule kept is worth more
-than a byte saved.
+under a ceilings table and each citation to a heading that exists. The
+exit's figure counts the five files a run holds, three of which, `commit`,
+`pr` and `CLAUDE.md`, were never in this step's table; and what `ship`
+carries past its landed size is rules later PRs added, step 7's sleep, the
+CI wait handed to an agent and the audit dispatched rather than invoked
+among them, not its argument regrown, a rule kept being worth more than a
+byte saved. `token-usage.md`'s 2026-10-18 section measures a run against
+it, and the end state holds.
 
 ### Step 7 — the context a session carries, and what it re-sends on a wake
 
