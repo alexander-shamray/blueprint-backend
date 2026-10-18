@@ -440,11 +440,13 @@ that set the step.
   vacuously: there is no plan to test it on.
 
 **Step 6's exit.** A `/ship` turn's resident text, by the method of
-`token-plan.md` §1, bytes over four, is about 15.2k: `ship.md` 30,626
+`token-plan.md` §1, bytes over four, is about 14.9k: `ship.md` 30,111
 bytes, against 28,020 when step 6 landed, with `branch.md`, `commit.md`,
-`pr.md` and `CLAUDE.md` at 30,245 between them. That is a third of the 45k
-measured on 2026-10-07, not the 12k the exit names. The end state held: 141
-pull requests merged over the span, under the short runbook.
+`pr.md` and `CLAUDE.md` at 29,670 between them, each with CRLF counted as
+LF, as the landed sizes were and `test_command_runbooks.py` counts. That is
+a third of the 45k measured on 2026-10-07, not the 12k the exit then
+named. The end state held: 141 pull requests merged over the span, under
+the short runbook.
 
 **Step 5.** Its exit is recall, the 2026-10-12 section's, and not met
 there. `token-plan.md` §2's targets for its cost, a first sweep over the
