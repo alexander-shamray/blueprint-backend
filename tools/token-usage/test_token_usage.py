@@ -408,6 +408,8 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(read("Bash", {"command": "cat a.md | grep -n x && cat src/X.cs"}), [("a.md", None)])
         self.assertEqual(read("Bash", {"command": "cd docs && set -e && cat a.md | grep -n x"}),
                          [("a.md", Grepped((1, None), True))])
+        for noisy in ("set", "export", "cd -"):
+            self.assertEqual(read("Bash", {"command": noisy + "; cat a.md | grep -n x"}), [("a.md", None)])
         piped = "sed -n '/a/,/b/p' a.md | head -3; head -40 b.md | sed -n '/x/p'; tail -50 c.md | head -10"
         self.assertEqual(read("Bash", {"command": piped}),
                          [("a.md", Piped(Addressed("a", "b"), (1, 3))),

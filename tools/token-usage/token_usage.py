@@ -47,7 +47,8 @@ SED_EXTENDED = re.compile(r"-[A-Za-z]*[Er][A-Za-z]*|--regexp-extended")
 SED_ADDRESS = r"\d+|\$|/(?:[^/\\]|\\.)*/"
 SED_LINES = re.compile(rf"({SED_ADDRESS})(?:,({SED_ADDRESS}))?p")
 GREPS = {"grep", "egrep", "fgrep"}
-# Commands that print nothing, so a call's result is still the grep's alone beside them.
+# Commands that print nothing given an argument, so a call's result is still the grep's alone beside them; bare,
+# `export` and `set` list every variable, and `cd -` prints where it went.
 SILENT = {"cd", "export", "set"}
 GREP_NUMBERED = re.compile(r"-[A-Za-z]*n[A-Za-z0-9]*|--line-number")
 NUMBERED_LINE = re.compile(r"(\d+)[:-]")
@@ -390,7 +391,8 @@ def markdown_read(tool: str, given) -> list[tuple[str, Span]]:
                 found = [(path, narrowed(span, stage_span(words))) if i in piped else (path, span)
                          for i, (path, span) in enumerate(found)]
     # One result holds every command's output, so a grep beside another that prints cannot be told apart in it.
-    printing = [line for line in lines if (first := SHELL_WORD.findall(line)) and first[0].lower() not in SILENT]
+    printing = [line for line in lines if (words := SHELL_WORD.findall(line))
+                and not (words[0].lower() in SILENT and len(words) > 1 and words[1] != "-")]
     if len(printing) > 1:
         found = [(path, None if isinstance(span, Grepped) else span) for path, span in found]
     return found
