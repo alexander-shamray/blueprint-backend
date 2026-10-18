@@ -332,8 +332,8 @@ export function teardown(data) {
         {
             name: 'Event end-to-end p95 < 2 s',
             // Scoped to the two events this run's orders publish, as the request
-            // rows are scoped to theirs. IntegrationEventConsumer<T> records the
-            // lag at consume start in every service that consumes them.
+            // rows are scoped to theirs. Each service that takes them through
+            // IntegrationEventConsumer<T> records the lag at consume start.
             query: `histogram_quantile(0.95, sum by (le) (rate(messaging_delivery_lag_seconds_bucket{message=~"OrderPlaced|OrderConfirmed"}[${window}])))`,
             limit: 2,
         },
