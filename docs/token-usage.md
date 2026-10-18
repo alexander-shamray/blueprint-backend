@@ -460,4 +460,4 @@ of the forty.
 `appendix-e-reference-domain.md` 278 times, 177 by subagents;
 `15-cicd-deployment.md` 235, 159; `10-api-gateway.md` 191, 114;
 `09-messaging.md` 132, 88. These chapters, opened most by subagents, are
-the evidence token-plan step 8 is to decide on.
+the evidence #847 waits on to decide whether the plan gains a step 8.
