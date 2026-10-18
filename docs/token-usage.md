@@ -431,10 +431,10 @@ that set the step.
   agents the two audit sessions of 2026-10-09 to 2026-10-10 spawned,
   implementers among them, came to 17.4M in two days, and those sessions
   to 40.6M in all, their own main contexts included, which the dispatch no
-  longer has. The main
-  sessions that dispatched them averaged 226k a call, 45 of their 94 rows
-  under 150k, but that is the whole `/ship` context, not the audit's, so
-  the exit's subject did not occur and is not read from this figure.
+  longer has. The main sessions that dispatched them averaged 226k a call,
+  45 of their 94 rows under 150k, but that is the whole `/ship` context,
+  not the audit's, so the exit's subject did not occur and is not read from
+  this figure.
 - No plan was added under `docs/superpowers/plans/` after the plan-size
   gate landed, at 2557f8d3 on 2026-10-11, so the plan limit holds
   vacuously: there is no plan to test it on.
