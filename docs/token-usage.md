@@ -469,30 +469,35 @@ of the forty.
 `09-messaging.md` 132, 88. These chapters, opened most by subagents, are
 the evidence #847 waits on to decide whether the plan gains a step 8.
 
-## 2026-10-18 — whole or ranged: how the chapters are opened
+## 2026-10-18 — how much of a chapter one context reads
 
 Measured by the report at bcc177e8 with `--since 2026-10-11 --docs`, and
-the `ranged` column added with this section: an open that asked for part
-of a file, by `Read`'s offset or limit, `head`, `tail`, `sed -n` or a
-`Get-Content` count. The rows sum the report's rows under
-`docs/backend-architecture/`.
+the two columns added with this section: `contexts`, the main sessions and
+subagents that opened a file, and `over_half`, those whose opens together
+covered more than half its lines. A refused call covers nothing, and a
+stage of a pipe after the read, such as `head` or a grep, narrows it. The
+rows sum the report's rows under `docs/backend-architecture/`, outside
+`adr/`.
 
-| Files | Count | Opens | By subagents | Ranged | Whole |
+| Chapters | Files | Opens | By subagents | Contexts | Over half |
 |---|---|---|---|---|---|
-| Chapters and appendices, outside `adr/` | 21 | 1,437 | 913 | 1,426 | 11 |
-| ADRs, under `adr/` | 134 | 247 | 200 | 64 | 183 |
+| Over 1,000 lines | 10 | 1,193 | 792 | 503 | 15 |
+| All 21 | 21 | 1,437 | 913 | 649 | 26 |
 
-Every open of `15-cicd-deployment.md`, `10-api-gateway.md` and
-`09-messaging.md` asked for a range; eight of the eleven whole opens were
-`appendix-e-reference-domain.md`, at 136 KB. The section above counts
-opens, not what each returned, so the chapters it names lead that list by
-how often agents come back to them, not by how much an open reads. An ADR
-is one decision of a few kilobytes, and reading it whole costs little more
-than a range of it would.
+A long chapter takes more opens to read, since a context pages through it
+in ranges and the `Read` tool imposes them above its line limit, so the
+section above ranks the chapters partly by their length. Counted per
+context, 488 of the 503 that opened a long chapter covered half of it or
+less. Fourteen of the fifteen that covered more came from the two sessions
+that moved the reference services out of the chapters: their implementers,
+the audits of what they moved, and the sessions themselves. The fifteenth
+was an audit of `appendix-e-reference-domain.md`, which has seven of the
+fifteen; `10-api-gateway.md` and `13-observability.md` have none.
 
 **What it decides for #847.** The issue's first two options, a brief that
-names a section and the index before `Read`, exist to turn whole-chapter
-reads into ranged ones, and the reads are already ranged. The third,
-splitting the largest chapters, is taken only if those two fail. None of
-the three has a whole-chapter read to cut, so `token-plan.md` gains no
-step 8.
+names a section and the index before `Read`, exist to stop a context
+reading a chapter it needs a section of, and 97% of contexts already read
+half a long chapter or less. The third, splitting the largest chapters, is
+taken only if those two fail. What is left is fifteen contexts in eight
+days, nearly all of them moving the very text they read, so
+`token-plan.md` gains no step 8.
