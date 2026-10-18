@@ -332,7 +332,8 @@ def call(tool, at="2026-10-07T09:10:00.000Z", cwd="/r/repo", call_id=None, **giv
 
 class DocsTests(unittest.TestCase):
     def test_read_and_the_shell_printers_are_reads_and_grep_is_not(self):
-        read = token_usage.markdown_read
+        def read(tool, given):
+            return [path for path, _ in token_usage.markdown_read(tool, given)]
         self.assertEqual(read("Read", {"file_path": "/r/repo/docs/a.md"}), ["/r/repo/docs/a.md"])
         self.assertEqual(read("Read", {"file_path": "/r/repo/src/A.cs"}), [])
         self.assertEqual(read("Bash", {"command": "cd x && sed -n 1,5p docs/a.md | head -3; cat 'docs/b.md'"}),
@@ -344,6 +345,19 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(read("Bash", {"command": "sed -ni p docs/a.md; sed --in-place=.bak p docs/a.md"}), [])
         self.assertEqual(read("Bash", {"command": "sed -n 1p docs/a.md"}), ["docs/a.md"])
         self.assertEqual(read("Bash", {"command": "cat docs/a.md > docs/b.md; cat > docs/c.md <<EOF"}), ["docs/a.md"])
+
+    def test_a_read_asks_for_part_of_a_file_by_offset_or_limit_head_tail_sed_n_or_a_get_content_count(self):
+        read = token_usage.markdown_read
+        self.assertEqual(read("Read", {"file_path": "a.md"}), [("a.md", False)])
+        self.assertEqual(read("Read", {"file_path": "a.md", "offset": None, "limit": None}), [("a.md", False)])
+        self.assertEqual(read("Read", {"file_path": "a.md", "offset": 120}), [("a.md", True)])
+        self.assertEqual(read("Read", {"file_path": "a.md", "limit": 40}), [("a.md", True)])
+        self.assertEqual(read("Bash", {"command": "head -40 a.md; tail b.md; cat c.md; less d.md"}),
+                         [("a.md", True), ("b.md", True), ("c.md", False), ("d.md", False)])
+        self.assertEqual(read("Bash", {"command": "sed -n 1,5p a.md; sed --quiet 2p b.md; sed s/x/y/ c.md"}),
+                         [("a.md", True), ("b.md", True), ("c.md", False)])
+        self.assertEqual(read("PowerShell", {"command": "Get-Content a.md -TotalCount 9; gc b.md -Tail 3; gc c.md"}),
+                         [("a.md", True), ("b.md", True), ("c.md", False)])
 
     def test_a_read_is_placed_in_the_checkout_its_worktrees_and_forks_and_nowhere_else(self):
         inside = token_usage.repo_relative
@@ -372,11 +386,14 @@ class DocsTests(unittest.TestCase):
                 "docs/named.md": "", "docs/claude.md": "", "docs/orphan.md": "", ".claude/notes/x.md": ""}
         reads = {("/r/repo/docs/named.md", MAIN): 2, ("/r/repo/docs/named.md", SUBAGENT): 3,
                  ("/r/repo/CLAUDE.md", MAIN): 9, ("/r/other/docs/orphan.md", MAIN): 4}
-        rows = {r["doc"]: r for r in token_usage.doc_rows(docs, reads, "/r/repo")}
+        ranged = {("/r/repo/docs/named.md", MAIN): 1, ("/r/repo/docs/named.md", SUBAGENT): 2,
+                  ("/r/other/docs/orphan.md", MAIN): 4}
+        rows = {r["doc"]: r for r in token_usage.doc_rows(docs, reads, ranged, "/r/repo")}
         self.assertNotIn("CLAUDE.md", rows)
         self.assertEqual(rows[".claude/commands/go.md"]["named_by"], "entry point")
-        self.assertEqual({k: rows["docs/named.md"][k] for k in ("named_by", "reads", "main", "subagents")},
-                         {"named_by": "named by entry", "reads": 5, "main": 2, "subagents": 3})
+        self.assertEqual({k: rows["docs/named.md"][k] for k in ("named_by", "reads", "main", "subagents", "ranged")},
+                         {"named_by": "named by entry", "reads": 5, "main": 2, "subagents": 3, "ranged": 3})
+        self.assertEqual(rows["docs/orphan.md"]["ranged"], 0)
         self.assertEqual(rows["docs/claude.md"]["named_by"], "CLAUDE.md only")
         self.assertEqual((rows["docs/orphan.md"]["named_by"], rows["docs/orphan.md"]["reads"]), ("none", 0))
         self.assertEqual(rows[".claude/notes/x.md"]["named_by"], "none")
@@ -398,6 +415,7 @@ class DocReadTests(unittest.TestCase):
             report.read_project(Path(directory))
         self.assertEqual(report.reads, {("/r/repo/docs/a.md", MAIN): 1, ("/r/repo/.claude/docs/a.md", MAIN): 1,
                                         ("/r/repo/docs/a.md", SUBAGENT): 2})
+        self.assertEqual(report.ranged, {("/r/repo/.claude/docs/a.md", MAIN): 1})
 
     def test_docs_lists_every_tracked_markdown_file_of_the_checkout(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -33,6 +33,10 @@ SHELL_READERS = {"cat", "head", "tail", "sed", "less", "more", "type", "gc", "ge
 SHELL_SEGMENT = re.compile(r"&&|\|\||[;|\n]")
 SED_IN_PLACE = re.compile(r"--in-place(?:=.*)?|-[A-Za-z]*i.*")
 SHELL_WORD = re.compile(r'"[^"]*"|\'[^\']*\'|\S+')
+# What asks a shell printer for part of a file: head and tail always, sed only when -n holds back the rest.
+SHELL_RANGED = {"head", "tail"}
+SED_QUIET = re.compile(r"-[A-Za-z]*n[A-Za-z]*|--quiet|--silent")
+GET_CONTENT_PART = {"-totalcount", "-head", "-tail", "-first", "-last"}
 # Where a run starts: what a command, an agent or a skill names, it is handed.
 ENTRY = re.compile(r"\.claude/(?:commands/[^/]+|agents/[^/]+|skills/[^/]+/SKILL)\.md")
 MENTION = re.compile(r"[\w./<>{}-]*[\w>}]\.md\b")
@@ -107,6 +111,7 @@ class Report:
         self.spawns: list[dict] = []
         self.results: dict[tuple[str, str], list[int]] = {}
         self.reads: dict[tuple[str, str], int] = {}
+        self.ranged: dict[tuple[str, str], int] = {}
         self.read_calls: set[str] = set()
 
     def add(self, command: str, agent: str, entry: dict, context: str, woken: bool = False) -> dict | None:
@@ -203,7 +208,8 @@ class Report:
                 counted[1] += len(result_text(block.get("content")))
 
     def count_reads(self, entry: dict, who: str) -> None:
-        """Count each markdown file a response opens, by its absolute path, with Read or a shell command."""
+        """Count each markdown file a response opens, by its absolute path, with Read or a shell command, and how
+        many of those opens asked for part of it."""
         content = (entry.get("message") or {}).get("content") if entry.get("type") == "assistant" else None
         if not isinstance(content, list):
             return
@@ -217,9 +223,11 @@ class Report:
                     continue
                 if call:
                     self.read_calls.add(call)
-                for path in markdown_read(str(block.get("name")), block.get("input")):
+                for path, part in markdown_read(str(block.get("name")), block.get("input")):
                     key = (absolute(path, cwd), who)
                     self.reads[key] = self.reads.get(key, 0) + 1
+                    if part:
+                        self.ranged[key] = self.ranged.get(key, 0) + 1
 
     def entries(self, path: Path):
         with path.open(encoding="utf-8", errors="replace") as lines:
@@ -256,13 +264,15 @@ def result_text(content) -> str:
     return ""
 
 
-def markdown_read(tool: str, given) -> list[str]:
-    """The markdown paths one tool call reads: Read's file, or what cat, head, tail, sed or Get-Content print."""
+def markdown_read(tool: str, given) -> list[tuple[str, bool]]:
+    """The markdown paths one tool call reads, each with whether the call asked for part of the file: Read's file,
+    ranged by an offset or a limit, or what cat, head, tail, sed or Get-Content print."""
     if not isinstance(given, dict):
         return []
     if tool == "Read":
         path = given.get("file_path")
-        return [path] if isinstance(path, str) and path.lower().endswith(".md") else []
+        part = given.get("offset") is not None or given.get("limit") is not None
+        return [(path, part)] if isinstance(path, str) and path.lower().endswith(".md") else []
     command = given.get("command")
     if tool not in ("Bash", "PowerShell") or not isinstance(command, str):
         return []
@@ -271,11 +281,14 @@ def markdown_read(tool: str, given) -> list[str]:
         words = [w.strip("\"'") for w in SHELL_WORD.findall(segment)]
         if not words or words[0].lower() not in SHELL_READERS:
             continue
-        if words[0].lower() == "sed" and any(SED_IN_PLACE.fullmatch(w) for w in words):
+        reader = words[0].lower()
+        if reader == "sed" and any(SED_IN_PLACE.fullmatch(w) for w in words):
             continue
+        part = reader in SHELL_RANGED or reader == "sed" and any(SED_QUIET.fullmatch(w) for w in words) or \
+            reader in ("gc", "get-content") and any(w.lower() in GET_CONTENT_PART for w in words)
         # A redirect's target is written, and so is everything after it.
         printed = next((i for i, w in enumerate(words) if ">" in w), len(words))
-        found += [w for w in words[1:printed] if w.lower().endswith(".md") and not w.startswith("-")]
+        found += [(w, part) for w in words[1:printed] if w.lower().endswith(".md") and not w.startswith("-")]
     return found
 
 
@@ -339,15 +352,19 @@ def named_in(source: str, text: str, docs: dict[str, str]) -> set[str]:
     return found
 
 
-def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int], root: str) -> list[dict]:
-    """One row per tracked document: who names it, and how often a main session and a subagent opened it."""
+def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int], ranged: dict[tuple[str, str], int],
+             root: str) -> list[dict]:
+    """One row per tracked document: who names it, how often a main session and a subagent opened it, and how many
+    of those opens asked for part of it."""
     entry = {doc for doc in docs if ENTRY.fullmatch(doc)}
     from_entry = set().union(*(named_in(doc, docs[doc], docs) for doc in entry))
     from_claude_md = named_in("CLAUDE.md", docs.get("CLAUDE.md", ""), docs)
     opened: dict[tuple[str, str], int] = {}
+    parts: dict[str, int] = {}
     for (path, who), count in reads.items():
         if (doc := repo_relative(path, root)) in docs:
             opened[doc, who] = opened.get((doc, who), 0) + count
+            parts[doc] = parts.get(doc, 0) + ranged.get((path, who), 0)
     rows = []
     for doc in docs:
         if doc == "CLAUDE.md":
@@ -355,7 +372,8 @@ def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int], root: str)
         link = LINKS[0] if doc in entry else LINKS[1] if doc in from_entry else \
             LINKS[2] if doc in from_claude_md else LINKS[3]
         main, agents = opened.get((doc, MAIN), 0), opened.get((doc, SUBAGENT), 0)
-        rows.append({"doc": doc, "named_by": link, "reads": main + agents, "main": main, "subagents": agents})
+        rows.append({"doc": doc, "named_by": link, "reads": main + agents, "main": main, "subagents": agents,
+                     "ranged": parts.get(doc, 0)})
     rows.sort(key=lambda r: (LINKS.index(r["named_by"]), -r["reads"], r["doc"]))
     return rows
 
@@ -456,7 +474,7 @@ def default_projects(cwd: Path) -> list[Path]:
 MODEL_ROWS = ("command", "agent", "model", "contexts", "calls", "mean_context", "input", "cache_write", "cache_read",
               "output", "input_equivalent", "woken_equivalent", "woken_write")
 ROWS = tuple(c for c in MODEL_ROWS if c != "model")
-DOCS = ("doc", "named_by", "reads", "main", "subagents")
+DOCS = ("doc", "named_by", "reads", "main", "subagents", "ranged")
 RESULTS = ("command", "tool", "results", "characters", "approx_tokens")
 SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
 
@@ -487,7 +505,8 @@ def main(argv: list[str] | None = None) -> int:
     views.add_argument("--models", action="store_true",
                        help="split each command and agent row by the model that answered")
     views.add_argument("--docs", action="store_true",
-                       help="list every tracked markdown file with who names it and how often it was opened")
+                       help="list every tracked markdown file with who names it, how often it was opened and how "
+                            "many opens asked for part of it")
     parser.add_argument("--session", default="", metavar="ID",
                         help="only the session whose id starts with ID, with its subagents")
     args = parser.parse_args(argv)
@@ -509,7 +528,7 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, subprocess.CalledProcessError):
             print(f"no git checkout at {root} to list the markdown files of", file=sys.stderr)
             return 2
-        rows, columns = doc_rows(docs, report.reads, str(root)), DOCS
+        rows, columns = doc_rows(docs, report.reads, report.ranged, str(root)), DOCS
         for line in link_summary(rows):
             print(line, file=sys.stderr)
     elif args.tools is not None:

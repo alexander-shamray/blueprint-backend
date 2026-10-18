@@ -66,7 +66,9 @@ others, and the total is the same as the default's.
 `--docs` lists every markdown file `git ls-files` tracks in the checkout it
 runs from, with how often a main session and a subagent opened it — with
 `Read`, or with `cat`, `head`, `tail`, `sed` or `Get-Content` in a shell —
-and who names it: an `entry point` is a command, an agent or a skill's
+how many of those opens were `ranged`, asking for part of the file by
+`Read`'s `offset` or `limit`, `head`, `tail`, `sed -n` or a `Get-Content`
+count, and who names it: an `entry point` is a command, an agent or a skill's
 `SKILL.md`; `named by entry` is a file one of them names; `CLAUDE.md only`
 is one only `CLAUDE.md` names; `none` is the rest. A name is a path from
 the root or from the citing file, a base name no other tracked file has, or
