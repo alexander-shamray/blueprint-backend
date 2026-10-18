@@ -87,7 +87,8 @@ new fixture does the same. CI's integration shards take the new process: a
 shard whose first attempt fails with that named failure runs once more, with
 the first attempt's results removed, and the run is posted on
 [#960](https://github.com/alexander-shamray/blueprint-backend/issues/960) for
-the recurrence count; any other failure is final.
+the recurrence count. A first attempt without it is final. The retry runs the
+whole shard, so a failure beside the named one gets a second run too.
 
 **They are not skipped when the daemon is absent, and that is a decision.** A
 skip on a missing daemon **fails open**: CI goes green on a runner whose Docker

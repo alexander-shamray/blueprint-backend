@@ -832,9 +832,9 @@ jobs:
           FILTER: Category=Integration&${{ matrix.selects }}
         # A first attempt that fails on TestcontainersWarmUp's named failure runs
         # once more, since a type initialiser that threw never runs again in its
-        # process and only a new one recovers (docs/testing.md). Any other failure
-        # is final, and the first attempt's results go, or the stage gate would
-        # count each of their tests twice.
+        # process and only a new one recovers (docs/testing.md). Without it a failure
+        # is final; with it the whole shard reruns, a failure beside it too, and the
+        # first attempt's results go, or the stage gate would count them twice.
         run: |
           set -o pipefail
           stage() {
