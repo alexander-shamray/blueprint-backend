@@ -222,8 +222,10 @@ class Report:
         if self.since and str(entry.get("timestamp", self.since))[:10] < self.since:
             return
         if entry.get("type") == "user":
+            # A shell's non-zero exit is an error result too, but its command ran and printed what it read.
             self.failed.update(str(block.get("tool_use_id")) for block in content if isinstance(block, dict)
-                               and block.get("type") == "tool_result" and block.get("is_error"))
+                               and block.get("type") == "tool_result" and block.get("is_error")
+                               and not result_text(block.get("content")).startswith("Exit code"))
             return
         if entry.get("type") != "assistant":
             return
