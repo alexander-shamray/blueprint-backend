@@ -1895,9 +1895,9 @@ the service is meeting a bar nobody is checking.
 
 Verify order-of-magnitude with the **k6 SLO run against staging**
 ([§15.1](15-cicd-deployment.md)) — `deploy/observability/slo/slo.js`, the load
-run in CD, which asserts the five rows of this table it can evaluate — the two
-request rows, the two outbox lanes and own-event staleness, with the other two
-named below — and is the first real gate after the dev deploy.
+run in CD, which asserts the six rows of this table it can evaluate — the two
+request rows, the two outbox lanes, own-event staleness and event end-to-end,
+with the seventh named below — and is the first real gate after the dev deploy.
 
 **It has been run locally and never against staging**, because this
 repository has no staging environment ([§15.1](15-cicd-deployment.md)). A
@@ -1923,7 +1923,7 @@ querying that row's named instrument after the run.
 **An absent series fails that run.** It is not read as "no problem observed",
 for the reason §13.6 gives one section up: empty and healthy look identical.
 
-**Two of the seven are not evaluated there, and each is named in the script
+**One of the seven is not evaluated there, and it is named in the script
 rather than quietly dropped.** Cutting a row rather than pretending is this
 table's own rule, applied to the gate that reads it — and a gate that fails on
 a healthy platform is a gate that gets switched off:
@@ -1931,14 +1931,22 @@ a healthy platform is a gate that gets switched off:
 | Row | Why the run cannot evaluate it |
 |---|---|
 | Availability | A **monthly** objective; a three-minute run cannot compute one. The run bounds its own error rate instead, says so, and reports no pass for the row |
-| Event end-to-end | `messaging.delivery.lag` is recorded by `IntegrationEventConsumer<T>`; the run places orders, and the consumer that records it handles Catalog's product events (in the reference domain, [E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), which neither scenario produces |
 
-The remaining five — the two request rows, the two outbox lanes and own-event
-staleness — are what the run actually asserts. Not a "smoke test": §15.1
-declines to have one and §12.1 gives the reason, which is that a stage named
-for what it actually does gets maintained. This is also not a capacity test —
-it catches the regression where a query loses its index and goes from 40 ms
-to 4 s, which no unit test will find.
+**Event end-to-end is evaluated over the events the run's orders publish.**
+`messaging.delivery.lag` is recorded by `IntegrationEventConsumer<T>` at
+consume start, and the orders the run places publish events that consumers
+in other services take through it (in the reference domain,
+[E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)).
+The row is scoped to those events, as the request rows are scoped to the
+request types the scenarios drive, so ambient traffic of other types cannot
+dilute it.
+
+The remaining six — the two request rows, the two outbox lanes, own-event
+staleness and event end-to-end — are what the run actually asserts. Not a
+"smoke test": §15.1 declines to have one and §12.1 gives the reason, which is
+that a stage named for what it actually does gets maintained. This is also not
+a capacity test — it catches the regression where a query loses its index and
+goes from 40 ms to 4 s, which no unit test will find.
 
 **It also records the two overdue gauges, and asserts neither.**
 `shipping.shipments.overdue` and `notifications.overdue` are printed once the

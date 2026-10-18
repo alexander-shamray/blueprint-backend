@@ -1900,9 +1900,10 @@ meter, and a service's own meters are `Catalog.*` by that rule.
   touches the outbox, so `projection.lag` is empty for it; Ordering's own
   producer of that signal is `OrderSummaryProjection` (§6.6), which every
   placed order reaches.
-- *Event end-to-end in the load run (§13.7).* The consumer that records
-  `messaging.delivery.lag` handles Catalog's product events, which neither
-  scenario produces.
+- *Event end-to-end in the load run (§13.7).* The run's orders publish
+  `OrderPlaced` and `OrderConfirmed`, which Payments, Notifications, Shipping
+  and the BFF consume through `IntegrationEventConsumer<T>`, so
+  `deploy/observability/slo/slo.js` asserts the row over those two messages.
 
 **The domain alerts and their runbooks (§13.6, §13.9).** The rows stay in the
 chapter, because `deploy/observability/check.py` reads each runbook name there;
