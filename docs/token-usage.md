@@ -532,17 +532,19 @@ its result printed. On the transcripts behind the chapter table of the
 2026-10-18 section on how much of a chapter one context reads, without the
 runner's sessions, the long-chapter row still reads 503 contexts and 15
 over half: those forms moved no context past half, so that row was not a
-lower bound in practice. With the runner's sessions, read as the subagents
-an interactive sweep would have spawned:
+lower bound in practice. It reads 1,196 opens, 793 by subagents, against
+that table's 1,193 and 792; the three more are reads a quoted `|` or `;`
+used to cut from their command. With the runner's sessions, read as the
+subagents an interactive sweep would have spawned:
 
 | Chapters | Files | Opens | By subagents | Contexts | Over half |
 |---|---|---|---|---|---|
 | Over 1,000 lines | 10 | 1,253 | 850 | 530 | 35 |
 | All 21 | 21 | 1,511 | 985 | 687 | 56 |
 
-The 27 contexts more on the long chapters are 23 sweep auditors and 4
-reviewers. All 20 of the new over-half contexts are auditors, 6 security
-and 14 bug, reading a slice that held a chapter, which is the work a slice
-hands them. Their line counts are today's, against a tree at the run's
-commit. #847's decision stands: what reads a long chapter whole is moving
-or auditing that text.
+The runner adds 57 opens of the long chapters, every one by a subagent, in
+27 contexts: 23 sweep auditors and 4 reviewers. All 20 of the new over-half
+contexts are auditors, 6 security and 14 bug, reading a slice that held a
+chapter, which is the work a slice hands them. Their line counts are
+today's, against a tree at the run's commit. #847's decision stands: what
+reads a long chapter whole is moving or auditing that text.
