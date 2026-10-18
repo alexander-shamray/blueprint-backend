@@ -252,6 +252,13 @@ is what makes the authoritative half of this gate mean anything.
 run cannot; `http_req_failed` bounds the error rate *during the run*, which is a
 much weaker claim, and the run says so rather than reporting a pass.
 
+**The two overdue gauges are recorded, never asserted.** `teardown()` prints
+`shipping.shipments.overdue` and `notifications.overdue` once the run has
+settled, because [ADR-063](../../docs/backend-architecture/adr/ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-hand.md)
+waits on a baseline under load for both and this run is the only load the
+platform has. No rule pages on either yet, so there is no limit to fail the
+run on, and an absent series is printed rather than failed.
+
 ### Running it locally
 
 This repository has no staging, so the run has only been made against the
@@ -397,18 +404,36 @@ echo "k6 exit: $?"
 ```
 
 **The exit code is the verdict.** 0 is a pass: every threshold met and
-`teardown()` silent but for its `SLO run: not evaluated` line. 99 is a k6
-threshold crossed, with `teardown()` passing. 107 is a `fail()`: from
-`teardown()`, `SLO run failed:` and one line per breached row; from `setup()`,
-the configuration or stock refusal, with no load driven. It wins over 99 when
-both happen. 105 is an interrupt: on Ctrl+C k6 stops the load and still runs
-`teardown()` over the shortened window, but does not report its verdict, so an
-interrupted run is neither a pass nor a fail.
+`teardown()` silent but for its `SLO run: not evaluated` and `SLO run:
+recorded, not asserted` lines. 99 is a k6 threshold crossed, with `teardown()`
+passing. 107 is a `fail()`: from `teardown()`, `SLO run failed:` and one line
+per breached row; from `setup()`, the configuration or stock refusal, with no
+load driven. It wins over 99 when both happen. 105 is an interrupt: on Ctrl+C
+k6 stops the load and still runs `teardown()` over the shortened window, but
+does not report its verdict, so an interrupted run is neither a pass nor a
+fail.
 
 **Nothing has to be undone afterwards.** The client stays in the running realm
 for the next run, the product keeps its count, and the orders a run placed,
 an interrupted one's included, go on through the saga with their stock
 reserved; the next run's step 4a sets the count again.
+
+**A run does leave a backlog, and the next run waits for it to clear.** It
+places orders faster than one `shipping-worker` books them or one
+`notifications-worker` sends their notices, so both are still working through
+them long after k6 exits: on one machine a run left about 45 minutes of
+bookings ([#1130](https://github.com/alexander-shamray/blueprint-backend/issues/1130)),
+and a second run inside that window adds to the same queue. That run starts
+on a target that is not quiescent, and its recorded readings include the
+first run's backlog. Wait until both gauges are back near zero:
+
+```bash
+for gauge in shipping_shipments_overdue_seconds notifications_overdue_seconds; do
+  curl -fsS -G http://localhost:3000/api/datasources/proxy/uid/prometheus/api/v1/query \
+    --data-urlencode "query=max($gauge)"
+  echo
+done
+```
 
 A failed run is a finding, not a reason to loosen anything: thresholds, rate
 budgets and checks stay as they are. A defect in `slo.js` is fixed; a defect in
