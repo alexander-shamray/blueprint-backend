@@ -238,8 +238,8 @@ export function placeOrder(data) {
     // PlaceOrderTests pins it deliberately. Asserting 201 would have failed
     // every accepted order — and with `checks: ['rate==1']` below, every
     // healthy run. A gate that fails on a healthy platform is a gate that gets
-    // switched off, which is the reason two §13.7 rows are named as not
-    // evaluated rather than asserted.
+    // switched off, which is the reason a §13.7 row the run cannot evaluate is
+    // named rather than asserted.
     //
     // 422 is the domain refusing — §10.5 maps Error.Rule there — and it is
     // checked separately rather than folded into a status class, because a run
