@@ -77,12 +77,13 @@ file's text as sed would; a later stage of the pipe that counts lines,
 another printer passes them on, a `grep` covers the lines its result
 printed, by the numbers `-n` gives or else by their text in order,
 unless the call ran any other command but `cd <dir>`, `export NAME=value`
-or `set` with `-e`, `-u` or `-o <name>`, and a stage the report cannot
-place, such as `sort`, covers none; and a call whose result was an error
-covers nothing, unless the error is a shell's non-zero exit, after which
-what the command printed still counts. A `|` or `;` inside quotes is part
-of a pattern, not a pipe or a second command. An agent's own session, as a
-`tools/quality-sets` run is, opens as a subagent. Each file is grouped by who
+or `set` with `-e`, `-u` or `-o <name>` or their `+` forms, and a stage
+the report cannot place, such as `sort`, covers none; and a call whose
+result was an error covers nothing, unless the error is a shell's non-zero
+exit, after which what the command printed still counts. A `|` or `;`
+inside quotes is part of a pattern, not a pipe or a second command. An
+agent's own session, as a `tools/quality-sets` run is, opens as a
+subagent. Each file is grouped by who
 names it: an `entry point` is a command, an agent or a skill's
 `SKILL.md`; `named by entry` is a file one of them names; `CLAUDE.md only`
 is one only `CLAUDE.md` names; `none` is the rest. A name is a path from

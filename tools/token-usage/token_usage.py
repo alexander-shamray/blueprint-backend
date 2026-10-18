@@ -398,7 +398,8 @@ def markdown_read(tool: str, given) -> list[tuple[str, Span]]:
 
 def silent(words: list[str]) -> bool:
     """Whether a command prints nothing, so a call's result is still a grep's alone beside it: only `cd <dir>`,
-    `export NAME=value` and `set` with -e, -u or -o <name>; bare or in any other form they can print."""
+    `export NAME=value` and `set` with -e, -u or -o <name>, or their + forms; bare or in any other form they can
+    print."""
     tool, given = words[0].lower(), words[1:]
     if tool == "cd":
         return len(given) == 1 and given[0] != "-"
