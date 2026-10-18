@@ -157,7 +157,7 @@ class Report:
         self.opens: list[tuple[str, str, str, Span]] = []
         self.failed: set[str] = set()
         self.read_calls: set[str] = set()
-        self.grepped: dict[str, int] = {}
+        self.grepped: set[str] = set()
         self.printed: dict[str, str] = {}
         self.trees: set[str] = set()
 
@@ -300,17 +300,21 @@ class Report:
                     self.reads[key] = self.reads.get(key, 0) + 1
                     self.opens.append((str(call), key[0], context, span))
                     if isinstance(span, Grepped):
-                        self.grepped[str(call)] = self.grepped.get(str(call), 0) + 1
+                        self.grepped.add(str(call))
 
     def kept_opens(self) -> list[tuple[str, str, Span]]:
         """Each open whose call did not fail, as (path, context, span): a refused Read put none of the file in
-        context. A grep's span takes its call's result, unless the call grepped two opens and mixed them in it."""
+        context. A grep's span takes its call's result, unless the call made another open, whose output the
+        result mixes in."""
+        per_call: dict[str, int] = {}
+        for call, *_ in self.opens:
+            per_call[call] = per_call.get(call, 0) + 1
         kept = []
         for call, path, context, span in self.opens:
             if call in self.failed:
                 continue
             if isinstance(span, Grepped):
-                span = replace(span, text=self.printed.get(call)) if self.grepped[call] == 1 else None
+                span = replace(span, text=self.printed.get(call)) if per_call[call] == 1 else None
             kept.append((path, context, span))
         return kept
 
