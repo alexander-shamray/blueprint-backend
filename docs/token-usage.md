@@ -445,8 +445,10 @@ bytes, against 28,020 when step 6 landed, with `branch.md`, `commit.md`,
 `pr.md` and `CLAUDE.md` at 29,670 between them, each with CRLF counted as
 LF, as the landed sizes were and `test_command_runbooks.py` counts. That is
 a third of the 45k measured on 2026-10-07, not the 12k the exit then
-named. The end state held: 141 pull requests merged over the span, under
-the short runbook.
+named. When step 6 landed, at 0aea8024, the five came to 55,575 bytes, about
+13.9k, because `commit.md`, `pr.md` and `CLAUDE.md` were never in its table.
+The end state held: 141 pull requests merged over the span, under the short
+runbook.
 
 **Step 5.** Its exit is recall, the 2026-10-12 section's, and not met
 there. `token-plan.md` §2's targets for its cost, a first sweep over the
