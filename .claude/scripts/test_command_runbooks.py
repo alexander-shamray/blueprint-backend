@@ -22,6 +22,16 @@ CEILINGS = {
     "review-branch.md": 8400,
 }
 
+ROOT = COMMANDS.parent.parent
+
+# The rest of what a /ship run holds resident, measured the same way: step 6's
+# exit counts these beside ship.md and branch.md, and none was split.
+RESIDENT = {
+    ".claude/commands/pr.md": 9100,
+    "CLAUDE.md": 9000,
+    ".claude/commands/commit.md": 5200,
+}
+
 CITATION = re.compile(r"docs/commands/([a-z-]+\.md)`?, \*([^*]+)\*")
 
 
@@ -60,6 +70,12 @@ class EachSplitCommandHasBothHalves(unittest.TestCase):
         for name, ceiling in CEILINGS.items():
             with self.subTest(command=name):
                 size = len((COMMANDS / name).read_bytes().replace(b"\r\n", b"\n"))
+                self.assertLessEqual(size, ceiling, f"{name} is {size} bytes, over {ceiling}")
+
+    def test_each_resident_file_stays_under_its_ceiling(self):
+        for name, ceiling in RESIDENT.items():
+            with self.subTest(file=name):
+                size = len((ROOT / name).read_bytes().replace(b"\r\n", b"\n"))
                 self.assertLessEqual(size, ceiling, f"{name} is {size} bytes, over {ceiling}")
 
     def test_each_argument_names_its_runbook(self):
