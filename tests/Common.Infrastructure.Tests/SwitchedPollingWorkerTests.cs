@@ -13,15 +13,19 @@ public class SwitchedPollingWorkerTests
 
     private static readonly TimeSpan Observation = TimeSpan.FromMilliseconds(400);
 
-    private sealed class Probe(OperatorSwitches? switches, bool passAtStart = false, TimeSpan? drain = null)
+    private sealed class Probe(
+        OperatorSwitches? switches, bool passAtStart = false, TimeSpan? drain = null, TimeSpan? interval = null)
         : SwitchedPollingWorker(switches)
     {
+        private readonly TaskCompletionSource _firstPass = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _passes;
         private int _failures;
 
         public int Passes => Volatile.Read(ref _passes);
 
         public int Failures => Volatile.Read(ref _failures);
+
+        public Task FirstPass => _firstPass.Task;
 
         public bool Throws { get; init; }
 
@@ -33,7 +37,7 @@ public class SwitchedPollingWorkerTests
 
         public override string SwitchName => "probe";
 
-        protected override TimeSpan PassInterval => Tick;
+        protected override TimeSpan PassInterval => interval ?? Tick;
 
         protected override bool PassAtStart => passAtStart;
 
@@ -43,6 +47,7 @@ public class SwitchedPollingWorkerTests
         {
             Interlocked.Increment(ref _passes);
             DrainSeen = Drain;
+            _firstPass.TrySetResult();
 
             if (BlockUntilDrained)
             {
@@ -72,10 +77,10 @@ public class SwitchedPollingWorkerTests
         return new OperatorSwitches(provider.GetRequiredService<IOptionsMonitor<OperatorSwitchOptions>>(), provider);
     }
 
-    private static async Task RunAsync(Probe worker, TimeSpan? observation = null)
+    private static async Task RunAsync(Probe worker)
     {
         await worker.StartAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(observation ?? Observation, TestContext.Current.CancellationToken);
+        await Task.Delay(Observation, TestContext.Current.CancellationToken);
         await worker.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -125,12 +130,22 @@ public class SwitchedPollingWorkerTests
     [Fact]
     public async Task A_pass_at_start_runs_before_the_first_tick()
     {
-        // Observed for less than one tick, so only a pass that does not wait for the timer can have run.
-        Probe worker = new(null, passAtStart: true);
+        // The tick outlasts the wait, so a pass seen at all did not wait for the timer. Awaiting the pass, not a fixed
+        // window, keeps the thread pool's delay in starting the loop out of what is measured.
+        Probe worker = new(null, passAtStart: true, interval: TimeSpan.FromHours(1));
 
-        await RunAsync(worker, TimeSpan.FromMilliseconds(5));
+        await worker.StartAsync(TestContext.Current.CancellationToken);
 
-        worker.Passes.ShouldBeGreaterThanOrEqualTo(1);
+        try
+        {
+            await worker.FirstPass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            await worker.StopAsync(TestContext.Current.CancellationToken);
+        }
+
+        worker.Passes.ShouldBe(1);
     }
 
     [Fact]
