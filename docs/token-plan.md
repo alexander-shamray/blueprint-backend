@@ -301,8 +301,10 @@ edited to match the code. The security sweep gains the explicit partition the
 bug sweep had. From round 2 one auditor per row follows the leads the round
 before produced; `sweep-mark.sh` records a clean sweep's commit as a local
 `refs/sweeps/<kind>`, and the next round 1 reads only what changed since, or
-everything under `full`. Re-verification runs on Sonnet. The exit waits on
-step 1's quality set.
+everything under `full`. Re-verification runs on Sonnet. The exit's recall
+half is unmet on step 1's quality set, and its cost half waits on a sweep
+run, which the week after step 7 did not hold (`token-usage.md`,
+2026-10-18).
 
 ### Step 6 — the commands
 
@@ -334,8 +336,9 @@ because its frontmatter's deny list is 2 KB on its own, and `bug-sweep`,
 `branch` and `validate-blueprint` by the clauses review restored after the
 first cut dropped them, a rule kept being worth more than a byte saved.
 `test_command_runbooks.py` holds each runbook
-under a ceilings table and each citation to a heading that exists. The exit
-waits on the next real `/ship` run, measured with `tools/token-usage/`.
+under a ceilings table and each citation to a heading that exists. Measured
+over the week after step 7, the end state holds and the resident text
+misses the exit's figure (`token-usage.md`, 2026-10-18).
 
 ### Step 7 — the context a session carries, and what it re-sends on a wake
 
@@ -370,6 +373,13 @@ this step: step 2's exit for a main session's mean context holds, read from
 `mean_context`; less than 40% of the input equivalent comes after a wake; a
 `/validate-blueprint` run's main session averages under 150k a call; and
 every plan added since the check landed is under the planning rule's limit.
+
+**Measured** over the week after it landed (`token-usage.md`, 2026-10-18):
+the wake share passes; the main session's mean context does not, and is
+step 2's owed exit, #589; the plan limit holds with no plan added; and no
+`/validate-blueprint` run had a main session of its own, since `/ship`
+dispatches the audit, so that part has no subject, and no implementer ran
+inside an audit.
 
 ### Step 7d — which model a subagent runs on
 

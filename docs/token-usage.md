@@ -392,3 +392,72 @@ Copilot raised small points, wording and link forms among them, which
 Reading 3.5% as the reviewer being worse by that factor would be wrong.
 Reading it as meeting the exit would be wrong too. The runner does not
 count tokens, so what these runs cost is still unmeasured.
+
+## 2026-10-18 — a week after step 7, read against steps 5, 6 and 7
+
+Measured by the report on the owner's machine at f1cb6278, with
+`--since 2026-10-11`, the day step 7's runbook landed, and repeated with
+`--spawns 40`, `--tools 30` and `--docs`. Over 2026-10-11 to 2026-10-18,
+20,416 responses in 1,390 contexts came to 408M input equivalent, 86.5M of
+it after a wake; output was 8.5M.
+
+| Who | Contexts | Calls | Mean context | Input equivalent | After a wake |
+|---|---|---|---|---|---|
+| Main, `/ship` | 139 | 10,365 | 185k | 228.5M | 49.5M |
+| Main, no command | 571 | 3,083 | 127k | 59.0M | 6.5M |
+| Main, `skill:ship` | 11 | 871 | 305k | 29.4M | 9.5M |
+| `general-purpose` under `/ship` | 270 | 2,954 | 86k | 49.0M | 11.9M |
+| `branch-reviewer` under `/ship` | 240 | 1,356 | 47k | 15.2M | 4.8M |
+| Every main row | 732 | 14,666 | 179k | 323.1M | 67.1M |
+| Every `general-purpose` row | 339 | 3,532 | 84k | 59.1M | 12.5M |
+
+The last two rows sum the report's rows by agent; the mean context is
+fresh input plus cache writes plus cache reads over calls, as the column
+computes it.
+
+**Step 7's exit, part by part.** The span is eight days, against the two
+that set the step.
+
+- A main session's mean context is 179k, not under 150k, so step 2's exit
+  does not hold here. It was 252k to 274k on 2026-10-10.
+- 21% of the input equivalent came after a wake, under 40%; it was 63% on
+  2026-10-10.
+- No `/validate-blueprint` run has a main session of its own in the span:
+  the report has no `skill:validate-blueprint` row, because `/ship` step 2
+  dispatches the audit's passes and never invokes the command. Found by the
+  task each `general-purpose` agent was given, 162 audit passes ran from 63
+  sessions, for 40.7M over 2,750 calls, against 37.7M for the two audit
+  sessions of 2026-10-09 to 2026-10-10; none was an implementer. The main
+  sessions that dispatched them averaged 226k a call, 45 of their 94 rows
+  under 150k, but that is the whole `/ship` context, not the audit's, so
+  the exit's subject did not occur and is not read from this figure.
+- No plan was added under `docs/superpowers/plans/` after the plan-size
+  gate landed, at 2557f8d3 on 2026-10-11, so the plan limit holds
+  vacuously: there is no plan to test it on.
+
+**Step 6's exit.** A `/ship` turn's resident text, by step 1's method of
+bytes over four, is about 15.2k: `ship.md` 30,626 bytes, against 28,020
+when step 6 landed, with `branch.md`, `commit.md`, `pr.md` and `CLAUDE.md`
+at 30,245 between them. That is a third of the 45k measured on 2026-10-07,
+not the 12k the exit names. The end state held: 141 pull requests merged
+over the span, under the short runbook.
+
+**Step 5's exit.** No sweep ran in the span, so neither half of its token
+measurement — a first sweep's cost over the slices, and a repeat sweep from
+`refs/sweeps/<kind>` — has a figure. Its recall half is the 2026-10-12
+section's, and not met there.
+
+**What fills a main session**, from `--tools 30`: `Bash` results under
+`/ship`, 7,914 of them, about 2.5M tokens; `Read` under no command, 733,
+about 0.8M; `Read` under `/ship`, 627, about 0.6M.
+
+**The forty costliest subagents**, from `--spawns 40`, are audit passes,
+review rounds and `Explore` searches of 0.4M to 1.5M each. No plan writer
+and no implementer is among them, where on 2026-10-10 those two were 94.7M
+of the forty.
+
+**Which documents are opened**, from `--docs`:
+`appendix-e-reference-domain.md` 278 times, 177 by subagents;
+`15-cicd-deployment.md` 235, 159; `10-api-gateway.md` 191, 114;
+`09-messaging.md` 132, 88. These chapters, opened most by subagents, are
+the evidence token-plan step 8 is to decide on.
