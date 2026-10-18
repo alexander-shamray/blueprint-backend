@@ -47,9 +47,8 @@ SED_EXTENDED = re.compile(r"-[A-Za-z]*[Er][A-Za-z]*|--regexp-extended")
 SED_ADDRESS = r"\d+|\$|/(?:[^/\\]|\\.)*/"
 SED_LINES = re.compile(rf"({SED_ADDRESS})(?:,({SED_ADDRESS}))?p")
 GREPS = {"grep", "egrep", "fgrep"}
-# Commands that print nothing given an argument, so a call's result is still the grep's alone beside them; bare,
-# `export` and `set` list every variable, and `cd -` prints where it went.
-SILENT = {"cd", "export", "set"}
+# A `set` option that prints nothing, unlike -x tracing or a bare -o listing; -o takes a name after it.
+SET_SILENT = re.compile(r"[-+]([eu]*)(o?)")
 GREP_NUMBERED = re.compile(r"-[A-Za-z]*n[A-Za-z0-9]*|--line-number")
 NUMBERED_LINE = re.compile(r"(\d+)[:-]")
 HEAD_TAIL_COUNT = re.compile(r"-(\d+)|-n(\+?\d+)|--lines=(\+?\d+)")
@@ -391,11 +390,29 @@ def markdown_read(tool: str, given) -> list[tuple[str, Span]]:
                 found = [(path, narrowed(span, stage_span(words))) if i in piped else (path, span)
                          for i, (path, span) in enumerate(found)]
     # One result holds every command's output, so a grep beside another that prints cannot be told apart in it.
-    printing = [line for line in lines if (words := SHELL_WORD.findall(line))
-                and not (words[0].lower() in SILENT and len(words) > 1 and words[1] != "-")]
+    printing = [line for line in lines if (words := SHELL_WORD.findall(line)) and not silent(words)]
     if len(printing) > 1:
         found = [(path, None if isinstance(span, Grepped) else span) for path, span in found]
     return found
+
+
+def silent(words: list[str]) -> bool:
+    """Whether a command prints nothing, so a call's result is still a grep's alone beside it: only `cd <dir>`,
+    `export NAME=value` and `set` with -e, -u or -o <name>; bare or in any other form they can print."""
+    tool, given = words[0].lower(), words[1:]
+    if tool == "cd":
+        return len(given) == 1 and given[0] != "-"
+    if tool == "export":
+        return bool(given) and all("=" in word and not word.startswith("-") for word in given)
+    if tool != "set" or not given:
+        return False
+    at = 0
+    while at < len(given):
+        match = SET_SILENT.fullmatch(given[at])
+        if not match or not (match[1] or match[2]) or match[2] and at + 1 == len(given):
+            return False
+        at += 2 if match[2] else 1
+    return True
 
 
 def unquoted_split(separator: re.Pattern, text: str) -> list[str]:
