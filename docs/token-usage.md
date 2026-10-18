@@ -439,9 +439,9 @@ that set the step.
   vacuously: there is no plan to test it on.
 
 **Step 6's exit.** A `/ship` turn's resident text, by the method of
-`token-plan.md` §1, bytes over four, is about 15.2k: `ship.md` 30,626 bytes, against 28,020
-when step 6 landed, with `branch.md`, `commit.md`, `pr.md` and `CLAUDE.md`
-at 30,245 between them. That is a third of the 45k measured on 2026-10-07,
+`token-plan.md` §1, bytes over four, is about 15.2k: `ship.md` 30,626
+bytes, against 28,020 when step 6 landed, with `branch.md`, `commit.md`,
+`pr.md` and `CLAUDE.md` at 30,245 between them. That is a third of the 45k measured on 2026-10-07,
 not the 12k the exit names. The end state held: 141 pull requests merged
 over the span, under the short runbook.
 
