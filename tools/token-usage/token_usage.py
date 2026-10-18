@@ -82,7 +82,14 @@ class Grepped:
     text: str | None = None
 
 
-Span = tuple[int, int | None] | Addressed | Grepped | None
+@dataclass(frozen=True)
+class Piped:
+    """A stage that reads the stage before it: inner placed against the lines outer printed, in their order."""
+    outer: Span
+    inner: Span
+
+
+Span = tuple[int, int | None] | Addressed | Grepped | Piped | None
 
 
 @dataclass
@@ -455,11 +462,9 @@ def narrowed(outer: Span, inner: Span) -> Span:
         return replace(inner, within=outer)
     if outer == (1, None):
         return inner
-    if not (isinstance(outer, tuple) and isinstance(inner, tuple)):
-        return None
+    if not (isinstance(outer, tuple) and isinstance(inner, tuple)) or outer[0] < 1 or inner[0] < 1:
+        return Piped(outer, inner)
     (first, last), (start, end) = outer, inner
-    if first < 1 or start < 1:
-        return None
     stop = None if end is None else first + end - 1
     return first + start - 1, last if stop is None else stop if last is None else min(last, stop)
 
@@ -505,6 +510,9 @@ def span_lines(span: Span, lines: list[str]) -> set[int]:
     """The lines of a file, numbered from 1, that one open put in context."""
     if isinstance(span, Addressed):
         return addressed_lines(span, lines)
+    if isinstance(span, Piped):
+        within = sorted(span_lines(span.outer, lines))
+        return {within[n - 1] for n in span_lines(span.inner, [lines[n - 1] for n in within])}
     if isinstance(span, Grepped):
         within = sorted(span_lines(span.within, lines))
         printed = (span.text or "").splitlines()
