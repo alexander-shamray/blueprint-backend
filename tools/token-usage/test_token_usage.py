@@ -345,6 +345,18 @@ class ReportTests(unittest.TestCase):
         _, report = self.rows()
         self.assertEqual(report.results, {("/ship", "Bash"): [1, 40], ("/ship", "Read"): [1, 8]})
 
+    def test_a_request_blob_replaying_results_is_not_counted_again(self):
+        calls = {"type": "assistant", "timestamp": "2026-10-07T09:05:00.000Z", "message": {
+            "id": "m1", "usage": usage(read=1), "content": [
+                {"type": "tool_use", "id": "t1", "name": "Bash", "input": {}}]}}
+        results = {"type": "user", "timestamp": "2026-10-07T09:06:00.000Z", "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "t1", "content": "x" * 40}]}}
+        replayed = calls["message"]["content"] + results["message"]["content"]
+        blob = {"type": "api-request-blob", "message": {"content": replayed}}
+        self.files.write("s.jsonl", [ship(), calls, results, blob])
+        _, report = self.rows(since="2026-10-07")
+        self.assertEqual(report.results, {("/ship", "Bash"): [1, 40]})
+
 
 def call(tool, at="2026-10-07T09:10:00.000Z", cwd="/r/repo", call_id=None, **given):
     return {"type": "assistant", "timestamp": at, "cwd": cwd, "message": {
