@@ -449,14 +449,19 @@ class DocReadTests(unittest.TestCase):
     def test_an_open_whose_call_failed_put_nothing_in_context(self):
         with tempfile.TemporaryDirectory() as directory:
             files = Transcripts(Path(directory))
-            refused = {"type": "user", "timestamp": "2026-10-07T09:10:01.000Z", "message": {"content": [
-                {"type": "tool_result", "tool_use_id": "c1", "is_error": True, "content": "too large"}]}}
-            files.write("s.jsonl", [ship(), call("Read", call_id="c1", file_path="/r/repo/docs/a.md"), refused,
-                                    call("Read", call_id="c2", file_path="/r/repo/docs/a.md", offset=1, limit=9)])
+            def error(call_id, text):
+                return {"type": "user", "timestamp": "2026-10-07T09:10:01.000Z", "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": call_id, "is_error": True, "content": text}]}}
+            files.write("s.jsonl", [ship(), call("Read", call_id="c1", file_path="/r/repo/docs/a.md"),
+                                    error("c1", "File content exceeds maximum allowed tokens"),
+                                    call("Read", call_id="c2", file_path="/r/repo/docs/a.md", offset=1, limit=9),
+                                    call("Bash", call_id="c3", command="sed -n 1,4p docs/b.md; grep -n x docs/c.txt"),
+                                    error("c3", [{"type": "text", "text": "Exit code 1\n1:b"}]),
+                                    call("Bash", call_id="c4", command="cat docs/d.md"), error("c4", "Hook refused")])
             report = Report("2026-10-07")
             report.read_project(Path(directory))
-        self.assertEqual(report.reads, {("/r/repo/docs/a.md", MAIN): 2})
-        self.assertEqual(report.kept_opens(), [("/r/repo/docs/a.md", "s", (1, 9))])
+        self.assertEqual(report.reads[("/r/repo/docs/a.md", MAIN)], 2)
+        self.assertEqual(report.kept_opens(), [("/r/repo/docs/a.md", "s", (1, 9)), ("/r/repo/docs/b.md", "s", (1, 4))])
 
     def test_docs_lists_every_tracked_markdown_file_of_the_checkout(self):
         with tempfile.TemporaryDirectory() as directory:
