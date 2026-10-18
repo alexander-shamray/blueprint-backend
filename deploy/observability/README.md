@@ -262,91 +262,141 @@ operating system, the Docker engine's limits, the commit and the k6 version.
 k6 is a machine tool like Docker: install it with `winget install k6 --source
 winget`, or `choco install k6`, and add it to no manifest.
 
-**1. Publish Prometheus.** The `grafana` service runs grafana/otel-lgtm, whose
-bundled Prometheus listens on 9090 inside the container and is published
-nowhere. A scratch overlay, kept outside the repository, publishes it; Compose
-appends a `ports` list to the base file's, so 3000 stays. Keep the loopback
-bind, never `0.0.0.0`:
+The blocks run in order in one Git Bash shell from the repository root, with
+nothing to fill in, and running them all again is safe: each one finds what an
+earlier run left and reuses it. `MSYS_NO_PATHCONV=1` stops Git Bash rewriting
+the `/opt/...` paths the containers are handed.
 
-```yaml
-# slo-overlay.yml
-services:
-  grafana:
-    ports: [ "127.0.0.1:9090:9090" ]
-```
+**1. Reach Prometheus through Grafana.** The `grafana` service runs
+grafana/otel-lgtm, whose bundled Prometheus listens on 9090 inside the
+container and is published nowhere. Grafana's datasource proxy reaches it with
+no login, the image's default, so `PROM_URL` is the proxy's route and `slo.js`
+appends `/api/v1/query` to it, as `tools/game-day` reads alerts. No overlay
+publishes 9090: one would recreate `grafana`, and with no data volume its
+Prometheus would start empty. Bring the stack up and let it idle a minute, so
+the series `teardown()` reads have been exported once:
 
 ```bash
-docker compose -f deploy/compose/docker-compose.yml -f slo-overlay.yml up -d --build --wait
-curl http://127.0.0.1:9090/-/ready
+export MSYS_NO_PATHCONV=1
+docker compose -f deploy/compose/docker-compose.yml up -d --wait
+curl -fsS http://localhost:3000/api/datasources/proxy/uid/prometheus/-/ready \
+    && echo 'prometheus ready: yes' || echo 'prometheus ready: no'
 ```
 
-**2. Create the SLO client at runtime.** The Compose realm has no client with
-`orders:write` and a GUID `sub`, which `slo.js`'s header states as an
+**2. Create the SLO client at runtime, once.** The Compose realm has no client
+with `orders:write` and a GUID `sub`, which `slo.js`'s header states as an
 obligation, and whether the realm should carry one is not decided here. The
 `commerce-api` client scope already maps a client's `commerce-api` roles into
-the `permission` claim, so a service account holding the role is enough. On
-Git Bash for Windows, `MSYS_NO_PATHCONV=1` stops the `/opt/...` path being
-rewritten:
+the `permission` claim, so a service account holding the roles is enough. The
+block reads the client before creating it, grants both roles either way, since
+granting a held role changes nothing, and exports the secret for step 5:
 
 ```bash
 kcadm="docker exec commerce-keycloak-1 /opt/keycloak/bin/kcadm.sh"
 $kcadm config credentials --server http://localhost:8080 --realm master \
     --user admin --password admin
-$kcadm create clients -r commerce -s clientId=slo-run -s enabled=true \
+id=$($kcadm get clients -r commerce -q clientId=slo-run --fields id --format csv --noquotes | tr -d '\r')
+[ -n "$id" ] || id=$($kcadm create clients -r commerce -i -s clientId=slo-run -s enabled=true \
     -s publicClient=false -s serviceAccountsEnabled=true \
     -s standardFlowEnabled=false -s directAccessGrantsEnabled=false \
-    -s 'defaultClientScopes=["commerce-api"]'
-$kcadm add-roles -r commerce --uusername service-account-slo-run \
-    --cclientid commerce-api --rolename orders:write
-$kcadm add-roles -r commerce --uusername service-account-slo-run \
-    --cclientid commerce-api --rolename inventory:admin
-$kcadm get clients/<id the create printed>/client-secret -r commerce
+    -s 'defaultClientScopes=["commerce-api"]' | tr -d '\r')
+for role in orders:write inventory:admin; do
+    $kcadm add-roles -r commerce --uusername service-account-slo-run \
+        --cclientid commerce-api --rolename "$role"
+done
+export CLIENT_SECRET=$($kcadm get "clients/$id/client-secret" -r commerce \
+    --fields value --format csv --noquotes | tr -d '\r')
 ```
 
-Request the token from `localhost:8080`, the host the gateway's authority
-accepts, and decode one before loading anything: `permission` must be
-`["orders:write"]`, `sub` a GUID and `iss`
-`http://localhost:8080/realms/commerce`.
+Keycloak runs `start-dev` with no volume, so its database lives in its
+container: a `down`, or an `up` that recreates `keycloak`, loses the client,
+and this block makes it again with a new secret.
 
-**3. Choose the product and the currency.** The scenario orders one product in
+**3. Check the token before loading anything.** Request it from
+`localhost:8080`, the host the gateway's authority accepts. The check prints
+`token check: pass` and exits 0 when `permission` holds both roles, `sub` is a
+GUID and `iss` is `http://localhost:8080/realms/commerce`, and `fail` with
+exit 1 otherwise:
+
+```bash
+token=$(curl -fsS http://localhost:8080/realms/commerce/protocol/openid-connect/token \
+    -d grant_type=client_credentials -d client_id=slo-run --data-urlencode client_secret="$CLIENT_SECRET" \
+    | py -3.12 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')
+echo "$token" | py -3.12 -c '
+import base64, json, sys, uuid
+part = sys.stdin.read().strip().split(".")[1]
+claims = json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+try:
+    guid = bool(uuid.UUID(claims["sub"]))
+except ValueError:
+    guid = False
+ok = {"orders:write", "inventory:admin"} <= set(claims.get("permission", [])) and guid \
+    and claims["iss"] == "http://localhost:8080/realms/commerce"
+print("permission:", ",".join(claims.get("permission", [])), "| sub:", claims["sub"], "| iss:", claims["iss"])
+print("token check:", "pass" if ok else "fail")
+sys.exit(0 if ok else 1)'
+```
+
+**4. Choose the product and the currency.** The scenario orders one product in
 one currency, and without a matching row in `ordering.ProductPrices` every
-order is a 422 (§6.6). The seeded prices in
-[`deploy/compose/README.md`](../compose/README.md#seeded-products) are all in
-one currency; confirm it against the table rather than assuming. The password
-is read inside the container, as its healthcheck reads it, so the command
-carries none:
+order is a 422 (§6.6). The product is the first seeded one in
+[`deploy/compose/README.md`](../compose/README.md#seeded-products), whose table
+owns the id; its price ends in no pence the payment simulator scripts as a
+decline or a timeout, which would cancel the order. The currency is read from
+Ordering's own row rather than assumed, and `none` means Ordering has not
+received the product yet. The password is read inside the container, as its
+healthcheck reads it, so the command carries none:
 
 ```bash
-docker exec commerce-sql-1 sh -c '/opt/mssql-tools18/bin/sqlcmd \
-    -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d Ordering -W \
-    -Q "SELECT Currency, COUNT(*) FROM ordering.ProductPrices GROUP BY Currency"'
+product=5eed0000-0000-0000-0000-000000000001
+currency=$(docker exec commerce-sql-1 sh -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec "$@"' sh \
+    /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -d Ordering -h -1 -W \
+    -Q "SET NOCOUNT ON; SELECT Currency FROM ordering.ProductPrices WHERE ProductId = '$product' AND IsAvailable = 1" \
+    | tr -d '\r')
+echo "product: $product, currency: ${currency:-none}"
 ```
 
-**3a. Restock the product.** The run places 540 single-unit orders and
-`setup()` refuses a product with fewer available. Set the count with a
-token that holds `inventory:admin` (the `demo` user's, or the SLO client's):
+**4a. Restock the product.** The run places 540 single-unit orders and
+`setup()` refuses a product with fewer available. The SLO client holds
+`inventory:admin`, so its token sets an absolute count, and a repeat sets the
+same one; `available` is that count less what earlier runs still reserve:
 
 ```bash
-curl -X PUT http://localhost:5000/api/v1/inventory/stock/<a seeded id> \
-  -H "Authorization: Bearer <a token with inventory:admin>" \
-  -H "Content-Type: application/json" -d '{"onHand": 100000}'
+curl -fsS -X PUT "http://localhost:5000/api/v1/inventory/stock/$product" \
+    -H "Authorization: Bearer $token" -H "Content-Type: application/json" -d '{"onHand": 100000}'
+curl -fsS "http://localhost:5000/api/v1/inventory/stock/$product" -H "Authorization: Bearer $token"
 ```
 
-**4. Run it.** `BASE_URL` is the gateway on 5000, never a service port. Let the
-stack idle a minute after `up --wait` so the first scrape exists. The secret
-goes through the environment, never `-e`:
+**5. Run it.** `BASE_URL` is the gateway on 5000, never a service port. The
+secret reaches k6 through the environment step 2 exported, never `-e`. The run
+takes about three and a half minutes: three of load, then `teardown()` waits up
+to 50 seconds for the saga's tail before it asks Prometheus:
 
 ```bash
-export CLIENT_SECRET="<the slo-run secret>"
 k6 run \
   -e BASE_URL=http://localhost:5000 \
-  -e PROM_URL=http://127.0.0.1:9090 \
+  -e PROM_URL=http://localhost:3000/api/datasources/proxy/uid/prometheus \
   -e TOKEN_URL=http://localhost:8080/realms/commerce/protocol/openid-connect/token \
   -e CLIENT_ID=slo-run \
-  -e SLO_PRODUCT_ID=<a seeded id> \
-  -e SLO_CURRENCY=<its currency> \
+  -e SLO_PRODUCT_ID="$product" \
+  -e SLO_CURRENCY="$currency" \
   deploy/observability/slo/slo.js
+echo "k6 exit: $?"
 ```
+
+**The exit code is the verdict.** 0 is a pass: every threshold met and
+`teardown()` silent but for its `SLO run: not evaluated` line. 99 is a k6
+threshold crossed, with `teardown()` passing. 107 is a `fail()`: from
+`teardown()`, `SLO run failed:` and one line per breached row; from `setup()`,
+the configuration or stock refusal, with no load driven. It wins over 99 when
+both happen. 105 is an interrupt: on Ctrl+C k6 stops the load and still runs
+`teardown()` over the shortened window, but does not report its verdict, so an
+interrupted run is neither a pass nor a fail.
+
+**Nothing has to be undone afterwards.** The client stays in the running realm
+for the next run, the product keeps its count, and the orders a run placed,
+an interrupted one's included, go on through the saga with their stock
+reserved; the next run's step 4a sets the count again.
 
 A failed run is a finding, not a reason to loosen anything: thresholds, rate
 budgets and checks stay as they are. A defect in `slo.js` is fixed; a defect in
