@@ -444,7 +444,7 @@ class DocsTests(unittest.TestCase):
         blanks = ["a", "", "x1", "", "b", "", "---", "c", "---"]
         self.assertEqual(cover(Grepped((1, None), False, "x1\n\nb\n--\n---"), blanks), {3, 4, 5, 7})
 
-    def test_a_grep_takes_its_calls_result_unless_the_call_grepped_two_opens(self):
+    def test_a_grep_takes_its_calls_result_unless_the_call_made_another_open(self):
         with tempfile.TemporaryDirectory() as directory:
             files = Transcripts(Path(directory))
             def result(call_id, text):
@@ -455,13 +455,16 @@ class DocsTests(unittest.TestCase):
                                     call("Bash", call_id="c2",
                                          command="cat docs/a.md | grep x; cat docs/b.md | grep x"),
                                     result("c2", "x"), call("Bash", call_id="c3", command="cat docs/c.md"),
-                                    result("c3", "whole")])
+                                    result("c3", "whole"),
+                                    call("Bash", call_id="c4", command="cat docs/d.md | grep -n x; cat docs/e.md"),
+                                    result("c4", "1:x\n1:e")])
             report = Report()
             report.read_project(Path(directory))
         self.assertEqual(report.kept_opens(), [("/r/repo/docs/a.md", "s", Grepped((1, None), True, "4:x")),
                                                ("/r/repo/docs/a.md", "s", None), ("/r/repo/docs/b.md", "s", None),
-                                               ("/r/repo/docs/c.md", "s", (1, None))])
-        self.assertEqual(report.printed, {"c1": "4:x", "c2": "x"})
+                                               ("/r/repo/docs/c.md", "s", (1, None)),
+                                               ("/r/repo/docs/d.md", "s", None), ("/r/repo/docs/e.md", "s", (1, None))])
+        self.assertEqual(report.printed, {"c1": "4:x", "c2": "x", "c4": "1:x\n1:e"})
 
     def test_a_read_is_placed_in_the_checkout_its_worktrees_and_forks_and_nowhere_else(self):
         inside = token_usage.repo_relative
