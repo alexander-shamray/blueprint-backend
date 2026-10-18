@@ -69,14 +69,19 @@ runs from, with how often a main session and a subagent opened it — with
 `Read`, or with `cat`, `head`, `tail`, `sed` or `Get-Content` in a shell —
 in how many `contexts`, a main session or a subagent each, and in how many
 of those `over_half` of its lines were read: a `Read` covers its `offset`
-for its `limit`, 2,000 lines when none is named; `head`, `tail`, `sed -n`
-and a `Get-Content` count cover their lines; a later stage of the pipe
-that counts lines, `head`, `tail`, `sed -n` or `Select-Object`, narrows
-them, `cat` or another printer passes them on, and a stage the report
-cannot place, such as `grep`, covers none; and a call whose result was an
-error covers nothing, unless the error is a shell's non-zero exit, after
-which what the command printed still counts. An agent's own session, as a
-`tools/quality-sets` run is, opens as a subagent. Each file is grouped by who
+for its `limit`, 2,000 lines when none is named; `head`, `tail` and a
+`Get-Content` count cover their lines, and so does a `sed -n` address, a
+line number or a pattern between slashes that the report finds in the
+file's text as sed would; a later stage of the pipe that counts lines,
+`head`, `tail`, `sed -n` or `Select-Object`, narrows them, `cat` or
+another printer passes them on, a `grep` covers the lines its result
+printed, by the numbers `-n` gives or else by their text, unless the call
+grepped two files, and a stage the report cannot place, such as `sort`,
+covers none; and a call whose result was an error covers nothing, unless
+the error is a shell's non-zero exit, after which what the command printed
+still counts. A `|` or `;` inside quotes is part of a pattern, not a pipe
+or a second command. An agent's own session, as a `tools/quality-sets`
+run is, opens as a subagent. Each file is grouped by who
 names it: an `entry point` is a command, an agent or a skill's
 `SKILL.md`; `named by entry` is a file one of them names; `CLAUDE.md only`
 is one only `CLAUDE.md` names; `none` is the rest. A name is a path from

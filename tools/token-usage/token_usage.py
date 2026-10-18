@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 NO_COMMAND = "(no command)"
@@ -37,10 +37,18 @@ SHELL_READERS = {"cat", "head", "tail", "sed", "less", "more", "type", "gc", "ge
 SHELL_COMMAND = re.compile(r"&&|\|\||[;\n]")
 SED_IN_PLACE = re.compile(r"--in-place(?:=.*)?|-[A-Za-z]*i.*")
 SHELL_WORD = re.compile(r'"[^"]*"|\'[^\']*\'|\S+')
+SHELL_QUOTED = re.compile(r'"[^"]*"|\'[^\']*\'')
+SHELL_PIPE = re.compile(r"\|")
 # A span is the lines an open printed, (first, last) from 1, with last None for the end and a negative first
-# for the last lines; None is a part the report cannot place, such as what a grep kept.
+# for the last lines; a pattern's lines are placed against the file's text, and None is a part the report
+# cannot place, such as a sed script it does not parse.
 SED_QUIET = re.compile(r"-[A-Za-z]*n[A-Za-z]*|--quiet|--silent")
-SED_LINES = re.compile(r"(\d+)(?:,(\d+|\$))?p")
+SED_EXTENDED = re.compile(r"-[A-Za-z]*[Er][A-Za-z]*|--regexp-extended")
+SED_ADDRESS = r"\d+|\$|/(?:[^/\\]|\\.)*/"
+SED_LINES = re.compile(rf"({SED_ADDRESS})(?:,({SED_ADDRESS}))?p")
+GREPS = {"grep", "egrep", "fgrep"}
+GREP_NUMBERED = re.compile(r"-[A-Za-z]*n[A-Za-z0-9]*|--line-number")
+NUMBERED_LINE = re.compile(r"(\d+)[:-]")
 HEAD_TAIL_COUNT = re.compile(r"-(\d+)|-n(\+?\d+)|--lines=(\+?\d+)")
 READ_LIMIT = 2000
 # Where a run starts: what a command, an agent or a skill names, it is handed.
@@ -53,6 +61,28 @@ LINKS = ("entry point", "named by entry", "CLAUDE.md only", "none")
 WRITE_5M = 1.25
 WRITE_1H = 2.0
 READ = 0.1
+
+
+@dataclass(frozen=True)
+class Addressed:
+    """A sed address range: from each line the start matches to the next line the stop matches, to a line number
+    or to the end; or, single, each line the start matches. A pattern is the text between its slashes."""
+    start: int | str
+    stop: int | str | None
+    single: bool = False
+    extended: bool = False
+
+
+@dataclass(frozen=True)
+class Grepped:
+    """What a grep after a read printed of its span: the call's result, placed by its line numbers when the grep
+    numbered them, else by the lines of the span whose text it printed."""
+    within: Span
+    numbered: bool
+    text: str | None = None
+
+
+Span = tuple[int, int | None] | Addressed | Grepped | None
 
 
 @dataclass
@@ -117,9 +147,11 @@ class Report:
         self.spawns: list[dict] = []
         self.results: dict[tuple[str, str], list[int]] = {}
         self.reads: dict[tuple[str, str], int] = {}
-        self.opens: list[tuple[str, str, str, tuple[int, int | None] | None]] = []
+        self.opens: list[tuple[str, str, str, Span]] = []
         self.failed: set[str] = set()
         self.read_calls: set[str] = set()
+        self.grepped: dict[str, int] = {}
+        self.printed: dict[str, str] = {}
         self.trees: set[str] = set()
 
     def add(self, command: str, agent: str, entry: dict, context: str, woken: bool = False) -> dict | None:
@@ -236,10 +268,15 @@ class Report:
         if self.since and str(entry.get("timestamp", self.since))[:10] < self.since:
             return
         if entry.get("type") == "user":
-            # A shell's non-zero exit is an error result too, but its command ran and printed what it read.
-            self.failed.update(str(block.get("tool_use_id")) for block in content if isinstance(block, dict)
-                               and block.get("type") == "tool_result" and block.get("is_error")
-                               and not result_text(block.get("content")).startswith("Exit code"))
+            for block in content:
+                if not isinstance(block, dict) or block.get("type") != "tool_result":
+                    continue
+                call, text = str(block.get("tool_use_id")), result_text(block.get("content"))
+                # A shell's non-zero exit is an error result too, but its command ran and printed what it read.
+                if block.get("is_error") and not text.startswith("Exit code"):
+                    self.failed.add(call)
+                if call in self.grepped:
+                    self.printed[call] = text
             return
         if entry.get("type") != "assistant":
             return
@@ -255,11 +292,20 @@ class Report:
                     key = (absolute(path, cwd), who)
                     self.reads[key] = self.reads.get(key, 0) + 1
                     self.opens.append((str(call), key[0], context, span))
+                    if isinstance(span, Grepped):
+                        self.grepped[str(call)] = self.grepped.get(str(call), 0) + 1
 
-    def kept_opens(self) -> list[tuple[str, str, tuple[int, int | None] | None]]:
+    def kept_opens(self) -> list[tuple[str, str, Span]]:
         """Each open whose call did not fail, as (path, context, span): a refused Read put none of the file in
-        context."""
-        return [(path, context, span) for call, path, context, span in self.opens if call not in self.failed]
+        context. A grep's span takes its call's result, unless the call grepped two opens and mixed them in it."""
+        kept = []
+        for call, path, context, span in self.opens:
+            if call in self.failed:
+                continue
+            if isinstance(span, Grepped):
+                span = replace(span, text=self.printed.get(call)) if self.grepped[call] == 1 else None
+            kept.append((path, context, span))
+        return kept
 
     def entries(self, path: Path):
         with path.open(encoding="utf-8", errors="replace") as lines:
@@ -296,7 +342,7 @@ def result_text(content) -> str:
     return ""
 
 
-def markdown_read(tool: str, given) -> list[tuple[str, tuple[int, int | None] | None]]:
+def markdown_read(tool: str, given) -> list[tuple[str, Span]]:
     """The markdown paths one tool call reads, each with the span it printed: Read's file, from its offset for its
     limit, or what cat, head, tail, sed or Get-Content print, narrowed by the stages of a pipe after them."""
     if not isinstance(given, dict):
@@ -309,10 +355,10 @@ def markdown_read(tool: str, given) -> list[tuple[str, tuple[int, int | None] | 
     command = given.get("command")
     if tool not in ("Bash", "PowerShell") or not isinstance(command, str):
         return []
-    found: list[tuple[str, tuple[int, int | None] | None]] = []
-    for line in SHELL_COMMAND.split(command):
+    found: list[tuple[str, Span]] = []
+    for line in unquoted_split(SHELL_COMMAND, command):
         piped: list[int] = []
-        for stage in line.split("|"):
+        for stage in unquoted_split(SHELL_PIPE, line):
             words = [w.strip("\"'") for w in SHELL_WORD.findall(stage)]
             if not words:
                 continue
@@ -332,6 +378,16 @@ def markdown_read(tool: str, given) -> list[tuple[str, tuple[int, int | None] | 
     return found
 
 
+def unquoted_split(separator: re.Pattern, text: str) -> list[str]:
+    """A command split at each separator outside quotes, as a sed or grep pattern can hold `|` or `;`."""
+    masked = SHELL_QUOTED.sub(lambda m: "\0" * len(m[0]), text)
+    parts, start = [], 0
+    for found in separator.finditer(masked):
+        parts.append(text[start:found.start()])
+        start = found.end()
+    return [*parts, text[start:]]
+
+
 def count_after(words: list[str], flags: set[str]) -> int | None:
     """The number after the first of the flags among a command's words, as -TotalCount 40 gives it."""
     for i, word in enumerate(words[:-1]):
@@ -340,7 +396,7 @@ def count_after(words: list[str], flags: set[str]) -> int | None:
     return None
 
 
-def stage_span(words: list[str]) -> tuple[int, int | None] | None:
+def stage_span(words: list[str]) -> Span:
     """The span one stage of a command prints of what it reads, a file it names or the stage before it."""
     tool = words[0].lower()
     if tool in ("cat", "less", "more", "type"):
@@ -360,7 +416,7 @@ def stage_span(words: list[str]) -> tuple[int, int | None] | None:
         quiet = any(SED_QUIET.fullmatch(w) for w in words[1:])
         script = next((w for w in words[1:] if not w.startswith("-") and not w.lower().endswith(".md")), "")
         if quiet and (match := SED_LINES.fullmatch(script)):
-            return int(match[1]), None if match[2] == "$" else int(match[2] or match[1])
+            return sed_span(match[1], match[2], any(SED_EXTENDED.fullmatch(w) for w in words[1:]))
         if not quiet and (match := re.fullmatch(r"(\d+)q", script)):
             return 1, int(match[1])
         return None if quiet else (1, None)
@@ -372,21 +428,94 @@ def stage_span(words: list[str]) -> tuple[int, int | None] | None:
         if last := count_after(words, {"-last"}):
             return -last, None
         return (skip + 1, skip + first if first else None) if first or skip else None
+    if tool in GREPS:
+        return Grepped((1, None), any(GREP_NUMBERED.fullmatch(w) for w in words[1:]))
     return None
 
 
-def narrowed(outer: tuple[int, int | None] | None,
-             inner: tuple[int, int | None] | None) -> tuple[int, int | None] | None:
-    """The file's span a stage prints when it reads the stage before it, counting inner from that stage's start."""
+def sed_span(start: str, stop: str | None, extended: bool) -> Span:
+    """The span a quiet sed prints for one address, or for a range of two."""
+    if start == "$":
+        return (-1, None) if stop is None else None
+    if not start.startswith("/") and not (stop or "").startswith("/"):
+        return int(start), None if stop == "$" else int(stop or start)
+    def address(word: str) -> int | str | None:
+        return word[1:-1] if word.startswith("/") else None if word == "$" else int(word)
+    return Addressed(address(start), None if stop is None else address(stop), stop is None, extended)
+
+
+def narrowed(outer: Span, inner: Span) -> Span:
+    """The file's span a stage prints when it reads the stage before it, counting inner from that stage's start.
+    A grep's span is its call's result, which every stage after it has already narrowed."""
+    if isinstance(outer, Grepped):
+        return outer
     if outer is None or inner is None:
         return None
+    if isinstance(inner, Grepped):
+        return replace(inner, within=outer)
     if outer == (1, None):
         return inner
+    if not (isinstance(outer, tuple) and isinstance(inner, tuple)):
+        return None
     (first, last), (start, end) = outer, inner
     if first < 1 or start < 1:
         return None
     stop = None if end is None else first + end - 1
     return first + start - 1, last if stop is None else stop if last is None else min(last, stop)
+
+
+def sed_pattern(body: str, extended: bool) -> re.Pattern | None:
+    """A sed pattern as Python reads it: in a basic one `\\(` groups and `(` is itself, the reverse of extended."""
+    if not extended:
+        body = re.sub(r"\\([(){}+?|])|([(){}+?|])", lambda m: m[1] or "\\" + m[2], body)
+    try:
+        return re.compile(body)
+    except re.error:
+        return None
+
+
+def addressed_lines(span: Addressed, lines: list[str]) -> set[int]:
+    """The lines sed prints of a file for an address range, numbered from 1."""
+    start = span.start if isinstance(span.start, int) else sed_pattern(span.start, span.extended)
+    stop = sed_pattern(span.stop, span.extended) if isinstance(span.stop, str) else span.stop
+    if start is None or isinstance(span.stop, str) and stop is None:
+        return set()
+    def hits(address: int | re.Pattern, number: int) -> bool:
+        return number == address if isinstance(address, int) else address.search(lines[number - 1]) is not None
+    printed, number = set(), 1
+    while number <= len(lines):
+        if not hits(start, number):
+            number += 1
+            continue
+        if span.single:
+            end = number
+        elif isinstance(stop, int):
+            # A stop at or before the line the start matched prints that line alone.
+            end = min(max(stop, number), len(lines))
+        elif stop is None:
+            end = len(lines)
+        else:
+            end = next((n for n in range(number + 1, len(lines) + 1) if hits(stop, n)), len(lines))
+        printed.update(range(number, end + 1))
+        number = end + 1
+    return printed
+
+
+def span_lines(span: Span, lines: list[str]) -> set[int]:
+    """The lines of a file, numbered from 1, that one open put in context."""
+    if isinstance(span, Addressed):
+        return addressed_lines(span, lines)
+    if isinstance(span, Grepped):
+        within = sorted(span_lines(span.within, lines))
+        printed = (span.text or "").splitlines()
+        if span.numbered:
+            numbers = {int(match[1]) for line in printed if (match := NUMBERED_LINE.match(line))}
+            return {within[n - 1] for n in numbers if 0 < n <= len(within)}
+        return {n for n in within if lines[n - 1] in set(printed)}
+    if span is None:
+        return set()
+    (first, last), size = span, len(lines)
+    return set(range(max(size + first + 1 if first < 0 else first, 1), min(last or size, size) + 1))
 
 
 def slashed(path: str) -> str:
@@ -453,9 +582,8 @@ def named_in(source: str, text: str, docs: dict[str, str]) -> set[str]:
     return found
 
 
-def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int],
-             opens: list[tuple[str, str, tuple[int, int | None] | None]], root: str,
-             trees: set[str] | tuple[str, ...] = ()) -> list[dict]:
+def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int], opens: list[tuple[str, str, Span]],
+             root: str, trees: set[str] | tuple[str, ...] = ()) -> list[dict]:
     """One row per tracked document: who names it, how often a main session and a subagent opened it, how many
     contexts opened it, and how many of those read more than half of its lines."""
     entry = {doc for doc in docs if ENTRY.fullmatch(doc)}
@@ -466,13 +594,12 @@ def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int],
         if (doc := repo_relative(path, root, trees)) in docs:
             opened[doc, who] = opened.get((doc, who), 0) + count
     covered: dict[tuple[str, str], set[int]] = {}
+    split: dict[str, list[str]] = {}
     for path, context, span in opens:
         if (doc := repo_relative(path, root, trees)) not in docs:
             continue
-        lines, size = covered.setdefault((doc, context), set()), len(docs[doc].splitlines())
-        if span is not None:
-            first, last = span
-            lines.update(range(max(size + first + 1 if first < 0 else first, 1), min(last or size, size) + 1))
+        lines = split.setdefault(doc, docs[doc].splitlines())
+        covered.setdefault((doc, context), set()).update(span_lines(span, lines))
     contexts: dict[str, int] = {}
     over_half: dict[str, int] = {}
     for (doc, _), lines in covered.items():
