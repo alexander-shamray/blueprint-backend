@@ -95,7 +95,7 @@ every sweep's tooling row reads.
 | Where | Now | After |
 |---|---|---|
 | Every turn, everywhere | 3.9k + 1.2k | about 1.5k + 0.85k |
-| A `/ship` turn | about 45k resident | about 12k |
+| A `/ship` turn | about 45k resident | about 15k, step 6's restated exit |
 | Reviewing one PR | about 9M, carrying the triage chain over as is | about 0.8M |
 | A first sweep | up to about 185M | about 25M ending by round 3, about 40M at the seventh |
 | A repeat sweep | the same | about 2–4M |
@@ -322,7 +322,7 @@ read only when the command is disputed or edited.
 | `validate-blueprint` | 4.5k | about 2k |
 | `review-branch` | 3.9k | about 1.5k |
 
-**Exit.** A `/ship` run's resident text is about 12k a turn, and the run
+**Exit.** A `/ship` run's resident text is §2's figure a turn, and the run
 reaches the same end state as one under the long form.
 
 **Landing.** The six runbooks keep their frontmatter, every step and its
@@ -339,7 +339,14 @@ first cut dropped them, a rule kept being worth more than a byte saved.
 `test_command_runbooks.py` holds each runbook
 under a ceilings table and each citation to a heading that exists. Measured
 over the week after step 7, the end state holds and the resident text
-misses the exit's figure (`token-usage.md`, 2026-10-18).
+misses the 12k the exit first named (`token-usage.md`, 2026-10-18), so §2
+restates it rather than this step cutting again. The five files a run holds
+came to about 13.9k when this step landed, because `commit`, `pr` and
+`CLAUDE.md` were never in its table, and what `ship` has gained since is
+rules later PRs added, step 7's sleep, the CI wait handed to an agent and
+the audit dispatched rather than invoked among them, not its argument
+regrown: 12k is reached only by cutting rules, and a rule kept is worth more
+than a byte saved.
 
 ### Step 7 — the context a session carries, and what it re-sends on a wake
 
