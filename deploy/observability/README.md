@@ -273,12 +273,14 @@ container and is published nowhere. Grafana's datasource proxy reaches it with
 no login, the image's default, so `PROM_URL` is the proxy's route and `slo.js`
 appends `/api/v1/query` to it, as `tools/game-day` reads alerts. No overlay
 publishes 9090: one would recreate `grafana`, and with no data volume its
-Prometheus would start empty. Bring the stack up and let it idle a minute, so
-the series `teardown()` reads have been exported once:
+Prometheus would start empty. Bring the stack up with `--build`, since the
+services are built from source and the result is reported with this commit,
+and let it idle a minute, so the series `teardown()` reads have been exported
+once:
 
 ```bash
 export MSYS_NO_PATHCONV=1
-docker compose -f deploy/compose/docker-compose.yml up -d --wait
+docker compose -f deploy/compose/docker-compose.yml up -d --build --wait
 curl -fsS http://localhost:3000/api/datasources/proxy/uid/prometheus/-/ready \
     && echo 'prometheus ready: yes' || echo 'prometheus ready: no'
 ```
