@@ -418,7 +418,7 @@ for the next run, the product keeps its count, and the orders a run placed,
 an interrupted one's included, go on through the saga with their stock
 reserved; the next run's step 4a sets the count again.
 
-**A run does leave a backlog, and the next run waits for it to clear.** It
+**A run does leave a backlog, so wait for it to clear before the next.** It
 places orders faster than one `shipping-worker` books them or one
 `notifications-worker` sends their notices, so both are still working through
 them long after k6 exits: on one machine a run left about 45 minutes of
