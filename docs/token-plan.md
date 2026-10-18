@@ -129,7 +129,8 @@ time.
 - `tools/token-usage/` reads Claude Code's transcripts and reports input,
   cache writes, cache reads and output per command and per subagent type,
   with a suite. Landed. Its `--docs` view, which lists the markdown files a
-  run opens and who names them, landed after it.
+  run opens, who names them and how many opens took part of a file, landed
+  after it.
 - `docs/token-usage.md` records the baseline. An all-history total and a
   three-week window landed, and one named `/ship` run; a second named run
   and one sweep are still owed.
@@ -415,6 +416,17 @@ loses recall.
 
 **Landed:** the report's `--models` view and the rule. **Owed:** the
 "after #845" rows, and the exit measurement.
+
+### Not a step — how subagents read the chapters
+
+#847 asked whether the chapters subagents open most need a step 8: a brief
+that names a section, the index before `Read`, or splitting the largest
+chapters. [`token-usage.md`](token-usage.md)'s 2026-10-18 section on whole
+and ranged opens decides it: the chapters are opened often and almost
+always in part, so there is no whole-chapter read for any of the three to
+cut, and the plan has no step 8. It is measured again with the others,
+from `--docs`'s `ranged` column; a rise in whole opens of a chapter is what
+would reopen it.
 
 ### Alongside — the comment budget
 
