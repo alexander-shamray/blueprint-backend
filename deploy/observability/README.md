@@ -257,7 +257,7 @@ much weaker claim, and the run says so rather than reporting a pass.
 settled, because [ADR-063](../../docs/backend-architecture/adr/ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-hand.md)
 waits on a baseline under load for both and this run is the only load the
 platform has. No rule pages on either yet, so there is no limit to fail the
-run on, and an absent series is printed rather than failed.
+run on, and an absent series or a refused read is printed rather than failed.
 
 ### Running it locally
 

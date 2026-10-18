@@ -375,16 +375,20 @@ export function teardown(data) {
         'SLO run: not evaluated — availability (monthly), ' +
         'messaging.delivery.lag (not exercised by this traffic).');
 
-    // Recorded and never asserted: ADR-063 waits on a baseline under load for the
-    // two overdue gauges, and this run is the only load the platform has. It also
-    // records that no rule pages on either yet, so there is no limit to hold them
-    // to, and an absent series is printed rather than failed. Read after settling, so each
-    // includes the backlog this run's orders left for the workers to book or send.
+    // Recorded, never asserted: ADR-063 waits on a baseline under load for both
+    // overdue gauges, this run is the only load the platform has, and no rule
+    // pages on either yet, so there is no limit to hold them to. An absent series
+    // or a refused read is printed, never failed. Read after settling, each holds
+    // the backlog this run's orders left for the workers to book or send.
     const overdue = [
         ['shipping.shipments.overdue', 'max(shipping_shipments_overdue_seconds)'],
         ['notifications.overdue', 'max(notifications_overdue_seconds)'],
     ].map(([name, query]) => {
-        const value = instantQuery(query);
+        const { status, value } = readQuery(query);
+
+        if (status !== 200)
+            return `${name} unavailable (Prometheus returned ${status})`;
+
         return `${name} ${value === null ? 'no series' : `${value.toFixed(1)} s`}`;
     });
     console.log(`SLO run: recorded, not asserted — ${overdue.join(', ')}.`);
@@ -432,17 +436,29 @@ function newCommandId() {
 }
 
 function instantQuery(query) {
+    const { status, value } = readQuery(query);
+
+    if (status !== 200)
+        fail(`Prometheus returned ${status} for: ${query}`);
+
+    return value;
+}
+
+// The read without the verdict, for the rows teardown() records and never
+// asserts: a refused query there is printed, so it can neither fail the run nor
+// stand in for its breach list.
+function readQuery(query) {
     const response = http.get(`${PROM_URL}/api/v1/query?query=${encodeURIComponent(query)}`);
 
     if (response.status !== 200)
-        fail(`Prometheus returned ${response.status} for: ${query}`);
+        return { status: response.status, value: null };
 
     const result = response.json('data.result');
 
     if (!result || result.length === 0)
-        return null;
+        return { status: 200, value: null };
 
     const value = Number(result[0].value[1]);
 
-    return Number.isNaN(value) ? null : value;
+    return { status: 200, value: Number.isNaN(value) ? null : value };
 }
