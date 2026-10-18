@@ -380,8 +380,9 @@ curl -fsS "http://localhost:5000/api/v1/inventory/stock/$product" -H "Authorizat
 
 **5. Run it.** `BASE_URL` is the gateway on 5000, never a service port. The
 secret reaches k6 through the environment step 2 exported, never `-e`. The run
-takes about three and a half minutes: three of load, then `teardown()` waits up
-to 50 seconds for the saga's tail before it asks Prometheus:
+takes three to four minutes: about 190 seconds of load, because the orders
+start ten seconds in, then `teardown()` waits up to 50 seconds for the saga's
+tail before it asks Prometheus:
 
 ```bash
 k6 run \
