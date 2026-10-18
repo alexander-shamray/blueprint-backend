@@ -375,6 +375,20 @@ export function teardown(data) {
         'SLO run: not evaluated — availability (monthly), ' +
         'messaging.delivery.lag (not exercised by this traffic).');
 
+    // Recorded and never asserted: ADR-063 waits on a baseline under load for the
+    // two overdue gauges, and this run is the only load the platform has. It also
+    // records that no rule pages on either yet, so there is no limit to hold them
+    // to, and an absent series is printed rather than failed. Read after settling, so each
+    // includes the backlog this run's orders left for the workers to book or send.
+    const overdue = [
+        ['shipping.shipments.overdue', 'max(shipping_shipments_overdue_seconds)'],
+        ['notifications.overdue', 'max(notifications_overdue_seconds)'],
+    ].map(([name, query]) => {
+        const value = instantQuery(query);
+        return `${name} ${value === null ? 'no series' : `${value.toFixed(1)} s`}`;
+    });
+    console.log(`SLO run: recorded, not asserted — ${overdue.join(', ')}.`);
+
     if (breaches.length > 0)
         fail(`SLO run failed:\n  ${breaches.join('\n  ')}`);
 }

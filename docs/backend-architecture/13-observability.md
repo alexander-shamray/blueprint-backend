@@ -1940,6 +1940,18 @@ for what it actually does gets maintained. This is also not a capacity test —
 it catches the regression where a query loses its index and goes from 40 ms
 to 4 s, which no unit test will find.
 
+**It also records the two overdue gauges, and asserts neither.**
+`shipping.shipments.overdue` and `notifications.overdue` are printed once the
+run has settled, because
+[ADR-063](adr/ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-hand.md)
+waits on a baseline under load for both and this run is the only load the
+platform has; no rule pages on either yet, so there is no target to hold them
+to. The absent-series rule above is for the rows the run asserts, so an absent
+gauge here is printed as missing rather than failing the run. The run places
+orders faster than one worker books or sends them, so the readings are the
+backlog it leaves, and a second run inside that backlog's lifetime starts on a
+target that is not quiescent.
+
 ## 13.8 Ownership
 
 | Artefact | Owner |
