@@ -786,7 +786,7 @@ jobs:
     runs-on: ubuntu-latest
     # Sized with the build job's, above.
     timeout-minutes: 30
-    # The one job that comments: it posts a sighting on its issue.
+    # The one job that comments: it posts a sighting, or a warm-up retry, on its issue.
     permissions:
       contents: read
       issues: write
@@ -826,15 +826,28 @@ jobs:
       # is not a skip: selected out, a test is not reported as passing;
       # selected in, it needs the daemon exactly as before. The runner has one.
       - name: Integration stage, ${{ matrix.shard }}
+        id: stage
         env:
           PLATFORM_SIGHTINGS_DIR: ${{ github.workspace }}/TestResults/sightings
-        run: >
-          dotnet test Platform.slnx --no-build -c Release
-          --filter "Category=Integration&${{ matrix.selects }}"
-          --collect:"Code Coverage"
-          --settings coverage.runsettings
-          --logger trx
-          --results-directory ./TestResults/integration
+          FILTER: Category=Integration&${{ matrix.selects }}
+        # A first attempt that fails on TestcontainersWarmUp's named failure runs
+        # once more, since a type initialiser that threw never runs again in its
+        # process and only a new one recovers (docs/testing.md). Any other failure
+        # is final, and the first attempt's results go, or the stage gate would
+        # count each of their tests twice.
+        run: |
+          set -o pipefail
+          stage() {
+            dotnet test Platform.slnx --no-build -c Release --filter "$FILTER" \
+              --collect:"Code Coverage" --settings coverage.runsettings \
+              --logger trx --results-directory ./TestResults/integration
+          }
+          if stage 2>&1 | tee first-attempt.log; then exit 0; fi
+          grep -qF "Testcontainers' static initialisation failed" first-attempt.log || exit 1
+          echo "::warning::TestcontainersWarmUp's named failure; running the shard again in a new process."
+          echo "retried=true" >> "$GITHUB_OUTPUT"
+          rm -rf ./TestResults/integration
+          stage
 
       - name: Hand the shard to the stage gate
         uses: actions/upload-artifact@v4
@@ -875,6 +888,22 @@ jobs:
             } > body.md
             gh issue comment 824 --body-file body.md
           done
+
+      # A retry hides the failure it recovered from, so the run is posted where
+      # that failure is tracked, which counts each recurrence.
+      - name: "Post the warm-up retry on #960"
+        if: always() && steps.stage.outputs.retried == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHARD: ${{ matrix.shard }}
+          REF_NAME: ${{ github.ref_name }}
+          OUTCOME: ${{ steps.stage.outcome }}
+        run: >
+          gh issue comment 960 --body
+          "TestcontainersWarmUp's named failure, and the shard ran again in a new process.
+          Run $RUN_URL, shard $SHARD, ref $REF_NAME; the retry's outcome was $OUTCOME."
 
   # Every stage's results in one place, the only place both readers below can
   # judge the run whole. Not `if: always()`: after a failed stage there is

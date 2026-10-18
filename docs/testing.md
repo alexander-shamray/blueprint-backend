@@ -83,7 +83,11 @@ process recovers. It first matches the same pattern once outside that timeout,
 so the regex engine's first-use cost is already paid. Every fixture that
 builds a container calls it before the first builder, through
 `TestcontainersWarmUp.Build` where that builder is a field initialiser, and a
-new fixture does the same.
+new fixture does the same. CI's integration shards take the new process: a
+shard whose first attempt fails with that named failure runs once more, with
+the first attempt's results removed, and the run is posted on
+[#960](https://github.com/alexander-shamray/blueprint-backend/issues/960) for
+the recurrence count; any other failure is final.
 
 **They are not skipped when the daemon is absent, and that is a decision.** A
 skip on a missing daemon **fails open**: CI goes green on a runner whose Docker
