@@ -340,8 +340,8 @@ first cut dropped them, a rule kept being worth more than a byte saved.
 under a ceilings table and each citation to a heading that exists. The
 exit's figure counts the five files a run holds, three of which, `commit`,
 `pr` and `CLAUDE.md`, were never in this step's table; and what `ship`
-carries past its landed size is rules later PRs added, step 7's sleep, the
-CI wait handed to an agent and the audit dispatched rather than invoked
+carries past its landed size is rules later PRs added, `/ship`'s `--sleep`,
+the CI wait handed to an agent and the audit dispatched rather than invoked
 among them, not its argument regrown, a rule kept being worth more than a
 byte saved. `token-usage.md`'s 2026-10-18 section measures a run against
 it, and the end state holds.
