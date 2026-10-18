@@ -4,6 +4,7 @@
 """
 
 import contextlib
+import importlib.util
 import io
 import json
 import subprocess
@@ -14,6 +15,11 @@ from unittest import mock
 
 import token_usage
 from token_usage import MAIN, NO_COMMAND, SUBAGENT, Report
+
+RUNNER = importlib.util.spec_from_file_location(
+    "quality_sets", Path(__file__).resolve().parents[1] / "quality-sets" / "quality_sets.py")
+quality_sets = importlib.util.module_from_spec(RUNNER)
+RUNNER.loader.exec_module(quality_sets)
 
 
 def usage(read=0, write_5m=0, write_1h=0, output=0, fresh=0):
@@ -252,6 +258,22 @@ class ReportTests(unittest.TestCase):
         rows, _ = self.rows()
         self.assertEqual(rows["/ship", "main"]["cache_read"], 3)
 
+    def test_a_session_started_as_an_agent_is_that_agent_under_the_command_it_was_read_as(self):
+        setting = {"type": "agent-setting", "agentSetting": "security-auditor"}
+        run = [setting, {**prompt("Root path: /t/secsweep-a1b2c3."), "cwd": "/t/secsweep-a1b2c3"}, reply("m1", read=7),
+               ship("2026-10-07T09:30:00.000Z"), reply("m2", read=3)]
+        self.files.write("s.jsonl", run)
+        report = Report()
+        report.read_project(self.root, "quality-sets:sweep")
+        rows = {(r["command"], r["agent"]): r["cache_read"] for r in report.rows()}
+        self.assertEqual(rows[("quality-sets:sweep", "security-auditor")], 7)
+        self.assertEqual(rows[("/ship", "security-auditor")], 3)
+        self.assertEqual(report.trees, {"/t/secsweep-a1b2c3"})
+        plain = Report()
+        plain.read_project(self.root)
+        self.assertIn((NO_COMMAND, "security-auditor"), {(r["command"], r["agent"]) for r in plain.rows()})
+        self.assertEqual(plain.trees, set())
+
     def test_the_span_is_the_first_and_last_day_counted(self):
         self.files.write("s.jsonl", [ship(), reply("m1", at="2026-09-01T00:00:00.000Z"),
                                      reply("m2", at="2026-10-02T00:00:00.000Z")])
@@ -384,6 +406,10 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(inside("/r/repo-fork/docs/a.md", "/r/repo"), "docs/a.md")
         self.assertIsNone(inside("/r/other/docs/a.md", "/r/repo"))
         self.assertEqual(inside(token_usage.absolute("Docs\\A.md", "c:\\Dev\\Repo"), "C:\\dev\\repo"), "Docs/A.md")
+        self.assertEqual(inside("/t/secsweep-a1b2c3/docs/a.md", "/r/repo", {"/t/secsweep-a1b2c3"}), "docs/a.md")
+        self.assertIsNone(inside("/t/secsweep-a1b2c3x/docs/a.md", "/r/repo", {"/t/secsweep-a1b2c3"}))
+        self.assertEqual(inside("D:/Tmp/qs-review-x/tree/docs/a.md", "C:/r/repo", {"d:/tmp/qs-review-x/tree"}),
+                         "docs/a.md")
         self.assertEqual(token_usage.absolute("../docs/a.md", "/r/repo/src"), "/r/repo/docs/a.md")
 
     def test_a_document_is_named_by_path_by_a_relative_link_by_a_unique_name_or_by_a_template(self):
@@ -507,6 +533,51 @@ class CommandLineTests(unittest.TestCase):
                 expected = [main, *beside]
                 self.assertEqual(token_usage.default_projects(checkout), expected)
                 self.assertEqual(token_usage.default_projects(worktree), expected)
+
+    def test_the_default_reads_each_quality_sets_run_by_the_name_its_runner_gives_the_worktree(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            temp, checkout = base / "temp", base / "repo"
+            temp.mkdir()
+            projects = base / "home" / ".claude" / "projects"
+            main = projects / token_usage.project_name(str(checkout))
+            with mock.patch.object(tempfile, "tempdir", str(temp)), \
+                    mock.patch.object(token_usage.Path, "home", return_value=base / "home"):
+                review = projects / token_usage.project_name(str(quality_sets.review_workspace() / "tree"))
+                sweep = projects / token_usage.project_name(str(quality_sets.sweep_root()))
+                # A sweep command's mktemp worktree is never a session's directory, and its name is not hex.
+                decoys = [projects / token_usage.project_name(str(temp / name))
+                          for name in ("secsweep-AbC12z", "other")]
+                for made in (main, review, sweep, *decoys):
+                    made.mkdir(parents=True)
+                self.assertEqual(token_usage.default_projects(checkout), [main, *sorted([review, sweep])])
+                self.assertEqual([token_usage.runner_command(p) for p in (review, sweep, main, *decoys)],
+                                 ["quality-sets:review", "quality-sets:sweep", None, None, None])
+
+    def test_docs_counts_a_quality_sets_runs_reads_of_its_worktree(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory).resolve()
+            temp, checkout = base / "temp", base / "repo"
+            (checkout / "docs").mkdir(parents=True)
+            (checkout / "docs" / "a.md").write_text("one\ntwo\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=checkout, check=True)
+            subprocess.run(["git", "add", "."], cwd=checkout, check=True)
+            temp.mkdir()
+            projects = base / "home" / ".claude" / "projects"
+            projects.mkdir(parents=True)
+            out = io.StringIO()
+            with mock.patch.object(tempfile, "tempdir", str(temp)), \
+                    mock.patch.object(token_usage.Path, "home", return_value=base / "home"), \
+                    mock.patch.object(token_usage.Path, "cwd", return_value=checkout):
+                tree = quality_sets.sweep_root()
+                setting = {"type": "agent-setting", "agentSetting": "bug-auditor"}
+                Transcripts(projects / token_usage.project_name(str(tree))).write("s.jsonl", [
+                    setting, {**prompt("Root path."), "cwd": str(tree)},
+                    call("Read", cwd=str(tree), file_path=str(tree / "docs" / "a.md"))])
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(token_usage.main(["--docs", "--json"]), 0)
+        rows = {r["doc"]: (r["subagents"], r["contexts"], r["over_half"]) for r in json.loads(out.getvalue())}
+        self.assertEqual(rows, {"docs/a.md": (1, 1, 1)})
 
     def test_the_spawns_tools_and_docs_views_cannot_be_asked_for_together(self):
         for views in (["--spawns", "5", "--tools", "5"], ["--tools", "5", "--docs"]):

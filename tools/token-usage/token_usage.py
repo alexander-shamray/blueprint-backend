@@ -15,6 +15,7 @@ import posixpath
 import re
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -28,6 +29,9 @@ INJECTED = ("<bash-", "<local-command-", "[Request interrupted")
 CARRY_ON = {"/compact", "/autocompact", "/reload-plugins", "/context", "/cost", "/status", "/model", "/effort",
             "/fast", "/config", "/permissions", "/memory", "/mcp", "/hooks", "/agents", "/plugin", "/help"}
 WORKTREE = re.compile(r"[\\/]\.claude[\\/]worktrees[\\/].*$")
+# tools/quality-sets runs each `claude -p` in a detached worktree in the system temp directory, named by its
+# review_workspace and sweep_root; a transcript directory named for one is counted under that run's command.
+RUNNERS = (("quality-sets:review", r"-qs-review-[A-Za-z0-9-]+-tree"), ("quality-sets:sweep", r"-secsweep-[0-9a-f]{6}"))
 # A shell command whose markdown arguments it prints: the reads that do not go through the Read tool.
 SHELL_READERS = {"cat", "head", "tail", "sed", "less", "more", "type", "gc", "get-content"}
 SHELL_COMMAND = re.compile(r"&&|\|\||[;\n]")
@@ -116,6 +120,7 @@ class Report:
         self.opens: list[tuple[str, str, str, tuple[int, int | None] | None]] = []
         self.failed: set[str] = set()
         self.read_calls: set[str] = set()
+        self.trees: set[str] = set()
 
     def add(self, command: str, agent: str, entry: dict, context: str, woken: bool = False) -> dict | None:
         """Count a response once, and return its usage when it was counted."""
@@ -140,22 +145,31 @@ class Report:
             self.span = [min(self.span[0], day), max(self.span[1], day)] if self.span else [day, day]
         return usage
 
-    def read_project(self, project: Path) -> None:
+    def read_project(self, project: Path, start: str = NO_COMMAND) -> None:
         for main in sorted(project.glob(glob.escape(self.session) + "*.jsonl")):
-            self.read_session(main)
+            self.read_session(main, start)
 
-    def read_session(self, main: Path) -> None:
+    def read_session(self, main: Path, start: str = NO_COMMAND) -> None:
+        """Count one session; start is the command a prompt naming none is counted under, a run's for its own."""
         session = main.stem
         boundaries: list[tuple[str, str, bool]] = []
         types: dict[str, str] = {}
-        command, prompt, woken = NO_COMMAND, 0, False
+        command, prompt, woken = start, 0, False
         tools: dict[str, str] = {}
+        agent, who = MAIN, MAIN
         for entry in self.entries(main):
+            # A session started with --agent is that agent's own, as each tools/quality-sets run is, and reads as
+            # the subagent an interactive run would have spawned.
+            if entry.get("type") == "agent-setting" and text_field(entry, "agentSetting"):
+                agent, who = entry["agentSetting"], SUBAGENT
+            if start != NO_COMMAND and text_field(entry, "cwd"):
+                self.trees.add(posixpath.normpath(slashed(entry["cwd"])))
             # A wake is mostly a background agent or watch reporting back inside the command's own run.
             if is_prompt(entry) and command_of(entry) in CARRY_ON:
                 pass
             elif is_prompt(entry):
-                command, prompt, woken = command_of(entry), prompt + 1, False
+                named = command_of(entry)
+                command, prompt, woken = start if named == NO_COMMAND else named, prompt + 1, False
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
             elif wake_of(entry) and not woken:
                 woken = True
@@ -171,14 +185,14 @@ class Report:
             if entry.get("isSidechain"):
                 self.count_reads(entry, SUBAGENT, f"{session}/{entry.get('agentId', 'inline')}")
             else:
-                self.count_reads(entry, MAIN, session)
+                self.count_reads(entry, who, session)
             result = entry.get("toolUseResult")
             if isinstance(result, dict) and result.get("agentId") and result.get("agentType"):
                 types[result["agentId"]] = result["agentType"]
             if entry.get("isSidechain"):
                 self.add(command, SUBAGENT, entry, f"{session}/{entry.get('agentId', 'inline')}", woken)
             else:
-                self.add(command, MAIN, entry, f"{session}#{prompt}", woken)
+                self.add(command, agent, entry, f"{session}#{prompt}", woken)
         for transcript in sorted((main.parent / session / "subagents").glob("agent-*.jsonl")):
             agent_id = transcript.stem.removeprefix("agent-")
             meta = read_meta(transcript.with_suffix(".meta.json"))
@@ -387,10 +401,14 @@ def absolute(path: str, cwd: str) -> str:
     return posixpath.normpath(path)
 
 
-def repo_relative(path: str, root: str) -> str | None:
-    """A read's path inside the checkout, a worktree under .claude/worktrees or a sibling fork, else None."""
+def repo_relative(path: str, root: str, trees: set[str] | tuple[str, ...] = ()) -> str | None:
+    """A read's path inside the checkout, a worktree under .claude/worktrees, a sibling fork or a tree a
+    tools/quality-sets run read, else None."""
     root = posixpath.normpath(slashed(root))
     windows = re.match(r"[A-Za-z]:/", root) is not None
+    for tree in trees:
+        if (path.lower() if windows else path).startswith((tree.lower() if windows else tree) + "/"):
+            return path[len(tree) + 1:]
     inside = re.match(re.escape(root.lower() if windows else root) + r"(?:-[^/]+|/\.claude/worktrees/[^/]+)?/(.+)$",
                       path.lower() if windows else path)
     return path[len(path) - len(inside.group(1)):] if inside else None
@@ -436,7 +454,8 @@ def named_in(source: str, text: str, docs: dict[str, str]) -> set[str]:
 
 
 def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int],
-             opens: list[tuple[str, str, tuple[int, int | None] | None]], root: str) -> list[dict]:
+             opens: list[tuple[str, str, tuple[int, int | None] | None]], root: str,
+             trees: set[str] | tuple[str, ...] = ()) -> list[dict]:
     """One row per tracked document: who names it, how often a main session and a subagent opened it, how many
     contexts opened it, and how many of those read more than half of its lines."""
     entry = {doc for doc in docs if ENTRY.fullmatch(doc)}
@@ -444,11 +463,11 @@ def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int],
     from_claude_md = named_in("CLAUDE.md", docs.get("CLAUDE.md", ""), docs)
     opened: dict[tuple[str, str], int] = {}
     for (path, who), count in reads.items():
-        if (doc := repo_relative(path, root)) in docs:
+        if (doc := repo_relative(path, root, trees)) in docs:
             opened[doc, who] = opened.get((doc, who), 0) + count
     covered: dict[tuple[str, str], set[int]] = {}
     for path, context, span in opens:
-        if (doc := repo_relative(path, root)) not in docs:
+        if (doc := repo_relative(path, root, trees)) not in docs:
             continue
         lines, size = covered.setdefault((doc, context), set()), len(docs[doc].splitlines())
         if span is not None:
@@ -560,10 +579,23 @@ def default_project(root: Path) -> Path:
     return Path.home() / ".claude" / "projects" / project_name(str(root.resolve()))
 
 
+def runner_command(project: Path) -> str | None:
+    """The command a transcript directory's sessions are counted under when it is named for the worktree of a
+    tools/quality-sets run, as the system temp directory is spelt either before or after resolving it."""
+    temp = tempfile.gettempdir()
+    for prefix in {project_name(temp), project_name(str(Path(temp).resolve()))}:
+        for command, tree in RUNNERS:
+            if re.fullmatch(re.escape(prefix) + tree, project.name):
+                return command
+    return None
+
+
 def default_projects(cwd: Path) -> list[Path]:
-    """The main checkout's transcript directory, then each worktree's: under .claude/worktrees or a sibling fork."""
+    """The main checkout's transcript directory, then each worktree's, under .claude/worktrees or a sibling fork,
+    then each tools/quality-sets run's."""
     main = default_project(Path(WORKTREE.sub("", str(cwd.resolve()))))
-    return [main, *sorted(main.parent.glob(main.name + "-*"))]
+    runs = sorted(p for p in main.parent.glob("*") if runner_command(p)) if main.parent.is_dir() else []
+    return [main, *sorted(main.parent.glob(main.name + "-*")), *runs]
 
 
 MODEL_ROWS = ("command", "agent", "model", "contexts", "calls", "mean_context", "input", "cache_write", "cache_read",
@@ -614,7 +646,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     report = Report(args.since, args.session)
     for project in projects:
-        report.read_project(project)
+        report.read_project(project, runner_command(project) or NO_COMMAND)
     print(f"read {projects[0]}" + (f" and {len(projects) - 1} more" if len(projects) > 1 else ""), file=sys.stderr)
     if args.docs:
         root = Path(WORKTREE.sub("", str(Path.cwd().resolve())))
@@ -623,7 +655,7 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, subprocess.CalledProcessError):
             print(f"no git checkout at {root} to list the markdown files of", file=sys.stderr)
             return 2
-        rows, columns = doc_rows(docs, report.reads, report.kept_opens(), str(root)), DOCS
+        rows, columns = doc_rows(docs, report.reads, report.kept_opens(), str(root), report.trees), DOCS
         for line in link_summary(rows):
             print(line, file=sys.stderr)
     elif args.tools is not None:
