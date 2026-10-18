@@ -14,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 import token_usage
-from token_usage import MAIN, NO_COMMAND, SUBAGENT, Report
+from token_usage import MAIN, NO_COMMAND, SUBAGENT, Addressed, Grepped, Report
 
 RUNNER = importlib.util.spec_from_file_location(
     "quality_sets", Path(__file__).resolve().parents[1] / "quality-sets" / "quality_sets.py")
@@ -382,14 +382,26 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(read("Bash", {"command": "sed -n '1,5p' a.md; sed --quiet 2p b.md; sed s/x/y/ c.md"}),
                          [("a.md", (1, 5)), ("b.md", (2, 2)), ("c.md", (1, None))])
         self.assertEqual(read("Bash", {"command": "sed -n '9,$p' a.md; sed -n '/^## 9/,/^## 10/p' b.md; sed 20q c.md"}),
-                         [("a.md", (9, None)), ("b.md", None), ("c.md", (1, 20))])
+                         [("a.md", (9, None)), ("b.md", Addressed("^## 9", "^## 10")), ("c.md", (1, 20))])
+        patterns = "sed -n '/^## /p' a.md; sed -nE '4,/^(x|y)$/p' b.md; sed -n '$p' c.md"
+        self.assertEqual(read("Bash", {"command": patterns}),
+                         [("a.md", Addressed("^## ", None, single=True)),
+                          ("b.md", Addressed(4, "^(x|y)$", extended=True)), ("c.md", (-1, None))])
+        self.assertEqual(read("Bash", {"command": "sed -n '/a/,$p' a.md; sed -n '/a/Ip' b.md"}),
+                         [("a.md", Addressed("a", None)), ("b.md", None)])
+        self.assertEqual(read("Bash", {"command": "sed -n '/x;y/p' a.md | grep -n 'p|q'; cat \"b|c.md\""}),
+                         [("a.md", Grepped(Addressed("x;y", None, single=True), True)), ("b|c.md", (1, None))])
         self.assertEqual(read("PowerShell", {"command": "Get-Content a.md -TotalCount 9; gc b.md -Tail 3; gc c.md"}),
                          [("a.md", (1, 9)), ("b.md", (-3, None)), ("c.md", (1, None))])
 
     def test_a_pipe_narrows_what_its_first_stage_read(self):
         read = token_usage.markdown_read
         self.assertEqual(read("Bash", {"command": "cat a.md | head -40; cat b.md | grep -n x; cat c.md | tail -5"}),
-                         [("a.md", (1, 40)), ("b.md", None), ("c.md", (-5, None))])
+                         [("a.md", (1, 40)), ("b.md", Grepped((1, None), True)), ("c.md", (-5, None))])
+        self.assertEqual(read("Bash", {"command": "sed -n 5,9p a.md | grep -A2 x | head -3; cat b.md | sort"}),
+                         [("a.md", Grepped((5, 9), False)), ("b.md", None)])
+        self.assertEqual(read("Bash", {"command": "sed -n '/^## 2/,/^## 3/p' a.md | grep --line-number x"}),
+                         [("a.md", Grepped(Addressed("^## 2", "^## 3"), True))])
         piped = "sed -n 100,300p a.md | head -50; sed -n 100,300p b.md | sed -n 5,9p"
         self.assertEqual(read("Bash", {"command": piped}),
                          [("a.md", (100, 149)), ("b.md", (104, 108))])
@@ -398,6 +410,48 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(read("PowerShell", {"command": "gc a.md | Select-Object -Last 4; gc b.md | Select -Skip 8"}),
                          [("a.md", (-4, None)), ("b.md", (9, None))])
         self.assertEqual(read("Bash", {"command": "cat a.md || head -3 b.md"}), [("a.md", (1, None)), ("b.md", (1, 3))])
+
+    def test_a_sed_address_covers_the_lines_sed_prints(self):
+        lines = ["# T", "## 9.8", "a", "b", "## 9.9", "c", "## 9.8", "d", "(x)"]
+        cover = token_usage.span_lines
+        self.assertEqual(cover(Addressed("^## 9.8", "^## 9.9"), lines), {2, 3, 4, 5, 7, 8, 9})
+        self.assertEqual(cover(Addressed("^## ", None, single=True), lines), {2, 5, 7})
+        self.assertEqual(cover(Addressed("^## 9.9", 3), lines), {5})
+        self.assertEqual(cover(Addressed(3, "^## "), lines), {3, 4, 5})
+        self.assertEqual(cover(Addressed("^c", None), lines), {6, 7, 8, 9})
+        self.assertEqual(cover(Addressed("^\\(a\\|b\\)$", None, single=True), lines), {3, 4})
+        self.assertEqual(cover(Addressed("^(a|b)$", None, single=True, extended=True), lines), {3, 4})
+        self.assertEqual(cover(Addressed("^(x)$", None, single=True), lines), {9})
+        self.assertEqual(cover(Addressed("[", None, single=True), lines), set())
+        self.assertEqual(cover(Addressed("^zzz", "^## "), lines), set())
+
+    def test_a_grep_after_a_read_covers_the_lines_its_result_printed(self):
+        lines = ["a", "x1", "b", "x2", "c", "x1"]
+        cover = token_usage.span_lines
+        self.assertEqual(cover(Grepped((1, None), True, "2:x1\n3-b\n--\n6:x1"), lines), {2, 3, 6})
+        self.assertEqual(cover(Grepped((3, 6), True, "2:x2\n9:gone"), lines), {4})
+        self.assertEqual(cover(Grepped((3, 6), False, "x1\nx2"), lines), {4, 6})
+        self.assertEqual(cover(Grepped((1, None), True, None), lines), set())
+        self.assertEqual(cover(Grepped((1, None), True, "Exit code 1\n"), lines), set())
+
+    def test_a_grep_takes_its_calls_result_unless_the_call_grepped_two_opens(self):
+        with tempfile.TemporaryDirectory() as directory:
+            files = Transcripts(Path(directory))
+            def result(call_id, text):
+                return {"type": "user", "timestamp": "2026-10-07T09:10:01.000Z", "message": {"content": [
+                    {"type": "tool_result", "tool_use_id": call_id, "content": text}]}}
+            files.write("s.jsonl", [ship(), call("Bash", call_id="c1", command="cat docs/a.md | grep -n x"),
+                                    result("c1", "4:x"),
+                                    call("Bash", call_id="c2",
+                                         command="cat docs/a.md | grep x; cat docs/b.md | grep x"),
+                                    result("c2", "x"), call("Bash", call_id="c3", command="cat docs/c.md"),
+                                    result("c3", "whole")])
+            report = Report()
+            report.read_project(Path(directory))
+        self.assertEqual(report.kept_opens(), [("/r/repo/docs/a.md", "s", Grepped((1, None), True, "4:x")),
+                                               ("/r/repo/docs/a.md", "s", None), ("/r/repo/docs/b.md", "s", None),
+                                               ("/r/repo/docs/c.md", "s", (1, None))])
+        self.assertEqual(report.printed, {"c1": "4:x", "c2": "x"})
 
     def test_a_read_is_placed_in_the_checkout_its_worktrees_and_forks_and_nowhere_else(self):
         inside = token_usage.repo_relative
