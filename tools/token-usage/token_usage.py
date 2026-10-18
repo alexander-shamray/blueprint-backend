@@ -253,7 +253,8 @@ class Report:
     def count_results(self, command: str, entry: dict, tools: dict[str, str]) -> None:
         """Note each tool call's name, and add each tool result's characters to its tool's count."""
         content = (entry.get("message") or {}).get("content")
-        if not isinstance(content, list):
+        # An api-request-blob replays blocks an assistant or user entry carries, with no timestamp for --since to drop.
+        if not isinstance(content, list) or entry.get("type") not in ("assistant", "user"):
             return
         if self.since and str(entry.get("timestamp", self.since))[:10] < self.since:
             return
