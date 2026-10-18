@@ -438,8 +438,8 @@ that set the step.
   gate landed, at 2557f8d3 on 2026-10-11, so the plan limit holds
   vacuously: there is no plan to test it on.
 
-**Step 6's exit.** A `/ship` turn's resident text, by step 1's method of
-bytes over four, is about 15.2k: `ship.md` 30,626 bytes, against 28,020
+**Step 6's exit.** A `/ship` turn's resident text, by the method of
+`token-plan.md` §1, bytes over four, is about 15.2k: `ship.md` 30,626 bytes, against 28,020
 when step 6 landed, with `branch.md`, `commit.md`, `pr.md` and `CLAUDE.md`
 at 30,245 between them. That is a third of the 45k measured on 2026-10-07,
 not the 12k the exit names. The end state held: 141 pull requests merged
