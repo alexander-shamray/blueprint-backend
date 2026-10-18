@@ -267,12 +267,25 @@ def ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
     return value["findings"]
 
 
+def review_workspace():
+    """A new directory in the system temp directory for one review, whose `tree` holds its worktree.
+
+    tools/token-usage finds a run's transcripts by the name this gives the tree.
+    """
+    return Path(tempfile.mkdtemp(prefix="qs-review-"))
+
+
+def sweep_root():
+    """Where one sweep's detached worktree goes, a name tools/token-usage finds its transcripts by."""
+    return Path(tempfile.gettempdir()) / f"secsweep-{os.urandom(3).hex()}"
+
+
 def review_findings(claude, entries, pr, head, spent=None):
     """Run branch-reviewer once over a pull request's diff at one commit, in a detached worktree."""
     base = next((e["base"] for e in entries if e["pr"] == pr and e["head"] == head), None)
     if base is None:
         raise SystemExit(f"reviews.json holds no entry for PR {pr} at {head}")
-    work = Path(tempfile.mkdtemp(prefix="qs-review-"))
+    work = review_workspace()
     git("worktree", "add", "--detach", str(work / "tree"), head)
     try:
         tree = work / "tree"
@@ -292,7 +305,7 @@ def sweep_findings(claude, kind, commit, spent=None):
 
     spent, a Counter, gains the tokens of every run, a retried or failed slice's included.
     """
-    root = Path(tempfile.gettempdir()) / f"secsweep-{os.urandom(3).hex()}"
+    root = sweep_root()
     git("worktree", "add", "--detach", str(root), commit)
     slices = Path(f"{root}.slices")
     try:

@@ -18,7 +18,8 @@ It reads Claude Code's transcripts — a `<session>.jsonl` per session and a
 `<session>/subagents/agent-<id>.jsonl` per subagent — and sums each
 response's `usage` once, grouped by the slash command the session was
 running and by who answered: `main` for the session itself, the agent type
-for a subagent.
+for a subagent or for a session started as one, as each `tools/quality-sets`
+run is.
 
 | | |
 |---|---|
@@ -74,13 +75,15 @@ that counts lines, `head`, `tail`, `sed -n` or `Select-Object`, narrows
 them, `cat` or another printer passes them on, and a stage the report
 cannot place, such as `grep`, covers none; and a call whose result was an
 error covers nothing, unless the error is a shell's non-zero exit, after
-which what the command printed still counts. Each file is grouped by who
+which what the command printed still counts. An agent's own session, as a
+`tools/quality-sets` run is, opens as a subagent. Each file is grouped by who
 names it: an `entry point` is a command, an agent or a skill's
 `SKILL.md`; `named by entry` is a file one of them names; `CLAUDE.md only`
 is one only `CLAUDE.md` names; `none` is the rest. A name is a path from
 the root or from the citing file, a base name no other tracked file has, or
 a template with a directory such as `docs/commands/<name>.md`. A read in a
-worktree or a sibling fork counts for the checkout's file. Each group's
+worktree, a sibling fork or the worktree a `tools/quality-sets` run read
+counts for the checkout's file, whatever that tree's commit. Each group's
 size, mean reads and never-read count go to stderr. It answers which
 documents a run never reaches, not which it needs: a file opened by `grep`
 or found through a link is not counted, and an unread file a person reads
@@ -93,7 +96,12 @@ is that one followed by a dash: the worktrees `/branch` makes under
 `.claude/worktrees/` and the sibling forks it makes when that directory is
 not writable. A different checkout whose path only extends this one's is
 read too, so name such a directory explicitly when it matters. Run from a
-worktree, it reads the same set. The directories read go to stderr.
+worktree, it reads the same set. **It also reads each `tools/quality-sets`
+run**, whose `claude -p` sessions Claude Code files under the run's
+worktree in the system temp directory: a directory named as that tool's
+`review_workspace` and `sweep_root` name them is counted under
+`quality-sets:review` or `quality-sets:sweep`, named on the command line
+or found by default. The directories read go to stderr.
 Transcripts are local to the machine that ran the sessions, so a baseline
 is measured there.
 

@@ -57,7 +57,9 @@ It also reports `tokens`: the input, cache-creation, cache-read and output count
 that each `claude -p` result carries, and their `total`, summed over the run, a
 retried or failed slice's included. A review prints them per attempt; a sweep's
 progress line gives each slice's total. A run that ends on a usage-limit notice
-reports none.
+reports none. A run's sessions are also in the transcripts, filed under its
+worktree's path, which `tools/token-usage` reads by the names `review_workspace`
+and `sweep_root` give it; renaming either is that report's change too.
 
 Recall is noisy: the same head scored 0 of 12 and 2 of 12 on two runs
 (`docs/token-usage.md`, 2026-10-11). Read a score as a sample, and run a head
