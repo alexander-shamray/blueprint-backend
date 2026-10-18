@@ -501,3 +501,48 @@ half a long chapter or less. The third, splitting the largest chapters, is
 taken only if those two fail. What is left is fifteen contexts in eight
 days, nearly all of them moving the very text they read, so
 `token-plan.md` gains no step 8.
+
+## 2026-10-18 — what the scored runs cost, and the reads a pattern places
+
+Measured by the report on 21168a10 with the changes this section lands with,
+`--since 2026-10-11`. The report now reads the transcript directories that
+`tools/quality-sets/` runs file under their temporary worktrees, counted
+under `quality-sets:review` and `quality-sets:sweep`. So the runs the
+2026-10-12 section scored, which step 5 of the 2026-10-18 section read
+against steps 5, 6 and 7 found uncounted, have a cost:
+
+| Run | Directory | Sessions | Input equivalent | Mean context |
+|---|---|---|---|---|
+| Security sweep, round 1, 41 slices | `secsweep-2316f4` | 41 | 5.5M | 43k |
+| Bug sweep, the attempt the usage limit stopped | `secsweep-fbfaa2` | 53 | 7.3M | 54k |
+| Bug sweep, round 1, 42 slices, scored | `secsweep-a54a55` | 42 | 10.6M | 74k |
+| Five `bug-auditor` sessions, no scored run | `secsweep-5a5c35` | 5 | 1.2M | 68k |
+| `branch-reviewer` | 38 `qs-review-*` | 38 | 10.3M | 91k |
+
+Together 34.9M. The reviewer ran 38 times where the scored sample needed 30,
+and the report cannot tell which 8 were not scored; a run cost about 0.27M.
+Against `token-plan.md` §2, a first sweep's round 1 cost 5.5M for security
+and 10.6M for bugs, where the target is about 25M by round 3. These are a
+floor and not that figure: each ran through `claude -p` with no main session
+to orchestrate, verify or file, and one round of seven.
+
+**The reads a pattern places.** `--docs` now places a `sed -n` address with
+a pattern, found in the file's text, and a `grep` after a read, by the lines
+its result printed. On the transcripts behind the chapter table of the
+2026-10-18 section on how much of a chapter one context reads, without the
+runner's sessions, the long-chapter row still reads 503 contexts and 15
+over half: those forms moved no context past half, so that row was not a
+lower bound in practice. With the runner's sessions, read as the subagents
+an interactive sweep would have spawned:
+
+| Chapters | Files | Opens | By subagents | Contexts | Over half |
+|---|---|---|---|---|---|
+| Over 1,000 lines | 10 | 1,253 | 850 | 530 | 35 |
+| All 21 | 21 | 1,511 | 985 | 687 | 56 |
+
+The 27 contexts more on the long chapters are 23 sweep auditors and 4
+reviewers. All 20 of the new over-half contexts are auditors, 6 security
+and 14 bug, reading a slice that held a chapter, which is the work a slice
+hands them. Their line counts are today's, against a tree at the run's
+commit. #847's decision stands: what reads a long chapter whole is moving
+or auditing that text.
