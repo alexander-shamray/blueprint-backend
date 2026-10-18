@@ -346,18 +346,36 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(read("Bash", {"command": "sed -n 1p docs/a.md"}), ["docs/a.md"])
         self.assertEqual(read("Bash", {"command": "cat docs/a.md > docs/b.md; cat > docs/c.md <<EOF"}), ["docs/a.md"])
 
-    def test_a_read_asks_for_part_of_a_file_by_offset_or_limit_head_tail_sed_n_or_a_get_content_count(self):
+    def test_each_read_carries_the_span_it_printed(self):
         read = token_usage.markdown_read
-        self.assertEqual(read("Read", {"file_path": "a.md"}), [("a.md", False)])
-        self.assertEqual(read("Read", {"file_path": "a.md", "offset": None, "limit": None}), [("a.md", False)])
-        self.assertEqual(read("Read", {"file_path": "a.md", "offset": 120}), [("a.md", True)])
-        self.assertEqual(read("Read", {"file_path": "a.md", "limit": 40}), [("a.md", True)])
-        self.assertEqual(read("Bash", {"command": "head -40 a.md; tail b.md; cat c.md; less d.md"}),
-                         [("a.md", True), ("b.md", True), ("c.md", False), ("d.md", False)])
-        self.assertEqual(read("Bash", {"command": "sed -n 1,5p a.md; sed --quiet 2p b.md; sed s/x/y/ c.md"}),
-                         [("a.md", True), ("b.md", True), ("c.md", False)])
+        self.assertEqual(read("Read", {"file_path": "a.md"}), [("a.md", (1, 2000))])
+        self.assertEqual(read("Read", {"file_path": "a.md", "offset": None, "limit": None}), [("a.md", (1, 2000))])
+        self.assertEqual(read("Read", {"file_path": "a.md", "offset": 120}), [("a.md", (120, 2119))])
+        self.assertEqual(read("Read", {"file_path": "a.md", "offset": 120, "limit": 40}), [("a.md", (120, 159))])
+        self.assertEqual(read("Bash", {"command": "head -40 a.md; tail b.md; cat c.md; less d.md; head -n 7 e.md"}),
+                         [("a.md", (1, 40)), ("b.md", (-10, None)), ("c.md", (1, None)), ("d.md", (1, None)),
+                          ("e.md", (1, 7))])
+        self.assertEqual(read("Bash", {"command": "tail -n +30 a.md; tail --lines=5 b.md"}),
+                         [("a.md", (30, None)), ("b.md", (-5, None))])
+        self.assertEqual(read("Bash", {"command": "sed -n '1,5p' a.md; sed --quiet 2p b.md; sed s/x/y/ c.md"}),
+                         [("a.md", (1, 5)), ("b.md", (2, 2)), ("c.md", (1, None))])
+        self.assertEqual(read("Bash", {"command": "sed -n '9,$p' a.md; sed -n '/^## 9/,/^## 10/p' b.md; sed 20q c.md"}),
+                         [("a.md", (9, None)), ("b.md", None), ("c.md", (1, 20))])
         self.assertEqual(read("PowerShell", {"command": "Get-Content a.md -TotalCount 9; gc b.md -Tail 3; gc c.md"}),
-                         [("a.md", True), ("b.md", True), ("c.md", False)])
+                         [("a.md", (1, 9)), ("b.md", (-3, None)), ("c.md", (1, None))])
+
+    def test_a_pipe_narrows_what_its_first_stage_read(self):
+        read = token_usage.markdown_read
+        self.assertEqual(read("Bash", {"command": "cat a.md | head -40; cat b.md | grep -n x; cat c.md | tail -5"}),
+                         [("a.md", (1, 40)), ("b.md", None), ("c.md", (-5, None))])
+        piped = "sed -n 100,300p a.md | head -50; sed -n 100,300p b.md | sed -n 5,9p"
+        self.assertEqual(read("Bash", {"command": piped}),
+                         [("a.md", (100, 149)), ("b.md", (104, 108))])
+        self.assertEqual(read("PowerShell", {"command": "Get-Content a.md | Select-Object -Skip 10 -First 5"}),
+                         [("a.md", (11, 15))])
+        self.assertEqual(read("PowerShell", {"command": "gc a.md | Select-Object -Last 4; gc b.md | Select -Skip 8"}),
+                         [("a.md", (-4, None)), ("b.md", (9, None))])
+        self.assertEqual(read("Bash", {"command": "cat a.md || head -3 b.md"}), [("a.md", (1, None)), ("b.md", (1, 3))])
 
     def test_a_read_is_placed_in_the_checkout_its_worktrees_and_forks_and_nowhere_else(self):
         inside = token_usage.repo_relative
@@ -386,14 +404,11 @@ class DocsTests(unittest.TestCase):
                 "docs/named.md": "", "docs/claude.md": "", "docs/orphan.md": "", ".claude/notes/x.md": ""}
         reads = {("/r/repo/docs/named.md", MAIN): 2, ("/r/repo/docs/named.md", SUBAGENT): 3,
                  ("/r/repo/CLAUDE.md", MAIN): 9, ("/r/other/docs/orphan.md", MAIN): 4}
-        ranged = {("/r/repo/docs/named.md", MAIN): 1, ("/r/repo/docs/named.md", SUBAGENT): 2,
-                  ("/r/other/docs/orphan.md", MAIN): 4}
-        rows = {r["doc"]: r for r in token_usage.doc_rows(docs, reads, ranged, "/r/repo")}
+        rows = {r["doc"]: r for r in token_usage.doc_rows(docs, reads, [], "/r/repo")}
         self.assertNotIn("CLAUDE.md", rows)
         self.assertEqual(rows[".claude/commands/go.md"]["named_by"], "entry point")
-        self.assertEqual({k: rows["docs/named.md"][k] for k in ("named_by", "reads", "main", "subagents", "ranged")},
-                         {"named_by": "named by entry", "reads": 5, "main": 2, "subagents": 3, "ranged": 3})
-        self.assertEqual(rows["docs/orphan.md"]["ranged"], 0)
+        self.assertEqual({k: rows["docs/named.md"][k] for k in ("named_by", "reads", "main", "subagents")},
+                         {"named_by": "named by entry", "reads": 5, "main": 2, "subagents": 3})
         self.assertEqual(rows["docs/claude.md"]["named_by"], "CLAUDE.md only")
         self.assertEqual((rows["docs/orphan.md"]["named_by"], rows["docs/orphan.md"]["reads"]), ("none", 0))
         self.assertEqual(rows[".claude/notes/x.md"]["named_by"], "none")
@@ -415,7 +430,33 @@ class DocReadTests(unittest.TestCase):
             report.read_project(Path(directory))
         self.assertEqual(report.reads, {("/r/repo/docs/a.md", MAIN): 1, ("/r/repo/.claude/docs/a.md", MAIN): 1,
                                         ("/r/repo/docs/a.md", SUBAGENT): 2})
-        self.assertEqual(report.ranged, {("/r/repo/.claude/docs/a.md", MAIN): 1})
+        self.assertEqual([(path, span) for path, _, span in report.kept_opens()],
+                         [("/r/repo/docs/a.md", (1, 2000)), ("/r/repo/.claude/docs/a.md", (1, 9)),
+                          ("/r/repo/docs/a.md", (1, 2000)), ("/r/repo/docs/a.md", (1, 2000))])
+        self.assertEqual([context for _, context, _ in report.kept_opens()], ["s", "s", "s/inline", "s/a"])
+
+    def test_a_context_reads_over_half_of_a_document_by_the_lines_its_opens_cover_together(self):
+        docs = {"docs/long.md": "x\n" * 10, "docs/short.md": "x\n" * 4, "docs/empty.md": ""}
+        opens = [("/r/repo/docs/long.md", "s/a", (1, 3)), ("/r/repo/docs/long.md", "s/a", (3, 6)),
+                 ("/r/repo/docs/long.md", "s/b", (-5, None)), ("/r/repo/docs/long.md", "s/c", None),
+                 ("/r/repo/docs/long.md", "s/d", (9, 2000)), ("/r/repo/docs/short.md", "s", (1, 2000)),
+                 ("/r/repo/docs/empty.md", "s", (1, None)), ("/r/other/docs/long.md", "s/e", (1, None))]
+        rows = {r["doc"]: r for r in token_usage.doc_rows(docs, {}, opens, "/r/repo")}
+        self.assertEqual((rows["docs/long.md"]["contexts"], rows["docs/long.md"]["over_half"]), (4, 1))
+        self.assertEqual((rows["docs/short.md"]["contexts"], rows["docs/short.md"]["over_half"]), (1, 1))
+        self.assertEqual((rows["docs/empty.md"]["contexts"], rows["docs/empty.md"]["over_half"]), (1, 0))
+
+    def test_an_open_whose_call_failed_put_nothing_in_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            files = Transcripts(Path(directory))
+            refused = {"type": "user", "timestamp": "2026-10-07T09:10:01.000Z", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "c1", "is_error": True, "content": "too large"}]}}
+            files.write("s.jsonl", [ship(), call("Read", call_id="c1", file_path="/r/repo/docs/a.md"), refused,
+                                    call("Read", call_id="c2", file_path="/r/repo/docs/a.md", offset=1, limit=9)])
+            report = Report("2026-10-07")
+            report.read_project(Path(directory))
+        self.assertEqual(report.reads, {("/r/repo/docs/a.md", MAIN): 2})
+        self.assertEqual(report.kept_opens(), [("/r/repo/docs/a.md", "s", (1, 9))])
 
     def test_docs_lists_every_tracked_markdown_file_of_the_checkout(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -66,11 +66,16 @@ others, and the total is the same as the default's.
 `--docs` lists every markdown file `git ls-files` tracks in the checkout it
 runs from, with how often a main session and a subagent opened it — with
 `Read`, or with `cat`, `head`, `tail`, `sed` or `Get-Content` in a shell —
-how many of those opens were `ranged`, asking for part of the file by
-`Read`'s `offset` or `limit`, `head`, `tail`, `sed -n` or a `Get-Content`
-count, and who names it: an `entry point` is a command, an agent or a skill's
-`SKILL.md`; `named by entry` is a file one of them names; `CLAUDE.md only`
-is one only `CLAUDE.md` names; `none` is the rest. A name is a path from
+in how many `contexts`, a main session or a subagent each, and in how many
+of those `over_half` of its lines were read: a `Read` covers its `offset`
+for its `limit`, 2,000 lines when none is named; `head`, `tail`, `sed -n`
+and a `Get-Content` count cover their lines; a later stage of the pipe,
+`head`, `tail`, `sed -n` or `Select-Object`, narrows them, and any other
+stage, such as `grep`, covers no line it can place; and a call whose result
+was an error covers nothing. Each file is grouped by who names it: an
+`entry point` is a command, an agent or a skill's `SKILL.md`;
+`named by entry` is a file one of them names; `CLAUDE.md only` is one
+only `CLAUDE.md` names; `none` is the rest. A name is a path from
 the root or from the citing file, a base name no other tracked file has, or
 a template with a directory such as `docs/commands/<name>.md`. A read in a
 worktree or a sibling fork counts for the checkout's file. Each group's

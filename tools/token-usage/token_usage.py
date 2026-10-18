@@ -30,13 +30,15 @@ CARRY_ON = {"/compact", "/autocompact", "/reload-plugins", "/context", "/cost", 
 WORKTREE = re.compile(r"[\\/]\.claude[\\/]worktrees[\\/].*$")
 # A shell command whose markdown arguments it prints: the reads that do not go through the Read tool.
 SHELL_READERS = {"cat", "head", "tail", "sed", "less", "more", "type", "gc", "get-content"}
-SHELL_SEGMENT = re.compile(r"&&|\|\||[;|\n]")
+SHELL_COMMAND = re.compile(r"&&|\|\||[;\n]")
 SED_IN_PLACE = re.compile(r"--in-place(?:=.*)?|-[A-Za-z]*i.*")
 SHELL_WORD = re.compile(r'"[^"]*"|\'[^\']*\'|\S+')
-# What asks a shell printer for part of a file: head and tail always, sed only when -n holds back the rest.
-SHELL_RANGED = {"head", "tail"}
+# A span is the lines an open printed, (first, last) from 1, with last None for the end and a negative first
+# for the last lines; None is a part the report cannot place, such as what a grep kept.
 SED_QUIET = re.compile(r"-[A-Za-z]*n[A-Za-z]*|--quiet|--silent")
-GET_CONTENT_PART = {"-totalcount", "-head", "-tail", "-first", "-last"}
+SED_LINES = re.compile(r"(\d+)(?:,(\d+|\$))?p")
+HEAD_TAIL_COUNT = re.compile(r"-(\d+)|-n(\+?\d+)|--lines=(\+?\d+)")
+READ_LIMIT = 2000
 # Where a run starts: what a command, an agent or a skill names, it is handed.
 ENTRY = re.compile(r"\.claude/(?:commands/[^/]+|agents/[^/]+|skills/[^/]+/SKILL)\.md")
 MENTION = re.compile(r"[\w./<>{}-]*[\w>}]\.md\b")
@@ -111,7 +113,8 @@ class Report:
         self.spawns: list[dict] = []
         self.results: dict[tuple[str, str], list[int]] = {}
         self.reads: dict[tuple[str, str], int] = {}
-        self.ranged: dict[tuple[str, str], int] = {}
+        self.opens: list[tuple[str, str, str, tuple[int, int | None] | None]] = []
+        self.failed: set[str] = set()
         self.read_calls: set[str] = set()
 
     def add(self, command: str, agent: str, entry: dict, context: str, woken: bool = False) -> dict | None:
@@ -165,7 +168,10 @@ class Report:
                 boundaries.append((str(entry.get("timestamp", "")), command, woken))
             if not entry.get("isSidechain"):
                 self.count_results(command, entry, tools)
-            self.count_reads(entry, SUBAGENT if entry.get("isSidechain") else MAIN)
+            if entry.get("isSidechain"):
+                self.count_reads(entry, SUBAGENT, f"{session}/{entry.get('agentId', 'inline')}")
+            else:
+                self.count_reads(entry, MAIN, session)
             result = entry.get("toolUseResult")
             if isinstance(result, dict) and result.get("agentId") and result.get("agentType"):
                 types[result["agentId"]] = result["agentType"]
@@ -182,7 +188,7 @@ class Report:
             spawned_in, after_wake = command_at(boundaries, started)
             spawn = Usage()
             for entry in entries:
-                self.count_reads(entry, SUBAGENT)
+                self.count_reads(entry, SUBAGENT, f"{session}/{agent_id}")
                 if counted := self.add(spawned_in, agent, entry, f"{session}/{agent_id}", after_wake):
                     spawn.add(counted, agent_id, after_wake)
             if spawn.calls:
@@ -207,13 +213,19 @@ class Report:
                 counted[0] += 1
                 counted[1] += len(result_text(block.get("content")))
 
-    def count_reads(self, entry: dict, who: str) -> None:
-        """Count each markdown file a response opens, by its absolute path, with Read or a shell command, and how
-        many of those opens asked for part of it."""
-        content = (entry.get("message") or {}).get("content") if entry.get("type") == "assistant" else None
+    def count_reads(self, entry: dict, who: str, context: str) -> None:
+        """Count each markdown file a response opens, by its absolute path, with Read or a shell command; keep each
+        open's span under its context, and note the calls whose result was an error."""
+        content = (entry.get("message") or {}).get("content")
         if not isinstance(content, list):
             return
         if self.since and str(entry.get("timestamp", self.since))[:10] < self.since:
+            return
+        if entry.get("type") == "user":
+            self.failed.update(str(block.get("tool_use_id")) for block in content if isinstance(block, dict)
+                               and block.get("type") == "tool_result" and block.get("is_error"))
+            return
+        if entry.get("type") != "assistant":
             return
         cwd = str(entry.get("cwd") or "")
         for block in content:
@@ -223,11 +235,15 @@ class Report:
                     continue
                 if call:
                     self.read_calls.add(call)
-                for path, part in markdown_read(str(block.get("name")), block.get("input")):
+                for path, span in markdown_read(str(block.get("name")), block.get("input")):
                     key = (absolute(path, cwd), who)
                     self.reads[key] = self.reads.get(key, 0) + 1
-                    if part:
-                        self.ranged[key] = self.ranged.get(key, 0) + 1
+                    self.opens.append((str(call), key[0], context, span))
+
+    def kept_opens(self) -> list[tuple[str, str, tuple[int, int | None] | None]]:
+        """Each open whose call did not fail, as (path, context, span): a refused Read put none of the file in
+        context."""
+        return [(path, context, span) for call, path, context, span in self.opens if call not in self.failed]
 
     def entries(self, path: Path):
         with path.open(encoding="utf-8", errors="replace") as lines:
@@ -264,32 +280,97 @@ def result_text(content) -> str:
     return ""
 
 
-def markdown_read(tool: str, given) -> list[tuple[str, bool]]:
-    """The markdown paths one tool call reads, each with whether the call asked for part of the file: Read's file,
-    ranged by an offset or a limit, or what cat, head, tail, sed or Get-Content print."""
+def markdown_read(tool: str, given) -> list[tuple[str, tuple[int, int | None] | None]]:
+    """The markdown paths one tool call reads, each with the span it printed: Read's file, from its offset for its
+    limit, or what cat, head, tail, sed or Get-Content print, narrowed by the stages of a pipe after them."""
     if not isinstance(given, dict):
         return []
     if tool == "Read":
-        path = given.get("file_path")
-        part = given.get("offset") is not None or given.get("limit") is not None
-        return [(path, part)] if isinstance(path, str) and path.lower().endswith(".md") else []
+        path, offset, limit = given.get("file_path"), given.get("offset"), given.get("limit")
+        first = max(offset, 1) if isinstance(offset, int) else 1
+        last = first + (limit if isinstance(limit, int) and limit > 0 else READ_LIMIT) - 1
+        return [(path, (first, last))] if isinstance(path, str) and path.lower().endswith(".md") else []
     command = given.get("command")
     if tool not in ("Bash", "PowerShell") or not isinstance(command, str):
         return []
-    found = []
-    for segment in SHELL_SEGMENT.split(command):
-        words = [w.strip("\"'") for w in SHELL_WORD.findall(segment)]
-        if not words or words[0].lower() not in SHELL_READERS:
-            continue
-        reader = words[0].lower()
-        if reader == "sed" and any(SED_IN_PLACE.fullmatch(w) for w in words):
-            continue
-        part = reader in SHELL_RANGED or reader == "sed" and any(SED_QUIET.fullmatch(w) for w in words) or \
-            reader in ("gc", "get-content") and any(w.lower() in GET_CONTENT_PART for w in words)
-        # A redirect's target is written, and so is everything after it.
-        printed = next((i for i, w in enumerate(words) if ">" in w), len(words))
-        found += [(w, part) for w in words[1:printed] if w.lower().endswith(".md") and not w.startswith("-")]
+    found: list[tuple[str, tuple[int, int | None] | None]] = []
+    for line in SHELL_COMMAND.split(command):
+        piped: list[int] = []
+        for stage in line.split("|"):
+            words = [w.strip("\"'") for w in SHELL_WORD.findall(stage)]
+            if not words:
+                continue
+            if words[0].lower() == "sed" and any(SED_IN_PLACE.fullmatch(w) for w in words):
+                piped = []
+                continue
+            # A redirect's target is written, and so is everything after it.
+            printed = next((i for i, w in enumerate(words) if ">" in w), len(words))
+            files = [w for w in words[1:printed] if w.lower().endswith(".md") and not w.startswith("-")] \
+                if words[0].lower() in SHELL_READERS else []
+            if files:
+                piped = list(range(len(found), len(found) + len(files)))
+                found += [(file, stage_span(words[:printed])) for file in files]
+            else:
+                found = [(path, narrowed(span, stage_span(words))) if i in piped else (path, span)
+                         for i, (path, span) in enumerate(found)]
     return found
+
+
+def count_after(words: list[str], flags: set[str]) -> int | None:
+    """The number after the first of the flags among a command's words, as -TotalCount 40 gives it."""
+    for i, word in enumerate(words[:-1]):
+        if word.lower() in flags and words[i + 1].isdigit():
+            return int(words[i + 1])
+    return None
+
+
+def stage_span(words: list[str]) -> tuple[int, int | None] | None:
+    """The span one stage of a command prints of what it reads, a file it names or the stage before it."""
+    tool = words[0].lower()
+    if tool in ("cat", "less", "more", "type"):
+        return 1, None
+    if tool in ("head", "tail"):
+        count = "10"
+        for i, word in enumerate(words[1:], 1):
+            if word in ("-n", "--lines") and i + 1 < len(words):
+                count = words[i + 1]
+            elif match := HEAD_TAIL_COUNT.fullmatch(word):
+                count = next(group for group in match.groups() if group)
+        if not count.lstrip("+").isdigit():
+            return None
+        lines = int(count.lstrip("+"))
+        return (1, lines) if tool == "head" else (lines, None) if count.startswith("+") else (-lines, None)
+    if tool == "sed":
+        quiet = any(SED_QUIET.fullmatch(w) for w in words[1:])
+        script = next((w for w in words[1:] if not w.startswith("-") and not w.lower().endswith(".md")), "")
+        if quiet and (match := SED_LINES.fullmatch(script)):
+            return int(match[1]), None if match[2] == "$" else int(match[2] or match[1])
+        if not quiet and (match := re.fullmatch(r"(\d+)q", script)):
+            return 1, int(match[1])
+        return None if quiet else (1, None)
+    if tool in ("gc", "get-content"):
+        first, last = count_after(words, {"-totalcount", "-head", "-first"}), count_after(words, {"-tail", "-last"})
+        return (1, first) if first else (-last, None) if last else (1, None)
+    if tool in ("select-object", "select"):
+        skip, first = count_after(words, {"-skip"}) or 0, count_after(words, {"-first"})
+        if last := count_after(words, {"-last"}):
+            return -last, None
+        return (skip + 1, skip + first if first else None) if first or skip else None
+    return None
+
+
+def narrowed(outer: tuple[int, int | None] | None,
+             inner: tuple[int, int | None] | None) -> tuple[int, int | None] | None:
+    """The file's span a stage prints when it reads the stage before it, counting inner from that stage's start."""
+    if outer is None or inner is None:
+        return None
+    if outer == (1, None):
+        return inner
+    (first, last), (start, end) = outer, inner
+    if first < 1 or start < 1:
+        return None
+    stop = None if end is None else first + end - 1
+    return first + start - 1, last if stop is None else stop if last is None else min(last, stop)
 
 
 def slashed(path: str) -> str:
@@ -352,19 +433,31 @@ def named_in(source: str, text: str, docs: dict[str, str]) -> set[str]:
     return found
 
 
-def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int], ranged: dict[tuple[str, str], int],
-             root: str) -> list[dict]:
-    """One row per tracked document: who names it, how often a main session and a subagent opened it, and how many
-    of those opens asked for part of it."""
+def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int],
+             opens: list[tuple[str, str, tuple[int, int | None] | None]], root: str) -> list[dict]:
+    """One row per tracked document: who names it, how often a main session and a subagent opened it, how many
+    contexts opened it, and how many of those read more than half of its lines."""
     entry = {doc for doc in docs if ENTRY.fullmatch(doc)}
     from_entry = set().union(*(named_in(doc, docs[doc], docs) for doc in entry))
     from_claude_md = named_in("CLAUDE.md", docs.get("CLAUDE.md", ""), docs)
     opened: dict[tuple[str, str], int] = {}
-    parts: dict[str, int] = {}
     for (path, who), count in reads.items():
         if (doc := repo_relative(path, root)) in docs:
             opened[doc, who] = opened.get((doc, who), 0) + count
-            parts[doc] = parts.get(doc, 0) + ranged.get((path, who), 0)
+    covered: dict[tuple[str, str], set[int]] = {}
+    for path, context, span in opens:
+        if (doc := repo_relative(path, root)) not in docs:
+            continue
+        lines, size = covered.setdefault((doc, context), set()), len(docs[doc].splitlines())
+        if span is not None:
+            first, last = span
+            lines.update(range(max(size + first + 1 if first < 0 else first, 1), min(last or size, size) + 1))
+    contexts: dict[str, int] = {}
+    over_half: dict[str, int] = {}
+    for (doc, _), lines in covered.items():
+        contexts[doc] = contexts.get(doc, 0) + 1
+        if 2 * len(lines) > len(docs[doc].splitlines()):
+            over_half[doc] = over_half.get(doc, 0) + 1
     rows = []
     for doc in docs:
         if doc == "CLAUDE.md":
@@ -373,7 +466,7 @@ def doc_rows(docs: dict[str, str], reads: dict[tuple[str, str], int], ranged: di
             LINKS[2] if doc in from_claude_md else LINKS[3]
         main, agents = opened.get((doc, MAIN), 0), opened.get((doc, SUBAGENT), 0)
         rows.append({"doc": doc, "named_by": link, "reads": main + agents, "main": main, "subagents": agents,
-                     "ranged": parts.get(doc, 0)})
+                     "contexts": contexts.get(doc, 0), "over_half": over_half.get(doc, 0)})
     rows.sort(key=lambda r: (LINKS.index(r["named_by"]), -r["reads"], r["doc"]))
     return rows
 
@@ -474,7 +567,7 @@ def default_projects(cwd: Path) -> list[Path]:
 MODEL_ROWS = ("command", "agent", "model", "contexts", "calls", "mean_context", "input", "cache_write", "cache_read",
               "output", "input_equivalent", "woken_equivalent", "woken_write")
 ROWS = tuple(c for c in MODEL_ROWS if c != "model")
-DOCS = ("doc", "named_by", "reads", "main", "subagents", "ranged")
+DOCS = ("doc", "named_by", "reads", "main", "subagents", "contexts", "over_half")
 RESULTS = ("command", "tool", "results", "characters", "approx_tokens")
 SPAWNS = ("command", "agent", "started", "calls", "input_equivalent", "description")
 
@@ -506,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
                        help="split each command and agent row by the model that answered")
     views.add_argument("--docs", action="store_true",
                        help="list every tracked markdown file with who names it, how often it was opened and how "
-                            "many opens asked for part of it")
+                            "many contexts read more than half of it")
     parser.add_argument("--session", default="", metavar="ID",
                         help="only the session whose id starts with ID, with its subagents")
     args = parser.parse_args(argv)
@@ -528,7 +621,7 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, subprocess.CalledProcessError):
             print(f"no git checkout at {root} to list the markdown files of", file=sys.stderr)
             return 2
-        rows, columns = doc_rows(docs, report.reads, report.ranged, str(root)), DOCS
+        rows, columns = doc_rows(docs, report.reads, report.kept_opens(), str(root)), DOCS
         for line in link_summary(rows):
             print(line, file=sys.stderr)
     elif args.tools is not None:
