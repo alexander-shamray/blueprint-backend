@@ -419,7 +419,8 @@ computes it.
 that set the step.
 
 - A main session's mean context is 179k, not under 150k, so step 2's exit
-  does not hold here. It was 252k to 274k on 2026-10-10.
+  does not hold here. It was about 286k on 2026-10-10, that section's three
+  main rows weighted by calls.
 - 21% of the input equivalent came after a wake, under 40%; it was 63% on
   2026-10-10.
 - No `/validate-blueprint` run has a main session of its own in the span:
