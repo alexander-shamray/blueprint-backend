@@ -438,9 +438,11 @@ class DocsTests(unittest.TestCase):
         cover = token_usage.span_lines
         self.assertEqual(cover(Grepped((1, None), True, "2:x1\n3-b\n--\n6:x1"), lines), {2, 3, 6})
         self.assertEqual(cover(Grepped((3, 6), True, "2:x2\n9:gone"), lines), {4})
-        self.assertEqual(cover(Grepped((3, 6), False, "x1\nx2"), lines), {4, 6})
+        self.assertEqual(cover(Grepped((3, 6), False, "x2\nx1"), lines), {4, 6})
         self.assertEqual(cover(Grepped((1, None), True, None), lines), set())
         self.assertEqual(cover(Grepped((1, None), True, "Exit code 1\n"), lines), set())
+        blanks = ["a", "", "x1", "", "b", "", "---", "c", "---"]
+        self.assertEqual(cover(Grepped((1, None), False, "x1\n\nb\n--\n---"), blanks), {3, 4, 5, 7})
 
     def test_a_grep_takes_its_calls_result_unless_the_call_grepped_two_opens(self):
         with tempfile.TemporaryDirectory() as directory:
