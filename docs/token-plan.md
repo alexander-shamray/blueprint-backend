@@ -303,8 +303,8 @@ before produced; `sweep-mark.sh` records a clean sweep's commit as a local
 `refs/sweeps/<kind>`, and the next round 1 reads only what changed since, or
 everything under `full`. Re-verification runs on Sonnet. The exit's recall
 half is unmet on step 1's quality set, and its cost half waits on a sweep
-run, which the week after step 7 did not hold (`token-usage.md`,
-2026-10-18).
+run the report can read, which the week after step 7 did not hold
+(`token-usage.md`, 2026-10-18).
 
 ### Step 6 — the commands
 

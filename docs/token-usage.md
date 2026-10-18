@@ -445,10 +445,12 @@ at 30,245 between them. That is a third of the 45k measured on 2026-10-07,
 not the 12k the exit names. The end state held: 141 pull requests merged
 over the span, under the short runbook.
 
-**Step 5's exit.** No sweep ran in the span, so neither half of its token
-measurement — a first sweep's cost over the slices, and a repeat sweep from
-`refs/sweeps/<kind>` — has a figure. Its recall half is the 2026-10-12
-section's, and not met there.
+**Step 5's exit.** No `/bug-sweep` or `/security-sweep` ran in the span,
+and the sweeps the 2026-10-12 section scored ran `claude -p` from temporary
+worktrees, whose transcripts the report does not read; so neither half of
+its token measurement — a first sweep's cost over the slices, and a repeat
+sweep from `refs/sweeps/<kind>` — has a figure. Its recall half is the
+2026-10-12 section's, and not met there.
 
 **What fills a main session**, from `--tools 30`: `Bash` results under
 `/ship`, 7,914 of them, about 2.5M tokens; `Read` under no command, 733,
