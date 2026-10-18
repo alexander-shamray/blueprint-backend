@@ -868,7 +868,7 @@ jobs:
 
       # A fork's token cannot comment, and a missed comment must not fail a shard
       # that passed. The artifact above is the record.
-      - name: Post the sightings on #824
+      - name: "Post the sightings on #824"
         if: always() && hashFiles('TestResults/sightings/*.txt') != ''
         continue-on-error: true
         env:
