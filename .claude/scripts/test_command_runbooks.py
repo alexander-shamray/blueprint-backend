@@ -1,7 +1,8 @@
 """The commands split into a runbook and its argument (docs/token-plan.md, step 6).
 
 A runbook is resident in every turn its command runs and its argument is read
-only when a rule is disputed; these cases hold the two halves to each other.
+only when a rule is disputed; these cases hold the two halves to each other,
+and hold the rest of what a run keeps resident under a ceiling the same way.
 """
 
 import re
