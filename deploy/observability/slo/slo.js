@@ -329,6 +329,14 @@ export function teardown(data) {
             query: `histogram_quantile(0.99, sum by (le) (rate(projection_lag_seconds_bucket{service_name="Ordering.Api"}[${window}])))`,
             limit: 1,
         },
+        {
+            name: 'Event end-to-end p95 < 2 s',
+            // Scoped to the two events this run's orders publish, as the request
+            // rows are scoped to theirs. IntegrationEventConsumer<T> records the
+            // lag at consume start in every service that consumes them.
+            query: `histogram_quantile(0.95, sum by (le) (rate(messaging_delivery_lag_seconds_bucket{message=~"OrderPlaced|OrderConfirmed"}[${window}])))`,
+            limit: 2,
+        },
     ];
 
     const breaches = [];
@@ -353,27 +361,12 @@ export function teardown(data) {
             breaches.push(`${row.name}: measured ${value.toFixed(4)}, limit ${row.limit}`);
     }
 
-    // TWO OF §13.7's SEVEN ROWS ARE NOT EVALUATED HERE, and each is named
-    // rather than quietly dropped — §13.7 cut two rows outright on the same
-    // rule: an SLO that cannot be evaluated is not a weak SLO, it is a claim
-    // that the service is meeting a bar nobody is checking.
-    //
-    //   * Availability (99.9% MONTHLY) — a three-minute run cannot compute a
-    //     monthly objective. `http_req_failed` above bounds the error rate
-    //     DURING the run, which is a different and much weaker claim.
-    //
-    //   * Event end-to-end (`messaging.delivery.lag`) — recorded by
-    //     IntegrationEventConsumer<T> at consume start. This run places orders;
-    //     the consumer that records it handles Catalog's product events, which
-    //     neither scenario produces. Asserting it against traffic that cannot
-    //     generate it would fail every run for a reason that is not a
-    //     regression.
-    //
-    // Asserting either would have made this gate fail permanently on
+    // ONE OF §13.7's SEVEN ROWS IS NOT EVALUATED HERE, and it is named rather
+    // than quietly dropped: availability is a MONTHLY objective a three-minute
+    // run cannot compute, and `http_req_failed` above bounds the error rate
+    // DURING the run, a much weaker claim. Asserting it would fail this gate on
     // a healthy platform, which is how a gate gets switched off.
-    console.log(
-        'SLO run: not evaluated — availability (monthly), ' +
-        'messaging.delivery.lag (not exercised by this traffic).');
+    console.log('SLO run: not evaluated — availability (monthly).');
 
     // Recorded, never asserted: ADR-063 waits on a baseline under load for both
     // overdue gauges, this run is the only load the platform has, and no rule

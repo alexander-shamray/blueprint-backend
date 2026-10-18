@@ -216,12 +216,12 @@ network, while §13.7's command and query rows read `request.duration`, which is
 dispatcher entry to result. The authoritative assertions are in `teardown()`,
 one per §13.7 row this run's own traffic can actually produce.
 
-**Two of §13.7's seven rows are not evaluated**, each named in `teardown()`
-rather than quietly dropped: availability, because a three-minute run cannot
-compute a monthly objective; and `messaging.delivery.lag`, because the
-consumer that records it handles Catalog's product events and neither
-scenario produces one. Asserting either would fail every run on a healthy
-platform, which is how a gate gets switched off.
+**One of §13.7's seven rows is not evaluated**, and it is named in
+`teardown()` rather than quietly dropped: availability, because a three-minute
+run cannot compute a monthly objective. Asserting it would fail every run on a
+healthy platform, which is how a gate gets switched off. Event end-to-end is
+asserted over the two events the run's own orders publish, `OrderPlaced` and
+`OrderConfirmed`, as the request rows are scoped to their request types.
 
 **The run must reach the happy path, and two checks hold that.** `placeOrder`
 asserts only the synchronous answer, and the stock reservation fails later, in
