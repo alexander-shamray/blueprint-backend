@@ -210,12 +210,25 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
             expected: 1,
             because: "the first escalation must land before a second can be absorbed");
 
-        await SendAsync(new FlagOrderForReview(orderId, ReviewReasons.StockNotReleased));
-        await Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+        // An old instant, so a repeat that moved RaisedAt to the present would show.
+        DateTimeOffset raised = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        await fixture.ExecuteAsync(
+            "UPDATE ordering.OrderReviews SET RaisedAt = {0} WHERE OrderId = {1}",
+            raised,
+            orderId);
 
-        (await ReviewCountAsync(orderId)).ShouldBe(
-            1,
-            "RaisedAt records when the process first stalled, so a repeat must not insert or move it");
+        Guid second = await SendAsync(new FlagOrderForReview(orderId, ReviewReasons.StockNotReleased));
+        await Eventually(
+            async () => (await InboxRowsAsync(second, MessagingRegistration.CommandsQueue)).Count,
+            expected: 1,
+            because: "the inbox row is written once the handler has committed, so the repeat has run");
+
+        (await ReviewCountAsync(orderId)).ShouldBe(1);
+        (await fixture.ScalarAsync<DateTimeOffset>(
+            "SELECT Value = RaisedAt FROM ordering.OrderReviews WHERE OrderId = {0}",
+            orderId)).ShouldBe(
+                raised,
+                "RaisedAt records when the process first stalled, so a repeat must not insert or move it");
     }
 
     [Fact]
@@ -340,7 +353,7 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
 
     /// <summary>Sends to <c>ordering-commands</c> by address, as §9.6's saga does.</summary>
     /// <param name="drain">False only where the mapper throws, so the inbox row is never written.</param>
-    private async Task SendAsync<T>(T command, bool drain = true)
+    private async Task<Guid> SendAsync<T>(T command, bool drain = true)
         where T : class
     {
         ISendEndpoint endpoint = await fixture.Factory.Services
@@ -353,6 +366,8 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
             _published.Add((messageId, MessagingRegistration.CommandsQueue));
 
         await endpoint.Send(command, c => c.MessageId = messageId, TestContext.Current.CancellationToken);
+
+        return messageId;
     }
 
     private async Task<IReadOnlyList<InboxMessage>> InboxRowsAsync(Guid messageId, string endpoint) =>
