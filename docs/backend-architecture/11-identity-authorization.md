@@ -1504,8 +1504,8 @@ Rules for each service's consumer:
   Shipping's fulfilment worker ([Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure))
   — checks the
   audit rows above once its write has committed, and deletes what it wrote for
-  an erased customer, unless the order names the request as one it was placed
-  after
+  an erased customer, or anonymises Payments' payer, unless the order names
+  the request as one it was placed after
   ([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md),
   [ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md),
   [ADR-103](adr/ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md)).

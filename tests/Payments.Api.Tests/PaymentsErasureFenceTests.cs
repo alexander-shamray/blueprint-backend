@@ -104,11 +104,11 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
             At);
 
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
-        await Handler(scope).HandleAsync(Placed(late, _subject), ct);
+        await Handler(scope).HandleAsync(Placed(late, _subject, [Guid.CreateVersion7()]), ct);
         await Handler(scope).HandleAsync(Placed(after, _subject, [request]), ct);
 
-        (await PayerOfAsync(late)).ShouldBe(Guid.Empty, "it lists no request, so the erasure is not older than it");
-        (await ErasedUnderOfAsync(late)).ShouldBe("[]");
+        (await PayerOfAsync(late)).ShouldBe(Guid.Empty, "it lists another request, so the erasure is not older");
+        (await ErasedUnderOfAsync(late)).ShouldBe("[]", "the list names the buyer, so it goes with the payer");
         (await PayerOfAsync(after)).ShouldBe(_subject);
     }
 
