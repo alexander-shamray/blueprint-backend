@@ -9,4 +9,5 @@ internal sealed class PaymentOrderRow
     public string? Currency { get; set; }
     public DateTimeOffset? PlacedAt { get; set; }
     public DateTimeOffset? CancelledAt { get; set; }
+    public string ErasedUnder { get; set; } = "[]";
 }

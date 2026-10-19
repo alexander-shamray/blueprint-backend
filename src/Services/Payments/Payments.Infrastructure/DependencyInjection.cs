@@ -44,6 +44,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
         services.AddScoped<IPaymentOrderStore, SqlPaymentOrderStore>();      // §3.2, §6.3
+        services.AddScoped<IErasedSubjects, SqlErasedSubjects>();            // ADR-097
 
         // §5.6's repository registration for each aggregate.
         services.AddScoped<IPaymentIntentRepository, PaymentIntentRepository>();

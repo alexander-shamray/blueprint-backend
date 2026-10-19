@@ -1240,8 +1240,8 @@ this case, and this table is the owner of what each edge of it erases:
 completion as a command **sent** to its queue by each holder
 ([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)).
 The holders that write from an event feed and so ask their own audit rows after
-they write are the BFF's projection, Notifications' intake and Shipping's
-fulfilment worker
+they write are the BFF's projection, Notifications' intake, Payments' intake and
+Shipping's fulfilment worker
 ([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md)).
 Privacy is a seventh service and its responder set is fixed when a request is
 raised

@@ -7,4 +7,5 @@ public sealed record RecordOrderPlacedCommand(
     Guid CustomerId,
     decimal TotalAmount,
     string Currency,
-    DateTimeOffset PlacedAt) : ICommand<Result>;
+    DateTimeOffset PlacedAt,
+    IReadOnlyList<Guid> ErasedUnder) : ICommand<Result>;

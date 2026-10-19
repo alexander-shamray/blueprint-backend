@@ -126,6 +126,7 @@ public class RecordOrderCancelledHandlerTests
             decimal total,
             string currency,
             DateTimeOffset placedAt,
+            IReadOnlyList<Guid> erasedUnder,
             CancellationToken ct) =>
             throw new NotSupportedException("Not exercised on the cancellation path.");
 
@@ -138,7 +139,10 @@ public class RecordOrderCancelledHandlerTests
         public Task<PaymentOrderRecord?> LockAsync(OrderId id, CancellationToken ct) =>
             throw new NotSupportedException("The stamp is this path's lock; it reads no record.");
 
-        public Task<int> AnonymiseCustomerAsync(Guid subjectId, CancellationToken ct) =>
+        public Task<int> AnonymiseCustomerAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+            throw new NotSupportedException("Not exercised on the cancellation path.");
+
+        public Task<int> AnonymiseOrderAsync(OrderId id, Guid customerId, CancellationToken ct) =>
             throw new NotSupportedException("Not exercised on the cancellation path.");
     }
 

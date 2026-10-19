@@ -1500,8 +1500,8 @@ Rules for each service's consumer:
   of already-erased data must succeed silently.
 - **A writer asks its own audit rows after it writes.** A holder fed by
   events that name a customer — in the reference domain the BFF's projection,
-  whose rebuild replays them, Notifications' intake and Shipping's fulfilment
-  worker ([Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure))
+  whose rebuild replays them, Notifications' intake, Payments' intake and
+  Shipping's fulfilment worker ([Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure))
   — checks the
   audit rows above once its write has committed, and deletes what it wrote for
   an erased customer, unless the order names the request as one it was placed

@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -13,12 +14,13 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
     private const string PlacedSql =
         """
         UPDATE payments.PaymentOrders WITH (UPDLOCK, HOLDLOCK)
-        SET CustomerId = @CustomerId, TotalAmount = @TotalAmount, Currency = @Currency, PlacedAt = @PlacedAt
+        SET CustomerId = @CustomerId, TotalAmount = @TotalAmount, Currency = @Currency, PlacedAt = @PlacedAt,
+            ErasedUnder = @ErasedUnder
         WHERE OrderId = @OrderId;
 
         IF @@ROWCOUNT = 0
-            INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt)
-            VALUES (@OrderId, @CustomerId, @TotalAmount, @Currency, @PlacedAt);
+            INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt, ErasedUnder)
+            VALUES (@OrderId, @CustomerId, @TotalAmount, @Currency, @PlacedAt, @ErasedUnder);
         """;
 
     // COALESCE keeps the first cancellation's instant, which a redelivery does not move.
@@ -42,11 +44,22 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
         """;
 
     // The empty id names nobody and, unlike NULL, is not "the order has not arrived yet" (§3.2); the money stays.
+    // HOLDLOCK takes a range lock even where the subject has no order, held to the commit that writes the audit row:
+    // a placement meanwhile waits, and its erased check then sees that row. An order listing the request was placed
+    // after it, so it keeps its payer (ADR-099).
     private const string AnonymiseSql =
+        """
+        UPDATE payments.PaymentOrders WITH (UPDLOCK, HOLDLOCK)
+        SET CustomerId = '00000000-0000-0000-0000-000000000000'
+        WHERE CustomerId = @SubjectId
+            AND NOT EXISTS (SELECT 1 FROM OPENJSON(ErasedUnder) AS u WHERE u.value = @RequestId);
+        """;
+
+    private const string AnonymiseOrderSql =
         """
         UPDATE payments.PaymentOrders
         SET CustomerId = '00000000-0000-0000-0000-000000000000'
-        WHERE CustomerId = @SubjectId;
+        WHERE OrderId = @OrderId AND CustomerId = @CustomerId;
         """;
 
     private sealed record Row(
@@ -63,6 +76,7 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
         decimal total,
         string currency,
         DateTimeOffset placedAt,
+        IReadOnlyList<Guid> erasedUnder,
         CancellationToken ct)
     {
         (DbConnection connection, DbTransaction transaction) = Current();
@@ -76,7 +90,8 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
                     CustomerId = customerId,
                     TotalAmount = total,
                     Currency = currency,
-                    PlacedAt = placedAt
+                    PlacedAt = placedAt,
+                    ErasedUnder = JsonSerializer.Serialize(erasedUnder)
                 },
                 transaction,
                 cancellationToken: ct));
@@ -112,12 +127,29 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
                 row.CancelledAt);
     }
 
-    public async Task<int> AnonymiseCustomerAsync(Guid subjectId, CancellationToken ct)
+    public async Task<int> AnonymiseCustomerAsync(Guid subjectId, Guid requestId, CancellationToken ct)
+    {
+        (DbConnection connection, DbTransaction transaction) = Current();
+
+        // As the column's JSON spells a Guid, which is what an order's list is matched against.
+        return await connection.ExecuteAsync(
+            new CommandDefinition(
+                AnonymiseSql,
+                new { SubjectId = subjectId, RequestId = requestId.ToString() },
+                transaction,
+                cancellationToken: ct));
+    }
+
+    public async Task<int> AnonymiseOrderAsync(OrderId id, Guid customerId, CancellationToken ct)
     {
         (DbConnection connection, DbTransaction transaction) = Current();
 
         return await connection.ExecuteAsync(
-            new CommandDefinition(AnonymiseSql, new { SubjectId = subjectId }, transaction, cancellationToken: ct));
+            new CommandDefinition(
+                AnonymiseOrderSql,
+                new { OrderId = id.Value, CustomerId = customerId },
+                transaction,
+                cancellationToken: ct));
     }
 
     private (DbConnection, DbTransaction) Current()

@@ -70,11 +70,17 @@ public class ErasePersonalDataHandlerTests
 
         public List<Guid> Subjects { get; } = [];
 
-        public Task<int> AnonymiseCustomerAsync(Guid subjectId, CancellationToken ct)
+        public List<Guid> Requests { get; } = [];
+
+        public Task<int> AnonymiseCustomerAsync(Guid subjectId, Guid requestId, CancellationToken ct)
         {
             Subjects.Add(subjectId);
+            Requests.Add(requestId);
             return Task.FromResult(Anonymised);
         }
+
+        public Task<int> AnonymiseOrderAsync(OrderId id, Guid customerId, CancellationToken ct) =>
+            throw new NotSupportedException("Not exercised on the erasure path.");
 
         public Task RecordPlacedAsync(
             OrderId id,
@@ -82,6 +88,7 @@ public class ErasePersonalDataHandlerTests
             decimal total,
             string currency,
             DateTimeOffset placedAt,
+            IReadOnlyList<Guid> erasedUnder,
             CancellationToken ct) =>
             throw new NotSupportedException("Not exercised on the erasure path.");
 

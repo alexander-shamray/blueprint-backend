@@ -37,8 +37,9 @@ public sealed class ObservedOrderStore
             decimal total,
             string currency,
             DateTimeOffset placedAt,
+            IReadOnlyList<Guid> erasedUnder,
             CancellationToken ct) =>
-            inner.RecordPlacedAsync(id, customerId, total, currency, placedAt, ct);
+            inner.RecordPlacedAsync(id, customerId, total, currency, placedAt, erasedUnder, ct);
 
         public Task RecordCancelledAsync(OrderId id, DateTimeOffset cancelledAt, CancellationToken ct)
         {
@@ -56,7 +57,10 @@ public sealed class ObservedOrderStore
             return record;
         }
 
-        public Task<int> AnonymiseCustomerAsync(Guid subjectId, CancellationToken ct) =>
-            inner.AnonymiseCustomerAsync(subjectId, ct);
+        public Task<int> AnonymiseCustomerAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+            inner.AnonymiseCustomerAsync(subjectId, requestId, ct);
+
+        public Task<int> AnonymiseOrderAsync(OrderId id, Guid customerId, CancellationToken ct) =>
+            inner.AnonymiseOrderAsync(id, customerId, ct);
     }
 }
