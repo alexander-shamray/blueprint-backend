@@ -3,6 +3,7 @@ using Payments.TestSupport.Outbox;
 using Common.Application;
 using Common.Contracts;
 using Common.Infrastructure.Outbox;
+using Common.TestSupport;
 using Shouldly;
 using Xunit;
 
@@ -33,7 +34,21 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         OutboxMessage poison = rows.Single(r => r.ProcessedAt is null);
         poison.Attempts.ShouldBe(1);
         poison.LastError.ShouldNotBeNullOrEmpty();
-        poison.LockedUntil.ShouldNotBeNull();     // backed off, not abandoned
+        OutboxBackoffRule.Violation(poison, attemptsBefore: 0).ShouldBeNull();     // backed off, not abandoned
+    }
+
+    [Fact]
+    public async Task A_failure_backs_off_by_the_ladder_and_not_by_the_claims_lease()
+    {
+        OutboxMessage poison = OutboxRows.Poison(fixture);
+        await fixture.StageOutboxAsync(poison);
+        await fixture.SetOutboxAttemptsAsync(poison.MessageId, 3);
+
+        (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
+
+        OutboxMessage row = (await fixture.OutboxAsync()).Single();
+        row.Attempts.ShouldBe(4);
+        OutboxBackoffRule.Violation(row, attemptsBefore: 3).ShouldBeNull();
     }
 
     [Fact]
