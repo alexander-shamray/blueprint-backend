@@ -866,7 +866,9 @@ RuleFor(x => x.Items)
     .Cascade(CascadeMode.Stop)
     .NotEmpty()
     .Must(items => items.Count <= OrderLimits.MaxLines)
-    .WithMessage($"An order cannot contain more than {OrderLimits.MaxLines} items.");
+    .WithMessage($"An order cannot contain more than {OrderLimits.MaxLines} items.")
+    .Must(items => items.All(item => item is not null))
+    .WithMessage("An order cannot contain a null item.");
 RuleForEach(x => x.Items).ChildRules(item =>
 {
     item.RuleFor(i => i.ProductId).NotEmpty();
@@ -898,6 +900,10 @@ RuleFor(x => x.Items)
   runs every validator in a rule by default, so on an explicit `"items": null`
   the `NotEmpty` records its failure and the size predicate then dereferences
   the null it just rejected.
+- **A null element has a rule of its own**, because `RuleForEach` skips one and
+  `PlaceOrderHandler` would dereference it for a 500 rather than this 400. It
+  follows the size predicate in the same chain, so it only runs on a list that
+  is not null.
 - **The quantity is bounded again over the merged lines**, because the
   per-item rule is not a bound on the order: a repeated product is legitimate
   and `Order.AddLine` merges the lines, so two items at the ceiling would place
