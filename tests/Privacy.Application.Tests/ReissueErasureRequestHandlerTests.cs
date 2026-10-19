@@ -41,7 +41,9 @@ public class ReissueErasureRequestHandlerTests
 
         result.IsSuccess.ShouldBeTrue();
         request.Status.ShouldBe(ErasureStatus.Open);
-        request.DueAt.ShouldBe(now + ConfiguredSlo, "the configured service level, read now and not when it was raised");
+        request.DueAt.ShouldBe(
+            now + ConfiguredSlo,
+            "the configured service level, read now and not when it was raised");
         request.DomainEvents.ShouldHaveSingleItem().ShouldBe(new ErasureRequestedDomainEvent(Request, Subject, now));
     }
 
