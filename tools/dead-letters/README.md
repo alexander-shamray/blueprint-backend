@@ -23,7 +23,7 @@ py -3.12 tools/dead-letters/dead_letters.py discard ordering-commands_error --al
 |---|---|
 | `list` | every queue ending `_error` or `_skipped`, its endpoint and its depth |
 | `inspect QUEUE` | reads up to `--limit` messages and puts them back: ids, `MT-Fault-*`, the body's `messageType`, the body |
-| `replay QUEUE` | moves the named messages, or `--all`, back to the endpoint the queue name gives |
+| `replay QUEUE` | moves the named messages, or `--all`, back to the endpoint the queue name gives, or to `--to ENDPOINT` |
 | `discard QUEUE` | removes the named messages, or `--all`, once each is in the record file |
 
 **It reads only queues ending `_error` or `_skipped`.** Any other name is
@@ -74,8 +74,14 @@ return fails too it is in neither place, so the run writes it whole to
 stderr on a line beginning `unrecorded`, and that line is the last copy.
 
 A run takes at most as many messages as its first read saw, which `--limit`
-bounds (100 by default), and stops early once every named id is handled, or
-when a message it returned comes round again.
+bounds (100 by default; `--all` reads the queue's whole depth unless `--limit`
+says otherwise), and stops early once every named id is handled, or when a
+message it returned comes round again. A read that filled its bound while the
+queue holds more says so on a `truncated` line, and a run that asked for `--all`
+exits 1 on it.
+
+A message the run did not select that cannot be returned is `failed`, not
+`returned`, and stops the run: it is off the queue, and the record holds it.
 
 A replay is refused, and the message returned, when MassTransit's
 `MT-Fault-InputAddress` names an endpoint other than the one the queue name
@@ -201,7 +207,7 @@ and one that only adds a field does not.
 |---|---|
 | `list` | `schema`, `command`, `vhost`, `queues[]` of `name`, `kind` (`error` or `skipped`), `endpoint`, `messages` |
 | `inspect` | `schema`, `command`, `vhost`, `queue`, `kind`, `endpoint`, `messages[]` of `message_id`, `correlation_id`, `message_type`, `fault_message`, `fault_exception_type`, `input_address`, `reason`, `redelivered`, `properties`, `body` (text, or `null` when not UTF-8), `body_base64` |
-| `replay`, `discard` | `schema`, `command`, `vhost`, `queue`, `kind`, `endpoint`, `dry_run`, `actions[]` of `message_id`, `action`, `destination`, `reason`, and `not_found[]` |
+| `replay`, `discard` | `schema`, `command`, `vhost`, `queue`, `kind`, `endpoint`, `dry_run`, `actions[]` of `message_id`, `action`, `destination`, `reason`, `not_found[]` and `truncated`, the messages past the read's bound |
 | any, refused | `schema`, `command`, `error` |
 
 An `action` is one of the audit line's, or `would-replay`, `would-discard` or

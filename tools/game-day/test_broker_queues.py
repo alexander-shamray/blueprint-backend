@@ -128,13 +128,25 @@ class BrokerCalls(unittest.TestCase):
         run, _ = self.tool_run({"actions": [], "not_found": ["a"]}, returncode=1)
         self.assertEqual([], self.broker(run=run).discard("q_error", ["a"]))
 
-    def test_a_discard_that_fails_or_misses_an_id_is_an_error(self):
-        for document in ({"actions": [{"message_id": "a", "action": "failed"}], "not_found": []},
-                         {"actions": [], "not_found": []}, {"error": "no credential"}):
+    def test_a_discard_that_misses_an_id_or_is_refused_is_an_error_and_leaves_no_record(self):
+        for document in ({"actions": [], "not_found": []}, {"error": "no credential"}):
             with self.subTest(document):
-                run, _ = self.tool_run(document, returncode=1)
+                run, calls = self.tool_run(document, returncode=1)
                 with self.assertRaises(harness.GameDayError):
                     self.broker(run=run).discard("q_error", ["a"])
+                self.assertFalse(os.path.exists(calls[0][0][10]))
+
+    def test_a_discard_that_fails_keeps_the_record_and_names_it(self):
+        document = {"actions": [{"message_id": "r", "action": "failed"}], "not_found": []}
+        run, calls = self.tool_run(document, returncode=1)
+        with self.assertRaises(harness.GameDayError) as raised:
+            self.broker(run=run).discard("q_error", ["a"])
+        record = calls[0][0][10]
+        try:
+            self.assertTrue(os.path.exists(record), "it may hold the only copy of a real dead letter")
+            self.assertIn(record, str(raised.exception))
+        finally:
+            os.remove(record)
 
     def test_nothing_to_discard_runs_nothing(self):
         self.assertEqual([], self.broker(run=lambda *_, **__: self.fail("ran")).discard("q_error", []))

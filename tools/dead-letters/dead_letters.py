@@ -107,6 +107,14 @@ class Broker:
         return bool(answer.get("routed"))
 
 
+def depth_of(broker: Broker, queue: str) -> int:
+    """The queue's message count by the Management API's statistics, which lag it by a few seconds."""
+    for entry in broker.queues():
+        if entry.get("name") == queue:
+            return int(entry.get("messages") or 0)
+    return 0
+
+
 def endpoint_of(queue: str) -> tuple[str, str]:
     """`ordering-commands_error` -> (`ordering-commands`, `error`); the runbooks' naming rule."""
     for suffix, kind in SUFFIXES.items():
@@ -310,9 +318,19 @@ def command_move(run: Run, verb: str) -> int:
                       f"leaves {queue}, which is the record the runbooks require before a discard")
     if args.execute:
         run.writable(args.record)
+    to = getattr(args, "to", None)
+    if to is not None and any(to.endswith(suffix) for suffix in SUFFIXES):
+        raise Refused(f"--to {to}: a dead-letter queue is not where a replay lands")
     wanted = None if args.all else set(args.message_id)
-    destination = endpoint if verb == "replay" else None
-    snapshot = run.broker.peek(queue, args.limit)
+    target = to or endpoint
+    destination = target if verb == "replay" else None
+    # --all asks for every message, so it reads the queue's whole depth unless --limit bounds it.
+    depth = depth_of(run.broker, queue)
+    limit = args.limit if args.limit is not None else (max(depth, DEFAULT_LIMIT) if args.all else DEFAULT_LIMIT)
+    snapshot = run.broker.peek(queue, limit)
+    # A read that filled its bound while the queue holds more left the rest unseen, which --all did not ask for.
+    truncated = depth - len(snapshot) if len(snapshot) >= limit and depth > len(snapshot) else 0
+    partial = wanted is None
     actions: list[dict] = []
 
     def act(message: dict, action: str, reason: str | None = None, to: str | None = destination) -> None:
@@ -325,7 +343,8 @@ def command_move(run: Run, verb: str) -> int:
                 reason = refusal(message, endpoint) if verb == "replay" else None
                 act(message, "would-refuse" if reason else f"would-{verb}", reason)
         found = {message_id(m) for m in snapshot}
-        return finish(run, verb, queue, kind, endpoint, actions, sorted((wanted or set()) - found), dry_run=True)
+        return finish(run, verb, queue, kind, endpoint, actions, sorted((wanted or set()) - found), dry_run=True,
+                      truncated=truncated, partial=partial)
 
     pending = set(wanted or ())
     returned: set[str] = set()
@@ -354,6 +373,8 @@ def command_move(run: Run, verb: str) -> int:
         identity = message_id(message)
         if wanted is not None and identity not in wanted:
             put_back(run, queue, message, "returned", "not selected", actions)
+            if actions[-1]["action"] == "failed":
+                break
             if identity is not None and identity in returned:
                 break
             returned.add(identity)
@@ -368,22 +389,23 @@ def command_move(run: Run, verb: str) -> int:
             put_back(run, queue, message, "refused", reason, actions)
             continue
         try:
-            routed = run.broker.publish(endpoint, message)
+            routed = run.broker.publish(target, message)
         except AnswerLost as error:
             # Returned as well, it could be on both; the record holds it either way, so the run stops and says so.
-            reason = f"{error}; the replay may have reached {endpoint}, so it is not returned, and --record holds it"
+            reason = f"{error}; the replay may have reached {target}, so it is not returned, and --record holds it"
             act(message, "failed", reason)
-            run.audit(queue, message, "failed", endpoint, reason)
+            run.audit(queue, message, "failed", target, reason)
             break
         except Refused as error:
             routed, reason = False, str(error)
         if routed:
             act(message, "replayed")
-            run.audit(queue, message, "replayed", endpoint, None)
+            run.audit(queue, message, "replayed", target, None)
             continue
-        put_back(run, queue, message, "failed", reason or f"the broker routed it nowhere from `{endpoint}`", actions)
+        put_back(run, queue, message, "failed", reason or f"the broker routed it nowhere from `{target}`", actions)
         break
-    return finish(run, verb, queue, kind, endpoint, actions, sorted(pending), dry_run=False)
+    return finish(run, verb, queue, kind, endpoint, actions, sorted(pending), dry_run=False,
+                  truncated=truncated, partial=partial)
 
 
 def refusal(message: dict, endpoint: str) -> str | None:
@@ -407,6 +429,9 @@ def put_back(run: Run, queue: str, message: dict, action: str, reason: str, acti
         returned, reason = False, f"{reason}; returning it failed too: {error}"
     if returned is False:
         reason = f"{reason}; it is not on {queue} any more and {held}"
+        # Gone from the queue is a loss, whatever the run meant to do with it: a "returned" that did not return fails.
+        if action == "returned":
+            action = "failed"
     if returned is not True and not recorded:
         # The last copy this run holds; prefixed, so no reader of the audit lines takes it for one.
         print("unrecorded " + json.dumps({"queue": queue, "message": message}), file=run.err)
@@ -415,19 +440,24 @@ def put_back(run: Run, queue: str, message: dict, action: str, reason: str, acti
 
 
 def finish(run: Run, verb: str, queue: str, kind: str, endpoint: str, actions: list[dict],
-           not_found: list[str], dry_run: bool) -> int:
+           not_found: list[str], dry_run: bool, truncated: int = 0, partial: bool = False) -> int:
     lines = []
     for a in actions:
         target = f" -> {a['destination']}" if a["destination"] else ""
         note = f" ({a['reason']})" if a["reason"] else ""
         lines.append(f"{a['action']:<14} {a['message_id']}{target}{note}")
     lines += [f"not found      {identity}" for identity in not_found]
+    if truncated:
+        lines.append(f"truncated      {truncated} more message(s) stay on {queue}, past --limit; "
+                     f"raise --limit to the queue's depth to reach them")
     if dry_run:
         lines.append(f"dry run: nothing left {queue}. Pass --execute --record FILE to {verb}; the read "
                      f"requeued what it saw, flagged redelivered")
-    failed = any(a["action"] in ("failed", "refused") for a in actions) or bool(not_found)
+    failed = any(a["action"] in ("failed", "refused") for a in actions) or bool(not_found) or (
+        partial and truncated > 0)
     run.emit({"schema": SCHEMA, "command": verb, "vhost": run.broker.vhost, "queue": queue, "kind": kind,
-              "endpoint": endpoint, "dry_run": dry_run, "actions": actions, "not_found": not_found}, lines)
+              "endpoint": endpoint, "dry_run": dry_run, "actions": actions, "not_found": not_found,
+              "truncated": truncated}, lines)
     return 1 if failed else 0
 
 
@@ -451,7 +481,10 @@ def parser() -> argparse.ArgumentParser:
         selection = move.add_mutually_exclusive_group()
         selection.add_argument("--message-id", action="append", default=[])
         selection.add_argument("--all", action="store_true")
-        move.add_argument("--limit", type=int, default=DEFAULT_LIMIT)
+        move.add_argument("--limit", type=int, default=None,
+                          help=f"messages read at most (default {DEFAULT_LIMIT}; with --all, the queue's depth)")
+        if verb == "replay":
+            move.add_argument("--to", help="the endpoint to replay to, when it is not the one the queue name gives")
         move.add_argument("--execute", action="store_true", help="carry it out; without it nothing moves")
         move.add_argument("--record", help="append each taken message here before it is moved or dropped")
     return root
@@ -465,7 +498,8 @@ def main(argv: list[str] | None = None, *, environ: dict | None = None, send: Se
     out = out or sys.stdout
     err = err or sys.stderr
     try:
-        if getattr(args, "limit", 1) < 1:
+        limit = getattr(args, "limit", 1)
+        if limit is not None and limit < 1:
             raise Refused("--limit must be at least 1")
         user, password = load_credential(args.credentials, environ)
         url = args.url or environ.get("DEAD_LETTERS_URL") or DEFAULT_URL

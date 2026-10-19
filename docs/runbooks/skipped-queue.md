@@ -128,7 +128,9 @@ insufficient.
    `dead_letters.py replay <endpoint>_skipped --all`, a dry run, then again
    with `--execute --record FILE` — or with the shovel procedure in
    [`error-queue.md`](error-queue.md); the mechanics are identical and only the
-   source queue name differs.
+   source queue name differs. Where the consumer shipped on a new endpoint, name
+   it: the tool's `--to <new-endpoint>`, or the shovel's `dest-exchange` set to
+   it.
 3. **Record it against the release.** A skipped queue after a deploy is a
    §9.2 violation and the next release of that service should not repeat it.
 
@@ -155,7 +157,9 @@ service and is publishing already, so the moment the new replica's bus starts
 the queue receives that type — and the stable track, still on the old build,
 skips its share for the length of the ladder. §15.5 names the way round it: a
 new receive endpoint, a queue old replicas never read from. Ship it that way,
-then replay what was parked.
+then replay what was parked **to the new endpoint**, with `--to`: a replay with
+no `--to` publishes to the old endpoint, which has no consumer for the type,
+and the messages return here.
 
 ### The message was addressed here and does not belong here
 
