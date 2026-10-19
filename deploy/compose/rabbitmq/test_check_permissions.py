@@ -170,7 +170,7 @@ class ARequiredGrantRemoved(unittest.TestCase):
             any("payments-commands" in f for f in failures),
             f"the gate accepted a missing grant for a queue Endpoints.cs names: {failures}")
 
-    def test_a_receive_endpoint_the_service_hosts(self):
+    def test_a_queue_the_services_own_endpoints_address(self):
         definitions = real()
         entry = permission(definitions, "ordering-svc")
         entry["read"] = r"^(inventory-commands|payments-commands|Common\.Contracts|MassTransit:)"
