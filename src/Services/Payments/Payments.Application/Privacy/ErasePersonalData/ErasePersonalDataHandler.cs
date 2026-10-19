@@ -14,7 +14,7 @@ public sealed class ErasePersonalDataHandler(
 {
     public async Task<Result<int>> HandleAsync(ErasePersonalDataCommand command, CancellationToken ct)
     {
-        int count = await orders.AnonymiseCustomerAsync(command.SubjectId, ct);
+        int count = await orders.AnonymiseCustomerAsync(command.SubjectId, command.RequestId, ct);
         DateTimeOffset now = clock.GetUtcNow();
 
         PersonalDataErasure? seen = await erasures.GetAsync(command.RequestId, ct);

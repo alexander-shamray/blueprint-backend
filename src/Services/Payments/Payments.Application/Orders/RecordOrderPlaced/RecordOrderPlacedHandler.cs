@@ -14,6 +14,7 @@ public sealed class RecordOrderPlacedHandler(IPaymentOrderStore orders)
             command.TotalAmount,
             command.Currency,
             command.PlacedAt,
+            command.ErasedUnder,
             ct);
 
         return Result.Success();

@@ -45,11 +45,11 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
         Guid customer = Guid.CreateVersion7();
 
         await InTransaction(s =>
-            s.RecordPlacedAsync(first, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken));
+            s.RecordPlacedAsync(first, customer, 25.50m, "EUR", Placed, [], TestContext.Current.CancellationToken));
         await InTransaction(s => s.RecordCancelledAsync(first, Cancelled, TestContext.Current.CancellationToken));
         await InTransaction(s => s.RecordCancelledAsync(second, Cancelled, TestContext.Current.CancellationToken));
         await InTransaction(s =>
-            s.RecordPlacedAsync(second, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken));
+            s.RecordPlacedAsync(second, customer, 25.50m, "EUR", Placed, [], TestContext.Current.CancellationToken));
 
         PaymentOrderRecord? a = await InTransaction(s => s.LockAsync(first, TestContext.Current.CancellationToken));
         PaymentOrderRecord? b = await InTransaction(s => s.LockAsync(second, TestContext.Current.CancellationToken));
@@ -86,9 +86,9 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
         Guid customer = Guid.CreateVersion7();
 
         await InTransaction(s =>
-            s.RecordPlacedAsync(order, customer, 10m, "EUR", Placed, TestContext.Current.CancellationToken));
+            s.RecordPlacedAsync(order, customer, 10m, "EUR", Placed, [], TestContext.Current.CancellationToken));
         await InTransaction(s =>
-            s.RecordPlacedAsync(order, customer, 10m, "EUR", Placed, TestContext.Current.CancellationToken));
+            s.RecordPlacedAsync(order, customer, 10m, "EUR", Placed, [], TestContext.Current.CancellationToken));
 
         (await fixture.ScalarAsync<int>(
             "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0}",
@@ -176,6 +176,7 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
                 25.50m,
                 "EUR",
                 Placed,
+                [],
                 TestContext.Current.CancellationToken),
             (store, order) => store.RecordCancelledAsync(order, Cancelled, TestContext.Current.CancellationToken),
             async order =>
@@ -201,6 +202,7 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
                 25.50m,
                 "EUR",
                 Placed,
+                [],
                 TestContext.Current.CancellationToken),
             (store, order) => store.RecordPlacedAsync(
                 order,
@@ -208,6 +210,7 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
                 25.50m,
                 "EUR",
                 Placed,
+                [],
                 TestContext.Current.CancellationToken),
             async order =>
             {
