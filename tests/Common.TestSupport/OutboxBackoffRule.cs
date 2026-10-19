@@ -4,9 +4,8 @@ namespace Common.TestSupport;
 
 /// <summary>The outbox dispatcher's failure backoff, read off a row it has just failed.</summary>
 /// <remarks>
-/// The claim leases a row for <see cref="OutboxDispatcher.LeaseSeconds"/>, so a row that merely has a
-/// <c>LockedUntil</c> shows the lease and not the backoff; this reads how far off the instant is. It answers with
-/// the reason rather than asserting, since this project carries no assertion library.
+/// The claim's <see cref="OutboxDispatcher.LeaseSeconds"/> lease also sets a <c>LockedUntil</c>, so this reads how far
+/// off it is. It answers with the reason, not an assertion: this project carries no assertion library.
 /// </remarks>
 public static class OutboxBackoffRule
 {
