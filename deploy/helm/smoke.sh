@@ -1585,9 +1585,11 @@ for chart in $MIGRATOR_CHARTS; do
     # migration-failure.md finds the failed Job by the name label on the Job
     # object itself, and the component label above is the pod's: this reads the
     # object's own metadata, which the grep above cannot tell from the pod's.
+    # Compared with the pod's name, the workload's with `-migrate`, since a
+    # worker chart has no Service to compare with.
     job_obj_name="$(awk '/^kind: Job$/ { j = 1 } j && /^    app.kubernetes.io\/name: / { sub(/.*: /, ""); print; exit }' "$OUT/$chart.yaml")"
-    check "$chart's migration Job carries the name label migration-failure.md selects it by ($job_obj_name vs $svc_name)" \
-        test "$job_obj_name" = "$svc_name"
+    check "$chart's migration Job carries the name label migration-failure.md selects it by ($job_obj_name, pod $job_pod_name)" \
+        test "${job_obj_name}-migrate" = "$job_pod_name"
 done
 
 # The gateway owns no database (§10.1, §4.2), so the hook has nothing to run
