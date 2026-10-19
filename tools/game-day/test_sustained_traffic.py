@@ -460,7 +460,8 @@ class OutboxGrowth(unittest.TestCase):
 
     def test_the_queries_and_the_sql_are_the_runbooks(self):
         module = self.module()
-        text = squash(runbook("outbox-growth.md"))
+        # The page writes Ordering's SQL with a placeholder for the schema, and the scenario runs against Ordering.
+        text = squash(runbook("outbox-growth.md").replace("<schema>", "ordering"))
         for query in (module._AGE, module._COUNT, module._DERIV, module._PURGE):
             self.assertIn(squash(query), text)
 
