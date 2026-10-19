@@ -293,9 +293,11 @@ class AReplayIsTheSameMessage(unittest.TestCase):
                 raise dead_letters.AnswerLost(f"POST {path}: the answer was lost (TimeoutError: timed out)")
             return real_call(method, path, body)
 
-        _, out, _ = run(lose_returns, "replay", "ordering-commands_error", "--message-id", "m-2", "--execute",
-                        "--record", self.record, "--json")
+        code, out, _ = run(lose_returns, "replay", "ordering-commands_error", "--message-id", "m-2", "--execute",
+                           "--record", self.record, "--json")
         returned = next(a for a in json.loads(out)["actions"] if a["message_id"] == "m-1")
+        self.assertEqual(1, code, "it may be gone, so a caller that deletes the record must see a failure")
+        self.assertEqual("failed", returned["action"])
         self.assertIn("may be back on ordering-commands_error", returned["reason"])
         self.assertNotIn("not on ordering-commands_error any more", returned["reason"])
 
@@ -345,6 +347,28 @@ class AReplayIsTheSameMessage(unittest.TestCase):
         [action] = json.loads(out)["actions"]
         self.assertEqual("ordering-commands-v2", action["destination"])
         self.assertEqual("ordering-commands-v2", audit_lines(err)[0]["destination"])
+
+    def test_a_queue_deeper_than_its_statistic_still_says_the_read_left_some(self):
+        api = FakeApi({"ordering-commands_error": [message(f"m-{n}") for n in range(150)], "ordering-commands": []})
+        real_call = api.__call__
+
+        def stale_depth(method, path, body):
+            listed = real_call(method, path, body)
+            if method == "GET":
+                return [{"name": entry["name"], "messages": 0} for entry in listed]
+            return listed
+
+        code, out, _ = run(stale_depth, "replay", "ordering-commands_error", "--all", "--execute",
+                           "--record", self.record, "--json")
+        self.assertEqual(1, code)
+        self.assertEqual(100, len(api.queues["ordering-commands"]))
+        self.assertGreaterEqual(json.loads(out)["truncated"], 1)
+
+    def test_an_empty_to_is_refused(self):
+        api = FakeApi({"ordering-commands_skipped": [message("s-1", input_address=None)]})
+        code, _, _ = run(api, "replay", "ordering-commands_skipped", "--all", "--to", "")
+        self.assertEqual(2, code)
+        self.assertEqual([], api.calls)
 
     def test_to_will_not_name_a_dead_letter_queue(self):
         api = FakeApi({"ordering-commands_skipped": [message("s-1", input_address=None)]})

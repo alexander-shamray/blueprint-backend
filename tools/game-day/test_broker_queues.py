@@ -136,6 +136,21 @@ class BrokerCalls(unittest.TestCase):
                     self.broker(run=run).discard("q_error", ["a"])
                 self.assertFalse(os.path.exists(calls[0][0][10]))
 
+    def test_a_tool_that_prints_no_json_keeps_the_record_and_names_it(self):
+        made = []
+
+        def run(argv, **_):
+            made.append(argv[10])
+            return subprocess.CompletedProcess(argv, 2, "", "boom")
+
+        with self.assertRaises(harness.GameDayError) as raised:
+            self.broker(run=run).discard("q_error", ["a"])
+        try:
+            self.assertTrue(os.path.exists(made[0]))
+            self.assertIn(made[0], str(raised.exception))
+        finally:
+            os.remove(made[0])
+
     def test_a_discard_that_fails_keeps_the_record_and_names_it(self):
         document = {"actions": [{"message_id": "r", "action": "failed"}], "not_found": []}
         run, calls = self.tool_run(document, returncode=1)

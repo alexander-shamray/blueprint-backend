@@ -319,17 +319,18 @@ def command_move(run: Run, verb: str) -> int:
     if args.execute:
         run.writable(args.record)
     to = getattr(args, "to", None)
-    if to is not None and any(to.endswith(suffix) for suffix in SUFFIXES):
-        raise Refused(f"--to {to}: a dead-letter queue is not where a replay lands")
+    if to is not None and (not to or any(to.endswith(suffix) for suffix in SUFFIXES)):
+        raise Refused(f"--to {to!r}: name a live endpoint; a dead-letter queue is not where a replay lands")
     wanted = None if args.all else set(args.message_id)
-    target = to or endpoint
+    target = endpoint if to is None else to
     destination = target if verb == "replay" else None
     # --all asks for every message, so it reads the queue's whole depth unless --limit bounds it.
     depth = depth_of(run.broker, queue)
     limit = args.limit if args.limit is not None else (max(depth, DEFAULT_LIMIT) if args.all else DEFAULT_LIMIT)
-    snapshot = run.broker.peek(queue, limit)
-    # A read that filled its bound while the queue holds more left the rest unseen, which --all did not ask for.
-    truncated = depth - len(snapshot) if len(snapshot) >= limit and depth > len(snapshot) else 0
+    # One past the bound, so a queue deeper than the statistic says still shows that the read left some unseen.
+    seen = run.broker.peek(queue, limit + 1)
+    snapshot = seen[:limit]
+    truncated = max(depth - limit, 1) if len(seen) > limit else 0
     partial = wanted is None
     actions: list[dict] = []
 
@@ -429,9 +430,10 @@ def put_back(run: Run, queue: str, message: dict, action: str, reason: str, acti
         returned, reason = False, f"{reason}; returning it failed too: {error}"
     if returned is False:
         reason = f"{reason}; it is not on {queue} any more and {held}"
-        # Gone from the queue is a loss, whatever the run meant to do with it: a "returned" that did not return fails.
-        if action == "returned":
-            action = "failed"
+    # Gone, or possibly gone, is a loss whatever the run meant to do with it: a "returned" that may not have
+    # returned fails, so the exit code and a caller that deletes the record both see it.
+    if returned is not True and action == "returned":
+        action = "failed"
     if returned is not True and not recorded:
         # The last copy this run holds; prefixed, so no reader of the audit lines takes it for one.
         print("unrecorded " + json.dumps({"queue": queue, "message": message}), file=run.err)
