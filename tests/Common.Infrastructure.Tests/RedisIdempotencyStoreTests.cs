@@ -2,6 +2,8 @@ using Common.Application;
 using Common.Infrastructure.Redis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Shouldly;
 using StackExchange.Redis;
 using Xunit;
@@ -194,6 +196,20 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
 
         await Should.NotThrowAsync(
             () => store.ReleaseAsync("never-held", Foreign, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task A_release_that_times_out_is_logged_and_not_thrown()
+    {
+        await Should.NotThrowAsync(() => ReleaseFailingWithAsync(
+            new RedisTimeoutException("Timeout awaiting response", CommandStatus.Sent)));
+    }
+
+    [Fact]
+    public async Task A_release_that_loses_the_connection_is_logged_and_not_thrown()
+    {
+        await Should.NotThrowAsync(() => ReleaseFailingWithAsync(
+            new RedisConnectionException(ConnectionFailureType.UnableToConnect, "No connection is available")));
     }
 
     [Fact]
@@ -450,6 +466,24 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
     }
 
     /// <summary>A claim the caller needs, failing at the claim rather than at a later null dereference.</summary>
+    /// <summary>A release whose script call faults as given: the behaviour is mid-rethrow, so it must not add its own.</summary>
+    private async Task ReleaseFailingWithAsync(Exception fault)
+    {
+        IDatabase database = Substitute.For<IDatabase>();
+        database
+            .ScriptEvaluateAsync(Arg.Any<string>(), Arg.Any<RedisKey[]?>(), Arg.Any<RedisValue[]?>(), Arg.Any<CommandFlags>())
+            .ThrowsAsync(fault);
+        IConnectionMultiplexer multiplexer = Substitute.For<IConnectionMultiplexer>();
+        multiplexer.GetDatabase(Arg.Any<int>(), Arg.Any<object?>()).Returns(database);
+
+        await using ServiceProvider provider = fixture.BuildProvider(
+            "faulting",
+            services => services.AddKeyedSingleton(RedisConnections.Coordination, multiplexer));
+        IIdempotencyStore store = provider.GetRequiredService<IIdempotencyStore>();
+
+        await store.ReleaseAsync("faulting", Foreign, TestContext.Current.CancellationToken);
+    }
+
     private static async Task<string> ClaimedAsync(IIdempotencyStore store, string key, TimeSpan retention)
     {
         string? claim = await store.TryClaimAsync(key, retention, TestContext.Current.CancellationToken);
