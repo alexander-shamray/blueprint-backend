@@ -177,8 +177,27 @@ class ARequiredGrantRemoved(unittest.TestCase):
 
         failures = run_against(definitions)
         self.assertTrue(
-            any("ordering-" in f for f in failures),
+            any("which its own Endpoints addresses" in f for f in failures),
             f"the gate accepted a service that cannot read its own queues: {failures}")
+
+    def test_a_name_masstransit_derives_from_a_receive_endpoint(self):
+        # Every sent and received queue stays covered, so check 1 has nothing to say:
+        # only check 2 can notice the one derived name the grant leaves out.
+        omitted = "ordering-stock-events_error"
+        _, consumes = gate.sends_and_consumes(gate.messaging_dirs()["Ordering"])
+        covered = [n for queue in sorted(consumes) for n in sorted(gate.derived_names(queue)) if n != omitted]
+        self.assertIn(omitted, {n for queue in consumes for n in gate.derived_names(queue)})
+        definitions = real()
+        entry = permission(definitions, "ordering-svc")
+        for verb in ("configure", "write", "read"):
+            entry[verb] = entry[verb].replace("ordering-|", "|".join(re.escape(n) + "$" for n in covered) + "|", 1)
+
+        failures = run_against(definitions)
+
+        self.assertEqual(
+            sorted(failures),
+            sorted(f"ordering-svc: {verb} does not cover `{omitted}`, derived from its receive endpoint "
+                   "`ordering-stock-events`" for verb in ("configure", "write", "read")))
 
     def test_the_framework_fault_exchange(self):
         # A service that cannot publish a fault fails INTO the silence §13.6's
