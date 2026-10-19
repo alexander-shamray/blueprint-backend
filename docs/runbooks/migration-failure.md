@@ -38,15 +38,17 @@ listener, running `Database.MigrateAsync` and exiting.
 **The Job's name carries the image tag and no release prefix.** §15.3's template
 builds it as `<workload>-migrate-<image.tag>` — so it changes every deploy, and
 a name guessed from the release will not resolve. Take it from the first command
-rather than typing it:
+rather than typing it. The command selects by the Job object's own
+`app.kubernetes.io/name`, which is the workload name: the `component=migrator`
+label is on the Job's pod, not on the Job, so it finds the pod and no Job.
 
 ```bash
-kubectl -n <ns> get jobs -l app.kubernetes.io/component=migrator
+kubectl -n <ns> get jobs -l app.kubernetes.io/name=<workload>
 
 # --sort-by, because the API guarantees no list order: `.items[-1]` off an
 # unsorted list is whichever Job the server happened to return last, which
 # during a failed upgrade is as likely to be the previous release's.
-job=$(kubectl -n <ns> get jobs -l app.kubernetes.io/component=migrator \
+job=$(kubectl -n <ns> get jobs -l app.kubernetes.io/name=<workload> \
         --sort-by=.metadata.creationTimestamp \
         -o jsonpath='{.items[-1].metadata.name}')
 
