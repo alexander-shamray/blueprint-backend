@@ -582,20 +582,29 @@ class Broker:
             return []
         handle, record = tempfile.mkstemp(prefix="game-day-", suffix=".jsonl")
         os.close(handle)
+        # The record is the tool's last copy of any message it took, and a shared queue may hold real dead letters
+        # beside the run's synthetic ones, so it is removed only once nothing failed.
+        keep = True
         try:
             selection = [part for message_id in message_ids for part in ("--message-id", message_id)]
-            code, document = self.tool("discard", queue, *selection, "--limit", str(INSPECT_LIMIT), "--execute",
-                                       "--record", record)
+            try:
+                code, document = self.tool("discard", queue, *selection, "--limit", str(INSPECT_LIMIT), "--execute",
+                                           "--record", record)
+            except GameDayError as error:
+                raise GameDayError(f"{error}; {record} is kept, it may hold the only copy of a message") from None
+            if "error" in document:
+                keep = False
+                raise GameDayError(f"dead_letters.py discard {queue} was refused: {document['error']}")
+            discarded = [action["message_id"] for action in document["actions"] if action["action"] == "discarded"]
+            failed = [action for action in document["actions"] if action["action"] in ("failed", "refused")]
+            keep = bool(failed)
+            if failed or set(message_ids) - set(discarded) - set(document["not_found"]):
+                kept = f"; {record} is kept, it may hold the only copy of a message" if keep else ""
+                raise GameDayError(f"dead_letters.py discard {queue} exited {code}: {document['actions']}{kept}")
+            return discarded
         finally:
-            # The record is the tool's last copy of a message, and these are the run's own synthetic ones.
-            os.remove(record)
-        if "error" in document:
-            raise GameDayError(f"dead_letters.py discard {queue} was refused: {document['error']}")
-        discarded = [action["message_id"] for action in document["actions"] if action["action"] == "discarded"]
-        failed = [action for action in document["actions"] if action["action"] in ("failed", "refused")]
-        if failed or set(message_ids) - set(discarded) - set(document["not_found"]):
-            raise GameDayError(f"dead_letters.py discard {queue} exited {code}: {document['actions']}")
-        return discarded
+            if not keep:
+                os.remove(record)
 
     def ours(self, queue: str) -> list[str]:
         """The ids of the game day's own messages on `queue`: the envelopes `publish` sent, by their source."""

@@ -295,7 +295,8 @@ gone.
 
 1. **Replay everything**, then work whatever returns to the error queue as a
    smaller, uniform problem. Poison messages simply come back, which costs a
-   round trip and loses nothing.
+   round trip and loses nothing. The tool's `--all` reads the queue's whole
+   depth, and says `truncated` and exits 1 if a `--limit` you set left some.
 2. Or **move the unreplayable ones out first** — the tool's `discard` with a
    `--message-id` for each takes exactly those among the first `--limit`
    messages, so set `--limit` to at least the queue's depth; it records each

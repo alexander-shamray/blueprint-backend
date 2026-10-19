@@ -299,6 +299,60 @@ class AReplayIsTheSameMessage(unittest.TestCase):
         self.assertIn("may be back on ordering-commands_error", returned["reason"])
         self.assertNotIn("not on ordering-commands_error any more", returned["reason"])
 
+    def test_an_unselected_message_that_cannot_be_returned_fails_the_run_and_stops_it(self):
+        api = FakeApi({"ordering-commands_error": [message("m-1"), message("m-2"), message("m-3")],
+                       "ordering-commands": []}, unbound={"ordering-commands_error"})
+        code, out, _ = run(api, "replay", "ordering-commands_error", "--message-id", "m-3", "--execute",
+                           "--record", self.record, "--json")
+        self.assertEqual(1, code, "a real dead letter left the queue and the harness would delete its record")
+        [failed] = json.loads(out)["actions"]
+        self.assertEqual(("m-1", "failed"), (failed["message_id"], failed["action"]))
+        self.assertIn("it is not on ordering-commands_error any more", failed["reason"])
+        self.assertEqual(["m-2", "m-3"], [m["properties"]["message_id"] for m in api.queues["ordering-commands_error"]],
+                         "the run stopped at the first loss")
+
+    def test_all_reads_the_whole_queue_and_not_the_first_hundred(self):
+        held = [message(f"m-{n}") for n in range(150)]
+        api = FakeApi({"ordering-commands_error": held, "ordering-commands": []})
+        code, out, _ = run(api, "replay", "ordering-commands_error", "--all", "--execute", "--record", self.record,
+                           "--json")
+        self.assertEqual(0, code)
+        self.assertEqual(150, len(api.queues["ordering-commands"]))
+        self.assertEqual([], api.queues["ordering-commands_error"])
+        self.assertEqual(0, json.loads(out)["truncated"])
+
+    def test_a_limit_that_leaves_messages_unread_is_said_and_fails_an_all_run(self):
+        held = [message(f"m-{n}") for n in range(30)]
+        api = FakeApi({"ordering-commands_error": held, "ordering-commands": []})
+        code, out, _ = run(api, "replay", "ordering-commands_error", "--all", "--limit", "10", "--execute",
+                           "--record", self.record, "--json")
+        self.assertEqual(1, code, "--all asked for every message")
+        self.assertEqual(20, json.loads(out)["truncated"])
+        self.assertEqual(10, len(api.queues["ordering-commands"]))
+        _, text, _ = run(FakeApi({"ordering-commands_error": [message(f"m-{n}") for n in range(30)],
+                                  "ordering-commands": []}),
+                         "replay", "ordering-commands_error", "--all", "--limit", "10")
+        self.assertIn("truncated      20 more message(s) stay on ordering-commands_error", text)
+
+    def test_to_replays_to_the_named_endpoint_and_audits_it(self):
+        api = FakeApi({"ordering-commands_skipped": [message("s-1", input_address=None)],
+                       "ordering-commands": [], "ordering-commands-v2": []})
+        code, out, err = run(api, "replay", "ordering-commands_skipped", "--all", "--to", "ordering-commands-v2",
+                             "--execute", "--record", self.record, "--json")
+        self.assertEqual(0, code)
+        self.assertEqual([], api.queues["ordering-commands"])
+        self.assertEqual(1, len(api.queues["ordering-commands-v2"]))
+        [action] = json.loads(out)["actions"]
+        self.assertEqual("ordering-commands-v2", action["destination"])
+        self.assertEqual("ordering-commands-v2", audit_lines(err)[0]["destination"])
+
+    def test_to_will_not_name_a_dead_letter_queue(self):
+        api = FakeApi({"ordering-commands_skipped": [message("s-1", input_address=None)]})
+        code, out, _ = run(api, "replay", "ordering-commands_skipped", "--all", "--to", "x_error", "--json")
+        self.assertEqual(2, code)
+        self.assertEqual([], api.calls)
+        self.assertIn("a dead-letter queue is not where a replay lands", out)
+
     def test_a_skipped_queue_replays_to_its_endpoint(self):
         api = FakeApi({"bff-order-events_skipped": [message("s-1", input_address=None)], "bff-order-events": []})
         code, _, _ = run(api, "replay", "bff-order-events_skipped", "--all", "--execute", "--record", self.record)
