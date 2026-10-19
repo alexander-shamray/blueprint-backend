@@ -113,6 +113,22 @@ public class PlaceOrderValidatorTests
     }
 
     [Fact]
+    public void A_null_item_is_a_400_and_not_a_500()
+    {
+        // RuleForEach skips a null element, and the handler would dereference it for a 500.
+        PlaceOrderCommand command = new(
+            Guid.CreateVersion7(),
+            [new PlaceOrderItem(Product, 1), null!],
+            AnAddress(),
+            "EUR");
+
+        ValidationResult result = Should.NotThrow(() => Validator.Validate(command));
+
+        result.IsValid.ShouldBeFalse();
+        result.Errors.ShouldContain(e => e.PropertyName == nameof(PlaceOrderCommand.Items));
+    }
+
+    [Fact]
     public void A_null_item_list_is_a_400_and_not_a_500()
     {
         // FluentValidation runs every validator in a rule unless Cascade(Stop), so null must not reach the next.
