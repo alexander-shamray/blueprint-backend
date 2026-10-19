@@ -748,17 +748,23 @@ class RolloutBindingTests(unittest.TestCase):
         refusal inside check(), and one handed over without the release it
         replaces leaves the baseline half unjudged. Both are the same run,
         not merely the same file."""
-        for dropped in (' --workload "$WORKLOAD"',
-                        ' --installed-source "$INSTALLED_SOURCE"'):
-            with self.subTest(dropped=dropped.strip()):
-                without = self.shipped.replace(dropped.strip() + " " + chr(92), "")
-                without = without.replace(dropped, "")
+        # Only from the canary.py check run: the read_prometheus.py runs carry
+        # the installed flag too, and their own failure must not stand in.
+        for original, dropped, cost in (
+            (' --installed-source "$INSTALLED_SOURCE" ' + chr(92) + "\n            --workload",
+             " " + chr(92) + "\n            --workload", "the release it replaces"),
+            ('"$INSTALLED_SOURCE" ' + chr(92) + '\n            --workload "$WORKLOAD"\n',
+             '"$INSTALLED_SOURCE"\n', "the workload it answers for"),
+        ):
+            with self.subTest(cost=cost):
+                self.assertEqual(self.shipped.count(original), 1, original)
+                without = self.shipped.replace(original, dropped)
 
                 failures = rollout_gate._rollout_reads_the_image_source(
                     self._workflow(without))
 
-                self.assertTrue(
-                    any(dropped.split()[0] in f for f in failures), failures)
+                self.assertEqual(1, len(failures), failures)
+                self.assertIn(cost, failures[0])
 
     def test_a_revision_resolved_from_the_wrong_value_fails(self) -> None:
         """One level below the archive again: `canary.py revision` is
