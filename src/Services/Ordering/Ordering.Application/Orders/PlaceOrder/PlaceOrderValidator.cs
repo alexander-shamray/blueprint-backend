@@ -18,7 +18,9 @@ public sealed class PlaceOrderValidator : AbstractValidator<PlaceOrderCommand>
             .Cascade(CascadeMode.Stop)
             .NotEmpty()
             .Must(items => items.Count <= OrderLimits.MaxLines)
-            .WithMessage($"An order cannot contain more than {OrderLimits.MaxLines} items.");
+            .WithMessage($"An order cannot contain more than {OrderLimits.MaxLines} items.")
+            .Must(items => items.All(item => item is not null))
+            .WithMessage("An order cannot contain a null item.");
         RuleForEach(x => x.Items).ChildRules(item =>
         {
             item.RuleFor(i => i.ProductId).NotEmpty();
