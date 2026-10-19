@@ -211,10 +211,10 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(verdict["decision"], analysis.ROLLBACK)
         self.assertIn("consume", verdict["reason"])
 
-    def test_the_minimum_is_the_smallest_sample_that_can_express_the_threshold(self) -> None:
-        """minimumRequests is 1/errorRate rather than a number somebody liked:
-        below it, one failure is already more than the threshold. The
-        shipped plan is read, not this file's own dict, which cannot drift."""
+    def test_the_minimum_is_at_least_the_sample_that_can_express_the_threshold(self) -> None:
+        """minimumRequests is derived from errorRate, not liked: below 1/errorRate
+        one failure is already more than the threshold. The shipped plan is read,
+        not this file's own dict, which cannot drift."""
         shipped = descriptor_model.entries(descriptor_model.load_plan()["thresholds"])
 
         self.assertGreaterEqual(shipped["minimumRequests"], 1 / shipped["errorRate"])
