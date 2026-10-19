@@ -437,11 +437,11 @@ public sealed class OrderProjection(
         return null;
     }
 
-    /// <summary>The lines as one parameter, numbered by their position in the event.</summary>
     /// <summary>The requests the order was placed after, as the column holds them: a JSON array.</summary>
     private static string ErasedUnderJson(IReadOnlyList<Guid>? erasedUnder) =>
         JsonSerializer.Serialize(erasedUnder ?? []);
 
+    /// <summary>The lines as one parameter, numbered by their position in the event.</summary>
     private static string LinesJson(IEnumerable<(Guid ProductId, int Quantity, decimal UnitPrice)> lines) =>
         JsonSerializer.Serialize(lines.Select((line, index) => new
         {
