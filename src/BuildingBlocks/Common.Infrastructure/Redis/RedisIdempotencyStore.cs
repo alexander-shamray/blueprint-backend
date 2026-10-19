@@ -135,7 +135,7 @@ internal sealed class RedisIdempotencyStore(
             if ((long)deleted == 0)
                 ClaimLost(log, key, null);
         }
-        catch (RedisException e)
+        catch (Exception e) when (e is RedisException or TimeoutException)
         {
             // Best-effort (§8.5): throwing here would replace the fault the behaviour is rethrowing.
             ReleaseFailed(log, key, e);
