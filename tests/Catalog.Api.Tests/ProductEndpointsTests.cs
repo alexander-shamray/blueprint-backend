@@ -735,9 +735,17 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         HttpResponseMessage response = await _client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        string document = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
-        document.ShouldContain("\"/v1/catalog/products/{id}\"");
-        document.ShouldContain("\"404\"");
+        using JsonDocument document = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        // Scoped to the GET operation: ChangePrice and WithdrawProduct declare a 404 on the same path.
+        document.RootElement
+            .GetProperty("paths")
+            .GetProperty("/v1/catalog/products/{id}")
+            .GetProperty("get")
+            .GetProperty("responses")
+            .TryGetProperty("404", out _)
+            .ShouldBeTrue("GetProduct documents its 404");
     }
 
     [Fact]
