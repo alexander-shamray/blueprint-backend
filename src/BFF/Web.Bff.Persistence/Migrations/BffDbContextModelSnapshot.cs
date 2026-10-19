@@ -149,6 +149,13 @@ namespace Web.Bff.Persistence.Migrations
                     b.Property<DateTimeOffset?>("DispatchedAt")
                         .HasColumnType("datetimeoffset(7)");
 
+                    b.Property<string>("ErasedUnder")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValueSql("N'[]'");
+
                     b.Property<DateTimeOffset>("FirstSeenAt")
                         .HasColumnType("datetimeoffset(7)");
 

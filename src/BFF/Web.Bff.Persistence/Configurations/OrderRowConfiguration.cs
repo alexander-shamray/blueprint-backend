@@ -43,6 +43,9 @@ internal sealed class OrderRowConfiguration : IEntityTypeConfiguration<OrderRow>
         builder.Property(o => o.CancelOutcome).HasMaxLength(ProjectionLimits.CancelOutcomeMaxLength);
         builder.Property(o => o.TrackingNumber).HasMaxLength(ProjectionLimits.TrackingNumberMaxLength);
 
+        // Written by the Ordering events' MERGEs, so a row an earlier event made carries the empty list (ADR-099).
+        builder.Property(o => o.ErasedUnder).HasColumnType("nvarchar(max)").HasDefaultValueSql("N'[]'");
+
         // The list's keyset seek (§10.7), filtered so it never reads a row with no owner.
         builder
             .HasIndex(o => new { o.CustomerId, o.FirstSeenAt, o.OrderId })
