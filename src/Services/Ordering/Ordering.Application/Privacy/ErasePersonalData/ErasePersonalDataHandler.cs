@@ -4,7 +4,10 @@ using Common.Domain;
 namespace Ordering.Application.Privacy.ErasePersonalData;
 
 /// <summary>Anonymises the subject's orders and summaries and writes the audit row (ADR-092).</summary>
-/// <remarks>A request already seen repeats rather than fails, so a reissue reports again (§11.7).</remarks>
+/// <remarks>
+/// A request already seen repeats rather than fails, so a reissue reports again (§11.7). An order placed under the
+/// request is not the request's to erase, however often it is run (ADR-099).
+/// </remarks>
 public sealed class ErasePersonalDataHandler(
     IOrderPersonalDataStore store,
     IPersonalDataErasureRepository erasures,
@@ -13,8 +16,8 @@ public sealed class ErasePersonalDataHandler(
 {
     public async Task<Result<int>> HandleAsync(ErasePersonalDataCommand command, CancellationToken ct)
     {
-        int count = await store.AnonymiseOrdersAsync(command.SubjectId, ct) +
-            await store.AnonymiseSummariesAsync(command.SubjectId, ct);
+        int count = await store.AnonymiseOrdersAsync(command.SubjectId, command.RequestId, ct) +
+            await store.AnonymiseSummariesAsync(command.SubjectId, command.RequestId, ct);
         DateTimeOffset now = clock.GetUtcNow();
 
         PersonalDataErasure? seen = await erasures.GetAsync(command.RequestId, ct);
