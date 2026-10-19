@@ -4,8 +4,28 @@
 |---|---|
 | Alert | `OutboxBrokerLaneStalled`, in `deploy/observability/alerts/platform-alerts.yaml` |
 | Condition | `outbox.oldest.age{lane="Broker"}` > 2 minutes |
-| Signal | `OutboxMetrics`, `Ordering.Infrastructure/Observability` ([§13.6](../backend-architecture/13-observability.md)) |
+| Signal | `OutboxMetrics`, the service's `Infrastructure/Observability` ([§13.6](../backend-architecture/13-observability.md)) |
 | Owner | Platform — a broker-lane stall is usually a shared-broker fault ([§13.8](../backend-architecture/13-observability.md)) |
+
+## Whose service
+
+The alert fires for any service that exports the gauge, and its `service_name`
+label says which. **The examples on this page and on
+[`outbox-abandoned.md`](outbox-abandoned.md),
+[`projection-lag.md`](projection-lag.md) and
+[`outbox-growth.md`](outbox-growth.md) are Ordering's**, the worked case, and
+read for another service by taking the prefix of its `service_name` (`Ordering`
+in `Ordering.Api`):
+
+| In the example | For the alert's service |
+|---|---|
+| `{service_name="Ordering.Api"}` | the alert's `service_name` |
+| `ordering.OutboxMessages` | the prefix, lower-cased, as the schema: `catalog.OutboxMessages` |
+| `AddOrderingInfrastructure` | `Add<Prefix>Infrastructure`: `AddCatalogInfrastructure` |
+| `-l app=ordering` | the same label, for that service |
+
+Silence from a query that names the wrong `service_name` means nothing: it
+reads the wrong service's log and says nothing about the stalled one.
 
 ## What it means
 
@@ -33,7 +53,7 @@ minutes. The hosts log through OpenTelemetry alone
 nothing, and that silence is not the dispatcher's.
 
 ```logql
-{service_name="Ordering.Api"} |~ "Outbox claim failed|Outbox message|Broker unreachable"
+{service_name="<the alert's service_name>"} |~ "Outbox claim failed|Outbox message|Broker unreachable"
 ```
 
 - **`Outbox claim failed`** — the dispatcher cannot reach *SQL Server*. This is
@@ -51,8 +71,9 @@ nothing, and that silence is not the dispatcher's.
   as under silence. Continue below.
 - **Silence**, none of the three — the dispatcher is not running at all. Check
   the pod is up and that `AddHostedService<OutboxDispatcher>()` survived the
-  last change to `AddOrderingInfrastructure`; a registration nothing resolves
-  at startup fails quietly, and the service reports ready regardless.
+  last change to the service's `Add<Prefix>Infrastructure`; a registration
+  nothing resolves at startup fails quietly, and the service reports ready
+  regardless.
 
 ## Check RabbitMQ, in this order
 
@@ -147,7 +168,7 @@ SELECT TOP 10
     Attempts,
     LockedUntil,
     LastError = LEFT(LastError, 500)
-FROM ordering.OutboxMessages
+FROM <schema>.OutboxMessages
 WHERE ProcessedAt IS NULL
     AND Lane = 'Broker'
 ORDER BY OccurredAt;
@@ -156,7 +177,7 @@ ORDER BY OccurredAt;
 ## What downstream is missing
 
 Worth writing into the incident record, because it is the part nobody
-reconstructs afterwards. §3.2 owns the contract map; for Ordering's broker lane
-the consumers are the services subscribed to `OrderPlaced`, `OrderCancelled` and
-the rest of §9.6's published set. Each of them has been operating on a world
-that stopped at the timestamp of the oldest unshipped row.
+reconstructs afterwards. §3.2 owns the contract map; for Ordering's broker lane,
+the worked case, the consumers are the services subscribed to `OrderPlaced`,
+`OrderCancelled` and the rest of §9.6's published set. Each of them has been
+operating on a world that stopped at the timestamp of the oldest unshipped row.

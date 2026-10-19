@@ -4,8 +4,14 @@
 |---|---|
 | Alert | `OutboxLocalLaneStalled`, in `deploy/observability/alerts/platform-alerts.yaml` |
 | Condition | `outbox.oldest.age{lane="Local"}` > 30 seconds |
-| Signal | `OutboxMetrics`, `Ordering.Infrastructure/Observability` ([§13.6](../backend-architecture/13-observability.md)) |
+| Signal | `OutboxMetrics`, the service's `Infrastructure/Observability` ([§13.6](../backend-architecture/13-observability.md)) |
 | Owner | The service team ([§13.8](../backend-architecture/13-observability.md)) |
+
+## Whose service
+
+The alert fires for whichever service exports the gauge, and every example
+below is Ordering's. [`outbox-broker.md`](outbox-broker.md#whose-service) says
+how to read one for another service.
 
 ## What it means
 
@@ -59,7 +65,7 @@ source, over the last fifteen minutes; the hosts log through OpenTelemetry alone
 nothing.
 
 ```logql
-{service_name="Ordering.Api"} |~ "Outbox message .* failed"
+{service_name="<the alert's service_name>"} |~ "Outbox message .* failed"
 ```
 
 Then read the row's own record of it — `LastError` is the first 2000 characters
@@ -73,7 +79,7 @@ SELECT TOP 10
     Attempts,
     LockedUntil,
     LastError = LEFT(LastError, 2000)
-FROM ordering.OutboxMessages
+FROM <schema>.OutboxMessages
 WHERE ProcessedAt IS NULL
     AND Lane = 'Local'
 ORDER BY OccurredAt;
@@ -104,7 +110,7 @@ SELECT
     Pending   = COUNT(*),
     Oldest    = MIN(OccurredAt),
     NextLease = MIN(LockedUntil)
-FROM ordering.OutboxMessages
+FROM <schema>.OutboxMessages
 WHERE ProcessedAt IS NULL
 GROUP BY Lane;
 ```
@@ -128,7 +134,9 @@ explicitly in the incident channel rather than shipping a quiet fallback.
 
 Local-lane rows are still in the outbox until the retention purge removes them
 (§9.4, seven days by default), so a rebuild inside that window needs no
-republish — reset the rows and let the dispatcher redeliver:
+republish — reset the rows and let the dispatcher redeliver. **A replay fills
+what is missing; it does not correct what is there**, as the paragraph after
+the two statements says.
 
 **`ProcessedAt` has to be cleared, and that is the whole difference between the
 two operations.** Retrying a *stuck* row needs only the attempt counter and the
@@ -143,7 +151,7 @@ ON; `sqlcmd` does not.
 
 ```sql
 -- Retrying one stuck row: it is already claimable, so only the backoff moves.
-UPDATE ordering.OutboxMessages
+UPDATE <schema>.OutboxMessages
 SET
     Attempts    = 0,
     LockedUntil = NULL,
@@ -158,7 +166,7 @@ WHERE ProcessedAt IS NULL
 -- Bound it — by time, by message id, by type — and read what you are about to
 -- replay first. Unbounded, this redelivers every local-lane row inside the
 -- retention window, in one burst, through a handler you have just changed.
-UPDATE ordering.OutboxMessages
+UPDATE <schema>.OutboxMessages
 SET
     ProcessedAt = NULL,
     Attempts    = 0,
@@ -174,6 +182,18 @@ the `MERGE` and its out-of-order guard are what make a replay a no-op rather
 than a double count. If the handler you are replaying is not idempotent, that is
 the defect, not the stall.
 
+**That same guard is why a replay does not repair a wrong row.** For a row that
+exists, `OrderSummaryProjection`'s `MERGE` writes `PlacedAt` only while it is
+null, moves `Status` and `UpdatedAt` only for a later `OccurredAt`, and keeps
+the stored `ConfirmedAt` and `CancelReason`. A replayed event carries the same
+`OccurredAt` as the row, so after a handler fix the values the old handler wrote
+stay, the outbox rows are marked processed, and the gauge below falls to zero
+all the same. To correct a row, delete the affected `ordering.OrderSummaries`
+rows first, bounded as the `UPDATE` above is, and read them before they go.
+Deleting a row also resets its `PlacedCounted`, `CancelledCounted` and
+`FulfilmentCounted` flags, so the redelivery records the placed, cancelled and
+fulfilled metrics (§13.3) again: say so in the incident record.
+
 Past the retention window there is no replay from the outbox, and the rebuild is
 whatever §6.6 records for that projection.
 
@@ -185,6 +205,8 @@ Watch the gauge, not the log:
 max by (service_name) (outbox_oldest_age_seconds{lane="Local"})
 ```
 
-It should fall to near zero. If it falls and the pending count stays high, the
+It should fall to near zero, and for a rebuild that is not the end: the gauge
+reads the lane, not the read model, so spot-check a row you meant to correct
+against its source. If it falls and the pending count stays high, the
 oldest row is moving but the lane is not keeping up — that is
 [`outbox-growth.md`](outbox-growth.md).

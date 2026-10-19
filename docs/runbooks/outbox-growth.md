@@ -4,8 +4,14 @@
 |---|---|
 | Alert | `OutboxGrowth`, in `deploy/observability/alerts/platform-alerts.yaml` |
 | Condition | pending rows > 1000 **and rising** over 10 minutes, replicas deduplicated |
-| Signal | `OutboxMetrics`, `Ordering.Infrastructure/Observability` ([§13.6](../backend-architecture/13-observability.md)) |
+| Signal | `OutboxMetrics`, the service's `Infrastructure/Observability` ([§13.6](../backend-architecture/13-observability.md)) |
 | Owner | The service team ([§13.8](../backend-architecture/13-observability.md)) |
+
+## Whose service
+
+The alert fires for whichever service exports the gauge, and every example
+below is Ordering's. [`outbox-broker.md`](outbox-broker.md#whose-service) says
+how to read one for another service.
 
 ## What it means
 
@@ -55,16 +61,16 @@ count above zero says it is running and failing, and zero says nothing either
 way: a healthy dispatcher is silent, and so is a dead one.
 
 ```logql
-count_over_time({service_name="Ordering.Api"} |~ "Outbox message" [10m])
+count_over_time({service_name="<the alert's service_name>"} |~ "Outbox message" [10m])
 ```
 
 ```bash
-kubectl -n <ns> get pods -l app=ordering
+kubectl -n <ns> get pods -l app=<service>
 ```
 
 A dispatcher that is not running produces a backlog that rises in a straight
 line with no errors at all. `AddHostedService<OutboxDispatcher>()` is registered
-in `AddOrderingInfrastructure`; nothing resolves it at startup, so a lost
+in `Add<Prefix>Infrastructure`; nothing resolves it at startup, so a lost
 registration is silent and the service still reports ready.
 
 ## Batch size against arrival rate
@@ -116,7 +122,7 @@ SELECT
     Pending   = SUM(CASE WHEN ProcessedAt IS NULL THEN 1 ELSE 0 END),
     Processed = SUM(CASE WHEN ProcessedAt IS NOT NULL THEN 1 ELSE 0 END),
     Oldest    = MIN(OccurredAt)
-FROM ordering.OutboxMessages;
+FROM <schema>.OutboxMessages;
 ```
 
 A large `Processed` count is a purge that is not running — check the hosted

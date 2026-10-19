@@ -4,8 +4,14 @@
 |---|---|
 | Alert | `OutboxAbandonedRows`, in `deploy/observability/alerts/platform-alerts.yaml` |
 | Condition | `max(outbox.abandoned.count)` > 0, per lane |
-| Signal | `OutboxMetrics`, `Ordering.Infrastructure/Observability` ([§13.6](../backend-architecture/13-observability.md)) |
+| Signal | `OutboxMetrics`, the service's `Infrastructure/Observability` ([§13.6](../backend-architecture/13-observability.md)) |
 | Owner | The service team ([§13.8](../backend-architecture/13-observability.md)) |
+
+## Whose service
+
+The alert fires for whichever service exports the gauge, and every example
+below is Ordering's. [`outbox-broker.md`](outbox-broker.md#whose-service) says
+how to read one for another service.
 
 ## What it means
 
@@ -63,7 +69,7 @@ SELECT
     Attempts,
     OccurredAt,
     LastError = LEFT(LastError, 2000)
-FROM ordering.OutboxMessages
+FROM <schema>.OutboxMessages
 WHERE ProcessedAt IS NULL
     AND Attempts >= 10
 ORDER BY OccurredAt;
@@ -122,7 +128,7 @@ with Msg 1934. SSMS defaults to ON; `sqlcmd` does not.
 ```sql
 -- One row at a time. Named by MessageId, never by a bare predicate over the
 -- whole abandoned set: the set may hold rows in all three categories above.
-UPDATE ordering.OutboxMessages
+UPDATE <schema>.OutboxMessages
 SET
     Attempts    = 0,
     LockedUntil = NULL
@@ -138,7 +144,7 @@ SELECT
     Attempts,
     ProcessedAt,
     LastError = LEFT(LastError, 500)
-FROM ordering.OutboxMessages
+FROM <schema>.OutboxMessages
 WHERE MessageId = @MessageId;
 ```
 
@@ -152,7 +158,7 @@ Only when the effect is confirmed produced another way, and only with the
 decision written down somewhere durable.
 
 ```sql
-UPDATE ordering.OutboxMessages
+UPDATE <schema>.OutboxMessages
 SET ProcessedAt = SYSDATETIMEOFFSET()
 WHERE MessageId = @MessageId
     AND ProcessedAt IS NULL;
