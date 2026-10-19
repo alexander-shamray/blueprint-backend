@@ -25,7 +25,8 @@ public static class FcmHop
     /// <summary>
     /// Sized to §9.7 rule 2's call rate: one event fans out to as many devices as a subject keeps, so a window must
     /// hold more than one subject's deliveries, one past <c>DeviceTokenOptions.MaxPerSubject</c>, before its ratio
-    /// speaks for the provider rather than for them.
+    /// speaks for the provider rather than for them. A token the provider rejects is one outcome, not retried; a
+    /// transient fault is retried and counts twice, and speaks for the provider.
     /// </summary>
     public const int CircuitBreakerMinimumThroughput = 11;
 
