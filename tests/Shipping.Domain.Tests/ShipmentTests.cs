@@ -200,7 +200,7 @@ public class ShipmentTests
     }
 
     [Fact]
-    public void Only_a_row_voided_while_pending_keeps_an_unreturned_booking()
+    public void Only_a_row_voided_or_ended_while_pending_keeps_an_unreturned_booking()
     {
         Pending().KeepUnreturnedBooking("car_1", "TRK1", Now).ShouldBeFalse("a pending row is booked, not kept");
         Booked().KeepUnreturnedBooking("car_2", "TRK2", Now).ShouldBeFalse();
