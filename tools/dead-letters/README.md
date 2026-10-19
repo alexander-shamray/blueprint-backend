@@ -80,8 +80,9 @@ message it returned comes round again. A read that filled its bound while the
 queue holds more says so on a `truncated` line, and a run that asked for `--all`
 exits 1 on it.
 
-A message the run did not select that cannot be returned is `failed`, not
-`returned`, and stops the run: it is off the queue, and the record holds it.
+A message the run did not select that cannot be returned, or whose return's
+answer was lost, is `failed`, not `returned`, and stops the run: it is off the
+queue or may be, and the record holds it.
 
 A replay is refused, and the message returned, when MassTransit's
 `MT-Fault-InputAddress` names an endpoint other than the one the queue name
