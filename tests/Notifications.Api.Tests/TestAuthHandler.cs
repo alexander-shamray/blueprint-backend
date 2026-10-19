@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Primitives;
+using Notifications.Api.Grpc;
 
 namespace Notifications.Api.Tests;
 
@@ -30,7 +31,7 @@ public sealed class TestAuthHandler(
 
         List<Claim> claims = [new(ClaimTypes.NameIdentifier, userId.ToString())];
         if (Request.Headers.TryGetValue(ClientHeader, out StringValues client))
-            claims.Add(new Claim("azp", client.ToString()));
+            claims.Add(new Claim(PreferencesService.ClientClaim, client.ToString()));
 
         ClaimsPrincipal principal = new(new ClaimsIdentity(claims, SchemeName));
 

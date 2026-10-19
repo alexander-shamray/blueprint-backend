@@ -13,6 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The suite names the client claim the service reads, so a rename of it fails a test. -->
+    <InternalsVisibleTo Include="Notifications.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Notifications.Application\Notifications.Application.csproj" />
     <ProjectReference Include="..\Notifications.Infrastructure\Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
