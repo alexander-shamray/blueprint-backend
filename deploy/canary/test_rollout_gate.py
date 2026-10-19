@@ -748,8 +748,7 @@ class RolloutBindingTests(unittest.TestCase):
         refusal inside check(), and one handed over without the release it
         replaces leaves the baseline half unjudged. Both are the same run,
         not merely the same file."""
-        # Only from the canary.py check run: the read_prometheus.py runs carry
-        # the installed flag too, and their own failure must not stand in.
+        # The canary.py check run alone: read_prometheus.py's failure names the flag too.
         for original, dropped, cost in (
             (' --installed-source "$INSTALLED_SOURCE" ' + chr(92) + "\n            --workload",
              " " + chr(92) + "\n            --workload", "the release it replaces"),

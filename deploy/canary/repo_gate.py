@@ -329,11 +329,8 @@ OWED_SIGNALS = (
 
 
 def _minimum_requests_express_the_error_rate(thresholds: dict) -> list[str]:
-    """canary.json says minimumRequests is 1/errorRate, and that is asserted here.
-
-    Below it one failure already exceeds the threshold, so a canary with no
-    failures in a smaller sample is promoted on arithmetic, not evidence.
-    Retuning errorRate turns this red until the minimum follows it.
+    """canary.json states minimumRequests as 1/errorRate; below it one failure already
+    exceeds the threshold, so retuning errorRate turns this red until the minimum follows.
     """
     rate = thresholds.get("errorRate")
     minimum = thresholds.get("minimumRequests")
