@@ -40,6 +40,9 @@ public sealed class OrderRow
 
     public string? TrackingNumber { get; private set; }
 
+    /// <summary>The erasure requests the order was placed after, as a JSON array; each keeps it (ADR-099).</summary>
+    public string ErasedUnder { get; private set; } = "[]";
+
     /// <summary>The BFF's clock at insert, which orders the list and never changes.</summary>
     public DateTimeOffset FirstSeenAt { get; private set; }
 

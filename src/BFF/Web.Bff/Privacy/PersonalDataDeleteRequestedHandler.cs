@@ -19,6 +19,9 @@ public sealed class PersonalDataDeleteRequestedHandler(
 {
     public async Task HandleAsync(PersonalDataDeleteRequested integrationEvent, CancellationToken ct)
     {
+        // As the column's JSON spells a Guid, which is what an order's list is matched against.
+        string requestId = integrationEvent.RequestId.ToString();
+
         int erased = await db.Database.CreateExecutionStrategy().ExecuteAsync(
             async () =>
             {
@@ -28,21 +31,29 @@ public sealed class PersonalDataDeleteRequestedHandler(
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
                 // The ids are kept first, so a shipment or payment event that names no customer cannot give the
-                // deleted order a new row (ADR-098).
+                // deleted order a new row (ADR-098). HOLDLOCK takes a key-range lock even where the subject has no
+                // order, and keeps it to the commit that writes the audit row: a projection write meanwhile waits,
+                // and its erased check then sees that row. An order listing this request was placed after it, so it
+                // stays, as the owner's own store keeps it (ADR-099).
                 DateTimeOffset erasedAt = clock.GetUtcNow();
                 await db.Database.ExecuteSqlInterpolatedAsync(
                     $"""
                     INSERT INTO bff.ErasedOrders (OrderId, ErasedAt)
                     SELECT o.OrderId, {erasedAt}
-                    FROM bff.Orders AS o
+                    FROM bff.Orders AS o WITH (UPDLOCK, HOLDLOCK)
                     WHERE o.CustomerId = {integrationEvent.SubjectId}
+                        AND NOT EXISTS (SELECT 1 FROM OPENJSON(o.ErasedUnder) AS u WHERE u.value = {requestId})
                         AND NOT EXISTS (SELECT 1 FROM bff.ErasedOrders AS e WHERE e.OrderId = o.OrderId)
                     """,
                     ct);
 
                 // The lines go with their order, by the foreign key's cascade (ADR-051).
                 int deleted = await db.Database.ExecuteSqlInterpolatedAsync(
-                    $"DELETE FROM bff.Orders WHERE CustomerId = {integrationEvent.SubjectId}",
+                    $"""
+                    DELETE o FROM bff.Orders AS o
+                    WHERE o.CustomerId = {integrationEvent.SubjectId}
+                        AND NOT EXISTS (SELECT 1 FROM OPENJSON(o.ErasedUnder) AS u WHERE u.value = {requestId})
+                    """,
                     ct);
 
                 // The saved address is the subject's own row, counted with the orders (ADR-107).

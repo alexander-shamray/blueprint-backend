@@ -23,7 +23,7 @@ public sealed class ProjectionModelTests
     }
 
     [Fact]
-    public void Any_order_event_can_create_an_order_row_so_only_the_key_and_the_two_instants_are_required()
+    public void Any_order_event_can_create_an_order_row_so_only_the_key_the_instants_and_a_defaulted_list_are_required()
     {
         using BffDbContext db = Context();
         IEntityType orders = db.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(OrderRow))!;
@@ -31,8 +31,16 @@ public sealed class ProjectionModelTests
         string[] required = [.. orders.GetProperties().Where(p => !p.IsNullable).Select(p => p.Name)];
 
         required.ShouldBe(
-            [nameof(OrderRow.OrderId), nameof(OrderRow.FirstSeenAt), nameof(OrderRow.AsOf)],
+            [
+                nameof(OrderRow.OrderId),
+                nameof(OrderRow.FirstSeenAt),
+                nameof(OrderRow.AsOf),
+                nameof(OrderRow.ErasedUnder)
+            ],
             ignoreOrder: true);
+
+        // The list is what the Ordering events write; a payment or shipment event creating the row leaves the default.
+        orders.FindProperty(nameof(OrderRow.ErasedUnder))!.GetDefaultValueSql().ShouldBe("N'[]'");
     }
 
     [Fact]

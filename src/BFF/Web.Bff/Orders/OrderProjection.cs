@@ -92,10 +92,11 @@ public sealed class OrderProjection(
         USING (SELECT OrderId = @OrderId) AS source
             ON target.OrderId = source.OrderId
         WHEN NOT MATCHED THEN
-            INSERT (OrderId, CustomerId, Currency, TotalAmount, PlacedAt, FirstSeenAt, AsOf)
-            VALUES (@OrderId, @CustomerId, @Currency, @TotalAmount, @OccurredAt, @Now, @Now)
+            INSERT (OrderId, CustomerId, ErasedUnder, Currency, TotalAmount, PlacedAt, FirstSeenAt, AsOf)
+            VALUES (@OrderId, @CustomerId, @ErasedUnder, @Currency, @TotalAmount, @OccurredAt, @Now, @Now)
         WHEN MATCHED AND target.PlacedAt IS NULL THEN
             UPDATE SET
+                ErasedUnder = CASE WHEN target.CustomerId IS NULL THEN @ErasedUnder ELSE target.ErasedUnder END,
                 CustomerId  = COALESCE(target.CustomerId, @CustomerId),
                 Currency    = COALESCE(target.Currency, @Currency),
                 TotalAmount = COALESCE(target.TotalAmount, @TotalAmount),
@@ -118,10 +119,11 @@ public sealed class OrderProjection(
         USING (SELECT OrderId = @OrderId) AS source
             ON target.OrderId = source.OrderId
         WHEN NOT MATCHED THEN
-            INSERT (OrderId, CustomerId, Currency, TotalAmount, ConfirmedAt, FirstSeenAt, AsOf)
-            VALUES (@OrderId, @CustomerId, @Currency, @TotalAmount, @OccurredAt, @Now, @Now)
+            INSERT (OrderId, CustomerId, ErasedUnder, Currency, TotalAmount, ConfirmedAt, FirstSeenAt, AsOf)
+            VALUES (@OrderId, @CustomerId, @ErasedUnder, @Currency, @TotalAmount, @OccurredAt, @Now, @Now)
         WHEN MATCHED AND target.ConfirmedAt IS NULL THEN
             UPDATE SET
+                ErasedUnder = CASE WHEN target.CustomerId IS NULL THEN @ErasedUnder ELSE target.ErasedUnder END,
                 CustomerId  = COALESCE(target.CustomerId, @CustomerId),
                 Currency    = COALESCE(target.Currency, @Currency),
                 TotalAmount = COALESCE(target.TotalAmount, @TotalAmount),
@@ -141,10 +143,11 @@ public sealed class OrderProjection(
         USING (SELECT OrderId = @OrderId) AS source
             ON target.OrderId = source.OrderId
         WHEN NOT MATCHED THEN
-            INSERT (OrderId, CustomerId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf)
-            VALUES (@OrderId, @CustomerId, @OccurredAt, @CancelOutcome, @Now, @Now)
+            INSERT (OrderId, CustomerId, ErasedUnder, CancelledAt, CancelOutcome, FirstSeenAt, AsOf)
+            VALUES (@OrderId, @CustomerId, @ErasedUnder, @OccurredAt, @CancelOutcome, @Now, @Now)
         WHEN MATCHED AND target.CancelledAt IS NULL THEN
             UPDATE SET
+                ErasedUnder   = CASE WHEN target.CustomerId IS NULL THEN @ErasedUnder ELSE target.ErasedUnder END,
                 CustomerId    = COALESCE(target.CustomerId, @CustomerId),
                 CancelledAt   = @OccurredAt,
                 CancelOutcome = @CancelOutcome,
@@ -251,6 +254,7 @@ public sealed class OrderProjection(
             {
                 integrationEvent.OrderId,
                 integrationEvent.CustomerId,
+                ErasedUnder = ErasedUnderJson(integrationEvent.ErasedUnder),
                 Currency = currency,
                 TotalAmount = currency is null ? (decimal?)null : integrationEvent.TotalAmount,
                 integrationEvent.OccurredAt,
@@ -274,6 +278,7 @@ public sealed class OrderProjection(
             {
                 integrationEvent.OrderId,
                 integrationEvent.CustomerId,
+                ErasedUnder = ErasedUnderJson(integrationEvent.ErasedUnder),
                 Currency = currency,
                 TotalAmount = currency is null ? (decimal?)null : integrationEvent.TotalAmount,
                 integrationEvent.OccurredAt,
@@ -293,6 +298,7 @@ public sealed class OrderProjection(
             {
                 integrationEvent.OrderId,
                 integrationEvent.CustomerId,
+                ErasedUnder = ErasedUnderJson(integrationEvent.ErasedUnder),
                 integrationEvent.OccurredAt,
                 CancelOutcome = CancellationOutcome.Of(integrationEvent.Origin, integrationEvent.Reason),
                 Now = clock.GetUtcNow()
@@ -432,6 +438,10 @@ public sealed class OrderProjection(
     }
 
     /// <summary>The lines as one parameter, numbered by their position in the event.</summary>
+    /// <summary>The requests the order was placed after, as the column holds them: a JSON array.</summary>
+    private static string ErasedUnderJson(IReadOnlyList<Guid>? erasedUnder) =>
+        JsonSerializer.Serialize(erasedUnder ?? []);
+
     private static string LinesJson(IEnumerable<(Guid ProductId, int Quantity, decimal UnitPrice)> lines) =>
         JsonSerializer.Serialize(lines.Select((line, index) => new
         {
