@@ -400,9 +400,16 @@ class Planted(unittest.TestCase):
     def test_unattributed_first_step_fails_when_the_row_is_missing_when_ordering_has_it_or_the_delete_leaves_it(self):
         from scenarios import unattributed_order as module
         row = f"{module.ORDER_ID.upper()}|x"
-        self.assertFalse(module.first_step(Stack(sql_results=[""]).world)[0])
-        self.assertFalse(module.first_step(Stack(sql_results=[row, module.ORDER_ID.upper() + "|c|Placed"]).world)[0])
-        self.assertFalse(module.first_step(Stack(sql_results=[row]).world)[0])
+        ok, detail = module.first_step(Stack(sql_results=[""]).world)
+        self.assertFalse(ok)
+        self.assertIn("did not list the unowned row", detail)
+        ok, detail = module.first_step(Stack(sql_results=[row, module.ORDER_ID.upper() + "|c|Placed"]).world)
+        self.assertFalse(ok)
+        self.assertIn("Ordering has the order", detail)
+        # Find, Ordering, delete, then the re-check: the last answer repeats, so it is the row again.
+        ok, detail = module.first_step(Stack(sql_results=[row, "", "", row]).world)
+        self.assertFalse(ok)
+        self.assertIn("left the row", detail)
 
     def test_unattributed_delete_is_the_runbooks_guarded_one(self):
         from scenarios import unattributed_order as module
