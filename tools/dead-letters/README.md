@@ -73,12 +73,13 @@ that cannot be written after the take: the message is returned, and if the
 return fails too it is in neither place, so the run writes it whole to
 stderr on a line beginning `unrecorded`, and that line is the last copy.
 
-A run takes at most as many messages as its first read saw, which `--limit`
-bounds (100 by default; `--all` reads the queue's whole depth unless `--limit`
-says otherwise), and stops early once every named id is handled, or when a
-message it returned comes round again. A read that filled its bound while the
-queue holds more says so on a `truncated` line, and a run that asked for `--all`
-exits 1 on it.
+A run takes at most as many messages as `--limit` bounds (100 by default;
+`--all` reads the queue's whole depth unless `--limit` says otherwise), and
+stops early once every named id is handled, or when a message it returned comes
+round again. A read that found a message past its bound says so on a
+`truncated` line, and a run that asked for `--all` exits 1 on it. A run that
+stopped on a failure lists the ids it had left as `not reached`, which is not
+the same as not found.
 
 A message the run did not select that cannot be returned, or whose return's
 answer was lost, is `failed`, not `returned`, and stops the run: it is off the
@@ -208,7 +209,7 @@ and one that only adds a field does not.
 |---|---|
 | `list` | `schema`, `command`, `vhost`, `queues[]` of `name`, `kind` (`error` or `skipped`), `endpoint`, `messages` |
 | `inspect` | `schema`, `command`, `vhost`, `queue`, `kind`, `endpoint`, `messages[]` of `message_id`, `correlation_id`, `message_type`, `fault_message`, `fault_exception_type`, `input_address`, `reason`, `redelivered`, `properties`, `body` (text, or `null` when not UTF-8), `body_base64` |
-| `replay`, `discard` | `schema`, `command`, `vhost`, `queue`, `kind`, `endpoint`, `dry_run`, `actions[]` of `message_id`, `action`, `destination`, `reason`, `not_found[]` and `truncated`, the messages past the read's bound |
+| `replay`, `discard` | `schema`, `command`, `vhost`, `queue`, `kind`, `endpoint`, `dry_run`, `actions[]` of `message_id`, `action`, `destination`, `reason`, `not_found[]`, `not_reached[]` and `truncated`, the messages past the read's bound |
 | any, refused | `schema`, `command`, `error` |
 
 An `action` is one of the audit line's, or `would-replay`, `would-discard` or
