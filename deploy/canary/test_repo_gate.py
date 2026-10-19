@@ -227,6 +227,36 @@ class VerifiedVersionTests(unittest.TestCase):
         self.assertIn("Directory.Packages.props", repo_gate.SOURCE_INPUTS)
 
 
+class MinimumRequestsTests(unittest.TestCase):
+    """canary.json states minimumRequests as 1/errorRate; the gate holds it to that."""
+
+    def shipped(self) -> dict:
+        return dict(descriptor_model.entries(descriptor_model.load_plan()["thresholds"]))
+
+    def test_the_shipped_plan_expresses_its_error_rate(self) -> None:
+        self.assertEqual(repo_gate._minimum_requests_express_the_error_rate(self.shipped()), [])
+
+    def test_a_retuned_error_rate_with_the_old_minimum_fails(self) -> None:
+        thresholds = self.shipped() | {"errorRate": 0.005}
+
+        failures = repo_gate._minimum_requests_express_the_error_rate(thresholds)
+
+        self.assertTrue(any("minimumRequests" in f and "200" in f for f in failures), failures)
+
+    def test_a_minimum_one_short_of_the_rate_fails_and_the_rate_itself_passes(self) -> None:
+        short = self.shipped() | {"minimumRequests": 99}
+
+        self.assertTrue(repo_gate._minimum_requests_express_the_error_rate(short))
+        self.assertEqual(
+            repo_gate._minimum_requests_express_the_error_rate(self.shipped() | {"minimumRequests": 100}), [])
+
+    def test_check_runs_it(self) -> None:
+        plan = descriptor_model.load_plan()
+        plan["thresholds"] = dict(plan["thresholds"]) | {"minimumRequests": 50}
+
+        self.assertTrue(any("minimumRequests is 50" in f for f in repo_gate.check(plan)))
+
+
 class SourceInputTests(unittest.TestCase):
     """SOURCE_INPUTS against the reads it claims to enumerate. It once omitted
     `deploy/observability` and check 7 stayed green, since **a gate cannot see
