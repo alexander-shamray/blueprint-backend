@@ -251,9 +251,10 @@ class MinimumRequestsTests(unittest.TestCase):
             repo_gate._minimum_requests_express_the_error_rate(self.shipped() | {"minimumRequests": 100}), [])
 
     def test_a_value_that_is_not_a_number_fails_rather_than_passes(self) -> None:
+        # errorRate 1 makes True arithmetically enough, so only the bool guard refuses it.
         for bad in (True, "100", None):
             with self.subTest(minimum=bad):
-                thresholds = self.shipped() | {"minimumRequests": bad}
+                thresholds = self.shipped() | {"errorRate": 1, "minimumRequests": bad}
 
                 self.assertTrue(repo_gate._minimum_requests_express_the_error_rate(thresholds))
 
