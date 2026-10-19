@@ -57,8 +57,9 @@ WHERE RequestId = @RequestId;
 ```
 
 A row with `Counted = 0` is a name outside the request's set, recorded and
-flagged and never standing in for a holder: a holder missing from
-`Privacy:Responders` fails as silence, and it is the same alert.
+flagged and never standing in for a holder: a name in `Privacy:Responders`
+that the holder does not answer under fails as silence, and it is the same
+alert.
 
 Then ask why the holder did not answer, in this order:
 
