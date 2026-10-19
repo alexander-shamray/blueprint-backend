@@ -30,9 +30,11 @@ internal sealed class SqlShippingPersonalDataStore(ShippingDbContext db, IDbConn
         """;
 
     // Deleted, not anonymised: the row is the address and nothing else, and the shipment beside it stays whole.
+    // HOLDLOCK takes a key-range lock even where the predicate matches nothing, and keeps it to the commit that
+    // writes the audit row: a worker saving an address meanwhile waits, and its erased check then sees that row.
     private const string DeleteAddressesSql =
         """
-        DELETE FROM shipping.DeliveryAddresses
+        DELETE FROM shipping.DeliveryAddresses WITH (UPDLOCK, HOLDLOCK)
         WHERE CustomerId = @SubjectId;
         """;
 
