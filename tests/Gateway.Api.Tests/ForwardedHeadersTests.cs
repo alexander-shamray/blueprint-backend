@@ -20,12 +20,16 @@ public sealed class ForwardedHeadersTests(StubDestination stub) : IClassFixture<
     private const string FirstClient = "203.0.113.7";
     private const string SecondClient = "203.0.113.8";
 
+    /// <summary>The ingress's network, and an address in it that is not loopback, which is trusted by default.</summary>
+    private const string IngressNetwork = "10.0.0.0/8";
+    private static readonly IPAddress Ingress = IPAddress.Parse("10.1.2.3");
+
     [Fact]
     public async Task A_trusted_forwarded_address_is_what_the_limiter_partitions_on()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
 
-        using BehindIngressFactory factory = new(stub.Address);
+        using BehindIngressFactory factory = new(stub.Address, Ingress);
         using HttpClient client = factory.CreateClient();
 
         for (int i = 0; i < PermitLimit; i++)
@@ -51,6 +55,27 @@ public sealed class ForwardedHeadersTests(StubDestination stub) : IClassFixture<
             "both addresses as the one connection it can see (§10.1)");
     }
 
+    [Theory]
+    [InlineData("198.51.100.9")]
+    [InlineData("127.0.0.1")]
+    public async Task A_forwarded_address_from_a_peer_outside_the_trusted_networks_is_ignored(string peer)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+
+        // Loopback is trusted by default, so it is ignored here only if the list replaced the defaults.
+        using BehindIngressFactory factory = new(stub.Address, IPAddress.Parse(peer));
+        using HttpClient client = factory.CreateClient();
+
+        for (int i = 0; i < PermitLimit; i++)
+            (await Get(client, FirstClient, ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        HttpResponseMessage other = await Get(client, SecondClient, ct);
+
+        other.StatusCode.ShouldBe(
+            HttpStatusCode.TooManyRequests,
+            $"{peer} is not the ingress, so a client's own header cannot choose its partition (§10.3)");
+    }
+
     private static async Task<HttpResponseMessage> Get(HttpClient client, string forwardedFor, CancellationToken ct)
     {
         using HttpRequestMessage request = new(HttpMethod.Get, PublicRoute);
@@ -60,15 +85,15 @@ public sealed class ForwardedHeadersTests(StubDestination stub) : IClassFixture<
     }
 
     /// <summary>The gateway as it runs in Kubernetes (§15.3): a proxy in front, only that proxy trusted.</summary>
-    private sealed class BehindIngressFactory(string destination) : StubbedGatewayFactory(destination)
+    private sealed class BehindIngressFactory(string destination, IPAddress peer) : StubbedGatewayFactory(destination)
     {
         protected override IEnumerable<KeyValuePair<string, string>> AdditionalSettings =>
         [
             .. base.AdditionalSettings,
             new("Ingress:Enabled", "true"),
 
-            // Loopback, the peer the startup filter below gives every request.
-            new("Ingress:TrustedNetworks:0", "127.0.0.1/32")
+            // The one network that is the ingress; the startup filter below gives every request its own peer.
+            new("Ingress:TrustedNetworks:0", IngressNetwork)
         ];
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -76,19 +101,19 @@ public sealed class ForwardedHeadersTests(StubDestination stub) : IClassFixture<
             base.ConfigureWebHost(builder);
 
             builder.ConfigureServices(services =>
-                services.AddSingleton<IStartupFilter, LoopbackPeerStartupFilter>());
+                services.AddSingleton<IStartupFilter>(new PeerStartupFilter(peer)));
         }
     }
 
     /// <summary>A peer set ahead of <c>UseForwardedHeaders</c>, which honours no header from a null one.</summary>
-    private sealed class LoopbackPeerStartupFilter : IStartupFilter
+    private sealed class PeerStartupFilter(IPAddress peer) : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) =>
             app =>
             {
                 app.Use(async (context, following) =>
                 {
-                    context.Connection.RemoteIpAddress = IPAddress.Loopback;
+                    context.Connection.RemoteIpAddress = peer;
 
                     await following();
                 });
