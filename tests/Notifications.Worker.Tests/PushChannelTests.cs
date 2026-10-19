@@ -182,8 +182,8 @@ public sealed class PushChannelTests : IClassFixture<PushSimulator>, IDisposable
     {
         IPushProvider apns = _provider.GetServices<IPushProvider>().Single(p => p.Platform == ApnsPushProvider.Name);
 
-        // Each send is two faulted attempts, so five fill a window past the hop's minimum throughput.
-        for (int i = 0; i < ApnsHop.CircuitBreakerMinimumThroughput / 2; i++)
+        // Each send is two faulted attempts, so half the minimum throughput, rounded up, fills a window past it.
+        for (int i = 0; i < (ApnsHop.CircuitBreakerMinimumThroughput + 1) / 2; i++)
         {
             await Should.ThrowAsync<PushUnavailableException>(() =>
                 _channel.SendAsync(PushSettings.To(ApnsPushProvider.Name, $"unavailable-{i}"), Ct));

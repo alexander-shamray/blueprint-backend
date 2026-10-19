@@ -23,7 +23,7 @@ public static class ApnsHop
     public const double CircuitBreakerFailureRatio = 0.5;
 
     /// <summary>As <see cref="FcmHop.CircuitBreakerMinimumThroughput"/>, for the same fan-out.</summary>
-    public const int CircuitBreakerMinimumThroughput = 10;
+    public const int CircuitBreakerMinimumThroughput = 11;
 
     public static readonly TimeSpan CircuitBreakerSamplingDuration = TimeSpan.FromSeconds(60);
 

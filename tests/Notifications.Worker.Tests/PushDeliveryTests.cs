@@ -359,13 +359,13 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
 
     private Task<SendPass> PushPassAsync() => _host.Services.GetRequiredService<PushSendWorker>().RunOnceAsync(Ct);
 
-    // Each send is two faulted attempts, so half the minimum throughput fills a window past it.
+    // Each send is two faulted attempts, so half the minimum throughput, rounded up, fills a window past it.
     private async Task OpenBreakerAsync(string platform)
     {
         IPushChannel channel = _host.Services.GetRequiredService<IPushChannel>();
         IPushProvider provider = _host.Services.GetServices<IPushProvider>().Single(p => p.Platform == platform);
 
-        for (int i = 0; i < ApnsHop.CircuitBreakerMinimumThroughput / 2; i++)
+        for (int i = 0; i < (ApnsHop.CircuitBreakerMinimumThroughput + 1) / 2; i++)
         {
             await Should.ThrowAsync<PushUnavailableException>(() =>
                 channel.SendAsync(PushSettings.To(platform, $"unavailable-{i}"), Ct));
