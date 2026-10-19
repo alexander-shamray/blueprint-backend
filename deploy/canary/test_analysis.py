@@ -213,8 +213,11 @@ class VerdictTests(unittest.TestCase):
 
     def test_the_minimum_is_the_smallest_sample_that_can_express_the_threshold(self) -> None:
         """minimumRequests is 1/errorRate rather than a number somebody liked:
-        below it, one failure is already more than the threshold."""
-        self.assertEqual(THRESHOLDS["minimumRequests"], 1 / THRESHOLDS["errorRate"])
+        below it, one failure is already more than the threshold. The
+        shipped plan is read, not this file's own dict, which cannot drift."""
+        shipped = descriptor_model.entries(descriptor_model.load_plan()["thresholds"])
+
+        self.assertGreaterEqual(shipped["minimumRequests"], 1 / shipped["errorRate"])
 
     def test_breaching_the_alert_threshold_rolls_back(self) -> None:
         """The absolute check is §13.6's own number. A canary tuned looser

@@ -114,6 +114,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     ):
         if key not in thresholds:
             failures.append(f"thresholds.{key} is missing; analyse() reads it")
+    failures += _minimum_requests_express_the_error_rate(thresholds)
 
     # 3. The absolute thresholds are §13.6's, and that is asserted rather than
     #    intended. A canary tolerating what pages the on-call has bought
@@ -325,6 +326,26 @@ OWED_SIGNALS = (
     ("consume", CONSUMER_REGISTRATION, "consumeExemption", "a consumer"),
     ("saga", SAGA_REGISTRATION, "sagaExemption", "a saga"),
 )
+
+
+def _minimum_requests_express_the_error_rate(thresholds: dict) -> list[str]:
+    """canary.json says minimumRequests is 1/errorRate, and that is asserted here.
+
+    Below it one failure already exceeds the threshold, so a canary with no
+    failures in a smaller sample is promoted on arithmetic, not evidence.
+    Retuning errorRate turns this red until the minimum follows it.
+    """
+    rate = thresholds.get("errorRate")
+    minimum = thresholds.get("minimumRequests")
+    if not isinstance(rate, (int, float)) or not isinstance(minimum, (int, float)) or rate <= 0:
+        return []
+    if minimum * rate < 1 - 1e-9:
+        return [
+            f"thresholds.minimumRequests is {minimum} and errorRate {rate} needs "
+            f"{1 / rate:g}: below that one failure is already more than the "
+            "threshold, so a green analysis is arithmetic rather than evidence"
+        ]
+    return []
 
 
 def _thresholds_match_alerts(thresholds: dict, root: Path) -> list[str]:
