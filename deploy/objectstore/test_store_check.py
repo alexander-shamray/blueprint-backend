@@ -235,9 +235,26 @@ class HeartbeatTests(unittest.TestCase):
             store_check.heartbeat(env)
 
     def test_a_redirect_is_not_followed(self):
-        _, env = self.beat(("302", ""))
+        """The 302 carries a Location: without one a following opener refuses it anyway."""
+        elsewhere, _ = self.beat(("200", "OK"))
+
+        class Redirecting(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Location", elsewhere.endpoint + self.path)
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), Redirecting)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        env = {store_check.HEARTBEAT: f"http://127.0.0.1:{server.server_port}/ping/the-token"}
         with self.assertRaisesRegex(store_check.Refusal, "302"):
             store_check.heartbeat(env)
+        self.assertEqual(elsewhere.seen, [])
 
     def test_plain_http_is_refused_off_loopback(self):
         with self.assertRaisesRegex(store_check.Refusal, "https"):
