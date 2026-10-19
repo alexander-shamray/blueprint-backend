@@ -250,6 +250,13 @@ class MinimumRequestsTests(unittest.TestCase):
         self.assertEqual(
             repo_gate._minimum_requests_express_the_error_rate(self.shipped() | {"minimumRequests": 100}), [])
 
+    def test_a_value_that_is_not_a_number_fails_rather_than_passes(self) -> None:
+        for bad in (True, "100", None):
+            with self.subTest(minimum=bad):
+                thresholds = self.shipped() | {"minimumRequests": bad}
+
+                self.assertTrue(repo_gate._minimum_requests_express_the_error_rate(thresholds))
+
     def test_check_runs_it(self) -> None:
         plan = descriptor_model.load_plan()
         plan["thresholds"] = dict(plan["thresholds"]) | {"minimumRequests": 50}
