@@ -73,6 +73,23 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         WHERE Status <> 'Pending' AND OrderId = @OrderId;
         """;
 
+    private const string DeleteWaitingOrderDeliveriesSql =
+        """
+        DELETE d
+        FROM notifications.PushDeliveries AS d
+        JOIN notifications.NotificationLog AS n ON n.NotificationId = d.NotificationId
+        WHERE d.Status = 'Pending' AND n.OrderId = @OrderId;
+        """;
+
+    private const string AnonymiseEndedOrderDeliveriesSql =
+        """
+        UPDATE d
+        SET CustomerId = NULL, Languages = NULL
+        FROM notifications.PushDeliveries AS d
+        JOIN notifications.NotificationLog AS n ON n.NotificationId = d.NotificationId
+        WHERE d.Status <> 'Pending' AND n.OrderId = @OrderId;
+        """;
+
     private const string DeleteOrderRecordSql =
         "DELETE FROM notifications.OrderRecords WHERE OrderId = @OrderId AND CustomerId = @SubjectId;";
 
@@ -117,6 +134,12 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
 
     public Task<int> AnonymiseEndedOrderNoticesAsync(Guid orderId, CancellationToken ct) =>
         ExecuteAsync(AnonymiseEndedOrderSql, new { OrderId = orderId }, ct);
+
+    public Task<int> DeleteWaitingOrderDeliveriesAsync(Guid orderId, CancellationToken ct) =>
+        ExecuteAsync(DeleteWaitingOrderDeliveriesSql, new { OrderId = orderId }, ct);
+
+    public Task<int> AnonymiseEndedOrderDeliveriesAsync(Guid orderId, CancellationToken ct) =>
+        ExecuteAsync(AnonymiseEndedOrderDeliveriesSql, new { OrderId = orderId }, ct);
 
     public Task<int> DeleteOrderRecordAsync(Guid subjectId, Guid orderId, CancellationToken ct) =>
         ExecuteAsync(DeleteOrderRecordSql, new { SubjectId = subjectId, OrderId = orderId }, ct);

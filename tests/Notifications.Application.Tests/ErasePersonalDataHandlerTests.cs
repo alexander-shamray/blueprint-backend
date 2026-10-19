@@ -111,6 +111,12 @@ public class ErasePersonalDataHandlerTests
         public Task<int> AnonymiseEndedOrderNoticesAsync(Guid orderId, CancellationToken ct) =>
             throw new NotSupportedException();
 
+        public Task<int> DeleteWaitingOrderDeliveriesAsync(Guid orderId, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<int> AnonymiseEndedOrderDeliveriesAsync(Guid orderId, CancellationToken ct) =>
+            throw new NotSupportedException();
+
         public Task<int> DeleteOrderRecordAsync(Guid subjectId, Guid orderId, CancellationToken ct) =>
             throw new NotSupportedException();
 
