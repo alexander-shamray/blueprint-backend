@@ -105,6 +105,15 @@ public class ErasePersonalDataHandlerTests
 
         public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) => Run("contact", Contacts);
 
+        public Task<int> DeleteWaitingOrderNoticesAsync(Guid orderId, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<int> AnonymiseEndedOrderNoticesAsync(Guid orderId, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<int> DeleteOrderRecordAsync(Guid subjectId, Guid orderId, CancellationToken ct) =>
+            throw new NotSupportedException();
+
         public Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct) => Run("devices", Devices);
 
         public Task<int> AnonymiseConsentAsync(Guid subjectId, DateTimeOffset now, CancellationToken ct)

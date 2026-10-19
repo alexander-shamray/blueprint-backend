@@ -1,10 +1,10 @@
 using Common.Application;
 using Notifications.Application.Privacy;
-using Notifications.Application.Privacy.EndErasedSubject;
+using Notifications.Application.Privacy.EndErasedOrder;
 
 namespace Notifications.Application.Intake;
 
-/// <summary>Records an event's notice, then deletes it again when its customer was already erased (ADR-097).</summary>
+/// <summary>Records an event's notice, then deletes its order if its customer was already erased (ADR-097).</summary>
 /// <remarks>
 /// Asked after the record's unit commits, so an erasure at any moment finds the rows or is seen (ADR-097).
 /// </remarks>
@@ -19,6 +19,6 @@ public sealed class ErasedIntake(IDispatcher dispatcher, IErasedSubjects erased)
             throw new InvalidOperationException($"The notice was not recorded: {recorded.Error.Code}.");
 
         if (command.Order is OrderFact order && await erased.IsErasedAsync(order.CustomerId, order.ErasedUnder ?? [], ct))
-            await dispatcher.SendAsync(new EndErasedSubjectCommand(order.CustomerId), ct);
+            await dispatcher.SendAsync(new EndErasedOrderCommand(order.CustomerId, command.Parameters.OrderId), ct);
     }
 }
