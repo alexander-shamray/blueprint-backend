@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>An erasure in flight against a worker saving an address, on a real engine's locks (#1145).</summary>
+/// <summary>An erasure in flight against a worker saving an address, on a real engine's locks.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ErasureFenceTests(ServiceFixture fixture) : IAsyncLifetime
 {
