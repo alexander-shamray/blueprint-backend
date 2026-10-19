@@ -313,6 +313,16 @@ class AReplayIsTheSameMessage(unittest.TestCase):
         self.assertEqual(["m-2", "m-3"], [m["properties"]["message_id"] for m in api.queues["ordering-commands_error"]],
                          "the run stopped at the first loss")
 
+    def test_ids_left_when_a_run_stops_on_a_failure_are_not_reached_and_not_not_found(self):
+        api = FakeApi({"ordering-commands_error": [message("m-1"), message("m-2")], "ordering-commands": []},
+                      unbound={"ordering-commands_error"})
+        code, out, _ = run(api, "replay", "ordering-commands_error", "--message-id", "m-2", "--execute",
+                           "--record", self.record, "--json")
+        document = json.loads(out)
+        self.assertEqual(1, code)
+        self.assertEqual([], document["not_found"])
+        self.assertEqual(["m-2"], document["not_reached"])
+
     def test_all_reads_the_whole_queue_and_not_the_first_hundred(self):
         held = [message(f"m-{n}") for n in range(150)]
         api = FakeApi({"ordering-commands_error": held, "ordering-commands": []})

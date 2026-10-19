@@ -405,8 +405,10 @@ def command_move(run: Run, verb: str) -> int:
             continue
         put_back(run, queue, message, "failed", reason or f"the broker routed it nowhere from `{target}`", actions)
         break
-    return finish(run, verb, queue, kind, endpoint, actions, sorted(pending), dry_run=False,
-                  truncated=truncated, partial=partial)
+    # A run that stopped on a failure never looked for the ids it had left, so they are unreached and not absent.
+    stopped = any(a["action"] == "failed" for a in actions)
+    return finish(run, verb, queue, kind, endpoint, actions, [] if stopped else sorted(pending), dry_run=False,
+                  truncated=truncated, partial=partial, unreached=sorted(pending) if stopped else [])
 
 
 def refusal(message: dict, endpoint: str) -> str | None:
@@ -442,13 +444,15 @@ def put_back(run: Run, queue: str, message: dict, action: str, reason: str, acti
 
 
 def finish(run: Run, verb: str, queue: str, kind: str, endpoint: str, actions: list[dict],
-           not_found: list[str], dry_run: bool, truncated: int = 0, partial: bool = False) -> int:
+           not_found: list[str], dry_run: bool, truncated: int = 0, partial: bool = False,
+           unreached: list[str] | None = None) -> int:
     lines = []
     for a in actions:
         target = f" -> {a['destination']}" if a["destination"] else ""
         note = f" ({a['reason']})" if a["reason"] else ""
         lines.append(f"{a['action']:<14} {a['message_id']}{target}{note}")
     lines += [f"not found      {identity}" for identity in not_found]
+    lines += [f"not reached    {identity} (the run stopped first)" for identity in unreached or []]
     if truncated:
         lines.append(f"truncated      {truncated} more message(s) stay on {queue}, past --limit; "
                      f"raise --limit to the queue's depth to reach them")
@@ -459,7 +463,7 @@ def finish(run: Run, verb: str, queue: str, kind: str, endpoint: str, actions: l
         partial and truncated > 0)
     run.emit({"schema": SCHEMA, "command": verb, "vhost": run.broker.vhost, "queue": queue, "kind": kind,
               "endpoint": endpoint, "dry_run": dry_run, "actions": actions, "not_found": not_found,
-              "truncated": truncated}, lines)
+              "not_reached": unreached or [], "truncated": truncated}, lines)
     return 1 if failed else 0
 
 
