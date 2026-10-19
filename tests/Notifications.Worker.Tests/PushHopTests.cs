@@ -24,7 +24,9 @@ public sealed class PushHopTests
     [MemberData(nameof(Hops))]
     public void A_window_holds_more_than_one_subjects_fan_out_before_the_breaker_may_open(string provider)
     {
-        Budget(provider).MinimumThroughput.ShouldBeGreaterThanOrEqualTo(new DeviceTokenOptions().MaxPerSubject);
+        Budget(provider).MinimumThroughput.ShouldBeGreaterThan(
+            new DeviceTokenOptions().MaxPerSubject,
+            "a subject's whole fan-out failing at once would otherwise open the shared breaker alone");
     }
 
     [Fact]

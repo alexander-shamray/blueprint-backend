@@ -24,9 +24,10 @@ public static class FcmHop
 
     /// <summary>
     /// Sized to §9.7 rule 2's call rate: one event fans out to as many devices as a subject keeps, so a window must
-    /// hold more than one subject's deliveries before its ratio speaks for the provider rather than for them.
+    /// hold more than one subject's deliveries, one past <c>DeviceTokenOptions.MaxPerSubject</c>, before its ratio
+    /// speaks for the provider rather than for them.
     /// </summary>
-    public const int CircuitBreakerMinimumThroughput = 10;
+    public const int CircuitBreakerMinimumThroughput = 11;
 
     public static readonly TimeSpan CircuitBreakerSamplingDuration = TimeSpan.FromSeconds(60);
 
