@@ -4,6 +4,7 @@ using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Notifications.Api.Grpc;
 using Notifications.Preferences.V1;
 using Shouldly;
 using Xunit;
@@ -98,6 +99,16 @@ public sealed class PreferencesTransportTests : IDisposable
     }
 
     [Fact]
+    public async Task A_well_formed_write_from_a_named_client_gets_past_validation_to_the_database()
+    {
+        // The control for the refusals above: a wrong ClientClaim also yields InvalidArgument, an empty client being
+        // refused, so only a write that is not refused shows the service read the claim the token carries.
+        RpcException reached = await RefusedAsync(Valid(), Caller());
+
+        reached.StatusCode.ShouldNotBe(StatusCode.InvalidArgument, reached.Status.Detail);
+    }
+
+    [Fact]
     public async Task A_write_under_a_token_naming_no_client_is_refused_since_the_entry_must_record_one()
     {
         (await RefusedAsync(Valid(), Caller(client: null))).StatusCode.ShouldBe(StatusCode.InvalidArgument);
@@ -130,6 +141,7 @@ public sealed class PreferencesTransportTests : IDisposable
 
         validated.IsValid.ShouldBeTrue();
         validated.ClaimsIdentity.FindFirst(ClaimTypes.NameIdentifier).ShouldNotBeNull("the map ran: a control");
-        validated.ClaimsIdentity.FindFirst("azp")!.Value.ShouldBe("web");
+        // The token carries azp, the OIDC claim for the authorized party; the service must read that name.
+        validated.ClaimsIdentity.FindFirst(PreferencesService.ClientClaim)!.Value.ShouldBe("web");
     }
 }
