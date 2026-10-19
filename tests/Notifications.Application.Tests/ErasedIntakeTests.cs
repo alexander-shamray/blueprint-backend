@@ -1,7 +1,7 @@
 using Common.Application;
 using Notifications.Application.Intake;
 using Notifications.Application.Privacy;
-using Notifications.Application.Privacy.EndErasedSubject;
+using Notifications.Application.Privacy.EndErasedOrder;
 using Notifications.Application.Rendering;
 using Shouldly;
 using Xunit;
@@ -23,7 +23,7 @@ public class ErasedIntakeTests
         await new ErasedIntake(_dispatcher, new Answers(erased: true))
             .RecordAsync(command, TestContext.Current.CancellationToken);
 
-        _dispatcher.Sent.ShouldBe([command, new EndErasedSubjectCommand(Customer)]);
+        _dispatcher.Sent.ShouldBe([command, new EndErasedOrderCommand(Customer, command.Parameters.OrderId)]);
     }
 
     [Fact]

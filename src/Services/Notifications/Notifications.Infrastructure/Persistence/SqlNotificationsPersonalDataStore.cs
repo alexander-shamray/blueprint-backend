@@ -14,11 +14,22 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
     private const string SubjectsOrders =
         "SELECT OrderId FROM notifications.OrderRecords WHERE CustomerId = @SubjectId";
 
+    // The erasure's first statement, so it reads the records before anything is deleted. HOLDLOCK takes a range lock
+    // even where the subject has no record, held to the commit that writes the audit row: an intake meanwhile
+    // waits, and its erased check then sees that row. The read is its own step because a plan may skip a subquery
+    // when no notice is there to compare, and uncounted, as the count is of what the erasure removed.
     private const string DeleteWaitingSql =
-        $"""
+        """
+        SET NOCOUNT ON;
+        DECLARE @Orders TABLE (OrderId uniqueidentifier NOT NULL);
+
+        INSERT INTO @Orders
+        SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK) WHERE CustomerId = @SubjectId;
+
+        SET NOCOUNT OFF;
         DELETE FROM notifications.NotificationLog
         WHERE Status = 'Pending'
-            AND (CustomerId = @SubjectId OR OrderId IN ({SubjectsOrders}));
+            AND (CustomerId = @SubjectId OR OrderId IN (SELECT OrderId FROM @Orders));
         """;
 
     // The ended row keeps what shows a notice was sent (ADR-053 rule 4) and loses what names the customer: the id, the
@@ -46,8 +57,24 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
     private const string DeleteOrderRecordsSql =
         "DELETE FROM notifications.OrderRecords WHERE CustomerId = @SubjectId;";
 
+    // Held for the same reason: a contact read saving meanwhile waits for the audit row and then finds it.
     private const string DeleteContactSql =
-        "DELETE FROM notifications.ContactRecords WHERE CustomerId = @SubjectId;";
+        "DELETE FROM notifications.ContactRecords WITH (UPDLOCK, HOLDLOCK) WHERE CustomerId = @SubjectId;";
+
+    // The late event's own order: the notice is deleted or anonymised through the order id, and the record only
+    // while it is still the subject's.
+    private const string DeleteWaitingOrderSql =
+        "DELETE FROM notifications.NotificationLog WHERE Status = 'Pending' AND OrderId = @OrderId;";
+
+    private const string AnonymiseEndedOrderSql =
+        """
+        UPDATE notifications.NotificationLog
+        SET CustomerId = NULL, Languages = NULL, Parameters = ''
+        WHERE Status <> 'Pending' AND OrderId = @OrderId;
+        """;
+
+    private const string DeleteOrderRecordSql =
+        "DELETE FROM notifications.OrderRecords WHERE OrderId = @OrderId AND CustomerId = @SubjectId;";
 
     // Guarded by the subject, so a registration that lands after the erasure is a new row of the subject's own act,
     // and the kept sequence refuses a retry of one made before it (ADR-117, ADR-118).
@@ -84,6 +111,15 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
 
     public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(DeleteContactSql, subjectId, ct);
+
+    public Task<int> DeleteWaitingOrderNoticesAsync(Guid orderId, CancellationToken ct) =>
+        ExecuteAsync(DeleteWaitingOrderSql, new { OrderId = orderId }, ct);
+
+    public Task<int> AnonymiseEndedOrderNoticesAsync(Guid orderId, CancellationToken ct) =>
+        ExecuteAsync(AnonymiseEndedOrderSql, new { OrderId = orderId }, ct);
+
+    public Task<int> DeleteOrderRecordAsync(Guid subjectId, Guid orderId, CancellationToken ct) =>
+        ExecuteAsync(DeleteOrderRecordSql, new { SubjectId = subjectId, OrderId = orderId }, ct);
 
     // Counted at the statement, inside the unit's transaction: a rolled-back erasure is retried and counts again,
     // which over-reads a series whose job is to show that removals happen (the push design's section 9).
