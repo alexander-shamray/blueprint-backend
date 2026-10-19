@@ -15,11 +15,16 @@ public class ReissueErasureRequestHandlerTests
     private static readonly Guid Request = new("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private static readonly Guid Subject = new("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
     private static readonly TimeSpan Slo = TimeSpan.FromDays(30);
+    private static readonly TimeSpan ConfiguredSlo = TimeSpan.FromDays(10);
 
     private readonly FakeRequests _requests = new();
 
+    // Configured apart from the Slo a request is raised under, so a reissue that kept the original span would show.
     private ReissueErasureRequestHandler Handler(DateTimeOffset now) =>
-        new(_requests, Options.Create(new PrivacyOptions { Responders = ["ordering"], CompletionSlo = Slo }), new FixedClock(now));
+        new(
+            _requests,
+            Options.Create(new PrivacyOptions { Responders = ["ordering"], CompletionSlo = ConfiguredSlo }),
+            new FixedClock(now));
 
     private static ReissueErasureRequestCommand Command(Guid request) => new(Guid.CreateVersion7(), request);
 
@@ -36,7 +41,7 @@ public class ReissueErasureRequestHandlerTests
 
         result.IsSuccess.ShouldBeTrue();
         request.Status.ShouldBe(ErasureStatus.Open);
-        request.DueAt.ShouldBe(now + Slo, "the configured service level, read now and not when it was raised");
+        request.DueAt.ShouldBe(now + ConfiguredSlo, "the configured service level, read now and not when it was raised");
         request.DomainEvents.ShouldHaveSingleItem().ShouldBe(new ErasureRequestedDomainEvent(Request, Subject, now));
     }
 

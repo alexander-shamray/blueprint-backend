@@ -89,10 +89,16 @@ curl -X POST -H "Authorization: Bearer $STAFF_TOKEN" -H "Content-Type: applicati
 The same command id is the same reissue, so a retry broadcasts once. A closed
 request answers 422: it has let the subject go and cannot be asked again.
 
-If the holder is missing from the set, a reissue does not help, since the set
-is fixed when the request is raised: raise a new request after fixing
-`privacy.responders` in the deployment's values, and say on the ticket which
-request it replaces. The old one stays overdue and visible, which is the
-point.
+A reissue does not change the set, which is fixed when the request is raised,
+and a new request cannot replace an unclosed one: a raise for the same subject
+returns the unclosed request unchanged and publishes nothing. A holder missing
+from the set is not waited for: its answer, if it sends one, is recorded with
+`Counted = 0` and never stands in for a holder, so the request can close
+without it. A name in the set that no holder answers under, a misspelling of
+one, never answers, and its holder's answer is the `Counted = 0` row above, so
+the request stays overdue and visible, and no operator action retires it yet
+([#1177](https://github.com/alexander-shamray/blueprint-backend/issues/1177)).
+Say on the ticket that the request cannot close, and fix `privacy.responders`
+in the deployment's values so the next request is raised under the right set.
 
 The count falls as the requests close, and the alert resolves.
