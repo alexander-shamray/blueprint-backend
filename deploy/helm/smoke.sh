@@ -1581,6 +1581,13 @@ for chart in $MIGRATOR_CHARTS; do
         test "$job_pod_name" != "$svc_name"
     check "$chart's migrator pod says what it is" \
         grep -q 'app.kubernetes.io/component: migrator' "$OUT/$chart.yaml"
+
+    # migration-failure.md finds the failed Job by the name label on the Job
+    # object itself, and the component label above is the pod's: this reads the
+    # object's own metadata, which the grep above cannot tell from the pod's.
+    job_obj_name="$(awk '/^kind: Job$/ { j = 1 } j && /^    app.kubernetes.io\/name: / { sub(/.*: /, ""); print; exit }' "$OUT/$chart.yaml")"
+    check "$chart's migration Job carries the name label migration-failure.md selects it by ($job_obj_name vs $svc_name)" \
+        test "$job_obj_name" = "$svc_name"
 done
 
 # The gateway owns no database (§10.1, §4.2), so the hook has nothing to run
