@@ -334,8 +334,13 @@ def _minimum_requests_express_the_error_rate(thresholds: dict) -> list[str]:
     """
     rate = thresholds.get("errorRate")
     minimum = thresholds.get("minimumRequests")
-    if not isinstance(rate, (int, float)) or not isinstance(minimum, (int, float)) or rate <= 0:
+    if "errorRate" not in thresholds or "minimumRequests" not in thresholds:
         return []
+    for name, value in (("errorRate", rate), ("minimumRequests", minimum)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return [f"thresholds.{name} is {value!r}, which is not a number"]
+    if rate <= 0:
+        return [f"thresholds.errorRate is {rate}, so no sample can express it"]
     if minimum * rate < 1 - 1e-9:
         return [
             f"thresholds.minimumRequests is {minimum} and errorRate {rate} needs "
