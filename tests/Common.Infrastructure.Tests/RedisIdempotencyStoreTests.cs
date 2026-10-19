@@ -465,7 +465,6 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
         throw new TimeoutException($"The claim on '{key}' had not expired after 15 seconds.");
     }
 
-    /// <summary>A claim the caller needs, failing at the claim rather than at a later null dereference.</summary>
     /// <summary>A release whose script call faults as given: the behaviour is mid-rethrow, so it must not add its own.</summary>
     private async Task ReleaseFailingWithAsync(Exception fault)
     {
@@ -484,6 +483,7 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
         await store.ReleaseAsync("faulting", Foreign, TestContext.Current.CancellationToken);
     }
 
+    /// <summary>A claim the caller needs, failing at the claim rather than at a later null dereference.</summary>
     private static async Task<string> ClaimedAsync(IIdempotencyStore store, string key, TimeSpan retention)
     {
         string? claim = await store.TryClaimAsync(key, retention, TestContext.Current.CancellationToken);
