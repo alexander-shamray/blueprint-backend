@@ -22,7 +22,7 @@ in `Ordering.Api`):
 | `{service_name="Ordering.Api"}` | the alert's `service_name` |
 | `ordering.OutboxMessages` | the prefix, lower-cased, as the schema: `catalog.OutboxMessages` |
 | `AddOrderingInfrastructure` | `Add<Prefix>Infrastructure`: `AddCatalogInfrastructure` |
-| `-l app=ordering` | the same label, for that service |
+| `-l app.kubernetes.io/name=ordering-api` | the service's workload name, as its chart's `workload.name` has it: `catalog-api` |
 
 Silence from a query that names the wrong `service_name` means nothing: it
 reads the wrong service's log and says nothing about the stalled one.

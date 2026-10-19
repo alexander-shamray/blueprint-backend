@@ -65,7 +65,7 @@ count_over_time({service_name="<the alert's service_name>"} |~ "Outbox message" 
 ```
 
 ```bash
-kubectl -n <ns> get pods -l app=<service>
+kubectl -n <ns> get pods -l app.kubernetes.io/name=<workload>
 ```
 
 A dispatcher that is not running produces a backlog that rises in a straight
