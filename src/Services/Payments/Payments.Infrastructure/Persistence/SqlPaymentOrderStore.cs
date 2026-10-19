@@ -46,11 +46,12 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
     // The empty id names nobody and, unlike NULL, is not "the order has not arrived yet" (§3.2); the money stays.
     // HOLDLOCK takes a range lock even where the subject has no order, held to the commit that writes the audit row:
     // a placement meanwhile waits, and its erased check then sees that row. An order listing the request was placed
-    // after it, so it keeps its payer (ADR-099).
+    // after it, so it keeps its payer (ADR-099). The list goes with the payer: it names the buyer to whoever can join it
+    // to an open request (ADR-103).
     private const string AnonymiseSql =
         """
         UPDATE payments.PaymentOrders WITH (UPDLOCK, HOLDLOCK)
-        SET CustomerId = '00000000-0000-0000-0000-000000000000'
+        SET CustomerId = '00000000-0000-0000-0000-000000000000', ErasedUnder = N'[]'
         WHERE CustomerId = @SubjectId
             AND NOT EXISTS (SELECT 1 FROM OPENJSON(ErasedUnder) AS u WHERE u.value = @RequestId);
         """;
@@ -58,7 +59,7 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
     private const string AnonymiseOrderSql =
         """
         UPDATE payments.PaymentOrders
-        SET CustomerId = '00000000-0000-0000-0000-000000000000'
+        SET CustomerId = '00000000-0000-0000-0000-000000000000', ErasedUnder = N'[]'
         WHERE OrderId = @OrderId AND CustomerId = @CustomerId;
         """;
 

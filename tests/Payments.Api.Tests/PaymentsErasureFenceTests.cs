@@ -77,7 +77,7 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
         Guid kept = Guid.CreateVersion7();
         Guid erased = Guid.CreateVersion7();
         await SeedAsync(kept, $"[\"{request}\"]");
-        await SeedAsync(erased, "[]");
+        await SeedAsync(erased, $"[\"{Guid.CreateVersion7()}\"]");
 
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<IDispatcher>()
@@ -85,6 +85,8 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
 
         (await PayerOfAsync(kept)).ShouldBe(_subject, "it was placed after this request, so the request is not its");
         (await PayerOfAsync(erased)).ShouldBe(Guid.Empty);
+        (await ErasedUnderOfAsync(erased)).ShouldBe("[]", "the list names the buyer, so it goes with the payer");
+        (await ErasedUnderOfAsync(kept)).ShouldBe($"[\"{request}\"]");
     }
 
     [Fact]
@@ -106,6 +108,7 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
         await Handler(scope).HandleAsync(Placed(after, _subject, [request]), ct);
 
         (await PayerOfAsync(late)).ShouldBe(Guid.Empty, "it lists no request, so the erasure is not older than it");
+        (await ErasedUnderOfAsync(late)).ShouldBe("[]");
         (await PayerOfAsync(after)).ShouldBe(_subject);
     }
 
@@ -132,6 +135,9 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
             order,
             _subject,
             erasedUnder);
+
+    private Task<string> ErasedUnderOfAsync(Guid order) =>
+        fixture.ScalarAsync<string>("SELECT Value = ErasedUnder FROM payments.PaymentOrders WHERE OrderId = {0}", order);
 
     private Task<Guid> PayerOfAsync(Guid order) =>
         fixture.ScalarAsync<Guid>("SELECT Value = CustomerId FROM payments.PaymentOrders WHERE OrderId = {0}", order);
