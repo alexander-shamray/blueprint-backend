@@ -184,6 +184,22 @@ public class ShipmentTests
     }
 
     [Fact]
+    public void A_booking_kept_on_a_row_an_erasure_ended_is_booked_with_the_endings_cancellation()
+    {
+        Shipment shipment = Pending();
+        shipment.MarkUnfulfillable("personal_data_erased", Now).ShouldBeTrue();
+
+        shipment.KeepUnreturnedBooking("car_1", "TRK1", Now.AddMinutes(1)).ShouldBeTrue();
+
+        shipment.Status.ShouldBe(ShipmentStatus.Booked);
+        shipment.CarrierReference.ShouldBe("car_1");
+        shipment.CancellationRequestedAt.ShouldBe(Now, "the cancellation is the ending's, not the keep's");
+        shipment.UnfulfillableReason.ShouldBeNull("a booked row is not unfulfillable");
+        shipment.TerminalAt.ShouldBeNull();
+        shipment.NextAttemptAt.ShouldBe(Now.AddMinutes(1), "due from the keep, when the claim could first take it");
+    }
+
+    [Fact]
     public void Only_a_row_voided_while_pending_keeps_an_unreturned_booking()
     {
         Pending().KeepUnreturnedBooking("car_1", "TRK1", Now).ShouldBeFalse("a pending row is booked, not kept");

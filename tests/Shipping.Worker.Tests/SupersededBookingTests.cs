@@ -39,6 +39,38 @@ public sealed class SupersededBookingTests
     }
 
     [Fact]
+    public async Task A_booking_the_commit_finds_ended_by_an_erasure_is_handed_back_under_the_cancel_key()
+    {
+        Shipment ended = Unfulfillable();
+        RecordingCarrier carrier = new();
+        RecordingLogger log = new();
+
+        bool moved = await PassAsync(carrier, new InlineUnitOfWork(), log, ended);
+
+        moved.ShouldBeFalse();
+        carrier.Cancels
+            .ShouldHaveSingleItem("a booking carrying an erased subject's address is never left live at the carrier")
+            .IdempotencyKey.ShouldBe($"cancel:{ended.Id.Value}");
+        log.Names().ShouldBe(["Superseded"]);
+    }
+
+    [Fact]
+    public async Task A_booking_on_an_ended_row_the_carrier_is_too_late_to_take_back_is_kept_for_the_claim()
+    {
+        Shipment ended = Unfulfillable();
+        RecordingCarrier carrier = new() { CancelAnswer = () => new CancellationResult.TooLate() };
+        RecordingLogger log = new();
+
+        bool moved = await PassAsync(carrier, new InlineUnitOfWork(), log, ended);
+
+        moved.ShouldBeFalse();
+        ended.Status.ShouldBe(ShipmentStatus.Booked);
+        ended.CarrierReference.ShouldBe(RecordingCarrier.Reference);
+        ended.CancellationRequestedAt.ShouldNotBeNull("the claim asks the carrier again on its ladder");
+        log.Entries.ShouldHaveSingleItem().Id.Name.ShouldBe("HandBackDeferred");
+    }
+
+    [Fact]
     public async Task A_booking_the_commit_finds_already_booked_is_kept()
     {
         ShipmentId id = new(Guid.CreateVersion7());
@@ -227,6 +259,17 @@ public sealed class SupersededBookingTests
         uncommitted.Message.ShouldNotContain("Abay");
         uncommitted.Exception.ShouldBeSameAs(thrown);
         carrier.Cancels.ShouldBeEmpty("a pending row's booking is rebooked under the same key, not handed back");
+    }
+
+    private static Shipment Unfulfillable()
+    {
+        Shipment shipment = Shipment.For(
+            new ShipmentId(Guid.CreateVersion7()),
+            new OrderId(Guid.CreateVersion7()),
+            Now);
+        shipment.MarkUnfulfillable("personal_data_erased", Now).ShouldBeTrue();
+
+        return shipment;
     }
 
     private static Shipment Voided()
