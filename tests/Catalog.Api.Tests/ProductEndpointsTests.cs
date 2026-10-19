@@ -738,7 +738,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         using JsonDocument document = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
-        // Scoped to the GET operation: ChangePrice and WithdrawProduct declare a 404 on the same path.
+        // Scoped to the GET operation: other operations declare a 404, which a document-wide search would find.
         document.RootElement
             .GetProperty("paths")
             .GetProperty("/v1/catalog/products/{id}")
