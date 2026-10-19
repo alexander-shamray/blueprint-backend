@@ -302,9 +302,13 @@ public sealed class FulfilmentWorker(
         }
 
         // The reloaded row decides, not the move: a refused move also comes back when the strategy repeated a
-        // commit whose acknowledgement was lost (§6.3), and that row holds this booking.
-        if (committed.Status != ShipmentStatus.Voided)
-            return committed.Status == ShipmentStatus.Booked;
+        // commit whose acknowledgement was lost (§6.3), and that row holds this booking. A row the cancel consumer
+        // voided or an erasure ended is not that row, and the booking on it is handed back.
+        if (committed.Status is ShipmentStatus.Booked)
+            return true;
+
+        if (committed.Status is not (ShipmentStatus.Voided or ShipmentStatus.Unfulfillable))
+            return false;
 
         await HandBackAsync(sp, carrier, id, work, booked, ct);
 
@@ -367,8 +371,8 @@ public sealed class FulfilmentWorker(
     }
 
     /// <summary>
-    /// A Pending row's commit, made once more when the cancel consumer voided it between reload and save, since
-    /// the strategy does not retry a conflict and that consumer, the row's one other writer, writes it once.
+    /// A Pending row's commit, made once more when the cancel consumer voided it or an erasure ended it between
+    /// reload and save, since the strategy does not retry a conflict and each writes the row once.
     /// </summary>
     private static async Task<CommitOutcome> CommitPendingAsync(
         IServiceProvider sp,

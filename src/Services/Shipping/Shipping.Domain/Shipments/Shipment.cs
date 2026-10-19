@@ -111,13 +111,18 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     }
 
     /// <summary>
-    /// A booking that landed on a row voided while it was pending, and that the carrier did not take back at once:
-    /// kept as booked with its cancellation requested from the void, so the fulfilment claim asks again on its ladder.
+    /// A booking that landed on a row voided or ended while it was pending, and that the carrier did not take back
+    /// at once: kept as booked with its cancellation requested from the ending, so the fulfilment claim asks again
+    /// on its ladder.
     /// </summary>
     public bool KeepUnreturnedBooking(string carrierReference, string trackingNumber, DateTimeOffset now)
     {
-        if (Status != ShipmentStatus.Voided || CarrierReference is not null || CancellationRequestedAt is not null)
+        if (Status is not (ShipmentStatus.Voided or ShipmentStatus.Unfulfillable) ||
+            CarrierReference is not null ||
+            CancellationRequestedAt is not null)
+        {
             return false;
+        }
 
         Require(carrierReference, ShipmentLimits.MaxCarrierReferenceLength, "the carrier's reference");
         Require(trackingNumber, ShipmentLimits.MaxTrackingNumberLength, "a tracking number");
@@ -127,6 +132,7 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         TrackingNumber = trackingNumber;
         CancellationRequestedAt = TerminalAt ?? now;
         TerminalAt = null;
+        UnfulfillableReason = null;
         NextPollAt = now;
 
         // Due from the keep, not the void, so the overdue gauge ages it from when the claim could first take it.
