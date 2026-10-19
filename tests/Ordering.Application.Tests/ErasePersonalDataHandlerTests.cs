@@ -68,15 +68,19 @@ public class ErasePersonalDataHandlerTests
 
         public List<Guid> Subjects { get; } = [];
 
-        public Task<int> AnonymiseOrdersAsync(Guid subjectId, CancellationToken ct)
+        public List<Guid> Requests { get; } = [];
+
+        public Task<int> AnonymiseOrdersAsync(Guid subjectId, Guid requestId, CancellationToken ct)
         {
             Subjects.Add(subjectId);
+            Requests.Add(requestId);
             return Task.FromResult(Orders);
         }
 
-        public Task<int> AnonymiseSummariesAsync(Guid subjectId, CancellationToken ct)
+        public Task<int> AnonymiseSummariesAsync(Guid subjectId, Guid requestId, CancellationToken ct)
         {
             Subjects.Add(subjectId);
+            Requests.Add(requestId);
             return Task.FromResult(Summaries);
         }
     }

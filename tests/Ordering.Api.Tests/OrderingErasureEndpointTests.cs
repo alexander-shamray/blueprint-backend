@@ -120,6 +120,38 @@ public sealed class OrderingErasureEndpointTests(ServiceFixture fixture) : IAsyn
     }
 
     [Fact]
+    public async Task A_reissued_request_keeps_an_order_placed_under_it_and_its_summary()
+    {
+        Guid request = Guid.CreateVersion7();
+        Guid before = Guid.CreateVersion7();
+        Guid after = Guid.CreateVersion7();
+        await SeedOrderAsync(before, Subject);
+        await SeedSummaryAsync(before, Subject, counted: true);
+        await PublishRequestAsync(request);
+
+        await SeedOrderAsync(after, Subject);
+        await SeedSummaryAsync(after, Subject, counted: true);
+        await fixture.ExecuteAsync(
+            "UPDATE ordering.Orders SET ErasedUnder = {0} WHERE Id = {1}",
+            $"[\"{request}\"]",
+            after);
+
+        await PublishRequestAsync(request);
+
+        const string Owner = "SELECT Value = CustomerId FROM ordering.Orders WHERE Id = {0}";
+        (await fixture.ScalarAsync<Guid>(Owner, after))
+            .ShouldBe(Subject, "it was placed after the request, so a reissue is not its erasure");
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ShipToLine1 FROM ordering.Orders WHERE Id = {0}",
+            after)).ShouldBe("1 Rue Exemple");
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM ordering.OrderSummaries WHERE OrderId = {0} AND CustomerId = {1}",
+            after,
+            Subject)).ShouldBe(1);
+        (await fixture.ScalarAsync<Guid>(Owner, before)).ShouldBe(Guid.Empty);
+    }
+
+    [Fact]
     public async Task A_reissued_request_keeps_one_audit_row_and_reports_again()
     {
         Guid request = Guid.CreateVersion7();
