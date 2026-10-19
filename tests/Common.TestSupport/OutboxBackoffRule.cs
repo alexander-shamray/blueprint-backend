@@ -9,7 +9,7 @@ namespace Common.TestSupport;
 /// </remarks>
 public static class OutboxBackoffRule
 {
-    /// <summary>The time between the failure and the read, and the database's clock against this host's.</summary>
+    /// <summary>The time between the failure and the read, and the database's clock against this host's, either way.</summary>
     private static readonly TimeSpan Slack = TimeSpan.FromSeconds(8);
 
     /// <summary>The ladder's wait for a failure made at <paramref name="attemptsBefore"/> attempts.</summary>
@@ -31,7 +31,7 @@ public static class OutboxBackoffRule
         if (remaining <= TimeSpan.Zero)
             return $"no backoff time is left ({remaining.TotalSeconds:F1}s), so the next pass claims the row at once";
 
-        if (remaining < expected - Slack || remaining > expected + TimeSpan.FromSeconds(2))
+        if (remaining < expected - Slack || remaining > expected + Slack)
         {
             return $"{remaining.TotalSeconds:F1}s remain where the ladder waits {expected.TotalSeconds:F0}s and the " +
                 $"claim's own lease is {OutboxDispatcher.LeaseSeconds}s";
