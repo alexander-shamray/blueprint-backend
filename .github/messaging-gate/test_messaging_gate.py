@@ -118,6 +118,16 @@ class TableAgainstCode(Fixture):
         self.assertIn("§3.2's Ordering row accepts CancelOrder and the code does not", problems)
         self.assertIn("Ordering's code accepts ConfirmOrder and §3.2's Ordering row does not say so", problems)
 
+    def test_a_binding_wrapped_inside_its_generic_is_still_read(self) -> None:
+        # Past 120 columns the type argument goes below its `<`, as the style guide's wrapping allows.
+        path = "src/Services/Ordering/Ordering.Infrastructure/Messaging/DependencyInjection.cs"
+        self.edit(path, "ConfigureConsumer<IntegrationEventConsumer<ProductPublished>>",
+                  "ConfigureConsumer<\n    IntegrationEventConsumer< ProductPublished >\n    >")
+        self.edit(path, "ConfigureConsumer<CommandConsumer<CancelOrder,",
+                  "ConfigureConsumer<\n    CommandConsumer<\n        CancelOrder ,")
+
+        self.assertEqual(self.check(), [])
+
     def test_a_service_without_a_row_and_a_row_without_a_service_are_both_caught(self) -> None:
         self.write("src/Services/Shipping/Shipping.Worker/Program.cs", "// a new service")
         self.edit(str(messaging_gate.TABLE_FILE), "| **Inventory** |", "| **Stock** |")
