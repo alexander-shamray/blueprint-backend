@@ -48,6 +48,12 @@ check after a write does not apply: a customer who saves an address after
 their erasure, on a token still valid, makes a new row of their own act, and
 a later erasure request removes it.
 
+**Amended by [ADR-135](ADR-135-a-saved-address-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-saved-1172-amending-adr-107.md).**
+The handler deletes the row only when it was not saved under the request
+being handled, so "a later erasure request" holds for a reissue and a late
+copy of the same request as well, which the delete by the customer's id
+alone did not keep.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

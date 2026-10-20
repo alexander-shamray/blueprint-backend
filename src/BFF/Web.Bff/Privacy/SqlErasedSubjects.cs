@@ -23,11 +23,26 @@ internal sealed class SqlErasedSubjects(IDbConnectionFactory connections) : IEra
     {
         using IDbConnection connection = connections.Create();
 
-        IEnumerable<Row> rows = await connection.QueryAsync<Row>(
-            new CommandDefinition(ErasuresSql, cancellationToken: ct));
+        IReadOnlyList<Guid> naming = await RequestsNamingAsync(connection, transaction: null, subjectId, ct);
 
-        return rows.Any(r =>
-            !placedAfter.Contains(r.RequestId) &&
-            PersonalDataErasure.HashSubject(r.RequestId, subjectId) == r.SubjectHash.Trim());
+        return naming.Any(r => !placedAfter.Contains(r));
+    }
+
+    /// <summary>The requests whose audit row names the subject; the saved address reads them in its own unit.</summary>
+    internal static async Task<IReadOnlyList<Guid>> RequestsNamingAsync(
+        IDbConnection connection,
+        IDbTransaction? transaction,
+        Guid subjectId,
+        CancellationToken ct)
+    {
+        IEnumerable<Row> rows = await connection.QueryAsync<Row>(
+            new CommandDefinition(ErasuresSql, transaction: transaction, cancellationToken: ct));
+
+        return
+        [
+            .. rows
+                .Where(r => PersonalDataErasure.HashSubject(r.RequestId, subjectId) == r.SubjectHash.Trim())
+                .Select(r => r.RequestId)
+        ];
     }
 }

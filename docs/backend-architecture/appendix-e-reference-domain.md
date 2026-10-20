@@ -1233,7 +1233,7 @@ this case, and this table is the owner of what each edge of it erases:
 | Notifications | ended `NotificationLog` and `PushDeliveries` rows anonymised, contacts, waiting notices, pending deliveries and `OrderRecords` deleted, device rows cleared to their installation id and sequence ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), keeping the last-seen time the retention pass deletes them by ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)), consent journal entries anonymised, keeping their topic, channel, opt-in, times, client and chain as the evidence that the sends before the erasure were lawful ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | `notifications` |
 | Shipping | `DeliveryAddresses` rows deleted (ADR-052), `Shipments.ErasedUnder` emptied (ADR-103) | `shipping` |
 | Payments | `PaymentOrders.CustomerId` anonymised | `payments` |
-| The BFF | order ids recorded, the subject's `bff.Orders` rows and saved address deleted (ADR-098, ADR-107) | `bff` |
+| The BFF | order ids recorded, the subject's `bff.Orders` rows deleted (ADR-098), and their saved address unless it was saved under the request (ADR-107, ADR-135) | `bff` |
 
 `PersonalDataDeleteRequested` and `PersonalDataDeleteCompleted` are both in
 `Common.Contracts.Privacy.V1`. Privacy publishes the request and accepts the
@@ -1562,7 +1562,10 @@ address in the order request, and no service reads the saved one.
 
 **Erasure is the BFF's handler for `PersonalDataDeleteRequested`**, which
 deletes the subject's row in the transaction that deletes their orders and
-counts it in the request's audit row; the responder set does not change, since
+counts it in the request's audit row, unless the row was saved under that
+request
+([ADR-135](adr/ADR-135-a-saved-address-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-saved-1172-amending-adr-107.md));
+the responder set does not change, since
 the BFF was already one of the holders an erasure request waits on
 ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)).
 
