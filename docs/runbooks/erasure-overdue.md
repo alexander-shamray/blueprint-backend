@@ -90,16 +90,44 @@ curl -X POST -H "Authorization: Bearer $STAFF_TOKEN" -H "Content-Type: applicati
 The same command id is the same reissue, so a retry broadcasts once. A closed
 request answers 422: it has let the subject go and cannot be asked again.
 
-A reissue does not change the set, which is fixed when the request is raised,
-and a new request cannot replace an unclosed one: a raise for the same subject
+A reissue does not change the set, which a configuration change never moves
+and only an amendment does (below), and a new request cannot replace an
+unclosed one: a raise for the same subject
 returns the unclosed request unchanged and publishes nothing. A holder missing
 from the set is not waited for: its answer, if it sends one, is recorded with
 `Counted = 0` and never stands in for a holder, so the request can close
 without it. A name in the set that no holder answers under, a misspelling of
-one, never answers, and its holder's answer is the `Counted = 0` row above, so
-the request stays overdue and visible, and no operator action retires it yet
-([#1177](https://github.com/alexander-shamray/blueprint-backend/issues/1177)).
-Say on the ticket that the request cannot close, and fix `privacy.responders`
-in the deployment's values so the next request is raised under the right set.
+one, never answers, and its holder's answer is the `Counted = 0` row above.
+
+### When the set itself is wrong
+
+Amend that request's set
+([ADR-136](../backend-architecture/adr/ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md)).
+Name what to add and what to remove, and say why; the request records your id,
+the reason and the time for as long as it is kept. The reason outlives the
+subject's id, so it names holders and never the subject:
+
+```bash
+curl -X POST -H "Authorization: Bearer $STAFF_TOKEN" -H "Content-Type: application/json" \
+  -d "{\"commandId\": \"$(uuidgen)\", \"add\": [\"shipping\"], \"remove\": [\"shiping\"], \"reason\": \"privacy.responders misspelt shipping\"}" \
+  "$GATEWAY/api/v1/privacy/erasure-requests/$REQUEST_ID/responders"
+```
+
+Answers already heard are counted again against the new set, so the
+`Counted = 0` row of a holder you add now counts. If nothing is left missing
+the request closes there and then, which the view's `status` shows; otherwise
+reissue it as above, so a holder you added is asked. A closed request answers
+422 with `erasure_request.closed`, as a reissue does; a change the set cannot
+take answers 422 with `erasure_request.amendment_refused` and says why: a name
+already in the set, one not in it, or a set that would be left empty. A
+malformed name or a missing reason is a 400.
+
+**Removing a holder asserts that it holds nothing for this subject**, and the
+request can close on that assertion alone. Check the holder's own
+`PersonalDataErasures` first, as in *Find the cause*, and remove a name only
+when no holder answers under it or the holder never held this subject.
+
+Then fix `privacy.responders` in the deployment's values, so the next request
+is raised under the right set.
 
 The count falls as the requests close, and the alert resolves.

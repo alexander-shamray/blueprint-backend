@@ -71,6 +71,27 @@ internal sealed class ErasureRequestConfiguration : IEntityTypeConfiguration<Era
             .HasField("_completions")
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
+        // Owned for the same reason; kept with the request for ever, as its completions are (ADR-136).
+        builder.OwnsMany(
+            r => r.Amendments,
+            amendment =>
+            {
+                amendment.ToTable("ErasureAmendments", "privacy");
+                amendment.WithOwner().HasForeignKey("RequestId");
+                amendment.HasKey("RequestId", nameof(ErasureAmendment.Sequence));
+                amendment.Property(a => a.Sequence).ValueGeneratedNever();
+                amendment.Property(a => a.Added).HasMaxLength(ErasureRequest.MaxRespondersLength);
+                amendment.Property(a => a.Removed).HasMaxLength(ErasureRequest.MaxRespondersLength);
+                amendment.Property(a => a.Reason).HasMaxLength(ErasureRequest.MaxReasonLength);
+                amendment.Property(a => a.AmendedBy);
+                amendment.Property(a => a.AmendedAt);
+            });
+
+        builder
+            .Navigation(r => r.Amendments)
+            .HasField("_amendments")
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
         builder.Ignore(r => r.Responders);
         builder.Ignore(r => r.Missing);
         builder.Ignore(r => r.DomainEvents);

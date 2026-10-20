@@ -16,13 +16,13 @@ public sealed class RecordErasureCompletionHandler(
         LoggerMessage.Define<Guid, string>(
             LogLevel.Warning,
             new EventId(1, nameof(Stray)),
-            "Request {RequestId} heard from {Responder}, which is not in the set it was raised with; flagged, not counted.");
+            "Request {RequestId} heard from {Responder}, which is not in the request's set; flagged, not counted.");
 
     private static readonly Action<ILogger, Guid, Exception?> Closed =
         LoggerMessage.Define<Guid>(
             LogLevel.Information,
             new EventId(2, nameof(Closed)),
-            "Request {RequestId} closed: every holder it was raised with has answered.");
+            "Request {RequestId} closed: every holder in its set has answered.");
 
     public async Task<Result> HandleAsync(RecordErasureCompletionCommand command, CancellationToken ct)
     {

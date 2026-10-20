@@ -13,7 +13,7 @@ internal sealed class ErasureStats(IDbConnectionFactory connections) : IErasureS
 
     private const string OverdueSql = "SELECT COUNT(*) FROM privacy.ErasureRequests WHERE Status = 'Overdue';";
 
-    // A holder counted in the set the request was raised with and heard from not at all, or only as a stray.
+    // A holder in the request's set, as any amendment left it, heard from not at all or only as a stray.
     private const string MissingSql =
         """
         SELECT Responder = holder.value, Requests = COUNT(*)

@@ -10,4 +10,7 @@ public static class ErasureRequestErrors
 
     public static readonly Error Closed =
         Error.Rule("erasure_request.closed", "The request has closed, so it no longer holds the subject to ask about.");
+
+    /// <summary>The aggregate's own reason, which names holders and never the subject.</summary>
+    public static Error AmendmentRefused(string why) => Error.Rule("erasure_request.amendment_refused", why);
 }

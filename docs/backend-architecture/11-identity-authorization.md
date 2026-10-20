@@ -1536,6 +1536,9 @@ reaches it, and the ids it holds leave it when
 > when a request is raised.** In the reference domain
 > ([Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure)),
 > see [ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md).
+> A configuration change never moves it; an operator may amend one unclosed
+> request's set, recorded with who, when and why
+> ([ADR-136](adr/ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md)).
 > The request carries the subject's id and no other fact about the subject,
 > so the identifiers-only rule below holds for it as for every other event.
 

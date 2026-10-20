@@ -1245,7 +1245,9 @@ Shipping's fulfilment worker
 ([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md)).
 Privacy is a seventh service and its responder set is fixed when a request is
 raised
-([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md));
+([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
+and moves after that only by an operator's recorded amendment
+([ADR-136](adr/ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md));
 `OrderConfirmed` carries no postal address although Shipping cannot act without
 one, which Shipping reads from its owner instead (ADR-052).
 
