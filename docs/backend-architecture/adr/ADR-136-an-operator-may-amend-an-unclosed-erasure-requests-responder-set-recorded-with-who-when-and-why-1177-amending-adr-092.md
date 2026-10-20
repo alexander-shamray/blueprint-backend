@@ -17,9 +17,11 @@ the configuration did.
 **Why.** [ADR-092](ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)
 fixes the set when a request is raised, so that a configuration change
 cannot close a request on fewer answers than it was raised with. It left no
-way out of the opposite failure: a set that names something that never
-answers, or omits a holder, keeps the request overdue for ever, and a raise
-for the subject returns that request unchanged. Two other remedies were
+way out of the opposite failure: a set naming something no holder answers
+under, a misspelling of one, keeps the request overdue for ever, and a raise
+for the subject returns that request unchanged. A set that omits a holder
+fails the other way, closing without its answer, and an amendment adds the
+holder only while the request is still open. Two other remedies were
 weighed. A reissue that re-read the configuration is the change ADR-092's
 Why rules out, made silently by whoever edits the values. Superseding the
 request and raising a new one would give the subject a fresh `RequestId`,
