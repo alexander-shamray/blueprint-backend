@@ -40,9 +40,12 @@ public interface INotificationsPersonalDataStore
     /// <summary>Deletes one order's record, if it is still the subject's.</summary>
     Task<int> DeleteOrderRecordAsync(Guid subjectId, Guid orderId, CancellationToken ct);
 
-    /// <summary>Clears the subject's device rows as a sign-out does, keeping their sequences (ADR-117).</summary>
+    /// <summary>
+    /// Clears the subject's device rows not registered under the request as a sign-out does, keeping their sequences
+    /// (ADR-117, ADR-138).
+    /// </summary>
     Task<int> ClearDevicesAsync(Guid subjectId, Guid requestId, CancellationToken ct);
 
-    /// <summary>Takes the subject off every journal entry and stamps when, keeping the rest (ADR-120).</summary>
+    /// <summary>Takes the subject off each entry not written under the request, and stamps when (ADR-120, ADR-138).</summary>
     Task<int> AnonymiseConsentAsync(Guid subjectId, Guid requestId, DateTimeOffset now, CancellationToken ct);
 }
