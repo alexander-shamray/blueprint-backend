@@ -6,9 +6,7 @@ using Web.Bff.Persistence;
 
 namespace Web.Bff.Privacy;
 
-/// <summary>
-/// Deletes the subject's order rows, lines and saved address, audits it, then tells Privacy once it commits (ADR-092).
-/// </summary>
+/// <summary>Deletes the subject's orders, lines and saved address, audits it, then tells Privacy (ADR-092).</summary>
 /// <remarks>
 /// Public, because §6.2's scan is public-only. The report follows the commit, since a send inside the
 /// execution strategy's retry would repeat (ADR-094); a request already seen repeats rather than fails (§11.7).
