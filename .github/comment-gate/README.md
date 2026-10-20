@@ -3,10 +3,12 @@
 **The claim: no comment a pull request adds names an issue, a delivery-plan
 row, a reviewer or a history, stresses a word, sits in a comment block
 longer than `BLOCK_LIMIT`, or is part of a C# `<remarks>` that cites no
-section, ADR or `cref`; and no pull request but a docs one or a sweep adds
-more lines of C# comment than of C# code.**
+section, ADR or `cref`; no pull request but a docs one or a sweep adds
+more lines of C# comment than of C# code; and no line it adds to a C# file
+runs past `WIDTH_LIMIT` columns.**
 [`docs/style-guide.md`](../../docs/style-guide.md)'s
-*Comments* section is the rule; this gate is its mechanical half.
+*Comments* section is the rule, and its *Wrapping* section owns the width;
+this gate is their mechanical half.
 
 ## What it reads
 
@@ -65,6 +67,15 @@ opening tag or the end of that comment block, whose comment text holds no
 `§`, no Appendix E section such as `E.6.13`, no `ADR-` number and no
 `cref=`, is a finding at its opening line when
 any line of it is added. The pattern is the gate's `CITATION`.
+
+**The width of a C# line.** An added line of a `.cs` file longer than
+`WIDTH_LIMIT` characters, its line break and a file's byte-order mark not
+counted, is a finding at that line, whatever it holds: code, a comment or
+the inside of a literal. A file under a `Migrations/` directory or named
+`*.Designer.cs` is generated, so the gate's `GENERATED` exempts it. The
+suite also holds every tracked C# file to the width, so a line no diff added
+— one the gate's base copy judged before the width was in it — fails the
+suite rather than staying.
 
 **Added lines only.** The corpus is brought under the rule by the sweeps in
 [`docs/churn-plan.md`](../../docs/churn-plan.md) and

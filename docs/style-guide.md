@@ -370,9 +370,11 @@ file and a reviewer are the only things that do.
   two elements on a line that is neither the call's nor their own, so it joins
   back up when the call fits and splits when it does not. One element alone
   below its `(` is the outermost-bracket break further down, not this.
-  The 120 is *review-carried*: no analyser or gate measures it, and
-  `max_line_length` only draws the editor's ruler, so a hand-written line
-  past it is a finding. Generated migrations and designers are exempt.
+  No analyser measures the 120 — `max_line_length` only draws the editor's
+  ruler — so the comment gate does: a line a pull request adds to a `.cs`
+  file past it, comment or literal alike, fails the gate
+  ([`.github/comment-gate/`](../.github/comment-gate/README.md)). Generated
+  migrations and designers are exempt.
 - **`[` and `{` each take a line of their own**, at the column of the construct
   they open, and their closers do too. **`(` is the single exception**: it ends
   the line it opens, and `)` trails the last element — `);`, not a line of its
@@ -809,8 +811,9 @@ wrapped list.
 **A SQL list obeys the same rule as a C# one: one line, or one element per
 line, never a ragged middle.** That covers the column list after `INSERT`, the
 values after `VALUES`, the columns after `OUTPUT` and `GROUP BY`, and a
-function's arguments. The budget is the same 120 columns, measured from the
-literal's margin:
+function's arguments. The budget is the same 120 columns, counted from the
+`.cs` file's first column as the C# line is, so the literal's indentation is
+part of it:
 
 ```sql
 INSERT (OrderId, CustomerId, Status, TotalAmount, Currency, LineCount, Products, PlacedAt, UpdatedAt)
