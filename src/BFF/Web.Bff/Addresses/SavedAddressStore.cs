@@ -1,4 +1,5 @@
 using System.Data;
+using System.Data.Common;
 using System.Text.Json;
 using Common.Application;
 using Dapper;
@@ -60,9 +61,10 @@ public sealed class SavedAddressStore(IDbConnectionFactory connections, TimeProv
     /// </summary>
     public async Task SaveAsync(Guid customerId, SavedAddress address, CancellationToken ct)
     {
-        using IDbConnection connection = connections.Create();
-        connection.Open();
-        using IDbTransaction transaction = connection.BeginTransaction();
+        // The base type, for the asynchronous open, begin and commit that IDbConnection lacks.
+        await using DbConnection connection = (DbConnection)connections.Create();
+        await connection.OpenAsync(ct);
+        await using DbTransaction transaction = await connection.BeginTransactionAsync(ct);
 
         await connection.ExecuteAsync(
             new CommandDefinition(LockSql, new { CustomerId = customerId }, transaction, cancellationToken: ct));
@@ -87,7 +89,7 @@ public sealed class SavedAddressStore(IDbConnectionFactory connections, TimeProv
                 transaction,
                 cancellationToken: ct));
 
-        transaction.Commit();
+        await transaction.CommitAsync(ct);
     }
 
     /// <summary>Deletes the customer's row, if any; a customer with none is as they asked to be left.</summary>
