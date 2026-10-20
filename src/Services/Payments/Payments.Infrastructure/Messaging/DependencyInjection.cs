@@ -21,7 +21,8 @@ public static class DependencyInjection
     /// <summary>§3.2's Consumes column; one queue, as both events dispatch a command with no failure branch.</summary>
     public const string EventsQueue = "payments-events";
 
-    /// <summary>§11.7's erasure request, apart from <see cref="EventsQueue"/> so a provider outage never holds it.</summary>
+    /// <summary>§11.7's erasure request, apart from <see cref="EventsQueue"/> so a provider outage never holds
+    /// it.</summary>
     public const string PrivacyQueue = "payments-privacy";
 
     /// <summary>§3.2's Accepts column; Ordering's <c>Endpoints.PaymentsQueue</c> must name it too.</summary>

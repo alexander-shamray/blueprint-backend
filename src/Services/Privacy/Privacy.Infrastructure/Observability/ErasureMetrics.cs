@@ -3,7 +3,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Privacy.Infrastructure.Observability;
 
-/// <summary>The gauges that make a holder's silence visible: requests overdue, and who has not answered (ADR-092).</summary>
+/// <summary>The gauges that make a holder's silence visible: requests overdue, and who has
+/// not answered (ADR-092).</summary>
 /// <remarks>On <see cref="OutboxMetrics.MeterName"/>, so §13.2's service prefix covers them.</remarks>
 public sealed class ErasureMetrics
 {
@@ -12,7 +13,8 @@ public sealed class ErasureMetrics
         LoggerMessage.Define(
             LogLevel.Error,
             new EventId(1, nameof(GaugeReadFailed)),
-            "Erasure gauge read failed. This collection omits the gauge rather than reporting none, see ErasureMetrics.");
+            "Erasure gauge read failed. This collection omits the gauge rather than reporting none, " +
+            "see ErasureMetrics.");
 
     public ErasureMetrics(IMeterFactory factory, IErasureStats stats, ILogger<ErasureMetrics> logger)
     {
@@ -55,7 +57,10 @@ public sealed class ErasureMetrics
             return
             [
                 .. stats.OverdueMissingByResponder()
-                    .Select(pair => new Measurement<int>(pair.Value, new KeyValuePair<string, object?>("responder", pair.Key)))
+                    .Select(pair =>
+                        new Measurement<int>(
+                            pair.Value,
+                            new KeyValuePair<string, object?>("responder", pair.Key)))
             ];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

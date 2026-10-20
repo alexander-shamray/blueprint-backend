@@ -10,7 +10,8 @@ using static Ordering.Application.Tests.OrderFulfilmentSagaHarness;
 
 namespace Ordering.Application.Tests;
 
-/// <summary>§9.6's saga stamping each state it enters, so the saga read can say how long an order has sat in one.</summary>
+/// <summary>§9.6's saga stamping each state it enters, so the saga read can say how long an order has sat in
+/// one.</summary>
 [Collection(nameof(OrderFulfilmentSagaCollection))]
 public class OrderFulfilmentSagaStateEnteredTests
 {

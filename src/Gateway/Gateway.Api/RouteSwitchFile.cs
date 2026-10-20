@@ -2,7 +2,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Gateway.Api;
 
-/// <summary>The one overlay on the route file that reloads, so an operator switches a route without a rollout (ADR-119).</summary>
+/// <summary>The one overlay on the route file that reloads, so a route switches without a rollout (ADR-119).</summary>
 /// <remarks>
 /// The file holds <c>ReverseProxy:Routes:&lt;id&gt;:Metadata:Suspended</c> entries, so YARP's own reload carries them
 /// through <see cref="SuspendableRouteFilter"/>, which refuses a route to a cluster ADR-104 keeps on.

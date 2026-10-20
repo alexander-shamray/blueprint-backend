@@ -96,7 +96,11 @@ public sealed class MessagingRegistrationTests
 
         services.AddMassTransitMessaging(Configuration());
 
-        foreach (Type consumer in Consumed.Concat(Erasure).Select(e => typeof(IntegrationEventConsumer<>).MakeGenericType(e)))
+        IEnumerable<Type> consumers = Consumed
+            .Concat(Erasure)
+            .Select(e => typeof(IntegrationEventConsumer<>).MakeGenericType(e));
+
+        foreach (Type consumer in consumers)
         {
             services.ShouldContain(
                 d => d.ImplementationType == consumer || d.ServiceType == consumer,

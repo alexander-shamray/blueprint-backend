@@ -4,7 +4,7 @@ using Shipping.Domain.Shipments;
 
 namespace Shipping.Application.Privacy.EndWaitingShipment;
 
-/// <summary>Ends a pending shipment whose address is being erased, which a worker would otherwise ask for again.</summary>
+/// <summary>Ends a pending shipment whose address is being erased, which a worker would ask for again.</summary>
 /// <remarks>
 /// Booked or despatched, a shipment needs no address and is left to its carrier. One command per shipment, since a
 /// transaction holds one aggregate (§2.3). Repeating it finds the shipment ended and changes nothing (ADR-052).

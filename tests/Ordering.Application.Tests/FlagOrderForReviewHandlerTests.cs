@@ -46,7 +46,9 @@ public class FlagOrderForReviewHandlerTests
 
         public int ModifiedAggregateCount => 0;
 
-        public Task<TResult> ExecuteAsync<TResult>(Func<CancellationToken, Task<TResult>> operation, CancellationToken ct) =>
+        public Task<TResult> ExecuteAsync<TResult>(
+            Func<CancellationToken, Task<TResult>> operation,
+            CancellationToken ct) =>
             throw new NotSupportedException();
 
         public Task<int> SaveChangesAsync(CancellationToken ct) => throw new NotSupportedException();

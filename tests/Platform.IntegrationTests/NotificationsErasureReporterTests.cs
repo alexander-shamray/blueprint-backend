@@ -6,7 +6,8 @@ using Xunit;
 
 namespace Platform.IntegrationTests;
 
-/// <summary>What Notifications tells Privacy, and where, which the endpoint test cannot read back off the queue.</summary>
+/// <summary>What Notifications tells Privacy, and where, which the endpoint test cannot read back off the
+/// queue.</summary>
 public class NotificationsErasureReporterTests
 {
     private static readonly Guid Request = new("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");

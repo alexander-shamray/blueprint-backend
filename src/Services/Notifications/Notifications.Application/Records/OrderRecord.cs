@@ -41,7 +41,8 @@ public sealed class OrderRecord
         RecordedAt = now;
     }
 
-    /// <summary>The first of Ordering's events for an order names its customer and the requests it was placed after.</summary>
+    /// <summary>The first of Ordering's events for an order names its customer and the requests it was placed
+    /// after.</summary>
     public static OrderRecord For(
         Guid orderId,
         Guid customerId,

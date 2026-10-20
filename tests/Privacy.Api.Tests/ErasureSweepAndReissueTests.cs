@@ -15,7 +15,8 @@ using Xunit;
 
 namespace Privacy.Api.Tests;
 
-/// <summary>Silence made visible and answerable: the sweep, the reissue and the gauges that name who is missing.</summary>
+/// <summary>Silence made visible and answerable: the sweep, the reissue and the gauges that name who is
+/// missing.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -85,7 +86,8 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
         using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         ServiceCollection services = new();
         services.AddSingleton(scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>());
-        services.AddSingleton<IDispatcher>(new ThrowingFor(first, scope.ServiceProvider.GetRequiredService<IDispatcher>()));
+        services.AddSingleton<IDispatcher>(
+            new ThrowingFor(first, scope.ServiceProvider.GetRequiredService<IDispatcher>()));
         using ServiceProvider provider = services.BuildServiceProvider();
         OverdueSweepService sweep = new(
             provider.GetRequiredService<IServiceScopeFactory>(),
@@ -102,7 +104,8 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
     {
         Guid request = await RaiseAsync();
         await fixture.ExecuteAsync(
-            "UPDATE privacy.ErasureRequests SET Status = 'Closed', SubjectId = NULL, DueAt = DATEADD(day, -1, SYSDATETIMEOFFSET()) " +
+            "UPDATE privacy.ErasureRequests SET Status = 'Closed', SubjectId = NULL, " +
+            "DueAt = DATEADD(day, -1, SYSDATETIMEOFFSET()) " +
             "WHERE RequestId = {0}",
             request);
 
@@ -195,7 +198,8 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
     [Fact]
     public void The_gauges_report_zero_when_nothing_is_overdue_and_name_no_holder()
     {
-        (IReadOnlyList<(string Name, int Value, string? Responder)> seen, _) = Observe(new FixedStats(0, new Dictionary<string, int>()));
+        (IReadOnlyList<(string Name, int Value, string? Responder)> seen, _) = Observe(
+            new FixedStats(0, new Dictionary<string, int>()));
 
         seen.ShouldBe([("privacy.erasure.overdue", 0, null)], "none overdue reads as a value, not as no data");
     }
@@ -218,7 +222,8 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
     [Fact]
     public void A_failing_read_yields_no_measurements_rather_than_throwing()
     {
-        (IReadOnlyList<(string Name, int Value, string? Responder)> seen, Exception? raised) = Observe(new BrokenStats());
+        (IReadOnlyList<(string Name, int Value, string? Responder)> seen, Exception? raised) = Observe(
+            new BrokenStats());
 
         raised.ShouldBeNull("the collector abandons its pass on an exception, so the gauge must contain it");
         seen.ShouldBeEmpty("absent rather than wrong (§13.6)");
@@ -242,8 +247,11 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
         using MeterListener listener = new();
         listener.InstrumentPublished = (instrument, l) =>
         {
-            if (ReferenceEquals(instrument.Meter, mine) && instrument.Name.StartsWith("privacy.", StringComparison.Ordinal))
+            if (ReferenceEquals(instrument.Meter, mine) &&
+                instrument.Name.StartsWith("privacy.", StringComparison.Ordinal))
+            {
                 l.EnableMeasurementEvents(instrument);
+            }
         };
         listener.SetMeasurementEventCallback<int>(
             (instrument, value, tags, _) => seen.Add((instrument.Name, value, ResponderOf(tags))));
@@ -310,7 +318,9 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
             request);
 
     private Task<string> StatusAsync(Guid request) =>
-        fixture.ScalarAsync<string>("SELECT Value = Status FROM privacy.ErasureRequests WHERE RequestId = {0}", request);
+        fixture.ScalarAsync<string>(
+            "SELECT Value = Status FROM privacy.ErasureRequests WHERE RequestId = {0}",
+            request);
 
     private sealed class ThrowingFor(Guid request, IDispatcher inner) : IDispatcher
     {

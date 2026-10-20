@@ -16,7 +16,8 @@ internal static class PersonalDataScan
     /// <summary>Types a text comparison cannot be asked of, and which hold no payload a person is written in.</summary>
     private const string Unreadable = "'timestamp','image','geography','geometry','hierarchyid','sql_variant'";
 
-    /// <summary>The tables, as <c>Database.schema.table</c>, holding any of <paramref name="needles"/> in any column.</summary>
+    /// <summary>The tables, as <c>Database.schema.table</c>, holding any of <paramref name="needles"/> in any
+    /// column.</summary>
     public static async Task<IReadOnlySet<string>> HoldingAsync(this JourneyWorld world, params string[] needles)
     {
         SortedSet<string> holding = [];
@@ -50,7 +51,13 @@ internal static class PersonalDataScan
                     [.. needles.Select(needle => (object)$"%{needle}%")]);
 
                 if (hits > 0)
-                    holding.Add($"{database}.{table.Replace("[", string.Empty, StringComparison.Ordinal).Replace("]", string.Empty, StringComparison.Ordinal)}");
+                {
+                    string bare = table
+                        .Replace("[", string.Empty, StringComparison.Ordinal)
+                        .Replace("]", string.Empty, StringComparison.Ordinal);
+
+                    holding.Add($"{database}.{bare}");
+                }
             }
         }
 

@@ -41,7 +41,11 @@ public static class ErasureRequestEndpoints
         group
             .MapPost(
                 "/{requestId:guid}/reissue",
-                async (Guid requestId, ReissueErasureRequestRequest request, IDispatcher dispatcher, CancellationToken ct) =>
+                async (
+                    Guid requestId,
+                    ReissueErasureRequestRequest request,
+                    IDispatcher dispatcher,
+                    CancellationToken ct) =>
                 {
                     Result result = await dispatcher.SendAsync(
                         new ReissueErasureRequestCommand(request.CommandId, requestId),

@@ -6,7 +6,8 @@ using Privacy.Domain.ErasureRequests;
 namespace Privacy.Infrastructure.Messaging;
 
 /// <summary>One mapper per command in §3.2's Accepts column: the wire-to-command boundary (§9.4).</summary>
-/// <remarks>A failed parse throws <see cref="ContractMappingException"/>, which the endpoint does not retry (§9.8).</remarks>
+/// <remarks>A failed parse throws <see cref="ContractMappingException"/>, which the endpoint does not retry
+/// (§9.8).</remarks>
 public sealed class PersonalDataDeleteCompletedMapper
     : ICommandMessageMapper<PersonalDataDeleteCompleted, RecordErasureCompletionCommand>
 {

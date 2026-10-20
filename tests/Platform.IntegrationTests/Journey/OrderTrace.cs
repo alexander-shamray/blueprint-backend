@@ -18,11 +18,10 @@ public sealed record OrderSnapshot(
     public const string None = "none";
 }
 
-/// <summary>Samples one order across every service, so the states it passed through are asserted legal (§12.1).</summary>
-/// <remarks>
-/// A sample can miss a short state, so legality is reachability: a state may follow any state the diagram reaches
-/// it from (§9.6).
-/// </remarks>
+/// <summary>Samples one order across every service, so the states it passed through are asserted legal
+/// (§12.1).</summary>
+/// <remarks>A sample can miss a short state, so legality is reachability: a state may follow any state the diagram
+/// reaches it from (§9.6).</remarks>
 public sealed class OrderTrace : IAsyncDisposable
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(50);
@@ -95,7 +94,8 @@ public sealed class OrderTrace : IAsyncDisposable
         }
     }
 
-    /// <summary>Starts sampling <paramref name="order"/>, for a product that held <paramref name="stocked"/> in all.</summary>
+    /// <summary>Starts sampling <paramref name="order"/>, for a product that held <paramref name="stocked"/> in
+    /// all.</summary>
     public static OrderTrace Start(JourneyWorld world, JourneyOrder order, int stocked)
     {
         OrderTrace trace = new(world, order, stocked);

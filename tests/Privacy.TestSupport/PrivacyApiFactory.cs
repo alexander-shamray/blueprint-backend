@@ -32,7 +32,8 @@ public class PrivacyApiFactory(
     /// </remarks>
     public const string UnreachableRedis = "redis.invalid:6379";
 
-    /// <summary>What a request is raised with: the five holders §11.7 draws, and a service level the host accepts.</summary>
+    /// <summary>What a request is raised with: the five holders §11.7 draws, and a service level the host
+    /// accepts.</summary>
     public static IReadOnlyDictionary<string, string?> PrivacySettings { get; } = new Dictionary<string, string?>
     {
         ["Privacy:Responders:0"] = "ordering",

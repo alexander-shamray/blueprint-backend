@@ -14,7 +14,8 @@ public interface IPersonalDataErasureRepository
     /// <exception cref="CustomerLockNotTakenException">The lock stayed held past the wait.</exception>
     Task LockSubjectAsync(Guid subjectId, CancellationToken ct);
 
-    /// <summary>The requests this holder has already erased the subject under, for an order to carry (ADR-099).</summary>
+    /// <summary>The requests this holder has already erased the subject under, for an order to carry
+    /// (ADR-099).</summary>
     /// <remarks>The hash is salted by its request (ADR-092), so each row is tried in turn.</remarks>
     Task<IReadOnlyList<Guid>> RequestsErasingAsync(Guid subjectId, CancellationToken ct);
 

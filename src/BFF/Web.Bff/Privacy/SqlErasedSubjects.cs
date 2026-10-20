@@ -5,7 +5,8 @@ using Dapper;
 
 namespace Web.Bff.Privacy;
 
-/// <summary>Answers from the audit rows alone: the hash is salted by its request, so each row is tried in turn.</summary>
+/// <summary>Answers from the audit rows alone: the hash is salted by its request, so each row is tried in
+/// turn.</summary>
 /// <remarks>On its own connection, after the projection's write has committed. Unbounded by the order's age: the
 /// owner anonymises on its own clock, so no age the BFF can compute is sound (ADR-092). A row is skipped only when
 /// the order itself names its request as one it was placed after (ADR-099).</remarks>

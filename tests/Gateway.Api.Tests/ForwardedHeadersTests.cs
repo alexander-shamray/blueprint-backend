@@ -20,7 +20,8 @@ public sealed class ForwardedHeadersTests(StubDestination stub) : IClassFixture<
     private const string FirstClient = "203.0.113.7";
     private const string SecondClient = "203.0.113.8";
 
-    /// <summary>The ingress's network, and an address in it that is not loopback, which is trusted by default.</summary>
+    /// <summary>The ingress's network, and an address in it that is not loopback, which is trusted by
+    /// default.</summary>
     private const string IngressNetwork = "10.0.0.0/8";
     private static readonly IPAddress Ingress = IPAddress.Parse("10.1.2.3");
 

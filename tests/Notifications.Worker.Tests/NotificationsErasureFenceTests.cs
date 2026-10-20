@@ -127,7 +127,10 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
             _saving = saving;
         }
 
-        public static async Task<ErasureAtItsAudit> OpenAsync(ServiceFixture fixture, Guid subject, CancellationToken ct)
+        public static async Task<ErasureAtItsAudit> OpenAsync(
+            ServiceFixture fixture,
+            Guid subject,
+            CancellationToken ct)
         {
             PauseBeforeAudit pause = new();
             NotificationsDbContext db = new(

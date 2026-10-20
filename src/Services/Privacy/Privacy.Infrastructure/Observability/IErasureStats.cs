@@ -6,6 +6,7 @@ public interface IErasureStats
     /// <summary>Requests that are overdue now.</summary>
     int OverdueCount();
 
-    /// <summary>For each holder missing from at least one overdue request, how many such requests it is missing from.</summary>
+    /// <summary>For each holder missing from at least one overdue request, how many such requests it is missing
+    /// from.</summary>
     IReadOnlyDictionary<string, int> OverdueMissingByResponder();
 }

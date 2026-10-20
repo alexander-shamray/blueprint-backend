@@ -18,7 +18,10 @@ public class RetentionMapTests
     private static readonly NotRetention[] Excluded =
     [
         .. RetentionMapRule.BuildingBlocksNotRetention,
-        new(typeof(PrivacyOptions), nameof(PrivacyOptions.CompletionSlo), "the time a request may stay open, not a retention")
+        new(
+            typeof(PrivacyOptions),
+            nameof(PrivacyOptions.CompletionSlo),
+            "the time a request may stay open, not a retention")
     ];
 
     [Fact]

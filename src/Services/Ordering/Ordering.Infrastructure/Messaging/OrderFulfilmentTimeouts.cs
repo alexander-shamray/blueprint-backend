@@ -12,7 +12,8 @@ public sealed class OrderFulfilmentTimeouts
     /// <summary>The configuration section, named once (§15.4).</summary>
     public const string SectionName = "Saga";
 
-    /// <summary>Shorter, and the timer fires before the broker has delivered the message that would cancel it.</summary>
+    /// <summary>Shorter, and the timer fires before the broker has delivered the message that would cancel
+    /// it.</summary>
     public const string MinimumDelay = "00:00:01";
 
     /// <summary>Ten years, which is a configuration error rather than a policy.</summary>

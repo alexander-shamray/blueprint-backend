@@ -116,7 +116,10 @@ public sealed class ShippingErasureEndpointTests(ServiceFixture fixture) : IAsyn
 
         await PublishRequestAsync(Guid.CreateVersion7());
 
-        await Eventually(CountCompletionsAsync, expected: 1, because: "the send is released when the consumer succeeds");
+        await Eventually(
+            CountCompletionsAsync,
+            expected: 1,
+            because: "the send is released when the consumer succeeds");
     }
 
     [Fact]

@@ -6,7 +6,8 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>§15.4's start-time check: an options class's annotations decide, and each failure's message survives.</summary>
+/// <summary>§15.4's start-time check: an options class's annotations decide, and each failure's message
+/// survives.</summary>
 public class AnnotatedOptionsValidatorTests
 {
     private sealed class Sample

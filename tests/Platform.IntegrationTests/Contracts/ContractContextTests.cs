@@ -3,8 +3,10 @@ using Xunit;
 
 namespace Platform.IntegrationTests.Contracts;
 
-/// <summary>Each service's <see cref="ContractContext"/> held to the contracts it is for, in both directions (§12.6).</summary>
-/// <remarks>A service with no context would be sampled by no one, and a stale one blocks its retirement (ADR-062).</remarks>
+/// <summary>Each service's <see cref="ContractContext"/> held to the contracts it is for, in both directions
+/// (§12.6).</summary>
+/// <remarks>A service with no context would be sampled by no one, and a stale one blocks its retirement
+/// (ADR-062).</remarks>
 public class ContractContextTests
 {
     private static string[] ServicesWithContracts =>

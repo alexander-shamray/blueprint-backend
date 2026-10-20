@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Catalog.Migrator;
 
-/// <summary>ADR-090's republish: the facts Catalog still holds for each product, staged again on the Broker lane.</summary>
+/// <summary>ADR-090's republish: the facts Catalog still holds for each product, restaged on the Broker lane.</summary>
 /// <remarks>
 /// SQL through the migration's own context, since §4.2 keeps the migrator off Application and Domain. A row
 /// keeps the event's <c>OccurredAt</c> for Ordering's guards (§6.6) and has a fresh <c>MessageId</c> (§9.5).

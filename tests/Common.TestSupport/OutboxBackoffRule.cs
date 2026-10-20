@@ -9,7 +9,8 @@ namespace Common.TestSupport;
 /// </remarks>
 public static class OutboxBackoffRule
 {
-    /// <summary>The time between the failure and the read, and the database's clock against this host's, either way.</summary>
+    /// <summary>The time between the failure and the read, and the database's clock against this host's, either
+    /// way.</summary>
     private static readonly TimeSpan Slack = TimeSpan.FromSeconds(8);
 
     /// <summary>The ladder's wait for a failure made at <paramref name="attemptsBefore"/> attempts.</summary>

@@ -7,7 +7,8 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>§9.6's five delays as the production helper binds them: the lever §14.1 gives a developer's stack.</summary>
+/// <summary>§9.6's five delays as the production helper binds them: the lever §14.1 gives a developer's
+/// stack.</summary>
 public class OrderFulfilmentTimeoutsTests
 {
     private static ServiceProvider Provider(params (string Key, string Value)[] settings)

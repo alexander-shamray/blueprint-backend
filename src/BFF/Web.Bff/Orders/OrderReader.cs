@@ -54,7 +54,8 @@ public sealed class OrderReader(IDbConnectionFactory connections)
         WHERE l.OrderId = @OrderId;
         """;
 
-    /// <summary>What a stream asks each interval (ADR-108): one key read, and the detail only when this moved.</summary>
+    /// <summary>What a stream asks each interval (ADR-108): one key read, and the detail only when this
+    /// moved.</summary>
     private const string AsOfSql =
         """
         SELECT o.AsOf
@@ -116,7 +117,8 @@ public sealed class OrderReader(IDbConnectionFactory connections)
             : Result.Success(OrderView.Detail(row, lines));
     }
 
-    /// <summary>The row's <c>AsOf</c> alone, filtered on id and customer; null for none, as <see cref="FindAsync"/> is.</summary>
+    /// <summary>The row's <c>AsOf</c> alone, filtered on id and customer; null for none, as <see cref="FindAsync"/>
+    /// is.</summary>
     public async Task<DateTimeOffset?> AsOfAsync(Guid customerId, Guid orderId, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();

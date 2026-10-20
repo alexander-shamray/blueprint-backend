@@ -70,7 +70,10 @@ public sealed class PaymentsErasureEndpointTests(ServiceFixture fixture) : IAsyn
 
         await PublishRequestAsync(request);
 
-        await Eventually(CountCompletionsAsync, expected: 1, because: "the send is released when the consumer succeeds");
+        await Eventually(
+            CountCompletionsAsync,
+            expected: 1,
+            because: "the send is released when the consumer succeeds");
     }
 
     [Fact]

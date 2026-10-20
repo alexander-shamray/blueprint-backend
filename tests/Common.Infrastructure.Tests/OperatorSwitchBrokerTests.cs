@@ -8,7 +8,8 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary><see cref="ReceiveEndpointSwitch"/> over a real broker, where the queue persists and a start rebinds.</summary>
+/// <summary><see cref="ReceiveEndpointSwitch"/> over a real broker, where the queue persists and a start
+/// rebinds.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
 {

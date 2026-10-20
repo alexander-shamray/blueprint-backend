@@ -6,7 +6,8 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>ADR-085's <c>https</c> rule as a rule about the configured base, checked when the host starts (§10.8).</summary>
+/// <summary>ADR-085's <c>https</c> rule as a rule about the configured base, checked when the host starts
+/// (§10.8).</summary>
 public class ProductImageStoreOptionsTests
 {
     private static readonly ProductImageStoreOptionsValidator Validator = new();

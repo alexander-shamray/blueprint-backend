@@ -99,7 +99,8 @@ public sealed class SavedAddressEndpointTests(BffServiceFixture fixture) : IAsyn
 
         (await stranger.GetAsync(Route, Ct)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
         (await stranger.DeleteAsync(Route, Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        (await mine.GetFromJsonAsync<SavedAddress>(Route, Ct)).ShouldBe(Home, "the stranger's delete touched their own");
+        (await mine.GetFromJsonAsync<SavedAddress>(Route, Ct))
+            .ShouldBe(Home, "the stranger's delete touched their own");
     }
 
     [Fact]

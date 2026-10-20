@@ -11,7 +11,8 @@ using Xunit;
 
 namespace Notifications.Worker.Tests;
 
-/// <summary>ADR-097: an order event for an erased customer is recorded and then deleted, whenever the erasure ran.</summary>
+/// <summary>ADR-097: an order event for an erased customer is recorded and then deleted, whenever the erasure
+/// ran.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -126,14 +127,18 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         switch (name)
         {
             case "Placed":
-                await Handler<OrderPlaced>(services).HandleAsync(OrderEvents.Placed(order, customer, At, erasedUnder), ct);
+                await Handler<OrderPlaced>(services)
+                    .HandleAsync(OrderEvents.Placed(order, customer, At, erasedUnder), ct);
                 break;
             case "Confirmed":
-                await Handler<OrderConfirmed>(services).HandleAsync(OrderEvents.Confirmed(order, customer, At, erasedUnder), ct);
+                await Handler<OrderConfirmed>(services)
+                    .HandleAsync(OrderEvents.Confirmed(order, customer, At, erasedUnder), ct);
                 break;
             default:
                 await Handler<OrderCancelled>(services)
-                    .HandleAsync(OrderEvents.Cancelled(order, customer, At, CancelReasons.OutOfStock, null, erasedUnder), ct);
+                    .HandleAsync(
+                        OrderEvents.Cancelled(order, customer, At, CancelReasons.OutOfStock, null, erasedUnder),
+                        ct);
                 break;
         }
     }
@@ -142,7 +147,8 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         where T : class =>
         services.GetServices<IIntegrationEventHandler<T>>().Single();
 
-    /// <summary>The audit row lands once the intake's unit has committed and before it asks, as a racing erasure's.</summary>
+    /// <summary>The audit row lands once the intake's unit has committed and before it asks, as a racing
+    /// erasure's.</summary>
     private sealed class ErasureBetweenRecordAndCheck(
         ServiceFixture fixture,
         Guid order,
@@ -151,7 +157,10 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
     {
         public bool RecordWasThereWhenAsked { get; private set; }
 
-        public async Task<bool> IsErasedAsync(Guid subjectId, IReadOnlyCollection<Guid> placedAfter, CancellationToken ct)
+        public async Task<bool> IsErasedAsync(
+            Guid subjectId,
+            IReadOnlyCollection<Guid> placedAfter,
+            CancellationToken ct)
         {
             RecordWasThereWhenAsked = await fixture.OrderRecordAsync(order) is not null;
             await RecordErasureAsync(fixture, subject, At);

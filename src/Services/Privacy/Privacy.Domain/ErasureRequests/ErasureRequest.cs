@@ -36,13 +36,15 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
     /// <summary>The holders expected to answer: the set it was raised with, as any amendment left it.</summary>
     public IReadOnlyList<string> Responders => _respondersCsv.Split(',');
 
-    /// <summary>Every answer heard, including any from a name outside the set, which is flagged and not counted.</summary>
+    /// <summary>Every answer heard, including any from a name outside the set, which is flagged and not
+    /// counted.</summary>
     public IReadOnlyList<ErasureCompletion> Completions => _completions.AsReadOnly();
 
     /// <summary>Each change an operator made to the set, in order.</summary>
     public IReadOnlyList<ErasureAmendment> Amendments => _amendments.AsReadOnly();
 
-    /// <summary>The hash the holders' audit rows carry, which replaces the subject's id when the request closes.</summary>
+    /// <summary>The hash the holders' audit rows carry, which replaces the subject's id when the request
+    /// closes.</summary>
     public string? SubjectHash { get; private set; }
 
     public DateTimeOffset? ClosedAt { get; private set; }
@@ -107,7 +109,8 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
     /// <summary>
     /// Records a holder's answer, closing the request when every expected holder has been counted.
     /// </summary>
-    /// <remarks>A closed request ignores a late answer, since the subject is no longer here to match it to (ADR-092).</remarks>
+    /// <remarks>A closed request ignores a late answer, since the subject is no longer here to match it to
+    /// (ADR-092).</remarks>
     public CompletionOutcome RecordCompletion(string responder, int count, DateTimeOffset now)
     {
         if (!IsResponderName(responder))

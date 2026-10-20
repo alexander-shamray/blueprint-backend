@@ -2,7 +2,8 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Common.Infrastructure.Switching;
 
-/// <summary>Reports Degraded while any name is switched off, so a loop that is off shows in readiness (ADR-115).</summary>
+/// <summary>Reports Degraded while any name is switched off, so a loop that is off shows in readiness
+/// (ADR-115).</summary>
 /// <remarks>Degraded answers 200 on <c>/health/ready</c> (§13.5), so the pod stays in service.</remarks>
 public sealed class OperatorSwitchHealthCheck(OperatorSwitches switches) : IHealthCheck
 {

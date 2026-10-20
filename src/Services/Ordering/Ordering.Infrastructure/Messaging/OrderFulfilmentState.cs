@@ -20,8 +20,10 @@ public sealed class OrderFulfilmentState : SagaStateMachineInstance
 
     public DateTimeOffset StartedAt { get; set; }
 
-    /// <summary>When the instance entered <see cref="CurrentState"/>; null on an instance an older release wrote.</summary>
-    /// <remarks>Nullable because §7.4's expand step ships it before every writer sets it, and no default is true (§9.6).</remarks>
+    /// <summary>When the instance entered <see cref="CurrentState"/>; null on an instance an older release
+    /// wrote.</summary>
+    /// <remarks>Nullable because §7.4's expand step ships it before every writer sets it, and no default is true
+    /// (§9.6).</remarks>
     public DateTimeOffset? StateEnteredAt { get; set; }
 
     /// <summary>Set on entry to <c>Compensating</c>, read by its two stock exits.</summary>

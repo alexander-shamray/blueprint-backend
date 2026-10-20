@@ -54,7 +54,10 @@ public class ProductImageKeysTests
     [Fact]
     public void The_longest_destination_key_is_the_length_the_option_check_sizes_against()
     {
-        ProductImageKeys.ProductKey(Seller, Image, "webp").Length.ShouldBe(ProductImageKeys.LongestDestinationKeyLength);
+        ProductImageKeys
+            .ProductKey(Seller, Image, "webp")
+            .Length
+            .ShouldBe(ProductImageKeys.LongestDestinationKeyLength);
     }
 
     public static TheoryData<string> Refused() => new()

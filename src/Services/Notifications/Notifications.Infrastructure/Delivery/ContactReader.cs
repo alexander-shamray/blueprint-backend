@@ -6,7 +6,8 @@ using Notifications.Application.Records;
 
 namespace Notifications.Infrastructure.Delivery;
 
-/// <summary>The contact read a send pass makes for a customer, whether for mail or for a push fan-out (ADR-052).</summary>
+/// <summary>The contact read a send pass makes for a customer, whether for mail or for a push fan-out
+/// (ADR-052).</summary>
 internal static class ContactReader
 {
     /// <summary>

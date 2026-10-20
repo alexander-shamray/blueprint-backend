@@ -84,7 +84,8 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
     }
 
     private ProductImageUpload Issue(Guid seller, string contentType, long size, TimeProvider? clock = null) =>
-        new ProductImageUploads(Options.Create(BffStore()), clock ?? TimeProvider.System).Issue(seller, contentType, size);
+        new ProductImageUploads(Options.Create(BffStore()), clock ?? TimeProvider.System)
+            .Issue(seller, contentType, size);
 
     /// <summary>The PUT a client makes with what the BFF returned, optionally corrupted by the caller.</summary>
     private static async Task<HttpResponseMessage> PutAsync(
@@ -168,7 +169,10 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
     public async Task The_signature_does_not_carry_to_another_key()
     {
         ProductImageUpload upload = Issue(Guid.CreateVersion7(), "image/png", Png.Length);
-        string other = upload.UploadUrl.AbsoluteUri.Replace(upload.Key, upload.Key.Replace(".png", ".jpg"), StringComparison.Ordinal);
+        string other = upload.UploadUrl.AbsoluteUri.Replace(
+            upload.Key,
+            upload.Key.Replace(".png", ".jpg"),
+            StringComparison.Ordinal);
 
         (await PutAsync(upload with { UploadUrl = new Uri(other) }, Png)).StatusCode
             .ShouldBe(HttpStatusCode.Forbidden);
@@ -305,7 +309,9 @@ public sealed class ProductImageStoreTests(ObjectStoreFixture store) : IClassFix
     public async Task Bytes_that_are_not_the_declared_image_are_refused_and_not_copied()
     {
         // Signed and stored as a PNG, but the body is text: the type is the client's claim, the bytes are the proof.
-        (Guid seller, ProductImageUpload upload) = await UploadedAsync("<html><script>1</script></html>"u8.ToArray(), "image/png");
+        (Guid seller, ProductImageUpload upload) = await UploadedAsync(
+            "<html><script>1</script></html>"u8.ToArray(),
+            "image/png");
 
         (await AttachAsync(seller, upload)).Outcome.ShouldBe(ImageAttachOutcome.NotAnImage);
     }

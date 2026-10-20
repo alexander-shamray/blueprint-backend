@@ -9,7 +9,8 @@ using Yarp.ReverseProxy.Configuration;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>A route switched from the mounted file takes effect on a running gateway, and a refusal changes nothing (ADR-119).</summary>
+/// <summary>A route switched from the mounted file takes effect on a running gateway, and a refusal changes nothing
+/// (ADR-119).</summary>
 public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<StubDestination>
 {
     private const string Suspendable = "privacy-erase";
@@ -46,13 +47,16 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
 
         using ReloadSignal reloaded = new(factory.Services.GetRequiredService<IConfiguration>());
 
-        // Turns the first route back on, which a partly applied reload would show, and switches a route that may not be.
+        // Turns the first route back on, which a partly applied reload would show, and switches a route that may not
+        // be.
         file.Write(Switch(Suspendable, on: false, Other, on2: true));
         await reloaded.WaitAsync(Wait);
         await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
-        (await StatusAsync(client, Suspendable)).ShouldBe(HttpStatusCode.ServiceUnavailable, "the refused reload applied");
-        (await StatusAsync(client, Other)).ShouldBe(HttpStatusCode.NoContent, "the refused reload switched a route off");
+        (await StatusAsync(client, Suspendable))
+            .ShouldBe(HttpStatusCode.ServiceUnavailable, "the refused reload applied");
+        (await StatusAsync(client, Other))
+            .ShouldBe(HttpStatusCode.NoContent, "the refused reload switched a route off");
 
         file.Write(Switch(Suspendable, on: false));
         await EventuallyAsync(client, Suspendable, HttpStatusCode.NoContent);
@@ -76,7 +80,8 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
         (await StatusAsync(client, Suspendable)).ShouldBe(HttpStatusCode.NoContent);
     }
 
-    /// <summary>A misspelt id is a route with no match to YARP, so it is refused like any other bad reload (ADR-119).</summary>
+    /// <summary>A misspelt id is a route with no match to YARP, so it is refused like any other bad reload
+    /// (ADR-119).</summary>
     [Fact]
     public async Task A_name_that_is_no_route_is_refused_and_changes_nothing()
     {
@@ -89,15 +94,17 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
         await reloaded.WaitAsync(Wait);
         await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
-        (await StatusAsync(client, Suspendable)).ShouldBe(HttpStatusCode.ServiceUnavailable, "the refused reload applied");
+        (await StatusAsync(client, Suspendable))
+            .ShouldBe(HttpStatusCode.ServiceUnavailable, "the refused reload applied");
     }
 
     /// <summary>
-    /// The control for the test above (ADR-119): a route with no match and no cluster is refused twice, by the filter and
-    /// by YARP's route validation, so only a host with neither applies the same file, and a pass there is the two of them.
+    /// The control for the test above (ADR-119): a route with no match and no cluster is refused twice, by the filter
+    /// and by YARP's route validation, so only a host with neither applies the same file, and a pass there is the two
+    /// of them.
     /// </summary>
     [Fact]
-    public async Task Without_the_filter_and_route_validation_the_file_the_misspelt_name_test_writes_applies_the_reload()
+    public async Task Without_the_filter_and_route_validation_the_misspelt_names_file_applies_the_reload()
     {
         using TempRouteFile file = new(Switch(Suspendable, on: true));
         using FileFactory factory = new(stub.Address, file.Path, withoutFilter: true, withoutValidation: true);
@@ -126,7 +133,9 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
     {
         RouteConfiguration route = ReadRoute(routeId);
         string path = route.MatchPath.Replace("{**catch-all}", "x", StringComparison.Ordinal);
-        using HttpRequestMessage request = new(new HttpMethod(route.Methods is [string method, ..] ? method : "GET"), path);
+        using HttpRequestMessage request = new(
+            new HttpMethod(route.Methods is [string method, ..] ? method : "GET"),
+            path);
 
         request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
         request.Headers.Add(TestAuthHandler.PermissionsHeader, route.AuthorizationPolicy ?? string.Empty);
@@ -167,7 +176,8 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
         bool withoutValidation = false)
         : StubbedGatewayFactory(destination)
     {
-        /// <summary>The filter is internal to the gateway, so it is found by name; a rename fails the control, as Single throws.</summary>
+        /// <summary>The filter is internal to the gateway, so it is found by name; a rename fails the control, as
+        /// Single throws.</summary>
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             base.ConfigureWebHost(builder);
@@ -193,7 +203,8 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
         ];
     }
 
-    /// <summary>YARP's own validator for a cluster and none for a route, so a route with no match reaches the proxy.</summary>
+    /// <summary>YARP's own validator for a cluster and none for a route, so a route with no match reaches the
+    /// proxy.</summary>
     private sealed class RoutesUnvalidated(IConfigValidator yarp) : IConfigValidator
     {
         public ValueTask<IList<Exception>> ValidateRouteAsync(RouteConfig route) => new(new List<Exception>());
@@ -219,7 +230,8 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
         public void Dispose() => Directory.Delete(_directory, recursive: true);
     }
 
-    /// <summary>Completes when the configuration next reloads, which is when YARP has been asked to look again.</summary>
+    /// <summary>Completes when the configuration next reloads, which is when YARP has been asked to look
+    /// again.</summary>
     private sealed class ReloadSignal : IDisposable
     {
         private readonly TaskCompletionSource _reloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -230,7 +242,8 @@ public sealed class RouteSwitchFileTests(StubDestination stub) : IClassFixture<S
                 configuration.GetReloadToken,
                 () => _reloaded.TrySetResult());
 
-        public Task WaitAsync(TimeSpan timeout) => _reloaded.Task.WaitAsync(timeout, TestContext.Current.CancellationToken);
+        public Task WaitAsync(TimeSpan timeout) =>
+            _reloaded.Task.WaitAsync(timeout, TestContext.Current.CancellationToken);
 
         public void Dispose() => _registration.Dispose();
     }
