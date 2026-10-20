@@ -577,6 +577,7 @@ builder.Host.UseDefaultServiceProvider(o =>
 builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddOrderingApplication();       // §6.2
 builder.Services.AddOrderingInfrastructure(builder.Configuration);   // §4.2, §7.1
+builder.Services.AddExceptionHandler<CustomerLockNotTakenExceptionHandler>();   // §10.5's 503 for a held lock
 
 // Appendix C's OpenAPI deliverable: document only, no UI.
 builder.Services.AddCommonOpenApi();
@@ -590,7 +591,8 @@ builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(OrderingPermissions.Write, p => p.RequirePermission(OrderingPermissions.Write))
     .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel))
-    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress));
+    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress))
+    .AddPolicy(OrderingPermissions.SagaRead, p => p.RequirePermission(OrderingPermissions.SagaRead));
 
 WebApplication app = builder.Build();
 
@@ -1104,8 +1106,15 @@ its description is worded to be true of both.
 
 **Privacy's lock refusal** is `ErasureLockNotTakenException`, thrown by
 `ErasureRequestRepository.TakeLockAsync`, answered 503 with `Retry-After` and
-`code` `erasure_request.busy` by `ErasureLockNotTakenExceptionHandler`. It is
-the only service that takes such a lock.
+`code` `erasure_request.busy` by `ErasureLockNotTakenExceptionHandler`.
+
+**Ordering's lock refusal** is `CustomerLockNotTakenException`, thrown by
+`PersonalDataErasureRepository.LockSubjectAsync`, answered 503 with
+`Retry-After` and `code` `order.customer_busy` by
+`CustomerLockNotTakenExceptionHandler`. The lock is the customer's, taken by
+a placement and an erasure alike
+([ADR-137](adr/ADR-137-a-placement-and-an-erasure-for-one-customer-take-one-application-lock-and-run-one-after-the-other-1191-amending-adr-099.md)).
+They are the only two services that take such a lock.
 
 ### E.6.3 Notice mail correlation
 
@@ -1229,7 +1238,7 @@ this case, and this table is the owner of what each edge of it erases:
 
 | Holder | Erases | Reports as |
 |---|---|---|
-| Ordering | `Orders.CustomerId` anonymised, address purged, `OrderSummaries.CustomerId` cleared | `ordering` |
+| Ordering | `Orders.CustomerId` anonymised, address purged, `OrderSummaries.CustomerId` cleared, bar an order placed under the request, under the customer's lock a placement also takes (ADR-099, ADR-137) | `ordering` |
 | Notifications | ended `NotificationLog` and `PushDeliveries` rows anonymised, contacts, waiting notices, pending deliveries and `OrderRecords` deleted, device rows cleared to their installation id and sequence ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), keeping the last-seen time the retention pass deletes them by ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)), consent journal entries anonymised, keeping their topic, channel, opt-in, times, client and chain as the evidence that the sends before the erasure were lawful ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | `notifications` |
 | Shipping | `DeliveryAddresses` rows deleted (ADR-052), `Shipments.ErasedUnder` emptied (ADR-103) | `shipping` |
 | Payments | `PaymentOrders.CustomerId` anonymised | `payments` |

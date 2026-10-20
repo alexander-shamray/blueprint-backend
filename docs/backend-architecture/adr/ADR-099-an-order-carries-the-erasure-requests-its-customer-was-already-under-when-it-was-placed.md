@@ -53,6 +53,13 @@ the Decision's last sentence and the Consequences' sentence on Shipping.
 Shipping keeps the shipment of such an order, because the shipment stores the
 list and the fulfilment claim returns it.
 
+**Amended by [ADR-137](ADR-137-a-placement-and-an-erasure-for-one-customer-take-one-application-lock-and-run-one-after-the-other-1191-amending-adr-099.md).**
+The Consequences' sentence on an order placed in the instant between a
+request's commit and the insert's read holds because a placement and an
+erasure for one customer take one lock and run one after the other. Without
+it the read and the insert could fall either side of the erasure, and the
+order was stamped under nothing and never erased.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

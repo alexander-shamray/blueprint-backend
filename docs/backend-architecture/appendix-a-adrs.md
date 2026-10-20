@@ -143,6 +143,7 @@ decision looks wrong.
 | **ADR-134** | [Each image has a `main` tag that names its newest signed build, and Compose names the image beside its build (#1111), adding to ADR-109](adr/ADR-134-each-image-has-a-main-tag-that-names-its-newest-signed-build-and-compose-names-the-image-beside-its-build-1111-adding-to-adr-109.md) |
 | **ADR-135** | [A saved address carries the erasure requests its customer was already under when it was saved (#1172), amending ADR-107](adr/ADR-135-a-saved-address-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-saved-1172-amending-adr-107.md) |
 | **ADR-136** | [An operator may amend an unclosed erasure request's responder set, recorded with who, when and why (#1177), amending ADR-092](adr/ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md) |
+| **ADR-137** | [A placement and an erasure for one customer take one application lock and run one after the other (#1191), amending ADR-099](adr/ADR-137-a-placement-and-an-erasure-for-one-customer-take-one-application-lock-and-run-one-after-the-other-1191-amending-adr-099.md) |
 
 ---
 

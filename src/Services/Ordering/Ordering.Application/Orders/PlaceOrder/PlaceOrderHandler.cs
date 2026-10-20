@@ -39,7 +39,8 @@ public sealed class PlaceOrderHandler(
             });
 
         // Read in the unit that inserts the order, so a holder can tell an order placed after an erasure from the
-        // one the erasure was for (ADR-099).
+        // one the erasure was for (ADR-099), and under the lock, so an erasure is either read here or erases it.
+        await erasures.LockSubjectAsync(currentUser.Id, ct);
         IReadOnlyList<Guid> erasedUnder = await erasures.RequestsErasingAsync(currentUser.Id, ct);
 
         var order = Order.Place(

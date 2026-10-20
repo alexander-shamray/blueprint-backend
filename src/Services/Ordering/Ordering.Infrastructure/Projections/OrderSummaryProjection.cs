@@ -25,11 +25,13 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
     private const string PlacedSql =
         """
         MERGE ordering.OrderSummaries WITH (HOLDLOCK) AS target
-        -- An order already erased (the empty id) must not bring its buyer back through a late placement.
+        -- An order already erased (the empty id) must not bring its buyer back through a late placement. The order
+        -- is read by its key alone and held to the insert, so an erasure not yet at it finds the summary (ADR-137).
         USING (
             SELECT OrderId = @OrderId,
                 CustomerId = CASE
-                    WHEN EXISTS (SELECT 1 FROM ordering.Orders WHERE Id = @OrderId AND CustomerId = @Erased) THEN NULL
+                    WHEN (SELECT CustomerId FROM ordering.Orders WITH (REPEATABLEREAD) WHERE Id = @OrderId) = @Erased
+                    THEN NULL
                     ELSE @CustomerId
                 END) AS source
             ON target.OrderId = source.OrderId
