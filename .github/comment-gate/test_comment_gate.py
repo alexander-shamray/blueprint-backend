@@ -699,8 +699,10 @@ class TheGateOnARepository(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stdout)
 
     def test_an_added_line_past_the_budget_fails_the_run(self):
+        marked = chr(0xFEFF) + "x(" + "a" * 116 + ");\n"
+        self.assertEqual(len(marked.rstrip("\n")), 121)
         self.write("Wide.cs", "x(" + "a" * 117 + ");\n")
-        self.write("Marked.cs", "﻿x(" + "a" * 116 + ");\n")
+        self.write("Marked.cs", marked)
         self.commit("change")
         result = self.run_gate()
         self.assertEqual(result.returncode, 1, result.stdout)
