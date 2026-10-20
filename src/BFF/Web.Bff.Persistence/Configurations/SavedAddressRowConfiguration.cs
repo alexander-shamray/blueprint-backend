@@ -20,5 +20,8 @@ internal sealed class SavedAddressRowConfiguration : IEntityTypeConfiguration<Sa
         builder.Property(a => a.PostalCode).HasMaxLength(AddressLimits.PostalCodeMaxLength);
         builder.Property(a => a.Country).HasMaxLength(AddressLimits.CountryLength).IsFixedLength();
         builder.Property(a => a.SavedAt);
+
+        // A row saved before the column existed was saved under no request, which is what the empty list says.
+        builder.Property(a => a.ErasedUnder).HasColumnType("nvarchar(max)").HasDefaultValueSql("N'[]'");
     }
 }

@@ -1,7 +1,10 @@
 using System.Diagnostics.Metrics;
+using System.Net;
+using System.Net.Http.Json;
 using Common.Application;
 using Common.Domain;
 using Common.Contracts.Privacy.V1;
+using Web.Bff.Addresses;
 using Web.Bff.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -117,6 +120,29 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
         (await fixture.ScalarAsync<int>(
             "SELECT Value = Count FROM bff.PersonalDataErasures WHERE RequestId = {0}",
             request)).ShouldBe(1, "the address is counted with what the request erased (ADR-107)");
+    }
+
+    [Fact]
+    public async Task An_address_saved_after_an_erasure_is_kept_when_that_request_is_reissued()
+    {
+        Guid request = Guid.CreateVersion7();
+        await PublishRequestAsync(request);
+        await SaveAddressAsync();
+
+        await PublishRequestAsync(request, Requested(request, Guid.CreateVersion7()));
+
+        (await CountAddressesAsync(Subject)).ShouldBe(1, "the address was saved under the request, not before it");
+    }
+
+    [Fact]
+    public async Task A_later_request_deletes_an_address_saved_under_an_earlier_one()
+    {
+        await PublishRequestAsync(Guid.CreateVersion7());
+        await SaveAddressAsync();
+
+        await PublishRequestAsync(Guid.CreateVersion7());
+
+        (await CountAddressesAsync(Subject)).ShouldBe(0);
     }
 
     [Fact]
@@ -239,6 +265,20 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
             "INSERT INTO bff.SavedAddresses (CustomerId, Line1, City, PostalCode, Country, SavedAt) " +
             "VALUES ({0}, N'1 Test Street', N'Testville', N'T1', N'KZ', SYSDATETIMEOFFSET())",
             customer);
+
+    /// <summary>Through the route, so the save reads the audit rows as a customer's own save does.</summary>
+    private async Task SaveAddressAsync()
+    {
+        using HttpClient client = fixture.Factory.CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Subject.ToString());
+
+        using HttpResponseMessage response = await client.PutAsJsonAsync(
+            "/v1/saved-address",
+            new SavedAddress("1 Test Street", null, "Testville", "T1", "KZ"),
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
 
     private Task<int> CountAddressesAsync(Guid customer) =>
         fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM bff.SavedAddresses WHERE CustomerId = {0}", customer);

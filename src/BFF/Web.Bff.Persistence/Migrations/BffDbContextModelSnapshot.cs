@@ -242,6 +242,13 @@ namespace Web.Bff.Persistence.Migrations
                         .HasColumnType("nchar(2)")
                         .IsFixedLength();
 
+                    b.Property<string>("ErasedUnder")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValueSql("N'[]'");
+
                     b.Property<string>("Line1")
                         .IsRequired()
                         .HasMaxLength(200)

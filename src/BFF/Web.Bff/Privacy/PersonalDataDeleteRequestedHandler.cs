@@ -6,7 +6,9 @@ using Web.Bff.Persistence;
 
 namespace Web.Bff.Privacy;
 
-/// <summary>Deletes the subject's order rows and lines, audits it, then tells Privacy once it commits (ADR-092).</summary>
+/// <summary>
+/// Deletes the subject's order rows, lines and saved address, audits it, then tells Privacy once it commits (ADR-092).
+/// </summary>
 /// <remarks>
 /// Public, because §6.2's scan is public-only. The report follows the commit, since a send inside the
 /// execution strategy's retry would repeat (ADR-094); a request already seen repeats rather than fails (§11.7).
@@ -56,9 +58,15 @@ public sealed class PersonalDataDeleteRequestedHandler(
                     """,
                     ct);
 
-                // The saved address is the subject's own row, counted with the orders (ADR-107).
+                // The saved address is counted with the orders (ADR-107), and one saved under this request stays.
+                // HOLDLOCK keeps the key to the commit where there is no row, so a save meanwhile reads the audit
+                // row and stamps it (ADR-135).
                 deleted += await db.Database.ExecuteSqlInterpolatedAsync(
-                    $"DELETE FROM bff.SavedAddresses WHERE CustomerId = {integrationEvent.SubjectId}",
+                    $"""
+                    DELETE a FROM bff.SavedAddresses AS a WITH (HOLDLOCK)
+                    WHERE a.CustomerId = {integrationEvent.SubjectId}
+                        AND NOT EXISTS (SELECT 1 FROM OPENJSON(a.ErasedUnder) AS u WHERE u.value = {requestId})
+                    """,
                     ct);
 
                 PersonalDataErasure? seen = await db.PersonalDataErasures

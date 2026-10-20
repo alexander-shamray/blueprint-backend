@@ -1,6 +1,8 @@
 using System.Data;
+using System.Text.Json;
 using Common.Application;
 using Dapper;
+using Web.Bff.Privacy;
 
 namespace Web.Bff.Addresses;
 
@@ -14,6 +16,17 @@ public sealed class SavedAddressStore(IDbConnectionFactory connections, TimeProv
         WHERE CustomerId = @CustomerId;
         """;
 
+    /// <summary>
+    /// The customer's key, held to the commit even where there is no row, so an erasure's delete waits for the save
+    /// or the save waits for the erasure's audit row and then reads it (ADR-135).
+    /// </summary>
+    private const string LockSql =
+        """
+        SELECT CustomerId
+        FROM bff.SavedAddresses WITH (UPDLOCK, HOLDLOCK)
+        WHERE CustomerId = @CustomerId;
+        """;
+
     /// <summary>HOLDLOCK, so two saves racing for a customer's first row cannot both insert.</summary>
     private const string SaveSql =
         """
@@ -21,10 +34,10 @@ public sealed class SavedAddressStore(IDbConnectionFactory connections, TimeProv
         USING (SELECT CustomerId = @CustomerId) AS source ON target.CustomerId = source.CustomerId
         WHEN MATCHED THEN
             UPDATE SET Line1 = @Line1, Line2 = @Line2, City = @City, PostalCode = @PostalCode,
-                Country = @Country, SavedAt = @SavedAt
+                Country = @Country, SavedAt = @SavedAt, ErasedUnder = @ErasedUnder
         WHEN NOT MATCHED THEN
-            INSERT (CustomerId, Line1, Line2, City, PostalCode, Country, SavedAt)
-            VALUES (@CustomerId, @Line1, @Line2, @City, @PostalCode, @Country, @SavedAt);
+            INSERT (CustomerId, Line1, Line2, City, PostalCode, Country, SavedAt, ErasedUnder)
+            VALUES (@CustomerId, @Line1, @Line2, @City, @PostalCode, @Country, @SavedAt, @ErasedUnder);
         """;
 
     private const string DeleteSql = "DELETE FROM bff.SavedAddresses WHERE CustomerId = @CustomerId;";
@@ -41,10 +54,21 @@ public sealed class SavedAddressStore(IDbConnectionFactory connections, TimeProv
             : Result.Success(row);
     }
 
-    /// <summary>Replaces whatever the customer had; a repeat of the same request leaves the same row.</summary>
+    /// <summary>
+    /// Replaces whatever the customer had, stamped with the erasures already applied to them, which each keep it;
+    /// a repeat of the same request leaves the same row.
+    /// </summary>
     public async Task SaveAsync(Guid customerId, SavedAddress address, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
+        connection.Open();
+        using IDbTransaction transaction = connection.BeginTransaction();
+
+        await connection.ExecuteAsync(
+            new CommandDefinition(LockSql, new { CustomerId = customerId }, transaction, cancellationToken: ct));
+
+        IReadOnlyList<Guid> erasedUnder =
+            await SqlErasedSubjects.RequestsNamingAsync(connection, transaction, customerId, ct);
 
         await connection.ExecuteAsync(
             new CommandDefinition(
@@ -57,9 +81,13 @@ public sealed class SavedAddressStore(IDbConnectionFactory connections, TimeProv
                     address.City,
                     address.PostalCode,
                     address.Country,
-                    SavedAt = clock.GetUtcNow()
+                    SavedAt = clock.GetUtcNow(),
+                    ErasedUnder = JsonSerializer.Serialize(erasedUnder)
                 },
+                transaction,
                 cancellationToken: ct));
+
+        transaction.Commit();
     }
 
     /// <summary>Deletes the customer's row, if any; a customer with none is as they asked to be left.</summary>
