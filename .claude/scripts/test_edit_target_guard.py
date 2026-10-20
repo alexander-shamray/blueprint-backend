@@ -159,9 +159,8 @@ class GuardCase(unittest.TestCase):
               project=None, process_cwd=None):
         """The hook's verdict on one call: the reason, or `None` for allowed.
 
-        `cwd` is the event's, which the hook resolves a relative path against;
-        `process_cwd` is the directory the hook process itself starts in, and
-        is the runner's own when left `None`.
+        `cwd` is the event's, which a relative path resolves against;
+        `process_cwd` is where the hook process starts, the runner's if `None`.
         """
         event = {
             "hook_event_name": "PreToolUse",
