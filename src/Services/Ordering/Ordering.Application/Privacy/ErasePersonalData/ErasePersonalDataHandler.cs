@@ -16,6 +16,9 @@ public sealed class ErasePersonalDataHandler(
 {
     public async Task<Result<int>> HandleAsync(ErasePersonalDataCommand command, CancellationToken ct)
     {
+        // Before the statements, so a placement already holding it has committed its order before they run (ADR-137).
+        await erasures.LockSubjectAsync(command.SubjectId, ct);
+
         int count = await store.AnonymiseOrdersAsync(command.SubjectId, command.RequestId, ct) +
             await store.AnonymiseSummariesAsync(command.SubjectId, command.RequestId, ct);
         DateTimeOffset now = clock.GetUtcNow();

@@ -941,7 +941,8 @@ public sealed class PlaceOrderHandler(
             });
 
         // Read in the unit that inserts the order, so a holder can tell an order placed after an erasure from the
-        // one the erasure was for (ADR-099).
+        // one the erasure was for (ADR-099), and under the lock, so an erasure is either read here or erases it.
+        await erasures.LockSubjectAsync(currentUser.Id, ct);
         IReadOnlyList<Guid> erasedUnder = await erasures.RequestsErasingAsync(currentUser.Id, ct);
 
         var order = Order.Place(
@@ -1672,19 +1673,29 @@ absent from §9.3's publish allow-list: `AwaitingPayment` is a state the
 customer sees on their own history screen and no other service has any
 business knowing.
 
-The placement is one `MERGE`:
+The placement is one `MERGE`. Its source reads the order, so an order already
+erased does not bring its buyer back, and holds that row until the insert
+commits, so an erasure not yet at it finds the summary
+([ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md),
+[ADR-137](adr/ADR-137-a-placement-and-an-erasure-for-one-customer-take-one-application-lock-and-run-one-after-the-other-1191-amending-adr-099.md)):
 
 ```sql
 MERGE ordering.OrderSummaries WITH (HOLDLOCK) AS target
-USING (SELECT OrderId = @OrderId) AS source
+USING (
+    SELECT OrderId = @OrderId,
+        CustomerId = CASE
+            WHEN (SELECT CustomerId FROM ordering.Orders WITH (REPEATABLEREAD) WHERE Id = @OrderId) = @Erased
+            THEN NULL
+            ELSE @CustomerId
+        END) AS source
     ON target.OrderId = source.OrderId
 WHEN NOT MATCHED THEN
     INSERT (OrderId, CustomerId, Status, TotalAmount, Currency, LineCount, Products, PlacedAt, UpdatedAt)
-    VALUES (@OrderId, @CustomerId, @Status, @Total, @Currency, @LineCount, @Products, @OccurredAt, @OccurredAt)
+    VALUES (@OrderId, source.CustomerId, @Status, @Total, @Currency, @LineCount, @Products, @OccurredAt, @OccurredAt)
 -- PlacedAt IS NULL fires once: a redelivery finds it set and writes nothing.
 WHEN MATCHED AND target.PlacedAt IS NULL THEN
     UPDATE SET
-        CustomerId  = @CustomerId,
+        CustomerId  = source.CustomerId,
         TotalAmount = @Total,
         Currency    = @Currency,
         LineCount   = @LineCount,

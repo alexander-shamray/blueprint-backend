@@ -15,10 +15,24 @@ public class ErasePersonalDataHandlerTests
 
     private static readonly ErasePersonalDataCommand Command = new(Request, Subject);
 
-    private readonly FakeStore _store = new();
-    private readonly FakeErasures _erasures = new();
+    private readonly FakeStore _store;
+    private readonly FakeErasures _erasures;
+
+    public ErasePersonalDataHandlerTests()
+    {
+        _store = new FakeStore();
+        _erasures = new FakeErasures(_store);
+    }
 
     private ErasePersonalDataHandler Handler() => new(_store, _erasures, new FixedClock(Now));
+
+    [Fact]
+    public async Task The_subject_is_locked_before_either_statement_runs()
+    {
+        await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
+
+        _erasures.Locked.ShouldBe([(Subject, 0)], "a placement holding the lock has to commit before they look");
+    }
 
     [Fact]
     public async Task Orders_and_summaries_are_both_anonymised_and_the_audit_row_counts_them()
@@ -85,14 +99,23 @@ public class ErasePersonalDataHandlerTests
         }
     }
 
-    private sealed class FakeErasures : IPersonalDataErasureRepository
+    private sealed class FakeErasures(FakeStore store) : IPersonalDataErasureRepository
     {
         public Dictionary<Guid, PersonalDataErasure> Existing { get; } = [];
+
+        /// <summary>Each subject locked, with how many statements had already run when it was.</summary>
+        public List<(Guid Subject, int StatementsBefore)> Locked { get; } = [];
 
         public List<PersonalDataErasure> Added { get; } = [];
 
         public Task<PersonalDataErasure?> GetAsync(Guid requestId, CancellationToken ct) =>
             Task.FromResult(Existing.GetValueOrDefault(requestId));
+
+        public Task LockSubjectAsync(Guid subjectId, CancellationToken ct)
+        {
+            Locked.Add((subjectId, store.Subjects.Count));
+            return Task.CompletedTask;
+        }
 
         public Task<IReadOnlyList<Guid>> RequestsErasingAsync(Guid subjectId, CancellationToken ct) =>
             throw new NotSupportedException();
