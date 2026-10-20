@@ -22,9 +22,9 @@ HEADER = "| Service | Owns | Publishes (events) | Consumes (events) | Accepts (c
 
 # What the code says, each read where the registration lives (§9.3, §9.4, §9.6).
 TO_CONTRACT = re.compile(r"private static (\w+) ToContract\(")
-BOUND_EVENT = re.compile(r"ConfigureConsumer<IntegrationEventConsumer<(\w+)>>")
+BOUND_EVENT = re.compile(r"ConfigureConsumer<\s*IntegrationEventConsumer<\s*(\w+)\s*>\s*>")
 SAGA_EVENT = re.compile(r"public Event<(\w+)> \w+ \{")
-BOUND_COMMAND = re.compile(r"ConfigureConsumer<CommandConsumer<(\w+),")
+BOUND_COMMAND = re.compile(r"ConfigureConsumer<\s*CommandConsumer<\s*(\w+)\s*,")
 NAMED = re.compile(r"`(\w+)`")
 ROW_NAME = re.compile(r"^\*\*([\w.]+)\*\*")
 OWED_LINE = re.compile(r"^([\w.]+) (publishes|consumes|accepts) (\w+) (#\d+)$")
