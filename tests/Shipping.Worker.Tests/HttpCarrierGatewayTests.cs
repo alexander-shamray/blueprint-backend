@@ -1,4 +1,5 @@
 using Common.TestSupport;
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -68,6 +69,30 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
 
     private int Calls(string path) =>
         _server.LogEntries.Count(e => e.RequestMessage!.Path == path);
+
+    /// <summary>The unavailable count of a call that ran inside one attempt, made again if it did not.</summary>
+    /// <remarks>
+    /// A call past <see cref="CarrierHop.AttemptTimeout"/> counted the timed-out attempt and then the retry, so it
+    /// measured the host's load and not the adapter. Three stalled calls in a row fail rather than pass.
+    /// </remarks>
+    private async Task<long> UnavailableCountedWithinAnAttempt(Func<Task> call)
+    {
+        const int tries = 3;
+
+        for (int attempt = 0; attempt < tries; attempt++)
+        {
+            using OutboundCount counted = OutboundCounter.Unavailable(_factory.Services);
+            Stopwatch clock = Stopwatch.StartNew();
+
+            await call();
+
+            if (clock.Elapsed < CarrierHop.AttemptTimeout)
+                return counted.Value;
+        }
+
+        throw new InvalidOperationException(
+            $"Every one of {tries} calls ran past the {CarrierHop.AttemptTimeout.TotalSeconds}s attempt timeout.");
+    }
 
     [Fact]
     public async Task An_ordinary_address_books_and_the_key_is_the_shipments()
@@ -409,12 +434,11 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
                     .WithStatusCode(201)
                     .WithHeader("Content-Type", "application/json; charset=bogus")
                     .WithBody("{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"t\"}"));
-        using OutboundCount counted = OutboundCounter.Unavailable(_factory.Services);
+        long counted = await UnavailableCountedWithinAnAttempt(() =>
+            Should.ThrowAsync<CarrierUnavailableException>(() =>
+                Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken)));
 
-        await Should.ThrowAsync<CarrierUnavailableException>(() =>
-            Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
-
-        counted.Value.ShouldBe(1, "one attempt, answered with a body this adapter cannot read");
+        counted.ShouldBe(1, "one attempt, answered with a body this adapter cannot read");
     }
 
     [Theory]
@@ -434,12 +458,11 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
                     .Create()
                     .WithStatusCode(201)
                     .WithBodyAsJson(new { status = "booked", reference = "crr_x", trackingNumber = tracking }));
-        using OutboundCount counted = OutboundCounter.Unavailable(_factory.Services);
+        long counted = await UnavailableCountedWithinAnAttempt(() =>
+            Should.ThrowAsync<CarrierUnavailableException>(() =>
+                Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken)));
 
-        await Should.ThrowAsync<CarrierUnavailableException>(() =>
-            Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
-
-        counted.Value.ShouldBe(1, "the despatch email carries it word for word, so only the alphabet passes (ADR-084)");
+        counted.ShouldBe(1, "the despatch email carries it word for word, so only the alphabet passes (ADR-084)");
     }
 
     [Theory]
