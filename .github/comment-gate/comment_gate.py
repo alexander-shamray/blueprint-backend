@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""The comments a pull request adds, judged against the style guide's rule.
+"""The comments and C# lines a pull request adds, against the style guide.
 
-`docs/style-guide.md`'s *Comments* section is the rule; what this reads, what
-it judges and what it leaves to the reviewer are the README's. Exit 0 passes,
-1 names each finding, and 2 is a diff or a file it could not read.
+The guide's *Comments* and *Wrapping* rule; exit 1 is a finding, 2 a refusal.
 """
 
 import argparse
@@ -19,6 +17,11 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 BLOCK_LIMIT = 5
+
+# The style guide's *Wrapping* budget for a line of C#, and the generated
+# files it exempts: a migration and its snapshot, and a designer.
+WIDTH_LIMIT = 120
+GENERATED = re.compile(r"(?:^|/)Migrations/|\.Designer\.cs$")
 
 # A section, an Appendix E section, an ADR or a symbol: the owners a
 # `<remarks>` may exist to cite.
@@ -696,12 +699,14 @@ def _line_starts(text):
 
 @dataclass(frozen=True)
 class Line:
-    """One line: its number, its comment text, and whether it holds only that."""
+    """One line: its number, its comment text, whether it holds only that, and
+    its width in characters, its line break not counted."""
 
     number: int
     said: str
     comment: bool
     blank: bool
+    width: int
 
 
 def scan(path, text):
@@ -724,7 +729,7 @@ def scan(path, text):
                        for k, ch in enumerate(text[start:stop], start))
         lines.append(Line(number, said,
                           _comment_only(text, whole, start, stop, end),
-                          not text[start:stop].strip()))
+                          not text[start:stop].strip(), stop - start))
     return lines
 
 
@@ -756,6 +761,11 @@ def findings(path, lines, added):
 
     if path.endswith(".cs"):
         found.extend(_uncited_remarks(path, lines, added))
+    if path.endswith(".cs") and not GENERATED.search(path):
+        found.extend((path, line.number, f"a line runs {line.width} columns, "
+                                         f"over {WIDTH_LIMIT}")
+                     for line in lines
+                     if line.number in added and line.width > WIDTH_LIMIT)
     return sorted(found, key=lambda finding: finding[1])
 
 

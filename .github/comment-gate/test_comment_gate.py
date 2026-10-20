@@ -420,6 +420,48 @@ class TheRemarksRule(unittest.TestCase):
             judged("A.cs", 'var s = "<remarks>x</remarks>";\n'), [])
 
 
+class TheWidthRule(unittest.TestCase):
+    def line(self, width, lead="x(", tail=");"):
+        return lead + "a" * (width - len(lead) - len(tail)) + tail + "\n"
+
+    def test_the_budget_is_120_columns(self):
+        self.assertEqual(gate.WIDTH_LIMIT, 120)
+
+    def test_the_budget_passes_and_one_column_more_fails(self):
+        self.assertEqual(len(self.line(121).rstrip("\n")), 121)
+        self.assertEqual(judged("A.cs", self.line(120)), [])
+        self.assertEqual(judged("A.cs", "x();\n" + self.line(121)),
+                         [("A.cs", 2, "a line runs 121 columns, over 120")])
+
+    def test_comments_and_literals_are_measured_as_code_is(self):
+        for lead, tail in (("// ", "."), ("/// ", "."),
+                           ('var s = """', '""";'), ('var s = $"', '";')):
+            with self.subTest(lead=lead):
+                self.assertEqual(
+                    len(judged("A.cs", self.line(121, lead, tail))), 1)
+
+    def test_a_line_break_is_not_a_column(self):
+        self.assertEqual(judged("A.cs", self.line(120).replace("\n", "\r\n")),
+                         [])
+
+    def test_only_added_lines_are_measured(self):
+        text = self.line(121) + "x();\n"
+        self.assertEqual(judged("A.cs", text, {2}), [])
+
+    def test_generated_migrations_and_designers_are_exempt(self):
+        for path in ("src/A.Infrastructure/Persistence/Migrations/1_Init.cs",
+                     "Migrations/Snapshot.cs", "src/Form.Designer.cs"):
+            with self.subTest(path=path):
+                self.assertEqual(judged(path, self.line(121)), [])
+        self.assertEqual(len(judged("src/MigrationsRunner.cs",
+                                    self.line(121))), 1)
+
+    def test_only_csharp_is_measured(self):
+        for path in ("a.py", "a.sh", "a.yml", "A.csproj"):
+            with self.subTest(path=path):
+                self.assertEqual(judged(path, "x" * 121 + "\n"), [])
+
+
 class TheDiff(unittest.TestCase):
     def test_hunks_give_the_added_line_numbers(self):
         diff = ("diff --git a/A.cs b/A.cs\n"
@@ -656,6 +698,16 @@ class TheGateOnARepository(unittest.TestCase):
         result = self.run_gate(base="HEAD")
         self.assertEqual(result.returncode, 2, result.stdout)
 
+    def test_an_added_line_past_the_budget_fails_the_run(self):
+        self.write("Wide.cs", "x(" + "a" * 117 + ");\n")
+        self.write("Marked.cs", "﻿x(" + "a" * 116 + ");\n")
+        self.commit("change")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("::error file=Wide.cs,line=1::a line runs 121 columns, "
+                      "over 120", result.stdout)
+        self.assertNotIn("Marked.cs", result.stdout)
+
     def test_a_file_that_is_not_utf8_refuses_the_run(self):
         self.write("Latin.cs", "// café\n", encoding="latin-1")
         self.commit("change")
@@ -715,6 +767,20 @@ class TheShippedTree(unittest.TestCase):
             with self.subTest(path=path):
                 text = (ROOT / path).read_text(encoding="utf-8-sig")
                 gate.judge(path, text, set())
+
+    def test_no_tracked_csharp_line_runs_past_the_budget(self):
+        listed = subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "-z", "--", "*.cs"],
+            capture_output=True, check=True).stdout
+        paths = [p for p in listed.decode("utf-8").split("\0") if p]
+        self.assertGreater(len(paths), 1000)
+        wide = []
+        for path in paths:
+            text = (ROOT / path).read_text(encoding="utf-8-sig")
+            every = set(range(1, text.count("\n") + 2))
+            wide.extend(f"{p}:{n}" for p, n, message in
+                        gate.judge(path, text, every) if "columns" in message)
+        self.assertEqual(wide, [])
 
 
 if __name__ == "__main__":
