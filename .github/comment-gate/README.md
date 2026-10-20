@@ -25,12 +25,13 @@ this gate is their mechanical half.
   Markdown, a Dockerfile, a Helm template, PowerShell — is
   not read. A file that is not UTF-8, or Python that does not parse, refuses
   the run.
-- **Every comment token, and nothing inside another literal.** A trailing
-  comment is judged as much as a whole-line one, so `Call(); // PR-1` fails,
-  and a Python docstring is a comment. A string, a character literal, a
-  C# directive's message, a shell heredoc or quoted word, a YAML quoted or
-  block scalar and an MSBuild CDATA section are code, so a comment-shaped
-  literal is not judged. The scaffold's templates are Python literals for
+- **Every comment token, and nothing inside another literal as one.** A
+  trailing comment is judged as much as a whole-line one, so
+  `Call(); // PR-1` fails, and a Python docstring is a comment. A string, a
+  character literal, a C# directive's message, a shell heredoc or quoted
+  word, a YAML quoted or block scalar and an MSBuild CDATA section are code,
+  so a comment-shaped literal is not judged as a comment; only the width
+  below measures it. The scaffold's templates are Python literals for
   that reason: the gate judges the service the scaffold renders when that
   service is committed, not the strings it renders from.
 - **A workflow's `run:` block as the shell it is.** It is a YAML block scalar,
