@@ -253,6 +253,39 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
+    public async Task A_reissue_keeps_a_device_registered_after_its_first_pass_and_a_later_request_clears_it()
+    {
+        Guid subject = Guid.CreateVersion7();
+        Guid installation = Guid.CreateVersion7();
+        Guid request = Guid.CreateVersion7();
+        await EraseAsync(request, subject);
+
+        await RegisterAsync(subject, installation, "token-a", 1);
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM notifications.DeviceInstallations WHERE InstallationId = {0}",
+            installation)).ShouldBe($"[\"{request}\"]", "registered under the request it read");
+
+        (await EraseAsync(request, subject)).ShouldBe(0);
+        (await TokenAsync(installation)).ShouldBe("token-a", "the subject's own act after the request (ADR-138)");
+
+        (await EraseAsync(Guid.CreateVersion7(), subject)).ShouldBe(1);
+        (await TokenAsync(installation)).ShouldBeNull();
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM notifications.DeviceInstallations WHERE InstallationId = {0}",
+            installation)).ShouldBe("[]", "the requests go with the subject");
+    }
+
+    private async Task<int> EraseAsync(Guid request, Guid subject)
+    {
+        await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+        Result<int> erased = await scope.ServiceProvider.GetRequiredService<IDispatcher>().SendAsync(
+            new ErasePersonalDataCommand(request, subject),
+            TestContext.Current.CancellationToken);
+
+        return erased.Value;
+    }
+
+    [Fact]
     public async Task The_retention_pass_deletes_a_row_unseen_for_the_stale_window_and_keeps_a_fresher_one()
     {
         Guid stale = Guid.CreateVersion7();

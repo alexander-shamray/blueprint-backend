@@ -15,4 +15,5 @@ internal sealed class DeviceInstallationRow
     public long Sequence { get; set; }
     public DateTimeOffset? RegisteredAt { get; set; }
     public DateTimeOffset LastSeenAt { get; set; }
+    public string ErasedUnder { get; set; } = "[]";
 }

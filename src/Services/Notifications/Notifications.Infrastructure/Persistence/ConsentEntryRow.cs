@@ -17,4 +17,5 @@ internal sealed class ConsentEntryRow
     public Guid? SupersedesEntryId { get; set; }
     public int Position { get; set; }
     public DateTimeOffset? AnonymisedAt { get; set; }
+    public string ErasedUnder { get; set; } = "[]";
 }

@@ -43,6 +43,9 @@ public class ErasePersonalDataHandlerTests
         row.Count.ShouldBe(24, "the push design's section 6: the count includes the deliveries");
         _store.ConsentStampedAt.ShouldBe(Now, "ADR-120: the anonymising stamps when it ran");
         row.SubjectHash.ShouldBe(PersonalDataErasure.HashSubject(Request, Subject));
+        _store.Requests.ShouldBe(
+            Enumerable.Repeat(Request, 7),
+            "every statement but the contact's keeps what was written under the request (ADR-138)");
     }
 
     [Fact]
@@ -91,17 +94,23 @@ public class ErasePersonalDataHandlerTests
 
         public List<string> Calls { get; } = [];
 
-        public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, CancellationToken ct) => Run("waiting", Waiting);
+        /// <summary>The request each statement that keeps what was written under it was handed.</summary>
+        public List<Guid> Requests { get; } = [];
 
-        public Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, CancellationToken ct) => Run("ended", Ended);
+        public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+            Run("waiting", Waiting, requestId);
 
-        public Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
-            Run("waiting deliveries", WaitingDeliveries);
+        public Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+            Run("ended", Ended, requestId);
 
-        public Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
-            Run("ended deliveries", EndedDeliveries);
+        public Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+            Run("waiting deliveries", WaitingDeliveries, requestId);
 
-        public Task<int> DeleteOrderRecordsAsync(Guid subjectId, CancellationToken ct) => Run("orders", Orders);
+        public Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+            Run("ended deliveries", EndedDeliveries, requestId);
+
+        public Task<int> DeleteOrderRecordsAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+            Run("orders", Orders, requestId);
 
         public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) => Run("contact", Contacts);
 
@@ -120,17 +129,25 @@ public class ErasePersonalDataHandlerTests
         public Task<int> DeleteOrderRecordAsync(Guid subjectId, Guid orderId, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct) => Run("devices", Devices);
+        public Task<int> ClearDevicesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+            Run("devices", Devices, requestId);
 
-        public Task<int> AnonymiseConsentAsync(Guid subjectId, DateTimeOffset now, CancellationToken ct)
+        public Task<int> AnonymiseConsentAsync(
+            Guid subjectId,
+            Guid requestId,
+            DateTimeOffset now,
+            CancellationToken ct)
         {
             ConsentStampedAt = now;
-            return Run("consent", Consent);
+            return Run("consent", Consent, requestId);
         }
 
-        private Task<int> Run(string call, int rows)
+        private Task<int> Run(string call, int rows, Guid? requestId = null)
         {
             Calls.Add(call);
+            if (requestId is { } request)
+                Requests.Add(request);
+
             return Task.FromResult(rows);
         }
     }
@@ -143,6 +160,9 @@ public class ErasePersonalDataHandlerTests
 
         public Task<PersonalDataErasure?> GetAsync(Guid requestId, CancellationToken ct) =>
             Task.FromResult(Existing.GetValueOrDefault(requestId));
+
+        public Task<IReadOnlyList<Guid>> RequestsErasingAsync(Guid subjectId, CancellationToken ct) =>
+            throw new NotSupportedException();
 
         public void Add(PersonalDataErasure erasure) => Added.Add(erasure);
     }

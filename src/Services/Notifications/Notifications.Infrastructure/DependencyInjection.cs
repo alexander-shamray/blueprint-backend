@@ -71,6 +71,10 @@ public static class DependencyInjection
         // ADR-120's journal: the API appends and reads it, and the worker reads it at send time.
         services.AddScoped<IConsentJournal, SqlConsentJournal>();
 
+        // §11.7's audit rows: the worker's erasure writes them, and the API's registrations and preference writes
+        // stamp from them (ADR-138); shared, as both hosts scan the handlers that take it.
+        services.AddScoped<IPersonalDataErasureRepository, PersonalDataErasureRepository>();
+
         // ADR-053's one options class, in both hosts since both read the required pairs; each host validates the
         // members it reads, so the API is not refused for the worker's windows (ADR-120).
         services
@@ -111,8 +115,7 @@ public static class DependencyInjection
         services.AddScoped<IPushDeliveryRepository, PushDeliveryRepository>();
         services.AddScoped<PushDevices>();
 
-        // §11.7's erasure: the audit row, the deletes in the unit's transaction and the report after it (ADR-094).
-        services.AddScoped<IPersonalDataErasureRepository, PersonalDataErasureRepository>();
+        // §11.7's erasure: the deletes in the unit's transaction and the report after it (ADR-094).
         services.AddScoped<INotificationsPersonalDataStore, SqlNotificationsPersonalDataStore>();
         services.AddScoped<IErasedSubjects, SqlErasedSubjects>();
         services.AddScoped<IErasureReporter, ErasureReporter>();

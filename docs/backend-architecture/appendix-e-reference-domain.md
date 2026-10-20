@@ -1239,7 +1239,7 @@ this case, and this table is the owner of what each edge of it erases:
 | Holder | Erases | Reports as |
 |---|---|---|
 | Ordering | `Orders.CustomerId` anonymised, address purged, `OrderSummaries.CustomerId` cleared, bar an order placed under the request, under the customer's lock a placement also takes (ADR-099, ADR-137) | `ordering` |
-| Notifications | ended `NotificationLog` and `PushDeliveries` rows anonymised, contacts, waiting notices, pending deliveries and `OrderRecords` deleted, device rows cleared to their installation id and sequence ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), keeping the last-seen time the retention pass deletes them by ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)), consent journal entries anonymised, keeping their topic, channel, opt-in, times, client and chain as the evidence that the sends before the erasure were lawful ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | `notifications` |
+| Notifications | ended `NotificationLog` and `PushDeliveries` rows anonymised, contacts, waiting notices, pending deliveries and `OrderRecords` deleted, device rows cleared to their installation id and sequence ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)), keeping the last-seen time the retention pass deletes them by ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)), consent journal entries anonymised, keeping their topic, channel, opt-in, times, client and chain as the evidence that the sends before the erasure were lawful ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)), bar an order placed under the request with its notices and deliveries, and a device row or entry written under it (ADR-099, ADR-138) | `notifications` |
 | Shipping | `DeliveryAddresses` rows deleted (ADR-052), `Shipments.ErasedUnder` emptied (ADR-103) | `shipping` |
 | Payments | `PaymentOrders.CustomerId` anonymised | `payments` |
 | The BFF | order ids recorded, the subject's `bff.Orders` rows and saved address deleted, bar one placed or saved under the request (ADR-098, ADR-099, ADR-107, ADR-135) | `bff` |
@@ -1634,8 +1634,10 @@ host's own chart, `deploy/helm/notifications-api/`, which admits `web-bff` on
 table.
 
 **Retention and erasure are ADR-117's**: a row not seen for
-`DeviceTokenOptions.StaleAfter` is deleted, and an erasure clears every row of
-the subject. The token is never a log attribute, a span attribute or part of
+`DeviceTokenOptions.StaleAfter` is deleted, and an erasure clears the
+subject's rows, bar one registered under the request
+([ADR-138](adr/ADR-138-notifications-erasure-keeps-what-was-written-under-its-request-1192-amending-adr-117-and-adr-120.md)).
+The token is never a log attribute, a span attribute or part of
 an exception's message ([§13.4](13-observability.md)).
 
 ### E.6.14 The notification preferences
@@ -1699,8 +1701,8 @@ a 500.
 
 **Retention and erasure are ADR-120's**: an entry no longer current is kept for
 `NotificationsJurisdictionOptions.ConsentRetention` and for as long as a kept
-send names it or the entry it ended, and an erasure anonymises every entry of
-the subject and keeps it.
+send names it or the entry it ended, and an erasure anonymises the subject's
+entries and keeps them, bar one written under the request (ADR-138).
 
 ## E.7 §12: the test strategy
 

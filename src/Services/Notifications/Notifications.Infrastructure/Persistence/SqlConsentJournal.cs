@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Text.Json;
 using Common.Application;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
@@ -61,8 +62,10 @@ internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnection
         IF (@ReadVersion IS NULL AND @NewestId IS NULL) OR @NewestId = @ReadVersion
         BEGIN
             INSERT notifications.ConsentEntries
-                (EntryId, SubjectId, Topic, Channel, OptedIn, WrittenAt, Client, SupersedesEntryId, Position)
-            VALUES (@EntryId, @SubjectId, @Topic, @Channel, @OptedIn, @Now, @Client, @ReadVersion, @Position);
+                (EntryId, SubjectId, Topic, Channel, OptedIn, WrittenAt, Client, SupersedesEntryId, Position,
+                ErasedUnder)
+            VALUES (@EntryId, @SubjectId, @Topic, @Channel, @OptedIn, @Now, @Client, @ReadVersion, @Position,
+                @ErasedUnder);
 
             SELECT 'Appended' AS Outcome, @EntryId AS EntryId, @OptedIn AS OptedIn, @Now AS WrittenAt,
                 @Client AS Client, @ReadVersion AS Supersedes;
@@ -106,7 +109,11 @@ internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnection
                 cancellationToken: ct));
     }
 
-    public async Task<ConsentAppend> AppendAsync(SetPreferenceCommand command, DateTimeOffset now, CancellationToken ct)
+    public async Task<ConsentAppend> AppendAsync(
+        SetPreferenceCommand command,
+        IReadOnlyList<Guid> erasedUnder,
+        DateTimeOffset now,
+        CancellationToken ct)
     {
         IDbContextTransaction? current = db.Database.CurrentTransaction;
 
@@ -131,7 +138,8 @@ internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnection
                     command.OptedIn,
                     command.ReadVersion,
                     Client = Ansi(command.Client, ConsentVocabulary.MaxClientLength),
-                    Now = now
+                    Now = now,
+                    ErasedUnder = JsonSerializer.Serialize(erasedUnder)
                 },
                 current.GetDbTransaction(),
                 cancellationToken: ct));
