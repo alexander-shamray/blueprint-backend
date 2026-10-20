@@ -188,6 +188,42 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
     }
 
     [Fact]
+    public async Task A_reissued_request_keeps_an_order_placed_under_it_with_its_notices_and_deliveries()
+    {
+        Guid request = Guid.CreateVersion7();
+        Guid kept = Guid.CreateVersion7();
+        Guid erased = Guid.CreateVersion7();
+        await fixture.OrderAsync(kept, Subject, [request]);
+        await fixture.OrderAsync(erased, Subject);
+
+        // Resolved to the subject, so each is found by its own customer id as well as through its order.
+        Notification keptWaiting = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, kept);
+        Notification keptEnded = await EndedAsync(kept, Subject, status: "Sent", TemplateKeys.OrderPlaced);
+        Notification erasedWaiting = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, erased);
+        await fixture.ExecuteAsync(
+            "UPDATE notifications.NotificationLog SET CustomerId = {0} WHERE NotificationId IN ({1}, {2})",
+            Subject,
+            keptWaiting.NotificationId,
+            erasedWaiting.NotificationId);
+        await DeliveryAsync(keptWaiting, "Pending");
+        await DeliveryAsync(keptEnded, "Sent");
+        await DeliveryAsync(erasedWaiting, "Pending");
+
+        await PublishRequestAsync(request);
+
+        (await fixture.OrderRecordAsync(kept)).ShouldNotBeNull("placed under the request, so not its to erase");
+        (await fixture.OrderRecordAsync(erased)).ShouldBeNull();
+        (await NoticeCountAsync(keptWaiting.NotificationId)).ShouldBe(1);
+        (await NoticeCountAsync(erasedWaiting.NotificationId)).ShouldBe(0);
+        Notification ended = await fixture.NotificationAsync(keptEnded.NotificationId);
+        ended.CustomerId.ShouldBe(Subject);
+        ended.Parameters.ShouldNotBeEmpty();
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM notifications.PushDeliveries WHERE CustomerId = {0} AND Languages = 'en'",
+            Subject)).ShouldBe(2, "the kept order's pending and sent deliveries, and not the erased order's");
+    }
+
+    [Fact]
     public async Task The_same_request_message_delivered_twice_is_erased_and_reported_once()
     {
         Guid request = Guid.CreateVersion7();
@@ -230,9 +266,22 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
         await Eventually(CountCompletionsAsync, expected: 1, because: "the inbox dropped the second delivery");
     }
 
-    private async Task<Notification> EndedAsync(Guid order, Guid? customer, string status)
+    private async Task DeliveryAsync(Notification notice, string status) =>
+        await fixture.ExecuteAsync(
+            "INSERT notifications.PushDeliveries (DeliveryId, NotificationId, InstallationId, Platform, Status, " +
+            "CreatedAt, Attempts, NextAttemptAt, CorrelationId, CustomerId, Languages) VALUES (NEWID(), {0}, " +
+            "NEWID(), 'fcm', {1}, SYSDATETIMEOFFSET(), 0, SYSDATETIMEOFFSET(), NEWID(), {2}, 'en');",
+            notice.NotificationId,
+            status,
+            Subject);
+
+    private async Task<Notification> EndedAsync(
+        Guid order,
+        Guid? customer,
+        string status,
+        string templateKey = TemplateKeys.OrderConfirmed)
     {
-        Notification notice = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+        Notification notice = await fixture.PendingAsync(templateKey, order);
         await fixture.ExecuteAsync(
             "UPDATE notifications.NotificationLog SET Status = {1}, Languages = 'en', " +
             "CompletedAt = SYSDATETIMEOFFSET() WHERE NotificationId = {0}",

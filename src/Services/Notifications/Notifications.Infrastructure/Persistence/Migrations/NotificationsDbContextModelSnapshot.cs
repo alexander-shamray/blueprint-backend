@@ -368,6 +368,13 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(255)");
 
+                    b.Property<string>("ErasedUnder")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValueSql("N'[]'");
+
                     b.Property<bool>("OptedIn")
                         .HasColumnType("bit");
 
@@ -438,6 +445,13 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .IsUnicode(false)
                         .HasColumnType("varchar(255)");
+
+                    b.Property<string>("ErasedUnder")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(max)")
+                        .HasDefaultValueSql("N'[]'");
 
                     b.Property<DateTimeOffset>("LastSeenAt")
                         .HasColumnType("datetimeoffset(7)");

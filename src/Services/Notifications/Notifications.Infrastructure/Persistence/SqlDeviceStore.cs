@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -16,8 +17,9 @@ namespace Notifications.Infrastructure.Persistence;
 internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptions options) : IDeviceStore
 {
     // What a sign-out leaves of a row: its installation id and sequence (ADR-117), and its last-seen time (ADR-118).
+    // The requests go with the subject, since one joined to an open request names it (ADR-138).
     private const string Cleared =
-        "SubjectId = NULL, Platform = NULL, AppId = NULL, Token = NULL, RegisteredAt = NULL";
+        "SubjectId = NULL, Platform = NULL, AppId = NULL, Token = NULL, RegisteredAt = NULL, ErasedUnder = N'[]'";
 
     private const string RegisterSql =
         $"""
@@ -53,8 +55,8 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
 
         IF @Current IS NULL
             INSERT notifications.DeviceInstallations
-                (InstallationId, SubjectId, Platform, AppId, Token, Sequence, RegisteredAt, LastSeenAt)
-            VALUES (@InstallationId, @SubjectId, @Platform, @AppId, @Token, @Sequence, @Now, @Now);
+                (InstallationId, SubjectId, Platform, AppId, Token, Sequence, RegisteredAt, LastSeenAt, ErasedUnder)
+            VALUES (@InstallationId, @SubjectId, @Platform, @AppId, @Token, @Sequence, @Now, @Now, @ErasedUnder);
         ELSE
             UPDATE notifications.DeviceInstallations
             SET RegisteredAt = CASE
@@ -63,7 +65,7 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
                     ELSE @Now
                 END,
                 SubjectId = @SubjectId, Platform = @Platform, AppId = @AppId, Token = @Token,
-                Sequence = @Sequence, LastSeenAt = @Now
+                Sequence = @Sequence, LastSeenAt = @Now, ErasedUnder = @ErasedUnder
             WHERE InstallationId = @InstallationId;
 
         UPDATE notifications.DeviceInstallations
@@ -120,7 +122,11 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
         SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
         """;
 
-    public Task<DeviceWrite> RegisterAsync(RegisterDeviceCommand command, DateTimeOffset now, CancellationToken ct) =>
+    public Task<DeviceWrite> RegisterAsync(
+        RegisterDeviceCommand command,
+        IReadOnlyList<Guid> erasedUnder,
+        DateTimeOffset now,
+        CancellationToken ct) =>
         DecideAsync(
             RegisterSql,
             new
@@ -133,7 +139,8 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
                 command.Sequence,
                 Now = now,
                 options.MaxSequenceStep,
-                options.MaxPerSubject
+                options.MaxPerSubject,
+                ErasedUnder = JsonSerializer.Serialize(erasedUnder)
             },
             ct);
 

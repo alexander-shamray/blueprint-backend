@@ -202,6 +202,14 @@ which confines the `DELETE`'s ownership rule to a live row, so a cleared row
 is ordered against any caller's sign-out and has its sequence moved by it,
 and keeps the row on a provider's invalid-token answer.
 
+**Amended by [ADR-138](ADR-138-notifications-erasure-keeps-what-was-written-under-its-request-1192-amending-adr-117-and-adr-120.md).**
+A row keeps the erasure requests Notifications had already applied to its
+subject when the registration read them, and the erasure clears it only when
+it does not list the request being handled, so "a later erasure request"
+holds for a reissue and a late copy of the same request as well, which
+clearing by the subject alone did not keep. A registration that raced the
+request's first pass lists nothing and is still cleared by a reissue.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

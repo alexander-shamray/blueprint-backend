@@ -14,12 +14,24 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
     private const string SubjectsOrders =
         "SELECT OrderId FROM notifications.OrderRecords WHERE CustomerId = @SubjectId";
 
+    // An order whose record lists the request was placed under it, so it is not the request's to erase, nor are its
+    // notices and their deliveries (ADR-099, ADR-138). Completed by the caller's correlation on r.OrderId.
+    private const string PlacedUnder =
+        """
+        SELECT 1 FROM notifications.OrderRecords AS r CROSS APPLY OPENJSON(r.ErasedUnder) AS u
+        WHERE u.value = @RequestId
+        """;
+
+    // A device row or a journal entry written under the request, which the subject's own act made after it.
+    private const string WrittenUnder =
+        "EXISTS (SELECT 1 FROM OPENJSON(ErasedUnder) AS u WHERE u.value = @RequestId)";
+
     // The erasure's first statement, so it reads the records before anything is deleted. HOLDLOCK takes a range lock
     // even where the subject has no record, held to the commit that writes the audit row: an intake meanwhile
     // waits, and its erased check then sees that row. The read is its own step because a plan may skip a subquery
     // when no notice is there to compare, and uncounted, as the count is of what the erasure removed.
     private const string DeleteWaitingSql =
-        """
+        $"""
         SET NOCOUNT ON;
         DECLARE @Orders TABLE (OrderId uniqueidentifier NOT NULL);
 
@@ -27,35 +39,55 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK) WHERE CustomerId = @SubjectId;
 
         SET NOCOUNT OFF;
-        DELETE FROM notifications.NotificationLog
-        WHERE Status = 'Pending'
-            AND (CustomerId = @SubjectId OR OrderId IN (SELECT OrderId FROM @Orders));
+        DELETE n
+        FROM notifications.NotificationLog AS n
+        WHERE n.Status = 'Pending'
+            AND (n.CustomerId = @SubjectId OR n.OrderId IN (SELECT OrderId FROM @Orders))
+            AND NOT EXISTS ({PlacedUnder} AND r.OrderId = n.OrderId);
         """;
 
     // The ended row keeps what shows a notice was sent (ADR-053 rule 4) and loses what names the customer: the id, the
     // language tag chosen from their contact, and the values that were merged into the message.
     private const string AnonymiseEndedSql =
         $"""
-        UPDATE notifications.NotificationLog
+        UPDATE n
         SET CustomerId = NULL, Languages = NULL, Parameters = ''
-        WHERE Status <> 'Pending'
-            AND (CustomerId = @SubjectId OR OrderId IN ({SubjectsOrders}));
+        FROM notifications.NotificationLog AS n
+        WHERE n.Status <> 'Pending'
+            AND (n.CustomerId = @SubjectId OR n.OrderId IN ({SubjectsOrders}))
+            AND NOT EXISTS ({PlacedUnder} AND r.OrderId = n.OrderId);
         """;
 
-    // A delivery carries its customer from the fan-out, so it is found by it and never through its notice.
+    // A delivery carries its customer from the fan-out, so it is found by it, and kept through its notice's order.
+    private const string OfKeptOrder =
+        $"""
+        EXISTS (
+            SELECT 1 FROM notifications.NotificationLog AS n
+            WHERE n.NotificationId = d.NotificationId AND EXISTS ({PlacedUnder} AND r.OrderId = n.OrderId))
+        """;
+
     private const string DeleteWaitingDeliveriesSql =
-        "DELETE FROM notifications.PushDeliveries WHERE Status = 'Pending' AND CustomerId = @SubjectId;";
+        $"""
+        DELETE d
+        FROM notifications.PushDeliveries AS d
+        WHERE d.Status = 'Pending' AND d.CustomerId = @SubjectId AND NOT {OfKeptOrder};
+        """;
 
     // As the ended notices: the row keeps what shows a push was sent, and loses whom to and in which language.
     private const string AnonymiseEndedDeliveriesSql =
-        """
-        UPDATE notifications.PushDeliveries
+        $"""
+        UPDATE d
         SET CustomerId = NULL, Languages = NULL
-        WHERE Status <> 'Pending' AND CustomerId = @SubjectId;
+        FROM notifications.PushDeliveries AS d
+        WHERE d.Status <> 'Pending' AND d.CustomerId = @SubjectId AND NOT {OfKeptOrder};
         """;
 
     private const string DeleteOrderRecordsSql =
-        "DELETE FROM notifications.OrderRecords WHERE CustomerId = @SubjectId;";
+        """
+        DELETE FROM notifications.OrderRecords
+        WHERE CustomerId = @SubjectId
+            AND NOT EXISTS (SELECT 1 FROM OPENJSON(ErasedUnder) AS u WHERE u.value = @RequestId);
+        """;
 
     // Held for the same reason: a contact read saving meanwhile waits for the audit row and then finds it.
     private const string DeleteContactSql =
@@ -94,37 +126,38 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         "DELETE FROM notifications.OrderRecords WHERE OrderId = @OrderId AND CustomerId = @SubjectId;";
 
     // Guarded by the subject, so a registration that lands after the erasure is a new row of the subject's own act,
-    // and the kept sequence refuses a retry of one made before it (ADR-117, ADR-118).
+    // and the kept sequence refuses a retry of one made before it (ADR-117, ADR-118). One written under the request
+    // is such a row, so a reissue keeps it (ADR-138).
     private const string ClearDevicesSql =
-        """
+        $"""
         UPDATE notifications.DeviceInstallations WITH (UPDLOCK, HOLDLOCK)
-        SET SubjectId = NULL, Platform = NULL, AppId = NULL, Token = NULL, RegisteredAt = NULL
-        WHERE SubjectId = @SubjectId;
+        SET SubjectId = NULL, Platform = NULL, AppId = NULL, Token = NULL, RegisteredAt = NULL, ErasedUnder = N'[]'
+        WHERE SubjectId = @SubjectId AND NOT {WrittenUnder};
         """;
 
     // Every entry keeps its pair, value, times, client and chain as evidence, and loses whom it was about. Over the
-    // subject's range, held, so an append runs wholly before or after it (ADR-120).
+    // subject's range, held, so an append runs wholly before or after it (ADR-120); kept as the devices are.
     private const string AnonymiseConsentSql =
-        """
+        $"""
         UPDATE notifications.ConsentEntries WITH (UPDLOCK, HOLDLOCK)
-        SET SubjectId = NULL, AnonymisedAt = @Now
-        WHERE SubjectId = @SubjectId;
+        SET SubjectId = NULL, AnonymisedAt = @Now, ErasedUnder = N'[]'
+        WHERE SubjectId = @SubjectId AND NOT {WrittenUnder};
         """;
 
-    public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, CancellationToken ct) =>
-        ExecuteAsync(DeleteWaitingSql, subjectId, ct);
+    public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+        ExecuteAsync(DeleteWaitingSql, Under(subjectId, requestId), ct);
 
-    public Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, CancellationToken ct) =>
-        ExecuteAsync(AnonymiseEndedSql, subjectId, ct);
+    public Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+        ExecuteAsync(AnonymiseEndedSql, Under(subjectId, requestId), ct);
 
-    public Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
-        ExecuteAsync(DeleteWaitingDeliveriesSql, subjectId, ct);
+    public Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+        ExecuteAsync(DeleteWaitingDeliveriesSql, Under(subjectId, requestId), ct);
 
-    public Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, CancellationToken ct) =>
-        ExecuteAsync(AnonymiseEndedDeliveriesSql, subjectId, ct);
+    public Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+        ExecuteAsync(AnonymiseEndedDeliveriesSql, Under(subjectId, requestId), ct);
 
-    public Task<int> DeleteOrderRecordsAsync(Guid subjectId, CancellationToken ct) =>
-        ExecuteAsync(DeleteOrderRecordsSql, subjectId, ct);
+    public Task<int> DeleteOrderRecordsAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+        ExecuteAsync(DeleteOrderRecordsSql, Under(subjectId, requestId), ct);
 
     public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(DeleteContactSql, subjectId, ct);
@@ -146,16 +179,23 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
 
     // Counted at the statement, inside the unit's transaction: a rolled-back erasure is retried and counts again,
     // which over-reads a series whose job is to show that removals happen (the push design's section 9).
-    public async Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct)
+    public async Task<int> ClearDevicesAsync(Guid subjectId, Guid requestId, CancellationToken ct)
     {
-        int cleared = await ExecuteAsync(ClearDevicesSql, subjectId, ct);
+        int cleared = await ExecuteAsync(ClearDevicesSql, Under(subjectId, requestId), ct);
         metrics.DevicesRemoved(PushMetrics.Erased, cleared);
 
         return cleared;
     }
 
-    public Task<int> AnonymiseConsentAsync(Guid subjectId, DateTimeOffset now, CancellationToken ct) =>
-        ExecuteAsync(AnonymiseConsentSql, new { SubjectId = subjectId, Now = now }, ct);
+    public Task<int> AnonymiseConsentAsync(Guid subjectId, Guid requestId, DateTimeOffset now, CancellationToken ct) =>
+        ExecuteAsync(
+            AnonymiseConsentSql,
+            new { SubjectId = subjectId, RequestId = requestId.ToString(), Now = now },
+            ct);
+
+    // The request as text, the form OPENJSON returns a list's values in.
+    private static object Under(Guid subjectId, Guid requestId) =>
+        new { SubjectId = subjectId, RequestId = requestId.ToString() };
 
     private Task<int> ExecuteAsync(string sql, Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(sql, new { SubjectId = subjectId }, ct);

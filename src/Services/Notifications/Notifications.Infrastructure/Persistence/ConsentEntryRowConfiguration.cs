@@ -18,6 +18,9 @@ internal sealed class ConsentEntryRowConfiguration : IEntityTypeConfiguration<Co
         builder.Property(r => r.Channel).HasMaxLength(ConsentVocabulary.MaxChannelLength).IsUnicode(false);
         builder.Property(r => r.Client).HasMaxLength(ConsentVocabulary.MaxClientLength).IsUnicode(false);
 
+        // As on a device row: the requests already applied to the subject when the write read them (ADR-138).
+        builder.Property(r => r.ErasedUnder).HasColumnType("nvarchar(max)").HasDefaultValueSql("N'[]'");
+
         // The pair's range an append holds and the erasure's by subject (ADR-120), every read of a subject's, and the
         // position a pair's newest entry is read by. Named, as a second key below shares its leading columns.
         builder.HasIndex(r => new { r.SubjectId, r.Topic, r.Channel, r.Position }, "IX_ConsentEntries_SubjectPair");

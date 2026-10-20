@@ -47,12 +47,12 @@ public sealed class ConsentJournalTests(ServiceFixture fixture) : IAsyncLifetime
         return states.Single(s => s is { Topic: Topic, Channel: Push });
     }
 
-    private async Task EraseAsync(Guid subject)
+    private async Task EraseAsync(Guid subject, Guid? request = null)
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
 
         await scope.ServiceProvider.GetRequiredService<IDispatcher>().SendAsync(
-            new ErasePersonalDataCommand(Guid.CreateVersion7(), subject),
+            new ErasePersonalDataCommand(request ?? Guid.CreateVersion7(), subject),
             TestContext.Current.CancellationToken);
     }
 
@@ -163,6 +163,30 @@ public sealed class ConsentJournalTests(ServiceFixture fixture) : IAsyncLifetime
         (await SetAsync(subject, false, second.State.Version)).Outcome
             .ShouldBe(ConsentAppendOutcome.PreconditionFailed);
         (await SetAsync(subject, false, null)).Outcome.ShouldBe(ConsentAppendOutcome.Appended);
+    }
+
+    [Fact]
+    public async Task A_reissue_keeps_an_entry_written_after_its_first_pass_and_a_later_request_anonymises_it()
+    {
+        Guid subject = Guid.CreateVersion7();
+        Guid request = Guid.CreateVersion7();
+        await EraseAsync(subject, request);
+
+        PreferenceWrite written = await SetAsync(subject, false, null);
+        await EraseAsync(subject, request);
+
+        (await ReadAsync(subject)).Version.ShouldBe(written.State.Version, "the subject's own act after the request");
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM notifications.ConsentEntries WHERE EntryId = {0}",
+            written.State.Version!.Value)).ShouldBe($"[\"{request}\"]");
+
+        await EraseAsync(subject);
+
+        (await ReadAsync(subject)).Source.ShouldBe(PreferenceSource.Default);
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM notifications.ConsentEntries WHERE EntryId = {0} AND SubjectId IS NULL " +
+            "AND ErasedUnder = '[]'",
+            written.State.Version!.Value)).ShouldBe(1, "anonymised, its requests gone with the subject");
     }
 
     [Fact]

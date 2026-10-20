@@ -59,19 +59,25 @@ public class EndErasedOrderHandlerTests
             return Task.FromResult(0);
         }
 
-        public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, CancellationToken ct) => Refuse();
+        public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, Guid requestId, CancellationToken ct) => Refuse();
 
-        public Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, CancellationToken ct) => Refuse();
+        public Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, Guid requestId, CancellationToken ct) => Refuse();
 
-        public Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, CancellationToken ct) => Refuse();
+        public Task<int> DeleteWaitingDeliveriesAsync(Guid subjectId, Guid requestId, CancellationToken ct) => Refuse();
 
-        public Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, CancellationToken ct) => Refuse();
+        public Task<int> AnonymiseEndedDeliveriesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
+            Refuse();
 
-        public Task<int> DeleteOrderRecordsAsync(Guid subjectId, CancellationToken ct) => Refuse();
+        public Task<int> DeleteOrderRecordsAsync(Guid subjectId, Guid requestId, CancellationToken ct) => Refuse();
 
-        public Task<int> ClearDevicesAsync(Guid subjectId, CancellationToken ct) => Refuse();
+        public Task<int> ClearDevicesAsync(Guid subjectId, Guid requestId, CancellationToken ct) => Refuse();
 
-        public Task<int> AnonymiseConsentAsync(Guid subjectId, DateTimeOffset now, CancellationToken ct) => Refuse();
+        public Task<int> AnonymiseConsentAsync(
+            Guid subjectId,
+            Guid requestId,
+            DateTimeOffset now,
+            CancellationToken ct) =>
+            Refuse();
 
         private Task<int> Run(string call, Guid orderId)
         {

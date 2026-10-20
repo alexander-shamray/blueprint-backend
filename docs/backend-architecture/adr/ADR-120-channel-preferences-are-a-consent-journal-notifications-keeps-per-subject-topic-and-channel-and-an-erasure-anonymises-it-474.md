@@ -182,6 +182,14 @@ which adds to the residual after a withdrawal, beside the notices a pass
 held, every send whose intent committed before it, until each ends: a resend
 under a committed intent is not decided again.
 
+**Amended by [ADR-138](ADR-138-notifications-erasure-keeps-what-was-written-under-its-request-1192-amending-adr-117-and-adr-120.md).**
+An entry keeps the erasure requests Notifications had already applied to its
+subject when the write read them, and the erasure anonymises it only when it
+does not list the request being handled, so a write made after an erasure
+stays the subject's own act through a reissue of that request. A write that
+raced the request's first pass lists nothing and is still anonymised by a
+reissue.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
