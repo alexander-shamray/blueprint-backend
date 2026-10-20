@@ -3,7 +3,8 @@ using Privacy.Domain.ErasureRequests;
 
 namespace Privacy.Application.ErasureRequests.RecordCompletion;
 
-/// <summary>The shape of an answer; a name outside the stored set is the aggregate's to flag, not this one's to refuse.</summary>
+/// <summary>The shape of an answer; a name outside the stored set is the aggregate's to flag, not this one's to
+/// refuse.</summary>
 public sealed class RecordErasureCompletionValidator : AbstractValidator<RecordErasureCompletionCommand>
 {
     public RecordErasureCompletionValidator()

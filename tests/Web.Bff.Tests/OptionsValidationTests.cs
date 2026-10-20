@@ -47,7 +47,8 @@ public class OptionsValidationTests
         refusal.Message.ShouldContain(member);
     }
 
-    /// <summary>ADR-117's app list: a registration cannot be checked against one that names an app ambiguously.</summary>
+    /// <summary>ADR-117's app list: a registration cannot be checked against one that names an app
+    /// ambiguously.</summary>
     [Theory]
     [InlineData("com.example.shop", "fcm", "com.example.shop", "apns", "2 times")]
     [InlineData("com.example.shop", "fcm", "com.example.shop.ios", "huawei", "not fcm or apns")]

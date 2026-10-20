@@ -437,7 +437,8 @@ public sealed class CompensationJourney(FirstJurisdictionWorld world)
         return await world.PlaceAsync(product, quantity, price);
     }
 
-    /// <summary>The reviews raised for the order, exactly these: the saga sends each as a command as it finishes.</summary>
+    /// <summary>The reviews raised for the order, exactly these: the saga sends each as a command as it
+    /// finishes.</summary>
     private Task ReviewsRaisedAsync(JourneyOrder order, params string[] reasons)
     {
         string[] wanted = [.. reasons.Order(StringComparer.Ordinal)];

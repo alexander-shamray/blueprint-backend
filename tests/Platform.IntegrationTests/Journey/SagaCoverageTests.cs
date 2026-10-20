@@ -22,7 +22,8 @@ public sealed class SagaCoverageTests
     /// <summary>MassTransit's own event on every schedule, which only discards a message from a stale token.</summary>
     private const string AnyReceivedSuffix = ".AnyReceived";
 
-    /// <summary>The lifecycle event <c>BeforeEnterAny</c> binds to stamp <c>StateEnteredAt</c>; nothing arrives.</summary>
+    /// <summary>The lifecycle event <c>BeforeEnterAny</c> binds to stamp <c>StateEnteredAt</c>; nothing
+    /// arrives.</summary>
     private const string BeforeEnterSuffix = ".BeforeEnter";
 
     /// <summary>Transitions an arrival race or a duplicate causes, each with the suite that drives it.</summary>

@@ -10,7 +10,8 @@ using Privacy.Application.ErasureRequests.MarkOverdue;
 namespace Privacy.Infrastructure.Sweep;
 
 /// <summary>Finds the open requests that have outlived their due time and marks each overdue (ADR-092).</summary>
-/// <remarks>Nothing closes an overdue request: an operator reissues it (ADR-092). This only makes the silence visible.</remarks>
+/// <remarks>Nothing closes an overdue request: an operator reissues it (ADR-092). This only makes the silence
+/// visible.</remarks>
 public sealed class OverdueSweepService : SwitchedPollingWorker
 {
     /// <summary>The name an operator lists to switch the sweep off (ADR-113).</summary>
@@ -69,7 +70,8 @@ public sealed class OverdueSweepService : SwitchedPollingWorker
 
     protected override void OnPassFailed(Exception exception) => PassFailed(_log, exception);
 
-    /// <summary>One pass: the requests now overdue, each marked in a command of its own. Public for the suite.</summary>
+    /// <summary>One pass: the requests now overdue, each marked in a command of its own. Public for the
+    /// suite.</summary>
     public async Task<int> RunOnceAsync(CancellationToken ct)
     {
         await using AsyncServiceScope scope = _scopes.CreateAsyncScope();

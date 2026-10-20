@@ -328,15 +328,18 @@ public class ObservabilityTests
 
         // A factory's Create, a Meter's constructor, and the two constants that hold a name (MeterName, and
         // OutboundMeter.Name, which only a file named for a meter may use).
-        Regex created = new("""\w*[Ff]actory\.Create\("([^"]+)"\)|new Meter\("([^"]+)"|MeterName\s*=\s*"([^"]+)[\x22]""");
+        Regex created = new(
+            """\w*[Ff]actory\.Create\("([^"]+)"\)|new Meter\("([^"]+)"|MeterName\s*=\s*"([^"]+)[\x22]""");
         Regex meterConstant = new("""\bconst string Name = "([^"]+)";""");
         Dictionary<string, List<string>> byService = [];
 
         foreach (string area in new[] { "src/Services", "src/BFF" })
         {
-            foreach (string file in Directory.EnumerateFiles(Path.Combine(root.FullName, area), "*.cs", SearchOption.AllDirectories))
+            string areaRoot = Path.Combine(root.FullName, area);
+
+            foreach (string file in Directory.EnumerateFiles(areaRoot, "*.cs", SearchOption.AllDirectories))
             {
-                string relative = Path.GetRelativePath(Path.Combine(root.FullName, area), file);
+                string relative = Path.GetRelativePath(areaRoot, file);
                 string[] segments = relative.Split(Path.DirectorySeparatorChar);
 
                 // src/Services/<Service>/<Project>/..., src/BFF/<Project>/...

@@ -4,7 +4,8 @@ using Privacy.Domain.ErasureRequests;
 
 namespace Privacy.Application.ErasureRequests.RaiseErasureRequest;
 
-/// <summary>Opens a request for a subject, or answers with the one already open and publishes nothing (ADR-092).</summary>
+/// <summary>Opens a request for a subject, or answers with the one already open and publishes nothing
+/// (ADR-092).</summary>
 public sealed class RaiseErasureRequestHandler(
     IErasureRequestRepository requests,
     IOptions<PrivacyOptions> options,

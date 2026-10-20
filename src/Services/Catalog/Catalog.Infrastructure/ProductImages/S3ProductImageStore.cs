@@ -8,7 +8,8 @@ using Microsoft.Extensions.Options;
 
 namespace Catalog.Infrastructure.ProductImages;
 
-/// <summary>ADR-106's port over the S3 API: reads an object's first bytes, then copies it with its own metadata.</summary>
+/// <summary>ADR-106's port over the S3 API: reads an object's first bytes, then copies it with its own
+/// metadata.</summary>
 public sealed class S3ProductImageStore(
     IAmazonS3 s3,
     IOptions<ProductImageStoreOptions> options,

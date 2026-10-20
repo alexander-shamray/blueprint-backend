@@ -12,7 +12,8 @@ internal static class TelemetryHost
     internal const string Authority = "https://identity.invalid/realms/test";
 
     /// <param name="environmentName">Overrides <see cref="EnvironmentName"/>, read by §11.3 and §13.2.</param>
-    /// <param name="applicationName">Overrides <see cref="ServiceName"/>; §13.2 reads its first segment as the service.</param>
+    /// <param name="applicationName">Overrides <see cref="ServiceName"/>; §13.2 reads its first segment as the
+    /// service.</param>
     internal static HostApplicationBuilder Builder(string? environmentName = null, string? applicationName = null)
     {
         HostApplicationBuilder builder = Host.CreateEmptyApplicationBuilder(

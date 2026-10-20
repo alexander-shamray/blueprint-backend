@@ -19,7 +19,17 @@ public sealed class ProjectionModelTests
 
         string[] tables = [.. model.GetEntityTypes().Select(e => $"{e.GetSchema()}.{e.GetTableName()}")];
 
-        tables.ShouldBe(["bff.ErasedOrders", "bff.InboxMessages", "bff.OrderLines", "bff.Orders", "bff.PersonalDataErasures", "bff.Products", "bff.SavedAddresses"], ignoreOrder: true);
+        tables.ShouldBe(
+            [
+                "bff.ErasedOrders",
+                "bff.InboxMessages",
+                "bff.OrderLines",
+                "bff.Orders",
+                "bff.PersonalDataErasures",
+                "bff.Products",
+                "bff.SavedAddresses"
+            ],
+            ignoreOrder: true);
     }
 
     [Fact]

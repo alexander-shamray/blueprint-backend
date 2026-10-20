@@ -40,11 +40,11 @@ public sealed record JourneyOrder(Guid Id, Guid Customer, Guid Product, int Quan
     public static string MailboxOf(Guid customer) => $"customer-{customer:N}@example.test";
 }
 
-/// <summary>Eight hosts over one SQL Server, one broker and one Redis pair, each under its own account (§12.1).</summary>
-/// <remarks>
-/// Nothing is widened for the harness, so a publish or bind the shipped grant refuses fails here (ADR-036).
-/// Ordering's address read is Ordering's own service. Every order is new to its scenario, so nothing is reset.
-/// </remarks>
+/// <summary>Eight hosts over one SQL Server, one broker and one Redis pair, each under its own account
+/// (§12.1).</summary>
+/// <remarks>Nothing is widened for the harness, so a publish or bind the shipped grant refuses fails here (ADR-036).
+/// Ordering's address read is Ordering's own service. Every order is new to its scenario, so nothing is
+/// reset.</remarks>
 public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
 {
     /// <summary>The services of §3.2's path, which are also the databases' names (§7.1).</summary>
@@ -56,7 +56,8 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
     public const string Shipping = "Shipping";
     public const string Notifications = "Notifications";
 
-    /// <summary>The erasure choreography's tracker and its last holder (§11.7), which the fulfilment path does not need.</summary>
+    /// <summary>The erasure choreography's tracker and its last holder (§11.7), which the fulfilment path does not
+    /// need.</summary>
     public const string Privacy = "Privacy";
 
     public const string Bff = "Bff";
@@ -290,7 +291,8 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
         stocked.EnsureSuccessStatusCode();
     }
 
-    /// <summary>A customer with a mailbox placing an order for one product, through Ordering as a person does.</summary>
+    /// <summary>A customer with a mailbox placing an order for one product, through Ordering as a person
+    /// does.</summary>
     public async Task<JourneyOrder> PlaceAsync(
         Guid product,
         int quantity,

@@ -3,7 +3,7 @@ using Common.Contracts.Privacy.V1;
 
 namespace Notifications.Application.Privacy.ErasePersonalData;
 
-/// <summary>Erases the contact, order and notice rows Notifications holds for the subject, then tells Privacy once the unit commits (ADR-094).</summary>
+/// <summary>Erases the subject's contact, order and notice rows, then tells Privacy after commit (ADR-094).</summary>
 /// <remarks>
 /// Reported here and not in the command, because the execution strategy re-runs a command whole and a send inside
 /// it would repeat (ADR-094); the consumer's in-memory outbox holds it until this handler returns.

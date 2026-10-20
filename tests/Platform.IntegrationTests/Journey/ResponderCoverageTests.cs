@@ -44,7 +44,10 @@ public sealed partial class ResponderCoverageTests
                 .Select(s => s.Value!)
         ];
 
-        factory.ShouldBe(ComposeResponders(), ignoreOrder: true, "PrivacyApiFactory.PrivacySettings drifted from Compose");
+        factory.ShouldBe(
+            ComposeResponders(),
+            ignoreOrder: true,
+            "PrivacyApiFactory.PrivacySettings drifted from Compose");
     }
 
     [Fact]
@@ -82,7 +85,8 @@ public sealed partial class ResponderCoverageTests
         return declared.Groups[1].Value.Split(',');
     }
 
-    /// <summary>The directory each file sits under, i.e. the service, which names a holder whatever its layout.</summary>
+    /// <summary>The directory each file sits under, i.e. the service, which names a holder whatever its
+    /// layout.</summary>
     private static string[] Services(string fileName) =>
         [.. Directory.EnumerateFiles(Source(), fileName, SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))

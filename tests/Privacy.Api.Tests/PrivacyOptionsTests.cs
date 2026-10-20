@@ -8,7 +8,8 @@ using Xunit;
 
 namespace Privacy.Api.Tests;
 
-/// <summary>§15.4's promise that the host refuses to start on a holders-and-service-level it could not raise with.</summary>
+/// <summary>§15.4's promise that the host refuses to start on a holders-and-service-level it could not raise
+/// with.</summary>
 public class PrivacyOptionsTests
 {
     private static readonly TimeSpan Month = TimeSpan.FromDays(30);

@@ -39,7 +39,8 @@ public sealed class SuspendedRouteTests(StubDestination stub) : IClassFixture<St
         }
     }
 
-    /// <summary>The same request without the switch, or the test above could pass on a route that never proxied.</summary>
+    /// <summary>The same request without the switch, or the test above could pass on a route that never
+    /// proxied.</summary>
     [Fact]
     public async Task A_route_not_switched_off_still_forwards()
     {

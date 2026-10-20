@@ -1,7 +1,8 @@
 namespace Privacy.Domain.ErasureRequests;
 
 /// <summary>One holder's answer to a request: how many records it erased, and whether the answer counts.</summary>
-/// <remarks>Counted only when the holder is in the set stored on the request; others are kept to be seen (ADR-092).</remarks>
+/// <remarks>Counted only when the holder is in the set stored on the request; others are kept to be seen
+/// (ADR-092).</remarks>
 public sealed class ErasureCompletion
 {
     public string Responder { get; private set; } = "";

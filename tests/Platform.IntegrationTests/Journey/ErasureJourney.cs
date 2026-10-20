@@ -48,7 +48,8 @@ public sealed class ErasureJourney(FirstJurisdictionWorld world)
 
         JourneyOrder order = await world.PlaceAsync(product, 1, UnitPrice);
         await Convergence.UntilAsync(
-            async () => (await world.NoticesAsync(order)).Count(n => n.EndsWith(":Sent", StringComparison.Ordinal)) == 4 &&
+            async () =>
+                (await world.NoticesAsync(order)).Count(n => n.EndsWith(":Sent", StringComparison.Ordinal)) == 4 &&
                 await world.AnyAsync(
                     JourneyWorld.Bff,
                     "SELECT 1 FROM bff.Orders WHERE CustomerId = @p0 AND DeliveredAt IS NOT NULL",
@@ -79,13 +80,15 @@ public sealed class ErasureJourney(FirstJurisdictionWorld world)
         [
             .. after.Except(LifetimeOnly)
         ];
-        unexpected.ShouldBeEmpty("nothing but a holding the register names as lifetime only may still hold the customer");
+        unexpected.ShouldBeEmpty(
+            "nothing but a holding the register names as lifetime only may still hold the customer");
 
         await AssertEveryHolderLeftItsAuditRowAsync(request, order.Customer);
         (await world.DeadLettersAsync()).ShouldBeEmpty("no message of the choreography was parked unanswered");
     }
 
-    /// <summary>One audit row per holder, each carrying the hash and never the id, and the request closed on all five.</summary>
+    /// <summary>One audit row per holder, each carrying the hash and never the id, and the request closed on all
+    /// five.</summary>
     private async Task AssertEveryHolderLeftItsAuditRowAsync(Guid request, Guid customer)
     {
         string hash = PersonalDataErasure.HashSubject(request, customer);

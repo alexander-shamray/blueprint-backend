@@ -6,7 +6,8 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>The loop the switched workers share: an off tick runs no pass, a failed pass ticks again (ADR-113).</summary>
+/// <summary>The loop the switched workers share: an off tick runs no pass, a failed pass ticks again
+/// (ADR-113).</summary>
 public class SwitchedPollingWorkerTests
 {
     private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(20);

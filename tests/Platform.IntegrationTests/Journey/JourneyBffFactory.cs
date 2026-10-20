@@ -8,11 +8,11 @@ using Web.Bff.Migrator;
 
 namespace Platform.IntegrationTests.Journey;
 
-/// <summary>The real BFF host, the last holder of a buyer's orders (§11.7), over the journey's database and broker.</summary>
-/// <remarks>
-/// Fake <c>Identity:Client</c> values, as <c>ValidateOnStart</c> needs them to boot (§15.4); the authority never
-/// resolves, since no request here carries a token. Nothing is removed: the journey wants every timer running.
-/// </remarks>
+/// <summary>The real BFF host, the last holder of a buyer's orders (§11.7), over the journey's database and
+/// broker.</summary>
+/// <remarks>Fake <c>Identity:Client</c> values, as <c>ValidateOnStart</c> needs them to boot (§15.4); the authority
+/// never resolves, since no request here carries a token. Nothing is removed: the journey wants every timer
+/// running.</remarks>
 internal sealed class JourneyBffFactory(string sql, string broker) : WebApplicationFactory<WebBff::Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>

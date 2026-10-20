@@ -153,7 +153,10 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
 
         await PublishRequestAsync(Guid.CreateVersion7());
 
-        await Eventually(CountCompletionsAsync, expected: 1, because: "the send is released when the consumer succeeds");
+        await Eventually(
+            CountCompletionsAsync,
+            expected: 1,
+            because: "the send is released when the consumer succeeds");
     }
 
     [Fact]

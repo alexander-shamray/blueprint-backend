@@ -14,7 +14,8 @@ namespace Common.TestSupport;
 /// </remarks>
 public sealed class ObjectStoreFixture : IAsyncLifetime
 {
-    /// <summary>The bucket <c>init.txt</c> creates, and the one the identities in <c>s3.json</c> are scoped to.</summary>
+    /// <summary>The bucket <c>init.txt</c> creates, and the one the identities in <c>s3.json</c> are scoped
+    /// to.</summary>
     public const string Bucket = "product-images";
 
     private const int S3Port = 8333;
@@ -36,10 +37,12 @@ public sealed class ObjectStoreFixture : IAsyncLifetime
     /// <summary>The S3 endpoint as the test host reaches it, which is what a client would be signed for.</summary>
     public Uri Endpoint => new($"http://127.0.0.1:{_store!.GetMappedPublicPort(S3Port)}");
 
-    /// <summary>Where the public image is served, as the test host reaches it: the edge in front of the store.</summary>
+    /// <summary>Where the public image is served, as the test host reaches it: the edge in front of the
+    /// store.</summary>
     public Uri PublicBase => new($"http://127.0.0.1:{_edge!.GetMappedPublicPort(EdgePort)}");
 
-    /// <summary>The key pair <c>s3.json</c> gives <paramref name="identity"/>, read so a test cannot restate it.</summary>
+    /// <summary>The key pair <c>s3.json</c> gives <paramref name="identity"/>, read so a test cannot restate
+    /// it.</summary>
     public static (string AccessKey, string SecretKey) Credentials(string identity)
     {
         using JsonDocument config = JsonDocument.Parse(File.ReadAllText(Path.Combine(Directory, "s3.json")));

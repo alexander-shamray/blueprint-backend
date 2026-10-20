@@ -27,7 +27,8 @@ internal sealed class ProviderSendLog : IDisposable
 
     internal void Answered(HttpRequestMessage request, string outcome) => Add("done", request, outcome);
 
-    /// <summary>Each send's wall time and gap to the one before, each answer, then the last stalls the probe saw.</summary>
+    /// <summary>Each send's wall time and gap to the one before, each answer, then the last stalls the probe
+    /// saw.</summary>
     internal string Describe()
     {
         Event[] events = [.. _events];
@@ -71,7 +72,8 @@ internal sealed class ProviderSendLog : IDisposable
             ThreadPool.ThreadCount,
             detail));
 
-    /// <summary>A thread of its own, so a starved pool cannot hold it back; it notes every tick that came late.</summary>
+    /// <summary>A thread of its own, so a starved pool cannot hold it back; it notes every tick that came
+    /// late.</summary>
     private void Probe()
     {
         const int periodMs = 20;

@@ -37,7 +37,16 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
             ON target.OrderId = source.OrderId
         WHEN NOT MATCHED THEN
             INSERT (OrderId, CustomerId, Status, TotalAmount, Currency, LineCount, Products, PlacedAt, UpdatedAt)
-            VALUES (@OrderId, source.CustomerId, @Status, @Total, @Currency, @LineCount, @Products, @OccurredAt, @OccurredAt)
+            VALUES (
+                @OrderId,
+                source.CustomerId,
+                @Status,
+                @Total,
+                @Currency,
+                @LineCount,
+                @Products,
+                @OccurredAt,
+                @OccurredAt)
         -- PlacedAt IS NULL fires once: a redelivery finds it set and writes nothing.
         WHEN MATCHED AND target.PlacedAt IS NULL THEN
             UPDATE SET

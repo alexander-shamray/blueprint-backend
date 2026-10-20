@@ -465,12 +465,17 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
         throw new TimeoutException($"The claim on '{key}' had not expired after 15 seconds.");
     }
 
-    /// <summary>A release whose script call faults as given: the behaviour is mid-rethrow, so it must not add its own.</summary>
+    /// <summary>A release whose script call faults as given: the behaviour is mid-rethrow, so it must not add its
+    /// own.</summary>
     private async Task ReleaseFailingWithAsync(Exception fault)
     {
         IDatabase database = Substitute.For<IDatabase>();
         database
-            .ScriptEvaluateAsync(Arg.Any<string>(), Arg.Any<RedisKey[]?>(), Arg.Any<RedisValue[]?>(), Arg.Any<CommandFlags>())
+            .ScriptEvaluateAsync(
+                Arg.Any<string>(),
+                Arg.Any<RedisKey[]?>(),
+                Arg.Any<RedisValue[]?>(),
+                Arg.Any<CommandFlags>())
             .ThrowsAsync(fault);
         IConnectionMultiplexer multiplexer = Substitute.For<IConnectionMultiplexer>();
         multiplexer.GetDatabase(Arg.Any<int>(), Arg.Any<object?>()).Returns(database);

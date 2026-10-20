@@ -137,7 +137,9 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
             erasedUnder);
 
     private Task<string> ErasedUnderOfAsync(Guid order) =>
-        fixture.ScalarAsync<string>("SELECT Value = ErasedUnder FROM payments.PaymentOrders WHERE OrderId = {0}", order);
+        fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM payments.PaymentOrders WHERE OrderId = {0}",
+            order);
 
     private Task<Guid> PayerOfAsync(Guid order) =>
         fixture.ScalarAsync<Guid>("SELECT Value = CustomerId FROM payments.PaymentOrders WHERE OrderId = {0}", order);

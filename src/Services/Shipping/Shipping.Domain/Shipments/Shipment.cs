@@ -28,7 +28,8 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     /// <summary>The clock ADR-052's give-up age is measured from.</summary>
     public DateTimeOffset CreatedAt { get; private set; }
 
-    /// <summary>The erasure requests the order's customer was already under when it was placed (ADR-099, ADR-103).</summary>
+    /// <summary>The erasure requests the order's customer was already under when it was placed (ADR-099,
+    /// ADR-103).</summary>
     public IReadOnlyList<Guid> ErasedUnder { get; private set; } = [];
 
     /// <summary>The fulfilment pass's failed passes on this row (ADR-054).</summary>

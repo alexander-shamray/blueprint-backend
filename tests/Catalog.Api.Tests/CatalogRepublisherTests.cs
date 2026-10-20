@@ -16,7 +16,8 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary><see cref="CatalogRepublisher"/> through the real job host, on databases the collection never reads.</summary>
+/// <summary><see cref="CatalogRepublisher"/> through the real job host, on databases the collection never
+/// reads.</summary>
 [Collection(nameof(IntegrationCollection))]
 public class CatalogRepublisherTests(ServiceFixture fixture)
 {
@@ -156,7 +157,8 @@ public class CatalogRepublisherTests(ServiceFixture fixture)
                 (Id, Name, ThumbnailUrl, PriceAmount, PriceCurrency, PublishedAt, LastEventAt, WithdrawnAt)
             VALUES
                 ({Untouched}, N'Untouched', NULL, 10.00, 'EUR', {Published}, {Published}, NULL),
-                ({PriceMoved}, N'Price moved', N'https://img.example/p.png', 12.50, 'EUR', {Published}, {Repriced}, NULL),
+                ({PriceMoved}, N'Price moved', N'https://img.example/p.png', 12.50, 'EUR', {Published}, {Repriced},
+                    NULL),
                 ({Pulled}, N'Pulled', NULL, 9.00, 'EUR', {Published}, {Withdrawn}, {Withdrawn});
             """,
             TestContext.Current.CancellationToken);
@@ -215,11 +217,16 @@ public class CatalogRepublisherTests(ServiceFixture fixture)
     {
         await using CatalogDbContext db = Open(database);
 
-        OutboxMessage[] rows = await db.OutboxMessages.AsNoTracking().ToArrayAsync(TestContext.Current.CancellationToken);
+        OutboxMessage[] rows = await db.OutboxMessages
+            .AsNoTracking()
+            .ToArrayAsync(TestContext.Current.CancellationToken);
 
         return [.. rows.Select(row => (row, Read(row)))];
     }
 
     private object Read(OutboxMessage row) =>
-        JsonSerializer.Deserialize(row.Payload, fixture.MessageTypes.Resolve(row.MessageType), fixture.OutboxJson.Options)!;
+        JsonSerializer.Deserialize(
+            row.Payload,
+            fixture.MessageTypes.Resolve(row.MessageType),
+            fixture.OutboxJson.Options)!;
 }

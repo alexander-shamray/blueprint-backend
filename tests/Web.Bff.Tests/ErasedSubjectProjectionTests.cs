@@ -84,7 +84,11 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
     {
         Guid order = Guid.CreateVersion7();
         ErasureBetweenWriteAndCheck between = new(fixture, order, _subject, new SqlErasedSubjects(Connections()));
-        OrderProjection projection = new(Connections(), between, TimeProvider.System, NullLogger<OrderProjection>.Instance);
+        OrderProjection projection = new(
+            Connections(),
+            between,
+            TimeProvider.System,
+            NullLogger<OrderProjection>.Instance);
 
         await projection.HandleAsync(OrderEvents.Placed(order, _subject, At), TestContext.Current.CancellationToken);
 
@@ -207,7 +211,8 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
         where T : class =>
         services.GetServices<IIntegrationEventHandler<T>>().Single(h => h is OrderProjection);
 
-    /// <summary>The audit row lands once the projection's write has committed and before it asks, as a racing erasure's.</summary>
+    /// <summary>The audit row lands once the projection's write has committed and before it asks, as a racing
+    /// erasure's.</summary>
     private sealed class ErasureBetweenWriteAndCheck(
         BffServiceFixture fixture,
         Guid order,
@@ -216,7 +221,10 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
     {
         public bool RowWasThereWhenAsked { get; private set; }
 
-        public async Task<bool> IsErasedAsync(Guid subjectId, IReadOnlyCollection<Guid> placedAfter, CancellationToken ct)
+        public async Task<bool> IsErasedAsync(
+            Guid subjectId,
+            IReadOnlyCollection<Guid> placedAfter,
+            CancellationToken ct)
         {
             RowWasThereWhenAsked = await fixture.OrderAsync(order) is not null;
             await RecordErasureAsync(fixture, subject, At);

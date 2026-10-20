@@ -71,8 +71,8 @@ public static class DependencyInjection
                         e.UseConsumeFilter(typeof(InboxFilter<>), context);
                         e.UseInMemoryOutbox(context);
 
-                        e.ConfigureConsumer<CommandConsumer<PersonalDataDeleteCompleted, RecordErasureCompletionCommand>>(
-                            context);
+                        e.ConfigureConsumer<
+                            CommandConsumer<PersonalDataDeleteCompleted, RecordErasureCompletionCommand>>(context);
                     });
 
                 // No ConfigureEndpoints(context): it would give a consumer a queue with neither the inbox filter

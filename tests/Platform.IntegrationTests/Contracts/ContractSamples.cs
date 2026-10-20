@@ -1,6 +1,7 @@
 namespace Platform.IntegrationTests.Contracts;
 
-/// <summary>One sample per contract, from each service's <see cref="ContractContext"/>, so a contract with none fails (§12.6).</summary>
+/// <summary>One sample per contract, from each service's <see cref="ContractContext"/>, so a contract with none fails
+/// (§12.6).</summary>
 /// <remarks>Every member distinct and non-default, or a zeroed sample hides a dropped member (§12.6).</remarks>
 internal static class ContractSamples
 {

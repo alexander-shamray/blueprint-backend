@@ -103,7 +103,8 @@ public class PushDeliveryTests
     [Fact]
     public void A_platform_outside_the_pair_is_the_caller_s_defect()
     {
-        Should.Throw<ArgumentOutOfRangeException>(() => PushDelivery.For(Notice(), Installation, "sms", null, "en", Now));
+        Should.Throw<ArgumentOutOfRangeException>(() =>
+            PushDelivery.For(Notice(), Installation, "sms", null, "en", Now));
     }
 
     [Theory]

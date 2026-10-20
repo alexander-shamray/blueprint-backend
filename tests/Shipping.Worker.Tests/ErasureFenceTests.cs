@@ -48,11 +48,14 @@ public sealed class ErasureFenceTests(ServiceFixture fixture) : IAsyncLifetime
         await deleted.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
 
         await using AsyncServiceScope saving = fixture.Factory.Services.CreateAsyncScope();
-        Task save = saving.ServiceProvider.GetRequiredService<IDeliveryAddressStore>().SaveAsync(order, subject, Address, Now, ct);
+        Task save = saving.ServiceProvider
+            .GetRequiredService<IDeliveryAddressStore>()
+            .SaveAsync(order, subject, Address, Now, ct);
 
         await Should.ThrowAsync<TimeoutException>(
             () => save.WaitAsync(TimeSpan.FromSeconds(3), ct),
-            "an insert the erasure's range lock does not hold back lands before the audit row, and the worker books it");
+            "an insert the erasure's range lock does not hold back lands before the audit row, " +
+            "and the worker books it");
 
         commit.SetResult();
         await erasure.WaitAsync(TimeSpan.FromSeconds(30), ct);

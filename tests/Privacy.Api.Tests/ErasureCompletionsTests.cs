@@ -13,7 +13,8 @@ using Xunit;
 
 namespace Privacy.Api.Tests;
 
-/// <summary>Every holder's answer over a real broker and database: counted, closing, flagged or dropped (ADR-092).</summary>
+/// <summary>Every holder's answer over a real broker and database: counted, closing, flagged or dropped
+/// (ADR-092).</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ErasureCompletionsTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -178,7 +179,8 @@ public sealed class ErasureCompletionsTests(ServiceFixture fixture) : IAsyncLife
     private Task CompleteAsync(Guid request, string responder, int count) =>
         SendAsync(Completion(request, responder, count));
 
-    /// <summary>Sends to the queue as a holder does, then waits for the inbox row, written after the commit (§9.5).</summary>
+    /// <summary>Sends to the queue as a holder does, then waits for the inbox row, written after the commit
+    /// (§9.5).</summary>
     private async Task SendAsync(PersonalDataDeleteCompleted message, bool awaitInbox = true)
     {
         using CancellationTokenSource bounded =

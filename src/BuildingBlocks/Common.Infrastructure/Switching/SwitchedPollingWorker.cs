@@ -2,7 +2,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Common.Infrastructure.Switching;
 
-/// <summary>The timer loop every <see cref="ISwitchedWorker"/> shares: tick, skip while off, run a pass (ADR-113).</summary>
+/// <summary>The loop every <see cref="ISwitchedWorker"/> shares: tick, skip while off, run a pass (ADR-113).</summary>
 /// <remarks>
 /// A worker supplies its interval, its pass and what a failed pass logs; it does not write the loop, so a change to
 /// what a switched-off tick or a failed pass does is made here once (ADR-131).
@@ -18,10 +18,12 @@ public abstract class SwitchedPollingWorker(OperatorSwitches? switches) : Backgr
     /// <summary>Whether a pass runs before the first tick, so a host restarted often still passes.</summary>
     protected virtual bool PassAtStart => false;
 
-    /// <summary>How long a pass under way at a stop runs before <see cref="Drain"/> fires; null cancels it at once.</summary>
+    /// <summary>How long a pass under way at a stop runs before <see cref="Drain"/> fires; null cancels it at
+    /// once.</summary>
     protected virtual TimeSpan? StopDrain => null;
 
-    /// <summary>The token a pass gives its rows: the stop's own, or one that fires <see cref="StopDrain"/> after it.</summary>
+    /// <summary>The token a pass gives its rows: the stop's own, or one that fires <see cref="StopDrain"/> after
+    /// it.</summary>
     protected CancellationToken Drain { get; private set; }
 
     /// <summary>One pass. A stop seen at a tick starts none, so a pass under way is the only one it meets.</summary>

@@ -44,7 +44,9 @@ public sealed partial class DespatchBoundTests
     }
 
     // A quoted TimeSpan under the top-level fulfilment: key, which no other block in the file shares.
-    [GeneratedRegex("""^fulfilment:\r?\n(?:[ ]+.*\r?\n)*?[ ]+giveUpAge:\s*"(?<age>[^"]+)"\s*$""", RegexOptions.Multiline)]
+    [GeneratedRegex(
+        """^fulfilment:\r?\n(?:[ ]+.*\r?\n)*?[ ]+giveUpAge:\s*"(?<age>[^"]+)"\s*$""",
+        RegexOptions.Multiline)]
     private static partial Regex GiveUpAge();
 
     [GeneratedRegex("""^[ ]+Fulfilment__GiveUpAge:\s*"(?<age>[^"]+)"\s*$""", RegexOptions.Multiline)]

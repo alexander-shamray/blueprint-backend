@@ -87,7 +87,8 @@ public class TemplateSetTests
 
         Should.Throw<TemplateSetException>(() => TemplateSet.Parse(files)).Refusals.ShouldBe(
         [
-            "Templates/order-placed.v1.en.push.txt: names {Amount}, which is not among order-placed's push placeholders.",
+            "Templates/order-placed.v1.en.push.txt: names {Amount}, which is not among order-placed's push " +
+            "placeholders.",
             "Templates/order-placed.v1.en.push.txt: names {Currency}, which is not among order-placed's push " +
             "placeholders."
         ]);

@@ -58,7 +58,8 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
     {
         Guid unattributed = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.Orders (OrderId, FirstSeenAt, AsOf) VALUES ({0}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            "INSERT INTO bff.Orders (OrderId, FirstSeenAt, AsOf) " +
+            "VALUES ({0}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
             unattributed);
 
         await PublishRequestAsync(Guid.CreateVersion7());
@@ -183,7 +184,10 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
 
         await PublishRequestAsync(Guid.CreateVersion7());
 
-        await Eventually(CountCompletionsAsync, expected: 1, because: "the send is released when the consumer succeeds");
+        await Eventually(
+            CountCompletionsAsync,
+            expected: 1,
+            because: "the send is released when the consumer succeeds");
     }
 
     [Fact]

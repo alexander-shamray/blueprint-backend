@@ -7,7 +7,8 @@ using Web.Bff.Privacy;
 
 namespace Web.Bff.Addresses;
 
-/// <summary>§10.9's three operations over <c>bff.SavedAddresses</c>, each bound to a customer the caller never names.</summary>
+/// <summary>§10.9's three operations over <c>bff.SavedAddresses</c>, each bound to a customer the caller never
+/// names.</summary>
 public sealed class SavedAddressStore(IDbConnectionFactory connections, TimeProvider clock)
 {
     private const string ReadSql =

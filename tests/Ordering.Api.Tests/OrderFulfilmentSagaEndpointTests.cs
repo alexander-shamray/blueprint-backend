@@ -23,7 +23,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
 
     private static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
-    /// <summary>A span the retry ladder cannot outrun: its limit in waits, none longer than its ceiling (§9.8).</summary>
+    /// <summary>A span the retry ladder cannot outrun: its limit in waits, none longer than its ceiling
+    /// (§9.8).</summary>
     private static readonly TimeSpan LadderBound = RetryPolicy.MaxInterval * RetryPolicy.RetryLimit;
 
     /// <summary>Every message this test published, so the teardown can wait for its inbox rows.</summary>

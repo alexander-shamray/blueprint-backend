@@ -7,7 +7,8 @@ using Xunit;
 
 namespace Notifications.Worker.Tests;
 
-/// <summary>ADR-100: a mailbox the owner returns after the customer's erasure is not written back to the table.</summary>
+/// <summary>ADR-100: a mailbox the owner returns after the customer's erasure is not written back to the
+/// table.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
 {

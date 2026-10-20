@@ -3,7 +3,8 @@ using static Platform.IntegrationTests.Contracts.SampleValues;
 
 namespace Platform.IntegrationTests.Contracts.Ordering;
 
-/// <summary>Ordering's samples, the commands it accepts, and the members added to live contracts (ADR-028, ADR-099).</summary>
+/// <summary>Ordering's samples, the commands it accepts, and the members added to live contracts (ADR-028,
+/// ADR-099).</summary>
 internal sealed class OrderingContracts : ContractContext
 {
     public override string Service => "Ordering";

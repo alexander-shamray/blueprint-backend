@@ -10,7 +10,8 @@ namespace Web.Bff.Addresses;
 /// </remarks>
 public sealed record SavedAddress(string Line1, string? Line2, string City, string PostalCode, string Country)
 {
-    /// <summary>Trimmed, an empty second line absent and the country upper case, as the order stores an address.</summary>
+    /// <summary>Trimmed, an empty second line absent and the country upper case, as the order stores an
+    /// address.</summary>
     public SavedAddress Normalised() =>
         new(
             Line1.Trim(),

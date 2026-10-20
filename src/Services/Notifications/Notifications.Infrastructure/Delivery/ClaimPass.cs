@@ -6,7 +6,7 @@ namespace Notifications.Infrastructure.Delivery;
 /// <summary>The claim pass both senders run: lease the due rows, then end each alone or back it off.</summary>
 /// <remarks>
 /// <see cref="SendWorker"/> and <see cref="PushSendWorker"/> supply the parked read, claim, row steps and fault lines;
-/// the lease, the fan-out and the back-off catch are written here once, and the sender nests its half (internal claims).
+/// the lease, the fan-out and the back-off catch are written here once; the sender nests its half (internal claims).
 /// </remarks>
 internal abstract class ClaimPass<TWork, TClaims, TState>(IServiceScopeFactory scopes)
     where TClaims : notnull
@@ -29,12 +29,14 @@ internal abstract class ClaimPass<TWork, TClaims, TState>(IServiceScopeFactory s
         return new SendPass(claimed.Count, finished.Count(f => f));
     }
 
-    /// <summary>Reads what parks rows, logging it, before the claim; the claim and every row are handed the result.</summary>
+    /// <summary>Reads what parks rows, logging it, before the claim; the claim and every row are handed the
+    /// result.</summary>
     protected abstract TState Begin(IServiceProvider claimScope);
 
     protected abstract Task<IReadOnlyList<TWork>> ClaimAsync(TClaims claims, TState state, CancellationToken rows);
 
-    /// <summary>The row's span, a child of the intake that wrote it so the calls join the order's trace (§9.4).</summary>
+    /// <summary>The row's span, a child of the intake that wrote it so the calls join the order's trace
+    /// (§9.4).</summary>
     protected abstract Activity? StartSpan(TWork work);
 
     /// <summary>One leased row, step by step, in a scope of its own; true when it reached an outcome.</summary>

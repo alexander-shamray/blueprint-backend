@@ -1,16 +1,18 @@
 namespace Notifications.Application.Privacy;
 
-/// <summary>What Notifications holds of a customer, erased in raw statements on the unit of work's transaction.</summary>
+/// <summary>What Notifications holds of a customer, erased in statements on the unit of work's transaction.</summary>
 /// <remarks>
 /// Each subject-wide statement that takes the request keeps what was written under it: the records, notices and
 /// deliveries of an order placed under it (ADR-099), and a device or consent row stamped with it (ADR-138).
 /// </remarks>
 public interface INotificationsPersonalDataStore
 {
-    /// <summary>Deletes the notices still waiting on the subject, which ADR-052 ends with the record they wait on.</summary>
+    /// <summary>Deletes the notices still waiting on the subject, which ADR-052 ends with the record they wait
+    /// on.</summary>
     Task<int> DeleteWaitingNoticesAsync(Guid subjectId, Guid requestId, CancellationToken ct);
 
-    /// <summary>Takes the subject's id and the message's values off the ended notices, keeping the evidence (ADR-053).</summary>
+    /// <summary>Takes the subject's id and the message's values off the ended notices, keeping the evidence
+    /// (ADR-053).</summary>
     Task<int> AnonymiseEndedNoticesAsync(Guid subjectId, Guid requestId, CancellationToken ct);
 
     /// <summary>Deletes the subject's push deliveries still pending, so none is sent after the erasure.</summary>

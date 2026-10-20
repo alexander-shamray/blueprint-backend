@@ -28,7 +28,8 @@ internal static class ContractShapes
         Path.Combine(AppContext.BaseDirectory, $"contract-shapes.{service}.received.json");
 
     /// <summary>The record's path under the source tree, for a failure to name the file to replace.</summary>
-    internal static string RecordPath(string service) => $"tests/Platform.IntegrationTests/{Folder}/{service}/{FileName}";
+    internal static string RecordPath(string service) =>
+        $"tests/Platform.IntegrationTests/{Folder}/{service}/{FileName}";
 
     internal static Type[] Contracts() => [.. ContractContexts.Assembly.GetTypes().Where(ContractTests.IsContract)];
 
