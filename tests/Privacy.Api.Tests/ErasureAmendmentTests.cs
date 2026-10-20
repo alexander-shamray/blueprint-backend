@@ -49,6 +49,25 @@ public sealed class ErasureAmendmentTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task Correcting_a_misspelt_name_counts_the_answer_already_heard_and_closes_the_request()
+    {
+        Guid request = await RaiseUnderAsync("ordering,shiping", answered: "ordering");
+        await fixture.ExecuteAsync(
+            "INSERT INTO privacy.ErasureCompletions (RequestId, Responder, Count, Counted, ReceivedAt) " +
+            "VALUES ({0}, 'shipping', 1, 0, SYSDATETIMEOFFSET())",
+            request);
+
+        (await AmendAsync(request, ["shipping"], ["shiping"], Reason)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = Status FROM privacy.ErasureRequests WHERE RequestId = {0}",
+            request)).ShouldBe("Closed");
+        (await fixture.ScalarAsync<bool>(
+            "SELECT Value = Counted FROM privacy.ErasureCompletions WHERE RequestId = {0} AND Responder = 'shipping'",
+            request)).ShouldBeTrue("the recount is saved, not only held by the aggregate");
+    }
+
+    [Fact]
     public async Task An_amendment_publishes_nothing_so_a_holder_it_adds_waits_for_a_reissue()
     {
         Guid request = await RaiseUnderAsync("ordering", answered: null);
