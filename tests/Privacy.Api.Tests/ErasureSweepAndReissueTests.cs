@@ -104,8 +104,8 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
     {
         Guid request = await RaiseAsync();
         await fixture.ExecuteAsync(
-            "UPDATE privacy.ErasureRequests SET Status = 'Closed', SubjectId = NULL, " +
-            "DueAt = DATEADD(day, -1, SYSDATETIMEOFFSET()) " +
+            "UPDATE privacy.ErasureRequests " +
+            "SET Status = 'Closed', SubjectId = NULL, DueAt = DATEADD(day, -1, SYSDATETIMEOFFSET()) " +
             "WHERE RequestId = {0}",
             request);
 
