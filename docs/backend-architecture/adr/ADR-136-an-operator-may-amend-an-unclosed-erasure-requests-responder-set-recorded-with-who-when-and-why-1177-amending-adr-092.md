@@ -21,7 +21,7 @@ way out of the opposite failure: a set naming something no holder answers
 under, a misspelling of one, keeps the request overdue for ever, and a raise
 for the subject returns that request unchanged. A set that omits a holder
 fails the other way, closing without its answer, and an amendment adds the
-holder only while the request is still open. Two other remedies were
+holder only while the request has not closed. Two other remedies were
 weighed. A reissue that re-read the configuration is the change ADR-092's
 Why rules out, made silently by whoever edits the values. Superseding the
 request and raising a new one would give the subject a fresh `RequestId`,
