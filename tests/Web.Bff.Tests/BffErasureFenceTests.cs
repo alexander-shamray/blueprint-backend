@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Common.Application;
 using Shouldly;
+using Web.Bff.Addresses;
 using Web.Bff.Orders;
 using Web.Bff.Persistence;
 using Web.Bff.Privacy;
@@ -12,7 +13,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>The erasure's order delete holds its range to the audit commit and keeps what is not its own.</summary>
+/// <summary>The erasure's deletes hold their range to the audit commit and keep what is not their own.</summary>
 [Collection(nameof(BffIntegrationCollection))]
 public sealed class BffErasureFenceTests(BffServiceFixture fixture) : IAsyncLifetime
 {
@@ -62,6 +63,38 @@ public sealed class BffErasureFenceTests(BffServiceFixture fixture) : IAsyncLife
         await projected.WaitAsync(BffServiceFixture.StepDeadline, ct);
 
         (await fixture.OrderAsync(order)).ShouldBeNull("the write waited, then found the audit row");
+    }
+
+    [Fact]
+    public async Task A_save_waits_for_an_erasure_that_found_no_address_and_is_then_saved_under_it()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid request = Guid.CreateVersion7();
+        PauseBeforeAudit pause = new();
+
+        await using BffDbContext db = new(
+            new DbContextOptionsBuilder<BffDbContext>()
+                .UseSqlServer(fixture.ConnectionString)
+                .AddInterceptors(pause)
+                .Options);
+        PersonalDataDeleteRequestedHandler handler = new(db, new NoReport(), TimeProvider.System);
+
+        Task erasure = handler.HandleAsync(Requested(request), ct);
+        (await pause.Reached.Task.WaitAsync(BffServiceFixture.StepDeadline, ct))
+            .ShouldBeTrue("the erasure has run its delete and not yet written its audit row");
+
+        Task saved = fixture.Factory.Services.GetRequiredService<SavedAddressStore>()
+            .SaveAsync(Subject, new SavedAddress("1 Test Street", null, "Testville", "T1", "KZ"), ct);
+
+        await Should.ThrowAsync<TimeoutException>(() => saved.WaitAsync(Wait, ct));
+
+        pause.Release.SetResult();
+        await erasure;
+        await saved.WaitAsync(BffServiceFixture.StepDeadline, ct);
+
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM bff.SavedAddresses WHERE CustomerId = {0}",
+            Subject)).ShouldBe($"[\"{request}\"]", "the save waited, then read the audit row and stamped it");
     }
 
     [Fact]
