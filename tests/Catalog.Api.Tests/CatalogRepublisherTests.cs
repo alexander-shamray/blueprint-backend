@@ -157,7 +157,14 @@ public class CatalogRepublisherTests(ServiceFixture fixture)
                 (Id, Name, ThumbnailUrl, PriceAmount, PriceCurrency, PublishedAt, LastEventAt, WithdrawnAt)
             VALUES
                 ({Untouched}, N'Untouched', NULL, 10.00, 'EUR', {Published}, {Published}, NULL),
-                ({PriceMoved}, N'Price moved', N'https://img.example/p.png', 12.50, 'EUR', {Published}, {Repriced},
+                (
+                    {PriceMoved},
+                    N'Price moved',
+                    N'https://img.example/p.png',
+                    12.50,
+                    'EUR',
+                    {Published},
+                    {Repriced},
                     NULL),
                 ({Pulled}, N'Pulled', NULL, 9.00, 'EUR', {Published}, {Withdrawn}, {Withdrawn});
             """,
