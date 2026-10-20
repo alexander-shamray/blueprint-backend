@@ -46,6 +46,8 @@ public interface INotificationsPersonalDataStore
     /// </summary>
     Task<int> ClearDevicesAsync(Guid subjectId, Guid requestId, CancellationToken ct);
 
-    /// <summary>Takes the subject off each entry not written under the request, and stamps when (ADR-120, ADR-138).</summary>
+    /// <summary>
+    /// Takes the subject off each entry not written under the request, and stamps when (ADR-120, ADR-138).
+    /// </summary>
     Task<int> AnonymiseConsentAsync(Guid subjectId, Guid requestId, DateTimeOffset now, CancellationToken ct);
 }
