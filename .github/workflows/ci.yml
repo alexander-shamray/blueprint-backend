@@ -92,6 +92,7 @@ jobs:
   # Docker and no network — each suite that reaches `gh` stubs it on PATH.
   review-helpers:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

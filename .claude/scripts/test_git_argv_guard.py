@@ -19,6 +19,8 @@ from review_helpers import (
 
 
 HOOK = SCRIPTS.parent / "hooks" / "guard-git-argv.py"
+# Well under the harness's 60 seconds, and far over what any case here takes.
+HOOK_TIMEOUT = 20
 
 
 class _TallyingList(list):
@@ -69,10 +71,17 @@ class TheGitArgvGuard(unittest.TestCase):
     def judge(self, command, tool="Bash"):
         """The hook's verdict on one command: None to allow, or the reason."""
         event = {"tool_name": tool, "tool_input": {"command": command}}
-        result = subprocess.run(
-            [sys.executable, str(HOOK)],
-            input=json.dumps(event), capture_output=True, text=True,
-        )
+        # A verdict that arrives after the harness's 60 seconds is no verdict,
+        # and a hook with none is non-blocking, so a slow answer is the failure
+        # and not a pass that took long.
+        try:
+            result = subprocess.run(
+                [sys.executable, str(HOOK)],
+                input=json.dumps(event), capture_output=True, text=True,
+                timeout=HOOK_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            self.fail(f"no verdict within {HOOK_TIMEOUT}s: {command[:80]!r}")
         self.assertEqual(0, result.returncode, result.stderr)
         if not result.stdout.strip():
             return None
