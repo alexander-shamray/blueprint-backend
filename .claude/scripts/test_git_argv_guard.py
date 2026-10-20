@@ -181,9 +181,25 @@ class TheGitArgvGuard(unittest.TestCase):
             "git push origin feature --force-if-includes",
             "git push origin -d some-branch",
             "git push origin topic:main",
+            # Git resolves a destination that is not fully qualified against
+            # `refs/%s`, so `heads/main` is `refs/heads/main`.
+            "git push origin HEAD:heads/main",
+            "git push origin topic:heads/main",
         ):
             with self.subTest(command=command):
                 self.assertRefused(command)
+
+    def test_a_branch_that_only_looks_like_a_prefixed_main_is_admitted(self):
+        # The control for the prefix strip: it removes one prefix and compares,
+        # so a branch merely named `heads/main` or `refs/heads/main` under a
+        # prefix of its own is not main, and refusing it would be over-reach.
+        for command in (
+            "git push origin topic:refs/heads/heads/main",
+            "git push origin topic:heads/refs/heads/main",
+            "git push origin topic:heads/feature",
+        ):
+            with self.subTest(command=command):
+                self.assertAdmitted(command)
 
     def test_the_pushes_ship_actually_makes_are_admitted(self):
         # The control that matters operationally: over-reach here breaks the

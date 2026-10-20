@@ -1055,9 +1055,13 @@ at all. That is the deny-list trailing the grammar in parser form. **The
 question is inverted now**: a push is refused unless every part of it is
 recognised, so the spelling nobody has listed is refused for being
 unrecognised rather than admitted for being unlisted. Its suite carries the
-six the issue listed and six it did not, plus the three pushes `/ship`
-actually makes, because over-reach here breaks the delivery chain and would
-be found at the worst moment.
+six the issue listed and the spellings it did not, plus the three pushes
+`/ship` actually makes, because over-reach here breaks the delivery chain and
+would be found at the worst moment. **One spelling still got through**: git
+matches a destination that is not fully qualified against `refs/%s`, so
+`HEAD:heads/main` is `refs/heads/main`, and the parser stripped only the
+longer prefix (#1154). It strips either now, once, so `refs/heads/heads/main`
+stays the branch it names.
 
 **The ninth is `/review-branch`'s pair of `dotnet` grants, and what makes it
 worth its own entry is that the enumeration guarding it could never have
