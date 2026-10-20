@@ -193,6 +193,9 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
         Guid request = Guid.CreateVersion7();
         Guid kept = Guid.CreateVersion7();
         Guid erased = Guid.CreateVersion7();
+
+        // The first pass, before either order: the kept one is placed under the request, the other under nothing.
+        await PublishRequestAsync(request);
         await fixture.OrderAsync(kept, Subject, [request]);
         await fixture.OrderAsync(erased, Subject);
 
