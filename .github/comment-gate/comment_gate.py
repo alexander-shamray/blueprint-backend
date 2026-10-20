@@ -699,8 +699,7 @@ def _line_starts(text):
 
 @dataclass(frozen=True)
 class Line:
-    """One line: its number, its comment text, whether it holds only that, and
-    its width in characters, its line break not counted."""
+    """One line: its number, comment text, whether it is only that, and width."""
 
     number: int
     said: str
