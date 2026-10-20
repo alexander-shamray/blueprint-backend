@@ -156,8 +156,13 @@ class GuardCase(unittest.TestCase):
         return linkpath
 
     def judge(self, file_path, tool="Edit", cwd=None, key="file_path",
-              project=None):
-        """The hook's verdict on one call: the reason, or `None` for allowed."""
+              project=None, process_cwd=None):
+        """The hook's verdict on one call: the reason, or `None` for allowed.
+
+        `cwd` is the event's, which the hook resolves a relative path against;
+        `process_cwd` is the directory the hook process itself starts in, and
+        is the runner's own when left `None`.
+        """
         event = {
             "hook_event_name": "PreToolUse",
             "cwd": self.root if cwd is None else cwd,
@@ -167,6 +172,7 @@ class GuardCase(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, str(HOOK)],
             input=json.dumps(event), capture_output=True, text=True,
+            cwd=process_cwd,
             env={**os.environ,
                  "CLAUDE_PROJECT_DIR": self.root if project is None else project},
         )
@@ -427,6 +433,23 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
         # that changes, and the answer must not be "resolve against whatever
         # directory the hook process happens to have inherited".
         self.assertAdmitted(os.path.join("docs", "chapter.md"))
+
+        # Admission cannot tell the two bases apart, so the refusal does: a link
+        # under the event's cwd that leaves the checkout, spelled relatively,
+        # while the process starts in a decoy outside every anchor holding a
+        # plain file of the same spelling. Joined onto the process's own
+        # directory the path would meet no link and fall through admitted.
+        decoy = tempfile.mkdtemp(prefix="guard-decoy-")
+        self.addCleanup(shutil.rmtree, decoy, ignore_errors=True)
+        for linker in linkers():
+            with self.subTest(link=linker):
+                link = self.link_dir("relative", self.outside, linker)
+                spelled = os.path.join("docs", os.path.basename(link), "loot.txt")
+                os.makedirs(os.path.dirname(os.path.join(decoy, spelled)))
+                self.write(os.path.join(decoy, spelled), "harmless\n")
+                self.assertRefused(spelled, process_cwd=decoy)
+                self.assertAdmitted(
+                    os.path.join("docs", "chapter.md"), process_cwd=decoy)
 
     def test_a_checkout_reached_through_a_link_is_not_refused_wholesale(self):
         # `/tmp` is a link to `/private/tmp` on macOS and a worktree path on
