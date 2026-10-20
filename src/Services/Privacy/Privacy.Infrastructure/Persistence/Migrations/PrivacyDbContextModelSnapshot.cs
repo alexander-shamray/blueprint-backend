@@ -207,6 +207,43 @@ namespace Privacy.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("Privacy.Domain.ErasureRequests.ErasureRequest", b =>
                 {
+                    b.OwnsMany("Privacy.Domain.ErasureRequests.ErasureAmendment", "Amendments", b1 =>
+                        {
+                            b1.Property<Guid>("RequestId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<int>("Sequence")
+                                .HasColumnType("int");
+
+                            b1.Property<string>("Added")
+                                .IsRequired()
+                                .HasMaxLength(400)
+                                .HasColumnType("nvarchar(400)");
+
+                            b1.Property<DateTimeOffset>("AmendedAt")
+                                .HasColumnType("datetimeoffset(7)");
+
+                            b1.Property<Guid>("AmendedBy")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<string>("Reason")
+                                .IsRequired()
+                                .HasMaxLength(400)
+                                .HasColumnType("nvarchar(400)");
+
+                            b1.Property<string>("Removed")
+                                .IsRequired()
+                                .HasMaxLength(400)
+                                .HasColumnType("nvarchar(400)");
+
+                            b1.HasKey("RequestId", "Sequence");
+
+                            b1.ToTable("ErasureAmendments", "privacy");
+
+                            b1.WithOwner()
+                                .HasForeignKey("RequestId");
+                        });
+
                     b.OwnsMany("Privacy.Domain.ErasureRequests.ErasureCompletion", "Completions", b1 =>
                         {
                             b1.Property<Guid>("RequestId")
@@ -232,6 +269,8 @@ namespace Privacy.Infrastructure.Persistence.Migrations
                             b1.WithOwner()
                                 .HasForeignKey("RequestId");
                         });
+
+                    b.Navigation("Amendments");
 
                     b.Navigation("Completions");
                 });

@@ -10,7 +10,17 @@ public sealed record ErasureRequestView(
     int Reissues,
     IReadOnlyList<string> Responders,
     IReadOnlyList<string> Missing,
-    IReadOnlyList<HolderAnswer> Answers);
+    IReadOnlyList<HolderAnswer> Answers,
+    IReadOnlyList<ResponderAmendment> Amendments);
 
-/// <summary>One holder's answer; <c>Counted</c> is false for a name outside the set the request was raised with.</summary>
+/// <summary>One holder's answer; <c>Counted</c> is false for a name outside the request's set.</summary>
 public sealed record HolderAnswer(string Responder, int Count, bool Counted, DateTimeOffset ReceivedAt);
+
+/// <summary>One change an operator made to the set, with the staff principal who made it (ADR-136).</summary>
+public sealed record ResponderAmendment(
+    int Sequence,
+    IReadOnlyList<string> Added,
+    IReadOnlyList<string> Removed,
+    string Reason,
+    Guid AmendedBy,
+    DateTimeOffset AmendedAt);

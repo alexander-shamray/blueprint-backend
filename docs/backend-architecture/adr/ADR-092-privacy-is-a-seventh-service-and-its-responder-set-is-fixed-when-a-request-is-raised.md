@@ -98,6 +98,13 @@ commits at any moment either finds the row to delete or is seen by the check.
 The audit row keeps no customer id, and the cost is a scan of
 a table that has no window ([ADR-095](ADR-095-a-closed-erasure-request-is-kept-as-the-evidence-and-has-no-retention-window.md)).
 
+**Amended by [ADR-136](ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md).**
+The set is fixed when a request is raised against the configuration, and an
+operator may still change it on one unclosed request, recorded with who did
+it, when and why. Nothing closes an overdue request by itself still: beside
+a reissue that brings the last answer, an amendment that removes the holders
+still missing closes it.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

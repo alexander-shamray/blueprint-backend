@@ -18,7 +18,20 @@ public sealed class GetErasureRequestHandler(IDbConnectionFactory connections)
         FROM privacy.ErasureCompletions
         WHERE RequestId = @RequestId
         ORDER BY ReceivedAt, Responder;
+
+        SELECT Sequence, Added, Removed, Reason, AmendedBy, AmendedAt
+        FROM privacy.ErasureAmendments
+        WHERE RequestId = @RequestId
+        ORDER BY Sequence;
         """;
+
+    private sealed record AmendmentRow(
+        int Sequence,
+        string Added,
+        string Removed,
+        string Reason,
+        Guid AmendedBy,
+        DateTimeOffset AmendedAt);
 
     private sealed record Row(
         Guid RequestId,
@@ -41,9 +54,20 @@ public sealed class GetErasureRequestHandler(IDbConnectionFactory connections)
             return Result.Failure<ErasureRequestView>(ErasureRequestErrors.NotFound);
 
         HolderAnswer[] answers = [.. await grid.ReadAsync<HolderAnswer>()];
+        ResponderAmendment[] amendments =
+        [
+            .. (await grid.ReadAsync<AmendmentRow>()).Select(a =>
+                new ResponderAmendment(
+                    a.Sequence,
+                    Names(a.Added),
+                    Names(a.Removed),
+                    a.Reason,
+                    a.AmendedBy,
+                    a.AmendedAt))
+        ];
         string[] responders = row.Responders.Split(',');
 
-        // The holders the request was raised with that have no counted answer, in the order it was raised with.
+        // The holders in the request's set that have no counted answer, in the set's order.
         string[] missing =
         [
             .. responders.Where(r => !answers.Any(a => a.Counted && a.Responder == r))
@@ -59,6 +83,10 @@ public sealed class GetErasureRequestHandler(IDbConnectionFactory connections)
                 row.Reissues,
                 responders,
                 missing,
-                answers));
+                answers,
+                amendments));
     }
+
+    // Stored joined, as the set is; an empty column is no names rather than one empty one.
+    private static string[] Names(string joined) => joined.Length == 0 ? [] : joined.Split(',');
 }

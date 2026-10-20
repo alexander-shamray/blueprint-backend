@@ -5,8 +5,9 @@ namespace Privacy.Domain.ErasureRequests;
 
 /// <summary>One data subject's request to be erased, and what the holders have answered (ADR-092).</summary>
 /// <remarks>
-/// The responder set is stored as it stood when the request was raised, so a later change moves no open request.
-/// The subject's id is personal data and stays until the request closes and the hash replaces it (ADR-092).
+/// The responder set is stored as it stood when the request was raised, so a configuration change moves no open
+/// request; only an operator's recorded amendment does (ADR-136). The subject's id is personal data and stays until
+/// the request closes and the hash replaces it (ADR-092).
 /// </remarks>
 public sealed class ErasureRequest : AggregateRoot<Guid>
 {
@@ -16,8 +17,12 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
     /// <summary>The width of the column the whole set is joined into, which the set may not outgrow.</summary>
     public const int MaxRespondersLength = 400;
 
+    /// <summary>The longest reason an amendment may give.</summary>
+    public const int MaxReasonLength = 400;
+
     private string _respondersCsv = "";
     private readonly List<ErasureCompletion> _completions = [];
+    private readonly List<ErasureAmendment> _amendments = [];
 
     /// <summary>The subject, or null once the request has closed and only the hash remains.</summary>
     public Guid? SubjectId { get; private set; }
@@ -29,11 +34,14 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
     /// <summary>When the request becomes overdue if it is still open (ADR-092).</summary>
     public DateTimeOffset DueAt { get; private set; }
 
-    /// <summary>The holders that were expected to answer when the request was raised.</summary>
+    /// <summary>The holders expected to answer: the set it was raised with, as any amendment left it.</summary>
     public IReadOnlyList<string> Responders => _respondersCsv.Split(',');
 
     /// <summary>Every answer heard, including any from a name outside the set, which is flagged and not counted.</summary>
     public IReadOnlyList<ErasureCompletion> Completions => _completions.AsReadOnly();
+
+    /// <summary>Each change an operator made to the set, in order.</summary>
+    public IReadOnlyList<ErasureAmendment> Amendments => _amendments.AsReadOnly();
 
     /// <summary>The hash the holders' audit rows carry, which replaces the subject's id when the request closes.</summary>
     public string? SubjectHash { get; private set; }
@@ -166,6 +174,85 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
     }
 
     /// <summary>
+    /// Changes the set of a request that has not closed, records who did it and why, and closes the request when
+    /// every holder left in the set has been counted; true when it closed. Publishes nothing: a holder the change
+    /// adds is asked by a reissue (ADR-136).
+    /// </summary>
+    public bool AmendResponders(
+        IReadOnlyCollection<string> add,
+        IReadOnlyCollection<string> remove,
+        string reason,
+        Guid amendedBy,
+        DateTimeOffset now)
+    {
+        string? unfit = WhyNotAnAmendment(add, remove);
+        if (unfit is not null)
+            throw new DomainException(unfit);
+
+        if (string.IsNullOrWhiteSpace(reason) || reason.Length > MaxReasonLength)
+            throw new DomainException($"An amendment gives a reason of at most {MaxReasonLength} characters.");
+
+        if (amendedBy == Guid.Empty)
+            throw new DomainException("An amendment names the operator who made it.");
+
+        _respondersCsv = string.Join(',', AmendedSet(add, remove));
+
+        foreach (ErasureCompletion heard in _completions)
+            heard.Recount(IsExpected(heard.Responder));
+
+        _amendments.Add(new ErasureAmendment(_amendments.Count + 1, add, remove, reason, amendedBy, now));
+
+        if (Missing.Count > 0)
+            return false;
+
+        Close(now);
+        return true;
+    }
+
+    /// <summary>Why the set cannot take this change, or null when it can.</summary>
+    public string? WhyNotAnAmendment(IReadOnlyCollection<string> add, IReadOnlyCollection<string> remove)
+    {
+        if (Status == ErasureStatus.Closed)
+            return "The request has closed, so its set no longer decides anything.";
+
+        if (add.Count == 0 && remove.Count == 0)
+            return "An amendment adds or removes at least one holder.";
+
+        List<string> named = new(add);
+        named.AddRange(remove);
+
+        foreach (string name in named)
+        {
+            if (!IsResponderName(name))
+            {
+                return $"'{name}' is not a lower-case name of letters, digits and hyphens, " +
+                    $"at most {MaxResponderLength} long, not starting with a hyphen.";
+            }
+        }
+
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        foreach (string name in named)
+        {
+            if (!seen.Add(name))
+                return $"'{name}' is named twice.";
+        }
+
+        foreach (string name in add)
+        {
+            if (IsExpected(name))
+                return $"'{name}' is already in the set.";
+        }
+
+        foreach (string name in remove)
+        {
+            if (!IsExpected(name))
+                return $"'{name}' is not in the set.";
+        }
+
+        return WhyNotAResponderSet(AmendedSet(add, remove));
+    }
+
+    /// <summary>
     /// Why a set cannot be a request's, or null when it can. The aggregate and the options both ask, so the host
     /// refuses at start what the first request would refuse.
     /// </summary>
@@ -190,6 +277,22 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
         return string.Join(',', responders).Length > MaxRespondersLength
             ? $"The holders together are over {MaxRespondersLength} characters, the width the set is stored in."
             : null;
+    }
+
+    // The set in its current order, less what goes, then what arrives in the order given.
+    private List<string> AmendedSet(IReadOnlyCollection<string> add, IReadOnlyCollection<string> remove)
+    {
+        HashSet<string> going = new(remove, StringComparer.Ordinal);
+        List<string> set = [];
+
+        foreach (string responder in Responders)
+        {
+            if (!going.Contains(responder))
+                set.Add(responder);
+        }
+
+        set.AddRange(add);
+        return set;
     }
 
     private bool IsExpected(string responder)

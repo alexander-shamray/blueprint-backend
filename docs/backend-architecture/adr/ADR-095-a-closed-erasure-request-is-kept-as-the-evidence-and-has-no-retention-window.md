@@ -28,6 +28,12 @@ request is untouched: it keeps the id until it closes, as
 [ADR-092](ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)
 says.
 
+**Amended by [ADR-136](ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md).**
+A request an operator amended keeps its amendments with it, and each names
+the staff user who made it, so a closed request no longer always names
+nobody. Its window is still none, on ADR-136's ground rather than this one:
+the record of who changed the set is the control on the change.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

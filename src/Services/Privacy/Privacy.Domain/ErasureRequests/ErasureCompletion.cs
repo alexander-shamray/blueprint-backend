@@ -25,6 +25,9 @@ public sealed class ErasureCompletion
         ReceivedAt = receivedAt;
     }
 
+    /// <summary>An amended set decides afresh whether this holder's answer counts.</summary>
+    internal void Recount(bool counted) => Counted = counted;
+
     /// <summary>A reissue erases again and reports again; the record keeps the most it ever removed.</summary>
     internal void Repeat(int count, DateTimeOffset receivedAt)
     {
