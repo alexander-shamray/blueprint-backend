@@ -2084,8 +2084,12 @@ def push_offence(segment):
             return "a `:branch` refspec deletes the remote branch"
     else:
         source, destination = refspec, refspec
-    if destination.startswith("refs/heads/"):
-        destination = destination[len("refs/heads/"):]
+    # One prefix, not a loop: `refs/heads/heads/main` is a branch named
+    # `heads/main`, and `heads/refs/heads/main` another, neither of them main.
+    for prefix in ("refs/heads/", "heads/"):
+        if destination.startswith(prefix):
+            destination = destination[len(prefix):]
+            break
     if source in UNRESOLVABLE_SOURCES and destination == source:
         return (
             f"`{source}` names no destination of its own; it updates whatever "
