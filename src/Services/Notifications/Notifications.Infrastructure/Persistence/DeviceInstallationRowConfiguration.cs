@@ -23,7 +23,7 @@ internal sealed class DeviceInstallationRowConfiguration : IEntityTypeConfigurat
         builder.HasIndex(r => new { r.Platform, r.AppId, r.Token }).IsUnique().HasFilter("[Token] IS NOT NULL");
 
         // The erasure requests already applied to the subject when the registration read them, which a reissue keeps
-        // the row for (ADR-138); a JSON column, as on OrderRecords, since nothing queries by them.
+        // the row for (ADR-138); a JSON column, as on OrderRecords, since no row is looked up or indexed by them.
         builder.Property(r => r.ErasedUnder).HasColumnType("nvarchar(max)").HasDefaultValueSql("N'[]'");
 
         // The cap's count and erasure's clearing, both by subject; and the stale pass, by when a row was last seen.

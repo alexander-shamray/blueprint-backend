@@ -20,7 +20,7 @@ internal sealed class OrderRecordConfiguration : IEntityTypeConfiguration<OrderR
         builder.Property(r => r.CancelReason).HasMaxLength(OrderRecordLimits.MaxCodeLength);
         builder.Property(r => r.CancelOrigin).HasMaxLength(OrderRecordLimits.MaxCodeLength);
 
-        // Request ids, kept as Ordering keeps them (ADR-099): a JSON column, since nothing queries by them (ADR-101).
+        // Request ids, kept as Ordering keeps them (ADR-099): a JSON column, as no row is looked up by them (ADR-101).
         builder
             .Property(r => r.ErasedUnder)
             .HasConversion(
