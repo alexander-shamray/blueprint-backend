@@ -5,9 +5,8 @@ namespace Privacy.Domain.ErasureRequests;
 
 /// <summary>One data subject's request to be erased, and what the holders have answered (ADR-092).</summary>
 /// <remarks>
-/// The responder set is stored as it stood when the request was raised, so a configuration change moves no open
-/// request; only an operator's recorded amendment does (ADR-136). The subject's id is personal data and stays until
-/// the request closes and the hash replaces it (ADR-092).
+/// The set is stored as raised, so a configuration change moves no open request; only an operator's recorded
+/// amendment does (ADR-136). The subject's id stays until the request closes and the hash replaces it (ADR-092).
 /// </remarks>
 public sealed class ErasureRequest : AggregateRoot<Guid>
 {

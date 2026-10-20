@@ -1,7 +1,7 @@
 namespace Privacy.Domain.ErasureRequests;
 
 /// <summary>One operator's change to a request's responder set: what it added and removed, who, when and why.</summary>
-/// <remarks>Kept with its request, closed or not, as the record of why the set is not the one raised.</remarks>
+/// <remarks>Kept with its request, closed or not, as the record of why the set is not the one raised (ADR-136).</remarks>
 public sealed class ErasureAmendment
 {
     /// <summary>The amendment's place on its request, from one.</summary>
