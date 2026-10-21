@@ -57,6 +57,19 @@ public class ErasureRequestAmendmentTests
     }
 
     [Fact]
+    public void A_dropped_holder_that_answers_before_the_close_lets_the_close_be_published()
+    {
+        // Its answer says it erased, which is all a published close claims of it (ADR-139).
+        ErasureRequest request = Raise("ordering", "shipping");
+        request.AmendResponders([], ["shipping"], Reason, Operator, Now).ShouldBeFalse();
+        request.RecordCompletion("shipping", 1, Now.AddMinutes(5)).ShouldBe(CompletionOutcome.Unexpected);
+
+        request.RecordCompletion("ordering", 2, Now.AddHours(1));
+
+        request.DomainEvents.OfType<ErasureRequestClosedDomainEvent>().ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public void A_close_whose_dropped_holder_had_answered_tells_the_holders_when_it_closed()
     {
         ErasureRequest request = Raise("ordering", "shipping");
