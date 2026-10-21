@@ -23,7 +23,10 @@ public sealed class PersonalDataDeleteRequestedHandler(
         if (await erasures.IsClosedAsync(integrationEvent.RequestId, ct))
             return;
 
-        foreach (Guid order in await store.AddressedOrdersAsync(integrationEvent.SubjectId, ct))
+        IReadOnlyList<Guid> orders =
+            await store.AddressedOrdersAsync(integrationEvent.SubjectId, integrationEvent.RequestId, ct);
+
+        foreach (Guid order in orders)
         {
             Result ended = await dispatcher.SendAsync(new EndWaitingShipmentCommand(order), ct);
 

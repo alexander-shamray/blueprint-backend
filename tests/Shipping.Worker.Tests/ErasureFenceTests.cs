@@ -37,7 +37,7 @@ public sealed class ErasureFenceTests(ServiceFixture fixture) : IAsyncLifetime
             async inner =>
             {
                 int count = await erasing.ServiceProvider.GetRequiredService<IShippingPersonalDataStore>()
-                    .DeleteAddressesAsync(subject, inner);
+                    .DeleteAddressesAsync(subject, Guid.CreateVersion7(), inner);
                 count.ShouldBe(0);
                 deleted.SetResult();
                 await commit.Task;

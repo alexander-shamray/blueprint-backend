@@ -29,6 +29,7 @@ public class ErasePersonalDataHandlerTests
 
         result.Value.ShouldBe(2);
         _store.Subjects.ShouldBe([Subject]);
+        _store.Requests.ShouldBe([Request], "an address saved under the request is the request's to keep (ADR-103)");
         PersonalDataErasure row = _erasures.Added.ShouldHaveSingleItem();
         row.Id.ShouldBe(Request);
         row.Count.ShouldBe(2);
@@ -65,12 +66,15 @@ public class ErasePersonalDataHandlerTests
 
         public List<Guid> Subjects { get; } = [];
 
-        public Task<IReadOnlyList<Guid>> AddressedOrdersAsync(Guid subjectId, CancellationToken ct) =>
+        public List<Guid> Requests { get; } = [];
+
+        public Task<IReadOnlyList<Guid>> AddressedOrdersAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
             throw new NotSupportedException("Reading the orders is the integration handler's step.");
 
-        public Task<int> DeleteAddressesAsync(Guid subjectId, CancellationToken ct)
+        public Task<int> DeleteAddressesAsync(Guid subjectId, Guid requestId, CancellationToken ct)
         {
             Subjects.Add(subjectId);
+            Requests.Add(requestId);
             return Task.FromResult(Addresses);
         }
     }

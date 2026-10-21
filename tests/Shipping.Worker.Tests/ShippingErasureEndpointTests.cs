@@ -154,6 +154,34 @@ public sealed class ShippingErasureEndpointTests(ServiceFixture fixture) : IAsyn
     }
 
     [Fact]
+    public async Task A_reissue_leaves_an_order_placed_under_the_request_whole()
+    {
+        // Placed after the first pass, so its shipment carries the request (ADR-103), and still waiting to be booked.
+        Guid request = Guid.CreateVersion7();
+        Guid before = Guid.CreateVersion7();
+        Guid after = Guid.CreateVersion7();
+        await SeedAddressAsync(before, Subject);
+        await SeedPendingShipmentAsync(before);
+        await SeedAddressAsync(after, Subject);
+        await SeedPendingShipmentAsync(after, request);
+
+        await PublishRequestAsync(request);
+
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = Status FROM shipping.Shipments WHERE OrderId = {0}",
+            after)).ShouldBe("Pending", "the reissue does not end a shipment placed under it");
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM shipping.Shipments WHERE OrderId = {0}",
+            after)).ShouldContain(request.ToString());
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0}",
+            after)).ShouldBe(1, "its address was saved under the request too");
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = Status FROM shipping.Shipments WHERE OrderId = {0}",
+            before)).ShouldBe("Unfulfillable", "the order placed before the request is still the request's");
+    }
+
+    [Fact]
     public async Task Privacys_close_stamps_the_audit_row_with_the_time_it_closed()
     {
         Guid request = Guid.CreateVersion7();
