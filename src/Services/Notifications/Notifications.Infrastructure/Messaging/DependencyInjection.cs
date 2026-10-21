@@ -54,6 +54,7 @@ public static class DependencyInjection
 
             // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
             x.AddConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>();
+            x.AddConsumer<IntegrationEventConsumer<PersonalDataDeleteClosed>>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -99,6 +100,7 @@ public static class DependencyInjection
                         e.UseInMemoryOutbox(context);
 
                         e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>(context);
+                        e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteClosed>>(context);
                     });
 
                 // No ConfigureEndpoints(context): it would give a consumer a queue with neither the inbox filter

@@ -30,8 +30,9 @@ public sealed class SetPreferenceHandler(
                     "This deployment is obliged to send this topic on this channel, so it takes no preference."));
         }
 
-        IReadOnlyList<Guid> erasedUnder = await erasures.RequestsErasingAsync(command.SubjectId, ct);
-        ConsentAppend appended = await journal.AppendAsync(command, erasedUnder, clock.GetUtcNow(), ct);
+        DateTimeOffset now = clock.GetUtcNow();
+        IReadOnlyList<Guid> erasedUnder = await erasures.RequestsErasingAsync(command.SubjectId, now, ct);
+        ConsentAppend appended = await journal.AppendAsync(command, erasedUnder, now, ct);
 
         return Result.Success(
             new PreferenceWrite(appended.Outcome, ConsentRules.StateOf(pair, required, appended.Newest)));

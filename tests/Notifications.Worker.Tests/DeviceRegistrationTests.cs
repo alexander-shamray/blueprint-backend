@@ -1,4 +1,5 @@
 using Common.Application;
+using Common.Domain;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Devices;
 using Notifications.Application.Devices.RegisterDevice;
@@ -273,6 +274,44 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
         (await fixture.ScalarAsync<string>(
             "SELECT Value = ErasedUnder FROM notifications.DeviceInstallations WHERE InstallationId = {0}",
             installation)).ShouldBe("[]", "the requests go with the subject");
+    }
+
+    [Fact]
+    public async Task A_request_that_closed_before_the_registration_is_not_stamped_on_it()
+    {
+        Guid subject = Guid.CreateVersion7();
+        Guid installation = Guid.CreateVersion7();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        await ErasedSubjectIntakeTests.RecordErasureAsync(
+            fixture,
+            subject,
+            now.AddDays(-9),
+            closedAt: now - PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
+
+        await RegisterAsync(subject, installation, "token-a", 1);
+
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM notifications.DeviceInstallations WHERE InstallationId = {0}",
+            installation)).ShouldBe("[]", "the owner had anonymised the subject before the device existed (ADR-139)");
+    }
+
+    [Fact]
+    public async Task A_request_that_closed_inside_the_margin_is_still_stamped_on_the_registration()
+    {
+        Guid subject = Guid.CreateVersion7();
+        Guid installation = Guid.CreateVersion7();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        Guid request = await ErasedSubjectIntakeTests.RecordErasureAsync(
+            fixture,
+            subject,
+            now.AddDays(-9),
+            closedAt: now - PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
+
+        await RegisterAsync(subject, installation, "token-a", 1);
+
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM notifications.DeviceInstallations WHERE InstallationId = {0}",
+            installation)).ShouldBe($"[\"{request}\"]", "the margin covers the clocks disagreeing (ADR-139)");
     }
 
     private async Task<int> EraseAsync(Guid request, Guid subject)

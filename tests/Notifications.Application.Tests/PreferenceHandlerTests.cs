@@ -65,6 +65,7 @@ public class PreferenceHandlerTests
         await handler.HandleAsync(Write(), TestContext.Current.CancellationToken);
 
         _erasures.AskedFor.ShouldBe([Subject]);
+        _erasures.SourcedAt.ShouldBe([Now], "a write is sourced when it is made, from the clock (ADR-139)");
         _journal.Appended.ShouldHaveSingleItem().erasedUnder.ShouldBe([request], "a reissue keeps the entry (ADR-138)");
     }
 
@@ -162,12 +163,21 @@ public class PreferenceHandlerTests
 
         public List<Guid> AskedFor { get; } = [];
 
+        public List<DateTimeOffset> SourcedAt { get; } = [];
+
         public Task<PersonalDataErasure?> GetAsync(Guid requestId, CancellationToken ct) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyList<Guid>> RequestsErasingAsync(Guid subjectId, CancellationToken ct)
+        public Task<bool> IsClosedAsync(Guid requestId, CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public Task<IReadOnlyList<Guid>> RequestsErasingAsync(
+            Guid subjectId,
+            DateTimeOffset sourcedAt,
+            CancellationToken ct)
         {
             AskedFor.Add(subjectId);
+            SourcedAt.Add(sourcedAt);
             return Task.FromResult(Requests);
         }
 

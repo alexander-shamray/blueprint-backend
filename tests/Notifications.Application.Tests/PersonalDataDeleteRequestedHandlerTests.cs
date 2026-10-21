@@ -23,8 +23,20 @@ public class PersonalDataDeleteRequestedHandlerTests
 
     private readonly FakeDispatcher _dispatcher = new();
     private readonly FakeReporter _reporter = new();
+    private readonly FakeErasures _erasures = new();
 
-    private PersonalDataDeleteRequestedHandler Handler() => new(_dispatcher, _reporter);
+    private PersonalDataDeleteRequestedHandler Handler() => new(_dispatcher, _erasures, _reporter);
+
+    [Fact]
+    public async Task A_late_copy_of_a_closed_request_erases_and_reports_nothing()
+    {
+        _erasures.Closed = true;
+
+        await Handler().HandleAsync(Requested, TestContext.Current.CancellationToken);
+
+        _dispatcher.Sent.ShouldBeEmpty("a closed row is no longer asked, so a second pass is uncovered (ADR-139)");
+        _reporter.Reported.ShouldBeEmpty();
+    }
 
     [Fact]
     public async Task The_erasure_is_dispatched_and_its_count_is_reported()
@@ -93,6 +105,24 @@ public class PersonalDataDeleteRequestedHandlerTests
 
         public Task<TResult> QueryAsync<TResult>(IQuery<TResult> query, CancellationToken ct) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class FakeErasures : IPersonalDataErasureRepository
+    {
+        public bool Closed { get; set; }
+
+        public Task<Common.Domain.PersonalDataErasure?> GetAsync(Guid requestId, CancellationToken ct) =>
+            throw new NotSupportedException("The erasure is a command; the handler under test only dispatches it.");
+
+        public Task<bool> IsClosedAsync(Guid requestId, CancellationToken ct) => Task.FromResult(Closed);
+
+        public Task<IReadOnlyList<Guid>> RequestsErasingAsync(
+            Guid subjectId,
+            DateTimeOffset sourcedAt,
+            CancellationToken ct) =>
+            throw new NotSupportedException();
+
+        public void Add(Common.Domain.PersonalDataErasure erasure) => throw new NotSupportedException();
     }
 
     private sealed class FakeReporter : IErasureReporter

@@ -252,8 +252,13 @@ public sealed class SendWorker(
         }
 
         // Before the owner is asked, so no mailbox is fetched for an erased customer; the intake's own check, or the
-        // erasure, deletes this row, so it is left to them (ADR-101).
-        if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(customer, order.ErasedUnder, ct))
+        // erasure, deletes this row, so it is left to them (ADR-101). Asks every row: the notice records when it was
+        // written, not when its event was, so no sound instant exists (ADR-139).
+        if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(
+            customer,
+            order.ErasedUnder,
+            DateTimeOffset.MinValue,
+            ct))
         {
             ErasedCustomer(log, work.NotificationId, work.OrderId, null);
             return false;

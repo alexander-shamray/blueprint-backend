@@ -73,6 +73,24 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_request_closed_long_ago_is_still_asked_by_the_send_pass()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        fixture.ContactAnswers(customer, Mailbox, "en");
+        await fixture.OrderAsync(order, customer);
+        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+
+        // The notice records when it was written, not when its event was, so the pass asks every row (ADR-139).
+        await ErasedSubjectIntakeTests.RecordErasureAsync(fixture, customer, At, closedAt: At.AddMonths(1));
+
+        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 0));
+
+        fixture.ContactCalls(customer).ShouldBe(0);
+        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Pending);
+    }
+
+    [Fact]
     public async Task An_order_placed_under_the_request_is_still_sent()
     {
         Guid order = Guid.CreateVersion7();

@@ -230,6 +230,35 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
     }
 
     [Fact]
+    public async Task Privacys_close_stamps_the_audit_row_with_the_time_it_closed()
+    {
+        Guid request = Guid.CreateVersion7();
+        await PublishRequestAsync(request);
+        DateTimeOffset closedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        await fixture.DeliverAsync(Closed(request, closedAt), MessagingRegistration.PrivacyQueue);
+
+        (await fixture.ScalarAsync<DateTimeOffset>(
+            "SELECT Value = ClosedAt FROM notifications.PersonalDataErasures WHERE RequestId = {0}",
+            request)).ShouldBe(closedAt);
+    }
+
+    [Fact]
+    public async Task A_late_copy_of_a_closed_request_erases_nothing_and_reports_nothing()
+    {
+        Guid request = Guid.CreateVersion7();
+        await PublishRequestAsync(request);
+        await fixture.DeliverAsync(Closed(request, DateTimeOffset.UtcNow), MessagingRegistration.PrivacyQueue);
+        Guid order = Guid.CreateVersion7();
+        await fixture.OrderAsync(order, Subject);
+
+        await PublishRequestAsync(request);
+
+        (await fixture.OrderRecordAsync(order)).ShouldNotBeNull("made after the close, so not this request's");
+        await Eventually(CountCompletionsAsync, expected: 1, because: "the first pass reported; the late copy did not");
+    }
+
+    [Fact]
     public async Task The_same_request_message_delivered_twice_is_erased_and_reported_once()
     {
         Guid request = Guid.CreateVersion7();
@@ -304,6 +333,14 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
 
         return notice;
     }
+
+    private static PersonalDataDeleteClosed Closed(Guid request, DateTimeOffset closedAt) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = request,
+        OccurredAt = closedAt,
+        RequestId = request
+    };
 
     private static PersonalDataDeleteRequested Requested(Guid request, Guid messageId) => new()
     {

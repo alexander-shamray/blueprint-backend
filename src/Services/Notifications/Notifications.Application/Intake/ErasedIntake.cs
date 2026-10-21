@@ -6,7 +6,8 @@ namespace Notifications.Application.Intake;
 
 /// <summary>Records an event's notice, then deletes its order if its customer was already erased (ADR-097).</summary>
 /// <remarks>
-/// Asked after the record's unit commits, so an erasure at any moment finds the rows or is seen (ADR-097).
+/// Asked after the record's unit commits, so an erasure at any moment finds the rows or is seen (ADR-097). The
+/// event's own instant bounds it, as the data left its owner then (ADR-139).
 /// </remarks>
 public sealed class ErasedIntake(IDispatcher dispatcher, IErasedSubjects erased)
 {
@@ -19,7 +20,11 @@ public sealed class ErasedIntake(IDispatcher dispatcher, IErasedSubjects erased)
             throw new InvalidOperationException($"The notice was not recorded: {recorded.Error.Code}.");
 
         if (command.Order is OrderFact order &&
-            await erased.IsErasedAsync(order.CustomerId, order.ErasedUnder ?? [], ct))
+            await erased.IsErasedAsync(
+                order.CustomerId,
+                order.ErasedUnder ?? [],
+                command.Parameters.OccurredAt,
+                ct))
         {
             await dispatcher.SendAsync(new EndErasedOrderCommand(order.CustomerId, command.Parameters.OrderId), ct);
         }

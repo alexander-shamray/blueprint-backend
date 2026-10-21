@@ -126,7 +126,8 @@ public class MessagingRegistrationTests
             typeof(IntegrationEventConsumer<ShipmentDelivered>),
 
             // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
-            typeof(IntegrationEventConsumer<PersonalDataDeleteRequested>)
+            typeof(IntegrationEventConsumer<PersonalDataDeleteRequested>),
+            typeof(IntegrationEventConsumer<PersonalDataDeleteClosed>)
         ];
         foreach (Type consumer in consumers)
         {
