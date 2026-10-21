@@ -102,10 +102,12 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
 
         await Eventually(() => PlacedCount(order), expected: 1, because: "the placement landed");
         await Eventually(() => CancelledCount(order), expected: 1, because: "the cancellation landed on the same row");
+        // One row is the key's to keep, and the endpoint's retry would repair a lost insert, so this pins only that
+        // both land; that the loser updates rather than failing on the key is PaymentOrderStoreTests' race.
         (await fixture.ScalarAsync<int>(
             "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0}",
             order))
-            .ShouldBe(1, "the loser of the first insert updated the winner's row rather than failing on the key");
+            .ShouldBe(1, "both events landed on the order's one row");
     }
 
     private async Task PublishAsync<T>(T message, bool drain = true)
