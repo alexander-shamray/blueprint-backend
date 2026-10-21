@@ -174,7 +174,9 @@ public sealed class BffErasureFenceTests(BffServiceFixture fixture) : IAsyncLife
             TestContext.Current.CancellationToken);
 
     private Task<string> StampAsync() =>
-        fixture.ScalarAsync<string>("SELECT Value = ErasedUnder FROM bff.SavedAddresses WHERE CustomerId = {0}", Subject);
+        fixture.ScalarAsync<string>(
+            "SELECT Value = ErasedUnder FROM bff.SavedAddresses WHERE CustomerId = {0}",
+            Subject);
 
     [Fact]
     public async Task The_projection_stores_the_requests_an_order_was_placed_after()

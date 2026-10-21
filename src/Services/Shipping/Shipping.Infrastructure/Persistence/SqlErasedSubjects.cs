@@ -8,10 +8,8 @@ namespace Shipping.Infrastructure.Persistence;
 
 /// <summary>Answers from the audit rows alone: the hash is salted by its request, so each row is tried in
 /// turn.</summary>
-/// <remarks>On its own connection: the worker asks after it saves, outside any unit (ADR-052). Bounded by the
-/// request's close and never by the holder's own row, which the owner's clock does not follow (ADR-092, ADR-139). A
-/// row is skipped too when the shipment names its request as one the order was placed under (ADR-099,
-/// ADR-103).</remarks>
+/// <remarks>On its own connection, outside any unit (ADR-052). Bounded by the request's close, never by the holder's
+/// own row (ADR-092, ADR-139), and a row the shipment lists as placed under is skipped (ADR-099, ADR-103).</remarks>
 internal sealed class SqlErasedSubjects(IDbConnectionFactory connections) : IErasedSubjects
 {
     private const string ErasuresSql =

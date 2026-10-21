@@ -177,7 +177,7 @@ public sealed class ShippingErasureEndpointTests(ServiceFixture fixture) : IAsyn
 
         await PublishRequestAsync(request);
 
-        (await CountAddressesAsync(Subject)).ShouldBe(1, "what the customer gave after the close is not this request's");
+        (await CountAddressesAsync(Subject)).ShouldBe(1, "what the customer gave since the close is not its to erase");
         await Eventually(CountCompletionsAsync, expected: 1, because: "the first pass reported; the late copy did not");
     }
 
