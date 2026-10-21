@@ -822,16 +822,12 @@ class CheckThreeFollowsTheSelector(unittest.TestCase):
 
 class AScaffoldedServiceIsNotRefused(unittest.TestCase):
     def test_an_account_whose_context_has_no_contracts_yet_is_allowed(self):
-        # §4.5's scaffold grants a broker account; `Common.Contracts` gains a
-        # record only in the PR whose code publishes one. The dogfood found the
-        # gate refusing exactly this, and the fix must not regress into
-        # refusing it again. Catalog keeps its source, so check 4 is reached;
-        # a planted account with none stops the gate a check earlier.
+        # §4.5's scaffold grants its own context before `Common.Contracts` holds
+        # one (test_new_service pins the grant), and the dogfood found the gate
+        # refusing exactly that. Catalog keeps its source, so check 4 is reached,
+        # and its whole grant, the Inventory binding its code still needs
+        # included: only the namespace goes.
         definitions = real()
-        entry = permission(definitions, "catalog-svc")
-        for verb in ("configure", "write", "read"):
-            entry[verb] = re.sub(r"(Common\\\.Contracts)?\\\.Catalog\\\.V1:\|", "", entry[verb])
-            self.assertNotIn("Catalog", entry[verb], "the grant still names its contracts: the case")
         original_prefixes = gate.contract_prefixes
         gate.contract_prefixes = lambda: {p for p in original_prefixes() if ".Catalog." not in p}
         try:
