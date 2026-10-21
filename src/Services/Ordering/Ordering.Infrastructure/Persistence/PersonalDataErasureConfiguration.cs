@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Ordering.Infrastructure.Persistence;
 
-/// <summary>Holds a request id, a hash, a count and a time: no personal data, so no retention window (§11.7).</summary>
+/// <summary>Holds a request id, a hash, a count and two times: no personal data, so no retention
+/// window (§11.7).</summary>
 internal sealed class PersonalDataErasureConfiguration : IEntityTypeConfiguration<PersonalDataErasure>
 {
     public void Configure(EntityTypeBuilder<PersonalDataErasure> builder)
@@ -18,6 +19,10 @@ internal sealed class PersonalDataErasureConfiguration : IEntityTypeConfiguratio
         builder.Property(e => e.SubjectHash).HasMaxLength(64).IsFixedLength().IsUnicode(false);
         builder.Property(e => e.Count);
         builder.Property(e => e.ErasedAt);
+        builder.Property(e => e.ClosedAt);
+
+        // The check reads the open rows and the ones closed lately, and the hash it tries (ADR-139).
+        builder.HasIndex(e => e.ClosedAt).IncludeProperties(e => e.SubjectHash);
 
         builder.Property(e => e.Version).HasColumnName("RowVersion").IsRowVersion();
 

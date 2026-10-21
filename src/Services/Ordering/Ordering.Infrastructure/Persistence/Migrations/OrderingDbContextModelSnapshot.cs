@@ -30,6 +30,9 @@ namespace Ordering.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("RequestId");
 
+                    b.Property<DateTimeOffset?>("ClosedAt")
+                        .HasColumnType("datetimeoffset(7)");
+
                     b.Property<int>("Count")
                         .HasColumnType("int");
 
@@ -51,6 +54,10 @@ namespace Ordering.Infrastructure.Persistence.Migrations
                         .HasColumnName("RowVersion");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ClosedAt");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ClosedAt"), new[] { "SubjectHash" });
 
                     b.ToTable("PersonalDataErasures", "ordering");
                 });

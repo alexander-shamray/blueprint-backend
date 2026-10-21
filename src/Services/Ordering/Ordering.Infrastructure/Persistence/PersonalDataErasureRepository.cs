@@ -23,6 +23,9 @@ internal sealed class PersonalDataErasureRepository(OrderingDbContext db) : IPer
     public Task<PersonalDataErasure?> GetAsync(Guid requestId, CancellationToken ct) =>
         db.PersonalDataErasures.FirstOrDefaultAsync(e => e.Id == requestId, ct);
 
+    public Task<bool> IsClosedAsync(Guid requestId, CancellationToken ct) =>
+        db.PersonalDataErasures.AnyAsync(e => e.Id == requestId && e.ClosedAt != null, ct);
+
     public async Task LockSubjectAsync(Guid subjectId, CancellationToken ct)
     {
         string resource = $"ordering.erasure.subject.{subjectId:N}";
@@ -37,10 +40,16 @@ internal sealed class PersonalDataErasureRepository(OrderingDbContext db) : IPer
         }
     }
 
-    public async Task<IReadOnlyList<Guid>> RequestsErasingAsync(Guid subjectId, CancellationToken ct)
+    public async Task<IReadOnlyList<Guid>> RequestsErasingAsync(
+        Guid subjectId,
+        DateTimeOffset sourcedAt,
+        CancellationToken ct)
     {
+        DateTimeOffset since = PersonalDataErasure.AskedSince(sourcedAt);
+
         var rows = await db.PersonalDataErasures
             .AsNoTracking()
+            .Where(e => e.ClosedAt == null || e.ClosedAt > since)
             .Select(e => new { RequestId = e.Id, e.SubjectHash })
             .ToListAsync(ct);
 

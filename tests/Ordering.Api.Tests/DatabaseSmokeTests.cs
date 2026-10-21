@@ -51,7 +51,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "_AddOutboxTraceContext",
             "_AddPersonalDataErasures",
             "_AddOrderErasedUnder",
-            "_AddSagaStateEnteredAt"
+            "_AddSagaStateEnteredAt",
+            "_AddPersonalDataErasureClosedAt"
         ];
 
         string[] applied = await fixture.AppliedMigrationsAsync();

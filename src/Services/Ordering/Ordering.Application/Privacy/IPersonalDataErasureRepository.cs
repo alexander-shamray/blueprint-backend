@@ -7,6 +7,9 @@ public interface IPersonalDataErasureRepository
 {
     Task<PersonalDataErasure?> GetAsync(Guid requestId, CancellationToken ct);
 
+    /// <summary>True once Privacy's close of the request has reached its row here (ADR-139).</summary>
+    Task<bool> IsClosedAsync(Guid requestId, CancellationToken ct);
+
     /// <summary>
     /// Holds the subject until the unit commits, so a placement and an erasure for one customer run one after the
     /// other (ADR-137). Taken by both before they read or write anything the other touches.
@@ -16,8 +19,10 @@ public interface IPersonalDataErasureRepository
 
     /// <summary>The requests this holder has already erased the subject under, for an order to carry
     /// (ADR-099).</summary>
+    /// <param name="sourcedAt">No later than the order took the data from its owner; a request that closed well
+    /// before it is not listed (ADR-139).</param>
     /// <remarks>The hash is salted by its request (ADR-092), so each row is tried in turn.</remarks>
-    Task<IReadOnlyList<Guid>> RequestsErasingAsync(Guid subjectId, CancellationToken ct);
+    Task<IReadOnlyList<Guid>> RequestsErasingAsync(Guid subjectId, DateTimeOffset sourcedAt, CancellationToken ct);
 
     void Add(PersonalDataErasure erasure);
 }

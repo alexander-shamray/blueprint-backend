@@ -140,6 +140,7 @@ public class MessagingRegistrationTests
 
                 // §11.7's erasure request, which every holder of personal data consumes (ADR-092).
                 typeof(IntegrationEventConsumer<PersonalDataDeleteRequested>),
+                typeof(IntegrationEventConsumer<PersonalDataDeleteClosed>),
 
                 // §3.2's Accepts column: a type missing here is sent into a queue that ignores it.
                 typeof(CommandConsumer<CancelOrder, CancelOrderCommand>),
