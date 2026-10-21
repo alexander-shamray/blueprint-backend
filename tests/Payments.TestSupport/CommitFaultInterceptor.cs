@@ -31,7 +31,7 @@ public sealed class CommitFaultInterceptor : SaveChangesInterceptor
     {
         Interlocked.CompareExchange(ref _armed, null, fault);
 
-        // Taken by a save that then failed before its statements completed, so it never fired.
+        // Taken by a save still running as the fault is disposed, which must not fire it once it is disarmed.
         if (fault.PendingOn is DbContext context)
             _pending.Remove(context);
     }
