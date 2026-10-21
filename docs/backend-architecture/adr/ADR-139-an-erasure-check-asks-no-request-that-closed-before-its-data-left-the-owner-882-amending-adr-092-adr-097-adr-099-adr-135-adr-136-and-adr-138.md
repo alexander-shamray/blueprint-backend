@@ -3,7 +3,8 @@
 **Decision.** Privacy publishes `PersonalDataDeleteClosed` through its outbox
 when a request closes, by a last answer or by an amendment, carrying the
 request's id and the close as its `OccurredAt`, unless an amendment removed a
-holder before that holder answered: then it publishes nothing for the request. Each holder consumes it on its
+holder that had not answered by the close: then it publishes nothing for the
+request. Each holder consumes it on its
 privacy endpoint and stamps that time on its own `PersonalDataErasures` row as
 `ClosedAt`; a holder with no row for the request stamps nothing. Every check
 that tries the audit rows' hashes against a subject is given `sourcedAt`, an

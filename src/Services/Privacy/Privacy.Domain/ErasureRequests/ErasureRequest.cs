@@ -327,7 +327,7 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
         Status = ErasureStatus.Closed;
         ClosedAt = now;
 
-        // A close that dropped a holder before it answered says nothing of that holder's data, so the holders are
+        // A close that dropped a holder not heard from by now says nothing of that holder's data, so the holders are
         // not told, and keep asking the request's rows (ADR-139).
         if (EveryRemovedHolderAnswered())
             Raise(new ErasureRequestClosedDomainEvent(Id, now));
