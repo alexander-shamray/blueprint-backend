@@ -5,5 +5,10 @@ public interface IOrderRecordRepository
 {
     Task<OrderRecord?> GetAsync(Guid orderId, CancellationToken ct);
 
+    /// <summary>
+    /// Reads the record under an update lock held to the commit, which an erasure's held read waits on (ADR-097).
+    /// </summary>
+    Task<OrderRecord?> GetHeldAsync(Guid orderId, CancellationToken ct);
+
     void Add(OrderRecord record);
 }
