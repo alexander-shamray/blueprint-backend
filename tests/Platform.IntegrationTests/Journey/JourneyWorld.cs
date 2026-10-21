@@ -394,10 +394,10 @@ public abstract class JourneyWorld(Jurisdiction jurisdiction) : IAsyncLifetime
         }
     }
 
-    /// <summary>A wait expiring, delivered as the delayed exchange would, from Ordering's own bus (ADR-021).</summary>
+    /// <summary>A wait expiring, published by hand from Ordering's bus in ADR-021's delayed exchange's place.</summary>
     /// <remarks>
-    /// The waits are minutes and days (§9.6), so a scenario about what follows one cannot let it lapse; the saga
-    /// cannot tell the message from the clock.
+    /// The waits are minutes and days (§9.6), so a scenario drives what follows an expiry, not its delivery, which
+    /// ScheduledStockTimeoutTests drives end to end.
     /// </remarks>
     public async Task ExpireAsync<T>(T expiry)
         where T : class
