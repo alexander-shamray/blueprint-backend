@@ -45,7 +45,7 @@ public class ErasePersonalDataHandlerTests
     }
 
     [Fact]
-    public async Task A_reissued_request_finds_its_row_and_keeps_the_larger_count()
+    public async Task A_reissued_request_finds_its_row_and_reports_the_larger_count()
     {
         PersonalDataErasure first = PersonalDataErasure.Record(Request, Subject, 5, Now.AddDays(-1));
         first.ClearDomainEvents();
@@ -53,7 +53,7 @@ public class ErasePersonalDataHandlerTests
 
         Result<int> result = await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
 
-        result.Value.ShouldBe(0, "the answer is this pass's count, the row keeps the larger");
+        result.Value.ShouldBe(5, "a reissue after a lost send reports what the first pass erased");
         _erasures.Added.ShouldBeEmpty("a second row for one request would break the key");
         first.Count.ShouldBe(5);
         first.ErasedAt.ShouldBe(Now);
