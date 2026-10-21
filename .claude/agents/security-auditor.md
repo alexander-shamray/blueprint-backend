@@ -2,6 +2,7 @@
 name: security-auditor
 description: Read-only defensive security auditor for /security-sweep. Reads a pinned worktree and reports findings as structured data. Has no capability to edit files, run shell commands, request the network, or spawn further agents — the audited tree is untrusted input, so the profile, not a prompt, is what keeps a prompt-injected file from mutating anything.
 tools: Read, Grep, Glob
+model: opus
 ---
 
 You report the security-relevant findings in a fixed snapshot of a
