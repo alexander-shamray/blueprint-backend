@@ -30,8 +30,43 @@ public class ErasureRequestAmendmentTests
         request.SubjectId.ShouldBeNull();
         request.SubjectHash.ShouldBe(PersonalDataErasure.HashSubject(Request, Subject));
         request.Responders.ShouldBe(["ordering"]);
+    }
+
+    [Fact]
+    public void A_close_that_dropped_a_holder_before_it_answered_tells_the_holders_nothing()
+    {
+        // The dropped holder may still give the subject out, so the holders keep asking the request (ADR-139).
+        ErasureRequest request = Raise("ordering", "ghost");
+        request.RecordCompletion("ordering", 2, Now);
+
+        request.AmendResponders([], ["ghost"], Reason, Operator, Now.AddDays(31)).ShouldBeTrue();
+
+        request.DomainEvents.OfType<ErasureRequestClosedDomainEvent>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_last_answer_after_an_earlier_amendment_dropped_an_unanswered_holder_tells_the_holders_nothing()
+    {
+        ErasureRequest request = Raise("ordering", "ghost");
+        request.AmendResponders([], ["ghost"], Reason, Operator, Now).ShouldBeFalse();
+
+        request.RecordCompletion("ordering", 2, Now.AddHours(1));
+
+        request.Status.ShouldBe(ErasureStatus.Closed);
+        request.DomainEvents.OfType<ErasureRequestClosedDomainEvent>().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_close_whose_dropped_holder_had_answered_tells_the_holders_when_it_closed()
+    {
+        ErasureRequest request = Raise("ordering", "shipping");
+        request.RecordCompletion("shipping", 1, Now);
+        request.AmendResponders([], ["shipping"], Reason, Operator, Now).ShouldBeFalse();
+
+        request.RecordCompletion("ordering", 2, Now.AddHours(1));
+
         request.DomainEvents.OfType<ErasureRequestClosedDomainEvent>().ShouldHaveSingleItem()
-            .OccurredAt.ShouldBe(Now.AddDays(31), "a closing amendment tells the holders as an answer does (ADR-139)");
+            .OccurredAt.ShouldBe(Now.AddHours(1));
     }
 
     [Fact]
