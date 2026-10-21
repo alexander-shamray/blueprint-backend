@@ -247,13 +247,14 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task The_same_message_is_handled_once_per_endpoint()
     {
-        // §9.5's composite key: keying on MessageId alone would drop the second endpoint's delivery.
+        // §9.5's composite key: the first endpoint's row is committed first, so a MessageId-only key drops the second.
         await using ServiceProvider provider = BuildHost<FirstConsumer>(withSecondEndpoint: true);
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
 
         var id = Guid.CreateVersion7();
         var messageId = Guid.CreateVersion7();
+        await fixture.StageInboxAsync(new InboxMessage(messageId, FirstEndpoint, DateTimeOffset.UtcNow));
 
         await harness.Bus.Publish(
             new ProbeMessage(id),
