@@ -54,6 +54,17 @@ public class OrderEventHandlerTests
     }
 
     [Fact]
+    public async Task The_check_is_bounded_by_the_instant_the_order_was_placed()
+    {
+        Erased erased = new(false);
+
+        await new OrderPlacedHandler(new RecordingDispatcher(), erased)
+            .HandleAsync(Placed(Guid.CreateVersion7(), []), TestContext.Current.CancellationToken);
+
+        erased.SourcedAt.ShouldHaveSingleItem().ShouldBe(Occurred, "the data was taken then (ADR-139)");
+    }
+
+    [Fact]
     public async Task The_requests_the_order_was_placed_after_are_stored_and_handed_to_the_check()
     {
         RecordingDispatcher dispatcher = new();
@@ -116,12 +127,19 @@ public class OrderEventHandlerTests
 
         public List<IReadOnlyCollection<Guid>> PlacedAfter { get; } = [];
 
+        public List<DateTimeOffset> SourcedAt { get; } = [];
+
         public Action? OnAsked { get; set; }
 
-        public Task<bool> IsErasedAsync(Guid subjectId, IReadOnlyCollection<Guid> placedAfter, CancellationToken ct)
+        public Task<bool> IsErasedAsync(
+            Guid subjectId,
+            IReadOnlyCollection<Guid> placedAfter,
+            DateTimeOffset sourcedAt,
+            CancellationToken ct)
         {
             Asked.Add(subjectId);
             PlacedAfter.Add(placedAfter);
+            SourcedAt.Add(sourcedAt);
             OnAsked?.Invoke();
 
             return Task.FromResult(erased);

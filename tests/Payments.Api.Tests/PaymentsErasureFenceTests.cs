@@ -112,6 +112,46 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
         (await PayerOfAsync(after)).ShouldBe(_subject);
     }
 
+    [Fact]
+    public async Task A_request_that_closed_before_the_order_was_placed_is_not_asked_and_the_payer_is_kept()
+    {
+        // Closed, so the owner had anonymised the subject before the event's data was taken (ADR-139).
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid order = Guid.CreateVersion7();
+        await RecordErasureAsync(At - PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
+
+        await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+        await Handler(scope).HandleAsync(Placed(order, _subject), ct);
+
+        (await PayerOfAsync(order)).ShouldBe(_subject);
+    }
+
+    [Fact]
+    public async Task A_request_that_closed_inside_the_margin_before_the_order_was_placed_still_ends_it()
+    {
+        // The margin is what covers the owner's, Payments' and Privacy's clocks disagreeing (ADR-139).
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid order = Guid.CreateVersion7();
+        await RecordErasureAsync(At - PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
+
+        await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+        await Handler(scope).HandleAsync(Placed(order, _subject), ct);
+
+        (await PayerOfAsync(order)).ShouldBe(Guid.Empty);
+    }
+
+    private async Task RecordErasureAsync(DateTimeOffset closedAt)
+    {
+        Guid request = Guid.CreateVersion7();
+        await fixture.ExecuteAsync(
+            "INSERT INTO payments.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt) " +
+            "VALUES ({0}, {1}, 0, {2}, {3})",
+            request,
+            PersonalDataErasure.HashSubject(request, _subject),
+            At,
+            closedAt);
+    }
+
     private static IIntegrationEventHandler<OrderPlaced> Handler(AsyncServiceScope scope) =>
         scope.ServiceProvider.GetServices<IIntegrationEventHandler<OrderPlaced>>().Single();
 

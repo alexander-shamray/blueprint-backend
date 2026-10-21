@@ -26,7 +26,7 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
     /// <summary>§3.2's second aggregate: the money a cancellation voided back.</summary>
     public DbSet<Refund> Refunds => Set<Refund>();
 
-    /// <summary>§11.7's audit rows: a hash, a count and a time per request, holding no personal data.</summary>
+    /// <summary>§11.7's audit rows: a hash, a count and two times per request, holding no personal data.</summary>
     public DbSet<PersonalDataErasure> PersonalDataErasures => Set<PersonalDataErasure>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
