@@ -61,8 +61,10 @@ that carries it.
 | Each service's `IdempotencyMarkers`, and the coordination Redis's claim keys | Every service with a keyed command | The authenticated caller's id, as the key's first segment (`IdempotencyBehavior`): a customer's for Ordering's `PlaceOrder`, a staff user's for Catalog's | A marker for `RetentionPolicy.IdempotencyWindow`; a claim key for `IdempotencyRetention.Window`, or until its release | Lifetime only | Each service's database; the coordination Redis |
 
 **Checked and holding none**: each holder's `PersonalDataErasures`, an audit
-row of a request id, a salted hash, a count and a time
-([ADR-092](backend-architecture/adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
+row of a request id, a salted hash, a count, when it erased and, once Privacy's
+close reaches the holder, when its request closed
+([ADR-092](backend-architecture/adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md),
+[ADR-139](backend-architecture/adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)),
 Privacy's `ErasureCompletions`, a holder's name, a count and a time per
 request, kept for ever with its closed request
 ([ADR-095](backend-architecture/adr/ADR-095-a-closed-erasure-request-is-kept-as-the-evidence-and-has-no-retention-window.md)),
