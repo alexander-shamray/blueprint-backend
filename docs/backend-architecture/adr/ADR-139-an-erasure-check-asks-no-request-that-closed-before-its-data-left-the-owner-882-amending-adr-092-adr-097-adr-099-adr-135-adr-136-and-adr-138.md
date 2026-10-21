@@ -51,10 +51,10 @@ holder only when every holder answered: an amendment that removes one first
 ([ADR-136](ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md)),
 the owner perhaps, closes the request while that holder may still give the
 subject out, so such a close is never published and its rows are asked for
-ever, a misspelt name removed included. Holders hear a close at different times, so an
-order placed after it can leave a request off its list at Ordering that a
-holder hearing more than the margin late still asks, and that holder erases
-the order; that is the side that fails safe. The amendment that closes a
+ever, a misspelt name removed included. Holders hear a close at different
+times, so an order placed after it can leave a request off its list at
+Ordering that a holder hearing more than the margin late still asks, and that
+holder erases the order; that is the side that fails safe. The amendment that closes a
 request now publishes, and each holder consumes a second Privacy event and
 adds a column to its audit table. The holders bind the close a release before
 Privacy publishes it, as [§9.2](../09-messaging.md) requires; a close a holder
