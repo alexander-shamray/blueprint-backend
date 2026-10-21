@@ -715,7 +715,8 @@ class AHostsMessagingIsReadToo(unittest.TestCase):
 
     def test_a_messaging_directory_deeper_in_a_host_is_not_read(self):
         # A host has no Infrastructure project (§10.1), so only its own project's root is the selector.
-        self.assertNotIn("Edge", self.found_over("Edge.Api/Orders/Messaging"))
+        # The whole result, against a host holding none: a widened glob keys the deeper one Edge.Api.
+        self.assertEqual(self.found_over("Edge.Api"), self.found_over("Edge.Api/Orders/Messaging"))
 
     def test_two_messaging_directories_keying_to_one_account_are_refused(self):
         with tempfile.TemporaryDirectory() as directory:
