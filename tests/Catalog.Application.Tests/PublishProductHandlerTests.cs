@@ -106,8 +106,8 @@ public sealed class PublishProductHandlerTests(ServiceFixture fixture) : IAsyncL
     [Fact]
     public async Task A_command_that_fails_after_staging_leaves_neither_row()
     {
-        // Staged rows roll back with their transaction: StageThenFailCommand publishes two aggregates, so §6.3's
-        // one-aggregate assertion throws after DispatchAsync has staged an event for each.
+        // Staged rows roll back with their transaction: StageThenFailCommand saves two products and their outbox
+        // rows, then modifies two more, so §6.3's one-aggregate assertion throws after the rows were written.
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
 
