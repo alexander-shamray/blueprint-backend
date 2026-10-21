@@ -1249,8 +1249,8 @@ this case, and this table is the owner of what each edge of it erases:
 publishes the request and accepts the completion as a command **sent** to its
 queue by each holder
 ([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)),
-and publishes the close, which each holder stamps on its audit row to bound
-its check
+and, from the release after every holder binds it, publishes the close, which
+each holder stamps on its audit row to bound its check
 ([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)).
 The holders that write from an event feed and so ask their own audit rows after
 they write are the BFF's projection, Notifications' intake, Payments' intake and
