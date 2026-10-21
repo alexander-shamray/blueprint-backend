@@ -27,7 +27,14 @@ public sealed class CommitFaultInterceptor : SaveChangesInterceptor
         return fault;
     }
 
-    internal void Disarm(CommitFault fault) => Interlocked.CompareExchange(ref _armed, null, fault);
+    internal void Disarm(CommitFault fault)
+    {
+        Interlocked.CompareExchange(ref _armed, null, fault);
+
+        // Taken by a save that then failed before its statements completed, so it never fired.
+        if (fault.PendingOn is DbContext context)
+            _pending.Remove(context);
+    }
 
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
@@ -44,7 +51,10 @@ public sealed class CommitFaultInterceptor : SaveChangesInterceptor
 
         CommitFault? fault = Interlocked.Exchange(ref _armed, null);
         if (fault is not null)
+        {
+            fault.PendingOn = eventData.Context;
             _pending.AddOrUpdate(eventData.Context!, fault);
+        }
 
         return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
@@ -58,10 +68,38 @@ public sealed class CommitFaultInterceptor : SaveChangesInterceptor
             return base.SavedChangesAsync(eventData, result, cancellationToken);
 
         _pending.Remove(eventData.Context);
+        fault.PendingOn = null;
         fault.Fired = true;
 
         // Transient to SQL Server's execution strategy and to §9.8's policy alike, so the unit is retried whole.
         throw new TimeoutException("Injected commit fault.");
+    }
+
+    // A save whose own statements failed, or were cancelled, never reaches SavedChangesAsync, and a fault it took
+    // would otherwise fire on the context's next save, whatever that staged.
+    public override Task SaveChangesFailedAsync(
+        DbContextErrorEventData eventData,
+        CancellationToken cancellationToken = default)
+    {
+        Drop(eventData.Context);
+        return base.SaveChangesFailedAsync(eventData, cancellationToken);
+    }
+
+    public override Task SaveChangesCanceledAsync(
+        DbContextEventData eventData,
+        CancellationToken cancellationToken = default)
+    {
+        Drop(eventData.Context);
+        return base.SaveChangesCanceledAsync(eventData, cancellationToken);
+    }
+
+    private void Drop(DbContext? context)
+    {
+        if (context is not null && _pending.TryGetValue(context, out CommitFault? fault))
+        {
+            _pending.Remove(context);
+            fault.PendingOn = null;
+        }
     }
 }
 
@@ -74,6 +112,9 @@ public sealed class CommitFault : IDisposable
 
     /// <summary>Whether a save reached the fault and was failed by it.</summary>
     public bool Fired { get; internal set; }
+
+    /// <summary>The context whose save took the fault and has not yet completed its statements.</summary>
+    internal DbContext? PendingOn { get; set; }
 
     public void Dispose() => _owner.Disarm(this);
 }
