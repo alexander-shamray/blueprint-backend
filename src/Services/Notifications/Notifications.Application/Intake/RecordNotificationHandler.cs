@@ -83,7 +83,7 @@ public sealed class RecordNotificationHandler(
         // An event cannot occur after it is recorded, so a forward-dated OccurredAt never widens what the check
         // skips (ADR-139).
         DateTimeOffset sourced = command.Parameters.OccurredAt < now ? command.Parameters.OccurredAt : now;
-        OrderRecord? record = await orders.GetAsync(orderId, ct);
+        OrderRecord? record = await orders.GetHeldAsync(orderId, ct);
 
         if (record is null)
         {

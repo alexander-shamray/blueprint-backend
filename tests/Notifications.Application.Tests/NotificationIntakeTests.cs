@@ -345,6 +345,9 @@ public class NotificationIntakeTests
         public List<OrderRecord> Added { get; } = [];
 
         public Task<OrderRecord?> GetAsync(Guid orderId, CancellationToken ct) =>
+            throw new NotSupportedException("The intake reads the record held, so an erasure's held read waits on it.");
+
+        public Task<OrderRecord?> GetHeldAsync(Guid orderId, CancellationToken ct) =>
             Task.FromResult(Added.Find(r => r.OrderId == orderId));
 
         public void Add(OrderRecord record) => Added.Add(record);

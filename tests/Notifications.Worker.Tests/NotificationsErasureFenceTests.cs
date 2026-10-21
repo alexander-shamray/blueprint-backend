@@ -120,6 +120,44 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
     }
 
     [Fact]
+    public async Task An_intake_that_changes_nothing_on_the_subjects_record_waits_for_the_erasures_first_statement()
+    {
+        // A confirmation at the placement's instant leaves the record as it was, so no update would make it wait.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid order = Guid.CreateVersion7();
+
+        await using (AsyncServiceScope placing = fixture.Factory.Services.CreateAsyncScope())
+        {
+            await placing.ServiceProvider
+                .GetServices<IIntegrationEventHandler<OrderPlaced>>()
+                .Single()
+                .HandleAsync(OrderEvents.Placed(order, _subject, At), ct);
+        }
+
+        int staged = (await fixture.NotificationsAsync(order)).Count;
+
+        await using NotificationsDbContext db = new(
+            new DbContextOptionsBuilder<NotificationsDbContext>().UseSqlServer(fixture.ConnectionString).Options);
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
+        SqlNotificationsPersonalDataStore store = new(
+            db,
+            new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>()));
+        await store.DeleteWaitingNoticesAsync(_subject, Guid.CreateVersion7(), ct);
+
+        await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+        Task intake = scope.ServiceProvider
+            .GetServices<IIntegrationEventHandler<OrderConfirmed>>()
+            .Single()
+            .HandleAsync(OrderEvents.Confirmed(order, _subject, At), ct);
+
+        await Should.ThrowAsync<TimeoutException>(() => intake.WaitAsync(Wait, ct));
+
+        await transaction.RollbackAsync(ct);
+        await intake.WaitAsync(ServiceFixture.StepDeadline, ct);
+        (await fixture.NotificationsAsync(order)).Count.ShouldBeGreaterThan(staged, "the intake staged its notice");
+    }
+
+    [Fact]
     public async Task A_contact_save_waits_for_an_erasure_that_found_no_contact()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
