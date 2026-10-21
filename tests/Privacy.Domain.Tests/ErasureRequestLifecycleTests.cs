@@ -56,6 +56,23 @@ public class ErasureRequestLifecycleTests
     }
 
     [Fact]
+    public void Closing_tells_the_holders_when_it_closed_and_an_answer_that_does_not_close_tells_nobody()
+    {
+        ErasureRequest request = Raised("ordering", "shipping");
+
+        request.RecordCompletion("ordering", 1, Now);
+
+        request.DomainEvents.ShouldBeEmpty();
+
+        request.RecordCompletion("shipping", 0, Now.AddHours(1));
+
+        ErasureRequestClosedDomainEvent closed = request.DomainEvents.ShouldHaveSingleItem()
+            .ShouldBeOfType<ErasureRequestClosedDomainEvent>();
+        closed.RequestId.ShouldBe(Request);
+        closed.OccurredAt.ShouldBe(Now.AddHours(1));
+    }
+
+    [Fact]
     public void The_order_holders_answer_in_does_not_matter()
     {
         ErasureRequest request = Raised();

@@ -7,11 +7,25 @@ namespace Common.Domain;
 /// <remarks>Keyed by the request, so a reissue finds its row and a second erasure succeeds silently (§11.7).</remarks>
 public sealed class PersonalDataErasure : AggregateRoot<Guid>
 {
+    /// <summary>How long before a check's instant a closed request is still asked, covering the owner's, the
+    /// holder's and Privacy's clocks disagreeing (ADR-139).</summary>
+    public static readonly TimeSpan ClockMargin = TimeSpan.FromDays(1);
+
     public string SubjectHash { get; private set; } = "";
     public int Count { get; private set; }
     public DateTimeOffset ErasedAt { get; private set; }
 
+    /// <summary>When Privacy closed the request, on its own clock; null until the close reaches this holder.</summary>
+    public DateTimeOffset? ClosedAt { get; private set; }
+
     private PersonalDataErasure() { }
+
+    /// <summary>
+    /// The earliest close still asked about data taken from its owner at <paramref name="sourcedAt"/>: a request that
+    /// closed before then had its owner anonymise the subject before the data was taken (ADR-139).
+    /// </summary>
+    public static DateTimeOffset AskedSince(DateTimeOffset sourcedAt) =>
+        sourcedAt - DateTimeOffset.MinValue < ClockMargin ? DateTimeOffset.MinValue : sourcedAt - ClockMargin;
 
     /// <summary>
     /// The SHA-256 of the request id's 32 lowercase hex digits then the subject's, as UTF-8, so two requests for one
@@ -48,6 +62,9 @@ public sealed class PersonalDataErasure : AggregateRoot<Guid>
         Count = Math.Max(Count, count);
         ErasedAt = now;
     }
+
+    /// <summary>Privacy closed the request; a repeat of its close changes nothing (ADR-139).</summary>
+    public void MarkClosed(DateTimeOffset closedAt) => ClosedAt ??= closedAt;
 
     private static void RequireCount(int count)
     {

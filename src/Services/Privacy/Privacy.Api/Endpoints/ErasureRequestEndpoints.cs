@@ -62,7 +62,7 @@ public static class ErasureRequestEndpoints
             .WithName("ReissueErasureRequest");
 
         // Changes the set of a request that has not closed, under the caller's name (ADR-136). Keyed, since a repeat
-        // would record a second amendment; it publishes nothing, so a holder it adds is asked by a reissue.
+        // would record a second amendment; it asks no holder, so a holder it adds is asked by a reissue.
         group
             .MapPost(
                 "/{requestId:guid}/responders",

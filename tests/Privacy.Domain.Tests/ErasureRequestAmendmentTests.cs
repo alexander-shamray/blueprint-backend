@@ -1,5 +1,6 @@
 using Common.Domain;
 using Privacy.Domain.ErasureRequests;
+using Privacy.Domain.ErasureRequests.Events;
 using Shouldly;
 using Xunit;
 
@@ -29,6 +30,8 @@ public class ErasureRequestAmendmentTests
         request.SubjectId.ShouldBeNull();
         request.SubjectHash.ShouldBe(PersonalDataErasure.HashSubject(Request, Subject));
         request.Responders.ShouldBe(["ordering"]);
+        request.DomainEvents.OfType<ErasureRequestClosedDomainEvent>().ShouldHaveSingleItem()
+            .OccurredAt.ShouldBe(Now.AddDays(31), "an amendment that closes tells the holders as an answer does (ADR-139)");
     }
 
     [Fact]

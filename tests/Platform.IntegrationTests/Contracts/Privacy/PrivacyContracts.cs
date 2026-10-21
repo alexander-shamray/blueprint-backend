@@ -18,6 +18,13 @@ internal sealed class PrivacyContracts : ContractContext
             RequestId = Request,
             SubjectId = Customer
         },
+        [typeof(PersonalDataDeleteClosed)] = () => new PersonalDataDeleteClosed
+        {
+            MessageId = Message,
+            CorrelationId = Correlation,
+            OccurredAt = Occurred,
+            RequestId = Request
+        },
         [typeof(PersonalDataDeleteCompleted)] = () => new PersonalDataDeleteCompleted(Request, "shipping", 3)
     };
 

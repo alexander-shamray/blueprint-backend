@@ -41,6 +41,22 @@ public class PrivacyIntegrationEventMapperTests
     }
 
     [Fact]
+    public void A_closed_request_becomes_PersonalDataDeleteClosed_at_its_close_and_without_the_subject()
+    {
+        DateTimeOffset closedAt = Raised.AddDays(3);
+
+        PersonalDataDeleteClosed contract = Mapper()
+            .Map([new ErasureRequestClosedDomainEvent(Request, closedAt)])
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<PersonalDataDeleteClosed>();
+
+        contract.RequestId.ShouldBe(Request);
+        contract.CorrelationId.ShouldBe(Request);
+        contract.OccurredAt.ShouldBe(closedAt);
+        contract.MessageId.ShouldNotBe(Guid.Empty);
+    }
+
+    [Fact]
     public void Each_publication_carries_a_message_id_of_its_own()
     {
         IIntegrationEventMapper mapper = Mapper();
