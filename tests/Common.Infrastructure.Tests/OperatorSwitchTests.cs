@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Common.Infrastructure.Switching;
 using MassTransit;
 using MassTransit.Testing;
@@ -304,5 +305,79 @@ public class OperatorSwitchTests
         });
         Volatile.Read(ref stops).ShouldBe(3, "the retry stops the endpoint before it starts it again");
         Volatile.Read(ref starts).ShouldBe(2);
+    }
+
+    /// <summary>An endpoint whose stops numbered in <paramref name="failingStops"/> throw, and whose first start never
+    /// becomes ready.</summary>
+    private static IReceiveEndpoint FaultyEndpoint(
+        StrongBox<int> stops,
+        StrongBox<int> starts,
+        params int[] failingStops)
+    {
+        IReceiveEndpoint endpoint = Substitute.For<IReceiveEndpoint>();
+        endpoint.Stop(Arg.Any<CancellationToken>()).Returns(_ =>
+            failingStops.Contains(Interlocked.Increment(ref stops.Value))
+                ? Task.FromException(new InvalidOperationException("the broker refused the stop"))
+                : Task.CompletedTask);
+        endpoint.Start(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            ReceiveEndpointHandle handle = Substitute.For<ReceiveEndpointHandle>();
+            handle.Ready.Returns(Interlocked.Increment(ref starts.Value) == 1
+                ? Task.FromException<ReceiveEndpointReady>(new InvalidOperationException("the broker refused"))
+                : Task.FromResult(Substitute.For<ReceiveEndpointReady>()));
+            return handle;
+        });
+
+        return endpoint;
+    }
+
+    [Fact]
+    public async Task An_unsettled_start_stays_unsettled_until_a_stop_succeeds()
+    {
+        MutableSource source = new();
+        source.Set(Queue);
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
+        StrongBox<int> stops = new();
+        StrongBox<int> starts = new();
+
+        // The compensating stop fails, and so does the first retry's stop before its start.
+        FakeTimeProvider clock = new();
+        using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
+        await endpoints.Ready(ReadyFor(FaultyEndpoint(stops, starts, 2, 3)));
+        await Until(() => endpoints.IsStopped(Queue));
+        source.Set();
+
+        await Until(() =>
+        {
+            clock.Advance(ReceiveEndpointSwitch.FirstRetry);
+            return !endpoints.IsStopped(Queue);
+        });
+        Volatile.Read(ref stops.Value).ShouldBe(4, "the second retry still stops the endpoint before it starts it");
+        Volatile.Read(ref starts.Value).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task An_unsettled_endpoint_switched_back_off_is_stopped()
+    {
+        MutableSource source = new();
+        source.Set(Queue);
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
+        StrongBox<int> stops = new();
+        StrongBox<int> starts = new();
+
+        using ReceiveEndpointSwitch endpoints = new(switches, clock: new FakeTimeProvider());
+        await endpoints.Ready(ReadyFor(FaultyEndpoint(stops, starts, 2)));
+        await Until(() => endpoints.IsStopped(Queue));
+        source.Set();
+        await Until(() => Volatile.Read(ref stops.Value) == 2);
+
+        // The set still says stopped, but the failed start may have left the endpoint running.
+        source.Set(Queue);
+        await endpoints.ApplyAllAsync();
+
+        Volatile.Read(ref stops.Value).ShouldBe(3);
+        endpoints.IsStopped(Queue).ShouldBeTrue();
     }
 }

@@ -155,28 +155,36 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         {
             IReceiveEndpoint endpoint;
             bool stopped;
+            bool unsettled;
             lock (_endpoints)
             {
                 endpoint = _endpoints[queue];
                 stopped = _stopped.Contains(queue);
+                unsettled = _unsettled.Contains(queue);
             }
 
+            // Unsettled is a start whose undoing stop failed, so the endpoint may be running whatever the set says;
+            // it is stopped first either way, and stays unsettled until a stop succeeds.
             bool off = _switches.IsOff(queue);
-            if (off && !stopped)
+            if (off && (!stopped || unsettled))
             {
                 await endpoint.Stop();
                 lock (_endpoints)
+                {
                     _stopped.Add(queue);
+                    _unsettled.Remove(queue);
+                }
+
                 Stopped(_log, queue, null);
             }
             else if (!off && stopped)
             {
-                // A start whose stop also failed may have left the endpoint running, so it is stopped first.
-                bool unsettled;
-                lock (_endpoints)
-                    unsettled = _unsettled.Remove(queue);
                 if (unsettled)
+                {
                     await endpoint.Stop();
+                    lock (_endpoints)
+                        _unsettled.Remove(queue);
+                }
 
                 ReceiveEndpointHandle handle = endpoint.Start();
                 try
