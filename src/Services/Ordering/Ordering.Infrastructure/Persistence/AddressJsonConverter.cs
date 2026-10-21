@@ -5,7 +5,10 @@ using Ordering.Domain.Common;
 namespace Ordering.Infrastructure.Persistence;
 
 /// <summary>§5.3's <c>Address</c> on the <c>Local</c> lane, carried by <c>OrderConfirmedDomainEvent</c>.</summary>
-/// <remarks>Read through <see cref="Address.Of"/>, on <see cref="MoneyJsonConverter"/>'s terms.</remarks>
+/// <remarks>
+/// Read through <see cref="Address.Of"/>, on <see cref="MoneyJsonConverter"/>'s terms, except the erased shape, which
+/// reads back as <see cref="Address.Erased"/>.
+/// </remarks>
 internal sealed class AddressJsonConverter : JsonConverter<Address>
 {
     public override Address Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
