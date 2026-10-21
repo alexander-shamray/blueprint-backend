@@ -177,8 +177,8 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
 
     /// <summary>
     /// Changes the set of a request that has not closed, records who did it and why, and closes the request when
-    /// every holder left in the set has been counted; true when it closed. Publishes nothing: a holder the change
-    /// adds is asked by a reissue (ADR-136).
+    /// every holder left in the set has been counted; true when it closed. Publishes only that close (ADR-139): a
+    /// holder the change adds is asked by a reissue (ADR-136).
     /// </summary>
     public bool AmendResponders(
         IReadOnlyCollection<string> add,
@@ -326,6 +326,7 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
         SubjectId = null;
         Status = ErasureStatus.Closed;
         ClosedAt = now;
+        Raise(new ErasureRequestClosedDomainEvent(Id, now));
     }
 
     /// <summary>A name never holds a comma, which is what lets the set be stored as one delimited column.</summary>

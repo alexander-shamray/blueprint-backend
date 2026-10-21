@@ -122,4 +122,40 @@ public class PersonalDataErasureTests
 
         erasure.Count.ShouldBe(5);
     }
+
+    [Fact]
+    public void A_recorded_erasure_is_open_until_its_close_reaches_the_holder()
+    {
+        PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 3, Now);
+
+        erasure.ClosedAt.ShouldBeNull();
+
+        erasure.MarkClosed(Now.AddDays(2));
+
+        erasure.ClosedAt.ShouldBe(Now.AddDays(2));
+    }
+
+    [Fact]
+    public void A_repeated_close_keeps_the_first()
+    {
+        PersonalDataErasure erasure = PersonalDataErasure.Record(Request, Subject, 3, Now);
+        erasure.MarkClosed(Now.AddDays(2));
+
+        erasure.MarkClosed(Now.AddDays(5));
+
+        erasure.ClosedAt.ShouldBe(Now.AddDays(2));
+    }
+
+    [Fact]
+    public void A_check_asks_every_request_that_closed_within_the_margin_before_its_data_was_taken()
+    {
+        PersonalDataErasure.AskedSince(Now).ShouldBe(Now - PersonalDataErasure.ClockMargin);
+    }
+
+    [Fact]
+    public void A_check_on_data_from_the_start_of_time_asks_every_request()
+    {
+        PersonalDataErasure.AskedSince(DateTimeOffset.MinValue).ShouldBe(DateTimeOffset.MinValue);
+        PersonalDataErasure.AskedSince(DateTimeOffset.MinValue.AddHours(1)).ShouldBe(DateTimeOffset.MinValue);
+    }
 }

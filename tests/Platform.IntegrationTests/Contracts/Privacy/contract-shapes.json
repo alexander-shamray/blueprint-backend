@@ -4,6 +4,12 @@
     "RequestId": "required System.Guid",
     "Responder": "required System.String"
   },
+  "Common.Contracts.Privacy.V1.PersonalDataDeleteClosed": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "RequestId": "required System.Guid"
+  },
   "Common.Contracts.Privacy.V1.PersonalDataDeleteRequested": {
     "CorrelationId": "required System.Guid",
     "MessageId": "required System.Guid",
