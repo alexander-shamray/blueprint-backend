@@ -177,8 +177,8 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
 
     /// <summary>
     /// Changes the set of a request that has not closed, records who did it and why, and closes the request when
-    /// every holder left in the set has been counted; true when it closed. Publishes only that close (ADR-139): a
-    /// holder the change adds is asked by a reissue (ADR-136).
+    /// every holder left in the set has been counted; true when it closed. Publishes at most that close (ADR-139):
+    /// a holder the change adds is asked by a reissue (ADR-136).
     /// </summary>
     public bool AmendResponders(
         IReadOnlyCollection<string> add,
@@ -326,7 +326,36 @@ public sealed class ErasureRequest : AggregateRoot<Guid>
         SubjectId = null;
         Status = ErasureStatus.Closed;
         ClosedAt = now;
-        Raise(new ErasureRequestClosedDomainEvent(Id, now));
+
+        // A close that dropped a holder before it answered says nothing of that holder's data, so the holders are
+        // not told, and keep asking the request's rows (ADR-139).
+        if (EveryRemovedHolderAnswered())
+            Raise(new ErasureRequestClosedDomainEvent(Id, now));
+    }
+
+    private bool EveryRemovedHolderAnswered()
+    {
+        foreach (ErasureAmendment amendment in _amendments)
+        {
+            foreach (string removed in amendment.Removed.Split(',', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!WasHeard(removed))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool WasHeard(string responder)
+    {
+        foreach (ErasureCompletion heard in _completions)
+        {
+            if (heard.Responder == responder)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>A name never holds a comma, which is what lets the set be stored as one delimited column.</summary>

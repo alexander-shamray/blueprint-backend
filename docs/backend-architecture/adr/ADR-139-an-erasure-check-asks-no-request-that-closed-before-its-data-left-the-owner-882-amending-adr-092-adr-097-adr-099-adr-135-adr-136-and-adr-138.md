@@ -2,7 +2,8 @@
 
 **Decision.** Privacy publishes `PersonalDataDeleteClosed` through its outbox
 when a request closes, by a last answer or by an amendment, carrying the
-request's id and the close as its `OccurredAt`. Each holder consumes it on its
+request's id and the close as its `OccurredAt`, unless an amendment removed a
+holder before that holder answered: then it publishes nothing for the request. Each holder consumes it on its
 privacy endpoint and stamps that time on its own `PersonalDataErasures` row as
 `ClosedAt`; a holder with no row for the request stamps nothing. Every check
 that tries the audit rows' hashes against a subject is given `sourcedAt`, an
@@ -44,11 +45,12 @@ event was, so it has no instant to give.
 data's age and the margin, through an index on `ClosedAt`, and still tries
 every row it reads. A request closed before this decision was never published,
 so its rows stay open and are asked for ever until something announces them;
-the send pass pays the old cost on every pass. A close stays a claim about the
-owner: an amendment that removes the owner from a request's set
-([ADR-136](ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md))
-closes it while the owner still gives the subject out, and checks stop asking
-it once the margin has passed. Holders hear a close at different times, so an
+the send pass pays the old cost on every pass. A close is a claim about every
+holder only when every holder answered: an amendment that removes one first
+([ADR-136](ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md)),
+the owner perhaps, closes the request while that holder may still give the
+subject out, so such a close is never published and its rows are asked for
+ever, a misspelt name removed included. Holders hear a close at different times, so an
 order placed after it can leave a request off its list at Ordering that a
 holder hearing more than the margin late still asks, and that holder erases
 the order; that is the side that fails safe. The amendment that closes a
