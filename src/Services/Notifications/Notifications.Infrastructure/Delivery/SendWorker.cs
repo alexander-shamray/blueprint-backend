@@ -271,7 +271,7 @@ public sealed class SendWorker(
             await CommitAsync(sp, work, (n, _) => n.AssignCustomer(customer), ct);
 
         if (work.Channel == ConsentVocabulary.Push)
-            return await FanOutAsync(sp, work, customer, sourcedAt, reads, ct);
+            return await FanOutAsync(sp, work, customer, reads, ct);
 
         // Decided when the send is made, so a withdrawal reaches the next one; a resend was decided at its intent,
         // which carries the entry, and is not asked again (ADR-120).
@@ -295,7 +295,7 @@ public sealed class SendWorker(
             consentEntry = consent.Version;
         }
 
-        if (await ContactAsync(sp, work, customer, sourcedAt, reads, ct) is not ContactLookup.Found contact)
+        if (await ContactAsync(sp, work, customer, reads, ct) is not ContactLookup.Found contact)
         {
             bool unknown = await CommitAsync(
                 sp,
@@ -368,7 +368,6 @@ public sealed class SendWorker(
         IServiceProvider sp,
         SendWork work,
         Guid customer,
-        DateTimeOffset sourcedAt,
         ContactReads reads,
         CancellationToken ct)
     {
@@ -402,7 +401,7 @@ public sealed class SendWorker(
         }
 
         // For the language alone: a push is addressed to a device, so the mailbox is never used (ADR-052).
-        if (await ContactAsync(sp, work, customer, sourcedAt, reads, ct) is not ContactLookup.Found contact)
+        if (await ContactAsync(sp, work, customer, reads, ct) is not ContactLookup.Found contact)
         {
             bool unknown = await CommitAsync(
                 sp,
@@ -451,13 +450,12 @@ public sealed class SendWorker(
         IServiceProvider sp,
         SendWork work,
         Guid customer,
-        DateTimeOffset sourcedAt,
         ContactReads reads,
         CancellationToken ct)
     {
         // The row whose read is kept awaits it in its own scope, so no read outlives the scope it runs in.
         (ContactLookup answer, Exception? stale) =
-            await reads.GetOrStart(customer, () => ContactReader.ReadAsync(sp, customer, sourcedAt, ct));
+            await reads.GetOrStart(customer, () => ContactReader.ReadAsync(sp, customer, ct));
 
         if (stale is not null)
             ServedStale(log, work.NotificationId, work.OrderId, customer, stale);

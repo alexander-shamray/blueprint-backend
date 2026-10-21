@@ -117,6 +117,20 @@ public class NotificationIntakeTests
     }
 
     [Fact]
+    public async Task A_forward_dated_event_stamps_the_record_no_later_than_it_was_recorded()
+    {
+        Guid order = Guid.CreateVersion7();
+        RecordNotificationCommand command = Placed(order, Guid.CreateVersion7()) with
+        {
+            Parameters = For(order) with { OccurredAt = Now.AddDays(3) }
+        };
+
+        await Handler().HandleAsync(command, TestContext.Current.CancellationToken);
+
+        _orders.Added.ShouldHaveSingleItem().SourcedAt.ShouldBe(Now, "an event cannot occur after it is recorded");
+    }
+
+    [Fact]
     public async Task An_earlier_event_arriving_second_moves_the_records_sourced_at_back()
     {
         Guid order = Guid.CreateVersion7();

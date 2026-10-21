@@ -138,7 +138,7 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_contact_read_keeps_a_row_for_a_request_closed_before_the_records_earliest_event()
+    public async Task The_contact_read_asks_every_row_so_a_request_closed_long_ago_deletes_the_saved_contact()
     {
         Guid order = Guid.CreateVersion7();
         Guid customer = Guid.CreateVersion7();
@@ -148,6 +148,8 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
 
         Task<SendPass> pass = fixture.RunSendPassAsync();
         await LandDuringTheOwnersAnswerAsync(owed);
+
+        // Closed well before the record's SourcedAt, so the send pass's own check lets the row through (ADR-139).
         await ErasedSubjectIntakeTests.RecordErasureAsync(
             fixture,
             customer,
@@ -156,29 +158,7 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
 
         (await pass).ShouldBe(new SendPass(1, 1));
 
-        (await fixture.ContactAsync(customer)).ShouldNotBeNull("the request closed before the data was taken");
-    }
-
-    [Fact]
-    public async Task The_contact_read_deletes_a_row_for_a_request_closed_inside_the_margin()
-    {
-        Guid order = Guid.CreateVersion7();
-        Guid customer = Guid.CreateVersion7();
-        fixture.ContactAnswers(customer, Mailbox, "en", delay: TimeSpan.FromMilliseconds(900));
-        await fixture.OrderAsync(order, customer, sourcedAt: At);
-        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
-
-        Task<SendPass> pass = fixture.RunSendPassAsync();
-        await LandDuringTheOwnersAnswerAsync(owed);
-        await ErasedSubjectIntakeTests.RecordErasureAsync(
-            fixture,
-            customer,
-            At.AddDays(-9),
-            closedAt: At - PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
-
-        (await pass).ShouldBe(new SendPass(1, 1));
-
-        (await fixture.ContactAsync(customer)).ShouldBeNull("the request closed inside the margin is still asked");
+        (await fixture.ContactAsync(customer)).ShouldBeNull("the contact read asks every row, not one order's");
     }
 
     // The row is leased and the owner stalls: a request lands in the window ADR-097 names, before the save.
