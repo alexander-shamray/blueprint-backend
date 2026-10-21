@@ -272,9 +272,10 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     }
 
     [Fact]
-    public async Task A_scheduled_expiry_survives_the_endpoints_inbox_filter()
+    public async Task An_expiry_carrying_a_message_id_passes_the_endpoints_inbox_filter()
     {
-        // The filter throws on a message with no MessageId, and an expiry comes from the scheduler, not a mapper.
+        // Published by hand, so it shows only the filter's half; ScheduledStockTimeoutTests drives one the saga
+        // schedules through the outbox and the delayed exchange.
         var orderId = Guid.CreateVersion7();
 
         await PublishPlacedAsync(orderId, Guid.CreateVersion7());
