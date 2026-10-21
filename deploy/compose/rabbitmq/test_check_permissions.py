@@ -825,26 +825,21 @@ class AScaffoldedServiceIsNotRefused(unittest.TestCase):
         # §4.5's scaffold grants a broker account; `Common.Contracts` gains a
         # record only in the PR whose code publishes one. The dogfood found the
         # gate refusing exactly this, and the fix must not regress into
-        # refusing it again.
+        # refusing it again. Catalog keeps its source, so check 4 is reached;
+        # a planted account with none stops the gate a check earlier.
         definitions = real()
-        template = copy.deepcopy(permission(definitions, "catalog-svc"))
-        template["user"] = "yankee-svc"
+        entry = permission(definitions, "catalog-svc")
         for verb in ("configure", "write", "read"):
-            template[verb] = template[verb].replace("Catalog", "Yankee")
-        definitions["permissions"].append(template)
-        definitions["users"].append({
-            "name": "yankee-svc",
-            "password_hash": "irrelevant",
-            "hashing_algorithm": "rabbit_password_hashing_sha256",
-            "tags": [],
-        })
+            entry[verb] = re.sub(r"(Common\\\.Contracts)?\\\.Catalog\\\.V1:\|", "", entry[verb])
+            self.assertNotIn("Catalog", entry[verb], "the grant still names its contracts: the case")
+        original_prefixes = gate.contract_prefixes
+        gate.contract_prefixes = lambda: {p for p in original_prefixes() if ".Catalog." not in p}
+        try:
+            failures = [f for f in run_against(definitions) if "catalog-svc" in f]
+        finally:
+            gate.contract_prefixes = original_prefixes
 
-        failures = run_against(definitions)
-        # It has no service directory either, so the "account with no service"
-        # rule is the only thing it may trip — never the contracts rule.
-        self.assertFalse(
-            any("owned contracts" in f or "vacuously" in f for f in failures),
-            f"the gate refused a correctly scaffolded service: {failures}")
+        self.assertEqual([], failures, "the gate refused a correctly scaffolded service")
 
 
 class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
