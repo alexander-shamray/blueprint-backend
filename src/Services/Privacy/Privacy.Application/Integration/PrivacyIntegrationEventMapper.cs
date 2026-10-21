@@ -11,11 +11,10 @@ namespace Privacy.Application.Integration;
 /// </summary>
 internal sealed class PrivacyIntegrationEventMapper : IIntegrationEventMapper
 {
-    // Translation is opt-in (§9.3).
+    // Translation is opt-in (§9.3); one event is the allow-list's whole content until the service grows more.
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
     {
-        [typeof(ErasureRequestedDomainEvent)] = e => ToContract((ErasureRequestedDomainEvent)e),
-        [typeof(ErasureRequestClosedDomainEvent)] = e => ToContract((ErasureRequestClosedDomainEvent)e)
+        [typeof(ErasureRequestedDomainEvent)] = e => ToContract((ErasureRequestedDomainEvent)e)
     };
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
@@ -41,13 +40,5 @@ internal sealed class PrivacyIntegrationEventMapper : IIntegrationEventMapper
         OccurredAt = e.OccurredAt,
         RequestId = e.RequestId,
         SubjectId = e.SubjectId
-    };
-
-    private static PersonalDataDeleteClosed ToContract(ErasureRequestClosedDomainEvent e) => new()
-    {
-        MessageId = Guid.CreateVersion7(),
-        CorrelationId = e.RequestId,
-        OccurredAt = e.OccurredAt,
-        RequestId = e.RequestId
     };
 }
