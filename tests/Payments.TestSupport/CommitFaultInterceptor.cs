@@ -8,8 +8,8 @@ namespace Payments.TestSupport;
 
 /// <summary>A commit that fails once, on demand, after the unit has staged its outbox row or its audit row.</summary>
 /// <remarks>
-/// Thrown once the save's statements have run inside the unit's transaction, so the rows they wrote are gone only
-/// if the transaction rolls back (§6.3); a throw before the save would leave nothing for a rollback to undo.
+/// Thrown once the save's statements have run inside the unit's transaction, so the outbox or audit row it wrote is
+/// gone only if the transaction rolls back (§6.3); thrown before the save, that row would never have been written.
 /// </remarks>
 public sealed class CommitFaultInterceptor : SaveChangesInterceptor
 {
