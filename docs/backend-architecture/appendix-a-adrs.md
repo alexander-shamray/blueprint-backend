@@ -146,6 +146,7 @@ decision looks wrong.
 | **ADR-137** | [A placement and an erasure for one customer take one application lock and run one after the other (#1191), amending ADR-099](adr/ADR-137-a-placement-and-an-erasure-for-one-customer-take-one-application-lock-and-run-one-after-the-other-1191-amending-adr-099.md) |
 | **ADR-138** | [Notifications' erasure keeps what was written under its request (#1192), amending ADR-117 and ADR-120](adr/ADR-138-notifications-erasure-keeps-what-was-written-under-its-request-1192-amending-adr-117-and-adr-120.md) |
 | **ADR-139** | [An erasure check asks no request that closed before its data left the owner (#882), amending ADR-092, ADR-097, ADR-099, ADR-135, ADR-136 and ADR-138](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md) |
+| **ADR-140** | [Shipping's erasure keeps an order placed under its request (#1275), amending ADR-052](adr/ADR-140-shippings-erasure-keeps-an-order-placed-under-its-request-1275-amending-adr-052.md) |
 
 ---
 

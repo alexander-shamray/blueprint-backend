@@ -286,6 +286,11 @@ whose registration call from the BFF to Notifications holds no client secret,
 so the count of hosts holding one is no longer the count of synchronous
 couplings.
 
+**Amended by
+[ADR-140](ADR-140-shippings-erasure-keeps-an-order-placed-under-its-request-1275-amending-adr-052.md)**,
+under which the erasure consumer keeps the contact row and the waiting shipment
+of an order whose shipment lists the request being handled.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
