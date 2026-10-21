@@ -9,9 +9,10 @@ namespace Ordering.Infrastructure.Persistence;
 internal sealed class SqlOrderPersonalDataStore(OrderingDbContext db) : IOrderPersonalDataStore
 {
     // The empty id names nobody; the address columns are required, so they are emptied and not nulled, and the
-    // country keeps the two-letter shape (ZZ constructs, as Address allows). The order and its money stay. The
-    // requests it was placed under go with the id, since a request id joined to an open request names the buyer
-    // (ADR-095, ADR-099). An order whose list holds the request was placed after it, so a reissue leaves it whole.
+    // country keeps the two-letter shape: Address.Erased, which the outbox reads back. The order and its money
+    // stay. The requests it was placed under go with the id, since a request id joined to an open request names the
+    // buyer (ADR-095, ADR-099). An order whose list holds the request was placed after it, so a reissue leaves it
+    // whole.
     private const string AnonymiseOrdersSql =
         """
         UPDATE ordering.Orders

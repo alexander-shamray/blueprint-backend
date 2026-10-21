@@ -51,6 +51,14 @@ internal sealed class AddressJsonConverter : JsonConverter<Address>
                 "rename is the likely cause (§9.4).");
         }
 
+        // An order erased mid-saga still confirms, and Of would refuse its blank lines (§11.7).
+        Address erased = Address.Erased;
+        if ((line1, line2, city, postalCode, country) ==
+            (erased.Line1, erased.Line2, erased.City, erased.PostalCode, erased.Country))
+        {
+            return erased;
+        }
+
         return Address.Of(line1, line2, city, postalCode, country);
     }
 
