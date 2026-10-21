@@ -3,6 +3,9 @@ using MassTransit;
 using MassTransit.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
+using NSubstitute;
 using Shouldly;
 using Xunit;
 
@@ -135,5 +138,44 @@ public class OperatorSwitchTests
         bus.CheckHealth().Status.ShouldBe(
             BusHealthStatus.Degraded,
             "Unhealthy would unready the pod, and a switched-off pod is meant to stay in service");
+    }
+
+    [Fact]
+    public async Task A_stop_that_fails_is_retried_until_the_endpoint_stops()
+    {
+        // No further change may come, and until the stop lands the queue consumes while readiness names it off.
+        MutableSource source = new();
+        source.Set(Queue);
+        ServiceCollection services = new();
+        services.AddOptions<OperatorSwitchOptions>()
+            .Bind(new ConfigurationBuilder().Add(source).Build().GetSection(OperatorSwitchOptions.SectionName));
+        using ServiceProvider provider = services.BuildServiceProvider();
+        OperatorSwitches switches = new(
+            provider.GetRequiredService<IOptionsMonitor<OperatorSwitchOptions>>(),
+            provider);
+
+        int stops = 0;
+        IReceiveEndpoint endpoint = Substitute.For<IReceiveEndpoint>();
+        endpoint.Stop(Arg.Any<CancellationToken>()).Returns(_ => Interlocked.Increment(ref stops) == 1
+            ? Task.FromException(new InvalidOperationException("the broker refused the stop"))
+            : Task.CompletedTask);
+        ReceiveEndpointReady ready = Substitute.For<ReceiveEndpointReady>();
+        ready.InputAddress.Returns(new Uri($"loopback://localhost/{Queue}"));
+        ready.ReceiveEndpoint.Returns(endpoint);
+
+        FakeTimeProvider clock = new();
+        using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
+
+        await endpoints.Ready(ready);
+        await Until(() => Volatile.Read(ref stops) == 1);
+        endpoints.IsStopped(Queue).ShouldBeFalse("the first stop failed");
+
+        // Advanced on every poll, since the retry's timer is armed just after the failure is seen.
+        await Until(() =>
+        {
+            clock.Advance(ReceiveEndpointSwitch.FirstRetry);
+            return endpoints.IsStopped(Queue);
+        });
+        Volatile.Read(ref stops).ShouldBe(2);
     }
 }
