@@ -27,7 +27,8 @@ public sealed class OrderPlacedHandler(IDispatcher dispatcher, IErasedSubjects e
                 placedAfter),
             ct);
 
-        if (await erased.IsErasedAsync(integrationEvent.CustomerId, placedAfter, ct))
+        if (await erased.IsErasedAsync(
+                integrationEvent.CustomerId, placedAfter, integrationEvent.OccurredAt, ct))
         {
             await dispatcher.SendAsync(
                 new EndErasedOrderCommand(integrationEvent.OrderId, integrationEvent.CustomerId),

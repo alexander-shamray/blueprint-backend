@@ -119,7 +119,8 @@ public class MessagingRegistrationTests
         [
             typeof(IntegrationEventConsumer<OrderPlaced>),
             typeof(IntegrationEventConsumer<OrderCancelled>),
-            typeof(IntegrationEventConsumer<PersonalDataDeleteRequested>)
+            typeof(IntegrationEventConsumer<PersonalDataDeleteRequested>),
+            typeof(IntegrationEventConsumer<PersonalDataDeleteClosed>)
         ];
         foreach (Type consumer in consumers)
         {
