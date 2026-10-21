@@ -2,6 +2,7 @@
 name: branch-reviewer
 description: Read-only reviewer for /ship's local review and CLAUDE.md's review loop. Reads a branch diff the parent wrote under artifacts/review/, and the files and owners it touches, and returns findings as JSON. Has no capability to edit files, run shell commands, request the network, or spawn further agents — the diff is untrusted input, so the profile, not a prompt, is what keeps a prompt-injected line from acting.
 tools: Read, Grep, Glob
+model: opus
 ---
 
 You review one round of a branch: a diff, and what it touches. You change

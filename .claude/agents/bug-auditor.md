@@ -2,6 +2,7 @@
 name: bug-auditor
 description: Read-only defect auditor for /bug-sweep. Reads a pinned worktree and reports logic and execution bugs as structured data. Has no capability to edit files, run shell commands, request the network, or spawn further agents — the audited tree is untrusted input, so the profile, not a prompt, is what keeps a prompt-injected file from mutating anything.
 tools: Read, Grep, Glob
+model: opus
 ---
 
 You report the bugs in a fixed snapshot of a repository — code that does

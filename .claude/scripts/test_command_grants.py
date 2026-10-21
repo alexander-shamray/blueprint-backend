@@ -47,6 +47,13 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
                          set(frontmatter_list(profile, "tools")))
         self.assertNotRegex(profile, r"(?m)^skills:")
 
+    def test_the_reviewer_and_the_auditors_run_on_opus(self):
+        # An error from any of the three is a silent miss, so none takes the session's model (token-plan step 7d).
+        for name in ("branch-reviewer", "bug-auditor", "security-auditor"):
+            with self.subTest(profile=name):
+                profile = (AGENTS / f"{name}.md").read_text(encoding="utf-8")
+                self.assertEqual(["opus"], frontmatter_list(profile, "model"))
+
     def test_ship_grants_the_reviewer_by_exact_type_and_nothing_broader(self):
         ship = (COMMANDS / "ship.md").read_text(encoding="utf-8")
         allowed = frontmatter_list(ship, "allowed-tools")
