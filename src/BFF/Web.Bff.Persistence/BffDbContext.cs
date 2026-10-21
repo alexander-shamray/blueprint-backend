@@ -19,7 +19,7 @@ public sealed class BffDbContext(DbContextOptions<BffDbContext> options) : DbCon
     /// <summary>§9.5's inbox.</summary>
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
-    /// <summary>§11.7's audit rows: a hash, a count and a time per request, holding no personal data.</summary>
+    /// <summary>§11.7's audit rows: a hash, a count and two times per request, holding no personal data.</summary>
     public DbSet<PersonalDataErasure> PersonalDataErasures => Set<PersonalDataErasure>();
 
     /// <summary>The ids of orders deleted for an erased customer, which a customer-less event is checked

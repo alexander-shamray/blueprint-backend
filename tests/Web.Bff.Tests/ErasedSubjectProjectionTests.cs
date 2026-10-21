@@ -117,6 +117,34 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
         (await fixture.OrderAsync(bystandersOrder)).ShouldNotBeNull().CustomerId.ShouldBe(_bystander);
     }
 
+    [Theory]
+    [InlineData("Placed")]
+    [InlineData("Confirmed")]
+    [InlineData("Cancelled")]
+    public async Task A_request_closed_beyond_the_margin_before_the_event_is_not_asked(string name)
+    {
+        Guid order = Guid.CreateVersion7();
+        await RecordErasureAsync(_subject, At.AddDays(-30), PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
+
+        await ApplyAsync(name, order, _subject);
+
+        (await fixture.OrderAsync(order)).ShouldNotBeNull("the owner anonymised before the event was sourced");
+    }
+
+    [Theory]
+    [InlineData("Placed")]
+    [InlineData("Confirmed")]
+    [InlineData("Cancelled")]
+    public async Task A_request_closed_inside_the_margin_before_the_event_is_still_asked(string name)
+    {
+        Guid order = Guid.CreateVersion7();
+        await RecordErasureAsync(_subject, At.AddDays(-30), PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
+
+        await ApplyAsync(name, order, _subject);
+
+        (await fixture.OrderAsync(order)).ShouldBeNull("the clocks may disagree by the margin, so the row counts");
+    }
+
     [Fact]
     public async Task An_event_that_names_no_customer_is_kept_for_an_order_nobody_erased()
     {
@@ -145,20 +173,41 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
 
     private IDbConnectionFactory Connections() => fixture.Factory.Services.GetRequiredService<IDbConnectionFactory>();
 
-    private static async Task<Guid> RecordErasureAsync(BffServiceFixture fixture, Guid subject, DateTimeOffset erasedAt)
+    /// <summary>Closed <paramref name="closedBefore"/> before the events' time when given; EF raw SQL cannot take
+    /// a null, so an open row is the form without the column.</summary>
+    private static async Task<Guid> RecordErasureAsync(
+        BffServiceFixture fixture,
+        Guid subject,
+        DateTimeOffset erasedAt,
+        TimeSpan? closedBefore = null)
     {
         Guid request = Guid.CreateVersion7();
+        string hash = PersonalDataErasure.HashSubject(request, subject);
+
+        if (closedBefore is { } before)
+        {
+            await fixture.ExecuteAsync(
+                "INSERT INTO bff.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt) " +
+                "VALUES ({0}, {1}, 0, {2}, {3})",
+                request,
+                hash,
+                erasedAt,
+                At - before);
+
+            return request;
+        }
+
         await fixture.ExecuteAsync(
             "INSERT INTO bff.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt) VALUES ({0}, {1}, 0, {2})",
             request,
-            PersonalDataErasure.HashSubject(request, subject),
+            hash,
             erasedAt);
 
         return request;
     }
 
-    private Task<Guid> RecordErasureAsync(Guid subject, DateTimeOffset erasedAt) =>
-        RecordErasureAsync(fixture, subject, erasedAt);
+    private Task<Guid> RecordErasureAsync(Guid subject, DateTimeOffset erasedAt, TimeSpan? closedBefore = null) =>
+        RecordErasureAsync(fixture, subject, erasedAt, closedBefore);
 
     private async Task ApplyAsync(
         string name,
@@ -224,12 +273,13 @@ public sealed class ErasedSubjectProjectionTests(BffServiceFixture fixture) : IA
         public async Task<bool> IsErasedAsync(
             Guid subjectId,
             IReadOnlyCollection<Guid> placedAfter,
+            DateTimeOffset sourcedAt,
             CancellationToken ct)
         {
             RowWasThereWhenAsked = await fixture.OrderAsync(order) is not null;
             await RecordErasureAsync(fixture, subject, At);
 
-            return await real.IsErasedAsync(subjectId, placedAfter, ct);
+            return await real.IsErasedAsync(subjectId, placedAfter, sourcedAt, ct);
         }
     }
 }

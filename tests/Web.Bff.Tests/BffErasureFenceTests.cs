@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Common.Application;
+using Common.Domain;
 using Shouldly;
 using Web.Bff.Addresses;
 using Web.Bff.Orders;
@@ -131,6 +132,49 @@ public sealed class BffErasureFenceTests(BffServiceFixture fixture) : IAsyncLife
             "SELECT Value = COUNT(*) FROM bff.ErasedOrders WHERE OrderId = {0}",
             kept)).ShouldBe(0);
     }
+
+    [Fact]
+    public async Task A_save_is_not_stamped_with_a_request_closed_beyond_the_margin()
+    {
+        Guid request = await RecordClosedErasureAsync(PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
+
+        await SaveAsync();
+
+        (await StampAsync()).ShouldBe("[]", $"request {request} closed before the save, past the clocks' margin");
+    }
+
+    [Fact]
+    public async Task A_save_is_stamped_with_a_request_closed_inside_the_margin()
+    {
+        Guid request = await RecordClosedErasureAsync(PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
+
+        await SaveAsync();
+
+        (await StampAsync()).ShouldBe($"[\"{request}\"]", "the clocks may disagree by the margin, so the row counts");
+    }
+
+    private async Task<Guid> RecordClosedErasureAsync(TimeSpan closedAgo)
+    {
+        Guid request = Guid.CreateVersion7();
+        await fixture.ExecuteAsync(
+            "INSERT INTO bff.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt) " +
+            "VALUES ({0}, {1}, 0, {2}, {3})",
+            request,
+            PersonalDataErasure.HashSubject(request, Subject),
+            DateTimeOffset.UtcNow - closedAgo,
+            DateTimeOffset.UtcNow - closedAgo);
+
+        return request;
+    }
+
+    private Task SaveAsync() =>
+        fixture.Factory.Services.GetRequiredService<SavedAddressStore>().SaveAsync(
+            Subject,
+            new SavedAddress("1 Test Street", null, "Testville", "T1", "KZ"),
+            TestContext.Current.CancellationToken);
+
+    private Task<string> StampAsync() =>
+        fixture.ScalarAsync<string>("SELECT Value = ErasedUnder FROM bff.SavedAddresses WHERE CustomerId = {0}", Subject);
 
     [Fact]
     public async Task The_projection_stores_the_requests_an_order_was_placed_after()

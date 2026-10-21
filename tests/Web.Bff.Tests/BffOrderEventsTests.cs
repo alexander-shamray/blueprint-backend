@@ -65,8 +65,12 @@ public sealed class BffOrderEventsTests(BffServiceFixture fixture) : IAsyncLifet
 
         (await fixture.BindingsAsync(MessagingRegistration.PrivacyQueue))
             .ShouldContain("Common.Contracts.Privacy.V1:PersonalDataDeleteRequested");
+        (await fixture.BindingsAsync(MessagingRegistration.PrivacyQueue))
+            .ShouldContain("Common.Contracts.Privacy.V1:PersonalDataDeleteClosed");
         (await fixture.BindingsAsync(MessagingRegistration.EventsQueue))
             .ShouldNotContain("Common.Contracts.Privacy.V1:PersonalDataDeleteRequested", "it has a queue of its own");
+        (await fixture.BindingsAsync(MessagingRegistration.EventsQueue))
+            .ShouldNotContain("Common.Contracts.Privacy.V1:PersonalDataDeleteClosed", "it has a queue of its own");
     }
 
     [Fact]

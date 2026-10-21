@@ -32,8 +32,9 @@ public sealed class MessagingRegistrationTests
         typeof(ProductPublished)
     ];
 
-    /// <summary>§11.7's erasure request, which every holder consumes (ADR-092); not a projection event.</summary>
-    private static readonly Type[] Erasure = [typeof(PersonalDataDeleteRequested)];
+    /// <summary>§11.7's erasure request, which every holder consumes (ADR-092), and Privacy's close of it (ADR-139);
+    /// neither is a projection event.</summary>
+    private static readonly Type[] Erasure = [typeof(PersonalDataDeleteRequested), typeof(PersonalDataDeleteClosed)];
 
     private static readonly TimeSpan HarnessInactivityTimeout = TimeSpan.FromSeconds(30);
 
