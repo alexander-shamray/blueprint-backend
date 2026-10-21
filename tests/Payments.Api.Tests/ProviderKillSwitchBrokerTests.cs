@@ -82,7 +82,15 @@ public sealed class ProviderKillSwitchBrokerTests(ServiceFixture fixture)
                 await endpoint.Send(new Probe(Guid.CreateVersion7()), TestContext.Current.CancellationToken);
 
             await transitions.Stopped.Task.WaitAsync(Budget, TestContext.Current.CancellationToken);
-            bus.CheckHealth().Status.ShouldBe(
+
+            // Completed can reach the observer before the bus's health records the stop, so a Healthy lag is waited
+            // out, as ProviderKillSwitchTests does; any other first reading is asserted.
+            using CancellationTokenSource deadline = new(Budget);
+            BusHealthStatus status;
+            while ((status = bus.CheckHealth().Status) == BusHealthStatus.Healthy && !deadline.IsCancellationRequested)
+                await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+
+            status.ShouldBe(
                 BusHealthStatus.Degraded,
                 "a stopped endpoint must leave readiness answering 200, or a provider outage unreadies the host");
 
