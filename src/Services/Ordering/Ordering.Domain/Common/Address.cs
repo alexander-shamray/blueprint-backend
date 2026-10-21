@@ -15,6 +15,9 @@ public sealed record Address
     public string PostalCode { get; }
     public string Country { get; }
 
+    /// <summary>What an erasure leaves on an order it anonymises, a shape <see cref="Of"/> refuses (§11.7).</summary>
+    public static Address Erased { get; } = new("", null, "", "", "ZZ");
+
     private Address(string line1, string? line2, string city, string postalCode, string country)
     {
         Line1 = line1;

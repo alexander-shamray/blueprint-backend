@@ -80,6 +80,31 @@ public class OutboxSerialisationTests
             .ShouldBe(address);
     }
 
+    [Fact]
+    public void An_erased_address_payload_reads_back_as_the_erased_address()
+    {
+        // An order erased mid-saga confirms with the blank its erasure wrote, and Address.Of refuses that shape.
+        using ServiceProvider provider = Registered();
+        JsonSerializerOptions options = provider.GetRequiredService<OutboxJson>().Options;
+
+        JsonSerializer
+            .Deserialize<Address>(
+                """{"Line1":"","Line2":null,"City":"","PostalCode":"","Country":"ZZ"}""",
+                options)
+            .ShouldBe(Address.Erased);
+    }
+
+    [Fact]
+    public void A_blank_address_that_is_not_the_erased_one_is_still_refused()
+    {
+        using ServiceProvider provider = Registered();
+        JsonSerializerOptions options = provider.GetRequiredService<OutboxJson>().Options;
+
+        Should.Throw<Common.Domain.DomainException>(() => JsonSerializer.Deserialize<Address>(
+            """{"Line1":"","Line2":null,"City":"","PostalCode":"","Country":"KZ"}""",
+            options));
+    }
+
     private static ServiceProvider Registered()
     {
         IConfiguration configuration = new ConfigurationBuilder()
