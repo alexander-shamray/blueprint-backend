@@ -23,8 +23,9 @@ or from an event without the field, holds an empty list and is erased as
 before. Each statement joins the subject's address rows to their shipments'
 lists, a JSON scan per row on the subject's own request. A late copy of a
 request already closed is refused before any statement runs
-([ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)), so the reissue of an open request is the case this
-decision changes.
+([ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)), so what this decision changes is a first pass that meets
+such an order, as a consumer lagging behind Ordering's can, and the reissue of
+a request still open.
 
 ---
 
