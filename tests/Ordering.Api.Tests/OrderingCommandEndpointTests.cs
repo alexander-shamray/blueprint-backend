@@ -94,10 +94,19 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
             MessagingRegistration.StockEventsQueue,
             suppressed);
 
+        // The saga's copy too, so it has finished before the next test resets.
+        using SemaphoreSlim sagaSuppressed = new(0);
+        using MeterListener sagaListener = ListenForSuppressed(
+            nameof(StockReserved),
+            MessagingRegistration.FulfilmentSagaQueue,
+            sagaSuppressed);
+
         await PublishStockReservedAsync(orderId, messageId, drain: false);
 
         (await suppressed.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken))
             .ShouldBeTrue("this endpoint's inbox has to drop the redelivery, not run it and reject it");
+        (await sagaSuppressed.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("the saga's queue drops its copy of the redelivery as well");
         (await StatusAsync(orderId)).ShouldBe("AwaitingPayment");
     }
 
