@@ -70,8 +70,11 @@ public sealed class SavedAddressStore(IDbConnectionFactory connections, TimeProv
         await connection.ExecuteAsync(
             new CommandDefinition(LockSql, new { CustomerId = customerId }, transaction, cancellationToken: ct));
 
+        // One instant for the stamp and the save: the row is stamped with what was asked as of when it was taken
+        // (ADR-139).
+        DateTimeOffset savedAt = clock.GetUtcNow();
         IReadOnlyList<Guid> erasedUnder =
-            await SqlErasedSubjects.RequestsNamingAsync(connection, transaction, customerId, ct);
+            await SqlErasedSubjects.RequestsNamingAsync(connection, transaction, customerId, savedAt, ct);
 
         await connection.ExecuteAsync(
             new CommandDefinition(
@@ -84,7 +87,7 @@ public sealed class SavedAddressStore(IDbConnectionFactory connections, TimeProv
                     address.City,
                     address.PostalCode,
                     address.Country,
-                    SavedAt = clock.GetUtcNow(),
+                    SavedAt = savedAt,
                     ErasedUnder = JsonSerializer.Serialize(erasedUnder)
                 },
                 transaction,

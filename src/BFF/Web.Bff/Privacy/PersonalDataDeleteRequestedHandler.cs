@@ -19,6 +19,16 @@ public sealed class PersonalDataDeleteRequestedHandler(
 {
     public async Task HandleAsync(PersonalDataDeleteRequested integrationEvent, CancellationToken ct)
     {
+        // A closed request is not reissued, so this is a late copy; the checks no longer ask its row, and a second
+        // pass would delete what the customer made since (ADR-139).
+        DateTimeOffset? closedAt = await db.PersonalDataErasures
+            .AsNoTracking()
+            .Where(e => e.Id == integrationEvent.RequestId)
+            .Select(e => e.ClosedAt)
+            .FirstOrDefaultAsync(ct);
+        if (closedAt is not null)
+            return;
+
         // As the column's JSON spells a Guid, which is what an order's list is matched against.
         string requestId = integrationEvent.RequestId.ToString();
 

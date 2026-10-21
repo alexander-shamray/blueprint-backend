@@ -222,6 +222,47 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
     }
 
     [Fact]
+    public async Task The_close_of_a_request_stamps_its_row_and_the_first_close_stands()
+    {
+        Guid request = Guid.CreateVersion7();
+        await PublishRequestAsync(request);
+        DateTimeOffset closedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        await fixture.DeliverAsync(Closed(request, closedAt), MessagingRegistration.PrivacyQueue);
+        await fixture.DeliverAsync(Closed(request, closedAt.AddHours(1)), MessagingRegistration.PrivacyQueue);
+
+        (await fixture.ScalarAsync<DateTimeOffset>(
+            "SELECT Value = ClosedAt FROM bff.PersonalDataErasures WHERE RequestId = {0}",
+            request)).ShouldBe(closedAt);
+    }
+
+    [Fact]
+    public async Task The_close_of_a_request_with_no_row_here_writes_none()
+    {
+        Guid request = Guid.CreateVersion7();
+
+        await fixture.DeliverAsync(Closed(request, DateTimeOffset.UtcNow), MessagingRegistration.PrivacyQueue);
+
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM bff.PersonalDataErasures WHERE RequestId = {0}",
+            request)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_late_copy_of_a_closed_request_erases_nothing_and_reports_nothing()
+    {
+        Guid request = Guid.CreateVersion7();
+        await PublishRequestAsync(request);
+        await fixture.DeliverAsync(Closed(request, DateTimeOffset.UtcNow), MessagingRegistration.PrivacyQueue);
+        await SeedAddressAsync(Subject);
+
+        await PublishRequestAsync(request);
+
+        (await CountAddressesAsync(Subject)).ShouldBe(1, "what the customer gave after the close is not this request's");
+        await Eventually(CountCompletionsAsync, expected: 1, because: "the first pass reported; the late copy did not");
+    }
+
+    [Fact]
     public async Task The_same_request_message_delivered_twice_is_erased_and_reported_once()
     {
         Guid request = Guid.CreateVersion7();
@@ -314,6 +355,14 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
         OccurredAt = DateTimeOffset.UtcNow,
         RequestId = request,
         SubjectId = Subject
+    };
+
+    private static PersonalDataDeleteClosed Closed(Guid request, DateTimeOffset closedAt) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = request,
+        OccurredAt = closedAt,
+        RequestId = request
     };
 
     private Task PublishRequestAsync(Guid request, PersonalDataDeleteRequested? sent = null) =>
