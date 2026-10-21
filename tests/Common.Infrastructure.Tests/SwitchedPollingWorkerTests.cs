@@ -32,6 +32,10 @@ public class SwitchedPollingWorkerTests
 
         public bool BlockUntilDrained { get; init; }
 
+        public bool AwaitsStop { get; init; }
+
+        public bool CutByStop { get; private set; }
+
         public bool Drained { get; private set; }
 
         public CancellationToken DrainSeen { get; private set; }
@@ -59,6 +63,18 @@ public class SwitchedPollingWorkerTests
                 catch (OperationCanceledException)
                 {
                     Drained = true;
+                }
+            }
+
+            if (AwaitsStop)
+            {
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
+                }
+                finally
+                {
+                    CutByStop = stoppingToken.IsCancellationRequested;
                 }
             }
 
@@ -162,10 +178,14 @@ public class SwitchedPollingWorkerTests
     [Fact]
     public async Task A_stop_returns_without_a_pass_failure_being_reported()
     {
-        Probe worker = new(null);
+        // The pass is under way at the stop and throws its cancellation, so only the filter keeps it unreported.
+        Probe worker = new(null, passAtStart: true, interval: TimeSpan.FromHours(1)) { AwaitsStop = true };
 
-        await RunAsync(worker);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
+        await worker.FirstPass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await worker.StopAsync(TestContext.Current.CancellationToken);
 
+        worker.CutByStop.ShouldBeTrue();
         worker.Failures.ShouldBe(0);
     }
 
