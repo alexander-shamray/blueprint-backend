@@ -286,8 +286,8 @@ a malformed record (#598). The exit waits on step 1's quality set.
   stays seven rounds, and the loop still ends on a round with nothing new.
 - The SHA of the last sweep is kept, and a repeat sweep reads the diff
   since it.
-- Re-verifying a finding runs on `model: sonnet`; the auditors stay on the
-  parent's model.
+- Re-verifying a finding runs on `model: sonnet`; which model the auditors
+  run on is step 7d's.
 
 **Exit.** On the sweep quality set, a first sweep finds at least what the
 earlier sweeps filed.
@@ -390,14 +390,17 @@ inside an audit.
 
 ### Step 7d — which model a subagent runs on
 
-No agent under `.claude/agents/` sets `model:`, so a subagent runs on its
-parent's model; the one exception is a sweep's re-verification (step 5).
-Step 2 deferred a cheaper model for `general-purpose` behind step 1's
+A subagent runs on its parent's model unless its profile under
+`.claude/agents/` sets `model:` or the spawn passes one, and the spawn's
+wins. Step 2 deferred a cheaper model for `general-purpose` behind step 1's
 quality sets, and that is right where its error is a silent miss. It is not
 needed where someone else catches the error: the parent opens the
 `file:line` a search returned, and a gate, a build or a test checks a
-mechanical edit. `CLAUDE.md`'s *Subagents, review rounds and plans* owns the
-rule; this table owns which task takes which model.
+mechanical edit. Where the error is a silent miss, the parent's model is
+not enough either, since a session started on Sonnet would make its
+reviewer and auditors Sonnet; those profiles name Opus. `CLAUDE.md`'s
+*Subagents, review rounds and plans* owns the rule; this table owns which
+task takes which model.
 
 | Task | Model | When |
 |---|---|---|
@@ -406,11 +409,15 @@ rule; this table owns which task takes which model.
 | A sweep's re-verification | Sonnet | already so |
 | A review recheck of a fix diff only | Sonnet | after #845 |
 | A plan task's implementer | Sonnet | after #845 |
-| `branch-reviewer`'s first pass, a sweep's fan-out, writing a plan | the parent's | until #845 shows otherwise |
+| `branch-reviewer`'s rounds, a sweep's fan-out | Opus | now: the profile pins it, whatever the session runs on |
+| Writing a plan | the parent's | until #845 shows otherwise |
 
 - For `general-purpose` and `Explore` the brief names the model at spawn.
-  `model:` goes in the frontmatter of a repository agent the table moves;
-  none moves yet, since the rows that are "now" name built-in agents.
+  `model:` goes in the frontmatter of a repository agent the table moves:
+  `branch-reviewer`, `bug-auditor` and `security-auditor` carry
+  `model: opus`, which `test_command_grants.py` pins. A spawn's `model`
+  overrides it, which is how a sweep's re-verification runs on Sonnet and
+  how a recheck would, once its row moves.
 - The report's `--models` view splits each row by the model that answered,
   read from each response's `message.model`, so what a built-in agent
   actually ran on is read from the transcripts rather than assumed.
@@ -420,7 +427,8 @@ rows the table moves run on the named model; the input equivalent, priced
 per model, falls; and on #845's sets nothing kept on the parent's model
 loses recall.
 
-**Landed:** the report's `--models` view and the rule. **Owed:** the
+**Landed:** the report's `--models` view, the rule, and the Opus pin on
+the three repository agents. **Owed:** the
 "after #845" rows, and the exit measurement.
 
 ### Not a step — how subagents read the chapters
