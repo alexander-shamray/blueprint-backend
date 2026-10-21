@@ -48,8 +48,13 @@ internal static class ContactReader
 
             // An erasure since the intake's check finds this row or is seen here, so it is not written back (ADR-100).
             // Asked without an order's requests, since this read serves all the customer's rows (ADR-101), so an order
-            // ADR-099 kept loses only a row the next read fetches again; the pass still sends.
-            if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(customer, [], ct))
+            // ADR-099 kept loses only a row the next read fetches again; the pass still sends. Asks every row, as
+            // the send pass does: no instant of the owner's data is known here (ADR-139).
+            if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(
+                customer,
+                [],
+                DateTimeOffset.MinValue,
+                ct))
                 await store.DeleteAsync(customer, ct);
         }
         else

@@ -16,8 +16,9 @@ public sealed class RegisterDeviceHandler(
 {
     public async Task<Result<DeviceWrite>> HandleAsync(RegisterDeviceCommand command, CancellationToken ct)
     {
-        IReadOnlyList<Guid> erasedUnder = await erasures.RequestsErasingAsync(command.SubjectId, ct);
+        DateTimeOffset now = clock.GetUtcNow();
+        IReadOnlyList<Guid> erasedUnder = await erasures.RequestsErasingAsync(command.SubjectId, now, ct);
 
-        return Result.Success(await store.RegisterAsync(command, erasedUnder, clock.GetUtcNow(), ct));
+        return Result.Success(await store.RegisterAsync(command, erasedUnder, now, ct));
     }
 }

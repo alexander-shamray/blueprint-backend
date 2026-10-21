@@ -12,6 +12,7 @@ namespace Notifications.Application.Tests;
 public class ErasedIntakeTests
 {
     private static readonly Guid Customer = Guid.CreateVersion7();
+    private static readonly DateTimeOffset EventAt = new(2026, 10, 2, 9, 0, 0, TimeSpan.Zero);
 
     private readonly RecordingDispatcher _dispatcher = new();
 
@@ -61,6 +62,18 @@ public class ErasedIntakeTests
     }
 
     [Fact]
+    public async Task The_check_is_bounded_by_the_events_own_instant_and_not_the_time_it_is_asked()
+    {
+        Answers answers = new(erased: false);
+        RecordNotificationCommand command = Command(new OrderFact(Customer, Cancellation: null));
+
+        await new ErasedIntake(_dispatcher, answers).RecordAsync(command, TestContext.Current.CancellationToken);
+
+        answers.SourcedAt.ShouldHaveSingleItem()
+            .ShouldBe(command.Parameters.OccurredAt, "the data left the owner then (ADR-139)");
+    }
+
+    [Fact]
     public async Task An_event_that_names_no_customer_is_not_asked_about()
     {
         Answers answers = new(erased: true);
@@ -89,7 +102,7 @@ public class ErasedIntakeTests
             Guid.CreateVersion7(),
             Guid.CreateVersion7(),
             TemplateKeys.OrderPlaced,
-            new NotificationParameters { OrderId = Guid.CreateVersion7(), OccurredAt = DateTimeOffset.UnixEpoch },
+            new NotificationParameters { OrderId = Guid.CreateVersion7(), OccurredAt = EventAt },
             order);
 
     private sealed class Answers(bool erased) : IErasedSubjects
@@ -98,12 +111,19 @@ public class ErasedIntakeTests
 
         public List<IReadOnlyCollection<Guid>> PlacedAfter { get; } = [];
 
+        public List<DateTimeOffset> SourcedAt { get; } = [];
+
         public Action? OnAsked { get; set; }
 
-        public Task<bool> IsErasedAsync(Guid subjectId, IReadOnlyCollection<Guid> placedAfter, CancellationToken ct)
+        public Task<bool> IsErasedAsync(
+            Guid subjectId,
+            IReadOnlyCollection<Guid> placedAfter,
+            DateTimeOffset sourcedAt,
+            CancellationToken ct)
         {
             Asked.Add(subjectId);
             PlacedAfter.Add(placedAfter);
+            SourcedAt.Add(sourcedAt);
             OnAsked?.Invoke();
 
             return Task.FromResult(erased);

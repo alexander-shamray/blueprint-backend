@@ -84,6 +84,42 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
     }
 
     [Fact]
+    public async Task A_request_that_closed_before_the_event_is_not_asked_and_the_order_is_kept()
+    {
+        Guid order = Guid.CreateVersion7();
+
+        // Closed, so the owner had anonymised the subject before the event existed to carry them (ADR-139).
+        await RecordErasureAsync(
+            fixture,
+            _subject,
+            At.AddDays(-9),
+            closedAt: At - PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
+
+        await ApplyAsync("Placed", order, _subject);
+
+        (await fixture.OrderRecordAsync(order)).ShouldNotBeNull();
+        (await fixture.NotificationsAsync(order)).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task A_request_that_closed_inside_the_margin_before_the_event_still_ends_the_order()
+    {
+        Guid order = Guid.CreateVersion7();
+
+        // The margin covers the owner's, Notifications' and Privacy's clocks disagreeing (ADR-139).
+        await RecordErasureAsync(
+            fixture,
+            _subject,
+            At.AddDays(-9),
+            closedAt: At - PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
+
+        await ApplyAsync("Placed", order, _subject);
+
+        (await fixture.OrderRecordAsync(order)).ShouldBeNull();
+        (await fixture.NotificationsAsync(order)).ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task An_erasure_committing_between_the_record_and_the_check_still_ends_with_nothing_held()
     {
         Guid order = Guid.CreateVersion7();
@@ -105,9 +141,30 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         (await fixture.NotificationsAsync(order)).ShouldBeEmpty();
     }
 
-    internal static async Task<Guid> RecordErasureAsync(ServiceFixture fixture, Guid subject, DateTimeOffset erasedAt)
+    /// <summary>The audit row a holder writes; closed at <paramref name="closedAt"/> when Privacy's close has
+    /// reached it, and open otherwise.</summary>
+    internal static async Task<Guid> RecordErasureAsync(
+        ServiceFixture fixture,
+        Guid subject,
+        DateTimeOffset erasedAt,
+        DateTimeOffset? closedAt = null)
     {
         Guid request = Guid.CreateVersion7();
+
+        // Two statements, since EF raw SQL cannot take a null parameter.
+        if (closedAt is { } closed)
+        {
+            await fixture.ExecuteAsync(
+                "INSERT INTO notifications.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt) " +
+                "VALUES ({0}, {1}, 0, {2}, {3})",
+                request,
+                PersonalDataErasure.HashSubject(request, subject),
+                erasedAt,
+                closed);
+
+            return request;
+        }
+
         await fixture.ExecuteAsync(
             "INSERT INTO notifications.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt) " +
             "VALUES ({0}, {1}, 0, {2})",
@@ -160,12 +217,13 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         public async Task<bool> IsErasedAsync(
             Guid subjectId,
             IReadOnlyCollection<Guid> placedAfter,
+            DateTimeOffset sourcedAt,
             CancellationToken ct)
         {
             RecordWasThereWhenAsked = await fixture.OrderRecordAsync(order) is not null;
             await RecordErasureAsync(fixture, subject, At);
 
-            return await real.IsErasedAsync(subjectId, placedAfter, ct);
+            return await real.IsErasedAsync(subjectId, placedAfter, sourcedAt, ct);
         }
     }
 }
