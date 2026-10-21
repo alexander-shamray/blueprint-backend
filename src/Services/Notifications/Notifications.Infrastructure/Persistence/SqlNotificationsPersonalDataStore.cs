@@ -27,9 +27,9 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         "EXISTS (SELECT 1 FROM OPENJSON(ErasedUnder) AS u WHERE u.value = @RequestId)";
 
     // The erasure's first statement, so it reads the records before anything is deleted. HOLDLOCK takes a range lock
-    // even where the subject has no record, held to the commit that writes the audit row: an intake meanwhile
-    // waits, and its erased check then sees that row. The read is its own step because a plan may skip a subquery
-    // when no notice is there to compare, and uncounted, as the count is of what the erasure removed.
+    // even where the subject has no record, held to the commit that writes the audit row, and the second read holds
+    // the records themselves, which the index's seek does not: an intake meanwhile waits, and its erased check then
+    // sees that row. Its own step, as a plan may skip a subquery with no notice to compare, and uncounted.
     private const string DeleteWaitingSql =
         $"""
         SET NOCOUNT ON;
@@ -37,6 +37,11 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
 
         INSERT INTO @Orders
         SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK) WHERE CustomerId = @SubjectId;
+
+        DECLARE @Held int;
+        SELECT @Held = COUNT(*)
+        FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK, FORCESEEK)
+        WHERE OrderId IN (SELECT OrderId FROM @Orders);
 
         SET NOCOUNT OFF;
         DELETE n
