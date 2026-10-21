@@ -58,6 +58,7 @@ public class PersonalDataDeleteRequestedHandlerTests
                 new ErasePersonalDataCommand(Request, Subject)
             ],
             "the rows that name the orders must outlive the step that reads them");
+        _store.Requests.ShouldBe([Request], "an order placed under the request is not the request's to end (ADR-103)");
         _reporter.Reported.ShouldBe([(Request, 2)]);
     }
 
@@ -113,10 +114,15 @@ public class PersonalDataDeleteRequestedHandlerTests
     {
         public IReadOnlyList<Guid> Orders { get; set; } = [];
 
-        public Task<IReadOnlyList<Guid>> AddressedOrdersAsync(Guid subjectId, CancellationToken ct) =>
-            Task.FromResult(Orders);
+        public List<Guid> Requests { get; } = [];
 
-        public Task<int> DeleteAddressesAsync(Guid subjectId, CancellationToken ct) =>
+        public Task<IReadOnlyList<Guid>> AddressedOrdersAsync(Guid subjectId, Guid requestId, CancellationToken ct)
+        {
+            Requests.Add(requestId);
+            return Task.FromResult(Orders);
+        }
+
+        public Task<int> DeleteAddressesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
             throw new NotSupportedException("The erasure is a command; the handler under test only dispatches it.");
     }
 
