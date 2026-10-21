@@ -63,7 +63,12 @@ public sealed class ScheduledStockTimeoutTests(ShortStockTimeoutFixture fixture)
         Guid placedId = Guid.CreateVersion7();
 
         await PublishPlacedAsync(orderId, placedId);
-        await Eventually(() => SagaRowsAsync(orderId), 1, "the transition into AwaitingStock arms the timeout");
+        // The order's own inbox row and not the instance, which lives only as long as the two-second delay.
+        await Eventually(
+            async () => (await fixture.InboxAsync())
+                .Count(r => r.Endpoint == DependencyInjection.FulfilmentSagaQueue && r.MessageId == placedId),
+            1,
+            "the saga handled OrderPlaced, which arms the timeout on the way into AwaitingStock");
 
         await Eventually(
             () => SagaRowsAsync(orderId),
