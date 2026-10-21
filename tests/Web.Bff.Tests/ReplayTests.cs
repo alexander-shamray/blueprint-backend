@@ -77,6 +77,20 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         IReadOnlyList<ProjectedLine> keptLines = await fixture.LinesAsync(kept);
         IReadOnlyList<ProjectedLine> cancelledLines = await fixture.LinesAsync(cancelled);
 
+        // Drift no event explains, an order and a line: the set-once handlers leave a row they did not delete as it
+        // was, so only the reset can remove these.
+        Guid stray = Guid.CreateVersion7();
+        await fixture.ExecuteAsync(
+            "INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf) " +
+            "VALUES ({0}, {1}, N'[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            stray,
+            customer);
+        await fixture.ExecuteAsync(
+            "INSERT INTO bff.OrderLines (OrderId, LineNumber, ProductId, Quantity, UnitPrice) " +
+            "VALUES ({0}, 99, {1}, 1, 9.99)",
+            kept,
+            Guid.CreateVersion7());
+
         // Three rows a replay must not send: two types outside the eight, and one the dispatcher still owns.
         PriceChanged repriced = new()
         {
@@ -121,6 +135,7 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         (await fixture.OrderAsync(cancelled)).ShouldNotBeNull().Facts().ShouldBe(cancelledBefore.Facts());
         (await fixture.LinesAsync(kept)).ShouldBe(keptLines);
         (await fixture.LinesAsync(cancelled)).ShouldBe(cancelledLines);
+        (await fixture.OrderAsync(stray)).ShouldBeNull();
         (await fixture.QueueDepthAsync($"{Replay.Queue}_skipped"))
             .ShouldBe(skippedBefore, "a type the queue does not bind was sent");
 
