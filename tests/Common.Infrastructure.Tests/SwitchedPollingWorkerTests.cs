@@ -182,8 +182,15 @@ public class SwitchedPollingWorkerTests
         Probe worker = new(null, passAtStart: true, interval: TimeSpan.FromHours(1)) { AwaitsStop = true };
 
         await worker.StartAsync(TestContext.Current.CancellationToken);
-        await worker.FirstPass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
-        await worker.StopAsync(TestContext.Current.CancellationToken);
+
+        try
+        {
+            await worker.FirstPass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            await worker.StopAsync(TestContext.Current.CancellationToken);
+        }
 
         worker.CutByStop.ShouldBeTrue();
         worker.Failures.ShouldBe(0);
