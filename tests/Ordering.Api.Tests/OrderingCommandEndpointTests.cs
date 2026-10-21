@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Common.Application;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
@@ -85,26 +86,19 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
             "the saga binds the same event on its own queue — a row from that endpoint would mean this " +
             "consumer was bound there instead, under a retry policy written for a state machine");
 
-        // The same id again. The row count, not the status, discriminates: a rejected duplicate leaves the same
-        // status as a suppressed one, since StockReservedHandler drops the Result (§9.8).
+        // The same id again, counted by the filter itself: a duplicate that ran and was rejected leaves the same
+        // status and, under the table's key, the same one row, since StockReservedHandler drops the Result (§9.8).
+        using SemaphoreSlim suppressed = new(0);
+        using MeterListener listener = ListenForSuppressed(
+            nameof(StockReserved),
+            MessagingRegistration.StockEventsQueue,
+            suppressed);
+
         await PublishStockReservedAsync(orderId, messageId, drain: false);
 
-        // A sentinel with a fresh id bounds the wait, and is drained on its own.
-        Guid sentinelOrderId = await fixture.SeedOrderAsync(Customer);
-        await PublishStockReservedAsync(sentinelOrderId, Guid.CreateVersion7());
-        await EventuallyStatus(
-            sentinelOrderId,
-            "AwaitingPayment",
-            because: "a message published after the duplicate has been consumed, so the endpoint has " +
-                "had the duplicate in front of it — a wait that scales with the runner rather than a " +
-                "fixed three seconds that is generous here and short on a loaded agent");
-
+        (await suppressed.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("this endpoint's inbox has to drop the redelivery, not run it and reject it");
         (await StatusAsync(orderId)).ShouldBe("AwaitingPayment");
-        (await InboxRowsAsync(messageId, MessagingRegistration.StockEventsQueue))
-            .Count
-            .ShouldBe(1, "a suppressed duplicate writes no second row");
-
-        // The sentinel bounds this wait but proves no order: no ConcurrentMessageLimit is set, so it may finish first.
     }
 
     [Fact]
@@ -349,6 +343,42 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
                     c.CorrelationId = reserved.CorrelationId;
                 },
                 TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>Releases <paramref name="suppressed"/> for each drop the inbox counts, as §9.5's filter does before it
+    /// returns.</summary>
+    private static MeterListener ListenForSuppressed(string message, string endpoint, SemaphoreSlim suppressed)
+    {
+        MeterListener listener = new();
+
+        listener.InstrumentPublished = (instrument, active) =>
+        {
+            if (instrument.Meter.Name == "Commerce.Messaging" &&
+                instrument.Name == "messaging.inbox.suppressed")
+            {
+                active.EnableMeasurementEvents(instrument);
+            }
+        };
+
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            if (TagValue(tags, "message") == message && TagValue(tags, "endpoint") == endpoint)
+                suppressed.Release();
+        });
+
+        listener.Start();
+        return listener;
+    }
+
+    private static string TagValue(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name)
+    {
+        foreach (KeyValuePair<string, object?> tag in tags)
+        {
+            if (tag.Key == name)
+                return tag.Value?.ToString() ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 
     /// <summary>Sends to <c>ordering-commands</c> by address, as §9.6's saga does.</summary>
