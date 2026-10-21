@@ -17,6 +17,9 @@ internal sealed class OrderRecordConfiguration : IEntityTypeConfiguration<OrderR
         builder.HasKey(r => r.OrderId);
         builder.Property(r => r.OrderId).ValueGeneratedNever();
 
+        // Nullable, as a record from before the column has no instant to bound the erasure check by (ADR-139).
+        builder.Property(r => r.SourcedAt);
+
         builder.Property(r => r.CancelReason).HasMaxLength(OrderRecordLimits.MaxCodeLength);
         builder.Property(r => r.CancelOrigin).HasMaxLength(OrderRecordLimits.MaxCodeLength);
 

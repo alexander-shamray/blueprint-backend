@@ -30,15 +30,27 @@ public sealed class OrderRecord
     /// </summary>
     public IReadOnlyList<Guid> ErasedUnder { get; private set; } = [];
 
+    /// <summary>
+    /// The earliest <c>OccurredAt</c> of the Ordering events that wrote this record, so no later than when the
+    /// customer left Ordering; null for a record from before the column, which asks every row (ADR-139).
+    /// </summary>
+    public DateTimeOffset? SourcedAt { get; private set; }
+
     // EF Core materialisation only (§5.4).
     private OrderRecord() { }
 
-    private OrderRecord(Guid orderId, Guid customerId, IReadOnlyList<Guid> erasedUnder, DateTimeOffset now)
+    private OrderRecord(
+        Guid orderId,
+        Guid customerId,
+        IReadOnlyList<Guid> erasedUnder,
+        DateTimeOffset now,
+        DateTimeOffset? sourcedAt)
     {
         OrderId = orderId;
         CustomerId = customerId;
         ErasedUnder = erasedUnder;
         RecordedAt = now;
+        SourcedAt = sourcedAt;
     }
 
     /// <summary>The first of Ordering's events for an order names its customer and the requests it was placed
@@ -47,8 +59,16 @@ public sealed class OrderRecord
         Guid orderId,
         Guid customerId,
         DateTimeOffset now,
-        IReadOnlyList<Guid>? erasedUnder = null) =>
-        new(orderId, customerId, [.. (erasedUnder ?? []).Distinct()], now);
+        IReadOnlyList<Guid>? erasedUnder = null,
+        DateTimeOffset? sourcedAt = null) =>
+        new(orderId, customerId, [.. (erasedUnder ?? []).Distinct()], now, sourcedAt);
+
+    /// <summary>Keeps the earlier of the stored instant and a later event's; a null one stays null (ADR-139).</summary>
+    public void Sourced(DateTimeOffset occurredAt)
+    {
+        if (SourcedAt is { } kept && occurredAt < kept)
+            SourcedAt = occurredAt;
+    }
 
     /// <summary>Records the cancellation once; a second one keeps the first and returns false.</summary>
     public bool Cancel(string? reason, string? origin, DateTimeOffset at)

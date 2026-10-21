@@ -250,6 +250,9 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("RecordedAt")
                         .HasColumnType("datetimeoffset(7)");
 
+                    b.Property<DateTimeOffset?>("SourcedAt")
+                        .HasColumnType("datetimeoffset(7)");
+
                     b.HasKey("OrderId");
 
                     b.HasIndex("RecordedAt");

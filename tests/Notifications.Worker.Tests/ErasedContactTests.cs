@@ -1,3 +1,4 @@
+using Common.Domain;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 using Notifications.Infrastructure.Delivery;
@@ -73,21 +74,122 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_request_closed_long_ago_is_still_asked_by_the_send_pass()
+    public async Task A_request_closed_before_the_records_earliest_event_is_not_asked_by_the_send_pass()
     {
         Guid order = Guid.CreateVersion7();
         Guid customer = Guid.CreateVersion7();
         fixture.ContactAnswers(customer, Mailbox, "en");
-        await fixture.OrderAsync(order, customer);
+        await fixture.OrderAsync(order, customer, sourcedAt: At);
         Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
 
-        // The notice records when it was written, not when its event was, so the pass asks every row (ADR-139).
-        await ErasedSubjectIntakeTests.RecordErasureAsync(fixture, customer, At, closedAt: At.AddMonths(1));
+        // Closed, so the owner had anonymised the subject before the record's event carried them (ADR-139).
+        await ErasedSubjectIntakeTests.RecordErasureAsync(
+            fixture,
+            customer,
+            At.AddDays(-9),
+            closedAt: At - PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
+
+        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1));
+
+        fixture.ContactCalls(customer).ShouldBe(1);
+        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Sent);
+    }
+
+    [Fact]
+    public async Task A_request_closed_inside_the_margin_before_the_records_earliest_event_is_asked()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        fixture.ContactAnswers(customer, Mailbox, "en");
+        await fixture.OrderAsync(order, customer, sourcedAt: At);
+        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+
+        await ErasedSubjectIntakeTests.RecordErasureAsync(
+            fixture,
+            customer,
+            At.AddDays(-9),
+            closedAt: At - PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
 
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 0));
 
         fixture.ContactCalls(customer).ShouldBe(0);
         (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Pending);
+    }
+
+    [Fact]
+    public async Task A_record_from_before_the_column_asks_every_row_so_a_request_closed_long_ago_stops_the_send()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        fixture.ContactAnswers(customer, Mailbox, "en");
+        await fixture.OrderAsync(order, customer, sourcedAt: null);
+        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+
+        await ErasedSubjectIntakeTests.RecordErasureAsync(
+            fixture,
+            customer,
+            At.AddDays(-90),
+            closedAt: At.AddDays(-60));
+
+        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 0));
+
+        fixture.ContactCalls(customer).ShouldBe(0);
+        (await fixture.NotificationAsync(owed.NotificationId)).Status.ShouldBe(NotificationStatus.Pending);
+    }
+
+    [Fact]
+    public async Task The_contact_read_keeps_a_row_for_a_request_closed_before_the_records_earliest_event()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        fixture.ContactAnswers(customer, Mailbox, "en", delay: TimeSpan.FromMilliseconds(900));
+        await fixture.OrderAsync(order, customer, sourcedAt: At);
+        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+
+        Task<SendPass> pass = fixture.RunSendPassAsync();
+        await LandDuringTheOwnersAnswerAsync(owed);
+        await ErasedSubjectIntakeTests.RecordErasureAsync(
+            fixture,
+            customer,
+            At.AddDays(-9),
+            closedAt: At - PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
+
+        (await pass).ShouldBe(new SendPass(1, 1));
+
+        (await fixture.ContactAsync(customer)).ShouldNotBeNull("the request closed before the data was taken");
+    }
+
+    [Fact]
+    public async Task The_contact_read_deletes_a_row_for_a_request_closed_inside_the_margin()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        fixture.ContactAnswers(customer, Mailbox, "en", delay: TimeSpan.FromMilliseconds(900));
+        await fixture.OrderAsync(order, customer, sourcedAt: At);
+        Notification owed = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
+
+        Task<SendPass> pass = fixture.RunSendPassAsync();
+        await LandDuringTheOwnersAnswerAsync(owed);
+        await ErasedSubjectIntakeTests.RecordErasureAsync(
+            fixture,
+            customer,
+            At.AddDays(-9),
+            closedAt: At - PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
+
+        (await pass).ShouldBe(new SendPass(1, 1));
+
+        (await fixture.ContactAsync(customer)).ShouldBeNull("the request closed inside the margin is still asked");
+    }
+
+    // The row is leased and the owner stalls: a request lands in the window ADR-097 names, before the save.
+    private async Task LandDuringTheOwnersAnswerAsync(Notification owed)
+    {
+        await ServiceFixture.WaitUntilAsync(async () =>
+            await fixture.ScalarAsync<int>(
+                "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE NotificationId = {0} " +
+                "AND Status = 'Pending' AND LockedUntil > SYSDATETIMEOFFSET()",
+                owed.NotificationId) == 1);
+        await Task.Delay(TimeSpan.FromMilliseconds(250), Ct);
     }
 
     [Fact]
