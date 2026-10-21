@@ -9,8 +9,11 @@ using Xunit;
 namespace Ordering.TestSupport;
 
 /// <summary>Ordering's names, migrator, factory and seeded orders over the shared body (ADR-056).</summary>
-/// <remarks>It schedules, so its broker is §14.1's image with ADR-021's delayed exchange.</remarks>
-public sealed class ServiceFixture()
+/// <remarks>
+/// It schedules, so its broker is §14.1's image with ADR-021's delayed exchange. Unsealed, so a suite that needs
+/// the host configured otherwise can bring its own factory over its own containers.
+/// </remarks>
+public class ServiceFixture()
     : ServiceFixture<OrderingApiFactory, Program, OrderingDbContext>("Ordering", redis: true, schedules: true)
 {
     /// <summary>Runs the real §7.4 job host; a null argument leaves that key unset.</summary>
