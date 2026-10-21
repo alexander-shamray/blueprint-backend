@@ -78,8 +78,8 @@ Then ask why the holder did not answer, in this order:
 
 Reissue the request, which asks the holders again under the same request id
 and a fresh message id and resets the clock. Every consumer is idempotent on
-the request, so a holder that already answered answers again with a count of
-zero and Privacy keeps the larger count:
+the request, so a holder that already answered answers again with the count
+its audit row kept, and Privacy keeps the larger count:
 
 ```bash
 curl -X POST -H "Authorization: Bearer $STAFF_TOKEN" -H "Content-Type: application/json" \
