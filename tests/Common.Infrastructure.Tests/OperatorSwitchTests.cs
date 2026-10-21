@@ -253,9 +253,10 @@ public class OperatorSwitchTests
         await endpoints.Ready(ReadyFor(endpoint));
         await Until(() => Volatile.Read(ref stops) == 1);
 
-        // A reload during the fault fails again, and finds the first failure's retry already waiting.
-        source.Set(Queue);
-        await Until(() => Volatile.Read(ref stops) == 2);
+        // A change during the fault fails again, and finds the first failure's retry already waiting; awaited, so
+        // its retry decision is made before the clock moves.
+        await endpoints.ApplyAllAsync();
+        Volatile.Read(ref stops).ShouldBe(2);
 
         clock.Advance(ReceiveEndpointSwitch.FirstRetry);
         await Until(() => Volatile.Read(ref stops) == 3);
