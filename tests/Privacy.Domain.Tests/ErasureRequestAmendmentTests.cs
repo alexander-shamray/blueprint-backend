@@ -31,7 +31,7 @@ public class ErasureRequestAmendmentTests
         request.SubjectHash.ShouldBe(PersonalDataErasure.HashSubject(Request, Subject));
         request.Responders.ShouldBe(["ordering"]);
         request.DomainEvents.OfType<ErasureRequestClosedDomainEvent>().ShouldHaveSingleItem()
-            .OccurredAt.ShouldBe(Now.AddDays(31), "an amendment that closes tells the holders as an answer does (ADR-139)");
+            .OccurredAt.ShouldBe(Now.AddDays(31), "a closing amendment tells the holders as an answer does (ADR-139)");
     }
 
     [Fact]

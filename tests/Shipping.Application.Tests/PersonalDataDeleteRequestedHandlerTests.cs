@@ -37,7 +37,7 @@ public class PersonalDataDeleteRequestedHandlerTests
 
         await Handler().HandleAsync(Requested, TestContext.Current.CancellationToken);
 
-        _dispatcher.Sent.ShouldBeEmpty("the checks no longer ask a closed row, so a second pass is not covered (ADR-139)");
+        _dispatcher.Sent.ShouldBeEmpty("the checks no longer ask a closed row, so a second pass is unguarded (ADR-139)");
         _reporter.Reported.ShouldBeEmpty();
     }
 
