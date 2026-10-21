@@ -35,11 +35,9 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
             await Task.Delay(25, timeout.Token);
     }
 
-    [Fact]
-    public async Task A_message_published_while_the_endpoint_is_off_waits_in_the_queue_and_drains_when_it_is_on()
+    private ServiceProvider Build(OperatorSwitchTests.MutableSource source)
     {
         string queue = RabbitFixture.Queue;
-        OperatorSwitchTests.MutableSource source = new();
         IConfiguration configuration = new ConfigurationBuilder().Add(source).Build();
         ServiceCollection services = new();
         services.AddSingleton(configuration);
@@ -63,7 +61,15 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
             });
         });
 
-        await using ServiceProvider provider = services.BuildServiceProvider(validateScopes: true);
+        return services.BuildServiceProvider(validateScopes: true);
+    }
+
+    [Fact]
+    public async Task A_message_published_while_the_endpoint_is_off_waits_in_the_queue_and_drains_when_it_is_on()
+    {
+        string queue = RabbitFixture.Queue;
+        OperatorSwitchTests.MutableSource source = new();
+        await using ServiceProvider provider = Build(source);
         IBusControl bus = provider.GetRequiredService<IBusControl>();
         ReceiveEndpointSwitch endpoints = provider.GetRequiredService<ReceiveEndpointSwitch>();
         await bus.StartAsync(TestContext.Current.CancellationToken);
@@ -94,6 +100,54 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
         finally
         {
             await bus.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task A_host_started_with_its_switch_off_takes_nothing_from_the_backlog()
+    {
+        // A pod restarting during an incident: the queue already holds messages and the switch is still off.
+        string queue = RabbitFixture.Queue;
+        OperatorSwitchTests.MutableSource source = new();
+        source.Set(queue);
+        Guid[] backlog = [.. Enumerable.Range(0, 20).Select(_ => Guid.CreateVersion7())];
+
+        // Kept until the test ends, since MassTransit's log context is static and would outlive a disposed host; its
+        // own source, so turning the second host's switch on cannot restart this one's endpoint.
+        OperatorSwitchTests.MutableSource firstSource = new();
+        firstSource.Set(queue);
+        await using ServiceProvider first = Build(firstSource);
+        IBusControl bus = first.GetRequiredService<IBusControl>();
+        await bus.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await Until(() => first.GetRequiredService<ReceiveEndpointSwitch>().IsStopped(queue));
+            ISendEndpoint endpoint = await bus.GetSendEndpoint(new Uri($"queue:{queue}"));
+            foreach (Guid id in backlog)
+                await endpoint.Send(new BrokerProbe(id), TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            await bus.StopAsync(CancellationToken.None);
+        }
+
+        await using ServiceProvider provider = Build(source);
+        IBusControl restarted = provider.GetRequiredService<IBusControl>();
+        ReceiveEndpointSwitch endpoints = provider.GetRequiredService<ReceiveEndpointSwitch>();
+        await restarted.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await Until(() => endpoints.IsStopped(queue));
+            await Task.Delay(1000, TestContext.Current.CancellationToken);
+            BrokerProbeConsumer.Seen.Intersect(backlog)
+                .ShouldBeEmpty("a start while switched off consumed its backlog");
+
+            source.Set();
+            await Until(() => backlog.All(BrokerProbeConsumer.Seen.Contains));
+        }
+        finally
+        {
+            await restarted.StopAsync(CancellationToken.None);
         }
     }
 }
