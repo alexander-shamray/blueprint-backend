@@ -255,6 +255,8 @@ namespace Notifications.Infrastructure.Persistence.Migrations
 
                     b.HasKey("OrderId");
 
+                    b.HasIndex("CustomerId");
+
                     b.HasIndex("RecordedAt");
 
                     b.ToTable("OrderRecords", "notifications");

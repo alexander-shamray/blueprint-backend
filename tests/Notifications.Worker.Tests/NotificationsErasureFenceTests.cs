@@ -56,6 +56,30 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
     }
 
     [Fact]
+    public async Task Another_customers_order_record_is_not_held_by_an_erasure()
+    {
+        // The erasure's HOLDLOCK read seeks its subject's keys on CustomerId's index; a scan would hold every row.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid order = Guid.CreateVersion7();
+
+        await using (AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider
+                .GetServices<IIntegrationEventHandler<OrderPlaced>>()
+                .Single()
+                .HandleAsync(OrderEvents.Placed(order, Guid.CreateVersion7(), At), ct);
+        }
+
+        await using ErasureAtItsAudit erasure = await ErasureAtItsAudit.OpenAsync(fixture, _subject, ct);
+
+        await fixture
+            .ExecuteAsync("UPDATE notifications.OrderRecords SET CancelReason = N'probe' WHERE OrderId = {0}", order)
+            .WaitAsync(Wait, ct);
+
+        await erasure.FinishAsync(ct);
+    }
+
+    [Fact]
     public async Task A_contact_save_waits_for_an_erasure_that_found_no_contact()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
