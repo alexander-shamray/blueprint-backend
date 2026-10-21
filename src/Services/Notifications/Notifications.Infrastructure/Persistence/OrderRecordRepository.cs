@@ -9,8 +9,8 @@ internal sealed class OrderRecordRepository(NotificationsDbContext db) : IOrderR
         db.OrderRecords.SingleOrDefaultAsync(r => r.OrderId == orderId, ct);
 
     // An intake that changes nothing on the record would otherwise read it shared, beside the erasure's update locks,
-    // and stage a notice the erasure never deletes. No HOLDLOCK: a range lock on an absent order's next key could be
-    // one of the subject's records, which a plain insert does not touch.
+    // and stage a notice the erasure never deletes. No HOLDLOCK: it would hold a range lock on an absent order's next
+    // key, which can be one of the subject's records, where a plain insert waits on that key and keeps nothing.
     public async Task<OrderRecord?> GetHeldAsync(Guid orderId, CancellationToken ct)
     {
         if (db.Database.CurrentTransaction is null)
