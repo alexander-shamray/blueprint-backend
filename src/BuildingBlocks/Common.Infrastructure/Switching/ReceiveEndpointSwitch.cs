@@ -98,8 +98,9 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         lock (_endpoints)
             _endpoints[queue] = ready.ReceiveEndpoint;
 
-        // Off at start, so a pod that restarts while the switch is thrown does not consume in the gap. Off the
-        // callback, since the bus waits on it and a stop waits on the bus.
+        // Off at start, so a pod that restarts while the switch is thrown stops once its endpoint is ready; what the
+        // broker delivered before the stop lands still runs. Off the callback, since the bus waits on it and a stop
+        // waits on the bus.
         if (_switches.IsOff(queue))
             _ = Task.Run(() => ApplyAsync(queue));
 
