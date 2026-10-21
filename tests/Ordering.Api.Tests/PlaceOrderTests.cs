@@ -154,13 +154,54 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.ExecuteAsync("DELETE FROM ordering.PersonalDataErasures;");
     }
 
-    private async Task RecordErasureAsync(Guid request, Guid subject) =>
+    [Fact]
+    public async Task An_order_placed_after_a_request_closed_long_before_does_not_carry_it()
+    {
+        // Closed, so the owner had anonymised the customer before this placement read from it (ADR-139).
+        Guid product = Guid.CreateVersion7();
+        await SeedPriceAsync(product, 5m, "EUR");
+        await fixture.ExecuteAsync("DELETE FROM ordering.PersonalDataErasures;");
+        await RecordErasureAsync(
+            Guid.CreateVersion7(), Caller, closedAgo: PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
+
+        Guid id = await IdOfAsync(await PlaceAsync(product));
+
+        (await fixture.ScalarAsync<string>("SELECT Value = ErasedUnder FROM ordering.Orders WHERE Id = {0}", id))
+            .ShouldBe("[]");
+
+        await fixture.ExecuteAsync("DELETE FROM ordering.PersonalDataErasures;");
+    }
+
+    [Fact]
+    public async Task An_order_placed_after_a_request_closed_inside_the_margin_still_carries_it()
+    {
+        // The margin is what covers the owner's, Ordering's and Privacy's clocks disagreeing (ADR-139).
+        Guid product = Guid.CreateVersion7();
+        await SeedPriceAsync(product, 5m, "EUR");
+        Guid request = Guid.CreateVersion7();
+        await fixture.ExecuteAsync("DELETE FROM ordering.PersonalDataErasures;");
+        await RecordErasureAsync(request, Caller, closedAgo: PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
+
+        Guid id = await IdOfAsync(await PlaceAsync(product));
+
+        (await fixture.ScalarAsync<string>("SELECT Value = ErasedUnder FROM ordering.Orders WHERE Id = {0}", id))
+            .ShouldBe($"[\"{request}\"]");
+
+        await fixture.ExecuteAsync("DELETE FROM ordering.PersonalDataErasures;");
+    }
+
+    /// <summary>The audit row a holder writes; closed <paramref name="closedAgo"/> before now when Privacy's close
+    /// has reached it.</summary>
+    private async Task RecordErasureAsync(Guid request, Guid subject, TimeSpan? closedAgo = null) =>
         await fixture.ExecuteAsync(
-            "INSERT INTO ordering.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt) " +
-            "VALUES ({0}, {1}, 0, {2})",
+            """
+            INSERT INTO ordering.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt)
+            VALUES ({0}, {1}, 0, SYSDATETIMEOFFSET(),
+                CASE WHEN {2} < 0 THEN NULL ELSE DATEADD(second, -{2}, SYSDATETIMEOFFSET()) END);
+            """,
             request,
             PersonalDataErasure.HashSubject(request, subject),
-            DateTimeOffset.UtcNow);
+            closedAgo is { } ago ? (int)ago.TotalSeconds : -1);
 
     [Fact]
     public async Task A_price_in_another_currency_does_not_satisfy_the_order()

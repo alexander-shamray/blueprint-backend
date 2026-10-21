@@ -8,11 +8,19 @@ namespace Ordering.Application.Privacy.ErasePersonalData;
 /// Reported here and not in the command, because the execution strategy re-runs a command whole and a send inside
 /// it would repeat (ADR-094); the consumer's in-memory outbox holds it until this handler returns.
 /// </remarks>
-public sealed class PersonalDataDeleteRequestedHandler(IDispatcher dispatcher, IErasureReporter reporter)
+public sealed class PersonalDataDeleteRequestedHandler(
+    IDispatcher dispatcher,
+    IPersonalDataErasureRepository erasures,
+    IErasureReporter reporter)
     : IIntegrationEventHandler<PersonalDataDeleteRequested>
 {
     public async Task HandleAsync(PersonalDataDeleteRequested integrationEvent, CancellationToken ct)
     {
+        // A closed request is not reissued, so this is a late copy; the checks no longer ask its row, and a second
+        // pass would anonymise what the customer made since (ADR-139).
+        if (await erasures.IsClosedAsync(integrationEvent.RequestId, ct))
+            return;
+
         Result<int> erased = await dispatcher.SendAsync(
             new ErasePersonalDataCommand(integrationEvent.RequestId, integrationEvent.SubjectId),
             ct);

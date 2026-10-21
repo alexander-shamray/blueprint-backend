@@ -111,13 +111,18 @@ public class ErasePersonalDataHandlerTests
         public Task<PersonalDataErasure?> GetAsync(Guid requestId, CancellationToken ct) =>
             Task.FromResult(Existing.GetValueOrDefault(requestId));
 
+        public Task<bool> IsClosedAsync(Guid requestId, CancellationToken ct) => throw new NotSupportedException();
+
         public Task LockSubjectAsync(Guid subjectId, CancellationToken ct)
         {
             Locked.Add((subjectId, store.Subjects.Count));
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<Guid>> RequestsErasingAsync(Guid subjectId, CancellationToken ct) =>
+        public Task<IReadOnlyList<Guid>> RequestsErasingAsync(
+            Guid subjectId,
+            DateTimeOffset sourcedAt,
+            CancellationToken ct) =>
             throw new NotSupportedException();
 
         public void Add(PersonalDataErasure erasure) => Added.Add(erasure);

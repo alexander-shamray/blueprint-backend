@@ -215,6 +215,34 @@ public sealed class OrderingErasureEndpointTests(ServiceFixture fixture) : IAsyn
         await Eventually(CountCompletionsAsync, expected: 1, because: "the inbox dropped the second delivery");
     }
 
+    [Fact]
+    public async Task Privacys_close_stamps_the_audit_row_with_the_time_it_closed()
+    {
+        Guid request = Guid.CreateVersion7();
+        await PublishRequestAsync(request);
+        DateTimeOffset closedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+
+        await PublishAsync(Closed(request, closedAt));
+
+        (await fixture.ScalarAsync<DateTimeOffset>(
+            "SELECT Value = ClosedAt FROM ordering.PersonalDataErasures WHERE RequestId = {0}",
+            request)).ShouldBe(closedAt);
+    }
+
+    [Fact]
+    public async Task A_late_copy_of_a_closed_request_erases_nothing_and_reports_nothing()
+    {
+        Guid request = Guid.CreateVersion7();
+        await PublishRequestAsync(request);
+        await PublishAsync(Closed(request, DateTimeOffset.UtcNow));
+        await SeedOrderAsync(Guid.CreateVersion7(), Subject);
+
+        await PublishRequestAsync(request);
+
+        (await CountOrdersAsync(Subject)).ShouldBe(1, "what the customer placed after the close is not this request's");
+        await Eventually(CountCompletionsAsync, expected: 1, because: "the first pass reported; the late copy did not");
+    }
+
     private async Task SeedOrderAsync(Guid order, Guid customer) =>
         await fixture.ExecuteAsync(
             "INSERT INTO ordering.Orders (Id, CustomerId, Status, PlacedAt, Currency, ShipToLine1, ShipToLine2, " +
@@ -239,6 +267,31 @@ public sealed class OrderingErasureEndpointTests(ServiceFixture fixture) : IAsyn
         RequestId = request,
         SubjectId = Subject
     };
+
+    private static PersonalDataDeleteClosed Closed(Guid request, DateTimeOffset closedAt) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = request,
+        OccurredAt = closedAt,
+        RequestId = request
+    };
+
+    private async Task PublishAsync(PersonalDataDeleteClosed message)
+    {
+        await fixture.Factory.Services.GetRequiredService<IBus>().Publish(
+            message,
+            c =>
+            {
+                c.MessageId = message.MessageId;
+                c.CorrelationId = message.CorrelationId;
+            },
+            TestContext.Current.CancellationToken);
+
+        await Eventually(
+            async () => (await fixture.InboxAsync(message.MessageId)).Count,
+            expected: 1,
+            because: "the inbox row is written after the close has committed (§9.5)");
+    }
 
     private async Task PublishRequestAsync(Guid request, PersonalDataDeleteRequested? sent = null, bool drain = true)
     {
