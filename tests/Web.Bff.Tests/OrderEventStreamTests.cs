@@ -158,7 +158,7 @@ public sealed class OrderEventStreamTests(BffServiceFixture fixture) : IAsyncLif
         OrderDetail current = (await client.GetFromJsonAsync<OrderDetail>($"/v1/orders/{order}", Ct))!;
 
         using HttpResponseMessage response = await OpenAsync(client, order, OrderEventStream.IdOf(current.AsOf));
-        string body = await response.Content.ReadAsStringAsync(Ct);
+        string body = await ReadBeforeHeartbeatAsync(response);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         body.ShouldNotContain($"event: {OrderEventStream.EventName}");
@@ -174,7 +174,7 @@ public sealed class OrderEventStreamTests(BffServiceFixture fixture) : IAsyncLif
         using HttpClient client = As(_buyer);
 
         using HttpResponseMessage response = await OpenAsync(client, order);
-        string body = await response.Content.ReadAsStringAsync(Ct);
+        string body = await ReadBeforeHeartbeatAsync(response);
 
         body.Split($"event: {OrderEventStream.EventName}").Length.ShouldBe(2);
         body.ShouldContain("\"status\":\"delivered\"");
@@ -217,5 +217,17 @@ public sealed class OrderEventStreamTests(BffServiceFixture fixture) : IAsyncLif
         using CancellationTokenSource bound = CancellationTokenSource.CreateLinkedTokenSource(Ct);
         bound.CancelAfter(OrderEventStream.HeartbeatInterval);
         (await reader.ReadToEndAsync(bound.Token)).ShouldNotContain($"event: {OrderEventStream.EventName}");
+    }
+
+    /// <summary>The whole body, read inside the first heartbeat, so a delivered order is seen to end the stream and
+    /// not its lifetime.</summary>
+    private static async Task<string> ReadBeforeHeartbeatAsync(HttpResponseMessage response)
+    {
+        using CancellationTokenSource bound = CancellationTokenSource.CreateLinkedTokenSource(Ct);
+        bound.CancelAfter(OrderEventStream.HeartbeatInterval);
+        string body = await response.Content.ReadAsStringAsync(bound.Token);
+
+        body.ShouldNotContain(": keep-alive");
+        return body;
     }
 }
