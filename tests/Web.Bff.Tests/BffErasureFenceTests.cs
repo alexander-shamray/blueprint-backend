@@ -153,6 +153,34 @@ public sealed class BffErasureFenceTests(BffServiceFixture fixture) : IAsyncLife
         (await fixture.ScalarAsync<string>(Sql, bystandersOrder)).ShouldBe("[]");
     }
 
+    [Fact]
+    public async Task A_reissue_that_finds_nothing_left_reports_what_the_first_pass_erased()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid request = Guid.CreateVersion7();
+        RecordedReports reports = new();
+
+        await fixture.ExecuteAsync(
+            "INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf) " +
+            "VALUES ({0}, {1}, N'[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            Guid.CreateVersion7(),
+            Subject);
+
+        // The second pass is the reissue a lost send is answered with (ADR-094).
+        for (int pass = 0; pass < 2; pass++)
+        {
+            await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+            PersonalDataDeleteRequestedHandler handler = new(
+                scope.ServiceProvider.GetRequiredService<BffDbContext>(),
+                reports,
+                TimeProvider.System);
+
+            await handler.HandleAsync(Requested(request), ct);
+        }
+
+        reports.Counts.ShouldBe([1, 1], "the reissue deletes nothing and reports the audit row's count");
+    }
+
     private static PersonalDataDeleteRequested Requested(Guid request) => new()
     {
         MessageId = Guid.CreateVersion7(),
@@ -165,6 +193,17 @@ public sealed class BffErasureFenceTests(BffServiceFixture fixture) : IAsyncLife
     private sealed class NoReport : IErasureReporter
     {
         public Task ReportAsync(Guid requestId, int count, CancellationToken ct) => Task.CompletedTask;
+    }
+
+    private sealed class RecordedReports : IErasureReporter
+    {
+        public List<int> Counts { get; } = [];
+
+        public Task ReportAsync(Guid requestId, int count, CancellationToken ct)
+        {
+            Counts.Add(count);
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>Holds the erasure at its audit INSERT, after the deletes have run and before the row exists.</summary>

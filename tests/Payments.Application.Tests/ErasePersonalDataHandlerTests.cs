@@ -58,7 +58,7 @@ public class ErasePersonalDataHandlerTests
 
         Result<int> result = await Handler().HandleAsync(Command, TestContext.Current.CancellationToken);
 
-        result.Value.ShouldBe(0, "the answer is this pass's count, the row keeps the larger");
+        result.Value.ShouldBe(2, "a reissue after a lost send reports what the first pass erased");
         _erasures.Added.ShouldBeEmpty("a second row for one request would break the key");
         first.Count.ShouldBe(2, "the first pass's count survives a pass that finds nothing");
         first.ErasedAt.ShouldBe(Now);

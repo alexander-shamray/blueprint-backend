@@ -19,10 +19,16 @@ public sealed class ErasePersonalDataHandler(
 
         PersonalDataErasure? seen = await erasures.GetAsync(command.RequestId, ct);
         if (seen is null)
-            erasures.Add(PersonalDataErasure.Record(command.RequestId, command.SubjectId, count, now));
+        {
+            seen = PersonalDataErasure.Record(command.RequestId, command.SubjectId, count, now);
+            erasures.Add(seen);
+        }
         else
+        {
             seen.Repeat(count, now);
+        }
 
-        return Result.Success(count);
+        // The row's count, not this pass's, so a reissue after a lost send does not report nothing erased (ADR-094).
+        return Result.Success(seen.Count);
     }
 }

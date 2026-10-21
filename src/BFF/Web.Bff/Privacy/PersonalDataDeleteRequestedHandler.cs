@@ -72,12 +72,12 @@ public sealed class PersonalDataDeleteRequestedHandler(
 
                 if (seen is null)
                 {
-                    db.PersonalDataErasures.Add(
-                        PersonalDataErasure.Record(
-                            integrationEvent.RequestId,
-                            integrationEvent.SubjectId,
-                            deleted,
-                            erasedAt));
+                    seen = PersonalDataErasure.Record(
+                        integrationEvent.RequestId,
+                        integrationEvent.SubjectId,
+                        deleted,
+                        erasedAt);
+                    db.PersonalDataErasures.Add(seen);
                 }
                 else
                 {
@@ -87,7 +87,9 @@ public sealed class PersonalDataDeleteRequestedHandler(
                 await db.SaveChangesAsync(ct);
                 await transaction.CommitAsync(ct);
 
-                return deleted;
+                // The row's count, not this pass's, so a reissue after a lost send does not report nothing erased
+                // (ADR-094).
+                return seen.Count;
             });
 
         // Even a count of zero is reported: silence cannot be told from success (§11.7).
