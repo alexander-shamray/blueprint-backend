@@ -105,6 +105,11 @@ it, when and why. Nothing closes an overdue request by itself still: beside
 a reissue that brings the last answer, an amendment that removes the holders
 still missing closes it.
 
+**Amended by [ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md).**
+Shipping's check no longer scans the whole table: it asks the rows still
+open and those whose request closed after its shipment was created, less a
+margin, which a close Privacy now publishes lets each holder stamp.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

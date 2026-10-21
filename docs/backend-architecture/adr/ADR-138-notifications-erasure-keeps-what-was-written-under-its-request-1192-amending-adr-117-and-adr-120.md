@@ -51,6 +51,11 @@ so it adds a column to two rows of
 before the column existed carries the empty list and is cleared by any
 request, as before.
 
+**Amended by [ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md).**
+A registration's and a preference write's read asks the rows still open and
+those closed within a margin of the write, and the erasure refuses a copy of a
+request whose row Notifications already holds closed.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

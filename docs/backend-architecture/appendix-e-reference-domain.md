@@ -209,13 +209,13 @@ holds every row to what its host's code publishes, consumes and accepts.
 | Service | Owns | Publishes (events) | Consumes (events) | Accepts (commands) |
 |---|---|---|---|---|
 | **Catalog** | Product, its Price | `ProductPublished`, `PriceChanged`, `ProductDiscontinued` | `StockLevelChanged` | — |
-| **Ordering** | Order, OrderLine, the fulfilment saga | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | `OrderPlaced` (its own — the saga starts on it), `OrderCancelled` (its own — the saga stops on it), `OrderConfirmed` (its own — the saga waits on it), `ProductPublished`, `PriceChanged`, `ProductDiscontinued`, `StockReserved`, `StockReservationFailed`, `StockReleased`, `PaymentAuthorised`, `PaymentDeclined`, `ShipmentDispatched`, `PersonalDataDeleteRequested` | `CancelOrder`, `ConfirmOrder`, `MarkOrderShipped`, `FlagOrderForReview` |
+| **Ordering** | Order, OrderLine, the fulfilment saga | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | `OrderPlaced` (its own — the saga starts on it), `OrderCancelled` (its own — the saga stops on it), `OrderConfirmed` (its own — the saga waits on it), `ProductPublished`, `PriceChanged`, `ProductDiscontinued`, `StockReserved`, `StockReservationFailed`, `StockReleased`, `PaymentAuthorised`, `PaymentDeclined`, `ShipmentDispatched`, `PersonalDataDeleteRequested`, `PersonalDataDeleteClosed` | `CancelOrder`, `ConfirmOrder`, `MarkOrderShipped`, `FlagOrderForReview` |
 | **Inventory** | StockItem, Reservation | `StockReserved`, `StockReservationFailed`, `StockReleased`, `StockLevelChanged` | `OrderCancelled`, `ShipmentDispatched` | `ReserveStock`, `ReleaseStock` |
-| **Payments** | PaymentIntent, Refund | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled`, `PersonalDataDeleteRequested` | `AuthorisePayment` |
-| **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled`, `PersonalDataDeleteRequested` | — |
-| **Notifications** | NotificationLog and its push deliveries, the device rows, the consent journal ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested` | — |
-| **Privacy** | ErasureRequest | `PersonalDataDeleteRequested` | — | `PersonalDataDeleteCompleted` |
-| **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model of other services' facts ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)), and a customer's saved address, the one fact it owns ([ADR-107](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested` | — |
+| **Payments** | PaymentIntent, Refund | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled`, `PersonalDataDeleteRequested`, `PersonalDataDeleteClosed` | `AuthorisePayment` |
+| **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled`, `PersonalDataDeleteRequested`, `PersonalDataDeleteClosed` | — |
+| **Notifications** | NotificationLog and its push deliveries, the device rows, the consent journal ([ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `PersonalDataDeleteRequested`, `PersonalDataDeleteClosed` | — |
+| **Privacy** | ErasureRequest | `PersonalDataDeleteRequested`, `PersonalDataDeleteClosed` | — | `PersonalDataDeleteCompleted` |
+| **Web.Bff** — a host, not a service ([§4.1](04-solution-structure.md)) | The buyer's order projection, a read model of other services' facts ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)), and a customer's saved address, the one fact it owns ([ADR-107](adr/ADR-107-the-bff-keeps-a-customers-saved-delivery-address-and-an-erasure-deletes-it-473.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished`, `PersonalDataDeleteRequested`, `PersonalDataDeleteClosed` | — |
 
 ## E.2 §4: the solution tree and the scaffold
 
@@ -877,7 +877,7 @@ namespace per owning service, and every event is an `IIntegrationEvent`.
 | Payments | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `AuthorisePayment` |
 | Shipping | `ShipmentDispatched`, `ShipmentDelivered` | |
 | Catalog | `ProductPublished`, `PriceChanged`, `ProductDiscontinued` | |
-| Privacy | `PersonalDataDeleteRequested` | `PersonalDataDeleteCompleted` |
+| Privacy | `PersonalDataDeleteRequested`, `PersonalDataDeleteClosed` | `PersonalDataDeleteCompleted` |
 
 [E.1.1](#e11-32-the-service-responsibilities-table)'s Accepts and Consumes columns are the owner of
 who binds what. `OrderPlaced`, `OrderConfirmed` and `OrderCancelled` each carry
@@ -1244,10 +1244,14 @@ this case, and this table is the owner of what each edge of it erases:
 | Payments | `PaymentOrders.CustomerId` anonymised | `payments` |
 | The BFF | order ids recorded, the subject's `bff.Orders` rows and saved address deleted, bar one placed or saved under the request (ADR-098, ADR-099, ADR-107, ADR-135) | `bff` |
 
-`PersonalDataDeleteRequested` and `PersonalDataDeleteCompleted` are both in
-`Common.Contracts.Privacy.V1`. Privacy publishes the request and accepts the
-completion as a command **sent** to its queue by each holder
-([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)).
+`PersonalDataDeleteRequested`, `PersonalDataDeleteCompleted` and
+`PersonalDataDeleteClosed` are all in `Common.Contracts.Privacy.V1`. Privacy
+publishes the request and accepts the completion as a command **sent** to its
+queue by each holder
+([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)),
+and publishes the close, which each holder stamps on its audit row to bound
+its check
+([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)).
 The holders that write from an event feed and so ask their own audit rows after
 they write are the BFF's projection, Notifications' intake, Payments' intake and
 Shipping's fulfilment worker
@@ -1575,7 +1579,10 @@ address in the order request, and no service reads the saved one.
 deletes the subject's row in the transaction that deletes their orders and
 counts it in the request's audit row, unless the row was saved under that
 request
-([ADR-135](adr/ADR-135-a-saved-address-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-saved-1172-amending-adr-107.md));
+([ADR-135](adr/ADR-135-a-saved-address-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-saved-1172-amending-adr-107.md)),
+and does nothing for a copy of a request whose audit row it already holds
+closed
+([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md));
 the responder set does not change, since
 the BFF was already one of the holders an erasure request waits on
 ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)).

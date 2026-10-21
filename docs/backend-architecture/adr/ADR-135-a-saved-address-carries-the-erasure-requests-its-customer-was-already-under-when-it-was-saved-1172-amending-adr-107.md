@@ -39,6 +39,12 @@ the row already does by its key, so it adds no holding to
 An address saved before this column existed carries the empty list and is
 deleted by any request, as it was before.
 
+**Amended by [ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md).**
+The save's read asks the rows still open and those closed within a margin of
+the save, and the handler refuses a copy of a request whose row it already
+holds closed, so an address saved after the BFF holds a request closed is not
+that request's to delete.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
