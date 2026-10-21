@@ -236,8 +236,8 @@ change, so nothing standing asks for a reviewer the tree no longer holds.
   and its suite, `harness-boundaries.md` — and leave one line in
   `harness-boundaries.md` naming the tag and the `git checkout` that
   restores them.
-- A `branch-reviewer` agent with `Read`, `Grep` and `Glob` on the parent's
-  model. The parent hands it the branch diff and the symbols it touches; it
+- A `branch-reviewer` agent with `Read`, `Grep` and `Glob`, on the model
+  step 7d names. The parent hands it the branch diff and the symbols it touches; it
   returns findings as JSON with `file:line`, at most about 2k.
 - `/ship`'s steps 5–6 become one local review step of about 1.5k: one full
   pass, the parent fixes, a recheck of the fix diff against the findings
