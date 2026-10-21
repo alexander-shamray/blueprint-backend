@@ -100,8 +100,9 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   message.
 - **Choose the model by who catches its error.** A subagent runs on a
   cheaper model where the parent, a gate, a build or a test catches its
-  error, and on the parent's where an error is a silent miss;
-  `docs/token-plan.md` step 7d owns the argument and the table of tasks.
+  error, and on the parent's, or the stronger model its profile pins,
+  where an error is a silent miss; `docs/token-plan.md` step 7d owns the
+  argument and the table of tasks.
 - **The review loop** is `/ship` step 5's, and a PR reviewed outside
   `/ship` runs it too: rounds of one `branch-reviewer` each, read-only by
   its tool list, handed the diff under `artifacts/review/` and not the
