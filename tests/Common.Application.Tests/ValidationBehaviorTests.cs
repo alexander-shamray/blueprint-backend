@@ -56,12 +56,12 @@ public class ValidationBehaviorTests
     [Fact]
     public async Task Enumerating_the_injected_validators_twice_constructs_them_once()
     {
-        // §6.3 reads the sequence twice, safe only because the container materialises IEnumerable<T> first.
+        // §6.3 reads the sequence twice; transient, since a scoped validator counts 1 however often it is resolved.
         using ServiceProvider provider = TestContainer.Build(services =>
         {
             services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
             services.AddScoped<ValidatorConstructions>();
-            services.AddScoped<IValidator<Ask>, CountingValidator>();
+            services.AddTransient<IValidator<Ask>, CountingValidator>();
         });
 
         using IServiceScope scope = provider.CreateScope();
