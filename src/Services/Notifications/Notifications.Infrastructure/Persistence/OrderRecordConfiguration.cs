@@ -39,7 +39,8 @@ internal sealed class OrderRecordConfiguration : IEntityTypeConfiguration<OrderR
         // OrderRetention's purge, by the instant this service first heard of the order.
         builder.HasIndex(r => r.RecordedAt);
 
-        // The erasure's HOLDLOCK read seeks its subject here, so its range lock holds no other customer's records.
+        // The erasure's held read seeks its subject here, so its range lock is the subject's keys and the gap to the
+        // next, not every customer's records.
         builder.HasIndex(r => r.CustomerId);
     }
 }
