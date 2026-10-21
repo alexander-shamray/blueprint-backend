@@ -70,11 +70,15 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
                 .HandleAsync(OrderEvents.Placed(order, Guid.CreateVersion7(), At), ct);
         }
 
+        (await fixture.OrderRecordAsync(order)).ShouldNotBeNull("an update matching no row would wait on nothing");
         await using ErasureAtItsAudit erasure = await ErasureAtItsAudit.OpenAsync(fixture, _subject, ct);
 
         await fixture
             .ExecuteAsync("UPDATE notifications.OrderRecords SET CancelReason = N'probe' WHERE OrderId = {0}", order)
             .WaitAsync(Wait, ct);
+        (await fixture.ScalarAsync<string>(
+            "SELECT Value = CancelReason FROM notifications.OrderRecords WHERE OrderId = {0}",
+            order)).ShouldBe("probe");
 
         await erasure.FinishAsync(ct);
     }
