@@ -29,7 +29,7 @@ public class ErasePersonalDataHandlerTests
 
         result.Value.ShouldBe(2);
         _store.Subjects.ShouldBe([Subject]);
-        _store.Requests.ShouldBe([Request], "an address saved under the request is the request's to keep (ADR-103)");
+        _store.Requests.ShouldBe([Request], "an address saved under the request is not its to erase (ADR-099)");
         PersonalDataErasure row = _erasures.Added.ShouldHaveSingleItem();
         row.Id.ShouldBe(Request);
         row.Count.ShouldBe(2);
