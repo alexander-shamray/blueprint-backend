@@ -28,8 +28,8 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
 
     // The erasure's first statement, so it reads the records before anything is deleted. HOLDLOCK takes a range lock
     // even where the subject has no record, held to the commit that writes the audit row, and the second read holds
-    // the records themselves, which the index's seek does not: an intake meanwhile waits, and its erased check then
-    // sees that row. Its own step, as a plan may skip a subquery with no notice to compare, and uncounted.
+    // the records themselves, which the index's seek does not: an intake writing the subject's record meanwhile waits,
+    // and its erased check then sees that row. Its own step, as a plan may skip a subquery, and uncounted.
     private const string DeleteWaitingSql =
         $"""
         SET NOCOUNT ON;
