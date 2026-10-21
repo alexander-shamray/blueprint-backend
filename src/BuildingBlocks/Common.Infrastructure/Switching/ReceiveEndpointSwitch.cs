@@ -54,6 +54,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<string, IReceiveEndpoint> _endpoints = new(StringComparer.Ordinal);
     private readonly HashSet<string> _stopped = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _retrying = new(StringComparer.Ordinal);
     private readonly IDisposable? _subscription;
 
     /// <summary>The wait before a failed stop or start is tried again, doubling up to
@@ -196,8 +197,17 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             _gate.Release();
         }
 
-        if (retry is TimeSpan delay)
-            _ = RetryAsync(queue, delay, attempt + 1);
+        if (retry is not TimeSpan delay)
+            return;
+
+        // One pending retry per queue: a reload during a long broker fault would otherwise add a chain each time.
+        lock (_endpoints)
+        {
+            if (!_retrying.Add(queue))
+                return;
+        }
+
+        _ = RetryAsync(queue, delay, attempt + 1);
     }
 
     private async Task RetryAsync(string queue, TimeSpan delay, int attempt)
@@ -210,6 +220,9 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         {
             return;
         }
+
+        lock (_endpoints)
+            _retrying.Remove(queue);
 
         // Asks the switch again, so a retry after the operator changed their mind converges on the new state.
         await ApplyAsync(queue, attempt);

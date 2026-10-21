@@ -231,4 +231,36 @@ public class OperatorSwitchTests
         });
         Volatile.Read(ref starts).ShouldBe(2);
     }
+
+    [Fact]
+    public async Task A_change_while_a_retry_waits_adds_no_second_retry()
+    {
+        MutableSource source = new();
+        source.Set(Queue);
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
+
+        int stops = 0;
+        IReceiveEndpoint endpoint = Substitute.For<IReceiveEndpoint>();
+        endpoint.Stop(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            Interlocked.Increment(ref stops);
+            return Task.FromException(new InvalidOperationException("the broker refused the stop"));
+        });
+
+        FakeTimeProvider clock = new();
+        using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
+        await endpoints.Ready(ReadyFor(endpoint));
+        await Until(() => Volatile.Read(ref stops) == 1);
+
+        // A reload during the fault fails again, and finds the first failure's retry already waiting.
+        source.Set(Queue);
+        await Until(() => Volatile.Read(ref stops) == 2);
+
+        clock.Advance(ReceiveEndpointSwitch.FirstRetry);
+        await Until(() => Volatile.Read(ref stops) == 3);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        Volatile.Read(ref stops).ShouldBe(3, "two retry chains would each have stopped again");
+    }
 }
