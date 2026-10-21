@@ -58,7 +58,7 @@ public class PersonalDataDeleteRequestedHandlerTests
                 new ErasePersonalDataCommand(Request, Subject)
             ],
             "the rows that name the orders must outlive the step that reads them");
-        _store.Requests.ShouldBe([Request], "an order placed under the request is not the request's to end (ADR-103)");
+        _store.Requests.ShouldBe([Request], "an order placed under the request is not the request's to end (ADR-140)");
         _reporter.Reported.ShouldBe([(Request, 2)]);
     }
 

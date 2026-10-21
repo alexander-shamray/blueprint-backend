@@ -12,7 +12,7 @@ internal sealed class SqlShippingPersonalDataStore(ShippingDbContext db, IDbConn
     : IShippingPersonalDataStore
 {
     // A shipment whose list holds the request was placed after it, so a reissue of that request leaves its order,
-    // its list and its address whole, as Ordering's store leaves the order (ADR-099).
+    // its list and its address whole, as Ordering's store leaves the order (ADR-140).
     private const string PlacedUnder =
         """
         EXISTS (
