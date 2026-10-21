@@ -169,7 +169,17 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             else if (!off && stopped)
             {
                 ReceiveEndpointHandle handle = endpoint.Start();
-                await handle.Ready;
+                try
+                {
+                    await handle.Ready;
+                }
+                catch
+                {
+                    // Stopped again, so the retry starts a stopped endpoint and not one that is already started.
+                    await endpoint.Stop();
+                    throw;
+                }
+
                 lock (_endpoints)
                     _stopped.Remove(queue);
                 Started(_log, queue, null);

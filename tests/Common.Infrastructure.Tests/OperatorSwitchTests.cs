@@ -140,33 +140,43 @@ public class OperatorSwitchTests
             "Unhealthy would unready the pod, and a switched-off pod is meant to stay in service");
     }
 
+    private static OperatorSwitches SwitchesOver(MutableSource source, out ServiceProvider provider)
+    {
+        ServiceCollection services = new();
+        services.AddOptions<OperatorSwitchOptions>()
+            .Bind(new ConfigurationBuilder().Add(source).Build().GetSection(OperatorSwitchOptions.SectionName));
+        provider = services.BuildServiceProvider();
+
+        return new OperatorSwitches(provider.GetRequiredService<IOptionsMonitor<OperatorSwitchOptions>>(), provider);
+    }
+
+    private static ReceiveEndpointReady ReadyFor(IReceiveEndpoint endpoint)
+    {
+        ReceiveEndpointReady ready = Substitute.For<ReceiveEndpointReady>();
+        ready.InputAddress.Returns(new Uri($"loopback://localhost/{Queue}"));
+        ready.ReceiveEndpoint.Returns(endpoint);
+        return ready;
+    }
+
     [Fact]
     public async Task A_stop_that_fails_is_retried_until_the_endpoint_stops()
     {
         // No further change may come, and until the stop lands the queue consumes while readiness names it off.
         MutableSource source = new();
         source.Set(Queue);
-        ServiceCollection services = new();
-        services.AddOptions<OperatorSwitchOptions>()
-            .Bind(new ConfigurationBuilder().Add(source).Build().GetSection(OperatorSwitchOptions.SectionName));
-        using ServiceProvider provider = services.BuildServiceProvider();
-        OperatorSwitches switches = new(
-            provider.GetRequiredService<IOptionsMonitor<OperatorSwitchOptions>>(),
-            provider);
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
 
         int stops = 0;
         IReceiveEndpoint endpoint = Substitute.For<IReceiveEndpoint>();
         endpoint.Stop(Arg.Any<CancellationToken>()).Returns(_ => Interlocked.Increment(ref stops) == 1
             ? Task.FromException(new InvalidOperationException("the broker refused the stop"))
             : Task.CompletedTask);
-        ReceiveEndpointReady ready = Substitute.For<ReceiveEndpointReady>();
-        ready.InputAddress.Returns(new Uri($"loopback://localhost/{Queue}"));
-        ready.ReceiveEndpoint.Returns(endpoint);
 
         FakeTimeProvider clock = new();
         using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
 
-        await endpoints.Ready(ready);
+        await endpoints.Ready(ReadyFor(endpoint));
         await Until(() => Volatile.Read(ref stops) == 1);
         endpoints.IsStopped(Queue).ShouldBeFalse("the first stop failed");
 
@@ -177,5 +187,48 @@ public class OperatorSwitchTests
             return endpoints.IsStopped(Queue);
         });
         Volatile.Read(ref stops).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_start_that_never_becomes_ready_is_stopped_before_it_is_retried()
+    {
+        // Retrying Start on an endpoint already started would fail every time and never converge.
+        MutableSource source = new();
+        source.Set(Queue);
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
+
+        int stops = 0;
+        int starts = 0;
+        IReceiveEndpoint endpoint = Substitute.For<IReceiveEndpoint>();
+        endpoint.Stop(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            Interlocked.Increment(ref stops);
+            return Task.CompletedTask;
+        });
+        endpoint.Start(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            ReceiveEndpointHandle handle = Substitute.For<ReceiveEndpointHandle>();
+            handle.Ready.Returns(Interlocked.Increment(ref starts) == 1
+                ? Task.FromException<ReceiveEndpointReady>(new InvalidOperationException("the broker refused"))
+                : Task.FromResult(Substitute.For<ReceiveEndpointReady>()));
+            return handle;
+        });
+
+        FakeTimeProvider clock = new();
+        using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
+        await endpoints.Ready(ReadyFor(endpoint));
+        await Until(() => endpoints.IsStopped(Queue));
+
+        source.Set();
+        await Until(() => Volatile.Read(ref stops) == 2);
+        endpoints.IsStopped(Queue).ShouldBeTrue("the first start never became ready");
+
+        await Until(() =>
+        {
+            clock.Advance(ReceiveEndpointSwitch.FirstRetry);
+            return !endpoints.IsStopped(Queue);
+        });
+        Volatile.Read(ref starts).ShouldBe(2);
     }
 }
