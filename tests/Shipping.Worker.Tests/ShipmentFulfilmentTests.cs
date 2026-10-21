@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Common.Application;
+using Common.Domain;
 using Grpc.Core;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
@@ -135,9 +136,38 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task An_erasure_recorded_before_the_shipment_was_created_still_ends_it()
     {
-        // The owner answers on its own clock, so it may still name the subject: no age bound is safe (ADR-092).
+        // Open, so the owner may still name the subject: the holder's own row bounds nothing (ADR-092).
         Guid customer = Guid.CreateVersion7();
         await RecordErasureAsync(customer);
+        Guid order = await ConfirmForAsync(customer);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Unfulfillable");
+        (await _steps.ReasonAsync(order)).ShouldBe("personal_data_erased");
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_request_that_closed_before_the_shipment_was_created_is_not_asked_and_the_order_is_booked()
+    {
+        // Closed, so the owner had anonymised the subject before the shipment existed to read from it (ADR-139).
+        Guid customer = Guid.CreateVersion7();
+        await RecordErasureAsync(customer, closedAgo: PersonalDataErasure.ClockMargin + TimeSpan.FromHours(1));
+        Guid order = await ConfirmForAsync(customer);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Booked");
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_request_that_closed_inside_the_margin_before_the_shipment_still_ends_it()
+    {
+        // The margin is what covers the owner's, Shipping's and Privacy's clocks disagreeing (ADR-139).
+        Guid customer = Guid.CreateVersion7();
+        await RecordErasureAsync(customer, closedAgo: PersonalDataErasure.ClockMargin - TimeSpan.FromHours(1));
         Guid order = await ConfirmForAsync(customer);
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
@@ -485,18 +515,21 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         return order;
     }
 
-    /// <summary>The audit row a holder writes: the request, the salted hash and a count, and nothing else.</summary>
-    private async Task<Guid> RecordErasureAsync(Guid subject)
+    /// <summary>The audit row a holder writes: the request, the salted hash and a count, and nothing else; closed
+    /// <paramref name="closedAgo"/> before now when Privacy's close has reached it.</summary>
+    private async Task<Guid> RecordErasureAsync(Guid subject, TimeSpan? closedAgo = null)
     {
         Guid request = Guid.CreateVersion7();
 
         await fixture.ExecuteAsync(
             """
-            INSERT INTO shipping.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt)
-            VALUES ({0}, {1}, 0, SYSDATETIMEOFFSET());
+            INSERT INTO shipping.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt)
+            VALUES ({0}, {1}, 0, SYSDATETIMEOFFSET(),
+                CASE WHEN {2} < 0 THEN NULL ELSE DATEADD(second, -{2}, SYSDATETIMEOFFSET()) END);
             """,
             request,
-            Common.Domain.PersonalDataErasure.HashSubject(request, subject));
+            PersonalDataErasure.HashSubject(request, subject),
+            closedAgo is { } ago ? (int)ago.TotalSeconds : -1);
 
         return request;
     }

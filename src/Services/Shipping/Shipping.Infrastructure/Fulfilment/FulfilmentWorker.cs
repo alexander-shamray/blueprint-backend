@@ -256,7 +256,9 @@ public sealed class FulfilmentWorker(
         if (holder is null)
             return false;
 
-        if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(holder.Value, work.PlacedAfter, ct))
+        // The address was read from the owner after the shipment existed, so no later instant is safe (ADR-139).
+        if (await sp.GetRequiredService<IErasedSubjects>()
+                .IsErasedAsync(holder.Value, work.PlacedAfter, work.CreatedAt, ct))
         {
             await store.DeleteAsync(order, ct);
 
