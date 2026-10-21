@@ -16,10 +16,13 @@ since the address is read from Ordering after the shipment exists; a write that
 stamps an `ErasedUnder` list, a placement, a saved address, a device
 registration or a preference, passes its own time. A holder that finds its row
 for a `PersonalDataDeleteRequested` already closed erases and reports nothing.
-Notifications' send pass, before the contact read and after it, passes the
-earliest `OccurredAt` of the order events its order record was written from,
-which the record keeps as `SourcedAt`, since the customer it asks about is the
-one those events named; a record written before that column asks every row.
+Notifications' send pass, before the contact read, passes the earliest
+`OccurredAt` of the order events its order record was written from, never
+later than the record's own write, which the record keeps as `SourcedAt`,
+since the customer it asks about is the one those events named; a record
+written before that column asks every row. The contact read's own check asks
+every row: one read serves all of a customer's rows in a pass, so it has no
+single instant, and it runs only when the stored contact is not fresh.
 **Why.** The measurement on #882 put the unbounded read at 200 ms and 67 MiB a
 call at 100,000 rows, paid by every booking, order event, placement and saved
 write. A close comes after
@@ -47,9 +50,10 @@ whose event can be later than the one that named the customer.
 **Consequences.** A check reads the open rows and those closed within its
 data's age and the margin, through an index on `ClosedAt`, and still tries
 every row it reads. A request closed before this decision was never published,
-so its rows stay open and are asked for ever until something announces them,
-and a send pass over a record older than `SourcedAt` pays the old cost. A close is a claim about every
-holder only when every holder answered: an amendment that removes one first
+so its rows stay open and are asked for ever until something announces them;
+a send pass over a record older than `SourcedAt`, and every contact read, pay
+the old cost. A close is a claim about every holder only when every holder
+answered: an amendment that removes one first
 ([ADR-136](ADR-136-an-operator-may-amend-an-unclosed-erasure-requests-responder-set-recorded-with-who-when-and-why-1177-amending-adr-092.md)),
 the owner perhaps, closes the request while that holder may still give the
 subject out, so such a close is never published and its rows are asked for

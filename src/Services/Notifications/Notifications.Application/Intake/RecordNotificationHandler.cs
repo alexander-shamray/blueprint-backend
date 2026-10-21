@@ -80,6 +80,9 @@ public sealed class RecordNotificationHandler(
         DateTimeOffset now,
         CancellationToken ct)
     {
+        // An event cannot occur after it is recorded, so a forward-dated OccurredAt never widens what the check
+        // skips (ADR-139).
+        DateTimeOffset sourced = command.Parameters.OccurredAt < now ? command.Parameters.OccurredAt : now;
         OrderRecord? record = await orders.GetAsync(orderId, ct);
 
         if (record is null)
@@ -89,12 +92,12 @@ public sealed class RecordNotificationHandler(
                 order.CustomerId,
                 now,
                 order.ErasedUnder,
-                command.Parameters.OccurredAt);
+                sourced);
             orders.Add(record);
         }
         else
         {
-            record.Sourced(command.Parameters.OccurredAt);
+            record.Sourced(sourced);
         }
 
         if (order.Cancellation is not OrderCancellation cancellation)
