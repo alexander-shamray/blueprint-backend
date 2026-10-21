@@ -38,7 +38,7 @@ internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.Property(s => s.CreatedAt).HasDefaultValueSql("SYSDATETIMEOFFSET()");
 
         // Request ids, kept as Ordering and Notifications keep them (ADR-099, ADR-103): a JSON column, since only the
-        // erasure asks them, a scan of the subject's own rows (ADR-140). Defaulted for CreatedAt's reason (§7.4).
+        // erasure filters on them, scanning the subject's own rows (ADR-140). Defaulted for CreatedAt's reason (§7.4).
         builder
             .Property(s => s.ErasedUnder)
             .HasConversion(
