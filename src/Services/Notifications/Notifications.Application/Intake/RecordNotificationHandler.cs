@@ -84,8 +84,17 @@ public sealed class RecordNotificationHandler(
 
         if (record is null)
         {
-            record = OrderRecord.For(orderId, order.CustomerId, now, order.ErasedUnder);
+            record = OrderRecord.For(
+                orderId,
+                order.CustomerId,
+                now,
+                order.ErasedUnder,
+                command.Parameters.OccurredAt);
             orders.Add(record);
+        }
+        else
+        {
+            record.Sourced(command.Parameters.OccurredAt);
         }
 
         if (order.Cancellation is not OrderCancellation cancellation)

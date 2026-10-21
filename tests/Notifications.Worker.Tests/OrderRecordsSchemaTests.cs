@@ -27,7 +27,8 @@ public sealed class OrderRecordsSchemaTests(ServiceFixture fixture) : IAsyncLife
         // Pseudonymous personal data, so the list is exact: a column added here owes §11.7's erasure path.
         string[] expected =
         [
-            "CancelOrigin", "CancelReason", "CancelledAt", "CustomerId", "ErasedUnder", "OrderId", "RecordedAt"
+            "CancelOrigin", "CancelReason", "CancelledAt", "CustomerId", "ErasedUnder", "OrderId", "RecordedAt",
+            "SourcedAt"
         ];
         columns.ShouldBe(expected, ignoreOrder: true);
     }

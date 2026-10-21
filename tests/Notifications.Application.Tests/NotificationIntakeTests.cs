@@ -100,6 +100,39 @@ public class NotificationIntakeTests
     }
 
     [Fact]
+    public async Task The_order_record_keeps_the_earliest_occurred_at_of_the_events_that_wrote_it()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        RecordNotificationCommand first = Placed(order, customer);
+        RecordNotificationCommand later = Confirmed(order, customer) with
+        {
+            Parameters = For(order) with { OccurredAt = Now.AddMinutes(5) }
+        };
+
+        await Handler().HandleAsync(first, TestContext.Current.CancellationToken);
+        await Handler().HandleAsync(later, TestContext.Current.CancellationToken);
+
+        _orders.Added.ShouldHaveSingleItem().SourcedAt.ShouldBe(Now, "the later event does not move it forward");
+    }
+
+    [Fact]
+    public async Task An_earlier_event_arriving_second_moves_the_records_sourced_at_back()
+    {
+        Guid order = Guid.CreateVersion7();
+        Guid customer = Guid.CreateVersion7();
+        RecordNotificationCommand first = Confirmed(order, customer) with
+        {
+            Parameters = For(order) with { OccurredAt = Now.AddMinutes(5) }
+        };
+
+        await Handler().HandleAsync(first, TestContext.Current.CancellationToken);
+        await Handler().HandleAsync(Placed(order, customer), TestContext.Current.CancellationToken);
+
+        _orders.Added.ShouldHaveSingleItem().SourcedAt.ShouldBe(Now);
+    }
+
+    [Fact]
     public async Task A_redelivery_past_the_inbox_records_no_second_notice()
     {
         RecordNotificationCommand command = Placed(Guid.CreateVersion7(), Guid.CreateVersion7());

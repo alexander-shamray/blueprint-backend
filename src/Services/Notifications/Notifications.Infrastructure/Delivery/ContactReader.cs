@@ -17,6 +17,7 @@ internal static class ContactReader
     public static async Task<(ContactLookup Answer, Exception? Stale)> ReadAsync(
         IServiceProvider sp,
         Guid customer,
+        DateTimeOffset sourcedAt,
         CancellationToken ct)
     {
         IContactStore store = sp.GetRequiredService<IContactStore>();
@@ -48,12 +49,12 @@ internal static class ContactReader
 
             // An erasure since the intake's check finds this row or is seen here, so it is not written back (ADR-100).
             // Asked without an order's requests, since this read serves all the customer's rows (ADR-101), so an order
-            // ADR-099 kept loses only a row the next read fetches again; the pass still sends. Asks every row, as
-            // the send pass does: no instant of the owner's data is known here (ADR-139).
+            // ADR-099 kept loses only a row the next read fetches again; the pass still sends. Bounded by the
+            // order record's instant the send pass used, which is no later than the owner's data (ADR-139).
             if (await sp.GetRequiredService<IErasedSubjects>().IsErasedAsync(
                 customer,
                 [],
-                DateTimeOffset.MinValue,
+                sourcedAt,
                 ct))
                 await store.DeleteAsync(customer, ct);
         }
