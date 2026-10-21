@@ -55,6 +55,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     private readonly Dictionary<string, IReceiveEndpoint> _endpoints = new(StringComparer.Ordinal);
     private readonly HashSet<string> _stopped = new(StringComparer.Ordinal);
     private readonly HashSet<string> _retrying = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _unsettled = new(StringComparer.Ordinal);
     private readonly IDisposable? _subscription;
 
     /// <summary>The wait before a failed stop or start is tried again, doubling up to
@@ -170,15 +171,32 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             }
             else if (!off && stopped)
             {
+                // A start whose stop also failed may have left the endpoint running, so it is stopped first.
+                bool unsettled;
+                lock (_endpoints)
+                    unsettled = _unsettled.Remove(queue);
+                if (unsettled)
+                    await endpoint.Stop();
+
                 ReceiveEndpointHandle handle = endpoint.Start();
                 try
                 {
                     await handle.Ready;
                 }
-                catch
+                catch (Exception readyFault)
                 {
                     // Stopped again, so the retry starts a stopped endpoint and not one that is already started.
-                    await endpoint.Stop();
+                    try
+                    {
+                        await endpoint.Stop();
+                    }
+                    catch (Exception stopFault)
+                    {
+                        lock (_endpoints)
+                            _unsettled.Add(queue);
+                        throw new AggregateException(readyFault, stopFault);
+                    }
+
                     throw;
                 }
 

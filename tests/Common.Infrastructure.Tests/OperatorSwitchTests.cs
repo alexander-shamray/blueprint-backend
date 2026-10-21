@@ -264,4 +264,45 @@ public class OperatorSwitchTests
 
         Volatile.Read(ref stops).ShouldBe(3, "two retry chains would each have stopped again");
     }
+
+    [Fact]
+    public async Task A_start_whose_compensating_stop_failed_is_stopped_before_the_next_start()
+    {
+        MutableSource source = new();
+        source.Set(Queue);
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
+
+        int stops = 0;
+        int starts = 0;
+        IReceiveEndpoint endpoint = Substitute.For<IReceiveEndpoint>();
+        endpoint.Stop(Arg.Any<CancellationToken>()).Returns(_ => Interlocked.Increment(ref stops) == 2
+            ? Task.FromException(new InvalidOperationException("the broker refused the stop"))
+            : Task.CompletedTask);
+        endpoint.Start(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            ReceiveEndpointHandle handle = Substitute.For<ReceiveEndpointHandle>();
+            handle.Ready.Returns(Interlocked.Increment(ref starts) == 1
+                ? Task.FromException<ReceiveEndpointReady>(new InvalidOperationException("the broker refused"))
+                : Task.FromResult(Substitute.For<ReceiveEndpointReady>()));
+            return handle;
+        });
+
+        FakeTimeProvider clock = new();
+        using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
+        await endpoints.Ready(ReadyFor(endpoint));
+        await Until(() => endpoints.IsStopped(Queue));
+
+        // The start never becomes ready and its compensating stop fails too, so the endpoint may still be running.
+        source.Set();
+        await Until(() => Volatile.Read(ref stops) == 2);
+
+        await Until(() =>
+        {
+            clock.Advance(ReceiveEndpointSwitch.FirstRetry);
+            return !endpoints.IsStopped(Queue);
+        });
+        Volatile.Read(ref stops).ShouldBe(3, "the retry stops the endpoint before it starts it again");
+        Volatile.Read(ref starts).ShouldBe(2);
+    }
 }
