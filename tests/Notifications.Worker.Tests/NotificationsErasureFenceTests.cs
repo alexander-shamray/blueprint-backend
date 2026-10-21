@@ -58,7 +58,7 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
     [Fact]
     public async Task Another_customers_order_record_is_not_held_by_an_erasure()
     {
-        // The erasure's HOLDLOCK read seeks its subject's keys on CustomerId's index; a scan would hold every row.
+        // The erasure's held read seeks its subject on CustomerId's index; a scan would hold every customer's row.
         CancellationToken ct = TestContext.Current.CancellationToken;
         Guid order = Guid.CreateVersion7();
 

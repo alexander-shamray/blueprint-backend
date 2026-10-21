@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Notifications.Infrastructure.Persistence.Migrations;
 
 /// <summary>An index on an order record's customer, so the erasure's read that fences an intake (ADR-097) seeks its
-/// subject and locks no other customer's records.</summary>
+/// subject rather than holding every customer's records.</summary>
 public partial class AddOrderRecordsCustomerIdIndex : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
