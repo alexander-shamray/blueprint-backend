@@ -84,6 +84,42 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
     }
 
     [Fact]
+    public async Task The_erasures_first_statement_holds_the_subjects_own_records()
+    {
+        // The later statements delete the records, but a change committed before they run would stage a notice whose
+        // erased check comes before the audit row; the seek on CustomerId's index alone leaves the row free.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid order = Guid.CreateVersion7();
+
+        await using (AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider
+                .GetServices<IIntegrationEventHandler<OrderPlaced>>()
+                .Single()
+                .HandleAsync(OrderEvents.Placed(order, _subject, At), ct);
+        }
+
+        (await fixture.OrderRecordAsync(order)).ShouldNotBeNull("an update matching no row would wait on nothing");
+
+        await using NotificationsDbContext db = new(
+            new DbContextOptionsBuilder<NotificationsDbContext>().UseSqlServer(fixture.ConnectionString).Options);
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
+        SqlNotificationsPersonalDataStore store = new(
+            db,
+            new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>()));
+        await store.DeleteWaitingNoticesAsync(_subject, Guid.CreateVersion7(), ct);
+
+        Task change = fixture.ExecuteAsync(
+            "UPDATE notifications.OrderRecords SET CancelReason = N'probe' WHERE OrderId = {0}",
+            order);
+
+        await Should.ThrowAsync<TimeoutException>(() => change.WaitAsync(Wait, ct));
+
+        await transaction.RollbackAsync(ct);
+        await change.WaitAsync(ServiceFixture.StepDeadline, ct);
+    }
+
+    [Fact]
     public async Task A_contact_save_waits_for_an_erasure_that_found_no_contact()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
