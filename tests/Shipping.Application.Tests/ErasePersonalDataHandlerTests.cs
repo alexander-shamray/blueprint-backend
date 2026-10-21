@@ -84,6 +84,9 @@ public class ErasePersonalDataHandlerTests
         public Task<PersonalDataErasure?> GetAsync(Guid requestId, CancellationToken ct) =>
             Task.FromResult(Existing.GetValueOrDefault(requestId));
 
+        public Task<bool> IsClosedAsync(Guid requestId, CancellationToken ct) =>
+            Task.FromResult(Existing.GetValueOrDefault(requestId)?.ClosedAt is not null);
+
         public void Add(PersonalDataErasure erasure) => Added.Add(erasure);
     }
 

@@ -12,11 +12,17 @@ namespace Shipping.Application.Privacy.ErasePersonalData;
 public sealed class PersonalDataDeleteRequestedHandler(
     IDispatcher dispatcher,
     IShippingPersonalDataStore store,
+    IPersonalDataErasureRepository erasures,
     IErasureReporter reporter)
     : IIntegrationEventHandler<PersonalDataDeleteRequested>
 {
     public async Task HandleAsync(PersonalDataDeleteRequested integrationEvent, CancellationToken ct)
     {
+        // A closed request is not reissued, so this is a late copy; the checks no longer ask its row, and a second
+        // pass would end what the customer made since (ADR-139).
+        if (await erasures.IsClosedAsync(integrationEvent.RequestId, ct))
+            return;
+
         foreach (Guid order in await store.AddressedOrdersAsync(integrationEvent.SubjectId, ct))
         {
             Result ended = await dispatcher.SendAsync(new EndWaitingShipmentCommand(order), ct);
