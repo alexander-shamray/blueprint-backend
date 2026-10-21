@@ -60,6 +60,12 @@ erasure for one customer take one lock and run one after the other. Without
 it the read and the insert could fall either side of the erasure, and the
 order was stamped under nothing and never erased.
 
+**Amended by [ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md).**
+The placement's read asks the rows still open and those closed within a
+margin of the placement, so an order no longer lists a request whose close
+Ordering had stamped as more than the margin before it, and a holder that has
+stamped that close no longer asks the request about the order.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

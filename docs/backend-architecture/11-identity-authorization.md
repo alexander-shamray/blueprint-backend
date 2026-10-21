@@ -1469,9 +1469,10 @@ sequenceDiagram
     Y->>P: PersonalDataDeleteCompleted {RequestId, "payments"}
     F->>P: PersonalDataDeleteCompleted {RequestId, "bff"}
     P->>P: all services reported → close request
+    P->>B: PersonalDataDeleteClosed {RequestId}
 ```
 
-> **In the reference domain both messages are in
+> **In the reference domain all three messages are in
 > `Common.Contracts.Privacy.V1`, which is where the version lives**
 > ([§9.2](09-messaging.md),
 > [Appendix E.6.9](appendix-e-reference-domain.md#e69-personal-data-erasure));
@@ -1493,9 +1494,11 @@ Rules for each service's consumer:
   reader keeps for its owner's value
   ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
 - **Write an audit record** of what was erased and when. That record itself
-  contains no personal data — a subject ID hash, a timestamp, a count. It is
-  `Common.Domain`'s `PersonalDataErasure`, which each holder maps to a table in
-  its own schema.
+  contains no personal data — a subject ID hash, a count, when it was erased
+  and when its request closed
+  ([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)).
+  It is `Common.Domain`'s `PersonalDataErasure`, which each holder maps to a
+  table in its own schema.
 - **Idempotent.** The message is delivered at least once, and a second erasure
   of already-erased data must succeed silently.
 - **A writer asks its own audit rows after it writes.** A holder fed by
@@ -1509,6 +1512,9 @@ Rules for each service's consumer:
   ([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md),
   [ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md),
   [ADR-103](adr/ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md)).
+  The check asks no request that closed, by the time `PersonalDataDeleteClosed`
+  stamps on the holder's row, before its data left the owner, less a margin
+  for the clocks ([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)).
 - **Report completion.** The privacy service tracks which services have
   responded and escalates on timeout. Silence is not success.
 

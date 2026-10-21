@@ -1282,7 +1282,10 @@ window: it lasts until the subject replaces or deletes it, or an erasure request
 deletes it (§11.7). The BFF's handler for `PersonalDataDeleteRequested` deletes
 the subject's row in the transaction that deletes their other rows and counts it
 in the request's audit row, unless the row was saved under that request
-([ADR-135](adr/ADR-135-a-saved-address-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-saved-1172-amending-adr-107.md));
+([ADR-135](adr/ADR-135-a-saved-address-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-saved-1172-amending-adr-107.md)),
+and does nothing for a copy of a request whose audit row it already holds
+closed
+([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md));
 the BFF was already one of the holders an erasure
 request waits on
 ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),

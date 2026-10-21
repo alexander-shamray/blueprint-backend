@@ -73,6 +73,12 @@ placed under; Shipping still drops it.
 the same sentence's Shipping clause. Shipping keeps such a shipment, because
 the shipment holds the list.
 
+**Amended by [ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md).**
+The read is still not bounded by the order's age, but by each request's
+close against the event's own time: a request whose close the holder has
+stamped as earlier than the event's `OccurredAt`, less a margin, is not asked,
+and the scan is of the rows still open and those closed since.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

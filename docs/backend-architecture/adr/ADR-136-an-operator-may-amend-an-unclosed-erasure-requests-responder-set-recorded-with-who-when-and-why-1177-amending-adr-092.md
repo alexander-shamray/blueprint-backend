@@ -50,6 +50,10 @@ reissue as a second step, and the status view shows the amendments so the
 operator can see what is still missing before making it. The command is
 keyed, as a reissue is, so a retry records one amendment.
 
+**Amended by [ADR-139](ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md).**
+An amendment that closes a request publishes its close, as a last answer
+does; one that leaves it open still publishes nothing.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
