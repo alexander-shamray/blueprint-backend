@@ -126,7 +126,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             if (!_switchable.TryAdd(queue, configure))
                 throw new InvalidOperationException($"Receive endpoint {queue} is registered with the switch twice.");
 
-            // Declared before the lock is released, so a reload's sweep never finds it off and undeclared; one
+            // Declared before the lock is released, so a sweep that finds it deferred never finds it undeclared; one
             // configured now is declared by Configured, as the bus configures it.
             off = _switches.IsOff(queue);
             if (off)
