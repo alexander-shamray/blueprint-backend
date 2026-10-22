@@ -11,14 +11,11 @@
          nothing at runtime does — the version is pinned to the line above
          because the tool and the runtime move together. -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
-    <!-- Transitive, and pinned deliberately. The package above reaches it twice — through
-         Microsoft.Build.Tasks.Core and through
-         Microsoft.CodeAnalysis.Workspaces.MSBuild — and both floors resolve to
-         9.0.0, which carries eight advisories. NU1903 turns that into a failed
-         restore, so this pin is what makes the line above restorable at all.
-         PrivateAssets on the Design reference means it never ships in an image;
-         the restore fails anyway, and rightly, because a design-time supply
-         chain runs on a developer's machine with their credentials. -->
+    <!-- Transitive, and pinned deliberately: the package above reaches it through Microsoft.Build.Tasks.Core
+         and Microsoft.CodeAnalysis.Workspaces.MSBuild at 9.0.0, which carries eight advisories, and NU1903
+         fails the restore, so this pin makes the line above restorable at all. Design is PrivateAssets and
+         never ships in an image; the restore fails anyway, and rightly, because a design-time supply chain
+         runs on a developer's machine with their credentials. -->
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
     <!-- Transitive and pinned for the same reason: Microsoft.Data.SqlClient
          reaches it at a 9.0 floor and MimeKit at 10.0.0, and both carry
@@ -194,15 +191,11 @@
          purpose. Same version line as the three above: the Testcontainers
          modules ship as one release. -->
     <PackageVersion Include="Testcontainers.Keycloak" Version="4.6.0" />
-    <!-- Transitive of the three rows above, pinned deliberately, in the shape
-         System.Security.Cryptography.Xml carries. Testcontainers 4.6.0 floors this at 2024.2.0 for its SSH
-         port-forwarding path, and every version through 2025.1.0 carries
-         GHSA-q939-rpr3-3284 — a malicious SCP server escaping the download
-         directory through traversal sequences in a filename. NU1903 turns that
-         into a failed restore, so the pin is what makes the three rows above
-         buildable at all. Nothing here downloads over SCP; the pin is not a
-         judgement that the advisory is reachable, only that a vulnerable
-         package resolving into the graph is not a thing to carry. -->
+    <!-- Transitive of the three rows above, pinned in System.Security.Cryptography.Xml's shape: Testcontainers
+         4.6.0 floors this at 2024.2.0 for SSH port forwarding, and every version through 2025.1.0 carries
+         GHSA-q939-rpr3-3284, an SCP traversal out of the download directory, which NU1903 fails the restore on.
+         Nothing here downloads over SCP; the pin judges not that the advisory is reachable, only that a
+         vulnerable package resolving into the graph is not a thing to carry. -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
     <PackageVersion Include="Respawn" Version="6.2.1" />
     <!-- 2.12.0 is the first release whose Scriban.Signed carries no advisory.
