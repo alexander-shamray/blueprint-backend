@@ -155,6 +155,25 @@ def r2_hook(text):
     return once(text, R2_PUSH, R2_PUSH.replace("stripped):", "flat):"))
 
 
+# ---- R2b: the fallback's push pattern does not trust a separator quotes may have hidden ----
+
+R2B_TEST_ANCHOR = '''        self.assertRefused(f"git pu\\\\sh origin +HEAD:main{NEWLINE}echo \\"")
+'''
+
+R2B_TEST = r'''
+    def test_a_quoted_separator_does_not_hide_a_push_from_the_fallback(self):
+        # Removing quotes turns a quoted `;` into what reads as a separator, so
+        # the fallback looks for git and push anywhere on a line.
+        self.assertRefused(f"git --git-dir=\";\" pu''sh origin +HEAD:main{NEWLINE}echo \"")
+'''
+
+R2B_OLD = '''        if re.search(r"\\bgit\\b[^;&|\\n]*\\bpush\\b", flat):
+'''
+
+R2B_NEW = '''        if re.search(r"\\bgit\\b[^\\n]*\\bpush\\b", flat):
+'''
+
+
 # ---- the pinned case's comment states the rule, not its history ----
 
 COMMENT_OLD = """        # The fallback used to read the raw string, so a quoted `--output` in an
@@ -178,6 +197,10 @@ def main(root, part):
         rewrite(tests, r2_tests)
     elif part == "r2-hook":
         rewrite(hook, r2_hook)
+    elif part == "r2b-tests":
+        rewrite(tests, lambda t: once(t, R2B_TEST_ANCHOR, R2B_TEST_ANCHOR + R2B_TEST))
+    elif part == "r2b-hook":
+        rewrite(hook, lambda t: once(t, R2B_OLD, R2B_NEW))
     elif part == "comment":
         rewrite(tests, lambda t: once(t, COMMENT_OLD, COMMENT_NEW))
     else:

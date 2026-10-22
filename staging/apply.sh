@@ -31,6 +31,13 @@ main() {
       "test_a_quote_split_push_before_an_untokenisable_line_is_refused failed before the change and passes after it; apply.sh checks both."
   fi
 
+  if ! done_already "does not trust a separator its quotes may hide"; then
+    fix "fix(harness): the git argv guard's fallback push check does not trust a separator its quotes may hide (review R2)" \
+      r2b-tests r2b-hook "$g.test_a_quoted_separator_does_not_hide_a_push_from_the_fallback" \
+      "R2's fix reads the untokenised command with its quotes removed, and that turns a quoted semicolon into what the push pattern takes for a separator: git --git-dir=\";\" pu''sh origin +HEAD:main above a line that breaks the parse ran the push and was admitted, since the pattern stopped at the semicolon. The pattern now looks for git and push anywhere on a line, which on this degraded path can only over-refuse." \
+      "test_a_quoted_separator_does_not_hide_a_push_from_the_fallback failed before the change and passes after it; apply.sh checks both."
+  fi
+
   if ! done_already "states the fallback's rule, not its history"; then
     "${PY[@]}" staging/patch_review.py . comment
     git add .claude/scripts/test_git_argv_guard.py
