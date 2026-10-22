@@ -401,9 +401,9 @@ or high.** Three gates, and each drops candidates the round must not file:
 - **Critical or high.** Everything below the bar is recorded in the round
   summary, not filed, per the runbook's severity table.
 - **Not already tracked.** Before filing, enumerate the **whole** issue set
-  through `gh-issue-list.sh`, which spells `--state all --limit 1000` itself
-  because the default 30 hides older issues and lets a duplicate straight
-  through — and match each finding against
+  through `gh-issue-list.sh`, which lists every state itself and refuses a list
+  as long as its limit, because gh cuts there without a word and an issue it
+  hides lets a duplicate straight through — and match each finding against
   it, **regardless of label**, since a `security` issue and a `bug` issue can
   name the same lines. An open issue **opened by the repository owner**
   blocks a re-file — as does a `wontfix` or an accepted-risk record meeting
