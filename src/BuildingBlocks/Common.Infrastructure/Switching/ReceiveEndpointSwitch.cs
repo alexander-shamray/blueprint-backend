@@ -257,27 +257,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
                         _unsettled.Remove(queue);
                 }
 
-                ReceiveEndpointHandle handle = endpoint.Start();
-                try
-                {
-                    await handle.Ready;
-                }
-                catch (Exception readyFault)
-                {
-                    // Stopped again, so the retry starts a stopped endpoint and not one that is already started.
-                    try
-                    {
-                        await endpoint.Stop();
-                    }
-                    catch (Exception stopFault)
-                    {
-                        lock (_endpoints)
-                            _unsettled.Add(queue);
-                        throw new AggregateException(readyFault, stopFault);
-                    }
-
-                    throw;
-                }
+                await ReadyOrStoppedAsync(queue, endpoint, endpoint.Start().Ready);
 
                 lock (_endpoints)
                     _stopped.Remove(queue);
@@ -308,8 +288,8 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         _ = RetryAsync(queue, delay, attempt + 1);
     }
 
-    // Called under the gate. The endpoint is kept from its handle, as the bus's own are from Ready, so a later switch
-    // stops and starts it like them; one that cannot be connected throws, and ApplyAsync retries it.
+    // Called under the gate. The endpoint is kept the moment it exists, still counted stopped, so one whose Ready
+    // faults is retried by the start above and never connected twice; a later switch stops and starts it likewise.
     private async Task ConnectAsync(string queue, Action<IReceiveEndpointConfigurator> configure)
     {
         IServiceProvider services = _services ??
@@ -318,16 +298,41 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         HostReceiveEndpointHandle handle = services
             .GetRequiredService<IReceiveEndpointConnector>()
             .ConnectReceiveEndpoint(queue, (_, e) => configure(e));
-        await handle.Ready;
-
         lock (_endpoints)
         {
             _endpoints[queue] = handle.ReceiveEndpoint;
             _deferred.Remove(queue);
-            _stopped.Remove(queue);
         }
 
+        await ReadyOrStoppedAsync(queue, handle.ReceiveEndpoint, handle.Ready);
+
+        lock (_endpoints)
+            _stopped.Remove(queue);
         Connected(_log, queue, null);
+    }
+
+    // Stopped again when Ready faults, so the retry starts a stopped endpoint and not one that is already started.
+    private async Task ReadyOrStoppedAsync(string queue, IReceiveEndpoint endpoint, Task ready)
+    {
+        try
+        {
+            await ready;
+        }
+        catch (Exception readyFault)
+        {
+            try
+            {
+                await endpoint.Stop();
+            }
+            catch (Exception stopFault)
+            {
+                lock (_endpoints)
+                    _unsettled.Add(queue);
+                throw new AggregateException(readyFault, stopFault);
+            }
+
+            throw;
+        }
     }
 
     private async Task RetryAsync(string queue, TimeSpan delay, int attempt)

@@ -287,6 +287,60 @@ public class OperatorSwitchTests
     }
 
     [Fact]
+    public async Task A_connect_that_never_becomes_ready_is_stopped_and_started_again_never_connected_twice()
+    {
+        // A second connect would add a second endpoint on the queue while the first, untracked, may still consume.
+        MutableSource source = new();
+        source.Set(Queue);
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
+
+        int stops = 0;
+        int starts = 0;
+        IReceiveEndpoint endpoint = Substitute.For<IReceiveEndpoint>();
+        endpoint.Stop(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            Interlocked.Increment(ref stops);
+            return Task.CompletedTask;
+        });
+        endpoint.Start(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            Interlocked.Increment(ref starts);
+            ReceiveEndpointHandle started = Substitute.For<ReceiveEndpointHandle>();
+            started.Ready.Returns(Task.FromResult(Substitute.For<ReceiveEndpointReady>()));
+            return started;
+        });
+        HostReceiveEndpointHandle connected = Substitute.For<HostReceiveEndpointHandle>();
+        connected.ReceiveEndpoint.Returns(endpoint);
+        connected.Ready.Returns(
+            Task.FromException<ReceiveEndpointReady>(new InvalidOperationException("the broker refused")));
+        IReceiveEndpointConnector connector = Substitute.For<IReceiveEndpointConnector>();
+        connector
+            .ConnectReceiveEndpoint(Queue, Arg.Any<Action<IBusRegistrationContext, IReceiveEndpointConfigurator>>())
+            .Returns(connected);
+        await using ServiceProvider container = new ServiceCollection().AddSingleton(connector).BuildServiceProvider();
+
+        FakeTimeProvider clock = new();
+        using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
+        endpoints.Register(Queue, _ => { }).ShouldBeFalse();
+        endpoints.Attach(container);
+
+        source.Set();
+        await Until(() => Volatile.Read(ref stops) == 1);
+        endpoints.IsStopped(Queue).ShouldBeTrue("the connect never became ready");
+
+        await Until(() =>
+        {
+            clock.Advance(ReceiveEndpointSwitch.FirstRetry);
+            return !endpoints.IsStopped(Queue);
+        });
+        Volatile.Read(ref starts).ShouldBe(1);
+        connector.Received(1).ConnectReceiveEndpoint(
+            Queue,
+            Arg.Any<Action<IBusRegistrationContext, IReceiveEndpointConfigurator>>());
+    }
+
+    [Fact]
     public async Task A_change_while_a_retry_waits_adds_no_second_retry()
     {
         MutableSource source = new();
