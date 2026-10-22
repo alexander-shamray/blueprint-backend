@@ -451,12 +451,15 @@ mutate, must agree — and the audited tree never enters the one invocation
 that holds `gh-issue-create.sh`. A verdict of `unreadable-root` is a round
 error under *Never fail open*, not a dropped record, and is read before the
 shape and location checks below. A verdict of `refuted` or `outside-root`
-drops the candidate; a record that is not in the declared shape is dropped as
-malformed and counted; and **a record whose `file` and `line` are not the
-candidate's as dispatched is dropped the same way**, whatever its verdict
-says — two readings that disagree on where the defect is have not agreed, and
-a `confirmed` at another location is a redirect, not a confirmation. Drop
-what does not survive.
+drops the candidate. **A record that is not in the declared shape, or whose
+`file` and `line` are not the candidate's as dispatched, is not a verdict at
+all**, whatever it says — two readings that disagree on where the defect is
+have not agreed, and a `confirmed` at another location is a redirect, not a
+confirmation. Dropping it once let a round with no other survivor end clean
+and mark its commit, so the file left every later incremental sweep
+unverified; the verifier is dispatched once more with the same candidate, and
+a second such record is a round error under *Never fail open*. Drop what does
+not survive.
 
 ## File
 
