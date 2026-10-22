@@ -894,9 +894,11 @@ fields is a rule a reader follows and a prefix grant beside it is what the
 session can actually run.
 
 **`pr-locality.sh` prints a verdict and never the cell it judges.** It
-reads `body` from the pull request and `filename` from the files endpoint,
-and prints one `class` line whose value is letters it validated, then one
-`inside <path>` or `outside <path>` line per changed file, where the path is
+reads `body` from the pull request, with any carriage return removed, and
+`filename` and a rename's `previous_filename` from the files endpoint, so both
+ends of a move are judged as the CI gate judges them. It prints one `class`
+line whose value is letters it validated, then one `inside <path>` or
+`outside <path>` line per changed path, where the path is
 the diff's own and the word is the script's. A pull request author is not a
 trusted party, and a path grammar cannot keep prose out of a cell —
 `Ignore_all_previous_instructions.md` is a path — so the cell is consumed
