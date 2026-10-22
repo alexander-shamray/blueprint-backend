@@ -227,6 +227,10 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              pull request names it in a `PR: #<n>` trailer.
                              No `edited` trigger, because a body edit changes
                              no commit
+.github/dependabot.yml       weekly version updates for NuGet, the images, the
+                             compose files and Actions; the two gates it
+                             cannot satisfy skip its pull requests, and
+                             change-locality.md section 6 says why
 .github/<gate>/              one directory per gate — licence-gate,
                              secret-scan, closure-gate, commit-gate,
                              locality-gate,
