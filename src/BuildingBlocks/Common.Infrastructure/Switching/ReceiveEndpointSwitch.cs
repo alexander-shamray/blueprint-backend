@@ -73,6 +73,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     private readonly HashSet<string> _deferred = new(StringComparer.Ordinal);
     private readonly HashSet<string> _unregistered = new(StringComparer.Ordinal);
     private readonly HashSet<string> _topologyPending = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _declaring = new(StringComparer.Ordinal);
     private readonly IDisposable? _subscription;
     private IServiceProvider? _services;
     private Func<Action<IBusFactoryConfigurator>, IBusControl>? _topologyBus;
@@ -257,6 +258,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     private async Task ApplyAsync(string queue, int attempt = 0)
     {
         TimeSpan? retry = null;
+        Action<IReceiveEndpointConfigurator>? declare = null;
 
         await _gate.WaitAsync();
         try
@@ -277,23 +279,23 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
 
             // Never configured, since its switch was off when the bus was: its topology declared while it stays off,
             // connected once it is on, and stopped and started like any other endpoint from then on.
+            bool off = _switches.IsOff(queue);
             if (deferred is not null)
             {
-                if (!_switches.IsOff(queue))
+                if (!off)
+                {
                     await ConnectAsync(queue, deferred);
+                }
                 else if (pending)
-                    await DeclareTopologyAsync(queue, deferred);
-
-                return;
+                {
+                    lock (_endpoints)
+                        declare = _declaring.Add(queue) ? deferred : null;
+                }
             }
-
-            if (endpoint is null)
-                return;
 
             // Unsettled is a start whose undoing stop failed, so the endpoint may be running whatever the set says;
             // it is stopped first either way, and stays unsettled until a stop succeeds.
-            bool off = _switches.IsOff(queue);
-            if (off && (!stopped || unsettled))
+            else if (endpoint is not null && off && (!stopped || unsettled))
             {
                 await endpoint.Stop();
                 lock (_endpoints)
@@ -304,7 +306,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
 
                 Stopped(_log, queue, null);
             }
-            else if (!off && stopped)
+            else if (endpoint is not null && !off && stopped)
             {
                 if (unsettled)
                 {
@@ -323,13 +325,17 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         catch (Exception ex)
         {
             // Retried on its own, since nothing else may come: a stop that failed leaves the queue consuming.
-            retry = TimeSpan.FromTicks(Math.Min(FirstRetry.Ticks << Math.Min(attempt, 16), LastRetry.Ticks));
+            retry = Backoff(attempt);
             ApplyFailed(_log, queue, retry.Value, ex);
         }
         finally
         {
             _gate.Release();
         }
+
+        // Outside the gate, since a broker that stalls new connections would otherwise hold every stop behind it.
+        if (declare is not null)
+            retry = await DeclareTopologyAsync(queue, declare, attempt);
 
         if (retry is not TimeSpan delay)
             return;
@@ -368,29 +374,57 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         Connected(_log, queue, null);
     }
 
-    // Called under the gate. A bus deploying topology only declares the queue, its exchanges and its bindings and
-    // never consumes, so what is routed to the queue while it is off waits there (ADR-145).
-    private async Task DeclareTopologyAsync(string queue, Action<IReceiveEndpointConfigurator> configure)
+    // Not under the gate, and once per queue at a time. A bus deploying topology only declares the queue, its exchanges
+    // and its bindings and never consumes, so what is routed to the queue while it is off waits there (ADR-145).
+    private async Task<TimeSpan?> DeclareTopologyAsync(
+        string queue,
+        Action<IReceiveEndpointConfigurator> configure,
+        int attempt)
     {
-        Func<Action<IBusFactoryConfigurator>, IBusControl> topologyBus = _topologyBus ??
-            throw new InvalidOperationException("The switch was never attached to the bus's container.");
-
-        IBusControl bus = topologyBus(cfg =>
+        try
         {
-            cfg.DeployTopologyOnly = true;
-            cfg.ReceiveEndpoint(queue, configure);
-        });
+            Func<Action<IBusFactoryConfigurator>, IBusControl> topologyBus = _topologyBus ??
+                throw new InvalidOperationException("The switch was never attached to the bus's container.");
 
-        // Bounded, since a start waits for the broker for as long as its token allows; the retry asks again.
-        using CancellationTokenSource timeout = new(TopologyTimeout, _clock);
-        using CancellationTokenSource attempt =
-            CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, _disposed.Token);
-        await bus.DeployAsync(attempt.Token);
+            IBusControl bus = topologyBus(cfg =>
+            {
+                cfg.DeployTopologyOnly = true;
+                cfg.ReceiveEndpoint(queue, configure);
+            });
 
-        lock (_endpoints)
-            _topologyPending.Remove(queue);
-        TopologyDeclared(_log, queue, null);
+            // Bounded, since a start waits for the broker for as long as its token allows; the retry asks again.
+            using CancellationTokenSource timeout = new(TopologyTimeout, _clock);
+            using CancellationTokenSource bounded =
+                CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, _disposed.Token);
+            await bus.DeployAsync(bounded.Token);
+
+            // A switch turned on meanwhile has connected it, and then the log line below would be false.
+            bool deferred;
+            lock (_endpoints)
+            {
+                _topologyPending.Remove(queue);
+                deferred = _deferred.Contains(queue);
+            }
+
+            if (deferred)
+                TopologyDeclared(_log, queue, null);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            TimeSpan retry = Backoff(attempt);
+            ApplyFailed(_log, queue, retry, ex);
+            return retry;
+        }
+        finally
+        {
+            lock (_endpoints)
+                _declaring.Remove(queue);
+        }
     }
+
+    private static TimeSpan Backoff(int attempt) =>
+        TimeSpan.FromTicks(Math.Min(FirstRetry.Ticks << Math.Min(attempt, 16), LastRetry.Ticks));
 
     // Stopped again when Ready faults, so the retry starts a stopped endpoint and not one that is already started.
     private async Task ReadyOrStoppedAsync(string queue, IReceiveEndpoint endpoint, Task ready)

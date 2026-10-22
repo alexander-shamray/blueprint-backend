@@ -256,6 +256,55 @@ public class OperatorSwitchTests
         endpoints.IsStopped(Queue).ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task A_stop_is_not_held_behind_a_topology_declaration_that_hangs()
+    {
+        // A broker stalling new connections while the bus stays connected: the running endpoint must still stop.
+        const string running = "switch-running";
+        MutableSource source = new();
+        source.Set(Queue);
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
+
+        int attempts = 0;
+        IBusControl Create(Action<IBusFactoryConfigurator> configure)
+        {
+            Interlocked.Increment(ref attempts);
+            IBusControl bus = Substitute.For<IBusControl>();
+            bus.StartAsync(Arg.Any<CancellationToken>()).Returns(call => Hang(call.Arg<CancellationToken>()));
+            return bus;
+        }
+
+        int stops = 0;
+        IReceiveEndpoint endpoint = Substitute.For<IReceiveEndpoint>();
+        endpoint.Stop(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            Interlocked.Increment(ref stops);
+            return Task.CompletedTask;
+        });
+        ReceiveEndpointReady ready = Substitute.For<ReceiveEndpointReady>();
+        ready.InputAddress.Returns(new Uri($"loopback://localhost/{running}"));
+        ready.ReceiveEndpoint.Returns(endpoint);
+
+        FakeTimeProvider clock = new();
+        using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
+        await using ServiceProvider container = new ServiceCollection().BuildServiceProvider();
+        endpoints.Attach(container, Create);
+        endpoints.Register(Queue, _ => { }).ShouldBeFalse();
+        await endpoints.Ready(ready);
+
+        Task declaring = endpoints.DeclareDeferredAsync();
+        await Until(() => Volatile.Read(ref attempts) == 1);
+
+        source.Set(Queue, running);
+        await Until(() => endpoints.IsStopped(running));
+        Volatile.Read(ref stops).ShouldBe(1);
+        Volatile.Read(ref attempts).ShouldBe(1, "a declaration already running is not started a second time");
+
+        clock.Advance(ReceiveEndpointSwitch.TopologyTimeout);
+        await declaring.WaitAsync(Budget, TestContext.Current.CancellationToken);
+    }
+
     private static async Task<BusHandle> Hang(CancellationToken cancellationToken)
     {
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
