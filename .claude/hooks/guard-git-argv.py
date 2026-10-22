@@ -2370,6 +2370,23 @@ def scan_budget(command):
     )
 
 
+# PowerShell quotes and escapes in a grammar `offence` does not parse, so a git
+# call through that tool cannot be judged and is refused; Bash runs git here.
+# Backticks and quotes go first, since PowerShell runs g`it as git.
+POWERSHELL_GIT = re.compile(r"(?i)(?<![a-z0-9_])git(?![a-z0-9_])")
+
+
+def powershell_git(command):
+    """The refusal for a PowerShell command that names git, or None."""
+    if not POWERSHELL_GIT.search(re.sub("[`'\"]", "", command)):
+        return None
+    return (
+        "git through PowerShell is refused: this guard reads Bash's grammar, "
+        "not PowerShell's, so what the call would run cannot be checked. Run "
+        "git through the Bash tool."
+    )
+
+
 def refuse(reason):
     """Print the deny JSON for `reason`; the exit status stays 0 either way."""
     json.dump(
@@ -2404,7 +2421,8 @@ def main():
         print("guard-git-argv: unreadable hook event; not judging", file=sys.stderr)
         return 0
 
-    if event.get("tool_name") != "Bash":
+    tool = event.get("tool_name")
+    if tool not in ("Bash", "PowerShell"):
         return 0
 
     command = (event.get("tool_input") or {}).get("command")
@@ -2412,7 +2430,8 @@ def main():
         return 0
 
     try:
-        reason = scan_budget(command) or offence(command)
+        reason = (powershell_git(command) if tool == "PowerShell"
+                  else scan_budget(command) or offence(command))
     except Exception:  # noqa: BLE001 - the direction is the point
         # A crash is empty stdout, and `PreToolUse` reads empty stdout as
         # non-blocking, so an uncaught defect here would be a fail-open.
