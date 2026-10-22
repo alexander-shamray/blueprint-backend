@@ -190,7 +190,7 @@
          purpose. Same version line as the three above: the Testcontainers
          modules ship as one release. -->
     <PackageVersion Include="Testcontainers.Keycloak" Version="4.6.0" />
-    <!-- Transitive of the four Testcontainers rows above, pinned in System.Security.Cryptography.Xml's shape: Testcontainers
+    <!-- Transitive of the four Testcontainers rows above, in System.Security.Cryptography.Xml's shape: their
          4.6.0 floors this at 2024.2.0 for SSH port forwarding, and every version through 2025.1.0 carries
          GHSA-q939-rpr3-3284, an SCP traversal out of the download directory, which NU1903 fails the restore on.
          Nothing here downloads over SCP; the pin judges not that the advisory is reachable, only that a
