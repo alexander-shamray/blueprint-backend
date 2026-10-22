@@ -56,7 +56,8 @@ public static class DependencyInjection
                         host.UseSsl(ssl => ssl.EnforcePolicyErrors(SslPolicyErrors.RemoteCertificateChainErrors));
                 });
 
-                cfg.ReceiveEndpoint(
+                cfg.SwitchedReceiveEndpoint(
+                    context,
                     CompletionsQueue,
                     e =>
                     {

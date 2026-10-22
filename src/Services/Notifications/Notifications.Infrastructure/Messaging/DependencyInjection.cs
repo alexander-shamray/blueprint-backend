@@ -69,7 +69,8 @@ public static class DependencyInjection
                         host.UseSsl(ssl => ssl.EnforcePolicyErrors(SslPolicyErrors.RemoteCertificateChainErrors));
                 });
 
-                cfg.ReceiveEndpoint(
+                cfg.SwitchedReceiveEndpoint(
+                    context,
                     EventsQueue,
                     e =>
                     {
@@ -90,7 +91,8 @@ public static class DependencyInjection
                         e.ConfigureConsumer<IntegrationEventConsumer<ShipmentDelivered>>(context);
                     });
 
-                cfg.ReceiveEndpoint(
+                cfg.SwitchedReceiveEndpoint(
+                    context,
                     PrivacyQueue,
                     e =>
                     {

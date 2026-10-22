@@ -50,7 +50,8 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
             {
                 cfg.Host(new Uri(fixture.BrokerAddress));
                 cfg.ConnectOperatorSwitch(context);
-                cfg.ReceiveEndpoint(
+                cfg.SwitchedReceiveEndpoint(
+                    context,
                     queue,
                     e =>
                     {
@@ -104,10 +105,10 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
     }
 
     [Fact]
-    public async Task A_host_started_with_its_switch_off_stops_and_drains_its_backlog_when_switched_on()
+    public async Task A_host_started_with_its_switch_off_consumes_none_of_its_backlog_until_switched_on()
     {
-        // A pod restarting during an incident: the queue already holds messages and the switch is still off. What the
-        // broker delivers before the stop lands is not asserted, since that is a race the switch does not close.
+        // A pod restarting during an incident: the queue already holds messages and the switch is still off. The
+        // endpoint is never configured, so the broker has no consumer to deliver any of them to (ADR-144).
         string queue = RabbitFixture.Queue;
         OperatorSwitchTests.MutableSource source = new();
         source.Set(queue);
@@ -139,6 +140,10 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
         try
         {
             await Until(() => endpoints.IsStopped(queue));
+            await Task.Delay(2000, TestContext.Current.CancellationToken);
+            backlog.ShouldNotContain(
+                id => BrokerProbeConsumer.Seen.Contains(id),
+                "nothing is consumed while the switch is off, not even the batch a start used to take");
 
             source.Set();
             await Until(() => backlog.All(BrokerProbeConsumer.Seen.Contains));

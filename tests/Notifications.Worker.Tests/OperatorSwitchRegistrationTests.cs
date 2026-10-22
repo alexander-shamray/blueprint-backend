@@ -32,6 +32,9 @@ public class OperatorSwitchRegistrationTests
         provider.GetRequiredService<OperatorSwitches>().Endpoints.ShouldBe(
             [DependencyInjection.EventsQueue, DependencyInjection.PrivacyQueue],
             "a receive endpoint added to this host must be reachable by a switch, and this list names it");
+
+        provider.GetRequiredService<ReceiveEndpointSwitch>().Unregistered.ShouldBeEmpty(
+            "an endpoint not configured through SwitchedReceiveEndpoint consumes at start while it is off");
     }
 
     [Fact]
