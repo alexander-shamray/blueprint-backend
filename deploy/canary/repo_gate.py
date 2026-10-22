@@ -40,6 +40,10 @@ SOURCE_INPUTS = [
     workflow_paths.HOME,
 ]
 
+# What deploy.yml's triggers must cover: the inputs, plus the workflow's own
+# path and this directory, or an edit to either runs no gate.
+TRIGGER_PATHS = SOURCE_INPUTS + ["deploy/canary", WORKFLOW_PATH]
+
 
 # --------------------------------------------------------------------------
 # The gate over the plan
@@ -493,10 +497,8 @@ def _verified_versions() -> str:
 
 def _workflow_covers_inputs() -> list[str]:
     """Both of the deploy workflow's triggers cover every SOURCE_INPUTS entry."""
-    # The workflow's own path and `deploy/canary` are required too: without
-    # them an edit to the trigger lists, canary.py or the suite runs no gate.
     return workflow_paths.check_workflow_covers_inputs(
-        WORKFLOW, SOURCE_INPUTS + ["deploy/canary", WORKFLOW_PATH],
+        WORKFLOW, TRIGGER_PATHS,
         reader="deploy/canary/canary.py", label=WORKFLOW_PATH)
 
 

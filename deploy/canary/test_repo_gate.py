@@ -326,8 +326,53 @@ class SourceInputTests(unittest.TestCase):
     a read it was never told about.**
     """
 
-    # `root / "deploy" / "observability"` and `(root / "src")`, as written.
-    READ = re.compile(r'root\s*/\s*"([a-z]+)"(?:\s*/\s*"([a-z-]+)")?')
+    # A join off a tree root: `root / "deploy" / "observability"`, `ROOT / NAME`,
+    # `root / entry["source"]`. Spaces are optional only before a quote, so
+    # prose such as `deploy/helm` is not a join.
+    OPERAND = r'''(?:"[^"\n]*"|'[^'\n]*'|[A-Za-z_]\w*(?:\[[^\]\n]*\])?)'''
+    JOIN = re.compile(
+        rf'(?<![\w.])([A-Za-z_]\w*(?:\.\w+)*)((?:(?:\s+/\s+|\s*/\s*(?=["\']))' + OPERAND + r')+)')
+    SEGMENT = re.compile(r'(?:\s+/\s+|\s*/\s*(?=["\']))(' + OPERAND + ')')
+    CONSTANT = re.compile(r'(?m)^([A-Z_][A-Z0-9_]*)\s*=\s*"([^"\n]*)"\s*$')
+
+    TREE_ROOTS = {"root", "ROOT", "source"}
+    # Joins inside deploy/canary itself, which deploy.yml watches whole.
+    RELATIVE_BASES = {"CANARY", "csproj.parent"}
+    # A first operand the scan cannot resolve, and the declared entry that
+    # covers every value it can take.
+    DYNAMIC_READS = {'entry["source"]': "src"}
+
+    @classmethod
+    def reads_in(cls, text: str) -> tuple[set[str], set[str], set[str]]:
+        """The paths read off a tree root, the first operands that cannot be
+        resolved to a path, and the bases that join a literal and are neither
+        a tree root nor known to stay inside deploy/canary.
+
+        Constants are the module-level string assignments in `text`, so
+        `ROOT / WORKFLOW_PATH` reads what WORKFLOW_PATH holds."""
+        constants = dict(cls.CONSTANT.findall(text))
+        paths: set[str] = set()
+        dynamic: set[str] = set()
+        unknown: set[str] = set()
+        for base, chain in cls.JOIN.findall(text):
+            operands = cls.SEGMENT.findall(chain)
+            if base not in cls.TREE_ROOTS:
+                if base not in cls.RELATIVE_BASES and any(o[0] in "\"'" for o in operands):
+                    unknown.add(base)
+                continue
+            segments: list[str] = []
+            for operand in operands:
+                if operand[0] in "\"'":
+                    segments.append(operand[1:-1])
+                elif operand in constants:
+                    segments.append(constants[operand])
+                else:
+                    if not segments:
+                        dynamic.add(operand)
+                    break
+            if segments:
+                paths.add("/".join(segments))
+        return paths, dynamic, unknown
 
     def script_modules(self) -> list[Path]:
         """Every module the command line is made of: `canary.py` and what it imports.
@@ -340,15 +385,9 @@ class SourceInputTests(unittest.TestCase):
             and path.name not in {"canary_testing.py", "read_prometheus.py"}
         )
 
-    def paths_read(self) -> set[str]:
+    def scan(self) -> tuple[set[str], set[str], set[str]]:
         source = "\n".join(path.read_text(encoding="utf-8") for path in self.script_modules())
-        found = set()
-        for first, second in self.READ.findall(source):
-            # Two segments where there are two: `deploy` is too wide, since
-            # deploy/compose must not trigger this gate. A declared entry that
-            # is a prefix still covers a two-segment read, as in check.py.
-            found.add(f"{first}/{second}" if second else first)
-        return found
+        return self.reads_in(source)
 
     def test_the_scan_reads_every_module_of_the_script(self) -> None:
         """The subject, before the reads: the files the scan opens. A glob that
@@ -358,20 +397,58 @@ class SourceInputTests(unittest.TestCase):
             {"canary.py", "repo_gate.py", "analysis.py", "csharp_sources.py"}, names)
 
     def test_the_scan_finds_the_reads_it_is_checking(self) -> None:
-        """The subject, before the assertion. A regex that matched nothing
-        would pass the test below against any list at all."""
-        self.assertIn("deploy/observability", self.paths_read())
-        self.assertIn("src", self.paths_read())
+        """The subject, before the assertion. A scan that matched nothing would
+        pass the test below against any list at all, so each spelling the
+        modules use is named: a plain segment, a capitalised file with a dot,
+        a constant, and a subscript."""
+        paths, dynamic, _ = self.scan()
+        for expected in ("src", "deploy/helm", "deploy/observability", "Directory.Packages.props",
+                         repo_gate.WORKFLOW_PATH, "deploy/helm/smoke.sh"):
+            with self.subTest(expected=expected):
+                self.assertTrue(
+                    any(p == expected or p.startswith(f"{expected}/") for p in paths), paths)
+        self.assertIn('entry["source"]', dynamic)
+
+    def test_the_scan_sees_every_spelling_of_a_read(self) -> None:
+        text = "\n".join([
+            'NAME = "Directory.Build.props"',
+            'a = ROOT / NAME',
+            'b = root / "docs"',
+            'c = source/"deploy"/"Helm"/chart',
+            'd = root / entry["x"]',
+            'e = repo / "docs"',
+            'f = CANARY / "canary.json"',
+            'g = 100 * canary / (stable + canary)',
+            'h = "deploy/helm is prose"',
+        ])
+
+        paths, dynamic, unknown = self.reads_in(text)
+
+        self.assertEqual(paths, {"Directory.Build.props", "docs", "deploy/Helm"})
+        self.assertEqual(dynamic, {'entry["x"]'})
+        self.assertEqual(unknown, {"repo"})
 
     def test_every_path_the_script_reads_is_declared(self) -> None:
-        for path in sorted(self.paths_read()):
+        paths, _, _ = self.scan()
+        for path in sorted(paths):
             with self.subTest(path=path):
                 self.assertTrue(
                     any(path == entry or path.startswith(f"{entry}/")
-                        for entry in repo_gate.SOURCE_INPUTS),
+                        for entry in repo_gate.TRIGGER_PATHS),
                     f"canary.py opens {path!r} and SOURCE_INPUTS does not declare it, "
-                    f"so deploy.yml's triggers do not watch it: {repo_gate.SOURCE_INPUTS}",
+                    f"so deploy.yml's triggers do not watch it: {repo_gate.TRIGGER_PATHS}",
                 )
+
+    def test_every_read_the_scan_cannot_resolve_is_accounted_for(self) -> None:
+        """A first operand that is not a literal or a constant, and a join off
+        a base this test does not know, are each a read the declared list was
+        never held against."""
+        _, dynamic, unknown = self.scan()
+        self.assertEqual(unknown, set(), "name the base in TREE_ROOTS or RELATIVE_BASES")
+        for operand in sorted(dynamic):
+            with self.subTest(operand=operand):
+                covered = self.DYNAMIC_READS.get(operand)
+                self.assertIn(covered, repo_gate.SOURCE_INPUTS, f"{operand} is read unresolved")
 
 
 class ImageSourceTests(unittest.TestCase):
