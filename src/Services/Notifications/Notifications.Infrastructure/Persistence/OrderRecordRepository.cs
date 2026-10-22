@@ -8,16 +8,20 @@ internal sealed class OrderRecordRepository(NotificationsDbContext db) : IOrderR
     public Task<OrderRecord?> GetAsync(Guid orderId, CancellationToken ct) =>
         db.OrderRecords.SingleOrDefaultAsync(r => r.OrderId == orderId, ct);
 
-    // An intake that changes nothing on the record would otherwise read it shared, beside the erasure's update locks,
-    // and stage a notice the erasure never deletes. No HOLDLOCK: it would hold a range lock on an absent order's next
-    // key, which can be a subject's record the erasure is about to lock; a plain insert's range check passes it.
-    public async Task<OrderRecord?> GetHeldAsync(Guid orderId, CancellationToken ct)
+    // The customer's range first and then the record, the order the erasure's first statement takes them in, so
+    // either side waits holding nothing: an intake that took its notice before meeting the range at its record's
+    // insert would deadlock with the erasure's later scans, and one that read the record shared would not wait.
+    public async Task<OrderRecord?> GetHeldAsync(Guid orderId, Guid customerId, CancellationToken ct)
     {
         if (db.Database.CurrentTransaction is null)
             throw new InvalidOperationException("A record is held only inside the unit of work's transaction (§6.3).");
 
         await db.Database.ExecuteSqlAsync(
-            $"SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK) WHERE OrderId = {orderId};",
+            $"""
+            SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK, FORCESEEK)
+            WHERE CustomerId = {customerId};
+            SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK) WHERE OrderId = {orderId};
+            """,
             ct);
 
         return await db.OrderRecords.SingleOrDefaultAsync(r => r.OrderId == orderId, ct);

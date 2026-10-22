@@ -209,6 +209,38 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
         (await fixture.NotificationsAsync(after)).ShouldHaveSingleItem();
     }
 
+    [Fact]
+    public async Task An_intake_creating_the_subjects_record_waits_before_its_notice_and_the_erasure_runs_through()
+    {
+        // Its notice taken before the record's insert met the range, the erasure's next scan waited on it: a deadlock.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid order = Guid.CreateVersion7();
+        Guid request = Guid.CreateVersion7();
+
+        await using NotificationsDbContext db = new(
+            new DbContextOptionsBuilder<NotificationsDbContext>().UseSqlServer(fixture.ConnectionString).Options);
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
+        SqlNotificationsPersonalDataStore store = new(
+            db,
+            new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>()));
+        await store.DeleteWaitingNoticesAsync(_subject, request, ct);
+
+        await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+        Task intake = scope.ServiceProvider
+            .GetServices<IIntegrationEventHandler<OrderPlaced>>()
+            .Single()
+            .HandleAsync(OrderEvents.Placed(order, _subject, At), ct);
+
+        await Should.ThrowAsync<TimeoutException>(() => intake.WaitAsync(Wait, ct));
+
+        await store.AnonymiseEndedNoticesAsync(_subject, request, ct).WaitAsync(ServiceFixture.StepDeadline, ct);
+        await store.DeleteOrderRecordsAsync(_subject, request, ct).WaitAsync(ServiceFixture.StepDeadline, ct);
+        await transaction.RollbackAsync(ct);
+
+        await intake.WaitAsync(ServiceFixture.StepDeadline, ct);
+        (await fixture.OrderRecordAsync(order)).ShouldNotBeNull("the erasure rolled back, so the record stands");
+    }
+
     /// <summary>The erasure's statements in an open transaction, held at its audit INSERT.</summary>
     private sealed class ErasureAtItsAudit : IAsyncDisposable
     {
