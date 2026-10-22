@@ -2372,20 +2372,29 @@ def scan_budget(command):
     )
 
 
-# PowerShell quotes and escapes in a grammar `offence` does not parse, so a git
-# call through that tool cannot be judged and is refused; Bash runs git here.
-# Backticks and quotes go first, since PowerShell runs g`it as git.
+# PowerShell is a language `offence` does not parse, so a command through that
+# tool is admitted only as one read-only cmdlet over plain words: no quote,
+# escape, variable, call, pipe, separator or wildcard, and no launcher, whose
+# arguments (an encoded command, say) can carry git in characters this allows.
+POWERSHELL_PLAIN = re.compile(r"[A-Za-z0-9 _./:,=-]*")
 POWERSHELL_GIT = re.compile(r"(?i)(?<![a-z0-9_])git(?![a-z0-9_])")
+POWERSHELL_READS = frozenset((
+    "get-childitem", "get-content", "get-item", "get-location", "resolve-path",
+    "select-string", "test-path", "write-output",
+))
 
 
 def powershell_git(command):
-    """The refusal for a PowerShell command that names git, or None."""
-    if not POWERSHELL_GIT.search(re.sub("[`'\"]", "", command)):
+    """The refusal for a PowerShell command that is not one read-only cmdlet over plain words, or None."""
+    words = command.split()
+    if (words and words[0].lower() in POWERSHELL_READS and POWERSHELL_PLAIN.fullmatch(command)
+            and not POWERSHELL_GIT.search(command)):
         return None
     return (
-        "git through PowerShell is refused: this guard reads Bash's grammar, "
-        "not PowerShell's, so what the call would run cannot be checked. Run "
-        "git through the Bash tool."
+        "a PowerShell command is admitted only as one read-only cmdlet over "
+        "plain words: this guard reads Bash's grammar, not PowerShell's, so a "
+        "launcher, quote, escape, variable, call or separator could run git "
+        "unseen. Run git, and anything else, through the Bash tool."
     )
 
 
