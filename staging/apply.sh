@@ -23,7 +23,7 @@ main() {
     fix "fix(harness): pr-locality.sh judges a rename's source beside its destination" \
       rename-tests rename-script "$c.test_a_rename_is_judged_at_both_ends" \
       "The helper read only each changed file's filename from the files endpoint, so a rename's source, previous_filename, was never judged, while the CI locality gate judges both ends because a move out of a tree changes that tree. A rename out of src into a declared docs tree read as inside to branch-reviewer and outside to CI." \
-      "The jq now emits a rename's previous_filename after its filename, each through the same JSON-string validation, so each end gets its own inside or outside line." \
+      "The jq now emits a rename's previous_filename after its filename, each through the same JSON-string validation, so each end gets its own inside or outside line. The call no longer fits 120 columns, so it continues onto a second line, and test_the_locality_rows_go_through_the_fixed_helper, which pins both gh calls whole, now joins a continued line as bash does before it compares, so the tail is still pinned." \
       "test_a_rename_is_judged_at_both_ends runs the helper's own --jq over a files payload holding a rename, through real jq. It failed before the change and passes after it; apply.sh checks both." \
       "Closes #1254"
   fi
