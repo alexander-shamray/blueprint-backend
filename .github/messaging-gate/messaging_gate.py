@@ -23,7 +23,9 @@ HEADER = "| Service | Owns | Publishes (events) | Consumes (events) | Accepts (c
 # What the code says, each read where the registration lives (§9.3, §9.4, §9.6).
 TO_CONTRACT = re.compile(r"private static (\w+) ToContract\(")
 BOUND_EVENT = re.compile(r"ConfigureConsumer<\s*IntegrationEventConsumer<\s*(\w+)\s*>\s*>")
+STATE_MACHINE = re.compile(r"MassTransitStateMachine<\s*(\w+)\s*>")
 SAGA_EVENT = re.compile(r"public Event<(\w+)> \w+ \{")
+BOUND_SAGA = re.compile(r"ConfigureSaga<\s*(\w+)\s*>")
 BOUND_COMMAND = re.compile(r"ConfigureConsumer<\s*CommandConsumer<\s*(\w+)\s*,")
 NAMED = re.compile(r"`(\w+)`")
 ROW_NAME = re.compile(r"^\*\*([\w.]+)\*\*")
@@ -68,6 +70,8 @@ def host_directories(root: Path) -> dict[str, Path]:
 
 def read_host(directory: Path) -> Host:
     host = Host()
+    saga_events: dict[str, set[str]] = {}
+    bound_sagas: set[str] = set()
     for path in sorted(directory.rglob("*.cs")):
         if {"obj", "bin", "Migrations"} & set(path.parts):
             continue
@@ -75,9 +79,16 @@ def read_host(directory: Path) -> Host:
         if path.name.endswith("IntegrationEventMapper.cs"):
             host.publishes |= set(TO_CONTRACT.findall(text))
         host.consumes |= set(BOUND_EVENT.findall(text))
-        if "MassTransitStateMachine<" in text:
-            host.consumes |= set(SAGA_EVENT.findall(text))
+        # Each machine's events run from its declaration to the next one's, keyed by its instance type.
+        machines = list(STATE_MACHINE.finditer(text))
+        for machine, after in zip(machines, machines[1:] + [None]):
+            body = text[machine.end():after.start() if after else len(text)]
+            saga_events.setdefault(machine.group(1), set()).update(SAGA_EVENT.findall(body))
+        bound_sagas |= set(BOUND_SAGA.findall(text))
         host.accepts |= set(BOUND_COMMAND.findall(text))
+    # A state machine is bound by its instance type, wherever the endpoint that binds it is declared.
+    for instance in saga_events.keys() & bound_sagas:
+        host.consumes |= saga_events[instance]
     return host
 
 
