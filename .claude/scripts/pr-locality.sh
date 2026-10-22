@@ -13,6 +13,8 @@ refuse() { echo "$1" >&2; exit 3; }
 # rather than indistinguishable from a body with no rows. Only grep's own
 # no-match status, which is exactly 1, is masked.
 body=$(gh_read pr view "$pr" --json body --jq .body)
+# A body saved on Windows or through the web form ends each line in CR, which no row grammar below expects.
+body=${body//$'\r'/}
 class_row=$(grep -E '^\| *Class *\|' <<<"$body" || [ $? -eq 1 ])
 touch_row=$(grep -E '^\| *Touch set *\|' <<<"$body" || [ $? -eq 1 ])
 # Exactly one of each, or none, checked before either grammar: with two rows a
