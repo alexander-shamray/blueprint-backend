@@ -235,7 +235,8 @@ def check(payload: dict) -> list[str]:
             problems.append(
                 f"commit {oid} is cut at the limit and its two readings differ on "
                 f"#{number}, which the description does not name: GitHub closes it "
-                f"only if the raw message does. Name it, or shorten the subject so "
+                f"only if the raw message does, and it may be a fragment of a longer "
+                f"number, so do not name it to settle this: reword the commit so "
                 f"nothing straddles the cut"
             )
         for phrase in unreadable:
@@ -261,7 +262,7 @@ def check(payload: dict) -> list[str]:
             f"#{number} is closed by commit {oids} and the description does not "
             f"name it (`closingIssuesReferences` reports "
             f"{sorted(linked) or 'nothing'}). The merge will close it either "
-            f"way — a commit message cannot be edited — so reconcile the "
+            f"way — a merged commit message cannot be edited — so reconcile the "
             f"description to the commits, not the commits to the description"
         )
 
