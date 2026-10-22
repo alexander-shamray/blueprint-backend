@@ -785,7 +785,7 @@ rule rather than complied with it.
 
 ## Step 6: the teardown
 
-**The order of the runbook's seven teardown lines is the instruction**, and
+**The order of the runbook's eight teardown lines is the instruction**, and
 three of them depend on which outcome step 1 produced; the line numbers
 below are that block's.
 
@@ -824,7 +824,8 @@ which is why the runbook skips line 3 on this path.
 there.** `/branch` puts a branch in place there whenever `main` is dirty, so
 another session's branch may be the one checked out. A pull there would run
 in that session's tree, fast-forwarding its branch under it if its upstream
-moved, and an ancestry check against `HEAD` could never confirm the merge. So
+moved, and an ancestry check against `HEAD` would ask about that session's
+branch, so its answer would say nothing about `main`. So
 line 4 reads the branch first: on `main` line 5 pulls, and on any other
 branch it refreshes `main` with `git fetch origin main:main` and touches
 nothing of that branch, and line 6 asks `main`, not `HEAD`, on both paths.
@@ -841,9 +842,9 @@ is refused (the contract's §6). Nothing else removes it: a row left behind
 reads as work still in progress after the PR has landed, which is what
 *In progress* exists not to say.
 
-The pull runs on both paths because skipping it leaves the main checkout a
-merge behind — precisely the state step 0 exists to stop the next run from
-starting in. The merged branch stays for step 0's teardown's reason.
+Line 5 runs on both paths, the pull on `main` or the fetch elsewhere,
+because skipping it leaves local `main` a merge behind — precisely the state
+step 0 exists to stop the next run from starting in. The merged branch stays for step 0's teardown's reason.
 
 ## Report
 
