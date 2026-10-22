@@ -2497,9 +2497,10 @@ class TheScheduleStillCallsThisGate(unittest.TestCase):
     def test_the_open_issue_is_looked_for_past_the_default_page(self):
         """One issue per drift is only true while the listing can see the
         open one. `gh issue list` defaults to 30 and the first form said 100;
-        past either the next hourly red files a duplicate, which is the
-        argument `.claude/scripts/gh-issue-list.sh` already makes for 1000,
-        and a list as long as its limit may be cut, so it is refused."""
+        past either the next hourly red files a duplicate. The workflow asks
+        for 1000, and gh cuts a list at its limit without a word, so a list
+        that long is refused, as `.claude/scripts/gh-issue-list.sh` refuses
+        one."""
         job = self.job()
         match = re.search(r"gh issue list ([^\n]*)", job)
         self.assertIsNotNone(match, "the filing step no longer lists issues")
