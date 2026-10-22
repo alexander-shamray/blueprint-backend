@@ -122,6 +122,16 @@ class TheGrantAndTheInvocationAgree(unittest.TestCase):
         self.assertIn("bash .claude/scripts/pr-for-branch.sh:*", granted)
         self.assertNotIn("git cherry:*", granted, "a grant nothing uses is a grant something else will")
 
+    def test_the_teardown_reads_the_branch_before_it_pulls(self):
+        # /branch leaves another session's branch in the main checkout when main
+        # was dirty, so the forked teardown asks before it pulls, and checks main.
+        text = SHIP.read_text(encoding="utf-8")
+        start = text.index("# 1. MERGED")
+        block = text[start:text.index("git worktree prune", start)]
+        self.assertLess(block.index("git branch --show-current"), block.index("git pull --ff-only"))
+        self.assertIn("git fetch origin main:main", block)
+        self.assertIn("--is-ancestor <merge-oid> main ", block)
+
 
 class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):
     """The helper is run against a stubbed `gh`, and the stub records the merge.
