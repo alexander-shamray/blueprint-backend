@@ -864,6 +864,12 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertRefused(f"git pu''sh origin +HEAD:main <<'EOF'{NEWLINE}it's open")
         self.assertAdmitted(f"git commit -F - <<'EOF'{NEWLINE}it's done{NEWLINE}EOF")
 
+    def test_a_quote_split_push_before_an_untokenisable_line_is_refused(self):
+        # Bash runs the first line before the second's syntax error, so the
+        # fallback has to read the push through its quotes and backslashes.
+        self.assertRefused(f"git pu''sh origin +HEAD:main{NEWLINE}echo \"")
+        self.assertRefused(f"git pu\\sh origin +HEAD:main{NEWLINE}echo \"")
+
     def test_git_named_as_data_is_not_an_invocation(self):
         # A printer's arguments are data, and the run's leading word is what
         # decides that — a guard refusing `echo git push …` refuses honest
@@ -1314,12 +1320,10 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertAdmitted("git -C /some/path log")
         self.assertAdmitted("git -C /some/path status --short")
 
-    def test_the_degraded_check_is_the_settings_denys_and_no_stronger(self):
-        # The fallback is honestly weaker: a quoted `--output` is exactly what
-        # a raw-string scan cannot see, so an unparseable command carrying one
-        # is admitted. Pinned, because a guard whose fallback is silently
-        # weaker than its main path is one nobody knows the reach of.
-        self.assertAdmitted('git log --out""put=/tmp/x "unbalanced')
+    def test_the_degraded_check_reads_through_quotes(self):
+        # The fallback used to read the raw string, so a quoted `--output` in an
+        # unparseable command was admitted; it now removes quotes as bash does.
+        self.assertRefused('git log --out""put=/tmp/x "unbalanced')
 
     def test_what_the_shell_computes_is_the_residual(self):
         # The bound, asserted rather than described. This hook resolves quoting
