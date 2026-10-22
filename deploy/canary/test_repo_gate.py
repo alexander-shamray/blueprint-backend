@@ -331,7 +331,7 @@ class SourceInputTests(unittest.TestCase):
     # `root / entry["source"]`. Spaces are optional only before a quote, so
     # prose such as `deploy/helm` is not a join.
     OPERAND = r'''(?:"[^"\n]*"|'[^'\n]*'|[A-Za-z_]\w*(?:\[[^\]\n]*\])?)'''
-    BASE = r'[A-Za-z_]\w*(?:\([^()\n]*\)|\[[^\]\n]*\]|\.\w+)*'
+    BASE = r'[A-Za-z_]\w*(?:\((?:[^()\n]|\([^()\n]*\))*\)|\[[^\]\n]*\]|\.\w+)*'
     JOIN = re.compile(
         rf'(?<![\w.])({BASE})((?:(?:\s+/\s+|\s*/\s*(?=["\']))' + OPERAND + r')+)')
     SEGMENT = re.compile(r'(?:\s+/\s+|\s*/\s*(?=["\']))(' + OPERAND + ')')
@@ -426,6 +426,7 @@ class SourceInputTests(unittest.TestCase):
             'h = "deploy/helm is prose"',
             'i = Path(__file__).resolve().parents[1] / "workflow_paths"',
             'j = Path(__file__).resolve().parents[2] / "docs" / "x.md"',
+            'k = Path(os.path.dirname(__file__)) / "docs"',
         ])
 
         paths, dynamic, unknown = self.reads_in(text)
@@ -433,7 +434,9 @@ class SourceInputTests(unittest.TestCase):
         self.assertEqual(
             paths, {"Directory.Build.props", "docs", "deploy/Helm", "deploy/workflow_paths"})
         self.assertEqual(dynamic, {'entry["x"]'})
-        self.assertEqual(unknown, {"repo", "Path(__file__).resolve().parents[2]"})
+        self.assertEqual(
+            unknown,
+            {"repo", "Path(__file__).resolve().parents[2]", "Path(os.path.dirname(__file__))"})
 
     def test_every_path_the_script_reads_is_declared(self) -> None:
         paths, _, _ = self.scan()
