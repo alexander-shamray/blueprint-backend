@@ -15,11 +15,11 @@ main() {
   local g=test_git_argv_guard.TheGitArgvGuard
 
   if ! done_already "(review R1)"; then
-    fix "fix(harness): the git argv guard admits a PowerShell command only as plain words that do not name git (review R1)" \
-      r1-tests r1-hook "$g.test_powershell_is_admitted_only_as_plain_words" \
+    fix "fix(harness): the git argv guard admits a PowerShell command only as a read-only cmdlet over plain words (review R1)" \
+      r1-tests r1-hook "$g.test_powershell_is_admitted_only_as_a_read_cmdlet_over_plain_words" \
       "powershell_git removed only PowerShell's own escapes before looking for git, so a call that handed git to another interpreter with that interpreter's escape, cmd's caret or the backslash bash and wsl read, showed no git and was admitted, as was a call to a name PowerShell computes, which shows nothing to match. A list of launchers to refuse would trail PowerShell's the way any deny-list does." \
-      "So the PowerShell path is an allow-list: a command is admitted only when it is plain words, letters, digits, spaces and the characters a path or an argument needs, and none of them is git. A quote, an escape, a variable, a call, a subexpression, a pipe, a separator, a wildcard or a backslash refuses it, and a plain-words command can run git only by naming it. Bash runs git and everything else here, so the refusal costs nothing a session needs; the residual is a script file PowerShell runs." \
-      "test_powershell_is_admitted_only_as_plain_words failed before the change and passes after it; apply.sh checks both."
+      "So the PowerShell path is an allow-list: a command is admitted only when its first word is one of eight read-only cmdlets (Get-ChildItem, Get-Content, Get-Item, Get-Location, Resolve-Path, Select-String, Test-Path, Write-Output), the whole is plain words, letters, digits, spaces and the characters a path or an argument needs, and none is git. A quote, an escape, a variable, a call, a pipe, a separator, a wildcard or a backslash refuses it, and so does any launcher, since an encoded command passed to pwsh is plain words that carry git. Bash runs git and everything else here, so the refusal costs nothing a session needs." \
+      "test_powershell_is_admitted_only_as_a_read_cmdlet_over_plain_words failed before the change and passes after it; apply.sh checks both."
   fi
 
   if ! done_already "(review R2)"; then

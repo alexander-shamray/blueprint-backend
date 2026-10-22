@@ -31,12 +31,13 @@ R1_TEST_ANCHOR = '''        for command in ("Get-ChildItem", "Get-Content .gitig
 '''
 
 R1_TEST = r'''
-    def test_powershell_is_admitted_only_as_plain_words(self):
-        # Another interpreter has escapes of its own and a computed name shows
-        # nothing to match, so anything beyond plain words is refused.
+    def test_powershell_is_admitted_only_as_a_read_cmdlet_over_plain_words(self):
+        # Another interpreter has escapes of its own, a launcher's arguments can
+        # encode git, and a computed name shows nothing to match.
         for command in ("cmd /c g^it push origin +HEAD:main", "bash -c 'g\\it push origin +HEAD:main'",
                         "wsl gi\\t push origin +HEAD:main", "$c = 'gi' + 't'; & $c push origin +HEAD:main",
-                        "iex $command", "Start-Process git", "Write-Output done; Get-ChildItem"):
+                        "iex $command", "Start-Process git", "Write-Output done; Get-ChildItem",
+                        "pwsh -EncodedCommand ZwBpAHQAIABzAHQAYQB0AHUAcwA=", "cmd /c run.bat"):
             with self.subTest(command=command):
                 self.assertIsNotNone(self.judge(command, tool="PowerShell"))
         for command in ("Write-Output done", "Get-ChildItem -Path docs/backend-architecture"):
@@ -62,21 +63,28 @@ def powershell_git(command):
 '''
 
 R1_NEW = r'''# PowerShell is a language `offence` does not parse, so a command through that
-# tool is admitted only as plain words, which can run git only by naming it: no
-# quote, escape, variable, call, subexpression, pipe, separator or wildcard.
+# tool is admitted only as one read-only cmdlet over plain words: no quote,
+# escape, variable, call, pipe, separator or wildcard, and no launcher, whose
+# arguments (an encoded command, say) can carry git in characters this allows.
 POWERSHELL_PLAIN = re.compile(r"[A-Za-z0-9 _./:,=-]*")
 POWERSHELL_GIT = re.compile(r"(?i)(?<![a-z0-9_])git(?![a-z0-9_])")
+POWERSHELL_READS = frozenset((
+    "get-childitem", "get-content", "get-item", "get-location", "resolve-path",
+    "select-string", "test-path", "write-output",
+))
 
 
 def powershell_git(command):
-    """The refusal for a PowerShell command that is more than plain words or names git, or None."""
-    if POWERSHELL_PLAIN.fullmatch(command) and not POWERSHELL_GIT.search(command):
+    """The refusal for a PowerShell command that is not one read-only cmdlet over plain words, or None."""
+    words = command.split()
+    if (words and words[0].lower() in POWERSHELL_READS and POWERSHELL_PLAIN.fullmatch(command)
+            and not POWERSHELL_GIT.search(command)):
         return None
     return (
-        "a PowerShell command is admitted only as plain words that do not name "
-        "git: this guard reads Bash's grammar, not PowerShell's, so a quote, "
-        "escape, variable, call or separator could run git unseen. Run git, and "
-        "anything that needs those, through the Bash tool."
+        "a PowerShell command is admitted only as one read-only cmdlet over "
+        "plain words: this guard reads Bash's grammar, not PowerShell's, so a "
+        "launcher, quote, escape, variable, call or separator could run git "
+        "unseen. Run git, and anything else, through the Bash tool."
     )
 '''
 
