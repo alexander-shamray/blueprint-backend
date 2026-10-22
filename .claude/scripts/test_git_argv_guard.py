@@ -2743,6 +2743,19 @@ class TheGitArgvGuard(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIsNone(self.judge(command, tool="PowerShell"))
 
+    def test_powershell_is_admitted_only_as_a_read_cmdlet_over_plain_words(self):
+        # Another interpreter has escapes of its own, a launcher's arguments can
+        # encode git, and a computed name shows nothing to match.
+        for command in ("cmd /c g^it push origin +HEAD:main", "bash -c 'g\\it push origin +HEAD:main'",
+                        "wsl gi\\t push origin +HEAD:main", "$c = 'gi' + 't'; & $c push origin +HEAD:main",
+                        "iex $command", "Start-Process git", "Write-Output done; Get-ChildItem",
+                        "pwsh -EncodedCommand ZwBpAHQAIABzAHQAYQB0AHUAcwA=", "cmd /c run.bat"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command, tool="PowerShell"))
+        for command in ("Write-Output done", "Get-ChildItem -Path docs/backend-architecture"):
+            with self.subTest(command=command):
+                self.assertIsNone(self.judge(command, tool="PowerShell"))
+
     def test_a_malformed_event_does_not_take_the_session_down(self):
         # The one deliberate fail-OPEN, and it is argued rather than assumed:
         # refusing every Bash call because this file cannot read its own input
