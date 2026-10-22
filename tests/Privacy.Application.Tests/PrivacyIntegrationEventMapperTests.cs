@@ -41,10 +41,19 @@ public class PrivacyIntegrationEventMapperTests
     }
 
     [Fact]
-    public void A_close_stays_local_until_the_holders_have_bound_it_a_release_ahead()
+    public void A_close_becomes_PersonalDataDeleteClosed_at_the_close_correlated_on_the_request()
     {
-        // §9.2's order: the holders bind PersonalDataDeleteClosed first, and the publication follows (ADR-139).
-        Mapper().Map([new ErasureRequestClosedDomainEvent(Request, Raised.AddDays(3))]).ShouldBeEmpty();
+        DateTimeOffset closed = Raised.AddDays(3);
+
+        PersonalDataDeleteClosed contract = Mapper()
+            .Map([new ErasureRequestClosedDomainEvent(Request, closed)])
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<PersonalDataDeleteClosed>();
+
+        contract.RequestId.ShouldBe(Request);
+        contract.CorrelationId.ShouldBe(Request);
+        contract.OccurredAt.ShouldBe(closed, "each holder stamps it as its row's ClosedAt (ADR-139)");
+        contract.MessageId.ShouldNotBe(Guid.Empty);
     }
 
     [Fact]
