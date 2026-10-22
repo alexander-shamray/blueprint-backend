@@ -542,19 +542,7 @@ def strip_comments(command):
 
 
 def undecodable_heredoc(command):
-    """Whether a heredoc names a delimiter this file cannot read.
-
-    An undecodable delimiter is refused outright, because leaving its body to
-    be judged as commands holds only while the command still tokenises: a body
-    carrying an unmatched quote sends `offence` down its `ValueError` path,
-    which does not enforce the push allow-list, so a force push after
-    `git commit -F - <<$'E\\x4fF'` would pass. Decoding every ANSI-C escape
-    instead is a list that trails bash's, and each gap in it reopens this.
-
-    The scan asks `shell_positions` where the `<<` is, so a delimiter quoted
-    inside an argument is not one of these; the two guards below are
-    `heredoc_spans`', for the same reasons it states.
-    """
+    """Whether a heredoc names a delimiter this file cannot read, refused with a reason that says so."""
     # The bodies are computed first and handed to the scanner, as in
     # `heredoc_spans`: an apostrophe in an earlier body would leave the scanner
     # in quote state, so a later undecodable opener would look quoted.
