@@ -47,11 +47,6 @@ updates:
     schedule:
       interval: weekly
 
-  - package-ecosystem: docker-compose
-    directory: /deploy/compose
-    schedule:
-      interval: weekly
-
   - package-ecosystem: github-actions
     directory: /
     schedule:
