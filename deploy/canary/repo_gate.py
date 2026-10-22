@@ -24,9 +24,10 @@ from rollout_gate import (
 from workflow_reads import WORKFLOW, WORKFLOW_PATH, _descriptors_agree, _smoke_reads
 
 
-# Every path outside deploy/canary that this script reads, declared once;
-# check 6 asserts the reads and this list agree, as deploy/helm/smoke.sh and
-# deploy/observability/check.py do for their own inventories.
+# Every path outside deploy/canary that this script reads, declared once, bar
+# the workflow's own, which TRIGGER_PATHS adds; check 6 asserts the reads and
+# that list agree, as deploy/helm/smoke.sh and deploy/observability/check.py
+# do for their own inventories.
 SOURCE_INPUTS = [
     "src",
     "deploy/helm",

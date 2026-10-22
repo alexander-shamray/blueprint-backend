@@ -321,7 +321,8 @@ class AlertThresholdTests(unittest.TestCase):
 
 
 class SourceInputTests(unittest.TestCase):
-    """SOURCE_INPUTS against the reads it claims to enumerate. It once omitted
+    """TRIGGER_PATHS (SOURCE_INPUTS and the workflow's own path) against the
+    reads it claims to enumerate. SOURCE_INPUTS once omitted
     `deploy/observability` and check 7 stayed green, since **a gate cannot see
     a read it was never told about.**
     """
@@ -443,7 +444,7 @@ class SourceInputTests(unittest.TestCase):
                 self.assertTrue(
                     any(path == entry or path.startswith(f"{entry}/")
                         for entry in repo_gate.TRIGGER_PATHS),
-                    f"canary.py opens {path!r} and SOURCE_INPUTS does not declare it, "
+                    f"canary.py opens {path!r} and neither SOURCE_INPUTS nor the workflow path declares it, "
                     f"so deploy.yml's triggers do not watch it: {repo_gate.TRIGGER_PATHS}",
                 )
 
