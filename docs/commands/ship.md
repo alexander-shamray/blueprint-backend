@@ -794,17 +794,17 @@ ancestry check is what says so honestly. Another PR merging between this
 merge and the pull leaves local `main` correctly ahead of this run's oid —
 nothing has gone wrong, and a report claiming `main` *is* that oid would be
 false on an ordinary Tuesday. What the run can promise is containment, so
-that is what it checks and what it reports: the HEAD `main` actually landed
+that is what it checks and what it reports: the oid `main` actually landed
 on, and that the merge is in its history. The check is the only guard
 between a pull that silently did nothing and a report that says the merge
 arrived.
 
 **A rebase landing still has an oid, and it is the last replayed commit on
-`main` rather than a merge commit.** Containment is what line 5 asks and
+`main` rather than a merge commit.** Containment is what line 6 asks and
 containment is what holds, so the check is unchanged; what changed is that
 the oid names a commit with one parent, and that the branch's local copy of
 it carries a different SHA. Were the remote ever to answer with an oid
-`main` does not contain, line 5 fails loudly — the direction this chain
+`main` does not contain, line 6 fails loudly — the direction this chain
 wants to be wrong in.
 
 **Verify first, from the remote** (the read is the runbook's line 1).
@@ -818,13 +818,21 @@ fork the session is inside the worktree *on the feature branch* — step 1 put
 it there and the main checkout kept `main` — so a switch attempted here
 fails outright: git refuses to check out a branch another worktree already
 holds. `ExitWorktree` is what returns the session to the main checkout,
-which is already on `main`, which is why the runbook skips line 3 on this
-path rather than running it as a no-op.
+which is why the runbook skips line 3 on this path.
+
+**And the main checkout is not always on `main` when the session gets
+there.** `/branch` puts a branch in place there whenever `main` is dirty, so
+another session's branch may be the one checked out. A pull there would run
+in that session's tree, fast-forwarding its branch under it if its upstream
+moved, and an ancestry check against `HEAD` could never confirm the merge. So
+line 4 reads the branch first: on `main` line 5 pulls, and on any other
+branch it refreshes `main` with `git fetch origin main:main` and touches
+nothing of that branch, and line 6 asks `main`, not `HEAD`, on both paths.
 
 **The in-place path is the mirror image.** There is no worktree to leave and
 none to remove, and the session *is* sitting on the merged branch in the
 main checkout — so line 3 is the only thing that makes the pull mean `main`.
-Running line 6 anyway exits non-zero against a worktree that never existed
+Running line 7 anyway exits non-zero against a worktree that never existed
 and stops the chain on a helper failure with nothing behind it.
 
 **The `TODO.md` row `/branch` added is deleted once the session is back in
