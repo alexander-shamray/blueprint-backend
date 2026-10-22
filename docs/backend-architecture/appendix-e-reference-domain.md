@@ -1251,7 +1251,10 @@ queue by each holder
 ([ADR-094](adr/ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)),
 and, from the release after every holder binds it, publishes the close, which
 each holder stamps on its audit row to bound its check
-([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)).
+([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md));
+a request closed before that release, where Privacy may announce its close,
+is told once an operator runs a republish of Privacy's migrator image
+([ADR-142](adr/ADR-142-privacys-migrator-republishes-the-close-of-each-request-it-may-announce-on-adr-090s-gate-1300-amending-adr-090-and-adr-139.md)).
 The holders that write from an event feed and so ask their own audit rows after
 they write are the BFF's projection, Notifications' intake, Payments' intake and
 Shipping's fulfilment worker
