@@ -77,6 +77,10 @@ never seen. Catalog carries the first exemption: its one consumer is a
 projection fed at a rate another service's traffic sets, faults there already
 reach a paging error queue, and the reads it serves are judged by `http`.
 
+**Superseded in part by [ADR-142](ADR-142-the-canarys-masstransit-check-holds-the-series-table-to-a-list-of-verified-versions-supersedes-the-single-version-rule-of-adr-047.md)**,
+which replaces the single verified version with a list: the check fails when the
+pin is none of the verified versions, and an upgrade to a listed version passes.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
