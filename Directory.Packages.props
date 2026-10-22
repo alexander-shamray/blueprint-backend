@@ -88,8 +88,8 @@
          outbox dispatcher publishes the Broker lane through (§9.4) and for the
          in-memory harness; Appendix B names which. Same version as the
          transport: they ship as one release. -->
-    <PackageVersion Include="MassTransit" Version="8.5.3" />
-    <PackageVersion Include="MassTransit.RabbitMQ" Version="8.5.3" />
+    <PackageVersion Include="MassTransit" Version="8.5.12" />
+    <PackageVersion Include="MassTransit.RabbitMQ" Version="8.5.12" />
     <!-- §9.6's saga repository — EntityFrameworkRepository and
          ConcurrencyMode.Pessimistic — and ADR-032's transactional outbox:
          AddEntityFrameworkOutbox, UseEntityFrameworkOutbox and
