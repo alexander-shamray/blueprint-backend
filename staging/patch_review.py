@@ -31,14 +31,17 @@ R1_TEST_ANCHOR = '''        for command in ("Get-ChildItem", "Get-Content .gitig
 '''
 
 R1_TEST = r'''
-    def test_powershell_cannot_hand_git_to_another_shell_or_a_computed_name(self):
-        # Another interpreter has escapes of its own, and a computed name shows
-        # nothing to match, so both are refused from PowerShell.
+    def test_powershell_is_admitted_only_as_plain_words(self):
+        # Another interpreter has escapes of its own and a computed name shows
+        # nothing to match, so anything beyond plain words is refused.
         for command in ("cmd /c g^it push origin +HEAD:main", "bash -c 'g\\it push origin +HEAD:main'",
-                        "$c = 'gi' + 't'; & $c push origin +HEAD:main", "iex $command"):
+                        "wsl gi\\t push origin +HEAD:main", "$c = 'gi' + 't'; & $c push origin +HEAD:main",
+                        "iex $command", "Start-Process git", "Write-Output done; Get-ChildItem"):
             with self.subTest(command=command):
                 self.assertIsNotNone(self.judge(command, tool="PowerShell"))
-        self.assertIsNone(self.judge('Write-Output "done"', tool="PowerShell"))
+        for command in ("Write-Output done", "Get-ChildItem -Path docs/backend-architecture"):
+            with self.subTest(command=command):
+                self.assertIsNone(self.judge(command, tool="PowerShell"))
 '''
 
 R1_OLD = r'''# PowerShell quotes and escapes in a grammar `offence` does not parse, so a git
@@ -58,28 +61,22 @@ def powershell_git(command):
     )
 '''
 
-R1_NEW = r'''# PowerShell quotes and escapes in a grammar `offence` does not parse, so a git
-# call through that tool cannot be judged and is refused; Bash runs git here.
-# Every quote and escape goes first, PowerShell's and those of the shells it starts.
+R1_NEW = r'''# PowerShell is a language `offence` does not parse, so a command through that
+# tool is admitted only as plain words, which can run git only by naming it: no
+# quote, escape, variable, call, subexpression, pipe, separator or wildcard.
+POWERSHELL_PLAIN = re.compile(r"[A-Za-z0-9 _./:,=-]*")
 POWERSHELL_GIT = re.compile(r"(?i)(?<![a-z0-9_])git(?![a-z0-9_])")
-POWERSHELL_ESCAPES = re.compile("[`'\"‘’“”^\\\\]")
-
-# A shell or evaluator started from PowerShell, or a call to a computed name,
-# runs what no string here shows, so it is refused as git is.
-POWERSHELL_INDIRECT = re.compile(
-    r"(?i)(?<![a-z0-9_.-])(?:bash|sh|cmd|wsl|pwsh|powershell|iex|invoke-expression|invoke-command"
-    r"|start-process)(?![a-z0-9_-])|[&.]\s*[$({'\"]")
 
 
 def powershell_git(command):
-    """The refusal for a PowerShell command that names git or could run it unseen, or None."""
-    if not (POWERSHELL_GIT.search(POWERSHELL_ESCAPES.sub("", command)) or POWERSHELL_INDIRECT.search(command)):
+    """The refusal for a PowerShell command that is more than plain words or names git, or None."""
+    if POWERSHELL_PLAIN.fullmatch(command) and not POWERSHELL_GIT.search(command):
         return None
     return (
-        "git through PowerShell, or a shell or computed call that could run "
-        "it, is refused: this guard reads Bash's grammar, not PowerShell's, so "
-        "what the call would run cannot be checked. Run git through the Bash "
-        "tool."
+        "a PowerShell command is admitted only as plain words that do not name "
+        "git: this guard reads Bash's grammar, not PowerShell's, so a quote, "
+        "escape, variable, call or separator could run git unseen. Run git, and "
+        "anything that needs those, through the Bash tool."
     )
 '''
 
