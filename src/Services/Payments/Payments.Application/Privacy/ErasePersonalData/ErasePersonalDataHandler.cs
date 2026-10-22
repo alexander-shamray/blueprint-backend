@@ -4,7 +4,10 @@ using Payments.Application.Orders;
 
 namespace Payments.Application.Privacy.ErasePersonalData;
 
-/// <summary>Anonymises the subject's payer id on every order record and writes the audit row (ADR-092).</summary>
+/// <summary>
+/// Anonymises the subject's payer id on every order record not placed under the request, and writes the audit
+/// row (ADR-092, ADR-141).
+/// </summary>
 /// <remarks>A request already seen repeats rather than fails, so a reissue reports again (§11.7).</remarks>
 public sealed class ErasePersonalDataHandler(
     IPaymentOrderStore orders,
