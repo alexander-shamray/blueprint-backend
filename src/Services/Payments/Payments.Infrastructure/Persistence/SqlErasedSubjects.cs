@@ -9,7 +9,7 @@ namespace Payments.Infrastructure.Persistence;
 /// <summary>Answers from the audit rows alone: each hash is salted by its request, so each row is tried.</summary>
 /// <remarks>On its own connection, after the placed record's unit has committed. Bounded by the request's close and
 /// never by the holder's own row, which the owner's clock does not follow (ADR-092, ADR-139). A row is skipped too
-/// when the order names its request as one it was placed after (ADR-099).</remarks>
+/// when the order names its request as one it was placed under (ADR-099, ADR-141).</remarks>
 internal sealed class SqlErasedSubjects(IDbConnectionFactory connections) : IErasedSubjects
 {
     private const string ErasuresSql =

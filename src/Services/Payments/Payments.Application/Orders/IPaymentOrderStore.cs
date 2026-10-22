@@ -20,8 +20,8 @@ public interface IPaymentOrderStore
     Task<PaymentOrderRecord?> LockAsync(OrderId id, CancellationToken ct);
 
     /// <summary>
-    /// Replaces the subject's payer id with the empty id on every record not placed after the request, and returns
-    /// how many (ADR-092, ADR-099).
+    /// Replaces the subject's payer id with the empty id on every record not placed under the request, and returns
+    /// how many (ADR-092, ADR-141).
     /// </summary>
     Task<int> AnonymiseCustomerAsync(Guid subjectId, Guid requestId, CancellationToken ct);
 
