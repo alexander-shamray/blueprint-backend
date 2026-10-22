@@ -68,7 +68,7 @@
          Common.Infrastructure is a library that takes neither — it pays for
          the contract as a package, like the abstractions rows above. -->
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.13" />
-    <PackageVersion Include="Dapper" Version="2.1.66" />
+    <PackageVersion Include="Dapper" Version="2.1.89" />
     <!-- SqlConnection itself, for §6.5's IDbConnectionFactory. EF's SqlServer
          provider already carries it transitively at exactly this version;
          the explicit pin exists because *.Infrastructure constructs the type
