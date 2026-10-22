@@ -8,7 +8,7 @@ compares them:
    not read, because a table pipe leaves it no keyword-reference pair;
 2. `closingIssuesReferences`, GitHub's own parse of the description;
 3. a closing keyword in a commit message, subject or body, honoured on merge
-   whatever the description says, and not editable after the push.
+   whatever the description says, and not editable once merged.
 
 ## What it compares
 
