@@ -26,6 +26,7 @@ on:
       - 'src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs'
       - 'src/BuildingBlocks/Common.Web/HealthProbe.cs'
       - 'deploy/canary/**'
+      - 'docs/backend-architecture/adr/**'
   push:
     branches: [main]
     paths:
@@ -39,6 +40,7 @@ on:
       - 'src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs'
       - 'src/BuildingBlocks/Common.Web/HealthProbe.cs'
       - 'deploy/canary/**'
+      - 'docs/backend-architecture/adr/**'
 
 permissions:
   contents: read
