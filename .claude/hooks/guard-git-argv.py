@@ -2357,9 +2357,33 @@ def scan_budget(command):
     )
 
 
+def refuse(reason):
+    """Print the deny JSON for `reason`; the exit status stays 0 either way."""
+    json.dump(
+        {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": reason,
+            }
+        },
+        sys.stdout,
+    )
+    return 0
+
+
 def main():
+    # The bytes, decoded as UTF-8: Python reads a Windows pipe in the ANSI code
+    # page, which raises on bytes UTF-8 uses, and that raise reached the
+    # fail-open below. An event that is not UTF-8 holds a command nothing read.
     try:
-        event = json.load(sys.stdin)
+        text = sys.stdin.buffer.read().decode("utf-8")
+    except UnicodeDecodeError:
+        return refuse(
+            "this hook event is not UTF-8, so the command in it cannot be "
+            "read; refusing rather than admitting what nothing judged.")
+    try:
+        event = json.loads(text)
     except (json.JSONDecodeError, ValueError):
         # A hook that cannot read its own input has established nothing. Say so
         # and allow: refusing every Bash call on a malformed event would take
@@ -2394,17 +2418,7 @@ def main():
     if reason is None:
         return 0
 
-    json.dump(
-        {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": reason,
-            }
-        },
-        sys.stdout,
-    )
-    return 0
+    return refuse(reason)
 
 
 if __name__ == "__main__":
