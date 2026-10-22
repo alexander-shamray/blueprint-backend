@@ -858,6 +858,12 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertRefused(
             f"cat <<NEVERCLOSED{NEWLINE}git push origin +HEAD:main")
 
+    def test_an_unterminated_heredoc_that_will_not_tokenise_is_refused(self):
+        # The body's apostrophe breaks the parse, and the fallback's crude scan
+        # cannot see a quote-split update; a closed body tokenises as before.
+        self.assertRefused(f"git pu''sh origin +HEAD:main <<'EOF'{NEWLINE}it's open")
+        self.assertAdmitted(f"git commit -F - <<'EOF'{NEWLINE}it's done{NEWLINE}EOF")
+
     def test_git_named_as_data_is_not_an_invocation(self):
         # A printer's arguments are data, and the run's leading word is what
         # decides that — a guard refusing `echo git push …` refuses honest
