@@ -660,11 +660,13 @@ the other hooks do, and refuse an event that is not UTF-8; an event that is
 UTF-8 but not JSON is still admitted, the one argued fail-open. The hook was
 registered on `Bash` alone, so git through the PowerShell tool was judged by
 nothing here: a second registration sends PowerShell calls to the git guard,
-which refuses any that names `git` once every quote and escape is removed, the
-caret and backslash of the shells it can start included, and any that starts a
-shell or evaluator or calls a computed name, since it parses Bash's grammar and
-not PowerShell's. The index guard stays on `Bash`, because the skill's prefix
-grants are `Bash(...)` rules and a PowerShell call is prompted like any other.
+which parses Bash's grammar and not PowerShell's, so it admits a PowerShell
+command only as plain words that do not name `git`. A quote, an escape, a
+variable, a call, a separator, a wildcard or a backslash refuses it, because
+each is a way another interpreter or a computed name could run git unseen, and
+a list of launchers would trail PowerShell's. The index guard stays on
+`Bash`, because the skill's prefix grants are `Bash(...)` rules and a
+PowerShell call is prompted like any other.
 And a heredoc with no closing line, whose body then fails to tokenise, is
 refused outright, as an undecodable delimiter is, while the untokenised
 fallback now reads the command with its quotes and backslashes removed, as
