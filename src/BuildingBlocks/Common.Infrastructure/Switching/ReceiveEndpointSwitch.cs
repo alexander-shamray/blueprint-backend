@@ -114,7 +114,10 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     {
         // Unattached means ConnectOperatorSwitch has not run, so Configured would never see one configured now.
         if (_services is null)
-            throw new InvalidOperationException($"Receive endpoint {queue} is registered before ConnectOperatorSwitch.");
+        {
+            throw new InvalidOperationException(
+                $"Receive endpoint {queue} is registered before ConnectOperatorSwitch.");
+        }
 
         // Read under the lock, so a reload that turns the name on either sees it deferred or finds it configured.
         bool off;
