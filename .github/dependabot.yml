@@ -54,6 +54,9 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: '*dotnet/runtime'
         update-types: [version-update:semver-major]
+      # The delayed-exchange plugin is built for one broker line (ADR-021); the Dockerfile says why.
+      - dependency-name: 'rabbitmq'
+        update-types: [version-update:semver-minor, version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
