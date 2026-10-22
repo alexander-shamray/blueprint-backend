@@ -242,8 +242,9 @@ or above.** Three gates, and each drops candidates the round must not file:
 - **Not already tracked.** Before filing, enumerate the **whole** issue set
   through `gh-issue-list.sh`, which lists every state itself and refuses a list
   as long as its limit, because gh cuts there without a word and an issue it
-  hides lets a duplicate straight through — and match each finding against it. An open issue **opened by the
-  repository owner** blocks a re-file — as does a `wontfix` or an
+  hides lets a duplicate straight through — and match each finding against it.
+  An open issue **opened by the repository owner** blocks a re-file — as does a
+  `wontfix` or an
   accepted-risk record meeting the same test. **An issue meeting neither
   condition is not tracking and blocks nothing**; the paragraph below says
   why.
