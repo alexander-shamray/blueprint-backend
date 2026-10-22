@@ -1331,8 +1331,8 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertAdmitted("git -C /some/path status --short")
 
     def test_the_degraded_check_reads_through_quotes(self):
-        # The fallback used to read the raw string, so a quoted `--output` in an
-        # unparseable command was admitted; it now removes quotes as bash does.
+        # A quoted `--output` in an unparseable command is refused, because the
+        # fallback removes quotes as bash does before it looks.
         self.assertRefused('git log --out""put=/tmp/x "unbalanced')
 
     def test_what_the_shell_computes_is_the_residual(self):
