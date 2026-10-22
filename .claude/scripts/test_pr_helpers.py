@@ -22,6 +22,12 @@ from review_helpers import (
 )
 
 
+def code_lines(text):
+    """A script's code lines, comments dropped first, since bash continues none, then continued lines joined."""
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return re.sub(r"\s*\\\n\s*", " ", code).splitlines()
+
+
 class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
     """A command reads a pull request through a helper whose field set is fixed."""
 
@@ -130,10 +136,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         # JSON strings, because git permits a newline in a name.
         helper = SCRIPTS / "pr-locality.sh"
         text = helper.read_text(encoding="utf-8")
-        # A continued line is joined first, as bash joins it, so its tail is compared too.
-        code = [
-            line for line in re.sub(r"\s*\\\n\s*", " ", text).splitlines() if not line.lstrip().startswith("#")
-        ]
+        code = code_lines(text)
         # `gh_read` is `gh` under gh-read-bound.sh's bound, so both spellings are calls.
         gh_calls = [line.strip() for line in code if "gh " in line or "gh_read " in line]
         self.assertEqual(
@@ -176,6 +179,11 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             [BASH, str(SCRIPTS / helper), arg],
             capture_output=True, text=True, encoding="utf-8", env=env,
         )
+
+    def test_a_comment_ending_in_a_backslash_swallows_no_call(self):
+        # The pin above reads code lines; a backslash ending a comment continues
+        # nothing to bash, so the call after it must still be one of them.
+        self.assertEqual(["x=$(gh_read api y)"], code_lines("# a comment \\\nx=$(gh_read api y)\n"))
 
     def test_a_stalled_gh_read_fails_at_the_bound_in_every_helper(self):
         # An unbounded `gh pr view` held pr-locality.sh, and every step behind
@@ -220,8 +228,8 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         # double-quoted `printf` argument would command-substitute them —
         # which is the stub doing what the helper exists to refuse. The shim
         # answers the files endpoint with each name JSON-encoded on its own
-        # line — the shape `--jq '.[].filename | @json'` produces, newline
-        # in a name and all — and anything else with the body.
+        # line — the shape the helper's `--jq` produces, newline in a name and
+        # all — and anything else with the body.
         encoded = "".join(
             json.dumps(name) + "\n" for name in files.split("\n") if name
         )
