@@ -46,7 +46,7 @@ jobs:
 
       # The floor every Python job here pins, for the reason CLAUDE.md gives:
       # an unpinned run goes green on code the runner cannot execute.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
