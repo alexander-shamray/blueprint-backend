@@ -45,7 +45,25 @@ public class OperatorSwitchTests
         }
     }
 
-    private static ServiceProvider Build(MutableSource source)
+    /// <summary>Counts each endpoint the bus readies, which it does only once the transport is consuming.</summary>
+    internal sealed class ReadyCounter : IReceiveEndpointObserver
+    {
+        public System.Collections.Concurrent.ConcurrentBag<string> Readied { get; } = [];
+
+        public Task Ready(ReceiveEndpointReady ready)
+        {
+            Readied.Add(ready.InputAddress.AbsolutePath.Split('/')[^1]);
+            return Task.CompletedTask;
+        }
+
+        public Task Stopping(ReceiveEndpointStopping stopping) => Task.CompletedTask;
+
+        public Task Completed(ReceiveEndpointCompleted completed) => Task.CompletedTask;
+
+        public Task Faulted(ReceiveEndpointFaulted faulted) => Task.CompletedTask;
+    }
+
+    private static ServiceProvider Build(MutableSource source, ReadyCounter? counter = null, bool plain = false)
     {
         IConfiguration configuration = new ConfigurationBuilder().Add(source).Build();
         ServiceCollection services = new();
@@ -58,7 +76,18 @@ public class OperatorSwitchTests
             x.UsingInMemory((context, cfg) =>
             {
                 cfg.ConnectOperatorSwitch(context);
-                cfg.ReceiveEndpoint(Queue, e => e.ConfigureConsumer<ProbeConsumer>(context));
+
+                void Configure(IReceiveEndpointConfigurator e)
+                {
+                    if (counter is not null)
+                        e.ConnectReceiveEndpointObserver(counter);
+                    e.ConfigureConsumer<ProbeConsumer>(context);
+                }
+
+                if (plain)
+                    cfg.ReceiveEndpoint(Queue, Configure);
+                else
+                    cfg.SwitchedReceiveEndpoint(context, Queue, Configure);
             });
         });
 
@@ -98,17 +127,41 @@ public class OperatorSwitchTests
     }
 
     [Fact]
-    public async Task An_endpoint_started_while_its_switch_is_off_is_stopped()
+    public async Task An_endpoint_whose_switch_is_off_at_start_is_never_readied_until_it_is_switched_on()
     {
+        // Readied means consuming, since the transport starts consuming before it raises Ready; an endpoint stopped
+        // from Ready has already taken what the broker sent it.
         MutableSource source = new();
         source.Set(Queue);
-        await using ServiceProvider provider = Build(source);
+        ReadyCounter counter = new();
+        await using ServiceProvider provider = Build(source, counter);
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         ReceiveEndpointSwitch endpoints = provider.GetRequiredService<ReceiveEndpointSwitch>();
 
         await harness.Start();
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
-        await Until(() => endpoints.IsStopped(Queue));
+        endpoints.IsStopped(Queue).ShouldBeTrue();
+        counter.Readied.ShouldNotContain(Queue, "an endpoint off at start is never configured, so never readied");
+        provider.GetRequiredService<OperatorSwitches>().Endpoints.ShouldContain(Queue);
+
+        source.Set();
+        await Until(() => !endpoints.IsStopped(Queue));
+        Guid probe = Guid.CreateVersion7();
+        await harness.Bus.Publish(new Probe(probe), TestContext.Current.CancellationToken);
+        await Until(() => ProbeConsumer.Seen.Contains(probe));
+    }
+
+    [Fact]
+    public async Task An_endpoint_configured_without_the_switch_is_reported_unregistered()
+    {
+        await using ServiceProvider switched = Build(new MutableSource());
+        await switched.GetRequiredService<ITestHarness>().Start();
+        switched.GetRequiredService<ReceiveEndpointSwitch>().Unregistered.ShouldNotContain(Queue);
+
+        await using ServiceProvider plain = Build(new MutableSource(), plain: true);
+        await plain.GetRequiredService<ITestHarness>().Start();
+        plain.GetRequiredService<ReceiveEndpointSwitch>().Unregistered.ShouldContain(Queue);
     }
 
     [Fact]

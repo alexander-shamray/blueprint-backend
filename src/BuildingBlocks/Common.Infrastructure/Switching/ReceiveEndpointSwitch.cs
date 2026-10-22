@@ -1,13 +1,16 @@
 using MassTransit;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Common.Infrastructure.Switching;
 
-/// <summary>Stops a receive endpoint while its name is switched off and restarts it when it is not (ADR-113).</summary>
+/// <summary>Stops a receive endpoint while its name is switched off and restarts it when it is not (ADR-113), and
+/// connects one that was off when the bus was configured once it is not (ADR-144).</summary>
 /// <remarks>
 /// Stopping is the mechanism <c>ProviderKillSwitch</c> uses: the queue keeps its messages and the inbox absorbs any
-/// redelivery (§9.5). A stopped endpoint leaves the bus Degraded, which readiness answers 200 (ADR-113).
+/// redelivery (§9.5). An endpoint stopped after it was configured leaves the bus Degraded, which readiness answers
+/// 200 (ADR-113); one not yet connected is on no bus entry, and only operator-switches reports it (ADR-144).
 /// </remarks>
 public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposable
 {
@@ -21,7 +24,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         LoggerMessage.Define<string>(
             LogLevel.Information,
             new EventId(2, nameof(Started)),
-            "Receive endpoint {Queue} started again; its operator switch is off.");
+            "Receive endpoint {Queue} started again; its name is no longer switched off.");
 
     private static readonly Action<ILogger, string, TimeSpan, Exception?> ApplyFailed =
         LoggerMessage.Define<string, TimeSpan>(
@@ -47,6 +50,12 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             new EventId(6, nameof(ReportFailed)),
             "The operator switch could not log the names now off.");
 
+    private static readonly Action<ILogger, string, Exception?> Connected =
+        LoggerMessage.Define<string>(
+            LogLevel.Information,
+            new EventId(7, nameof(Connected)),
+            "Receive endpoint {Queue} connected; it was switched off when the bus was configured.");
+
     private readonly OperatorSwitches _switches;
     private readonly ILogger<ReceiveEndpointSwitch> _log;
     private readonly TimeProvider _clock;
@@ -56,7 +65,11 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     private readonly HashSet<string> _stopped = new(StringComparer.Ordinal);
     private readonly HashSet<string> _retrying = new(StringComparer.Ordinal);
     private readonly HashSet<string> _unsettled = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Action<IReceiveEndpointConfigurator>> _switchable = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _deferred = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _unregistered = new(StringComparer.Ordinal);
     private readonly IDisposable? _subscription;
+    private IServiceProvider? _services;
 
     /// <summary>The wait before a failed stop or start is tried again, doubling up to
     /// <see cref="LastRetry"/>.</summary>
@@ -82,6 +95,42 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             return _stopped.Contains(queue);
     }
 
+    /// <summary>The endpoints the bus configured without <c>SwitchedReceiveEndpoint</c>.</summary>
+    public IReadOnlyCollection<string> Unregistered
+    {
+        get
+        {
+            lock (_endpoints)
+                return [.. _unregistered.Order(StringComparer.Ordinal)];
+        }
+    }
+
+    /// <summary>The container the bus was configured from, holding the connector a deferred endpoint needs.</summary>
+    public void Attach(IServiceProvider services) => _services = services;
+
+    /// <summary>
+    /// Records how a switchable endpoint is configured and whether the bus should configure it now: false when its
+    /// switch is off, so the bus never consumes from it until the switch connects it (ADR-144).
+    /// </summary>
+    public bool Register(string queue, Action<IReceiveEndpointConfigurator> configure)
+    {
+        _switches.DeclareEndpoint(queue);
+        bool off = _switches.IsOff(queue);
+        lock (_endpoints)
+        {
+            if (!_switchable.TryAdd(queue, configure))
+                throw new InvalidOperationException($"Receive endpoint {queue} is registered with the switch twice.");
+
+            if (off)
+            {
+                _deferred.Add(queue);
+                _stopped.Add(queue);
+            }
+        }
+
+        return !off;
+    }
+
     /// <summary>Called as the bus configures each endpoint, so a host test sees them without a broker.</summary>
     public void Configured(IReceiveEndpointConfigurator configurator)
     {
@@ -89,7 +138,16 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         if (configurator.InputAddress.Query.Contains("temporary=true", StringComparison.Ordinal))
             return;
 
-        _switches.DeclareEndpoint(QueueOf(configurator.InputAddress));
+        // An endpoint the switch did not register starts before a switch that is off can stop it, so the host tests
+        // read this list (ADR-144); it is still stopped from Ready, as every endpoint was before.
+        string queue = QueueOf(configurator.InputAddress);
+        lock (_endpoints)
+        {
+            if (!_switchable.ContainsKey(queue))
+                _unregistered.Add(queue);
+        }
+
+        _switches.DeclareEndpoint(queue);
         configurator.ConnectReceiveEndpointObserver(this);
     }
 
@@ -99,9 +157,9 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         lock (_endpoints)
             _endpoints[queue] = ready.ReceiveEndpoint;
 
-        // Off at start, so a pod that restarts while the switch is thrown stops once its endpoint is ready; what the
-        // broker delivered before the stop lands still runs. Off the callback, since the bus waits on it and a stop
-        // waits on the bus.
+        // Thrown after the bus was configured and before this endpoint was ready, so what the broker delivered before
+        // the stop lands still runs; one off when the bus was configured never got here (ADR-144). Off the callback,
+        // since the bus waits on it and a stop waits on the bus.
         if (_switches.IsOff(queue))
             _ = Task.Run(() => ApplyAsync(queue));
 
@@ -127,7 +185,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     {
         string[] queues;
         lock (_endpoints)
-            queues = [.. _endpoints.Keys];
+            queues = [.. _endpoints.Keys.Union(_deferred, StringComparer.Ordinal)];
 
         foreach (string queue in queues)
             await ApplyAsync(queue);
@@ -153,15 +211,30 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         await _gate.WaitAsync();
         try
         {
-            IReceiveEndpoint endpoint;
+            IReceiveEndpoint? endpoint;
             bool stopped;
             bool unsettled;
+            Action<IReceiveEndpointConfigurator>? deferred;
             lock (_endpoints)
             {
-                endpoint = _endpoints[queue];
+                _endpoints.TryGetValue(queue, out endpoint);
                 stopped = _stopped.Contains(queue);
                 unsettled = _unsettled.Contains(queue);
+                deferred = _deferred.Contains(queue) ? _switchable[queue] : null;
             }
+
+            // Never configured, since its switch was off when the bus was: connected now it is on, and stopped and
+            // started like any other endpoint from then on.
+            if (deferred is not null)
+            {
+                if (!_switches.IsOff(queue))
+                    await ConnectAsync(queue, deferred);
+
+                return;
+            }
+
+            if (endpoint is null)
+                return;
 
             // Unsettled is a start whose undoing stop failed, so the endpoint may be running whatever the set says;
             // it is stopped first either way, and stays unsettled until a stop succeeds.
@@ -235,6 +308,28 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         }
 
         _ = RetryAsync(queue, delay, attempt + 1);
+    }
+
+    // Called under the gate. The endpoint is kept from its handle, as the bus's own are from Ready, so a later switch
+    // stops and starts it like them; one that cannot be connected throws, and ApplyAsync retries it.
+    private async Task ConnectAsync(string queue, Action<IReceiveEndpointConfigurator> configure)
+    {
+        IServiceProvider services = _services ??
+            throw new InvalidOperationException("The switch was never attached to the bus's container.");
+
+        HostReceiveEndpointHandle handle = services
+            .GetRequiredService<IReceiveEndpointConnector>()
+            .ConnectReceiveEndpoint(queue, (_, e) => configure(e));
+        await handle.Ready;
+
+        lock (_endpoints)
+        {
+            _endpoints[queue] = handle.ReceiveEndpoint;
+            _deferred.Remove(queue);
+            _stopped.Remove(queue);
+        }
+
+        Connected(_log, queue, null);
     }
 
     private async Task RetryAsync(string queue, TimeSpan delay, int attempt)

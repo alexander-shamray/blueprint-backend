@@ -31,9 +31,26 @@ public static class OperatorSwitchExtensions
     /// <summary>Connects the switch to every endpoint configured after it, so a new endpoint is not left out.</summary>
     /// <remarks>Called before the first <c>ReceiveEndpoint</c>; one declared earlier would not be seen
     /// (ADR-113).</remarks>
-    public static void ConnectOperatorSwitch(this IBusFactoryConfigurator cfg, IServiceProvider services) =>
-        cfg.ConnectEndpointConfigurationObserver(
-            new SwitchEveryEndpoint(services.GetRequiredService<ReceiveEndpointSwitch>()));
+    public static void ConnectOperatorSwitch(this IBusFactoryConfigurator cfg, IServiceProvider services)
+    {
+        ReceiveEndpointSwitch endpointSwitch = services.GetRequiredService<ReceiveEndpointSwitch>();
+        endpointSwitch.Attach(services);
+        cfg.ConnectEndpointConfigurationObserver(new SwitchEveryEndpoint(endpointSwitch));
+    }
+
+    /// <summary>
+    /// A receive endpoint the operator switch governs: configured now when its switch is on, and otherwise left
+    /// unconfigured until the switch connects it, so a pod started while it is off never consumes from it (ADR-144).
+    /// </summary>
+    public static void SwitchedReceiveEndpoint(
+        this IBusFactoryConfigurator cfg,
+        IServiceProvider services,
+        string queue,
+        Action<IReceiveEndpointConfigurator> configure)
+    {
+        if (services.GetRequiredService<ReceiveEndpointSwitch>().Register(queue, configure))
+            cfg.ReceiveEndpoint(queue, configure);
+    }
 
     private sealed class SwitchEveryEndpoint(ReceiveEndpointSwitch endpointSwitch) : IEndpointConfigurationObserver
     {
