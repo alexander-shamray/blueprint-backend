@@ -464,7 +464,7 @@ MASSTRANSIT_PIN = re.compile(r"<PackageVersion\s+Include=\"MassTransit\"\s+Versi
 
 
 def _masstransit_pin_is_verified(root: Path) -> list[str]:
-    """The MassTransit pin is the version EXPORTED_SERIES was verified against."""
+    """The MassTransit pin is one of the versions EXPORTED_SERIES was read from."""
     props = root / "Directory.Packages.props"
     try:
         text = props.read_text(encoding="utf-8")
