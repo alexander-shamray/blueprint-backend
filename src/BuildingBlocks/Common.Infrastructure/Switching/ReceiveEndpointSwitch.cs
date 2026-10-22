@@ -112,19 +112,28 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     /// </summary>
     public bool Register(string queue, Action<IReceiveEndpointConfigurator> configure)
     {
-        _switches.DeclareEndpoint(queue);
-        bool off = _switches.IsOff(queue);
+        // Unattached means ConnectOperatorSwitch has not run, so Configured would never see one configured now.
+        if (_services is null)
+            throw new InvalidOperationException($"Receive endpoint {queue} is registered before ConnectOperatorSwitch.");
+
+        // Read under the lock, so a reload that turns the name on either sees it deferred or finds it configured.
+        bool off;
         lock (_endpoints)
         {
             if (!_switchable.TryAdd(queue, configure))
                 throw new InvalidOperationException($"Receive endpoint {queue} is registered with the switch twice.");
 
+            off = _switches.IsOff(queue);
             if (off)
             {
                 _deferred.Add(queue);
                 _stopped.Add(queue);
             }
         }
+
+        // One configured now is declared by Configured, as the bus configures it.
+        if (off)
+            _switches.DeclareEndpoint(queue);
 
         return !off;
     }
@@ -155,9 +164,9 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         lock (_endpoints)
             _endpoints[queue] = ready.ReceiveEndpoint;
 
-        // Thrown after the bus was configured and before this endpoint was ready, so what the broker delivered before
-        // the stop lands still runs; one off when the bus was configured never got here (ADR-144). Off the callback,
-        // since the bus waits on it and a stop waits on the bus.
+        // Off by now: thrown before this endpoint was ready, or configured without the helper, so what the broker
+        // delivered before the stop lands still runs; one the helper deferred never got here off (ADR-144). Off the
+        // callback, since the bus waits on it and a stop waits on the bus.
         if (_switches.IsOff(queue))
             _ = Task.Run(() => ApplyAsync(queue));
 
