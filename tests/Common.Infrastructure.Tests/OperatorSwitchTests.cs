@@ -241,10 +241,10 @@ public class OperatorSwitchTests
         endpoints.Attach(container, Create);
         endpoints.Register(Queue, _ => { }).ShouldBeFalse();
 
-        Task first = endpoints.DeclareDeferredAsync();
-        await Until(() => Volatile.Read(ref attempts) == 1);
+        // Started and not awaited, so the sweep returns while its declaration still hangs.
+        await endpoints.DeclareDeferredAsync().WaitAsync(Budget, TestContext.Current.CancellationToken);
+        Volatile.Read(ref attempts).ShouldBe(1);
         clock.Advance(ReceiveEndpointSwitch.TopologyTimeout);
-        await first.WaitAsync(Budget, TestContext.Current.CancellationToken);
         endpoints.TopologyPending.ShouldBe([Queue], "a declaration that never finished has declared nothing");
 
         await Until(() =>
@@ -299,6 +299,10 @@ public class OperatorSwitchTests
         source.Set(Queue, running);
         await Until(() => endpoints.IsStopped(running));
         Volatile.Read(ref stops).ShouldBe(1);
+
+        // A whole sweep, which reaches the deferred queue only after the running one; a declaration starts before
+        // the sweep moves on, so a second one would be counted by now.
+        await endpoints.ApplyAllAsync().WaitAsync(Budget, TestContext.Current.CancellationToken);
         Volatile.Read(ref attempts).ShouldBe(1, "a declaration already running is not started a second time");
 
         clock.Advance(ReceiveEndpointSwitch.TopologyTimeout);

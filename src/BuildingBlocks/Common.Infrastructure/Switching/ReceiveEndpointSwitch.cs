@@ -136,7 +136,8 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         _topologyBus = topologyBus;
     }
 
-    /// <summary>Declares the topology of every endpoint deferred so far, as the bus starts (ADR-145).</summary>
+    /// <summary>Starts declaring the topology of every endpoint deferred so far, as the bus starts; each declaration
+    /// retries on its own (ADR-145).</summary>
     public async Task DeclareDeferredAsync()
     {
         string[] queues;
@@ -333,14 +334,18 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             _gate.Release();
         }
 
-        // Outside the gate, since a broker that stalls new connections would otherwise hold every stop behind it.
+        // Outside the gate and not awaited: a broker that stalls new connections would otherwise hold every stop, and
+        // every later queue of the same sweep, behind it. It retries on its own.
         if (declare is not null)
-            retry = await DeclareTopologyAsync(queue, declare, attempt);
+            _ = DeclareTopologyAsync(queue, declare, attempt);
 
-        if (retry is not TimeSpan delay)
-            return;
+        if (retry is TimeSpan delay)
+            ScheduleRetry(queue, delay, attempt);
+    }
 
-        // One pending retry per queue: a reload during a long broker fault would otherwise add a chain each time.
+    // One pending retry per queue: a reload during a long broker fault would otherwise add a chain each time.
+    private void ScheduleRetry(string queue, TimeSpan delay, int attempt)
+    {
         lock (_endpoints)
         {
             if (!_retrying.Add(queue))
@@ -376,11 +381,9 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
 
     // Not under the gate, and once per queue at a time. A bus deploying topology only declares the queue, its exchanges
     // and its bindings and never consumes, so what is routed to the queue while it is off waits there (ADR-145).
-    private async Task<TimeSpan?> DeclareTopologyAsync(
-        string queue,
-        Action<IReceiveEndpointConfigurator> configure,
-        int attempt)
+    private async Task DeclareTopologyAsync(string queue, Action<IReceiveEndpointConfigurator> configure, int attempt)
     {
+        TimeSpan? retry = null;
         try
         {
             Func<Action<IBusFactoryConfigurator>, IBusControl> topologyBus = _topologyBus ??
@@ -408,19 +411,20 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
 
             if (deferred)
                 TopologyDeclared(_log, queue, null);
-            return null;
         }
         catch (Exception ex)
         {
-            TimeSpan retry = Backoff(attempt);
-            ApplyFailed(_log, queue, retry, ex);
-            return retry;
+            retry = Backoff(attempt);
+            ApplyFailed(_log, queue, retry.Value, ex);
         }
         finally
         {
             lock (_endpoints)
                 _declaring.Remove(queue);
         }
+
+        if (retry is TimeSpan delay)
+            ScheduleRetry(queue, delay, attempt);
     }
 
     private static TimeSpan Backoff(int attempt) =>
