@@ -99,7 +99,7 @@
          package: a saga repository a minor behind the state machine it stores
          is not a combination anyone tests. Appendix B names the projects that
          reference it. -->
-    <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.3" />
+    <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.12" />
     <PackageVersion Include="StackExchange.Redis" Version="2.9.11" />
     <PackageVersion Include="FluentValidation" Version="12.2.0" />
     <!-- AddValidatorsFromAssemblyContaining (E.2.6's registration sample) lives
