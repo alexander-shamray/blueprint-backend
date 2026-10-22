@@ -284,7 +284,8 @@ Beside those, how a change is made here:
   request, and the owner merges it. The exemption is by pull request author,
   so a human who pushes to a Dependabot branch rides on it; review such a
   push as you would a gate bypass. With no trailer, `git-revert-pr.sh`
-  cannot find its commit, so one is reverted with `git revert`.
+  cannot find its commit, so one is reverted with `git revert` on a branch
+  of its own, whose pull request `/pr` stamps like any other.
 - **The issue vocabulary is wider than the label helper**: kind is
   `security`, `bug` or `documentation`, and the helper does not create the
   last. A `## Severity` in the body and the label both have to say it.
