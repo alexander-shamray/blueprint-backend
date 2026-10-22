@@ -56,9 +56,10 @@ line stays.
 [ADR-144](ADR-144-a-receive-endpoint-switched-off-when-its-bus-is-configured-is-not-configured-until-its-switch-is-on-1289-amending-adr-113.md)**:
 a receive endpoint whose name is off when the bus is configured is not
 configured until it is switched on, so it is not stopped from `Ready`, consumes
-nothing in the meantime and leaves the bus check Healthy rather than Degraded;
-the `operator-switches` check still reports it. An endpoint switched off after
-the bus was configured is still stopped as this record decides.
+nothing in the meantime and is in no bus health entry, so it adds no Degraded
+to the bus check; the `operator-switches` check still reports it. An endpoint
+switched off after the bus was configured is still stopped as this record
+decides.
 
 ---
 
