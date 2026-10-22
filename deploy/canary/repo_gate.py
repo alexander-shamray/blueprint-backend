@@ -407,11 +407,11 @@ def _chart_exists(chart: str | None, root: Path) -> bool:
     return (root / "deploy" / "helm" / chart / "Chart.yaml").is_file()
 
 
-# The MassTransit versions the two tables below were read from, out of each
-# package's own instrument names and units. Check 5 fails when the pin is none
-# of them, because an upgrade may rename or re-unit an instrument. A list, so
-# the gate learns a version before the pin moves: the pin is Class E, this file
-# Class D, and the contract admits no pull request of both.
+# The MassTransit versions analysis.py's two tables were read from, out of
+# each package's own instrument names and units. Check 5 fails when the pin is
+# none of them, because an upgrade may rename or re-unit an instrument. A list,
+# so a version is verified before the pin moves and Dependabot's bump, which
+# edits the pin alone, passes on its own (change-locality.md, section 3).
 MASSTRANSIT_VERIFIED = ("8.5.3", "8.5.12")
 
 

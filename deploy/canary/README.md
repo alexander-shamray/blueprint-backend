@@ -122,9 +122,10 @@ because a branch driven by the file it judges asserts nothing. Every value
    that something publishes it — or it is an instrument of a meter
    `Common.Web`'s `ObservabilityExtensions` registers, which is how
    MassTransit's series qualify — and those only as exact entries in
-   `EXPORTED_SERIES`, verified against the MassTransit pin in
-   `Directory.Packages.props`, which fails the check when it moves. Deleting
-   the registration fails it too.
+   `EXPORTED_SERIES`, verified against the MassTransit versions in
+   `MASSTRANSIT_VERIFIED`, and the check fails when the pin in
+   `Directory.Packages.props` is none of them. Deleting the registration fails
+   it too.
 6. The parser found host assemblies at all, so check 4 cannot pass
    vacuously.
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
