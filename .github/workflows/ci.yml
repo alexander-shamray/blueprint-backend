@@ -920,13 +920,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: stages-build
           path: TestResults
 
       # One directory per shard under integration/, and both readers walk it.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: stages-integration-*
           path: TestResults/integration
