@@ -32,7 +32,7 @@ SOURCE_INPUTS = [
     "deploy/helm",
     # Checks 3 and 5 both read platform-alerts.yaml: one to take §13.6's
     # thresholds from it, the other to match the series the queries read.
-    # Without this entry a retuned ErrorRateService is a green pull request,
+    # Without this entry a retuned error-rate alert is a green pull request,
     # because observability.yml's check.py does not compare canary thresholds.
     "deploy/observability",
     # Check 5 holds the MassTransit pin to the version its series were read from.
@@ -363,8 +363,11 @@ def _thresholds_match_alerts(thresholds: dict, root: Path) -> list[str]:
         return [f"{rules} is not readable, so the thresholds cannot be checked: {error}"]
 
     failures = []
+    # The error rate is one condition split by owner: ErrorRateService excludes
+    # Gateway.Api by name and ErrorRateGateway pages for it, so both are read.
     for alert, key, label in (
         ("ErrorRateService", "errorRate", "error rate"),
+        ("ErrorRateGateway", "errorRate", "gateway error rate"),
         ("Latency", "latencyP99Seconds", "p99"),
     ):
         expected = _alert_threshold(text, alert)

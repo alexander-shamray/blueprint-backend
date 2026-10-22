@@ -268,6 +268,58 @@ class MinimumRequestsTests(unittest.TestCase):
         self.assertTrue(any("minimumRequests is 50" in f for f in repo_gate.check(plan)))
 
 
+class AlertThresholdTests(unittest.TestCase):
+    """Check 3: the canary's thresholds against the alerts that page. The error
+    rate is split across two rules, so a retune of either alone must turn it red."""
+
+    THRESHOLDS = {"errorRate": 0.01, "latencyP99Seconds": 1}
+
+    @staticmethod
+    def root_with(gateway: str = "0.01", service: str = "0.01", latency: str = "1") -> Path:
+        def rule(name: str, threshold: str) -> str:
+            return f"      - alert: {name}\n        expr: |\n          x\n          > {threshold}\n        for: 5m\n"
+
+        tmp = Path(tempfile.mkdtemp())
+        alerts = tmp / "deploy" / "observability" / "alerts"
+        alerts.mkdir(parents=True)
+        (alerts / "platform-alerts.yaml").write_text(
+            rule("ErrorRateGateway", gateway) + rule("ErrorRateService", service)
+            + rule("Latency", latency), encoding="utf-8")
+        return tmp
+
+    def test_agreeing_rules_pass(self) -> None:
+        self.assertEqual(
+            repo_gate._thresholds_match_alerts(self.THRESHOLDS, self.root_with()), [])
+
+    def test_a_retuned_gateway_rule_alone_fails(self) -> None:
+        failures = repo_gate._thresholds_match_alerts(
+            self.THRESHOLDS, self.root_with(gateway="0.005"))
+
+        self.assertTrue(any("errorRate" in f and "0.005" in f for f in failures), failures)
+
+    def test_a_retuned_service_rule_alone_fails(self) -> None:
+        failures = repo_gate._thresholds_match_alerts(
+            self.THRESHOLDS, self.root_with(service="0.02"))
+
+        self.assertTrue(any("errorRate" in f and "0.02" in f for f in failures), failures)
+
+    def test_a_missing_gateway_rule_fails_rather_than_passes(self) -> None:
+        root = self.root_with()
+        rules = root / "deploy" / "observability" / "alerts" / "platform-alerts.yaml"
+        rules.write_text(rules.read_text(encoding="utf-8").replace("ErrorRateGateway", "Renamed"),
+                         encoding="utf-8")
+
+        failures = repo_gate._thresholds_match_alerts(self.THRESHOLDS, root)
+
+        self.assertTrue(any("ErrorRateGateway" in f for f in failures), failures)
+
+    def test_the_real_repository_agrees(self) -> None:
+        plan = descriptor_model.load_plan()
+        thresholds = descriptor_model.entries(plan["thresholds"])
+
+        self.assertEqual(repo_gate._thresholds_match_alerts(thresholds, descriptor_model.ROOT), [])
+
+
 class SourceInputTests(unittest.TestCase):
     """SOURCE_INPUTS against the reads it claims to enumerate. It once omitted
     `deploy/observability` and check 7 stayed green, since **a gate cannot see
