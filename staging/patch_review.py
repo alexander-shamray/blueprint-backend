@@ -163,10 +163,13 @@ R2B_TEST_ANCHOR = '''        self.assertRefused(f"git pu\\\\sh origin +HEAD:main
 R2B_TEST = r'''
     def test_a_quoted_separator_does_not_hide_a_push_from_the_fallback(self):
         # Removing quotes turns a quoted `;` or newline into what reads as a
-        # separator, and -c reaches git's config, so the fallback refuses any git.
+        # separator, -c reaches git's config, and GIT is git on Windows, so the
+        # fallback refuses whatever it could not tokenise.
         self.assertRefused(f"git --git-dir=\";\" pu''sh origin +HEAD:main{NEWLINE}echo \"")
         self.assertRefused(f"git --git-dir=\"{NEWLINE}\" pu''sh origin +HEAD:main{NEWLINE}echo \"")
         self.assertRefused(f"git -c a.b=x status{NEWLINE}echo \"")
+        self.assertRefused(f"GIT pu''sh origin +HEAD:main{NEWLINE}echo \"")
+        self.assertRefused("ls 'unbalanced")
 '''
 
 R2B_OLD = '''        # The push check reaches this path too, because a line is easy to make
@@ -177,19 +180,29 @@ R2B_OLD = '''        # The push check reaches this path too, because a line is e
                 "tokenise, so its remote and refspec cannot be read; refusing "
                 "rather than admitting a push nothing checked."
             )
+        return None
 '''
 
-R2B_NEW = '''        # Any git here is refused: a line is easy to make untokenisable on
-        # purpose, and no crude check reads git's options and refspecs.
-        if re.search(r"\\bgit\\b", flat):
-            return (
-                "git appears in a command this guard could not tokenise, so its "
-                "options and refspecs cannot be read; refusing rather than "
-                "admitting a git command nothing checked."
-            )
+R2B_NEW = '''        # Everything left is refused: a line is easy to make untokenisable on
+        # purpose, bash runs the lines before the one that breaks, and a glob,
+        # an expansion or another case can name git without its letters.
+        return (
+            "this command could not be tokenised, so what it runs cannot be "
+            "read; refusing rather than admitting a command nothing checked. "
+            "Balance its quotes, or move a body into a quoted heredoc."
+        )
 '''
 
-R2B_BACKSLASH_OLD = '''        # A trailing backslash has nothing to escape and must not read past
+R2B_COMMENT_OLD = '''        # Unparseable is not hostile: `shlex` fails on commands bash runs, an
+        # ordinary commit among them. A parse failure degrades to the substring
+        # scan the settings deny already performs, never a silent pass.
+'''
+
+R2B_COMMENT_NEW = '''        # Unparseable is refused below, whatever it is; the checks before that
+        # only give the refusal a sharper reason.
+'''
+
+R2B_BACKSLASH_OLD ='''        # A trailing backslash has nothing to escape and must not read past
         # the end of the string.
         self.assertAdmitted("git log \\\\")
 '''
@@ -231,7 +244,7 @@ def main(root, part):
     elif part == "r2b-tests":
         rewrite(tests, r2b_tests)
     elif part == "r2b-hook":
-        rewrite(hook, lambda t: once(t, R2B_OLD, R2B_NEW))
+        rewrite(hook, lambda t: once(once(t, R2B_OLD, R2B_NEW), R2B_COMMENT_OLD, R2B_COMMENT_NEW))
     elif part == "comment":
         rewrite(tests, lambda t: once(t, COMMENT_OLD, COMMENT_NEW))
     else:
