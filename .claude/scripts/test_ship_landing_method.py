@@ -123,8 +123,7 @@ class TheGrantAndTheInvocationAgree(unittest.TestCase):
         self.assertNotIn("git cherry:*", granted, "a grant nothing uses is a grant something else will")
 
     def test_the_teardown_reads_the_branch_before_it_pulls(self):
-        # /branch leaves another session's branch in the main checkout when main
-        # was dirty, so the forked teardown asks before it pulls, and checks main.
+        # Why the branch is read first is docs/commands/ship.md's, *Step 6: the teardown*.
         text = SHIP.read_text(encoding="utf-8")
         start = text.index("# 1. MERGED")
         block = text[start:text.index("git worktree prune", start)]
