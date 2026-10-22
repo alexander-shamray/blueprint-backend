@@ -4,6 +4,8 @@
 # its own. docs/change-locality.md section 6 says why the commit and locality
 # gates skip a Dependabot pull request.
 version: 2
+# Each entry's commit-message gives its commits a chore(deps) subject, so a revert
+# of one keeps the commit gate's form inside its quotes.
 updates:
   # Directory.Packages.props is the central pin file; Dependabot reads it from
   # the root.
@@ -11,6 +13,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       # The 10.0 line's servicing patches move together, as the runtime does.
       dotnet-servicing:
@@ -46,6 +51,9 @@ updates:
       - /deploy/compose/rabbitmq
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
     ignore:
       # The SDK image moves with global.json, which disables roll-forward (§4.4), and a runtime
       # major moves with the target framework: each is a deliberate edit, not a bump.
@@ -62,3 +70,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    commit-message:
+      prefix: chore
+      include: scope
