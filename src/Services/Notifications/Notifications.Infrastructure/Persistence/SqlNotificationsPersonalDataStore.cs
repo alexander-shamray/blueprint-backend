@@ -100,9 +100,15 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         "DELETE FROM notifications.ContactRecords WITH (UPDLOCK, HOLDLOCK) WHERE CustomerId = @SubjectId;";
 
     // The late event's own order: the notice is deleted or anonymised through the order id, and the record only
-    // while it is still the subject's.
+    // while it is still the subject's. The record's key is held first, as an intake holds it before reading its
+    // notices, so the two never lock a notice and the key in opposite orders.
     private const string DeleteWaitingOrderSql =
-        "DELETE FROM notifications.NotificationLog WHERE Status = 'Pending' AND OrderId = @OrderId;";
+        """
+        SET NOCOUNT ON;
+        DECLARE @Held int = (SELECT COUNT(*) FROM notifications.OrderRecords WITH (UPDLOCK) WHERE OrderId = @OrderId);
+        SET NOCOUNT OFF;
+        DELETE FROM notifications.NotificationLog WHERE Status = 'Pending' AND OrderId = @OrderId;
+        """;
 
     private const string AnonymiseEndedOrderSql =
         """
