@@ -169,9 +169,11 @@ Each round is the review done once, end to end:
    verdict contract in `.claude/agents/security-auditor.md`, and take its
    verdict record. **This step does not open `$work` itself.** Read
    `unreadable-root` first: a round error under *Never fail open*. Drop
-   `refuted` and `outside-root`; drop and count a malformed record; **drop a
-   record whose `file` and `line` are not the candidate's as dispatched**,
-   whatever its verdict. (why: docs/commands/security-sweep.md, *Verify*)
+   `refuted` and `outside-root`. **A record not in the declared shape, or whose
+   `file` and `line` are not the candidate's as dispatched, is not a verdict**:
+   dispatch that verifier once more with the same candidate, and a second such
+   record is a round error under *Never fail open*. (why:
+   docs/commands/security-sweep.md, *Verify*)
 3. **De-duplicate.** Check each survivor against the tracked set and the
    already-tracked rule above.
 4. **File.** One issue per survivor, most severe first, in the house body
@@ -231,7 +233,8 @@ contract with a `full` sweep.
 
 **Never fail open.** A round that errored — a subagent that died, a `gh` call
 that failed, an auditor reporting `unreadable-root` or `empty-scope`, a
-worktree path git had to quote — is not a clean round. Report the error and
+verifier whose record was twice not a verdict, a worktree path git had to
+quote — is not a clean round. Report the error and
 let the user decide.
 
 ## What this command does not do

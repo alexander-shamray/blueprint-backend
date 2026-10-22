@@ -94,6 +94,18 @@ class BothSweepsAgreeOnWhatSuppresses(unittest.TestCase):
             with self.subTest(sweep=name):
                 self.assertIn("files normally", self.sweep(name))
 
+    def test_a_verifier_record_that_is_not_a_verdict_is_retried_then_an_error(self):
+        # A dropped record let a round end clean and mark its commit, and the
+        # unverified candidate's file then left every incremental sweep.
+        for name in self.SWEEPS:
+            with self.subTest(sweep=name):
+                text = self.sweep(name)
+                self.assertIn("as dispatched, is not a verdict", text)
+                self.assertIn("a second such record is a round error", text)
+                self.assertIn("a verifier whose record was twice not a verdict", text)
+                self.assertNotIn("dropped as malformed", text)
+                self.assertNotIn("drop and count a malformed record", text)
+
     def test_the_clean_round_rule_agrees_with_the_gate(self):
         # A qualifier four paragraphs below the summary it qualifies leaves
         # the summary as the rule.
