@@ -351,10 +351,8 @@ class SourceInputTests(unittest.TestCase):
     @classmethod
     def reads_in(cls, text: str) -> tuple[set[str], set[str], set[str]]:
         """The paths read off a tree root, the first operands that cannot be
-        resolved to a path, and the bases that join a literal and are neither
-        a tree root, an expression base nor known to sit below a covered path.
-
-        Constants are the module-level string assignments in `text`, so
+        resolved, and the bases joining a literal that are not known. Constants
+        are the module-level string assignments in `text`, so
         `ROOT / WORKFLOW_PATH` reads what WORKFLOW_PATH holds."""
         constants = dict(cls.CONSTANT.findall(text))
         paths: set[str] = set()
