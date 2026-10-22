@@ -11,8 +11,7 @@
          nothing at runtime does — the version is pinned to the line above
          because the tool and the runtime move together. -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
-    <!-- Transitive, pinned deliberately, and the same shape as Microsoft.OpenApi
-         below. The package above reaches it twice — through
+    <!-- Transitive, and pinned deliberately. The package above reaches it twice — through
          Microsoft.Build.Tasks.Core and through
          Microsoft.CodeAnalysis.Workspaces.MSBuild — and both floors resolve to
          9.0.0, which carries eight advisories. NU1903 turns that into a failed
@@ -141,12 +140,11 @@
     <!-- Appendix C's OpenAPI deliverable: the framework's own document
          generator — AddOpenApi/MapOpenApi, document only, no UI. -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
-    <!-- Transitive, pinned deliberately: the package above's first patches
-         floor this at 2.0.0, which carries GHSA-v5pm-xwqc-g5wc, and NuGet
-         resolves a floor to its lowest. NU1903 turns that into a failed
-         restore, so the pin is what keeps the line above buildable —
-         CentralPackageTransitivePinningEnabled is why it works. It sits at the
-         floor the pinned patch reaches it at, as anything lower fails NU1109. -->
+    <!-- Transitive, and pinned because Common.Web's RequestExampleExtensions
+         names its types, so the version that code compiles against is held
+         here. It sits at the floor the pinned patch above reaches it at, as
+         anything lower fails NU1109. The pin came in when that floor was 2.0.0,
+         which carries GHSA-v5pm-xwqc-g5wc and failed the restore on NU1903. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
   </ItemGroup>
   <ItemGroup Label="Telemetry">
@@ -196,9 +194,8 @@
          purpose. Same version line as the three above: the Testcontainers
          modules ship as one release. -->
     <PackageVersion Include="Testcontainers.Keycloak" Version="4.6.0" />
-    <!-- Transitive of the three rows above, pinned deliberately, and the third
-         instance of the shape Microsoft.OpenApi and System.Security.Cryptography.Xml
-         already carry. Testcontainers 4.6.0 floors this at 2024.2.0 for its SSH
+    <!-- Transitive of the three rows above, pinned deliberately, in the shape
+         System.Security.Cryptography.Xml carries. Testcontainers 4.6.0 floors this at 2024.2.0 for its SSH
          port-forwarding path, and every version through 2025.1.0 carries
          GHSA-q939-rpr3-3284 — a malicious SCP server escaping the download
          directory through traversal sequences in a filename. NU1903 turns that
