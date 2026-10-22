@@ -162,16 +162,47 @@ R2B_TEST_ANCHOR = '''        self.assertRefused(f"git pu\\\\sh origin +HEAD:main
 
 R2B_TEST = r'''
     def test_a_quoted_separator_does_not_hide_a_push_from_the_fallback(self):
-        # Removing quotes turns a quoted `;` into what reads as a separator, so
-        # the fallback looks for git and push anywhere on a line.
+        # Removing quotes turns a quoted `;` or newline into what reads as a
+        # separator, and -c reaches git's config, so the fallback refuses any git.
         self.assertRefused(f"git --git-dir=\";\" pu''sh origin +HEAD:main{NEWLINE}echo \"")
+        self.assertRefused(f"git --git-dir=\"{NEWLINE}\" pu''sh origin +HEAD:main{NEWLINE}echo \"")
+        self.assertRefused(f"git -c a.b=x status{NEWLINE}echo \"")
 '''
 
-R2B_OLD = '''        if re.search(r"\\bgit\\b[^;&|\\n]*\\bpush\\b", flat):
+R2B_OLD = '''        # The push check reaches this path too, because a line is easy to make
+        # untokenisable on purpose; here it can only be the crude one.
+        if re.search(r"\\bgit\\b[^;&|\\n]*\\bpush\\b", flat):
+            return (
+                "a `git push` appears in a command this guard could not "
+                "tokenise, so its remote and refspec cannot be read; refusing "
+                "rather than admitting a push nothing checked."
+            )
 '''
 
-R2B_NEW = '''        if re.search(r"\\bgit\\b[^\\n]*\\bpush\\b", flat):
+R2B_NEW = '''        # Any git here is refused: a line is easy to make untokenisable on
+        # purpose, and no crude check reads git's options and refspecs.
+        if re.search(r"\\bgit\\b", flat):
+            return (
+                "git appears in a command this guard could not tokenise, so its "
+                "options and refspecs cannot be read; refusing rather than "
+                "admitting a git command nothing checked."
+            )
 '''
+
+R2B_BACKSLASH_OLD = '''        # A trailing backslash has nothing to escape and must not read past
+        # the end of the string.
+        self.assertAdmitted("git log \\\\")
+'''
+
+R2B_BACKSLASH_NEW = '''        # A trailing backslash has nothing to escape and must not read past
+        # the end of the string; it cannot be tokenised, so it is refused.
+        self.assertRefused("git log \\\\")
+'''
+
+
+def r2b_tests(text):
+    text = once(text, R2B_TEST_ANCHOR, R2B_TEST_ANCHOR + R2B_TEST)
+    return once(text, R2B_BACKSLASH_OLD, R2B_BACKSLASH_NEW)
 
 
 # ---- the pinned case's comment states the rule, not its history ----
@@ -198,7 +229,7 @@ def main(root, part):
     elif part == "r2-hook":
         rewrite(hook, r2_hook)
     elif part == "r2b-tests":
-        rewrite(tests, lambda t: once(t, R2B_TEST_ANCHOR, R2B_TEST_ANCHOR + R2B_TEST))
+        rewrite(tests, r2b_tests)
     elif part == "r2b-hook":
         rewrite(hook, lambda t: once(t, R2B_OLD, R2B_NEW))
     elif part == "comment":

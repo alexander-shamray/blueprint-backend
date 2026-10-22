@@ -669,9 +669,11 @@ list of launchers would trail PowerShell's. The index guard stays on
 `Bash`, because the skill's prefix grants are `Bash(...)` rules and a
 PowerShell call is prompted like any other.
 And a heredoc with no closing line, whose body then fails to tokenise, is
-refused outright, as an undecodable delimiter is, while the untokenised
-fallback now reads the command with its quotes and backslashes removed, as
-bash does, so a quote-split push ahead of a line that breaks the parse is seen.
+refused outright, as an undecodable delimiter is, and the untokenised
+fallback refuses any command that names git once quotes and backslashes are
+removed, because a line is easy to make untokenisable on purpose and bash runs
+the lines before the one that breaks, while no crude check reads git's options
+and refspecs.
 
 ## The ext transport and pinned grants
 
