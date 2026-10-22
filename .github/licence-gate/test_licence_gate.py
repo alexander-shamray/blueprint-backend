@@ -87,6 +87,10 @@ class ReadPins(unittest.TestCase):
             '    <GlobalPackageReference Include="Roslynator.Analyzers" Version="4.0.0" />\n')
         self.assertEqual(read_pins(document), {"Roslynator.Analyzers"})
 
+    def test_reads_a_pin_without_regard_to_the_case_of_its_element_name(self):
+        document = pins_doc('    <packageversion Include="Dapper" Version="1.0.0" />\n')
+        self.assertEqual(read_pins(document), {"Dapper"})
+
     def test_reads_pins_out_of_a_namespaced_project(self):
         # An xmlns on <Project> renames every tag to {uri}PackageVersion, and
         # MSBuild restores the file either way. Matching the bare name only is a
@@ -209,6 +213,13 @@ class ScanProjects(unittest.TestCase):
                 '  </ItemGroup>\n')
         findings = scan(("src/Thing/Thing.csproj", csproj(body)))
         self.assertEqual(len(findings), 2, findings)
+
+    def test_fails_an_opt_out_spelled_in_another_case(self):
+        body = ('  <PropertyGroup>\n'
+                '    <managepackageversionscentrally>false</managepackageversionscentrally>\n'
+                '  </PropertyGroup>\n')
+        findings = scan(("src/Thing/Thing.csproj", csproj(body)))
+        self.assertEqual(len(findings), 1)
 
     def test_fails_a_project_that_opts_out_of_central_package_management(self):
         body = ('  <PropertyGroup>\n'

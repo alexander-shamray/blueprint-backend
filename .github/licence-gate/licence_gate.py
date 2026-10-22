@@ -67,6 +67,7 @@ NAMEABLE = frozenset(SPDX.values())
 # is the one worth naming: it shares nothing but a file with `PackageVersion`
 # and injects its package into every project in the repository.
 PIN_ELEMENTS = frozenset({"PackageVersion", "GlobalPackageReference"})
+PIN_NAMES = frozenset(name.lower() for name in PIN_ELEMENTS)
 
 # Directories the project scan does not descend into. `obj` is the load-bearing
 # one — a restore writes generated MSBuild files there, so a scan that read them
@@ -139,7 +140,7 @@ def read_pins(path: Path) -> set[str]:
     pins = set()
 
     for element in root.iter():
-        if local_name(element) not in PIN_ELEMENTS:
+        if local_name(element).lower() not in PIN_NAMES:
             continue
 
         # `Include` is how central management names a package, and it is the
@@ -226,7 +227,7 @@ def scan_projects(root: Path) -> list[str]:
                         findings.append(
                             f"{name}: PackageReference {identity} carries a {metadata} child "
                             f"element, so it restores a version no pin declares")
-            elif tag == "ManagePackageVersionsCentrally":
+            elif tag.lower() == "managepackageversionscentrally":
                 value = (element.text or "").strip()
                 if value.lower() != "true":
                     findings.append(
