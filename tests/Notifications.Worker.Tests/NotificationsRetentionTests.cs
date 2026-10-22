@@ -154,7 +154,8 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
     [Fact]
     public async Task A_record_purge_deadlocked_with_its_customers_erasure_yields_and_the_erasure_completes()
     {
-        // The erasure's first statement split at its two reads, so the purge's delete can take the key between them.
+        // The erasure's first statement split at its two reads, so the purge's delete can take the key between them;
+        // FORCESEEK pins the index seek the statement takes on a populated table, which a near-empty one may not.
         CancellationToken ct = TestContext.Current.CancellationToken;
         Guid customer = Guid.CreateVersion7();
         Guid order = Guid.CreateVersion7();
@@ -167,6 +168,8 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
         await using NotificationsDbContext erasing = new(
             new DbContextOptionsBuilder<NotificationsDbContext>().UseSqlServer(fixture.ConnectionString).Options);
         await using IDbContextTransaction transaction = await erasing.Database.BeginTransactionAsync(ct);
+        int session = (await erasing.Database.SqlQueryRaw<int>("SELECT Value = CAST(@@SPID AS int)").ToListAsync(ct))
+            .Single();
         await erasing.Database.ExecuteSqlAsync(
             $"""
             SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK, FORCESEEK)
@@ -175,7 +178,7 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
             ct);
 
         Task purge = fixture.PurgeNotificationsRetentionAsync();
-        await Task.Delay(TimeSpan.FromSeconds(2), ct);
+        await BlockedByAsync(session, ct);
 
         await erasing.Database.ExecuteSqlAsync(
             $"SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK) WHERE OrderId = {order};",
@@ -184,6 +187,19 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
 
         (await Should.ThrowAsync<Exception>(() => purge.WaitAsync(TimeSpan.FromSeconds(30), ct)))
             .Message.ShouldContain("deadlock victim", Case.Insensitive, "the purge yields, so the erasure completes");
+    }
+
+    private async Task BlockedByAsync(int session, CancellationToken ct)
+    {
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + ServiceFixture.StepDeadline;
+
+        while (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM sys.dm_exec_requests WHERE blocking_session_id = {0}",
+            session) == 0)
+        {
+            DateTimeOffset.UtcNow.ShouldBeLessThan(deadline, "the purge never reached the held record");
+            await Task.Delay(TimeSpan.FromMilliseconds(50), ct);
+        }
     }
 
     private async Task<Guid> AgedOrderAsync(TimeSpan ago)
