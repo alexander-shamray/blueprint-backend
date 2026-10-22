@@ -330,14 +330,19 @@ class SourceInputTests(unittest.TestCase):
     # `root / entry["source"]`. Spaces are optional only before a quote, so
     # prose such as `deploy/helm` is not a join.
     OPERAND = r'''(?:"[^"\n]*"|'[^'\n]*'|[A-Za-z_]\w*(?:\[[^\]\n]*\])?)'''
+    BASE = r'[A-Za-z_]\w*(?:\([^()\n]*\)|\[[^\]\n]*\]|\.\w+)*'
     JOIN = re.compile(
-        rf'(?<![\w.])([A-Za-z_]\w*(?:\.\w+)*)((?:(?:\s+/\s+|\s*/\s*(?=["\']))' + OPERAND + r')+)')
+        rf'(?<![\w.])({BASE})((?:(?:\s+/\s+|\s*/\s*(?=["\']))' + OPERAND + r')+)')
     SEGMENT = re.compile(r'(?:\s+/\s+|\s*/\s*(?=["\']))(' + OPERAND + ')')
     CONSTANT = re.compile(r'(?m)^([A-Z_][A-Z0-9_]*)\s*=\s*"([^"\n]*)"\s*$')
 
     TREE_ROOTS = {"root", "ROOT", "source"}
-    # Joins inside deploy/canary itself, which deploy.yml watches whole.
+    # Bases below a path the declared list already covers: CANARY is
+    # deploy/canary, which deploy.yml watches whole, and csproj.parent is a
+    # project directory under src.
     RELATIVE_BASES = {"CANARY", "csproj.parent"}
+    # A base that is an expression, and the repository path it stands for.
+    EXPRESSION_BASES = {"Path(__file__).resolve().parents[1]": "deploy"}
     # A first operand the scan cannot resolve, and the declared entry that
     # covers every value it can take.
     DYNAMIC_READS = {'entry["source"]': "src"}
@@ -346,7 +351,7 @@ class SourceInputTests(unittest.TestCase):
     def reads_in(cls, text: str) -> tuple[set[str], set[str], set[str]]:
         """The paths read off a tree root, the first operands that cannot be
         resolved to a path, and the bases that join a literal and are neither
-        a tree root nor known to stay inside deploy/canary.
+        a tree root, an expression base nor known to sit below a covered path.
 
         Constants are the module-level string assignments in `text`, so
         `ROOT / WORKFLOW_PATH` reads what WORKFLOW_PATH holds."""
@@ -356,11 +361,11 @@ class SourceInputTests(unittest.TestCase):
         unknown: set[str] = set()
         for base, chain in cls.JOIN.findall(text):
             operands = cls.SEGMENT.findall(chain)
-            if base not in cls.TREE_ROOTS:
+            if base not in cls.TREE_ROOTS and base not in cls.EXPRESSION_BASES:
                 if base not in cls.RELATIVE_BASES and any(o[0] in "\"'" for o in operands):
                     unknown.add(base)
                 continue
-            segments: list[str] = []
+            segments = [cls.EXPRESSION_BASES[base]] if base in cls.EXPRESSION_BASES else []
             for operand in operands:
                 if operand[0] in "\"'":
                     segments.append(operand[1:-1])
@@ -420,13 +425,16 @@ class SourceInputTests(unittest.TestCase):
             'f = CANARY / "canary.json"',
             'g = 100 * canary / (stable + canary)',
             'h = "deploy/helm is prose"',
+            'i = Path(__file__).resolve().parents[1] / "workflow_paths"',
+            'j = Path(__file__).resolve().parents[2] / "docs" / "x.md"',
         ])
 
         paths, dynamic, unknown = self.reads_in(text)
 
-        self.assertEqual(paths, {"Directory.Build.props", "docs", "deploy/Helm"})
+        self.assertEqual(
+            paths, {"Directory.Build.props", "docs", "deploy/Helm", "deploy/workflow_paths"})
         self.assertEqual(dynamic, {'entry["x"]'})
-        self.assertEqual(unknown, {"repo"})
+        self.assertEqual(unknown, {"repo", "Path(__file__).resolve().parents[2]"})
 
     def test_every_path_the_script_reads_is_declared(self) -> None:
         paths, _, _ = self.scan()
