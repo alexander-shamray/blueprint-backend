@@ -45,7 +45,7 @@ jobs:
     # whole run is seconds, which is what makes filtering on src/** affordable.
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The pin is a floor rather than a preference: a newer interpreter
       # accepts APIs this one does not, so a suite green locally can be

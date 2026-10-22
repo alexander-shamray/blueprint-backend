@@ -78,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -140,7 +140,7 @@ jobs:
       # that commit's ancestry, and the default shallow fetch carries one
       # commit. Without the history both fail for every tag but the head of
       # main, which is the one case where the binding has nothing to catch.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 

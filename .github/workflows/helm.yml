@@ -54,7 +54,7 @@ jobs:
     # is seconds.
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Pinned to the version the charts were developed and verified against.
       # `latest` here would make a helm release note a way for this repository

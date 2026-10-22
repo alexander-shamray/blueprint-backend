@@ -49,7 +49,7 @@ jobs:
   licence-gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -94,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -131,7 +131,7 @@ jobs:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -155,7 +155,7 @@ jobs:
   comment-gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The diff needs the merge base, and the enforcing copy needs the
           # base commit; a shallow checkout has neither.
@@ -214,7 +214,7 @@ jobs:
   pipeline-gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -299,7 +299,7 @@ jobs:
   workflow-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install actionlint
         env:
@@ -337,7 +337,7 @@ jobs:
   scaffold:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # --verify re-renders a named commit (tools/new-service/README.md); a shallow checkout has none.
           fetch-depth: 0
@@ -371,7 +371,7 @@ jobs:
   scaffold-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -442,7 +442,7 @@ jobs:
   token-usage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -457,7 +457,7 @@ jobs:
   quality-sets:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -473,7 +473,7 @@ jobs:
   dead-letters:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -506,7 +506,7 @@ jobs:
       bff: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.bff }}
       deploy: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.deploy }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Detect changed services
         id: changes
@@ -607,7 +607,7 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -624,7 +624,7 @@ jobs:
     # hour rather than at GitHub's default of 360.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # No version named here. global.json is the pin (§4.4), and a version in
       # two places is a version that drifts.
@@ -749,7 +749,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -813,7 +813,7 @@ jobs:
             selects: >-
               FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.&FullyQualifiedName!~Notifications.&FullyQualifiedName!~Shipping.&FullyQualifiedName!~Platform.IntegrationTests.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -914,7 +914,7 @@ jobs:
     needs: [build, integration]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
         with:
@@ -1061,7 +1061,7 @@ jobs:
 
       # The whole history, because the main tag moves only forward in it
       # (ADR-134) and the step that decides needs `git merge-base`.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
         with:
           fetch-depth: 0
