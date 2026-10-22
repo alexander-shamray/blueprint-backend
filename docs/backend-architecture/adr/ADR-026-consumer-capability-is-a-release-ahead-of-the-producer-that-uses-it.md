@@ -97,6 +97,14 @@ PR-24 without anyone writing it down — the difference is that this ADR leans a
 and a claim of enforceability that quietly depends on an unwired signal is the
 exact shape of *a registered name is not a live signal*.
 
+**Amended by
+[ADR-144](ADR-144-a-receive-endpoint-switched-off-when-its-bus-is-configured-is-not-configured-until-its-switch-is-on-1289-amending-adr-113.md)**:
+a consumer released while its operator switch is off has not declared the
+binding it adds, so a message of the new type routes to no queue, not to
+`<queue>_skipped`, and the alert this record leans on does not fire. Such a
+consumer counts as deployed only once its switch is on and its pod has
+connected the endpoint.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

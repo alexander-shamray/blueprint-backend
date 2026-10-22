@@ -1695,8 +1695,8 @@ lets an operator stop: each receive endpoint and each worker loop of such a
 service is switched off by name from a mounted file that reloads, with no
 restart
 ([ADR-113](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)),
-and an endpoint off when its pod starts is not configured until it is switched
-on, so the pod consumes nothing from it
+and an endpoint off when its pod's bus is configured is not configured until it
+is switched on, so the pod consumes nothing from it
 ([ADR-144](adr/ADR-144-a-receive-endpoint-switched-off-when-its-bus-is-configured-is-not-configured-until-its-switch-is-on-1289-amending-adr-113.md)).
 
 ---
