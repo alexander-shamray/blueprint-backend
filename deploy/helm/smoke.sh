@@ -447,7 +447,14 @@ done
 # hides a gap: anything ending in `/` is an interpolation prefix whose
 # concrete forms are declared, and `deploy/helm` is this script's own tree,
 # which SOURCE_INPUTS by definition excludes.
-grep -oE '\$ROOT"?/[A-Za-z0-9_./-]+' "$0" | sed -E 's|^\$ROOT"?/||' | sort -u >"$OUT/reads.txt"
+root_reads() { grep -oE '\$ROOT"?/[A-Za-z0-9_./-]+' | sed -E 's|^\$ROOT"?/||' | sort -u; }
+# The fixture is spelled in two pieces so this script's own scan does not read
+# it as a path it names; it covers the quoted form no read uses today.
+printf '%s\n' 'x="$RO''OT"/planted/quoted' 'y=$RO''OT/planted/bare' >"$OUT/planted-reads.sh"
+root_reads <"$OUT/planted-reads.sh" >"$OUT/planted-found.txt"
+check 'the read scan lists a ROOT quoted before its slash' grep -qx planted/quoted "$OUT/planted-found.txt"
+check 'the read scan lists a ROOT followed directly by a slash' grep -qx planted/bare "$OUT/planted-found.txt"
+root_reads <"$0" >"$OUT/reads.txt"
 
 if [ ! -s "$OUT/reads.txt" ]; then
     # A scan that found nothing would pass the loop below against any list at
