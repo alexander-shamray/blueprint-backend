@@ -14,8 +14,13 @@ set -euo pipefail
 [ "$#" -eq 0 ] ||
   { echo "usage: gh-issue-list.sh   (no arguments)" >&2; exit 2; }
 
-# `--state all`, because the sweeps de-duplicate against closed issues too: a
-# finding already filed and fixed must not be re-filed. `--limit 1000`, because
-# the default 30 hides older issues and a de-duplication gate that cannot see an
-# issue reports a duplicate as new.
-gh issue list --state all --limit 1000 --json number,title,state,labels
+# `--state all`, because the sweeps de-duplicate against closed issues too. gh
+# cuts a list at `--limit` without a word, and a de-duplication gate that cannot
+# see an issue reports a duplicate as new, so a list as long as the limit is
+# refused rather than read as whole.
+limit=5000
+list=$(gh issue list --state all --limit "$limit" --json number,title,state,labels)
+count=$(jq length <<<"$list" | tr -d '\r')
+[ "$count" -lt "$limit" ] ||
+  { echo "gh-issue-list: $count issues is the limit, so the list may be cut; raise it here" >&2; exit 3; }
+printf '%s\n' "$list"
