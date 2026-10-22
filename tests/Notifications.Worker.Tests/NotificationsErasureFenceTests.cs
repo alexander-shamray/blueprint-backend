@@ -158,6 +158,45 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
     }
 
     [Fact]
+    public async Task An_intake_whose_record_appears_while_it_waits_for_the_range_is_refused_for_its_retry()
+    {
+        // Ids that sort first and in this order, so the subject's range stops at the neighbour's record and the other
+        // customer's insert lands beyond it, unheld; the record appears under that customer while the subject waits.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid subject = new("00000000-0000-0000-0000-000000000010");
+        Guid neighbour = new("00000000-0000-0000-0000-000000000020");
+        Guid other = new("00000000-0000-0000-0000-000000000030");
+        Guid order = Guid.CreateVersion7();
+        await HandleAsync(OrderEvents.Placed(Guid.CreateVersion7(), neighbour, At), ct);
+
+        await using NotificationsDbContext db = new(
+            new DbContextOptionsBuilder<NotificationsDbContext>().UseSqlServer(fixture.ConnectionString).Options);
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
+        SqlNotificationsPersonalDataStore store = new(
+            db,
+            new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>()));
+        await store.DeleteWaitingNoticesAsync(subject, Guid.CreateVersion7(), ct);
+
+        Task intake = HandleAsync(OrderEvents.Placed(order, subject, At), ct);
+        await Should.ThrowAsync<TimeoutException>(() => intake.WaitAsync(Wait, ct));
+
+        await HandleAsync(OrderEvents.Placed(order, other, At), ct).WaitAsync(ServiceFixture.StepDeadline, ct);
+        await transaction.RollbackAsync(ct);
+
+        (await Should.ThrowAsync<InvalidOperationException>(() => intake.WaitAsync(ServiceFixture.StepDeadline, ct)))
+            .Message.ShouldContain("the retry reads it held");
+    }
+
+    private async Task HandleAsync(OrderPlaced placed, CancellationToken ct)
+    {
+        await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+        await scope.ServiceProvider
+            .GetServices<IIntegrationEventHandler<OrderPlaced>>()
+            .Single()
+            .HandleAsync(placed, ct);
+    }
+
+    [Fact]
     public async Task A_contact_save_waits_for_an_erasure_that_found_no_contact()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
