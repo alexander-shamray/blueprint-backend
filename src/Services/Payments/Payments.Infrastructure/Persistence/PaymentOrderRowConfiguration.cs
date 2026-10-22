@@ -19,7 +19,7 @@ internal sealed class PaymentOrderRowConfiguration : IEntityTypeConfiguration<Pa
         // char(3), not nvarchar(3): three ASCII letters by contract.
         builder.Property(r => r.Currency).HasMaxLength(3).IsFixedLength().IsUnicode(false);
 
-        // The requests the order was placed after, as a JSON array; an erasure by one of them leaves it (ADR-099).
+        // The requests the order was placed after, as a JSON array; an erasure by one of them leaves it (ADR-141).
         builder.Property(r => r.ErasedUnder).HasColumnType("nvarchar(max)").HasDefaultValueSql("N'[]'");
     }
 }
