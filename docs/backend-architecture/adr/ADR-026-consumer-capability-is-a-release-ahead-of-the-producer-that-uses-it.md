@@ -105,6 +105,13 @@ binding it adds, so a message of the new type routes to no queue, not to
 consumer counts as deployed only once its switch is on and its pod has
 connected the endpoint.
 
+**Amended by
+[ADR-145](ADR-145-a-receive-endpoint-off-at-start-has-its-topology-declared-by-a-bus-that-only-deploys-it-1360-amending-adr-144-and-adr-026.md)**:
+the binding is declared as the pod starts, while the switch is still off, so a
+message of the new type waits in the consumer's queue. Such a consumer counts as
+deployed once its pod has started and declared its topology, whether or not its
+switch is on.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
