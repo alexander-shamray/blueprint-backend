@@ -72,6 +72,37 @@ RENAME_TEST = r'''    def test_a_rename_is_judged_at_both_ends(self):
 
 '''
 
+PIN_OLD = """        text = helper.read_text(encoding="utf-8")
+        code = [
+            line for line in text.splitlines() if not line.lstrip().startswith("#")
+        ]
+"""
+
+PIN_NEW = """        text = helper.read_text(encoding="utf-8")
+        # A continued line is joined first, as bash joins it, so its tail is compared too.
+        code = [
+            line for line in re.sub(r"\\s*\\\\\\n\\s*", " ", text).splitlines() if not line.lstrip().startswith("#")
+        ]
+"""
+
+PIN_CALL_OLD = """                'files=$(gh_read api "repos/{owner}/{repo}/pulls/$pr/files" '
+                "--paginate --jq '.[].filename | @json')",
+"""
+
+PIN_CALL_NEW = """                'files=$(gh_read api "repos/{owner}/{repo}/pulls/$pr/files" '
+                "--paginate --jq '.[] | (.filename, (.previous_filename // empty)) | @json')",
+"""
+
+
+def rename_tests(text):
+    text = once(text, TEST_ANCHOR, RENAME_TEST + TEST_ANCHOR)
+    text = once(text, PIN_OLD, PIN_NEW)
+    text = once(text, PIN_CALL_OLD, PIN_CALL_NEW)
+    if "\nimport re\n" not in text:
+        text = once(text, "import json\n", "import json\nimport re\n")
+    return text
+
+
 FILES_OLD = """# The changed paths are the diff's own, and each gets the one word this
 # script chooses for it. `filename` is the whole of what is read, and it is
 # read as a JSON string so that a newline inside a name cannot be a second
@@ -98,7 +129,7 @@ def main(root, part):
     elif part == "crlf-script":
         rewrite(helper, lambda t: once(t, BODY_READ, BODY_READ + BODY_STRIP))
     elif part == "rename-tests":
-        rewrite(tests, lambda t: once(t, TEST_ANCHOR, RENAME_TEST + TEST_ANCHOR))
+        rewrite(tests, rename_tests)
     elif part == "rename-script":
         rewrite(helper, lambda t: once(t, FILES_OLD, FILES_NEW))
     else:
