@@ -310,10 +310,12 @@ class FilingTests(unittest.TestCase):
         self.assertIn("gh issue create", job)
         self.assertIn("--label security --label high", job)
         self.assertIn("gh issue comment", job)
-        listing = re.search(r"gh issue list (.*?)\\\n", job)
+        listing = re.search(r"gh issue list ([^\n]*)", job)
         self.assertIsNotNone(listing, "the filing step no longer lists issues")
         for flag in ("--limit 1000", "--state open", "--label security"):
             self.assertIn(flag, listing.group(1))
+        # A list as long as its limit may be cut, so it is refused.
+        self.assertIn('[ "$(jq length <<<"$LIST")" -lt 1000 ]', job)
 
     def test_issues_write_is_the_deployed_jobs_and_no_other(self):
         text = commands()

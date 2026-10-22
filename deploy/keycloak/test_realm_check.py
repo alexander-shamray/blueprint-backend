@@ -2498,11 +2498,13 @@ class TheScheduleStillCallsThisGate(unittest.TestCase):
         """One issue per drift is only true while the listing can see the
         open one. `gh issue list` defaults to 30 and the first form said 100;
         past either the next hourly red files a duplicate, which is the
-        argument `.claude/scripts/gh-issue-list.sh` already makes for 1000."""
+        argument `.claude/scripts/gh-issue-list.sh` already makes for 1000,
+        and a list as long as its limit may be cut, so it is refused."""
         job = self.job()
-        match = re.search(r"gh issue list (.*?)\\\n", job)
+        match = re.search(r"gh issue list ([^\n]*)", job)
         self.assertIsNotNone(match, "the filing step no longer lists issues")
         self.assertIn("--limit 1000", match.group(1))
+        self.assertIn('[ "$(jq length <<<"$LIST")" -lt 1000 ]', job)
         self.assertIn("--state open", match.group(1))
         self.assertIn("--label security", match.group(1))
 
