@@ -59,8 +59,8 @@ the body, which is edited without a push. It is a workflow of its own rather
 than a job in `ci.yml` because `edited` there would rebuild the solution on
 every typo in a description. Its job skips a pull request whose author is
 `dependabot[bot]`, which declares no class or touch set. **The gate and the
-map that judge are read out
-of the base commit**, so a pull request cannot widen its own class. A base
+map that judge are read out of the base commit**, so a pull request cannot
+widen its own class. A base
 with no gate directory at all is judged by the head copy under a warning,
 because the pull request that lands the gate has no base copy by definition.
 The workflow file is still the branch's copy, as the closure gate's is.
