@@ -150,6 +150,21 @@ public class OperatorSwitchTests
         Guid probe = Guid.CreateVersion7();
         await harness.Bus.Publish(new Probe(probe), TestContext.Current.CancellationToken);
         await Until(() => ProbeConsumer.Seen.Contains(probe));
+        await Until(() => counter.Readied.Contains(Queue));
+    }
+
+    [Fact]
+    public void An_endpoint_registered_before_the_switch_is_connected_is_refused()
+    {
+        // Configured would never observe it, so switching it off later would stop nothing while readiness says off.
+        MutableSource source = new();
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
+        using ReceiveEndpointSwitch endpoints = new(switches);
+
+        Should.Throw<InvalidOperationException>(() => endpoints.Register(Queue, _ => { }))
+            .Message.ShouldContain("before ConnectOperatorSwitch");
+        switches.Endpoints.ShouldNotContain(Queue);
     }
 
     [Fact]
@@ -322,8 +337,8 @@ public class OperatorSwitchTests
 
         FakeTimeProvider clock = new();
         using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
-        endpoints.Register(Queue, _ => { }).ShouldBeFalse();
         endpoints.Attach(container);
+        endpoints.Register(Queue, _ => { }).ShouldBeFalse();
 
         source.Set();
         await Until(() => Volatile.Read(ref stops) == 1);
