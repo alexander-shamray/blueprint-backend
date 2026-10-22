@@ -109,6 +109,7 @@ src/BuildingBlocks/Common.Web/HealthProbe.cs
 .gitattributes
 deploy/canary
 deploy/workflow_paths
+docs/backend-architecture/adr
 $(awk '$2 == "source" { print $3 }' "$CASES")
 "
 SOURCE_INPUTS="$(printf '%s\n' $SOURCE_INPUTS | sort -u)"
@@ -446,7 +447,7 @@ done
 # hides a gap: anything ending in `/` is an interpolation prefix whose
 # concrete forms are declared, and `deploy/helm` is this script's own tree,
 # which SOURCE_INPUTS by definition excludes.
-grep -oE '\$ROOT/[A-Za-z0-9_./-]+' "$0" | sed -E 's|^\$ROOT/||' | sort -u >"$OUT/reads.txt"
+grep -oE '\$ROOT"?/[A-Za-z0-9_./-]+' "$0" | sed -E 's|^\$ROOT"?/||' | sort -u >"$OUT/reads.txt"
 
 if [ ! -s "$OUT/reads.txt" ]; then
     # A scan that found nothing would pass the loop below against any list at
@@ -2606,7 +2607,7 @@ section 'A suspended service renders no workload, and only where ADR-104 allows 
 # chart's `suspendable` value is held to it, and every chart on disk is then
 # rendered with `suspended` on, so a service added later is covered without
 # anyone adding it to a list. A chart with no row is not suspendable.
-ADR104="$(ls "$ROOT"/docs/backend-architecture/adr/ADR-104-*.md)"
+ADR104="$(ls "$ROOT/docs/backend-architecture/adr"/ADR-104-*.md)"
 ADR104_ROWS="$(awk -F'|' '$3 ~ /^ (Yes|No) $/ { gsub(/ /, "", $2); gsub(/ /, "", $3); print tolower($2), $3 }' "$ADR104")"
 adr104_says() { printf '%s\n' "$ADR104_ROWS" | awk -v c="$1" '$1 == c { print $2 }'; }
 
