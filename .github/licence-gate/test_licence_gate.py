@@ -191,6 +191,25 @@ class ScanProjects(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("Version child element", findings[0])
 
+    def test_fails_a_package_reference_carrying_a_version_override_child_element(self):
+        body = ('  <ItemGroup>\n'
+                '    <PackageReference Include="Evil">\n'
+                '      <VersionOverride>1.0.0</VersionOverride>\n'
+                '    </PackageReference>\n'
+                '  </ItemGroup>\n')
+        findings = scan(("src/Thing/Thing.csproj", csproj(body)))
+        self.assertEqual(len(findings), 1)
+        self.assertIn("VersionOverride child element", findings[0])
+
+    def test_reads_metadata_and_item_names_without_regard_to_case(self):
+        body = ('  <ItemGroup>\n'
+                '    <packagereference Include="Evil" versionoverride="1.0.0">\n'
+                '      <version>1.0.0</version>\n'
+                '    </packagereference>\n'
+                '  </ItemGroup>\n')
+        findings = scan(("src/Thing/Thing.csproj", csproj(body)))
+        self.assertEqual(len(findings), 2, findings)
+
     def test_fails_a_project_that_opts_out_of_central_package_management(self):
         body = ('  <PropertyGroup>\n'
                 '    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>\n'

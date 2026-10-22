@@ -213,17 +213,19 @@ def scan_projects(root: Path) -> list[str]:
         name = project.relative_to(root).as_posix()
         for element in parse_msbuild(project).iter():
             tag = local_name(element)
-            if tag == "PackageReference":
+            if tag.lower() == "packagereference":
                 identity = element.attrib.get("Include", element.attrib.get("Update", "?"))
-                for attribute in ("Version", "VersionOverride"):
-                    if attribute in element.attrib:
+                # Item metadata is a name MSBuild reads without regard to case,
+                # as an attribute or as a child element alike.
+                for metadata in ("Version", "VersionOverride"):
+                    if any(key.lower() == metadata.lower() for key in element.attrib):
                         findings.append(
-                            f"{name}: PackageReference {identity} carries a {attribute} "
+                            f"{name}: PackageReference {identity} carries a {metadata} "
                             f"attribute, so it restores a version no pin declares")
-                if any(local_name(child) == "Version" for child in element):
-                    findings.append(
-                        f"{name}: PackageReference {identity} carries a Version child "
-                        f"element, so it restores a version no pin declares")
+                    if any(local_name(child).lower() == metadata.lower() for child in element):
+                        findings.append(
+                            f"{name}: PackageReference {identity} carries a {metadata} child "
+                            f"element, so it restores a version no pin declares")
             elif tag == "ManagePackageVersionsCentrally":
                 value = (element.text or "").strip()
                 if value.lower() != "true":
