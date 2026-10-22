@@ -120,7 +120,7 @@ public class PrivacyRepublisherTests(ServiceFixture fixture)
     }
 
     [Fact]
-    public async Task A_run_that_cannot_reach_the_database_fails_and_says_so()
+    public async Task A_run_that_cannot_reach_the_database_exits_non_zero()
     {
         string absent = new SqlConnectionStringBuilder(fixture.ConnectionString)
         {
