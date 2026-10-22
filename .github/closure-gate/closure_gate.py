@@ -57,11 +57,14 @@ import sys
 # produce eight.
 _KEYWORD = r"(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)"
 
-# Every keyword followed by whatever token comes next. Classification happens
-# afterwards, and that ordering is the point: a keyword whose reference this
-# gate cannot parse is a finding, not a non-match. Matching the reference
-# shape here instead would turn every unhandled spelling into silence.
-KEYWORD_THEN_TOKEN = re.compile(rf"\b{_KEYWORD}\b\s*:?\s+(?P<token>\S+)", re.IGNORECASE)
+# Every keyword and the token after it, classified afterwards: a keyword whose
+# reference this gate cannot parse is a finding, not a non-match. The token is
+# a lookahead, so a keyword used as the token still matches: "fix closes #8".
+KEYWORD_THEN_TOKEN = re.compile(rf"\b{_KEYWORD}\b\s*:?\s+(?=(?P<token>\S+))", re.IGNORECASE)
+
+# GitHub ends a long subject's headline with this mark and starts the body
+# with it, at about 70 characters.
+CUT = "…"
 
 # What a token has to look like to be an issue reference. The optional
 # `owner/repo` prefix is captured so a cross-repository form can be refused by
@@ -106,6 +109,20 @@ def repository_of(pull_url: str) -> str | None:
     return match.group("repo") if match else None
 
 
+def commit_text(commit: dict) -> str:
+    """The commit's message, with a headline GitHub cut at the limit rejoined.
+
+    A cut headline ends in `CUT` and its body starts with `CUT` and the rest of
+    the subject. Left apart, a keyword or number straddling the cut is never
+    read, while GitHub's linker reads the whole message.
+    """
+    headline = commit.get("messageHeadline") or ""
+    body = commit.get("messageBody") or ""
+    if headline.endswith(CUT) and body.startswith(CUT):
+        return headline[:-1] + body[1:]
+    return f"{headline}\n{body}"
+
+
 def closing_references(text: str, repository: str) -> tuple[set[int], list[str]]:
     """Issue numbers a closing keyword in `text` names, and what could not be read.
 
@@ -119,6 +136,7 @@ def closing_references(text: str, repository: str) -> tuple[set[int], list[str]]
     unreadable: list[str] = []
 
     for match in KEYWORD_THEN_TOKEN.finditer(text):
+        phrase = f"{match.group(0)}{match.group('token')}".strip()
         token = match.group("token").lstrip(WRAPPERS)
         reference = REFERENCE.match(token)
         if reference is None:
@@ -130,13 +148,13 @@ def closing_references(text: str, repository: str) -> tuple[set[int], list[str]]
             if (token.startswith("#")
                     or ISSUE_SHAPED.search(token)
                     or "github.com/" in token.lower()):
-                unreadable.append(match.group(0).strip())
+                unreadable.append(phrase)
             continue
 
         named = reference.group("repo") or reference.group("url_repo")
         number = reference.group("number") or reference.group("url_number")
         if named is not None and named.lower() != repository.lower():
-            unreadable.append(match.group(0).strip())
+            unreadable.append(phrase)
             continue
         numbers.add(int(number))
 
@@ -206,8 +224,7 @@ def check(payload: dict) -> list[str]:
     from_commits: dict[int, list[str]] = {}
     for commit in commits:
         oid = (commit.get("oid") or "")[:8] or "(no oid)"
-        text = f"{commit.get('messageHeadline', '')}\n{commit.get('messageBody', '')}"
-        numbers, unreadable = closing_references(text, repository)
+        numbers, unreadable = closing_references(commit_text(commit), repository)
         for number in numbers:
             from_commits.setdefault(number, []).append(oid)
         for phrase in unreadable:
