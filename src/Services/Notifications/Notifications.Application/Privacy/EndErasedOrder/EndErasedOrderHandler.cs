@@ -12,7 +12,7 @@ public sealed class EndErasedOrderHandler(INotificationsPersonalDataStore store)
 {
     public async Task<Result> HandleAsync(EndErasedOrderCommand command, CancellationToken ct)
     {
-        await store.DeleteWaitingOrderNoticesAsync(command.OrderId, ct);
+        await store.DeleteWaitingOrderNoticesAsync(command.SubjectId, command.OrderId, ct);
         await store.AnonymiseEndedOrderNoticesAsync(command.OrderId, ct);
         await store.DeleteWaitingOrderDeliveriesAsync(command.OrderId, ct);
         await store.AnonymiseEndedOrderDeliveriesAsync(command.OrderId, ct);

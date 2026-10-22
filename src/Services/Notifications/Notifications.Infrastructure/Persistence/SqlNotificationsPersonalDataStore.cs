@@ -100,11 +100,14 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         "DELETE FROM notifications.ContactRecords WITH (UPDLOCK, HOLDLOCK) WHERE CustomerId = @SubjectId;";
 
     // The late event's own order: the notice is deleted or anonymised through the order id, and the record only
-    // while it is still the subject's. The record's key is held first, as an intake holds it before reading its
-    // notices, so the two never lock a notice and the key in opposite orders.
+    // while it is still the subject's. The subject's range and then the record's key are held first, the order the
+    // erasure takes them in and before any notice, as an intake holds the key before reading its notices.
     private const string DeleteWaitingOrderSql =
         """
         SET NOCOUNT ON;
+        DECLARE @Range int = (
+            SELECT COUNT(*) FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK, FORCESEEK)
+            WHERE CustomerId = @SubjectId);
         DECLARE @Held int = (SELECT COUNT(*) FROM notifications.OrderRecords WITH (UPDLOCK) WHERE OrderId = @OrderId);
         SET NOCOUNT OFF;
         DELETE FROM notifications.NotificationLog WHERE Status = 'Pending' AND OrderId = @OrderId;
@@ -174,8 +177,8 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
     public Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct) =>
         ExecuteAsync(DeleteContactSql, subjectId, ct);
 
-    public Task<int> DeleteWaitingOrderNoticesAsync(Guid orderId, CancellationToken ct) =>
-        ExecuteAsync(DeleteWaitingOrderSql, new { OrderId = orderId }, ct);
+    public Task<int> DeleteWaitingOrderNoticesAsync(Guid subjectId, Guid orderId, CancellationToken ct) =>
+        ExecuteAsync(DeleteWaitingOrderSql, new { SubjectId = subjectId, OrderId = orderId }, ct);
 
     public Task<int> AnonymiseEndedOrderNoticesAsync(Guid orderId, CancellationToken ct) =>
         ExecuteAsync(AnonymiseEndedOrderSql, new { OrderId = orderId }, ct);
