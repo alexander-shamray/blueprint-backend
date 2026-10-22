@@ -2246,9 +2246,8 @@ def _offence(command, depth, judged):
         lexer.whitespace_split = True
         tokens = list(lexer)
     except ValueError:
-        # Unparseable is not hostile: `shlex` fails on commands bash runs, an
-        # ordinary commit among them. A parse failure degrades to the substring
-        # scan the settings deny already performs, never a silent pass.
+        # Unparseable is refused below, whatever it is; the checks before that
+        # only give the refusal a sharper reason.
         # Bash removes quotes and backslashes too, so `pu''sh` is still push here.
         flat = re.sub(r"[\\'\"]", "", stripped)
         for needle in FORBIDDEN_FLAGS + FORBIDDEN_SUBSTRINGS:
@@ -2269,15 +2268,14 @@ def _offence(command, depth, judged):
                 "cannot be tokenised, so what bash runs cannot be read; "
                 "refusing rather than judging its body as commands."
             )
-        # The push check reaches this path too, because a line is easy to make
-        # untokenisable on purpose; here it can only be the crude one.
-        if re.search(r"\bgit\b[^;&|\n]*\bpush\b", flat):
-            return (
-                "a `git push` appears in a command this guard could not "
-                "tokenise, so its remote and refspec cannot be read; refusing "
-                "rather than admitting a push nothing checked."
-            )
-        return None
+        # Everything left is refused: a line is easy to make untokenisable on
+        # purpose, bash runs the lines before the one that breaks, and a glob,
+        # an expansion or another case can name git without its letters.
+        return (
+            "this command could not be tokenised, so what it runs cannot be "
+            "read; refusing rather than admitting a command nothing checked. "
+            "Balance its quotes, or move a body into a quoted heredoc."
+        )
 
     if unmodelled_printer(tokens):
         return (
