@@ -733,7 +733,7 @@ jobs:
           --results-directory ./TestResults/unit
 
       - name: Hand the two stages to the stage gate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stages-build
           path: TestResults
@@ -851,7 +851,7 @@ jobs:
           stage
 
       - name: Hand the shard to the stage gate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stages-integration-${{ matrix.shard }}
           path: TestResults/integration
@@ -862,7 +862,7 @@ jobs:
       # anyone opening this log. Not the stage gate's: it counts TestResults/integration.
       - name: Keep the sightings
         if: always() && hashFiles('TestResults/sightings/*.txt') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sightings-${{ matrix.shard }}
           path: TestResults/sightings
