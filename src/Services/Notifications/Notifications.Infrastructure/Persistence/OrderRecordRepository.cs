@@ -8,9 +8,10 @@ internal sealed class OrderRecordRepository(NotificationsDbContext db) : IOrderR
     public Task<OrderRecord?> GetAsync(Guid orderId, CancellationToken ct) =>
         db.OrderRecords.SingleOrDefaultAsync(r => r.OrderId == orderId, ct);
 
-    // The customer's range first and then the record, the order the erasure's first statement takes them in, so
-    // either side waits holding nothing: an intake that took its notice before meeting the range at its record's
-    // insert would deadlock with the erasure's later scans, and one that read the record shared would not wait.
+    // The record's key under an update lock. Only an absent record takes the customer's range as well, the erasure's
+    // first lock, so its intake waits there before writing anything: meeting the range at the record's insert, after
+    // staging a notice, deadlocked with the erasure's later scans. A deleter that locks a record's key before its
+    // index entry reaches no absent record, so the range is never held between the two.
     public async Task<OrderRecord?> GetHeldAsync(Guid orderId, Guid customerId, CancellationToken ct)
     {
         if (db.Database.CurrentTransaction is null)
@@ -18,9 +19,11 @@ internal sealed class OrderRecordRepository(NotificationsDbContext db) : IOrderR
 
         await db.Database.ExecuteSqlAsync(
             $"""
-            SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK, FORCESEEK)
-            WHERE CustomerId = {customerId};
-            SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK) WHERE OrderId = {orderId};
+            DECLARE @Found int =
+                (SELECT COUNT(*) FROM notifications.OrderRecords WITH (UPDLOCK) WHERE OrderId = {orderId});
+            IF @Found = 0
+                SELECT @Found = COUNT(*) FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK, FORCESEEK)
+                WHERE CustomerId = {customerId};
             """,
             ct);
 
