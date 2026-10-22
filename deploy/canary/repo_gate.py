@@ -407,11 +407,12 @@ def _chart_exists(chart: str | None, root: Path) -> bool:
     return (root / "deploy" / "helm" / chart / "Chart.yaml").is_file()
 
 
-# The MassTransit version the two tables below were read from, out of its
-# package's own instrument names and units. Check 5 fails when the pin in
-# Directory.Packages.props moves, because an upgrade may rename or re-unit an
-# instrument and every message-judged rung would then read an absent series.
-MASSTRANSIT_VERIFIED = "8.5.3"
+# The MassTransit versions the two tables below were read from, out of each
+# package's own instrument names and units. Check 5 fails when the pin is none
+# of them, because an upgrade may rename or re-unit an instrument. A list, so
+# the gate learns a version before the pin moves: the pin is Class E, this file
+# Class D, and the contract admits no pull request of both.
+MASSTRANSIT_VERIFIED = ("8.5.3", "8.5.12")
 
 
 def _metrics_are_vouched_for(metrics: list[str], root: Path, source: Path) -> list[str]:
@@ -439,7 +440,7 @@ def _metrics_are_vouched_for(metrics: list[str], root: Path, source: Path) -> li
             if instrument not in METER_INSTRUMENTS.get(meter, ()):
                 failures.append(
                     f"a template reads {metric}, whose instrument {instrument} "
-                    f"is not one {meter} {MASSTRANSIT_VERIFIED} declares"
+                    f"is not one {meter} {_verified_versions()} declares"
                 )
             elif meter not in registered:
                 failures.append(
@@ -473,14 +474,18 @@ def _masstransit_pin_is_verified(root: Path) -> list[str]:
     if not pin:
         return [f"{props.name} pins no MassTransit version, so the series table "
                 "cannot be held to one"]
-    if pin.group(1) != MASSTRANSIT_VERIFIED:
+    if pin.group(1) not in MASSTRANSIT_VERIFIED:
         return [
             f"{props.name} pins MassTransit {pin.group(1)}, and analysis.py's "
-            f"EXPORTED_SERIES was verified against {MASSTRANSIT_VERIFIED}. Re-read "
+            f"EXPORTED_SERIES was verified against {_verified_versions()}. Re-read "
             "the package's instrument names and units, correct the table and "
-            "the queries, then move MASSTRANSIT_VERIFIED"
+            "the queries, then add the version to MASSTRANSIT_VERIFIED"
         ]
     return []
+
+
+def _verified_versions() -> str:
+    return " and ".join(MASSTRANSIT_VERIFIED)
 
 
 def _workflow_covers_inputs() -> list[str]:
