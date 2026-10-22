@@ -224,12 +224,9 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
 
     @staticmethod
     def _gh_printing(body, files="docs/x.md\n"):
-        # Quoted heredocs, because a body carries backticks and a
-        # double-quoted `printf` argument would command-substitute them —
-        # which is the stub doing what the helper exists to refuse. The shim
-        # answers the files endpoint with each name JSON-encoded on its own
-        # line — the shape the helper's `--jq` produces, newline in a name and
-        # all — and anything else with the body.
+        # Quoted heredocs, since a double-quoted printf would command-substitute a body's backticks, which is the stub
+        # doing what the helper refuses. The files endpoint gets one JSON-encoded name per line, the shape the helper's
+        # `--jq` produces, newline in a name and all; anything else gets the body.
         encoded = "".join(
             json.dumps(name) + "\n" for name in files.split("\n") if name
         )
