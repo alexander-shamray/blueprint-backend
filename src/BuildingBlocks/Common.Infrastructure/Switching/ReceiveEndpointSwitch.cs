@@ -126,17 +126,16 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             if (!_switchable.TryAdd(queue, configure))
                 throw new InvalidOperationException($"Receive endpoint {queue} is registered with the switch twice.");
 
+            // Declared before the lock is released, so a reload's sweep never finds it off and undeclared; one
+            // configured now is declared by Configured, as the bus configures it.
             off = _switches.IsOff(queue);
             if (off)
             {
+                _switches.DeclareEndpoint(queue);
                 _deferred.Add(queue);
                 _stopped.Add(queue);
             }
         }
-
-        // One configured now is declared by Configured, as the bus configures it.
-        if (off)
-            _switches.DeclareEndpoint(queue);
 
         return !off;
     }
@@ -168,8 +167,8 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             _endpoints[queue] = ready.ReceiveEndpoint;
 
         // Off by now: thrown before this endpoint was ready, or configured without the helper, so what the broker
-        // delivered before the stop lands still runs; one the helper deferred never got here off (ADR-144). Off the
-        // callback, since the bus waits on it and a stop waits on the bus.
+        // delivered before the stop lands still runs (ADR-144). Off the callback, since the bus waits on it and a stop
+        // waits on the bus.
         if (_switches.IsOff(queue))
             _ = Task.Run(() => ApplyAsync(queue));
 
