@@ -411,7 +411,7 @@ def _chart_exists(chart: str | None, root: Path) -> bool:
 # each package's own instrument names and units. Check 5 fails when the pin is
 # none of them, because an upgrade may rename or re-unit an instrument. A list,
 # so a version is verified before the pin moves and Dependabot's bump, which
-# edits the pin alone, passes on its own (change-locality.md, section 3).
+# edits the pin alone, passes on its own.
 MASSTRANSIT_VERIFIED = ("8.5.3", "8.5.12")
 
 
