@@ -651,6 +651,24 @@ nobody had gone looking for, and the pattern is that the bound gets narrower
 every time somebody probes rather than reasons. **It is a claim about the last
 search, not a proof.**
 
+**Three ways round it had nothing to do with git's grammar.** The hook read its
+event as text, and Python reads a Windows pipe in the ANSI code page, so a
+command carrying a character whose UTF-8 bytes include one cp1252 leaves
+undefined raised before anything was judged, and landed in the branch that
+admits a malformed event. Both argv guards now decode the bytes as UTF-8, as
+the other hooks do, and refuse an event that is not UTF-8; an event that is
+UTF-8 but not JSON is still admitted, the one argued fail-open. The hook was
+registered on `Bash` alone, so git through the PowerShell tool was judged by
+nothing here: a second registration sends PowerShell calls to the git guard,
+which refuses any that names `git` once backticks and quotes are removed, since
+it parses Bash's grammar and not PowerShell's. The index guard stays on `Bash`,
+because the skill's prefix grants are `Bash(...)` rules and a PowerShell call is
+prompted like any other. And a heredoc with no closing line, whose body then
+fails to tokenise, is refused outright, as an undecodable delimiter is, because
+the untokenised fallback reads that body as commands with its crudest checks.
+The new residual is a name PowerShell computes, a concatenation say, which is
+the expansion residual above in another shell.
+
 ## The ext transport and pinned grants
 
 **The `::` in a value collides with the `:*` suffix syntax, and the collision
