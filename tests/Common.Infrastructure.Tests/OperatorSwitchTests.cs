@@ -293,8 +293,8 @@ public class OperatorSwitchTests
         endpoints.Register(Queue, _ => { }).ShouldBeFalse();
         await endpoints.Ready(ready);
 
-        Task declaring = endpoints.DeclareDeferredAsync();
-        await Until(() => Volatile.Read(ref attempts) == 1);
+        await endpoints.DeclareDeferredAsync().WaitAsync(Budget, TestContext.Current.CancellationToken);
+        Volatile.Read(ref attempts).ShouldBe(1);
 
         source.Set(Queue, running);
         await Until(() => endpoints.IsStopped(running));
@@ -304,9 +304,6 @@ public class OperatorSwitchTests
         // the sweep moves on, so a second one would be counted by now.
         await endpoints.ApplyAllAsync().WaitAsync(Budget, TestContext.Current.CancellationToken);
         Volatile.Read(ref attempts).ShouldBe(1, "a declaration already running is not started a second time");
-
-        clock.Advance(ReceiveEndpointSwitch.TopologyTimeout);
-        await declaring.WaitAsync(Budget, TestContext.Current.CancellationToken);
     }
 
     private static async Task<BusHandle> Hang(CancellationToken cancellationToken)
