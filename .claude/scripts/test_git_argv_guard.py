@@ -6,6 +6,7 @@ re-implementing are `review_helpers.py`'s.
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -2547,7 +2548,7 @@ class TheGitArgvGuard(unittest.TestCase):
         out, err = _io.StringIO(), _io.StringIO()
         stdin = _sys.stdin
         try:
-            _sys.stdin = _io.StringIO(event)
+            _sys.stdin = _io.TextIOWrapper(_io.BytesIO(event.encode("utf-8")), encoding="utf-8")
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 guard.main()
         finally:
@@ -2733,6 +2734,37 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertEqual(0, result.returncode)
         self.assertEqual("", result.stdout.strip())
         self.assertIn("guard-git-argv", result.stderr)
+
+    def judge_raw(self, payload):
+        """The verdict on raw event bytes, read as this host's pipe reads them."""
+        # PYTHONIOENCODING stands in for the Windows pipe: text read from stdin
+        # is cp1252, strict, so a reader that decodes text instead of bytes raises.
+        result = subprocess.run(
+            [sys.executable, str(HOOK)], input=payload, capture_output=True,
+            timeout=HOOK_TIMEOUT, env=dict(os.environ, PYTHONIOENCODING="cp1252"))
+        self.assertEqual(0, result.returncode, result.stderr)
+        if not result.stdout.strip():
+            return None
+        decision = json.loads(result.stdout)["hookSpecificOutput"]
+        self.assertEqual("deny", decision["permissionDecision"])
+        return decision["permissionDecisionReason"]
+
+    @staticmethod
+    def raw_event(command):
+        """`command` in an event as the harness sends it, unescaped UTF-8."""
+        event = {"tool_name": "Bash", "tool_input": {"command": command}}
+        return json.dumps(event, ensure_ascii=False).encode("utf-8")
+
+    def test_a_character_cp1252_cannot_decode_does_not_skip_the_judgement(self):
+        # U+23F3 is E2 8F B3 in UTF-8, and 0x8F is undefined in cp1252.
+        hourglass = "\u23f3"
+        self.assertIsNotNone(self.judge_raw(self.raw_event(f"git push origin +HEAD:main # {hourglass}")))
+        self.assertIsNone(self.judge_raw(self.raw_event(f"git status # {hourglass}")))
+
+    def test_an_event_that_is_not_utf8_is_refused(self):
+        reason = self.judge_raw(self.raw_event("git status X").replace(b"X", b"\xff"))
+        self.assertIsNotNone(reason)
+        self.assertIn("UTF-8", reason)
 
     # ---- the wiring, without which none of the above runs -------------------
 

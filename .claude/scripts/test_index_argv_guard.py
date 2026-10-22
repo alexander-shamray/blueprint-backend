@@ -8,6 +8,7 @@ never calls the file.
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -197,6 +198,38 @@ class GuardIndexArgv(unittest.TestCase):
             input=json.dumps(event), capture_output=True, text=True)
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("", result.stdout.strip())
+
+    def judge_raw(self, payload):
+        """The verdict on raw event bytes, read as this host's pipe reads them."""
+        # PYTHONIOENCODING stands in for the Windows pipe: text read from stdin
+        # is cp1252, strict, so a reader that decodes text instead of bytes raises.
+        result = subprocess.run(
+            [sys.executable, str(HOOK)], input=payload, capture_output=True,
+            env=dict(os.environ, PYTHONIOENCODING="cp1252"))
+        self.assertEqual(0, result.returncode, result.stderr)
+        if not result.stdout.strip():
+            return None
+        payload = json.loads(result.stdout)["hookSpecificOutput"]
+        self.assertEqual("deny", payload["permissionDecision"])
+        return payload["permissionDecisionReason"]
+
+    @staticmethod
+    def raw_event(command):
+        """`command` in an event as the harness sends it, unescaped UTF-8."""
+        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": command}}
+        return json.dumps(event, ensure_ascii=False).encode("utf-8")
+
+    def test_a_character_cp1252_cannot_decode_does_not_skip_the_judgement(self):
+        # U+23F3 is E2 8F B3 in UTF-8, and 0x8F is undefined in cp1252.
+        cbx = "bash .claude/skills/codebase-index/scripts/cbx search"
+        self.assertIsNotNone(self.judge_raw(self.raw_event(f'{cbx} "\u23f3"; rm -rf x')))
+        self.assertIsNone(self.judge_raw(self.raw_event(f'{cbx} "\u23f3" --json')))
+
+    def test_an_event_that_is_not_utf8_is_refused(self):
+        cbx = "bash .claude/skills/codebase-index/scripts/cbx search X --json"
+        reason = self.judge_raw(self.raw_event(cbx).replace(b"X", b"\xff"))
+        self.assertIsNotNone(reason)
+        self.assertIn("UTF-8", reason)
 
     def test_the_hook_is_registered_for_bash(self):
         settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
