@@ -34,7 +34,8 @@ against a throwaway repository. `docs/testing.md` has the live invocation.
 ## How it runs
 
 [`commit-gate.yml`](../workflows/commit-gate.yml), on every pull request with
-no path filter. **The gate that judges is read out of the base commit**, while
+no path filter but Dependabot's: its job skips a pull request whose author
+is `dependabot[bot]`, whose commits carry no trailer. **The gate that judges is read out of the base commit**, while
 the suite runs the branch's copy, so a pull request cannot supply its own
 judge. The pull request that introduces the gate has no base copy and is
 judged by its own, with a notice; a base without the gate and a head without

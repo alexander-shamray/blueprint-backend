@@ -18,7 +18,7 @@ concurrency:
 jobs:
   commit-gate:
     # Dependabot's pull requests declare no class or touch set and carry no
-    # PR trailer; docs/change-locality.md section 6.
+    # PR trailer; .github/commit-gate/README.md, How it runs.
     if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
