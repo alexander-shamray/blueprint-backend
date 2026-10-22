@@ -870,6 +870,16 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertRefused(f"git pu''sh origin +HEAD:main{NEWLINE}echo \"")
         self.assertRefused(f"git pu\\sh origin +HEAD:main{NEWLINE}echo \"")
 
+    def test_a_quoted_separator_does_not_hide_a_push_from_the_fallback(self):
+        # Removing quotes turns a quoted `;` or newline into what reads as a
+        # separator, -c reaches git's config, and GIT is git on Windows, so the
+        # fallback refuses whatever it could not tokenise.
+        self.assertRefused(f"git --git-dir=\";\" pu''sh origin +HEAD:main{NEWLINE}echo \"")
+        self.assertRefused(f"git --git-dir=\"{NEWLINE}\" pu''sh origin +HEAD:main{NEWLINE}echo \"")
+        self.assertRefused(f"git -c a.b=x status{NEWLINE}echo \"")
+        self.assertRefused(f"GIT pu''sh origin +HEAD:main{NEWLINE}echo \"")
+        self.assertRefused("ls 'unbalanced")
+
     def test_git_named_as_data_is_not_an_invocation(self):
         # A printer's arguments are data, and the run's leading word is what
         # decides that — a guard refusing `echo git push …` refuses honest
@@ -1089,8 +1099,8 @@ class TheGitArgvGuard(unittest.TestCase):
                 self.assertAdmitted(f"{prefix}# git push origin +HEAD:main")
 
         # A trailing backslash has nothing to escape and must not read past
-        # the end of the string.
-        self.assertAdmitted("git log \\")
+        # the end of the string; it cannot be tokenised, so it is refused.
+        self.assertRefused("git log \\")
 
     def test_a_here_string_is_not_a_heredoc(self):
         # `cat <<<EOF` prints the word `EOF` and runs the next line, so reading
