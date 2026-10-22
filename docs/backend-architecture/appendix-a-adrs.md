@@ -149,7 +149,7 @@ decision looks wrong.
 | **ADR-140** | [Shipping's erasure keeps an order placed under its request (#1275), amending ADR-052](adr/ADR-140-shippings-erasure-keeps-an-order-placed-under-its-request-1275-amending-adr-052.md) |
 | **ADR-141** | [Payments keeps the erasure requests an order was placed under, and its erasure spares that order (#1322), amending ADR-092](adr/ADR-141-payments-keeps-the-erasure-requests-an-order-was-placed-under-and-its-erasure-spares-that-order-1322-amending-adr-092.md) |
 | **ADR-142** | [The canary's MassTransit check holds the series table to a list of verified versions; supersedes the single-version rule of ADR-047](adr/ADR-142-the-canarys-masstransit-check-holds-the-series-table-to-a-list-of-verified-versions-supersedes-the-single-version-rule-of-adr-047.md) |
-| **ADR-142** | [Privacy's migrator republishes the close of each request it may announce, on ADR-090's gate (#1300), amending ADR-090 and ADR-139](adr/ADR-142-privacys-migrator-republishes-the-close-of-each-request-it-may-announce-on-adr-090s-gate-1300-amending-adr-090-and-adr-139.md) |
+| **ADR-143** | [Privacy's migrator republishes the close of each request it may announce, on ADR-090's gate (#1300), amending ADR-090 and ADR-139](adr/ADR-143-privacys-migrator-republishes-the-close-of-each-request-it-may-announce-on-adr-090s-gate-1300-amending-adr-090-and-adr-139.md) |
 
 ---
 

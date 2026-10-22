@@ -4,7 +4,7 @@ using Privacy.Infrastructure.Persistence;
 
 namespace Privacy.Migrator;
 
-/// <summary>ADR-090's republish for Privacy: each close it may announce, staged on the Broker lane (ADR-142).</summary>
+/// <summary>ADR-090's republish for Privacy: each close it may announce, staged on the Broker lane (ADR-143).</summary>
 /// <remarks>
 /// SQL through the migration's own context, since §4.2 keeps the migrator off Application and Domain. The payload
 /// keeps the close as <c>OccurredAt</c>, which holders stamp as <c>ClosedAt</c> (ADR-139), under a fresh id (§9.5).

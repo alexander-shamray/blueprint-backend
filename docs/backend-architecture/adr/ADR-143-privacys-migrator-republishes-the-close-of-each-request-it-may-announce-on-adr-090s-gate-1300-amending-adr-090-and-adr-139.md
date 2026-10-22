@@ -1,4 +1,4 @@
-# ADR-142 — Privacy's migrator republishes the close of each request it may announce, on ADR-090's gate (#1300), amending ADR-090 and ADR-139
+# ADR-143 — Privacy's migrator republishes the close of each request it may announce, on ADR-090's gate (#1300), amending ADR-090 and ADR-139
 
 **Decision.** Privacy's migrator image takes `Republish:Enabled=true` as
 [ADR-090](ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)
