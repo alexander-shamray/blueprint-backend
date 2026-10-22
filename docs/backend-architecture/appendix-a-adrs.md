@@ -150,6 +150,7 @@ decision looks wrong.
 | **ADR-141** | [Payments keeps the erasure requests an order was placed under, and its erasure spares that order (#1322), amending ADR-092](adr/ADR-141-payments-keeps-the-erasure-requests-an-order-was-placed-under-and-its-erasure-spares-that-order-1322-amending-adr-092.md) |
 | **ADR-142** | [The canary's MassTransit check holds the series table to a list of verified versions; supersedes the single-version rule of ADR-047](adr/ADR-142-the-canarys-masstransit-check-holds-the-series-table-to-a-list-of-verified-versions-supersedes-the-single-version-rule-of-adr-047.md) |
 | **ADR-143** | [Privacy's migrator republishes the close of each request it may announce, on ADR-090's gate (#1300), amending ADR-090 and ADR-139](adr/ADR-143-privacys-migrator-republishes-the-close-of-each-request-it-may-announce-on-adr-090s-gate-1300-amending-adr-090-and-adr-139.md) |
+| **ADR-144** | [A receive endpoint switched off when its bus is configured is not configured until its switch is on (#1289), amending ADR-113](adr/ADR-144-a-receive-endpoint-switched-off-when-its-bus-is-configured-is-not-configured-until-its-switch-is-on-1289-amending-adr-113.md) |
 
 ---
 
