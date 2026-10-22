@@ -112,8 +112,8 @@ def repository_of(pull_url: str) -> str | None:
 def commit_texts(commit: dict) -> list[str]:
     """Each reading of the commit's message the gate must judge.
 
-    A headline cut at the limit is read apart and rejoined to its body. Both,
-    because a pair that only looks cut reads as written to GitHub.
+    A headline cut at the limit is read as written and rejoined to its body.
+    Both, because a pair that only looks cut reads as written to GitHub.
     """
     headline = commit.get("messageHeadline") or ""
     body = commit.get("messageBody") or ""
@@ -224,14 +224,20 @@ def check(payload: dict) -> list[str]:
     from_commits: dict[int, list[str]] = {}
     for commit in commits:
         oid = (commit.get("oid") or "")[:8] or "(no oid)"
-        numbers: set[int] = set()
+        readings = [closing_references(text, repository) for text in commit_texts(commit)]
         unreadable: list[str] = []
-        for text in commit_texts(commit):
-            found, failed = closing_references(text, repository)
-            numbers |= found
+        for _, failed in readings:
             unreadable += [phrase for phrase in failed if phrase not in unreadable]
-        for number in numbers:
+        agreed = set.intersection(*(found for found, _ in readings))
+        for number in agreed:
             from_commits.setdefault(number, []).append(oid)
+        for number in sorted(set.union(*(found for found, _ in readings)) - agreed - linked):
+            problems.append(
+                f"commit {oid} is cut at the limit and its two readings differ on "
+                f"#{number}, which the description does not name: GitHub closes it "
+                f"only if the raw message does. Name it, or shorten the subject so "
+                f"nothing straddles the cut"
+            )
         for phrase in unreadable:
             problems.append(
                 f"commit {oid} carries `{phrase}`, which is keyword-shaped and "

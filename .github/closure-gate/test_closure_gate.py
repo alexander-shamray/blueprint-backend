@@ -181,14 +181,21 @@ class CutHeadlines(unittest.TestCase):
         problems = check(data)
         self.assertTrue(any("#812" in problem for problem in problems), problems)
 
-    def test_a_number_cut_in_two_is_read_whole_and_as_written(self):
+    def test_a_number_cut_in_two_is_ambiguous_not_closed(self):
         data = self.pull("fix(ci): the gate reads the wrapped binding, closes #8…", "…12")
         problems = check(data)
-        self.assertTrue(any("#812" in problem for problem in problems), problems)
-        self.assertTrue(any("#8 " in problem or "#8`" in problem for problem in problems), problems)
+        self.assertEqual(len(problems), 2, problems)
+        self.assertTrue(all("differ" in problem for problem in problems), problems)
+        self.assertFalse(any("is closed by commit" in problem for problem in problems), problems)
 
-    def test_a_headline_without_the_mark_is_left_apart(self):
-        data = self.pull("fix: a closes…", "#812")
+    def test_a_cut_reading_the_description_names_is_not_a_problem(self):
+        data = self.pull("fix(ci): the gate reads the wrapped binding, closes…", "… #812")
+        data["closingIssuesReferences"] = [{"number": 812}]
+        data["body"] = "| Closes | #812 |\n\nCloses #812"
+        self.assertEqual(check(data), [])
+
+    def test_a_body_without_the_mark_is_not_rejoined(self):
+        data = self.pull("fix: a closes…", "x #812")
         self.assertEqual(check(data), [])
 
 
