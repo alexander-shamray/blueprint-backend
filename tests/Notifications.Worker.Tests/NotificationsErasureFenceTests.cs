@@ -197,6 +197,34 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
     }
 
     [Fact]
+    public async Task A_redelivered_intake_waits_for_an_ended_orders_key_before_reading_its_notice()
+    {
+        // Ending the order deletes the event's notice; a redelivery holding the key first would read that notice and
+        // wait, while the ending's record delete waited on the key: a deadlock.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid order = Guid.CreateVersion7();
+        OrderPlaced placed = OrderEvents.Placed(order, _subject, At);
+        await HandleAsync(placed, ct);
+
+        await using NotificationsDbContext db = new(
+            new DbContextOptionsBuilder<NotificationsDbContext>().UseSqlServer(fixture.ConnectionString).Options);
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
+        SqlNotificationsPersonalDataStore store = new(
+            db,
+            new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>()));
+        await store.DeleteWaitingOrderNoticesAsync(order, ct);
+
+        Task redelivery = HandleAsync(placed, ct);
+        await Should.ThrowAsync<TimeoutException>(() => redelivery.WaitAsync(Wait, ct));
+
+        await store.AnonymiseEndedOrderNoticesAsync(order, ct).WaitAsync(ServiceFixture.StepDeadline, ct);
+        await store.DeleteOrderRecordAsync(_subject, order, ct).WaitAsync(ServiceFixture.StepDeadline, ct);
+        await transaction.RollbackAsync(ct);
+
+        await redelivery.WaitAsync(ServiceFixture.StepDeadline, ct);
+    }
+
+    [Fact]
     public async Task A_contact_save_waits_for_an_erasure_that_found_no_contact()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
