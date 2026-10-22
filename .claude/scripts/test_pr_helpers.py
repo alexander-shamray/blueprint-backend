@@ -130,8 +130,9 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         # JSON strings, because git permits a newline in a name.
         helper = SCRIPTS / "pr-locality.sh"
         text = helper.read_text(encoding="utf-8")
+        # A continued line is joined first, as bash joins it, so its tail is compared too.
         code = [
-            line for line in text.splitlines() if not line.lstrip().startswith("#")
+            line for line in re.sub(r"\s*\\\n\s*", " ", text).splitlines() if not line.lstrip().startswith("#")
         ]
         # `gh_read` is `gh` under gh-read-bound.sh's bound, so both spellings are calls.
         gh_calls = [line.strip() for line in code if "gh " in line or "gh_read " in line]
@@ -139,7 +140,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             [
                 'body=$(gh_read pr view "$pr" --json body --jq .body)',
                 'files=$(gh_read api "repos/{owner}/{repo}/pulls/$pr/files" '
-                "--paginate --jq '.[].filename | @json')",
+                "--paginate --jq '.[] | (.filename, (.previous_filename // empty)) | @json')",
             ],
             gh_calls,
         )
@@ -292,6 +293,26 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
                 self.assertEqual("", r.stdout)
                 self.assertNotIn("IGNORE", r.stderr)
                 self.assertNotIn("ignore", r.stderr)
+
+    def test_a_rename_is_judged_at_both_ends(self):
+        # The files API gives a rename's source as previous_filename, and the CI
+        # gate judges both ends, so the stub runs the helper's own --jq on it.
+        body = "| Class | D |\n| Touch set | docs/** |\n"
+        api = json.dumps([
+            {"filename": "docs/foo.md", "previous_filename": "src/Foo.cs", "status": "renamed"},
+            {"filename": "docs/x.md", "status": "modified"},
+        ])
+        script = (
+            'case "$*" in *"/files"*)\n'
+            '  while [ $# -gt 0 ]; do if [ "$1" = --jq ]; then q=$2; fi; shift; done\n'
+            "  jq -r \"$q\" <<'FILES' | tr -d '\\r'\n" + api + "\nFILES\n"
+            ";; *) cat <<'STUB'\n" + body + "STUB\n;; esac\n"
+        )
+        r = self._run_locality_with_gh(script)
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertEqual(
+            ["class D", "inside docs/foo.md", "outside src/Foo.cs", "inside docs/x.md"],
+            r.stdout.splitlines())
 
     def test_a_body_without_rows_is_empty_success(self):
         r = self._run_locality_with_gh(self._gh_printing("no rows here\n"))

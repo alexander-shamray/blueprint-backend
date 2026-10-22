@@ -77,10 +77,12 @@ for item in "${items[@]}"; do
   patterns+=("^${re}(/.*)?$")
 done
 # The changed paths are the diff's own, and each gets the one word this
-# script chooses for it. `filename` is the whole of what is read, and it is
-# read as a JSON string so that a newline inside a name cannot be a second
-# line: a name that needed an escape is refused rather than decoded.
-files=$(gh_read api "repos/{owner}/{repo}/pulls/$pr/files" --paginate --jq '.[].filename | @json')
+# script chooses for it: `filename`, and a rename's `previous_filename`, since a
+# move out of a tree changes that tree, as the CI gate judges it. Each is read
+# as a JSON string so that a newline inside a name cannot be a second line: a
+# name that needed an escape is refused rather than decoded.
+files=$(gh_read api "repos/{owner}/{repo}/pulls/$pr/files" --paginate \
+  --jq '.[] | (.filename, (.previous_filename // empty)) | @json')
 verdicts=()
 while IFS= read -r line; do
   [ -n "$line" ] || continue
