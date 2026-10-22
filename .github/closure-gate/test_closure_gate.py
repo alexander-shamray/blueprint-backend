@@ -157,6 +157,48 @@ class KeywordParser(unittest.TestCase):
         self.assert_finds(f"Closes {REPO.upper()}#20", {20})
 
 
+class AdjacentKeywords(unittest.TestCase):
+    def test_a_keyword_before_a_keyword_still_finds_the_reference(self):
+        for text in ("This fix closes #812", "the fix resolves #812", "Resolved: fixes #812"):
+            with self.subTest(text=text):
+                numbers, unreadable = closing_references(text, REPO)
+                self.assertEqual(numbers, {812})
+                self.assertEqual(unreadable, [])
+
+    def test_an_unreadable_phrase_is_reported_whole(self):
+        _, unreadable = closing_references("fix closes elsewhere/repo#5", REPO)
+        self.assertEqual(unreadable, ["closes elsewhere/repo#5"])
+
+
+class CutHeadlines(unittest.TestCase):
+    def pull(self, headline: str, body: str) -> dict:
+        data = payload()
+        data["commits"][0].update(messageHeadline=headline, messageBody=body)
+        return data
+
+    def test_a_keyword_cut_from_its_reference_is_read(self):
+        data = self.pull("fix(ci): the gate reads the wrapped binding, closes…", "… #812\n\nWhy.")
+        problems = check(data)
+        self.assertTrue(any("#812" in problem for problem in problems), problems)
+
+    def test_a_number_cut_in_two_is_ambiguous_not_closed(self):
+        data = self.pull("fix(ci): the gate reads the wrapped binding, closes #8…", "…12")
+        problems = check(data)
+        self.assertEqual(len(problems), 2, problems)
+        self.assertTrue(all("differ" in problem for problem in problems), problems)
+        self.assertFalse(any("is closed by commit" in problem for problem in problems), problems)
+
+    def test_a_cut_reading_the_description_names_is_not_a_problem(self):
+        data = self.pull("fix(ci): the gate reads the wrapped binding, closes…", "… #812")
+        data["closingIssuesReferences"] = [{"number": 812}]
+        data["body"] = "| Closes | #812 |\n\nCloses #812"
+        self.assertEqual(check(data), [])
+
+    def test_a_body_without_the_mark_is_not_rejoined(self):
+        data = self.pull("fix: a closes…", "x #812")
+        self.assertEqual(check(data), [])
+
+
 class TableRow(unittest.TestCase):
     def test_the_house_metadata_row_is_read(self):
         body = "| | |\n|---|---|\n| Closes | #88 (high), #81 (high), #85 (high) |\n"
