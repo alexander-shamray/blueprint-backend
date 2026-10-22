@@ -120,9 +120,23 @@ class TableAgainstCode(Fixture):
 
     def test_a_saga_binding_counts_only_for_its_own_state_machine(self) -> None:
         self.edit("src/Services/Ordering/Ordering.Infrastructure/Messaging/DependencyInjection.cs",
-                  "ConfigureSaga<OrderFulfilmentState>", "ConfigureSaga<\n    RefundState >")
+                  "ConfigureSaga<OrderFulfilmentState>", "ConfigureSaga<RefundState>")
 
         self.assertEqual(self.check(), ["§3.2's Ordering row consumes OrderPlaced and the code does not"])
+
+    def test_a_second_state_machine_in_the_file_is_bound_on_its_own(self) -> None:
+        saga = "src/Services/Ordering/Ordering.Infrastructure/Messaging/OrderFulfilmentSaga.cs"
+        self.edit(saga, "OrderPlaced { get; private set; } = null!;",
+                  "OrderPlaced { get; private set; } = null!;\n"
+                  "public sealed class RefundSaga : MassTransitStateMachine<RefundState>\n"
+                  "    public Event<StockReleased> StockReleased { get; private set; } = null!;")
+        self.assertEqual(self.check(), [])
+
+        self.edit("src/Services/Ordering/Ordering.Infrastructure/Messaging/DependencyInjection.cs",
+                  "e.ConfigureSaga<OrderFulfilmentState>(context);",
+                  "e.ConfigureSaga<OrderFulfilmentState>(context);\ne.ConfigureSaga<RefundState>(context);")
+        self.assertEqual(self.check(), [
+            "Ordering's code consumes StockReleased and §3.2's Ordering row does not say so"])
 
     def test_a_command_consumer_is_an_accepted_command(self) -> None:
         self.edit("src/Services/Ordering/Ordering.Infrastructure/Messaging/DependencyInjection.cs",
@@ -139,6 +153,7 @@ class TableAgainstCode(Fixture):
                   "ConfigureConsumer<\n    IntegrationEventConsumer< ProductPublished >\n    >")
         self.edit(path, "ConfigureConsumer<CommandConsumer<CancelOrder,",
                   "ConfigureConsumer<\n    CommandConsumer<\n        CancelOrder ,")
+        self.edit(path, "ConfigureSaga<OrderFulfilmentState>", "ConfigureSaga<\n    OrderFulfilmentState >")
 
         self.assertEqual(self.check(), [])
 
