@@ -444,26 +444,29 @@ branch is.
    docs/commands/ship.md, *Step 6: the landing*)
 
    Now put the workspace back the way step 0 wants to find it. **The order is
-   the instruction**, and three of the seven lines depend on which outcome
+   the instruction**, and three of the eight lines depend on which outcome
    step 1 produced:
 
    ```bash
    bash .claude/scripts/pr-state.sh <n>                 # 1. MERGED, with an oid
    #    ExitWorktree({action: "keep"})                  # 2. forked runs only — a tool, not bash
    bash .claude/scripts/git-switch-existing.sh main     # 3. in-place runs only
-   git pull --ff-only                                   # 4. main, now containing the merge
-   git merge-base --is-ancestor <merge-oid> HEAD        # 5. and it really does contain it
-   bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug>  # 6. forked runs only
-   git worktree prune                                   # 7.
+   git branch --show-current                            # 4. main, or a branch another session left here
+   git pull --ff-only                                   # 5. on main; elsewhere git fetch origin main:main
+   git merge-base --is-ancestor <merge-oid> main        # 6. and main really does contain it
+   bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug>  # 7. forked runs only
+   git worktree prune                                   # 8.
    ```
 
    - **Verify first**, from the remote rather than an exit code: `state`
      must read `MERGED` and `mergeCommit` must carry an oid.
-   - Forked: line 2 returns the session to the main checkout, already on
-     `main`, so skip line 3. In place: skip lines 2 and 6.
-   - Run the pull, the ancestry check and the prune on both paths; report
-     containment, never equality: the HEAD `main` landed on, and that the
-     merge is in its history.
+   - Forked: line 2 returns the session to the main checkout, so skip line
+     3. `/branch` leaves another session's branch there when `main` was
+     dirty, so off `main` line 5 fetches and leaves that branch alone. In
+     place: skip lines 2 and 7.
+   - Run lines 4 to 6 and the prune on both paths; report containment,
+     never equality: the oid `main` landed on, and that the merge is in
+     its history.
    - Back in the main checkout, delete this change's row from *In progress*
      in `TODO.md`, never from the worktree (why: docs/commands/ship.md,
      *Step 6: the teardown*).
