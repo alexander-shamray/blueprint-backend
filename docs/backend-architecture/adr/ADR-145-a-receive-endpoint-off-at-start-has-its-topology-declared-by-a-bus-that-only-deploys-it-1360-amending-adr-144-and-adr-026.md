@@ -22,8 +22,8 @@ with no prefetch and no consumer filter. It therefore declares what the
 endpoint would and never issues `basic.consume`, and both the setting and
 `DeployAsync` are public API. A broker test publishes through a binding that
 exists only in the deferred endpoint's configuration. It shows the message
-waiting in the queue while the switch is off and consumed once it is on, and
-lost without the declaration.
+waiting in the queue while the switch is off and consumed once it is on; with
+the declaration removed, the same test fails, because the message is lost.
 **Consequences.** Each pod start opens one more broker connection per endpoint
 that is off at start, for as long as its declaration takes. The topology bus
 must be configured as the host's bus is: a bus-level topology convention, such
@@ -32,11 +32,12 @@ bindings the host never uses. Sharing `UseBroker` covers the broker; any
 bus-level convention a host adds goes into that method as well. Until a
 declaration lands, for example while the broker is unreachable as the pod
 starts, ADR-144's window stays open for that endpoint. Each failed attempt is
-logged as an error, and `TopologyPending` names the endpoint. Readiness does
-not say the declaration is pending: the `operator-switches` check reports the
-endpoint only as switched off. The in-memory transport ignores `DeployTopologyOnly`, so the unit
-tests stand in a recording factory for the topology bus, and only the broker
-test proves that nothing is consumed. ADR-144's note on
+logged as an error, and `TopologyPending` names the endpoint. Readiness does not
+say the declaration is pending: the `operator-switches` check reports the
+endpoint only as switched off. The in-memory transport ignores
+`DeployTopologyOnly`, so the unit tests stand in a recording factory for the
+topology bus, and only the broker test proves that nothing is consumed.
+ADR-144's note on
 [ADR-026](ADR-026-consumer-capability-is-a-release-ahead-of-the-producer-that-uses-it.md)
 no longer holds once a declaration has landed: a consumer released while its
 switch is off counts as deployed when its pod has started and declared its
