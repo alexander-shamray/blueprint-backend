@@ -197,10 +197,12 @@ class VerifiedVersionTests(unittest.TestCase):
         )
         return tmp
 
-    def test_the_verified_version_passes(self) -> None:
-        root = self.root_with(repo_gate.MASSTRANSIT_VERIFIED)
+    def test_every_verified_version_passes(self) -> None:
+        for version in repo_gate.MASSTRANSIT_VERIFIED:
+            with self.subTest(version=version):
+                root = self.root_with(version)
 
-        self.assertEqual(repo_gate._masstransit_pin_is_verified(root), [])
+                self.assertEqual(repo_gate._masstransit_pin_is_verified(root), [])
 
     def test_an_upgrade_fails_until_the_table_is_reverified(self) -> None:
         """An upgrade can rename or re-unit an instrument, and every
@@ -210,7 +212,8 @@ class VerifiedVersionTests(unittest.TestCase):
         failures = repo_gate._masstransit_pin_is_verified(root)
 
         self.assertTrue(
-            any("99.0.0" in f and repo_gate.MASSTRANSIT_VERIFIED in f for f in failures),
+            any("99.0.0" in f and all(v in f for v in repo_gate.MASSTRANSIT_VERIFIED)
+                for f in failures),
             failures)
 
     def test_a_missing_pin_fails(self) -> None:
