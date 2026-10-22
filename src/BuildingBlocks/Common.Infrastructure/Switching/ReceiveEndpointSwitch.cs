@@ -54,6 +54,12 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             new EventId(7, nameof(Connected)),
             "Receive endpoint {Queue} connected; it was switched off when the bus was configured.");
 
+    private static readonly Action<ILogger, string, Exception?> TopologyDeclared =
+        LoggerMessage.Define<string>(
+            LogLevel.Information,
+            new EventId(8, nameof(TopologyDeclared)),
+            "Receive endpoint {Queue} is switched off; its queue and bindings are declared, and nothing consumes it.");
+
     private readonly OperatorSwitches _switches;
     private readonly ILogger<ReceiveEndpointSwitch> _log;
     private readonly TimeProvider _clock;
@@ -66,14 +72,19 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     private readonly Dictionary<string, Action<IReceiveEndpointConfigurator>> _switchable = new(StringComparer.Ordinal);
     private readonly HashSet<string> _deferred = new(StringComparer.Ordinal);
     private readonly HashSet<string> _unregistered = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _topologyPending = new(StringComparer.Ordinal);
     private readonly IDisposable? _subscription;
     private IServiceProvider? _services;
+    private Func<Action<IBusFactoryConfigurator>, IBusControl>? _topologyBus;
 
     /// <summary>The wait before a failed stop or start is tried again, doubling up to
     /// <see cref="LastRetry"/>.</summary>
     public static readonly TimeSpan FirstRetry = TimeSpan.FromSeconds(1);
 
     public static readonly TimeSpan LastRetry = TimeSpan.FromMinutes(1);
+
+    /// <summary>How long one declaration of a deferred endpoint's topology may take before it is retried.</summary>
+    public static readonly TimeSpan TopologyTimeout = TimeSpan.FromSeconds(30);
 
     // The logger is optional, since a suite builds a bus without logging and the switch is not the reason to add it.
     public ReceiveEndpointSwitch(
@@ -103,8 +114,37 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         }
     }
 
-    /// <summary>The container the bus was configured from, holding the connector a deferred endpoint needs.</summary>
-    public void Attach(IServiceProvider services) => _services = services;
+    /// <summary>The deferred endpoints whose queue and bindings are not yet declared; a failed declaration stays here
+    /// until a retry lands.</summary>
+    public IReadOnlyCollection<string> TopologyPending
+    {
+        get
+        {
+            lock (_endpoints)
+                return [.. _topologyPending.Order(StringComparer.Ordinal)];
+        }
+    }
+
+    /// <summary>
+    /// The container the bus was configured from, holding the connector a deferred endpoint needs, and the factory
+    /// for a bus configured as the host's is, which declares a deferred endpoint's topology (ADR-145).
+    /// </summary>
+    public void Attach(IServiceProvider services, Func<Action<IBusFactoryConfigurator>, IBusControl> topologyBus)
+    {
+        _services = services;
+        _topologyBus = topologyBus;
+    }
+
+    /// <summary>Declares the topology of every endpoint deferred so far, as the bus starts (ADR-145).</summary>
+    public async Task DeclareDeferredAsync()
+    {
+        string[] queues;
+        lock (_endpoints)
+            queues = [.. _deferred];
+
+        foreach (string queue in queues)
+            await ApplyAsync(queue);
+    }
 
     /// <summary>
     /// Records how a switchable endpoint is configured and whether the bus should configure it now: false when its
@@ -134,6 +174,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
                 _switches.DeclareEndpoint(queue);
                 _deferred.Add(queue);
                 _stopped.Add(queue);
+                _topologyPending.Add(queue);
             }
         }
 
@@ -224,20 +265,24 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
             bool stopped;
             bool unsettled;
             Action<IReceiveEndpointConfigurator>? deferred;
+            bool pending;
             lock (_endpoints)
             {
                 _endpoints.TryGetValue(queue, out endpoint);
                 stopped = _stopped.Contains(queue);
                 unsettled = _unsettled.Contains(queue);
                 deferred = _deferred.Contains(queue) ? _switchable[queue] : null;
+                pending = _topologyPending.Contains(queue);
             }
 
-            // Never configured, since its switch was off when the bus was: connected now it is on, and stopped and
-            // started like any other endpoint from then on.
+            // Never configured, since its switch was off when the bus was: its topology declared while it stays off,
+            // connected once it is on, and stopped and started like any other endpoint from then on.
             if (deferred is not null)
             {
                 if (!_switches.IsOff(queue))
                     await ConnectAsync(queue, deferred);
+                else if (pending)
+                    await DeclareTopologyAsync(queue, deferred);
 
                 return;
             }
@@ -313,6 +358,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         {
             _endpoints[queue] = handle.ReceiveEndpoint;
             _deferred.Remove(queue);
+            _topologyPending.Remove(queue);
         }
 
         await ReadyOrStoppedAsync(queue, handle.ReceiveEndpoint, handle.Ready);
@@ -320,6 +366,30 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         lock (_endpoints)
             _stopped.Remove(queue);
         Connected(_log, queue, null);
+    }
+
+    // Called under the gate. A bus deploying topology only declares the queue, its exchanges and its bindings and
+    // never consumes, so what is routed to the queue while it is off waits there (ADR-145).
+    private async Task DeclareTopologyAsync(string queue, Action<IReceiveEndpointConfigurator> configure)
+    {
+        Func<Action<IBusFactoryConfigurator>, IBusControl> topologyBus = _topologyBus ??
+            throw new InvalidOperationException("The switch was never attached to the bus's container.");
+
+        IBusControl bus = topologyBus(cfg =>
+        {
+            cfg.DeployTopologyOnly = true;
+            cfg.ReceiveEndpoint(queue, configure);
+        });
+
+        // Bounded, since a start waits for the broker for as long as its token allows; the retry asks again.
+        using CancellationTokenSource timeout = new(TopologyTimeout, _clock);
+        using CancellationTokenSource attempt =
+            CancellationTokenSource.CreateLinkedTokenSource(timeout.Token, _disposed.Token);
+        await bus.DeployAsync(attempt.Token);
+
+        lock (_endpoints)
+            _topologyPending.Remove(queue);
+        TopologyDeclared(_log, queue, null);
     }
 
     // Stopped again when Ready faults, so the retry starts a stopped endpoint and not one that is already started.

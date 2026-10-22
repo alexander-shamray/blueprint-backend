@@ -29,13 +29,18 @@ public static class OperatorSwitchExtensions
     }
 
     /// <summary>Connects the switch to every endpoint configured after it, so a new endpoint is not left out.</summary>
-    /// <remarks>Called before the first <c>ReceiveEndpoint</c>; one declared earlier would not be seen
-    /// (ADR-113).</remarks>
-    public static void ConnectOperatorSwitch(this IBusFactoryConfigurator cfg, IServiceProvider services)
+    /// <remarks>Called before the first <c>ReceiveEndpoint</c>, or that one is not seen (ADR-113).
+    /// <paramref name="topologyBus"/> builds a bus configured as the host's, applying the action it is given, so a
+    /// deferred endpoint's queue and bindings are declared as this bus would declare them (ADR-145).</remarks>
+    public static void ConnectOperatorSwitch(
+        this IBusFactoryConfigurator cfg,
+        IServiceProvider services,
+        Func<Action<IBusFactoryConfigurator>, IBusControl> topologyBus)
     {
         ReceiveEndpointSwitch endpointSwitch = services.GetRequiredService<ReceiveEndpointSwitch>();
-        endpointSwitch.Attach(services);
+        endpointSwitch.Attach(services, topologyBus);
         cfg.ConnectEndpointConfigurationObserver(new SwitchEveryEndpoint(endpointSwitch));
+        cfg.ConnectBusObserver(new DeclareDeferredOnStart(endpointSwitch));
     }
 
     /// <summary>
@@ -57,5 +62,34 @@ public static class OperatorSwitchExtensions
         public void EndpointConfigured<T>(T configurator)
             where T : IReceiveEndpointConfigurator =>
             endpointSwitch.Configured(configurator);
+    }
+
+    // On start, not on configuration: a host test builds the bus without a broker and never starts it. Off the start,
+    // since a broker outage would otherwise hold it; each declaration retries on its own.
+    private sealed class DeclareDeferredOnStart(ReceiveEndpointSwitch endpointSwitch) : IBusObserver
+    {
+        public void PostCreate(IBus bus)
+        {
+        }
+
+        public void CreateFaulted(Exception exception)
+        {
+        }
+
+        public Task PreStart(IBus bus)
+        {
+            _ = Task.Run(endpointSwitch.DeclareDeferredAsync);
+            return Task.CompletedTask;
+        }
+
+        public Task PostStart(IBus bus, Task<BusReady> busReady) => Task.CompletedTask;
+
+        public Task StartFaulted(IBus bus, Exception exception) => Task.CompletedTask;
+
+        public Task PreStop(IBus bus) => Task.CompletedTask;
+
+        public Task PostStop(IBus bus) => Task.CompletedTask;
+
+        public Task StopFaulted(IBus bus, Exception exception) => Task.CompletedTask;
     }
 }

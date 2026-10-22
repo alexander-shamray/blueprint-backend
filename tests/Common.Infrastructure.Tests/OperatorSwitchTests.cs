@@ -63,7 +63,33 @@ public class OperatorSwitchTests
         public Task Faulted(ReceiveEndpointFaulted faulted) => Task.CompletedTask;
     }
 
-    private static ServiceProvider Build(MutableSource source, ReadyCounter? counter = null, bool plain = false)
+    /// <summary>Stands in for the host's topology bus, recording what it is asked to declare; it starts
+    /// nothing.</summary>
+    internal sealed class TopologyRecorder
+    {
+        public System.Collections.Concurrent.ConcurrentQueue<string> Declared { get; } = [];
+
+        public System.Collections.Concurrent.ConcurrentQueue<bool> DeployOnly { get; } = [];
+
+        public IBusControl Create(Action<IBusFactoryConfigurator> configure)
+        {
+            IBusFactoryConfigurator cfg = Substitute.For<IBusFactoryConfigurator>();
+            bool deployOnly = false;
+            cfg.When(c => c.DeployTopologyOnly = Arg.Any<bool>()).Do(call => deployOnly = call.Arg<bool>());
+            cfg.When(c => c.ReceiveEndpoint(Arg.Any<string>(), Arg.Any<Action<IReceiveEndpointConfigurator>>()))
+                .Do(call => Declared.Enqueue(call.Arg<string>()));
+
+            configure(cfg);
+            DeployOnly.Enqueue(deployOnly);
+            return Substitute.For<IBusControl>();
+        }
+    }
+
+    private static ServiceProvider Build(
+        MutableSource source,
+        ReadyCounter? counter = null,
+        bool plain = false,
+        TopologyRecorder? topology = null)
     {
         IConfiguration configuration = new ConfigurationBuilder().Add(source).Build();
         ServiceCollection services = new();
@@ -75,7 +101,7 @@ public class OperatorSwitchTests
             x.AddConsumer<ProbeConsumer>();
             x.UsingInMemory((context, cfg) =>
             {
-                cfg.ConnectOperatorSwitch(context);
+                cfg.ConnectOperatorSwitch(context, (topology ?? new TopologyRecorder()).Create);
 
                 void Configure(IReceiveEndpointConfigurator e)
                 {
@@ -151,6 +177,89 @@ public class OperatorSwitchTests
         await harness.Bus.Publish(new Probe(probe), TestContext.Current.CancellationToken);
         await Until(() => ProbeConsumer.Seen.Contains(probe));
         await Until(() => counter.Readied.Contains(Queue));
+    }
+
+    [Fact]
+    public async Task An_endpoint_off_at_start_has_its_topology_declared_by_a_bus_that_only_deploys_it()
+    {
+        // Unconfigured, the endpoint declares no queue and no binding, so a message routed to it while it is off would
+        // reach no queue and be lost (ADR-145).
+        MutableSource source = new();
+        source.Set(Queue);
+        ReadyCounter counter = new();
+        TopologyRecorder topology = new();
+        await using ServiceProvider provider = Build(source, counter, topology: topology);
+        ReceiveEndpointSwitch endpoints = provider.GetRequiredService<ReceiveEndpointSwitch>();
+        _ = provider.GetRequiredService<IBus>();
+        endpoints.TopologyPending.ShouldBe([Queue], "configuring the bus declares nothing; starting it does");
+
+        await provider.GetRequiredService<ITestHarness>().Start();
+        await Until(() => endpoints.TopologyPending.Count == 0);
+
+        topology.Declared.ShouldBe([Queue]);
+        topology.DeployOnly.ToArray().ShouldBe(
+            [true],
+            "a topology bus that also consumed would take what the switch holds");
+        endpoints.IsStopped(Queue).ShouldBeTrue();
+        counter.Readied.ShouldNotContain(Queue);
+    }
+
+    [Fact]
+    public async Task An_endpoint_on_at_start_declares_its_own_topology_and_starts_no_topology_bus()
+    {
+        TopologyRecorder topology = new();
+        await using ServiceProvider provider = Build(new MutableSource(), topology: topology);
+
+        await provider.GetRequiredService<ITestHarness>().Start();
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        topology.Declared.ShouldBeEmpty();
+        provider.GetRequiredService<ReceiveEndpointSwitch>().TopologyPending.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_topology_declaration_that_hangs_is_timed_out_and_retried_until_it_lands()
+    {
+        // A broker unreachable at start must not leave the queue undeclared for the life of the pod.
+        MutableSource source = new();
+        source.Set(Queue);
+        OperatorSwitches switches = SwitchesOver(source, out ServiceProvider provider);
+        using ServiceProvider _ = provider;
+
+        int attempts = 0;
+        IBusControl Create(Action<IBusFactoryConfigurator> configure)
+        {
+            IBusControl bus = Substitute.For<IBusControl>();
+            if (Interlocked.Increment(ref attempts) == 1)
+                bus.StartAsync(Arg.Any<CancellationToken>()).Returns(call => Hang(call.Arg<CancellationToken>()));
+            return bus;
+        }
+
+        FakeTimeProvider clock = new();
+        using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
+        await using ServiceProvider container = new ServiceCollection().BuildServiceProvider();
+        endpoints.Attach(container, Create);
+        endpoints.Register(Queue, _ => { }).ShouldBeFalse();
+
+        Task first = endpoints.DeclareDeferredAsync();
+        await Until(() => Volatile.Read(ref attempts) == 1);
+        clock.Advance(ReceiveEndpointSwitch.TopologyTimeout);
+        await first.WaitAsync(Budget, TestContext.Current.CancellationToken);
+        endpoints.TopologyPending.ShouldBe([Queue], "a declaration that never finished has declared nothing");
+
+        await Until(() =>
+        {
+            clock.Advance(ReceiveEndpointSwitch.FirstRetry);
+            return endpoints.TopologyPending.Count == 0;
+        });
+        Volatile.Read(ref attempts).ShouldBe(2);
+        endpoints.IsStopped(Queue).ShouldBeTrue();
+    }
+
+    private static async Task<BusHandle> Hang(CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        throw new InvalidOperationException("unreachable: the delay above never completes");
     }
 
     [Fact]
@@ -337,7 +446,7 @@ public class OperatorSwitchTests
 
         FakeTimeProvider clock = new();
         using ReceiveEndpointSwitch endpoints = new(switches, clock: clock);
-        endpoints.Attach(container);
+        endpoints.Attach(container, new TopologyRecorder().Create);
         endpoints.Register(Queue, _ => { }).ShouldBeFalse();
 
         source.Set();

@@ -35,9 +35,12 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
             await Task.Delay(25, timeout.Token);
     }
 
-    private ServiceProvider Build(OperatorSwitchTests.MutableSource source)
+    private ServiceProvider Build(
+        OperatorSwitchTests.MutableSource source,
+        string queue = RabbitFixture.Queue,
+        string? routedThrough = null)
     {
-        string queue = RabbitFixture.Queue;
+        Uri broker = new(fixture.BrokerAddress);
         IConfiguration configuration = new ConfigurationBuilder().Add(source).Build();
         ServiceCollection services = new();
         services.AddSingleton(configuration);
@@ -48,8 +51,14 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
             x.AddConsumer<BrokerProbeConsumer>();
             x.UsingRabbitMq((context, cfg) =>
             {
-                cfg.Host(new Uri(fixture.BrokerAddress));
-                cfg.ConnectOperatorSwitch(context);
+                cfg.Host(broker);
+                cfg.ConnectOperatorSwitch(
+                    context,
+                    topology => Bus.Factory.CreateUsingRabbitMq(d =>
+                    {
+                        d.Host(broker);
+                        topology(d);
+                    }));
                 cfg.SwitchedReceiveEndpoint(
                     context,
                     queue,
@@ -57,6 +66,8 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
                     {
                         // Binding this test's message-type exchange is outside payments-svc's grant (ADR-036).
                         e.ConfigureConsumeTopology = false;
+                        if (routedThrough is not null)
+                            ((IRabbitMqReceiveEndpointConfigurator)e).Bind(routedThrough);
                         e.ConfigureConsumer<BrokerProbeConsumer>(context);
                     });
             });
@@ -151,6 +162,39 @@ public sealed class OperatorSwitchBrokerTests(RabbitFixture fixture)
         finally
         {
             await restarted.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task A_message_routed_to_an_endpoint_off_since_start_waits_in_its_queue_and_drains_when_on()
+    {
+        // A queue and a binding the broker has never seen, as a release adding a consumer brings: unconfigured, the
+        // endpoint declared neither, so the message routed nowhere and was lost without an alert (ADR-145).
+        string queue = $"payments-operator-switch-deferred-{Guid.NewGuid():N}";
+        string exchange = $"payments-operator-switch-routed-{Guid.NewGuid():N}";
+        OperatorSwitchTests.MutableSource source = new();
+        source.Set(queue);
+        await using ServiceProvider provider = Build(source, queue, exchange);
+        IBusControl bus = provider.GetRequiredService<IBusControl>();
+        ReceiveEndpointSwitch endpoints = provider.GetRequiredService<ReceiveEndpointSwitch>();
+        await bus.StartAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await Until(() => endpoints.TopologyPending.Count == 0);
+
+            Guid routed = Guid.CreateVersion7();
+            ISendEndpoint endpoint = await bus.GetSendEndpoint(new Uri($"exchange:{exchange}"));
+            await endpoint.Send(new BrokerProbe(routed), TestContext.Current.CancellationToken);
+            await Task.Delay(1000, TestContext.Current.CancellationToken);
+            BrokerProbeConsumer.Seen.ShouldNotContain(routed, "declaring the topology must not start consuming");
+            endpoints.IsStopped(queue).ShouldBeTrue();
+
+            source.Set();
+            await Until(() => BrokerProbeConsumer.Seen.Contains(routed));
+        }
+        finally
+        {
+            await bus.StopAsync(CancellationToken.None);
         }
     }
 }
