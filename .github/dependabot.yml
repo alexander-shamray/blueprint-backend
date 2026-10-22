@@ -1,0 +1,58 @@
+# Weekly version updates for the four places this repository pins a
+# dependency. Security updates are a repository setting, and every group
+# below applies to version updates only, so a security update opens on its
+# own. docs/change-locality.md section 6 says why the commit and locality
+# gates skip a Dependabot pull request.
+version: 2
+updates:
+  # Directory.Packages.props is the central pin file; Dependabot reads it from
+  # the root.
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # The 10.0 line's servicing patches move together, as the runtime does.
+      dotnet-servicing:
+        applies-to: version-updates
+        update-types: [patch]
+        patterns: ['Microsoft.*', 'System.*']
+      grpc:
+        applies-to: version-updates
+        patterns: ['Grpc.*', 'Google.Protobuf']
+      fluentvalidation:
+        applies-to: version-updates
+        patterns: ['FluentValidation*']
+    ignore:
+      # Each is a decision with its own issue, not a bump: MassTransit 9 changes
+      # the licence, SqlClient 7 the driver, and a framework major the target.
+      - dependency-name: 'MassTransit*'
+        update-types: [version-update:semver-major]
+      - dependency-name: 'Microsoft.Data.SqlClient'
+        update-types: [version-update:semver-major]
+      - dependency-name: 'Microsoft.AspNetCore.*'
+        update-types: [version-update:semver-major]
+      - dependency-name: 'Microsoft.EntityFrameworkCore*'
+        update-types: [version-update:semver-major]
+      - dependency-name: 'Microsoft.Extensions.*'
+        update-types: [version-update:semver-major]
+      - dependency-name: 'System.Security.Cryptography.*'
+        update-types: [version-update:semver-major]
+
+  # Every service image and the broker's.
+  - package-ecosystem: docker
+    directories:
+      - /src/**/*
+      - /deploy/compose/rabbitmq
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker-compose
+    directory: /deploy/compose
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
