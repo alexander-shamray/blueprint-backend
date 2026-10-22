@@ -111,14 +111,16 @@ jobs:
           $compose exec -T rabbitmq rabbitmqadmin -u probe -p probe declare queue \
             --name compose-smoke_error --type classic --durable true
           series=0
+          positive='^[1-9][0-9]*$'
           for _ in $(seq 45); do
             series=$(curl -sf -G http://localhost:3000/api/datasources/proxy/uid/prometheus/api/v1/query \
               --data-urlencode 'query=count(rabbitmq_queue_messages{queue=~".+_error"})' |
-              jq -r '.data.result[0].value[1] // 0') && [[ "$series" =~ ^[1-9][0-9]*$ ]] && break
+              jq -r '.data.result[0].value[1] // 0') && [[ $series =~ $positive ]] && break
             sleep 2
           done
           echo "rabbitmq_queue_messages series for an _error queue: ${series:-none}"
-          [[ "$series" =~ ^[1-9][0-9]*$ ]] || { echo "::error::rabbitmq_queue_messages has no series for an _error queue"; exit 1; }
+          [[ $series =~ $positive ]] ||
+            { echo "::error::rabbitmq_queue_messages has no series for an _error queue"; exit 1; }
 
       - name: Show state on failure
         if: failure()
