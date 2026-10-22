@@ -1255,7 +1255,8 @@ each holder stamps on its audit row to bound its check
 The holders that write from an event feed and so ask their own audit rows after
 they write are the BFF's projection, Notifications' intake, Payments' intake and
 Shipping's fulfilment worker
-([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md)).
+([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md);
+Payments' by [ADR-141](adr/ADR-141-payments-keeps-the-erasure-requests-an-order-was-placed-under-and-its-erasure-spares-that-order-1322-amending-adr-092.md)).
 Privacy is a seventh service and its responder set is fixed when a request is
 raised
 ([ADR-092](adr/ADR-092-privacy-is-a-seventh-service-and-its-responder-set-is-fixed-when-a-request-is-raised.md)),
