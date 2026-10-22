@@ -643,8 +643,8 @@ writes, and it has two measured shapes: a flag or command assembled from a
 variable (`F=--output=x; git log $F`), and a substitution whose OUTPUT becomes
 the command line (`sh -c "$(echo 'git push origin +HEAD:main')"`). Closing
 either needs the argv after expansion, which no hook is given. Both are pinned
-as **admitted** in the suite, on the same argument as the degraded-check case:
-a residual nobody can run is one the next reader assumes was closed.
+as **admitted** in the suite, because a residual nobody can run is one the next
+reader assumes was closed.
 
 Three earlier versions of that sentence were each falsified by a spelling
 nobody had gone looking for, and the pattern is that the bound gets narrower
@@ -660,14 +660,17 @@ the other hooks do, and refuse an event that is not UTF-8; an event that is
 UTF-8 but not JSON is still admitted, the one argued fail-open. The hook was
 registered on `Bash` alone, so git through the PowerShell tool was judged by
 nothing here: a second registration sends PowerShell calls to the git guard,
-which refuses any that names `git` once backticks and quotes are removed, since
-it parses Bash's grammar and not PowerShell's. The index guard stays on `Bash`,
-because the skill's prefix grants are `Bash(...)` rules and a PowerShell call is
-prompted like any other. And a heredoc with no closing line, whose body then
-fails to tokenise, is refused outright, as an undecodable delimiter is, because
-the untokenised fallback reads that body as commands with its crudest checks.
-The new residual is a name PowerShell computes, a concatenation say, which is
-the expansion residual above in another shell.
+which refuses any that names `git` once every quote and escape is removed, the
+caret and backslash of the shells it can start included, and any that starts a
+shell or evaluator or calls a computed name, since it parses Bash's grammar and
+not PowerShell's. The index guard stays on `Bash`, because the skill's prefix
+grants are `Bash(...)` rules and a PowerShell call is prompted like any other.
+And a heredoc with no closing line, whose body then fails to tokenise, is
+refused outright, as an undecodable delimiter is, while the untokenised
+fallback now reads the command with its quotes and backslashes removed, as
+bash does, so a quote-split push ahead of a line that breaks the parse is seen.
+The residual PowerShell leaves is a script file it runs that calls git, which
+is a script bash runs in another shell.
 
 ## The ext transport and pinned grants
 
