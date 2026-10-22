@@ -110,6 +110,11 @@ Shipping's check no longer scans the whole table: it asks the rows still
 open and those whose request closed after its shipment was created, less a
 margin, which a close Privacy now publishes lets each holder stamp.
 
+**Amended by
+[ADR-141](ADR-141-payments-keeps-the-erasure-requests-an-order-was-placed-under-and-its-erasure-spares-that-order-1322-amending-adr-092.md)**,
+under which Payments' step leaves an order whose request ids list the request
+being handled, and a placement is checked against Payments' own audit rows.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
