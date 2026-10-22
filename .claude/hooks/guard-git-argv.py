@@ -2249,12 +2249,14 @@ def _offence(command, depth, judged):
         # Unparseable is not hostile: `shlex` fails on commands bash runs, an
         # ordinary commit among them. A parse failure degrades to the substring
         # scan the settings deny already performs, never a silent pass.
+        # Bash removes quotes and backslashes too, so `pu''sh` is still push here.
+        flat = re.sub(r"[\\'\"]", "", stripped)
         for needle in FORBIDDEN_FLAGS + FORBIDDEN_SUBSTRINGS:
-            if needle in stripped:
+            if needle in flat:
                 return (
                     f"`{needle}` appears in a command this guard could not "
-                    "tokenise; refusing on the raw string, which is the weaker "
-                    "check the settings deny already performs."
+                    "tokenise; refusing on the string with its quotes removed, "
+                    "a cruder check than the parsed one."
                 )
         # An unterminated heredoc leaves its body in the string, so a quote in
         # the body is what failed the parse, and the checks below would read the
@@ -2269,7 +2271,7 @@ def _offence(command, depth, judged):
             )
         # The push check reaches this path too, because a line is easy to make
         # untokenisable on purpose; here it can only be the crude one.
-        if re.search(r"\bgit\b[^;&|\n]*\bpush\b", stripped):
+        if re.search(r"\bgit\b[^;&|\n]*\bpush\b", flat):
             return (
                 "a `git push` appears in a command this guard could not "
                 "tokenise, so its remote and refspec cannot be read; refusing "
