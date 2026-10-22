@@ -160,11 +160,13 @@ public class PrivacyRepublisherTests(ServiceFixture fixture)
                 ({ClosedByAnswer}, 'ordering', 1, 1, {Answered}),
                 ({ClosedByAmendment}, 'ordering', 1, 1, {Answered}),
                 ({ClosedByAmendment}, 'shipping', 0, 0, {Answered}),
+                ({ClosedByAmendment}, 'bff', 1, 1, {Amended}),
                 ({ClosedOverSilence}, 'ordering', 1, 1, {Answered});
 
             INSERT INTO privacy.ErasureAmendments (RequestId, Sequence, Added, Removed, Reason, AmendedBy, AmendedAt)
             VALUES
                 ({ClosedByAmendment}, 1, '', 'shipping', N'answered, then left the set', NEWID(), {Amended}),
+                ({ClosedByAmendment}, 2, 'bff', '', N'added, so it removes nothing', NEWID(), {Amended}),
                 ({ClosedOverSilence}, 1, '', 'bff', N'never answered', NEWID(), {Amended}),
                 ({ClosedOverSilence}, 2, 'shipping', '', N'added, not removed', NEWID(), {Amended});
             """,
