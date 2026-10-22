@@ -181,11 +181,11 @@ class CutHeadlines(unittest.TestCase):
         problems = check(data)
         self.assertTrue(any("#812" in problem for problem in problems), problems)
 
-    def test_a_number_cut_in_two_is_read_whole(self):
+    def test_a_number_cut_in_two_is_read_whole_and_as_written(self):
         data = self.pull("fix(ci): the gate reads the wrapped binding, closes #8…", "…12")
         problems = check(data)
         self.assertTrue(any("#812" in problem for problem in problems), problems)
-        self.assertFalse(any("#8 " in problem or "#8`" in problem for problem in problems), problems)
+        self.assertTrue(any("#8 " in problem or "#8`" in problem for problem in problems), problems)
 
     def test_a_headline_without_the_mark_is_left_apart(self):
         data = self.pull("fix: a closes…", "#812")

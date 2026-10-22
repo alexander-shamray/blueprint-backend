@@ -59,7 +59,7 @@ _KEYWORD = r"(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)"
 
 # Every keyword and the token after it, classified afterwards: a keyword whose
 # reference this gate cannot parse is a finding, not a non-match. The token is
-# a lookahead, so a keyword used as the token still matches: "fix closes #8".
+# a lookahead, so a keyword used as the token still matches: "fix closes it".
 KEYWORD_THEN_TOKEN = re.compile(rf"\b{_KEYWORD}\b\s*:?\s+(?=(?P<token>\S+))", re.IGNORECASE)
 
 # GitHub ends a long subject's headline with this mark and starts the body
@@ -109,18 +109,18 @@ def repository_of(pull_url: str) -> str | None:
     return match.group("repo") if match else None
 
 
-def commit_text(commit: dict) -> str:
-    """The commit's message, with a headline GitHub cut at the limit rejoined.
+def commit_texts(commit: dict) -> list[str]:
+    """Each reading of the commit's message the gate must judge.
 
-    A cut headline ends in `CUT` and its body starts with `CUT` and the rest of
-    the subject. Left apart, a keyword or number straddling the cut is never
-    read, while GitHub's linker reads the whole message.
+    A headline cut at the limit is read apart and rejoined to its body. Both,
+    because a pair that only looks cut reads as written to GitHub.
     """
     headline = commit.get("messageHeadline") or ""
     body = commit.get("messageBody") or ""
+    texts = [f"{headline}\n{body}"]
     if headline.endswith(CUT) and body.startswith(CUT):
-        return headline[:-1] + body[1:]
-    return f"{headline}\n{body}"
+        texts.append(headline[:-1] + body[1:])
+    return texts
 
 
 def closing_references(text: str, repository: str) -> tuple[set[int], list[str]]:
@@ -224,7 +224,12 @@ def check(payload: dict) -> list[str]:
     from_commits: dict[int, list[str]] = {}
     for commit in commits:
         oid = (commit.get("oid") or "")[:8] or "(no oid)"
-        numbers, unreadable = closing_references(commit_text(commit), repository)
+        numbers: set[int] = set()
+        unreadable: list[str] = []
+        for text in commit_texts(commit):
+            found, failed = closing_references(text, repository)
+            numbers |= found
+            unreadable += [phrase for phrase in failed if phrase not in unreadable]
         for number in numbers:
             from_commits.setdefault(number, []).append(oid)
         for phrase in unreadable:
