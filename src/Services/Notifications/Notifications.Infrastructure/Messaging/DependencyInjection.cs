@@ -58,16 +58,18 @@ public static class DependencyInjection
 
             x.UsingRabbitMq((context, cfg) =>
             {
-                // First, since the switch sees only the endpoints configured after it (ADR-113).
-                cfg.ConnectOperatorSwitch(context);
-
+                // First, since the switch sees only the endpoints configured after it (ADR-113). The topology bus
+                // shares this one's broker, so a deferred endpoint's bindings are declared where it consumes (ADR-145).
                 Uri broker = new(connectionString);
-                cfg.Host(broker, host =>
-                {
-                    // MassTransit reads TLS from the port and trusts any chain, so the scheme asks (ADR-079).
-                    if (TransportSecurity.IsTls(broker))
-                        host.UseSsl(ssl => ssl.EnforcePolicyErrors(SslPolicyErrors.RemoteCertificateChainErrors));
-                });
+                cfg.ConnectOperatorSwitch(
+                    context,
+                    topology => Bus.Factory.CreateUsingRabbitMq(d =>
+                    {
+                        UseBroker(d, broker);
+                        topology(d);
+                    }));
+
+                UseBroker(cfg, broker);
 
                 cfg.SwitchedReceiveEndpoint(
                     context,
@@ -114,4 +116,13 @@ public static class DependencyInjection
         // stays false, so a broker outage fails readiness rather than boot.
         return services;
     }
+
+    // Both buses' broker: the host's and the operator switch's topology bus, which must not drift apart.
+    private static void UseBroker(IRabbitMqBusFactoryConfigurator cfg, Uri broker) =>
+        cfg.Host(broker, host =>
+        {
+            // MassTransit reads TLS from the port and trusts any chain, so the scheme asks (ADR-079).
+            if (TransportSecurity.IsTls(broker))
+                host.UseSsl(ssl => ssl.EnforcePolicyErrors(SslPolicyErrors.RemoteCertificateChainErrors));
+        });
 }
