@@ -140,9 +140,9 @@
     <!-- Appendix C's OpenAPI deliverable: the framework's own document
          generator — AddOpenApi/MapOpenApi, document only, no UI. -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
-    <!-- Transitive, and pinned because Common.Web's RequestExampleExtensions
-         names its types, so the version that code compiles against is held
-         here. It sits at the floor the pinned patch above reaches it at, as
+    <!-- Transitive, with no direct reference, and pinned because Common.Web's
+         RequestExampleExtensions names its types, so the version that code
+         compiles against is held here. It sits at the floor the pinned patch above reaches it at, as
          anything lower fails NU1109. The pin came in when that floor was 2.0.0,
          which carries GHSA-v5pm-xwqc-g5wc and failed the restore on NU1903. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
