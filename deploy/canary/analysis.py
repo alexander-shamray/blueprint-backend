@@ -337,9 +337,10 @@ def series_read() -> set[str]:
     }
 
 
-# The instruments of a third-party meter this plan reads, as the verified
-# version declares them. They are real only while Common.Web collects the
-# meter, which is the registration `_metrics_are_vouched_for` looks for.
+# The instruments of a third-party meter this plan reads, as each version in
+# repo_gate.MASSTRANSIT_VERIFIED declares them. They are real only while
+# Common.Web collects the meter, which is the registration
+# `_metrics_are_vouched_for` looks for.
 METER_INSTRUMENTS = {
     "MassTransit": (
         "messaging.masstransit.consume",
