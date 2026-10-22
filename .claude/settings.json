@@ -84,6 +84,16 @@
         ]
       },
       {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-git-argv.py\"",
+            "statusMessage": "checking git argv"
+          }
+        ]
+      },
+      {
         "matcher": "Edit|Write|NotebookEdit|MultiEdit",
         "hooks": [
           {

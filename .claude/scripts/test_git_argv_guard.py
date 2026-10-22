@@ -2729,6 +2729,16 @@ class TheGitArgvGuard(unittest.TestCase):
     def test_a_non_bash_tool_is_not_judged(self):
         self.assertIsNone(self.judge("git push origin +HEAD:main", tool="Read"))
 
+    def test_git_through_powershell_is_refused(self):
+        # This guard parses Bash's grammar only, so a PowerShell call naming git
+        # is refused whatever its arguments, a backtick-split name included.
+        for command in ("git push origin +HEAD:main", "git status", "g`it log", "& 'git' push"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command, tool="PowerShell"))
+        for command in ("Get-ChildItem", "Get-Content .gitignore"):
+            with self.subTest(command=command):
+                self.assertIsNone(self.judge(command, tool="PowerShell"))
+
     def test_a_malformed_event_does_not_take_the_session_down(self):
         # The one deliberate fail-OPEN, and it is argued rather than assumed:
         # refusing every Bash call because this file cannot read its own input
@@ -2794,6 +2804,20 @@ class TheGitArgvGuard(unittest.TestCase):
             any("py -3.12" in c for c in commands),
             "the hook must run on the 3.12 floor, like every other Python here",
         )
+
+    def test_the_hook_is_registered_for_powershell_in_settings(self):
+        # The Bash case's lesson again: a PowerShell verdict is silent if no
+        # matcher selects that tool for this hook.
+        settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
+        commands = [
+            h.get("command", "")
+            for entry in settings.get("hooks", {}).get("PreToolUse", [])
+            if "PowerShell" in (entry.get("matcher") or "").split("|")
+            for h in entry.get("hooks", [])
+        ]
+        self.assertTrue(
+            any(HOOK.name in c and "py -3.12" in c for c in commands),
+            f"{HOOK.name} is not among the registered PowerShell hooks: {commands}")
 
     def test_the_hook_directory_is_a_control_surface_and_is_denied(self):
         # It grants nothing, but it RUNS on every Bash call, so a session able
