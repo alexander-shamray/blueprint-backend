@@ -463,10 +463,8 @@ class TheGitArgvGuard(unittest.TestCase):
         body = "the guard's own body, with apostrophes and a don't"
         self.assertAdmitted(f"git commit -F - <<'EOF'{NEWLINE}{body}{NEWLINE}EOF")
 
-    def test_an_unparseable_command_still_gets_the_weaker_check(self):
-        # What a parse failure degrades to, which is what keeps it from being a
-        # fail-open: the substring scan the settings deny already performs, so
-        # never weaker than the settings alone and never a silent pass.
+    def test_an_unparseable_command_is_refused(self):
+        # A parse failure is refused outright, never a silent pass.
         self.assertRefused('git log --output="/tmp/unbalanced')
 
     def test_a_heredoc_body_is_data_even_when_it_names_a_command(self):
@@ -859,8 +857,8 @@ class TheGitArgvGuard(unittest.TestCase):
             f"cat <<NEVERCLOSED{NEWLINE}git push origin +HEAD:main")
 
     def test_an_unterminated_heredoc_that_will_not_tokenise_is_refused(self):
-        # The body's apostrophe breaks the parse, and the fallback's crude scan
-        # cannot see a quote-split update; a closed body tokenises as before.
+        # The body's apostrophe breaks the parse, so the command is refused; a
+        # closed body tokenises and is judged as before.
         self.assertRefused(f"git pu''sh origin +HEAD:main <<'EOF'{NEWLINE}it's open")
         self.assertAdmitted(f"git commit -F - <<'EOF'{NEWLINE}it's done{NEWLINE}EOF")
 
@@ -1506,11 +1504,9 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertRefused(
             "git commit -F - <<$'EOF'\nEOF\ngit push origin +HEAD:main\n$EOF")
 
-        # An undecodable delimiter is refused outright rather than opening no
-        # body. Leaving the lines unstripped makes them commands only while the
-        # command still tokenises: a body carrying an unmatched quote takes the
-        # `ValueError` path, and that fallback scans for forbidden flags and
-        # `ext::` alone without enforcing the push allow-list.
+        # An undecodable delimiter is refused outright, with a reason that names
+        # it, rather than opening no body and leaving an unmatched quote in the
+        # lines to be refused without one.
         self.assertRefused(
             "git commit -F - <<$'E\\x4fF'\nEOF\ngit push origin +HEAD:main\nEOF")
         self.assertRefused(
@@ -1682,12 +1678,9 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertAdmitted("git log --format=$FORMAT -5")
         self.assertAdmitted("git checkout $BRANCH")
 
-    def test_the_fallback_still_reads_the_push_grammar(self):
-        # A `ValueError` path scanning for forbidden flags and `ext::` alone
-        # switches the push allow-list off for any command this guard cannot
-        # tokenise, and a line is easy to make untokenisable on purpose. The
-        # check there can only be the crude one, which is the point of the
-        # path.
+    def test_an_untokenisable_push_is_refused(self):
+        # A line is easy to make untokenisable on purpose, so that cannot switch
+        # the push allow-list off: whatever fails to tokenise is refused.
         self.assertRefused("git push origin +HEAD:main \"unbalanced")
         self.assertRefused("git push origin main 'unbalanced")
 
