@@ -670,10 +670,11 @@ list of launchers would trail PowerShell's. The index guard stays on
 PowerShell call is prompted like any other.
 And a heredoc with no closing line, whose body then fails to tokenise, is
 refused outright, as an undecodable delimiter is, and the untokenised
-fallback refuses any command that names git once quotes and backslashes are
-removed, because a line is easy to make untokenisable on purpose and bash runs
-the lines before the one that breaks, while no crude check reads git's options
-and refspecs.
+fallback now refuses whatever reaches it, because a line is easy to make
+untokenisable on purpose, bash runs the lines before the one that breaks, and
+no crude check reads git's options or sees a name that case, a glob or an
+expansion builds. The cost is a rephrased command where bash would have run
+one `shlex` cannot read.
 
 ## The ext transport and pinned grants
 

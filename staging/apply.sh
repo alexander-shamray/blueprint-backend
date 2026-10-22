@@ -32,9 +32,9 @@ main() {
   fi
 
   if ! done_already "does not trust a separator its quotes may hide"; then
-    fix "fix(harness): the git argv guard's fallback refuses any git it could not tokenise, and does not trust a separator its quotes may hide (review R2)" \
+    fix "fix(harness): the git argv guard refuses whatever it could not tokenise, and does not trust a separator its quotes may hide (review R2)" \
       r2b-tests r2b-hook "$g.test_a_quoted_separator_does_not_hide_a_push_from_the_fallback" \
-      "R2's fix reads the untokenised command with its quotes removed, and that turns a quoted semicolon into what the push pattern takes for a separator: git --git-dir=\";\" pu''sh origin +HEAD:main above a line that breaks the parse ran the push and was admitted, since the pattern stopped at the semicolon; a quoted newline did the same, and the fallback never refused -c or --config-env as the parsed path does. So the fallback now refuses any command naming git that it could not tokenise. Across both guard suites the only case that changes is git log with a trailing backslash, pinned to show the scanner does not read past the end, which it still shows when refused." \
+      "R2's fix reads the untokenised command with its quotes removed, and that turns a quoted semicolon into what the push pattern takes for a separator: git --git-dir=\";\" pu''sh origin +HEAD:main above a line that breaks the parse ran the push and was admitted, since the pattern stopped at the semicolon; a quoted newline did the same, and the fallback never refused -c or --config-env as the parsed path does, nor GIT, which is git on Windows, nor a name a glob or an expansion builds. Each patch to the crude checks left the next spelling, so the fallback now refuses whatever it could not tokenise. Across both guard suites the only case that changes is git log with a trailing backslash, pinned to show the scanner does not read past the end, which it still shows when refused; bash refuses most of what shlex cannot read, and the refusal says how to rephrase the rest." \
       "test_a_quoted_separator_does_not_hide_a_push_from_the_fallback failed before the change and passes after it; apply.sh checks both."
   fi
 
