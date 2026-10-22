@@ -50,9 +50,11 @@ endpoints also fails for one that bypasses it.
 [ADR-145](ADR-145-a-receive-endpoint-off-at-start-has-its-topology-declared-by-a-bus-that-only-deploys-it-1360-amending-adr-144-and-adr-026.md)**:
 an endpoint off at start still consumes nothing, but its queue, exchanges and
 bindings are declared as the bus starts, by a bus that only deploys topology.
-A message routed to it while it is off therefore waits in its queue, and the
-consequence above, that such a message routes nowhere, holds only until that
-declaration lands.
+A message routed to it while it is off therefore waits in its queue. Two
+consequences above hold only until that declaration lands: that such a
+message routes nowhere, and that a consumer released while its endpoint is
+off has not been deployed in ADR-026's sense, so that the release that starts
+emitting waits for the switch.
 
 ---
 
