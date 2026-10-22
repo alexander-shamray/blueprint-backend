@@ -148,6 +148,7 @@ decision looks wrong.
 | **ADR-139** | [An erasure check asks no request that closed before its data left the owner (#882), amending ADR-092, ADR-097, ADR-099, ADR-135, ADR-136 and ADR-138](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md) |
 | **ADR-140** | [Shipping's erasure keeps an order placed under its request (#1275), amending ADR-052](adr/ADR-140-shippings-erasure-keeps-an-order-placed-under-its-request-1275-amending-adr-052.md) |
 | **ADR-141** | [Payments keeps the erasure requests an order was placed under, and its erasure spares that order (#1322), amending ADR-092](adr/ADR-141-payments-keeps-the-erasure-requests-an-order-was-placed-under-and-its-erasure-spares-that-order-1322-amending-adr-092.md) |
+| **ADR-142** | [The canary's MassTransit check holds the series table to a list of verified versions; supersedes the single-version rule of ADR-047](adr/ADR-142-the-canarys-masstransit-check-holds-the-series-table-to-a-list-of-verified-versions-supersedes-the-single-version-rule-of-adr-047.md) |
 
 ---
 

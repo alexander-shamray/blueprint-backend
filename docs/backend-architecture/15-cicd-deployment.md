@@ -338,7 +338,8 @@ checks each `serviceName` against a real entry assembly,
 `deploy/observability/**`, because it takes §13.6's thresholds out of the rules
 file rather than restating them, and `Directory.Packages.props`, because the
 MassTransit series its plan reads are held to that pin
-([ADR-047](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md));
+([ADR-047](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md),
+[ADR-142](adr/ADR-142-the-canarys-masstransit-check-holds-the-series-table-to-a-list-of-verified-versions-supersedes-the-single-version-rule-of-adr-047.md));
 the realm one names
 `src/BuildingBlocks/Common.Web/AuthenticationExtensions.cs`, because the
 lifetime every realm owes is read out of `AccessTokenLifetime` rather than
