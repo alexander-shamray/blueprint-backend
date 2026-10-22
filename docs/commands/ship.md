@@ -825,10 +825,10 @@ there.** `/branch` puts a branch in place there whenever `main` is dirty, so
 another session's branch may be the one checked out. A pull there would run
 in that session's tree, fast-forwarding its branch under it if its upstream
 moved, and an ancestry check against `HEAD` would ask about that session's
-branch, so its answer would say nothing about `main`. So
-line 4 reads the branch first: on `main` line 5 pulls, and on any other
-branch it refreshes `main` with `git fetch origin main:main` and touches
-nothing of that branch, and line 6 asks `main`, not `HEAD`, on both paths.
+branch, so its answer would say nothing about `main`. So line 4 reads the
+branch first: on `main` line 5 pulls, and on any other branch it refreshes
+`main` with `git fetch origin main:main` and touches nothing of that branch,
+and line 6 asks `main`, not `HEAD`, on both paths.
 
 **The in-place path is the mirror image.** There is no worktree to leave and
 none to remove, and the session *is* sitting on the merged branch in the
@@ -844,7 +844,8 @@ reads as work still in progress after the PR has landed, which is what
 
 Line 5 runs on both paths, the pull on `main` or the fetch elsewhere,
 because skipping it leaves local `main` a merge behind — precisely the state
-step 0 exists to stop the next run from starting in. The merged branch stays for step 0's teardown's reason.
+step 0 exists to stop the next run from starting in. The merged branch stays
+for step 0's teardown's reason.
 
 ## Report
 
