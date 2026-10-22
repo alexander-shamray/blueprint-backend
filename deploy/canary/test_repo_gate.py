@@ -321,8 +321,8 @@ class AlertThresholdTests(unittest.TestCase):
 
 
 class SourceInputTests(unittest.TestCase):
-    """TRIGGER_PATHS (SOURCE_INPUTS and the workflow's own path) against the
-    reads it claims to enumerate. SOURCE_INPUTS once omitted
+    """TRIGGER_PATHS (SOURCE_INPUTS, deploy/canary and the workflow's own path)
+    against the reads it claims to enumerate. SOURCE_INPUTS once omitted
     `deploy/observability` and check 7 stayed green, since **a gate cannot see
     a read it was never told about.**
     """
