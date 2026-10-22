@@ -314,6 +314,18 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             ["class D", "inside docs/foo.md", "outside src/Foo.cs", "inside docs/x.md"],
             r.stdout.splitlines())
 
+    def test_a_crlf_body_is_read_as_its_rows(self):
+        # A body saved on Windows or through the web form ends its lines in CR;
+        # the CI gate reads it, so the review round's verdict has to as well.
+        # printf makes the CR at run time, so no host's line endings can drop it.
+        script = (
+            "case \"$*\" in *\"/files\"*) echo '\"docs/x.md\"' ;;\n"
+            "*) printf '| Class | D |\\r\\n| Touch set | docs/x.md |\\r\\n' ;; esac\n"
+        )
+        r = self._run_locality_with_gh(script)
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertEqual(["class D", "inside docs/x.md"], r.stdout.splitlines())
+
     def test_a_body_without_rows_is_empty_success(self):
         r = self._run_locality_with_gh(self._gh_printing("no rows here\n"))
         self.assertEqual(0, r.returncode, r.stderr)
