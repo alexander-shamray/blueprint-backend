@@ -46,6 +46,14 @@ updates:
       - /deploy/compose/rabbitmq
     schedule:
       interval: weekly
+    ignore:
+      # The SDK image moves with global.json, which disables roll-forward (§4.4), and a runtime
+      # major moves with the target framework: each is a deliberate edit, not a bump.
+      - dependency-name: '*dotnet/sdk'
+      - dependency-name: '*dotnet/aspnet'
+        update-types: [version-update:semver-major]
+      - dependency-name: '*dotnet/runtime'
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
