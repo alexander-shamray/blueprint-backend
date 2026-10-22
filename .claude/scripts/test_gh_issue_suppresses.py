@@ -294,6 +294,33 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
                 )
                 self.assertEqual(2, result.returncode)
 
+    def test_a_list_as_long_as_its_limit_is_refused_as_cut(self):
+        # gh stops at --limit without a word, so a stub answering with as many
+        # issues as were asked for is a cut list, and the helper refuses it.
+        stub_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, stub_dir, ignore_errors=True)
+        stub = stub_dir / "gh"
+        stub.write_text(
+            "#!/usr/bin/env bash\n"
+            'while [ $# -gt 0 ]; do if [ "$1" = --limit ]; then n=$2; fi; shift; done\n'
+            '[ "$FULL" = 1 ] || n=2\n'
+            "printf '['\n"
+            "for ((i = 1; i <= n; i++)); do [ $i -eq 1 ] || printf ','; "
+            """printf '{"number":%d,"title":"t","state":"OPEN","labels":[]}' $i; done\n"""
+            "printf ']\\n'\n",
+            encoding="utf-8", newline="\n")
+        stub.chmod(0o755)
+        for full, code in (("1", 3), ("0", 0)):
+            with self.subTest(full=full):
+                env = dict(os.environ, FULL=full, PATH=str(stub_dir) + os.pathsep + os.environ["PATH"])
+                result = subprocess.run([BASH, str(ISSUE_LIST)], capture_output=True, text=True, env=env)
+                self.assertEqual(code, result.returncode, result.stderr)
+                if code:
+                    self.assertIn("may be cut", result.stderr)
+                    self.assertEqual("", result.stdout)
+                else:
+                    self.assertIn('"number":2', result.stdout)
+
     def test_both_sweeps_reach_the_issue_set_only_through_the_helper(self):
         for name in ("security-sweep.md", "bug-sweep.md"):
             with self.subTest(command=name):
