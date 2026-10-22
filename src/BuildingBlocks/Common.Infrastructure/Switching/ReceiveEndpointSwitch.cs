@@ -5,12 +5,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Common.Infrastructure.Switching;
 
-/// <summary>Stops a receive endpoint while its name is switched off and restarts it when it is not (ADR-113), and
-/// connects one that was off when the bus was configured once it is not (ADR-144).</summary>
+/// <summary>Stops a receive endpoint while its name is switched off, and starts it again when not (ADR-113).</summary>
 /// <remarks>
-/// Stopping is the mechanism <c>ProviderKillSwitch</c> uses: the queue keeps its messages and the inbox absorbs any
-/// redelivery (§9.5). An endpoint stopped after it was configured leaves the bus Degraded, which readiness answers
-/// 200 (ADR-113); one not yet connected is on no bus entry, and only operator-switches reports it (ADR-144).
+/// Stopping is <c>ProviderKillSwitch</c>'s mechanism, and the inbox absorbs any redelivery (§9.5). The bus check reads
+/// a stopped endpoint Degraded, and one off since configuration not at all, so operator-switches reports it (ADR-144).
 /// </remarks>
 public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposable
 {
