@@ -212,7 +212,7 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
         SqlNotificationsPersonalDataStore store = new(
             db,
             new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>()));
-        await store.DeleteWaitingOrderNoticesAsync(order, ct);
+        await store.DeleteWaitingOrderNoticesAsync(_subject, order, ct);
 
         Task redelivery = HandleAsync(placed, ct);
         await Should.ThrowAsync<TimeoutException>(() => redelivery.WaitAsync(Wait, ct));
@@ -222,6 +222,39 @@ public sealed class NotificationsErasureFenceTests(ServiceFixture fixture) : IAs
         await transaction.RollbackAsync(ct);
 
         await redelivery.WaitAsync(ServiceFixture.StepDeadline, ct);
+    }
+
+    [Fact]
+    public async Task An_ended_order_and_its_subjects_erasure_take_the_range_before_the_key()
+    {
+        // The ending held the key while a reissued erasure held the range and waited on it, then needed the range's
+        // entry for its record delete: a deadlock the erasure lost.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid order = Guid.CreateVersion7();
+        await HandleAsync(OrderEvents.Placed(order, _subject, At), ct);
+
+        await using NotificationsDbContext ending = new(
+            new DbContextOptionsBuilder<NotificationsDbContext>().UseSqlServer(fixture.ConnectionString).Options);
+        await using IDbContextTransaction endingTransaction = await ending.Database.BeginTransactionAsync(ct);
+        SqlNotificationsPersonalDataStore endingStore = new(
+            ending,
+            new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>()));
+        await endingStore.DeleteWaitingOrderNoticesAsync(_subject, order, ct);
+
+        await using NotificationsDbContext erasing = new(
+            new DbContextOptionsBuilder<NotificationsDbContext>().UseSqlServer(fixture.ConnectionString).Options);
+        await using IDbContextTransaction erasingTransaction = await erasing.Database.BeginTransactionAsync(ct);
+        SqlNotificationsPersonalDataStore erasingStore = new(
+            erasing,
+            new PushMetrics(fixture.Factory.Services.GetRequiredService<IMeterFactory>()));
+        Task erasure = erasingStore.DeleteWaitingNoticesAsync(_subject, Guid.CreateVersion7(), ct);
+        await Should.ThrowAsync<TimeoutException>(() => erasure.WaitAsync(Wait, ct));
+
+        await endingStore.DeleteOrderRecordAsync(_subject, order, ct).WaitAsync(ServiceFixture.StepDeadline, ct);
+        await endingTransaction.RollbackAsync(ct);
+
+        await erasure.WaitAsync(ServiceFixture.StepDeadline, ct);
+        await erasingTransaction.RollbackAsync(ct);
     }
 
     [Fact]

@@ -35,7 +35,8 @@ public class EndErasedOrderHandlerTests
 
         public List<Guid> Subjects { get; } = [];
 
-        public Task<int> DeleteWaitingOrderNoticesAsync(Guid orderId, CancellationToken ct) => Run("waiting", orderId);
+        public Task<int> DeleteWaitingOrderNoticesAsync(Guid subjectId, Guid orderId, CancellationToken ct) =>
+            Run("waiting", orderId);
 
         public Task<int> AnonymiseEndedOrderNoticesAsync(Guid orderId, CancellationToken ct) => Run("ended", orderId);
 

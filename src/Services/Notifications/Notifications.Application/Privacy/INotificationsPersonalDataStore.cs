@@ -27,8 +27,8 @@ public interface INotificationsPersonalDataStore
     /// <summary>Deletes the subject's mailbox and language (ADR-052).</summary>
     Task<int> DeleteContactAsync(Guid subjectId, CancellationToken ct);
 
-    /// <summary>Deletes the notices still waiting on one order.</summary>
-    Task<int> DeleteWaitingOrderNoticesAsync(Guid orderId, CancellationToken ct);
+    /// <summary>Deletes the notices still waiting on one of the subject's orders.</summary>
+    Task<int> DeleteWaitingOrderNoticesAsync(Guid subjectId, Guid orderId, CancellationToken ct);
 
     /// <summary>Takes the customer's id and the message's values off one order's ended notices (ADR-053).</summary>
     Task<int> AnonymiseEndedOrderNoticesAsync(Guid orderId, CancellationToken ct);
