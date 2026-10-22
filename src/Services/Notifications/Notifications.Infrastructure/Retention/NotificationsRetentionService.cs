@@ -92,9 +92,12 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
                 SELECT 1 FROM notifications.NotificationLog p WHERE p.OrderId = n.OrderId AND p.Status = 'Pending');
         """;
 
-    // Asked again, so a notice a consumer wrote since the select keeps the record it will wait on.
+    // Asked again, so a notice a consumer wrote since the select keeps the record it will wait on. A delete locks the
+    // record's key before its CustomerId entry, the reverse of an erasure's first statement, so a deadlock between
+    // them is possible; housekeeping yields, its next pass retries, and the erasure completes.
     private const string DeleteOrders =
         """
+        SET DEADLOCK_PRIORITY LOW;
         DELETE r FROM notifications.OrderRecords r
         WHERE r.OrderId IN @Keys
             AND r.RecordedAt < @Before

@@ -1,5 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
+using Notifications.Infrastructure.Persistence;
 using Notifications.Infrastructure.Retention;
 using Notifications.TestSupport;
 using Shouldly;
@@ -147,6 +150,41 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
             "CompletedAt = DATEADD(minute, -{1}, SYSDATETIMEOFFSET()) WHERE NotificationId = {0};",
             notification.NotificationId,
             (int)ago.TotalMinutes);
+
+    [Fact]
+    public async Task A_record_purge_deadlocked_with_its_customers_erasure_yields_and_the_erasure_completes()
+    {
+        // The erasure's first statement split at its two reads, so the purge's delete can take the key between them.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid customer = Guid.CreateVersion7();
+        Guid order = Guid.CreateVersion7();
+        await fixture.OrderAsync(order, customer);
+        await fixture.ExecuteAsync(
+            "UPDATE notifications.OrderRecords SET RecordedAt = DATEADD(day, -72, SYSDATETIMEOFFSET()) " +
+            "WHERE OrderId = {0};",
+            order);
+
+        await using NotificationsDbContext erasing = new(
+            new DbContextOptionsBuilder<NotificationsDbContext>().UseSqlServer(fixture.ConnectionString).Options);
+        await using IDbContextTransaction transaction = await erasing.Database.BeginTransactionAsync(ct);
+        await erasing.Database.ExecuteSqlAsync(
+            $"""
+            SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK, HOLDLOCK, FORCESEEK)
+            WHERE CustomerId = {customer};
+            """,
+            ct);
+
+        Task purge = fixture.PurgeNotificationsRetentionAsync();
+        await Task.Delay(TimeSpan.FromSeconds(2), ct);
+
+        await erasing.Database.ExecuteSqlAsync(
+            $"SELECT OrderId FROM notifications.OrderRecords WITH (UPDLOCK) WHERE OrderId = {order};",
+            ct);
+        await transaction.RollbackAsync(ct);
+
+        (await Should.ThrowAsync<Exception>(() => purge.WaitAsync(TimeSpan.FromSeconds(30), ct)))
+            .Message.ShouldContain("deadlock victim", Case.Insensitive, "the purge yields, so the erasure completes");
+    }
 
     private async Task<Guid> AgedOrderAsync(TimeSpan ago)
     {
