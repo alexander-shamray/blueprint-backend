@@ -1697,7 +1697,9 @@ restart
 ([ADR-113](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)),
 and an endpoint off when its pod's bus is configured is not configured until it
 is switched on, so the pod consumes nothing from it
-([ADR-144](adr/ADR-144-a-receive-endpoint-switched-off-when-its-bus-is-configured-is-not-configured-until-its-switch-is-on-1289-amending-adr-113.md)).
+([ADR-144](adr/ADR-144-a-receive-endpoint-switched-off-when-its-bus-is-configured-is-not-configured-until-its-switch-is-on-1289-amending-adr-113.md)),
+though its queue and bindings are declared as the pod starts
+([ADR-145](adr/ADR-145-a-receive-endpoint-off-at-start-has-its-topology-declared-by-a-bus-that-only-deploys-it-1360-amending-adr-144-and-adr-026.md)).
 
 ---
 

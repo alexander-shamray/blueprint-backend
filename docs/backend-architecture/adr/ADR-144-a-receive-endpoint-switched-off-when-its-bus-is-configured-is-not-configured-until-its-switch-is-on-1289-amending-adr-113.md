@@ -46,6 +46,14 @@ still stopped from its `Ready`, with the batch that costs; only the helper
 leaves an endpoint off at start unconfigured, so a host whose test lists its
 endpoints also fails for one that bypasses it.
 
+**Amended by
+[ADR-145](ADR-145-a-receive-endpoint-off-at-start-has-its-topology-declared-by-a-bus-that-only-deploys-it-1360-amending-adr-144-and-adr-026.md)**:
+an endpoint off at start still consumes nothing, but its queue, exchanges and
+bindings are declared as the bus starts, by a bus that only deploys topology.
+A message routed to it while it is off therefore waits in its queue, and the
+consequence above, that such a message routes nowhere, holds only until that
+declaration lands.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
