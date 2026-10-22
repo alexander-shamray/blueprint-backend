@@ -50,7 +50,7 @@ jobs:
       # The pin is a floor rather than a preference: a newer interpreter
       # accepts APIs this one does not, so a suite green locally can be
       # unrunnable here.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
