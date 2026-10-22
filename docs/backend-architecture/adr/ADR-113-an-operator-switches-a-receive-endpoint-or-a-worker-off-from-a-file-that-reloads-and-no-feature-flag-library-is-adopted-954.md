@@ -52,6 +52,14 @@ in the Decision, "a loop that is off is logged and adds no check, because
 `operator-switches` check, Degraded, which readiness answers 200; the log
 line stays.
 
+**Amended by
+[ADR-144](ADR-144-a-receive-endpoint-switched-off-when-its-bus-is-configured-is-not-configured-until-its-switch-is-on-1289-amending-adr-113.md)**:
+a receive endpoint whose name is off when the bus is configured is not
+configured until it is switched on, so it is not stopped from `Ready`, consumes
+nothing in the meantime and leaves the bus check Healthy rather than Degraded;
+the `operator-switches` check still reports it. An endpoint switched off after
+the bus was configured is still stopped as this record decides.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
