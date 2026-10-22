@@ -60,7 +60,7 @@ jobs:
       # The SLO run's stock precondition and confirmed-order floor. The pin is
       # a floor: the quoted glob and the extensionless ESM need Node 22.7 or
       # later, and the runner's preinstalled Node is not promised to be.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.12.0'
 
