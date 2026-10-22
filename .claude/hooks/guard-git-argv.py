@@ -417,7 +417,7 @@ def _quoting(command, quotes=True, data=()):
         index += 1
 
 
-def heredoc_spans(command):
+def heredoc_spans(command, unclosed=None):
     """Every heredoc body in `command`, as `(start, end, expands)`.
 
     `start` is just past the introducer and `end` just past the closing
@@ -501,6 +501,8 @@ def heredoc_spans(command):
             # find means either an unterminated heredoc, whose tail is data and
             # over-refuses, or a delimiter read wrongly, whose tail holds
             # commands. Scanning the tail is wrong only in the safe direction.
+            if unclosed is not None:
+                unclosed.append(index)
             break
         pending = start + closing.end()
         spans.append((start, pending, expands))
@@ -2254,6 +2256,17 @@ def _offence(command, depth, judged):
                     "tokenise; refusing on the raw string, which is the weaker "
                     "check the settings deny already performs."
                 )
+        # An unterminated heredoc leaves its body in the string, so a quote in
+        # the body is what failed the parse, and the checks below would read the
+        # body as commands; refused outright, as an undecodable delimiter is.
+        unclosed = []
+        heredoc_spans(command, unclosed)
+        if unclosed:
+            return (
+                "a heredoc here has no closing delimiter and the command "
+                "cannot be tokenised, so what bash runs cannot be read; "
+                "refusing rather than judging its body as commands."
+            )
         # The push check reaches this path too, because a line is easy to make
         # untokenisable on purpose; here it can only be the crude one.
         if re.search(r"\bgit\b[^;&|\n]*\bpush\b", stripped):
