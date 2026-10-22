@@ -9,12 +9,14 @@ and it fails naming the row and the name that differ.
 
 | Subcommand | Refuses | Reads |
 |---|---|---|
-| `check` | a name a row's Publishes, Consumes or Accepts cell holds and its host's code does not, and the reverse; a host under `src/Services/` or `src/BFF/` with no row, and a row with no host; a name in a Consumes cell that is not in exactly one Publishes cell, and a name in a Publishes cell that is in no Consumes cell, which are §3.2's own two closure comparisons; and an `owed.txt` line that is malformed or no longer a difference | §3.2's table, and per host the contract types its `*IntegrationEventMapper.cs` maps to, the events its endpoints bind with `ConfigureConsumer<IntegrationEventConsumer<T>>`, the `Event<T>` properties of a `MassTransitStateMachine`, and the commands it binds with `ConfigureConsumer<CommandConsumer<T, …>>` |
+| `check` | a name a row's Publishes, Consumes or Accepts cell holds and its host's code does not, and the reverse; a host under `src/Services/` or `src/BFF/` with no row, and a row with no host; a name in a Consumes cell that is not in exactly one Publishes cell, and a name in a Publishes cell that is in no Consumes cell, which are §3.2's own two closure comparisons; and an `owed.txt` line that is malformed or no longer a difference | §3.2's table, and per host the contract types its `*IntegrationEventMapper.cs` maps to, the events its endpoints bind with `ConfigureConsumer<IntegrationEventConsumer<T>>`, the `Event<T>` properties of a `MassTransitStateMachine<TState>` its endpoints bind with `ConfigureSaga<TState>`, and the commands it binds with `ConfigureConsumer<CommandConsumer<T, …>>` |
 | `report` | nothing | the same code, printed as JSON per host: the table the code implies, for a sibling repository's broker map to compare with |
 
 **Bound, not registered.** An `AddConsumer` line with no `ConfigureConsumer`
 binds nothing, and the broker never delivers to it, so only the binding counts
-as consuming. A host is a directory under `src/Services/`, and the BFF is the
+as consuming. A saga is held to the same rule: `AddSagaStateMachine` registers
+it, and its events count only where `ConfigureSaga` names its instance type.
+A host is a directory under `src/Services/`, and the BFF is the
 whole of `src/BFF/`, named by its one project whose name prefixes the others.
 
 **`owed.txt` is the one way a difference passes**, and only in one direction:

@@ -36,7 +36,8 @@ FILES = {
         "private static OrderPlaced ToContract(OrderPlacedDomainEvent e) => new()",
     "src/Services/Ordering/Ordering.Infrastructure/Messaging/DependencyInjection.cs":
         "e.ConfigureConsumer<IntegrationEventConsumer<ProductPublished>>(context);\n"
-        "e.ConfigureConsumer<CommandConsumer<CancelOrder, CancelOrderCommand>>(context);",
+        "e.ConfigureConsumer<CommandConsumer<CancelOrder, CancelOrderCommand>>(context);\n"
+        "e.ConfigureSaga<OrderFulfilmentState>(context);",
     "src/Services/Ordering/Ordering.Infrastructure/Messaging/OrderFulfilmentSaga.cs":
         "public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmentState>\n"
         "    public Event<OrderPlaced> OrderPlaced { get; private set; } = null!;",
@@ -109,6 +110,19 @@ class TableAgainstCode(Fixture):
                   "MassTransitStateMachine<OrderFulfilmentState>", "SomethingElse")
 
         self.assertIn("§3.2's Ordering row consumes OrderPlaced and the code does not", self.check())
+
+    def test_a_state_machine_with_no_saga_binding_is_not_a_consumer(self) -> None:
+        # As with a consumer, AddSagaStateMachine registers and only ConfigureSaga binds an endpoint to it.
+        self.edit("src/Services/Ordering/Ordering.Infrastructure/Messaging/DependencyInjection.cs",
+                  "\ne.ConfigureSaga<OrderFulfilmentState>(context);", "")
+
+        self.assertEqual(self.check(), ["§3.2's Ordering row consumes OrderPlaced and the code does not"])
+
+    def test_a_saga_binding_counts_only_for_its_own_state_machine(self) -> None:
+        self.edit("src/Services/Ordering/Ordering.Infrastructure/Messaging/DependencyInjection.cs",
+                  "ConfigureSaga<OrderFulfilmentState>", "ConfigureSaga<\n    RefundState >")
+
+        self.assertEqual(self.check(), ["§3.2's Ordering row consumes OrderPlaced and the code does not"])
 
     def test_a_command_consumer_is_an_accepted_command(self) -> None:
         self.edit("src/Services/Ordering/Ordering.Infrastructure/Messaging/DependencyInjection.cs",
