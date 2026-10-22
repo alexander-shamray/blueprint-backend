@@ -6,6 +6,6 @@ namespace Privacy.Domain.ErasureRequests.Events;
 public sealed record ErasureRequestedDomainEvent(Guid RequestId, Guid SubjectId, DateTimeOffset OccurredAt)
     : IDomainEvent;
 
-/// <summary>A request closed with every removed holder heard from; local until §9.3's mapper publishes it as
-/// <c>PersonalDataDeleteClosed</c>, a release after the holders bind it (ADR-139).</summary>
+/// <summary>A request closed with every removed holder heard from; §9.3's mapper publishes it as
+/// <c>PersonalDataDeleteClosed</c>, which each holder stamps on its audit row (ADR-139).</summary>
 public sealed record ErasureRequestClosedDomainEvent(Guid RequestId, DateTimeOffset OccurredAt) : IDomainEvent;
