@@ -10,9 +10,7 @@ series table was read from as a list, `MASSTRANSIT_VERIFIED`, and check 5 fails
 when the pin in `Directory.Packages.props` is none of them. A version is added
 to the list by reading that package's instrument names and units, in a change
 of its own that lands before the pin moves. The list is not a second owner of
-the pin, which [change-locality](../../change-locality.md) §2 keeps in
-`Directory.Packages.props`: it records what the table was read against, and a
-pin outside it still fails.
+the pin, on ADR-047's terms, and a pin outside it still fails.
 **Why.** Dependabot's bump edits the pin alone, so with one verified version it
 was red on arrival and no commit on its branch could turn it green without
 becoming a pull request of two classes that Dependabot would then no longer
