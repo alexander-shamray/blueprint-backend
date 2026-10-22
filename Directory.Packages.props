@@ -20,10 +20,10 @@
          the restore fails anyway, and rightly, because a design-time supply
          chain runs on a developer's machine with their credentials. -->
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
-    <!-- Transitive and pinned for the same reason: Microsoft.Data.SqlClient and
-         MimeKit both reach it at 10.0.0, and every 10.0 below 10.0.13 carries
-         CVE-2026-84008, which NU1903 turns into a failed restore in every
-         project with a database. -->
+    <!-- Transitive and pinned for the same reason: Microsoft.Data.SqlClient
+         reaches it at a 9.0 floor and MimeKit at 10.0.0, and both carry
+         advisories — every 10.0 below 10.0.13 carries CVE-2026-84008 — which
+         NU1903 turns into a failed restore in every project with a database. -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.0.0" />
     <!-- HybridCache's L2 (§8.2): AddStackExchangeRedisCache and
