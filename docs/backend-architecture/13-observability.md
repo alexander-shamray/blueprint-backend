@@ -1172,7 +1172,8 @@ not by this block
 It reports Degraded while a receive endpoint or a worker loop is switched off
 ([ADR-113](adr/ADR-113-an-operator-switches-a-receive-endpoint-or-a-worker-off-from-a-file-that-reloads-and-no-feature-flag-library-is-adopted-954.md)),
 and while `Switches:Off` holds a single value, which a list does not bind from
-and so switches nothing off; a host that starts with one refuses to start. It
+and so switches nothing off; a host that starts with one refuses to start
+([ADR-147](adr/ADR-147-a-scalar-switches-off-refuses-the-host-at-start-and-is-reported-degraded-on-a-reload-1291-amending-adr-113-and-adr-115.md)). It
 is never Unhealthy, so `/health/ready` still answers 200 and a deliberate stop
 does not take the pod out of service. The endpoint sets no `ResultStatusCodes`,
 so ASP.NET's default maps Degraded to 200 and only Unhealthy to 503. A
