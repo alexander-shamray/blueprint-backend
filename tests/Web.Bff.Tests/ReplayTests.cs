@@ -409,8 +409,8 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         (await fixture.InboxAsync()).Count.ShouldBe(1);
     }
 
-    // The name OrderPlaced was stored under before a section 9.4 rename, which the contracts' map does not carry.
-    private const string OldName = "Ordering.Domain.Orders.Events.OrderPlaced";
+    // A name no contract in the map carries, as a retired version of OrderPlaced would have left in a processed row.
+    private const string OldName = "Common.Contracts.Ordering.V0.OrderPlaced";
 
     [Fact]
     public async Task A_row_stored_under_a_name_the_contracts_do_not_carry_stops_a_reset_before_anything_is_deleted()

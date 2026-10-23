@@ -62,10 +62,13 @@ public static class OutboxRows
     public static async Task<IReadOnlyList<StoredName>> NamesAsync(
         SqlConnection connection,
         Publisher publisher,
-        DateTimeOffset cutoff) =>
+        DateTimeOffset cutoff,
+        CancellationToken ct) =>
         [.. await connection.QueryAsync<StoredName>(
-            NamesSql(publisher),
-            new { Lane = nameof(OutboxLane.Broker), Cutoff = cutoff })];
+            new CommandDefinition(
+                NamesSql(publisher),
+                new { Lane = nameof(OutboxLane.Broker), Cutoff = cutoff },
+                cancellationToken: ct))];
 
     /// <summary>Unbuffered, since a window is whatever the publisher kept, not this process's to hold.</summary>
     public static IAsyncEnumerable<OutboxRow> ReadAsync(

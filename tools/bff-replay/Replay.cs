@@ -62,7 +62,7 @@ public static class Replay
                         new CommandDefinition(OutboxRows.CutoffSql, cancellationToken: ct)));
 
                 // The map is the contracts' alone, so a name it cannot resolve is one the replay would skip unseen.
-                foreach (StoredName stored in await OutboxRows.NamesAsync(connection, source.Publisher, cutoffs[^1]))
+                foreach (StoredName stored in await OutboxRows.NamesAsync(connection, source.Publisher, cutoffs[^1], ct))
                 {
                     if (!Resolves(types, stored.Name))
                         unread.Add($"{source.Publisher.Name}: {stored.Name} ({stored.Total} row(s))");
@@ -75,8 +75,10 @@ public static class Replay
                 if (reset)
                 {
                     throw new InvalidOperationException(
-                        "The window holds rows stored under names the contracts do not carry, so a reset would " +
-                        $"delete projected facts the replay cannot send: {names}. Nothing was deleted or sent.");
+                        "The window holds rows stored under names the contracts do not carry, and the tool cannot " +
+                        "tell whether one is of the eight, so a reset could delete facts it cannot resend. A retired " +
+                        $"contract version leaves such rows until retention purges them: {names}. " +
+                        "Nothing was deleted or sent.");
                 }
 
                 await output.WriteLineAsync(
