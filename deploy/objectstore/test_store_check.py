@@ -123,7 +123,7 @@ class CheckTests(unittest.TestCase):
 
 
 class NoGrantTests(unittest.TestCase):
-    """A bucket that exists and grants the pairs nothing refuses every probe, as the right one does."""
+    """The limit the README's *What it does not check* states, held to the check's behaviour."""
 
     README = pathlib.Path(__file__).resolve().parent / "README.md"
 
@@ -134,12 +134,15 @@ class NoGrantTests(unittest.TestCase):
         violations = store_check.check(store.env(**{store_check.BUCKET: "another-accounts-bucket"}))
 
         self.assertEqual(violations, [])
+        # The wrong bucket was the one asked, six times, and still passed.
+        self.assertEqual(len(store.seen), 6)
+        self.assertTrue(all(path.startswith("/another-accounts-bucket") for _, path, _ in store.seen), store.seen)
 
     def test_the_readme_says_so_rather_than_claiming_a_404_covers_it(self):
         text = " ".join(self.README.read_text(encoding="utf-8").split())
 
         self.assertIn("a wrong `OBJECT_STORE_BUCKET` reads as a pass", text)
-        self.assertIn("a `404` is a bucket that does not exist", text)
+        self.assertIn("a `404`, such as `NoSuchBucket`, names no bucket the store holds", text)
 
 
 class RedirectTests(unittest.TestCase):
