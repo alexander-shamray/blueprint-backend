@@ -83,6 +83,12 @@ or above.** (why: docs/commands/security-sweep.md, *What counts as an issue*)
   confirmed by the verify step before it becomes an issue.
 - **Medium or above.** Low and info findings are recorded in the round summary,
   not filed. The threshold is the user's to move, not this command's.
+- **One cause, one issue; fifteen a run.** Sites that share one cause and
+  one fix are one issue naming every site. Past fifteen filings in a run,
+  the rest are ranked in the summary for the next run.
+- **Inside the guards' threat model.** A spelling built only to hide a
+  command from a guard hook is out of scope (`docs/harness-boundaries.md`,
+  *The guards' threat model*): record it in the summary, never file it.
 - **Not already tracked.** Enumerate the **whole** issue set through
   `gh-issue-list.sh` and match each finding against it. An open issue
   **opened by the repository owner** blocks a re-file — as does a `wontfix` or
