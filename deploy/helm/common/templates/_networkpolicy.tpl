@@ -56,7 +56,8 @@ or selectors naming nothing, rather than a list of spellings. */}}
 than stated twice: its own port, or its scheme's. A policy matches the pod's
 port after a Service translates it, so a peer's stated port wins (ADR-065). */}}
 {{- define "commerce.urlPort" -}}
-{{- $url := . | default "" | toString -}}
+{{- /* Trimmed, as commerce.require trims the same address into the ConfigMap, so the policy opens the port the pod dials. */}}
+{{- $url := . | default "" | toString | trim -}}
 {{- $port := regexFind ":[0-9]+$" (regexFind "^[a-z]+://[^/]+" $url) -}}
 {{- if $port }}{{ trimPrefix ":" $port }}{{ else if hasPrefix "https://" $url }}443{{ else }}80{{ end -}}
 {{- end -}}
