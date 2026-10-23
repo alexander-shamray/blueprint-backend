@@ -179,22 +179,47 @@ eliminating most Redis round trips; adjust with the domain in mind.
 public sealed class GetProductDetailHandler(HybridCache cache, IDbConnectionFactory connections)
     : IQueryHandler<GetProductDetailQuery, ProductDetailDto?>
 {
-    public async Task<ProductDetailDto?> HandleAsync(GetProductDetailQuery query, CancellationToken ct) =>
-        await cache.GetOrCreateAsync(
-            $"product:{query.ProductId}:v2",
-            query,
-            static async (q, token) =>
-            {
-                using IDbConnection connection = connections.Create();
-                return await connection.QuerySingleOrDefaultAsync<ProductDetailDto>(ProductSql, new { q.ProductId });
-            },
-            tags: [$"product:{query.ProductId}", "catalog"],
-            cancellationToken: ct);
+    public async Task<ProductDetailDto?> HandleAsync(GetProductDetailQuery query, CancellationToken ct)
+    {
+        try
+        {
+            return await cache.GetOrCreateAsync(
+                $"product:{query.ProductId}:v2",
+                (query, connections),
+                static async (state, token) =>
+                {
+                    using IDbConnection connection = state.connections.Create();
+                    ProductDetailDto? row = await connection.QuerySingleOrDefaultAsync<ProductDetailDto>(
+                        new CommandDefinition(ProductSql, new { state.query.ProductId }, cancellationToken: token));
+
+                    return row ?? throw new MissSignal();
+                },
+                tags: [$"product:{query.ProductId}", "catalog"],
+                cancellationToken: ct);
+        }
+        catch (MissSignal)
+        {
+            return null;
+        }
+    }
+
+    private sealed class MissSignal : Exception;
 }
 ```
 
 The `static` lambda with the state parameter avoids allocating a closure per
-call — a small thing that matters on a hot path.
+call — a small thing that matters on a hot path. A static lambda cannot read
+the handler's `connections`, so the state carries it beside the query.
+
+**A miss is never cached.** `QuerySingleOrDefaultAsync` answers `null` for an
+id with no row, and `GetOrCreateAsync` would store that `null` under the key:
+every distinct id a caller sends would add an entry, evicting real ones from
+the `allkeys-lru` instance (§8.1), and an id that later gains a row would be
+served as missing until the entry expired, since no event removes an entry for
+an id that never had a row. A factory that throws stores nothing, so the
+lambda throws a private signal for an absent row and the handler catches it
+and returns `null`. The token reaches Dapper through `CommandDefinition`, so a
+cancelled request stops its query.
 
 **A real one-product read may not be this handler, and may cache nothing.** A
 read whose row carries a value that a projection writes, and for which nothing
