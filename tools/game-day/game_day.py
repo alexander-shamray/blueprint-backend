@@ -283,7 +283,7 @@ def hold(scenario: ModuleType, world: harness.World, *, sleep=time.sleep, clock=
     """--hold, the detached child: the cause, then alive for as long as a thread of the cause's has work to do.
 
     `report` tells the --cause once whether the cause landed: when it returns or raises or, for a loop, after `grace`
-    (the scenario's LANDED_AFTER_SECONDS) of neither. A finite cause has none: its warm-up outlasts any.
+    (the scenario's LANDED_AFTER_SECONDS) of neither. A finite cause has none: a grace could run out in a warm-up.
     """
     if grace is None:
         grace = getattr(scenario, "LANDED_AFTER_SECONDS", None)

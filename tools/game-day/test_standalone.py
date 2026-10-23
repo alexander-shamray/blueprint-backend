@@ -574,7 +574,9 @@ class Landing(unittest.TestCase):
         game_day.hold(types.SimpleNamespace(cause=loop, LANDED_AFTER_SECONDS=0.05), Stack().world, report=report)
         self.assertEqual([[]], reports)
         reports.clear()
-        game_day.hold(types.SimpleNamespace(cause=slow), Stack().world, report=report, sleep=lambda s: None)
+        with mock.patch.object(game_day.threading, "Timer") as timer:
+            game_day.hold(types.SimpleNamespace(cause=slow), Stack().world, report=report, sleep=lambda s: None)
+        timer.return_value.start.assert_not_called()
         self.assertEqual([], seen)
         self.assertEqual([[]], reports)
 
@@ -582,6 +584,14 @@ class Landing(unittest.TestCase):
         declared = {name for name in coverage.scripts() if hasattr(fresh(name), "LANDED_AFTER_SECONDS")}
         self.assertEqual({"queue_backlog"}, declared)
         self.assertLess(fresh("queue_backlog").LANDED_AFTER_SECONDS, game_day.LANDING_SECONDS)
+
+    def test_the_wait_for_a_report_outlasts_every_warm_up(self):
+        for name in coverage.scripts():
+            warm = getattr(fresh(name), "WARM_SECONDS", None)
+            if warm is not None:
+                with self.subTest(name):
+                    self.assertGreater(game_day.LANDING_SECONDS, warm)
+        self.assertIsNotNone(getattr(fresh("latency"), "WARM_SECONDS", None))
 
     def test_a_report_is_read_back_whole_and_a_missing_one_is_not_a_landing(self):
         with tempfile.TemporaryDirectory() as directory:
