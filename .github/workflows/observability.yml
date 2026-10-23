@@ -57,6 +57,11 @@ jobs:
       - name: Alerts, runbooks and signals agree
         run: python deploy/observability/check.py
 
+      # The gate's own checks, over throwaway source trees: a scan that read
+      # the wrong text passes the real tree, so it is shown a tree it must refuse.
+      - name: The gate refuses what it should
+        run: python -m unittest discover -s deploy/observability -p "test_*.py"
+
       # The SLO run's stock precondition and confirmed-order floor. The pin is
       # a floor: the quoted glob and the extensionless ESM need Node 22.7 or
       # later, and the runner's preinstalled Node is not promised to be.
