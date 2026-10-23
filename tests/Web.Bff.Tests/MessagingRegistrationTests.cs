@@ -48,7 +48,7 @@ public sealed class MessagingRegistrationTests
             .Build();
 
     /// <summary>The events the production registration adds an <see cref="IntegrationEventConsumer{T}"/> for, less
-    /// the erasure pair: what the projection really consumes, read from the registrations and not from a list.</summary>
+    /// the erasure pair: what the projection consumes, read from the registrations and not from a list.</summary>
     public static Type[] RegisteredProjectionEvents()
     {
         ServiceCollection services = new();
