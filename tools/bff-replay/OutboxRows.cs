@@ -49,7 +49,7 @@ public static class OutboxRows
         ORDER BY {nameof(OutboxMessage.OccurredAt)}, {nameof(OutboxMessage.Id)};
         """;
 
-    /// <summary>Every name the window's rows were stored under, because a renamed type's old name selects nothing.</summary>
+    /// <summary>Every name the window's rows carry; a renamed type's old name is one the read never selects.</summary>
     public static string NamesSql(Publisher publisher) =>
         $"""
         SELECT {nameof(OutboxMessage.MessageType)} AS Name, COUNT(*) AS Total
