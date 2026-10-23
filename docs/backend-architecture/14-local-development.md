@@ -31,8 +31,9 @@ include:
 this section has.** Compose gained the top-level element in **v2.20.0**; an
 older v2 rejects this model before anything starts, which is a failure at parse
 time rather than a service that misbehaves. The broker's `start_interval`
-below adds Docker Engine 25 to it. Docker Desktop and a current
-`docker-compose-plugin` are both well past it, so "only Docker" holds — the
+below adds Docker Engine 25 to it. Docker Desktop, and a current Docker Engine
+with its `docker-compose-plugin`, are both well past them, so "only Docker"
+holds — the
 version is stated because a floor nobody writes down is one a stale
 installation discovers.
 
