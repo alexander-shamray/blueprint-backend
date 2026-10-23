@@ -18,8 +18,8 @@ public sealed class ReplayTargetTests
     public static TheoryData<string> Publishers => [.. Publisher.All.Select(p => p.Name)];
 
     [Fact]
-    public void The_tool_replays_exactly_the_events_the_queue_binds() =>
-        ReplayedEvents.Types.ShouldBe(MessagingRegistrationTests.Consumed, ignoreOrder: true);
+    public void The_tool_replays_exactly_the_events_the_bff_registers_a_projection_consumer_for() =>
+        ReplayedEvents.Types.ShouldBe(MessagingRegistrationTests.RegisteredProjectionEvents(), ignoreOrder: true);
 
     [Fact]
     public void Every_replayed_event_belongs_to_exactly_one_publisher()
