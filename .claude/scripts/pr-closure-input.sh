@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Feed the closure gate — a PR's number, url, body, commits, GitHub's own
-# closing-issue parse, the head oid and the author, as JSON on stdout. Read-only, fixed
-# field set.
+# closing-issue parse, the head oid and the author, as JSON on stdout.
+# Read-only, fixed field set.
 #
 # pr.md reads through this rather than holding a `gh pr view` grant. The field
 # set is exactly what closure_gate.py reads, fixed because a caller that
