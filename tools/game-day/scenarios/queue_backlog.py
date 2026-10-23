@@ -15,6 +15,9 @@ import harness
 RUNBOOK = "queue-backlog.md"
 IMPACT = "outage"
 SUSTAINED = True
+# The cause is a loop of rounds that runs for SUSTAIN_SECONDS, so `--cause` is told it landed once it has run this
+# long without failing (README.md, *Cause and restore apart*); the other sustained causes return when they have.
+LANDED_AFTER_SECONDS = 20.0
 ALERT = "DeliveryLagHigh"
 CONSUMER = "web-bff"
 LOG_SERVICE = "Web.Bff"
