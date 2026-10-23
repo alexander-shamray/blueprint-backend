@@ -56,13 +56,10 @@ services:
     ports: [ "127.0.0.1:5672:5672", "127.0.0.1:15672:15672" ]
     volumes: [ rabbit-data:/var/lib/rabbitmq ]
     healthcheck:
-      # Both applications, asked of the running node in one VM: a broker without
-      # the plugin runs healthy while every saga schedule hangs on a declare it
-      # refuses (ADR-021), and the plugin list is readable before the broker has
-      # finished starting. Each rabbitmq CLI call boots an Erlang VM that takes
-      # every core for its start-up, so two calls every 10 s was most of the
-      # stack's idle CPU; erlang:error is the non-zero exit, and halt would stop
-      # the broker.
+      # Both applications, asked of the running node in one call (§14.1): a
+      # broker without the plugin runs healthy while every saga schedule hangs
+      # on a declare it refuses (ADR-021). erlang:error is the non-zero exit,
+      # and halt would stop the broker.
       test: ["CMD", "rabbitmqctl", "eval", "A = [N || {N, _, _} <- application:which_applications()], [rabbit, rabbitmq_delayed_message_exchange] -- A =:= [] orelse erlang:error(not_running)."]
       interval: 30s
       # Quick while starting so `up --wait` is not held for a steady-state
