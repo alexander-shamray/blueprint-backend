@@ -80,7 +80,8 @@ public class TimeSpanRangeAttributeTests
     // The stock attribute with a TimeSpan operand: Range or RangeAttribute, spaced, System- or global-qualified, the
     // operand named or not.
     private static readonly Regex StockTimeSpanRange = new(
-        @"\bRange(?:Attribute)?\s*\(\s*(?:type\s*:\s*)?typeof\s*\(\s*(?:global\s*::\s*)?(?:System\s*\.\s*)?TimeSpan\s*\)",
+        @"\bRange(?:Attribute)?\s*\(\s*(?:type\s*:\s*)?typeof\s*\(\s*" +
+        @"(?:global\s*::\s*)?(?:System\s*\.\s*)?TimeSpan\s*\)",
         RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(5));
 
