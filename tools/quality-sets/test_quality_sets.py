@@ -57,6 +57,8 @@ class Sweeps(unittest.TestCase):
             echoed = (f"## Affected lines\n\nFound by the #433 sweep at {'c' * 40}.\n\n## Fix\n\ny\n\n"
                       f"Found by the #433 sweep at {SHA}.")
             self.assertEqual(qs.pinned_commit(echoed), SHA, "a found-by line quoted in the affected lines")
+            last = f"## Summary\n\nx\n\n## Affected lines\n\nci.yml\n\nPinned commit: {SHA}."
+            self.assertEqual(qs.pinned_commit(last), SHA, "the pin follows the last heading and no later one ends it")
 
     def test_paths_come_from_affected_lines_and_only_those_that_exist_at_the_commit(self):
         body = sweep_body("deploy/helm/smoke.sh line 390 and docs/gone.md and check_permissions.py")
@@ -297,7 +299,7 @@ class Runs(unittest.TestCase):
         self.assertEqual(qs.tokens(spent)["total"], 9)
 
     def test_a_usage_limit_notice_only_on_stderr_ends_the_run_too(self):
-        with self.assertRaises(qs.UsageLimit):
+        with self.assertRaisesRegex(qs.UsageLimit, "usage limit reached"):
             self.failed_run("", stderr="Claude AI usage limit reached")
 
     def test_a_non_zero_exit_with_no_findings_is_refused_by_its_code_and_its_tokens_are_counted(self):

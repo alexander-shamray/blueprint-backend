@@ -70,11 +70,11 @@ def resolve_commit(text):
 def pinned_commit(body):
     """The commit a sweep issue was found on: its 'pinned commit' or 'found ... at', else a sha this clone holds.
 
-    Outside the affected lines, which quote action pins and other hashes before the pin is named. A bare
-    40-hex word is a pin only when no words name one and this clone resolves it.
+    Words outside the affected lines, which quote action pins first, win over any inside them. A bare 40-hex
+    word is a pin only when no words name one and this clone resolves it.
     """
-    body = AFFECTED.sub("", body)
-    named = PINNED.search(body) or FOUND_AT.search(body)
+    outside = AFFECTED.sub("", body)
+    named = PINNED.search(outside) or FOUND_AT.search(outside) or PINNED.search(body) or FOUND_AT.search(body)
     if named:
         text = named.group(1)
         return text if len(text) == 40 else resolve_commit(text)
@@ -274,7 +274,7 @@ def ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
     value = agent_json(text)
     if value is None:
         if "usage limit" in f"{text}\n{done.stderr}".lower():
-            raise UsageLimit(f"{agent} stopped on a usage-limit notice: {text.strip()[:200]}")
+            raise UsageLimit(f"{agent} stopped on a usage-limit notice: {(text.strip() or done.stderr.strip())[:200]}")
         if done.returncode:
             raise SystemExit(f"{claude} exited {done.returncode}: {(done.stderr.strip() or text.strip())[:300]}")
         raise SystemExit(f"{agent} returned no findings JSON: {text.strip()[:200]}")
