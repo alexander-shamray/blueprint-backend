@@ -1,4 +1,5 @@
 using Common.Infrastructure.Identity;
+using Common.TestSupport;
 using Common.Web;
 using Microsoft.Extensions.Options;
 using Shouldly;
@@ -13,9 +14,6 @@ public class OptionsValidationTests
 {
     /// <summary>A field, since CA1861 is an error under ADR-019.</summary>
     private static readonly string[] Members = ["ClientId", "ClientSecret", "Scope"];
-
-    /// <summary>Hosts started on one blank credential, re-asked past a disposal race that hides the reason.</summary>
-    private const int StartAttempts = 5;
 
     /// <summary>The host's own registration refuses the blank credential, and its failure names the member.</summary>
     [Theory]
@@ -81,31 +79,9 @@ public class OptionsValidationTests
     private static Exception Refusal(string section, string member) =>
         Refusal(() => new MissingSettingFactory($"{section}:{member}"));
 
-    /// <summary>Starts hosts missing one credential until one says why, not that its provider is disposed.</summary>
-    /// <remarks>
-    /// A failed start can dispose the provider the factory still reads, reporting <see cref="ObjectDisposedException"/>
-    /// with no inner exception; only a failed start does that, so a re-ask cannot invent a refusal.
-    /// </remarks>
-    private static Exception Refusal(Func<BffFactory> unstartable)
-    {
-        Exception? refusal = null;
-
-        for (int attempt = 0; attempt < StartAttempts; attempt++)
-        {
-            using BffFactory factory = unstartable();
-
-            // The factory builds the host on first use.
-            refusal = Record.Exception(() => factory.CreateClient())
-                .ShouldNotBeNull("a blank credential must stop the host");
-
-            if (refusal is not ObjectDisposedException { ObjectName: nameof(IServiceProvider) })
-                return refusal;
-        }
-
-        throw new InvalidOperationException(
-            "Every host started here reported a disposed provider, so none of them said why it refused to start.",
-            refusal);
-    }
+    // The factory builds the host on first use.
+    private static Exception Refusal(Func<BffFactory> unstartable) =>
+        StartRefusal.Ask(unstartable, factory => factory.CreateClient());
 
     [Fact]
     public void The_host_starts_when_all_three_are_supplied()

@@ -1,3 +1,4 @@
+using Common.TestSupport;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Options;
 using Shouldly;
@@ -33,8 +34,8 @@ public sealed class RequiredPairsTests
     [InlineData("newsletter/email")]
     public void The_host_refuses_to_start_on_a_pair_outside_the_vocabulary(string pair)
     {
-        using RequiringFactory factory = new(pair);
+        Exception refusal = StartRefusal.Ask(() => new RequiringFactory(pair), factory => factory.CreateClient());
 
-        Should.Throw<OptionsValidationException>(() => factory.CreateClient()).Message.ShouldContain(pair);
+        refusal.ShouldBeOfType<OptionsValidationException>().Message.ShouldContain(pair);
     }
 }
