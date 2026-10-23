@@ -34,7 +34,7 @@
          a direct PackageReference either way. Not a second cache in the sense
          §8 argues about — it stores no domain data and crosses no process. -->
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
     <!-- The engine under the row above, named directly where no HttpClient carries it: Notifications' relay
          pipeline. The version the row above already resolves, so pinning it moves no other graph. -->
     <PackageVersion Include="Polly.Core" Version="8.4.2" />
