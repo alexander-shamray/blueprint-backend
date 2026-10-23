@@ -16,13 +16,13 @@ delete. The code sends two commands, so it does not honour the word batch.
 What the rule rests on holds: both commit or neither does, and the emptying
 cannot follow the delete, because once the address row is gone nothing joins the
 shipment to the subject. The update reads the address table without the lock
-hints, so it holds nothing to the commit, and a hint on its join would lock only
-the keys its plan reads, which is none when it is driven from a shipments table
-with no match. The first therefore opens with a read of its own that takes the
-lock; without it an address saved between the two was deleted with its
-shipment's list kept (#1392). Merging the two into one batch would make the word
-true and change nothing the rule depends on, so the code stays split and the
-sentence is amended.
+hints, so it holds no lock on that table to the commit, and a hint on its join
+would lock only the keys its plan reads, which is none when it is driven from a
+shipments table with no match. The first therefore opens with a read of its own
+that takes the lock; without it an address saved between the two was deleted
+with its shipment's list kept (#1392). Merging the two into one batch would make
+the word true and change nothing the rule depends on, so the code stays split
+and the sentence is amended.
 **Consequences.** A reader of ADR-103 finds the word batch there, as an ADR is
 amended and never rewritten, and reads this decision beside it. A change that
 reorders the two statements, runs the delete in a unit that does not also hold
