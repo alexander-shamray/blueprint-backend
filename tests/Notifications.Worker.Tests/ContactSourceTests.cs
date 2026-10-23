@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json.Nodes;
 using Common.Infrastructure.Identity;
+using Common.TestSupport;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -78,9 +79,6 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
 
     /// <summary>The pinned Keycloak's body for an id its realm holds no user under.</summary>
     private const string UserNotFound = """{"error":"User not found"}""";
-
-    // Five starts, because a run that loses the race below five times over has something else wrong with it.
-    private const int StartAttempts = 5;
 
     private readonly WireMockServer _keycloak;
     private readonly PatientFactory _factory;
@@ -394,23 +392,8 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
             .Message.ShouldContain(nameof(ServiceIdentityOptions.ClientSecret));
     }
 
-    // A start refused at validation can lose a race with its own disposal and say only that, so it is asked again.
-    private static Exception Refusal(Func<WebApplicationFactory<Program>> derive)
-    {
-        Exception refusal = null!;
-
-        for (int attempt = 0; attempt < StartAttempts; attempt++)
-        {
-            using WebApplicationFactory<Program> host = derive();
-
-            refusal = Should.Throw<Exception>(() => host.Services);
-
-            if (refusal is not ObjectDisposedException { ObjectName: nameof(IServiceProvider) })
-                return refusal;
-        }
-
-        return refusal;
-    }
+    private static Exception Refusal(Func<WebApplicationFactory<Program>> derive) =>
+        StartRefusal.Ask(derive, host => _ = host.Services);
 
     /// <summary>The host with <c>Program</c>'s own token source left in place.</summary>
     private sealed class ProgramTokensFactory() : NotificationsWorkerFactory(Unreachable.Sql, Unreachable.Rabbit)
