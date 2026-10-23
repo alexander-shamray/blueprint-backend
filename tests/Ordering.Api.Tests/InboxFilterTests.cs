@@ -360,6 +360,9 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
 
+        DeliveryRecorder recorder = new();
+        harness.Bus.ConnectReceiveObserver(recorder);
+
         var messageId = Guid.CreateVersion7();
 
         await harness.Bus.Publish(
@@ -374,6 +377,19 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
 
         received.ShouldNotBeNull();
         received.Exception.ShouldBeOfType<InvalidOperationException>();
+
+        // The fault is recorded inside the consume pipe, before the exception unwinds through the filter, so a
+        // row written in a finally block would still be in flight here: wait for the receive pipeline to end.
+        await Eventually(
+            () =>
+            {
+                lock (recorder.Deliveries)
+                {
+                    return Task.FromResult<IReadOnlyList<Guid?>>(
+                        [.. recorder.Deliveries.Select(d => d.MessageId).Where(m => m == messageId)]);
+                }
+            },
+            expected: 1);
 
         // This message's rows, not the table, which would be a claim about every other class.
         (await fixture.InboxAsync(messageId)).ShouldBeEmpty();
