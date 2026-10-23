@@ -341,6 +341,19 @@ class ReferenceServiceTests(unittest.TestCase):
                 self.assertNotIn(f"services/{name.lower()}.yml", rendered.updated[new_service.COMPOSE_INDEX])
 
 
+    def test_removing_notifications_leaves_the_bffs_and_the_walks_allow_list_entries(self):
+        """The block the scaffold wrote under a service's heading is cut whole, so it must hold only its own."""
+        path = f"{remove_service.SCAN_ALLOW_LIST}/deploy.txt"
+        before = (REPO_ROOT / path).read_text(encoding="utf-8").splitlines()
+        kept = [line for line in before
+                if line.startswith("deploy/") and ("web-bff.yml" in line or "BFF" in line or "walk-an-order" in line)]
+        self.assertGreaterEqual(len(kept), 7, "the entries this test guards were not found")
+
+        after = remove_service.plan(REPO_ROOT, "Notifications").updated[path].splitlines()
+
+        self.assertEqual([line for line in kept if line not in after], [])
+        self.assertFalse([line for line in after if line.startswith("deploy/compose/services/notifications.yml |")])
+
     def test_a_block_before_the_bff_does_not_take_the_bffs_with_it(self):
         """ENV_MARKER skips "The BFF's", and Ordering's block sits directly above it."""
         rendered = remove_service.plan(REPO_ROOT, "Ordering")
