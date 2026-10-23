@@ -92,7 +92,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     {
         // DATEDIFF(second) reads 1 whenever a boundary falls inside the row's life, so slo.js's 1 s row passed by luck.
         OutboxMessage fresh = await StageOneAsync(OutboxLane.Local);
-        await AgeAsync(fresh, TimeSpan.FromMilliseconds(100));
+        await AgeOnServerClockAsync(fresh, milliseconds: 100);
 
         NewStats().OldestAgeSeconds(OutboxLane.Local).ShouldBeInRange(0.05, 0.99);
     }
@@ -164,5 +164,14 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
         fixture.ExecuteAsync(
             "UPDATE inventory.OutboxMessages SET OccurredAt = {0} WHERE MessageId = {1};",
             DateTimeOffset.UtcNow.Subtract(by),
+            row.MessageId);
+
+    // Stamped by the clock OutboxStats measures against, so a skew between this host and the database
+    // container cannot move a reading of a few hundred milliseconds.
+    private Task AgeOnServerClockAsync(OutboxMessage row, int milliseconds) =>
+        fixture.ExecuteAsync(
+            "UPDATE inventory.OutboxMessages SET OccurredAt = DATEADD(millisecond, -{0}, SYSDATETIMEOFFSET()) "
+            + "WHERE MessageId = {1};",
+            milliseconds,
             row.MessageId);
 }
