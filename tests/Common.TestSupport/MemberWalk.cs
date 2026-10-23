@@ -11,9 +11,12 @@ namespace Common.TestSupport;
 /// </remarks>
 public static class MemberWalk
 {
-    public static IReadOnlyList<string> Of(object? value) => [.. Walk(value, "$")];
+    // A domain event is a few levels deep; a cycle or a type that reaches itself is far past this.
+    private const int MaxDepth = 24;
 
-    private static IEnumerable<string> Walk(object? value, string path)
+    public static IReadOnlyList<string> Of(object? value) => [.. Walk(value, "$", 0)];
+
+    private static IEnumerable<string> Walk(object? value, string path, int depth)
     {
         if (value is null)
         {
@@ -21,12 +24,15 @@ public static class MemberWalk
             yield break;
         }
 
+        if (depth > MaxDepth)
+            throw new InvalidOperationException($"{path} nests more than {MaxDepth} members deep: a cycle?");
+
         Type type = value.GetType();
 
         if (type.IsPrimitive || type.IsEnum ||
             value is string or decimal or Guid or DateTimeOffset or DateTime or TimeSpan)
         {
-            yield return $"{path}={Convert.ToString(value, CultureInfo.InvariantCulture)}";
+            yield return $"{path}={Leaf(value)}";
             yield break;
         }
 
@@ -36,7 +42,7 @@ public static class MemberWalk
 
             foreach (object? element in sequence)
             {
-                foreach (string line in Walk(element, $"{path}[{index++}]"))
+                foreach (string line in Walk(element, $"{path}[{index++}]", depth + 1))
                     yield return line;
             }
 
@@ -48,15 +54,23 @@ public static class MemberWalk
             .Where(p => p.GetIndexParameters().Length == 0)
             .OrderBy(p => p.Name, StringComparer.Ordinal))
         {
-            foreach (string line in Walk(property.GetValue(value), $"{path}.{property.Name}"))
+            foreach (string line in Walk(property.GetValue(value), $"{path}.{property.Name}", depth + 1))
                 yield return line;
         }
 
         foreach (FieldInfo field in type.GetFields(BindingFlags.Public | BindingFlags.Instance)
             .OrderBy(f => f.Name, StringComparer.Ordinal))
         {
-            foreach (string line in Walk(field.GetValue(value), $"{path}.{field.Name}"))
+            foreach (string line in Walk(field.GetValue(value), $"{path}.{field.Name}", depth + 1))
                 yield return line;
         }
     }
+
+    // "O" keeps the fractional seconds and the offset or kind that the general format drops.
+    private static string? Leaf(object value) => value switch
+    {
+        DateTimeOffset moment => moment.ToString("O", CultureInfo.InvariantCulture),
+        DateTime moment => moment.ToString("O", CultureInfo.InvariantCulture),
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture)
+    };
 }
