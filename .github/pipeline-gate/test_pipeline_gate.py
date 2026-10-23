@@ -946,6 +946,35 @@ class ShardTests(Fixture):
 
         self.assertTrue(any("'Category=Slow'" in problem for problem in problems), problems)
 
+    def test_a_namespace_that_is_more_than_a_dotted_name_is_caught(self) -> None:
+        """An OR-ed value is one term to the splitter; the later shards repeating it would clear the cascade."""
+        for namespace in (
+            "Payments.|FullyQualifiedName~Shipping.",
+            "(Payments.)",
+            "Payments.~Shipping.",
+            "!Payments.",
+            "Payments.*",
+        ):
+            with self.subTest(namespace=namespace):
+                # Every later shard repeats the string, as the issue's scenario does, so only the term's shape can fail.
+                self.write(WORKFLOW + SHARDS.replace("~Payments.", f"~{namespace}"))
+
+                problems = pipeline_gate.check_shards()
+
+                self.assertTrue(
+                    any("is not a FullyQualifiedName term" in problem for problem in problems),
+                    problems,
+                )
+
+    def test_a_dotted_namespace_with_or_without_a_trailing_dot_is_read(self) -> None:
+        """The control for the cases above: what the matrix writes today still parses."""
+        for namespace in ("Payments.", "Platform.IntegrationTests.", "Payments"):
+            with self.subTest(namespace=namespace):
+                found = pipeline_gate.SELECTS_TERM.fullmatch(f"FullyQualifiedName~{namespace}")
+
+                self.assertIsNotNone(found)
+                self.assertEqual(found.group(2), namespace)
+
     def test_an_entry_the_parser_skips_is_caught(self) -> None:
         """Each shape below drops out of `read_shards`, leaving a clean cascade of the rest."""
         overlapping = (
