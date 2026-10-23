@@ -378,8 +378,8 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         received.ShouldNotBeNull();
         received.Exception.ShouldBeOfType<InvalidOperationException>();
 
-        // The fault is recorded inside the consume pipe, before the exception unwinds through the filter, so a
-        // row written in a finally block would still be in flight here: wait for the receive pipeline to end.
+        // The faulted record does not say the receive pipeline has finished: PostReceive does, after the filter
+        // and the move to _error, so a row written late is in the inbox by the time this wait is met.
         await Eventually(
             () =>
             {
