@@ -89,14 +89,14 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
         // The same id again, counted by the filter itself: a duplicate that ran and was rejected leaves the same
         // status and, under the table's key, the same one row, since StockReservedHandler drops the Result (§9.8).
         using SemaphoreSlim suppressed = new(0);
-        using MeterListener listener = ListenForSuppressed(
+        using MeterListener listener = InboxSuppression.Listen(
             nameof(StockReserved),
             MessagingRegistration.StockEventsQueue,
             suppressed);
 
         // The saga's copy too, so it has finished before the next test resets.
         using SemaphoreSlim sagaSuppressed = new(0);
-        using MeterListener sagaListener = ListenForSuppressed(
+        using MeterListener sagaListener = InboxSuppression.Listen(
             nameof(StockReserved),
             MessagingRegistration.FulfilmentSagaQueue,
             sagaSuppressed);
@@ -352,42 +352,6 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
                     c.CorrelationId = reserved.CorrelationId;
                 },
                 TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>Releases <paramref name="suppressed"/> for each drop the inbox counts, as §9.5's filter does before it
-    /// returns.</summary>
-    private static MeterListener ListenForSuppressed(string message, string endpoint, SemaphoreSlim suppressed)
-    {
-        MeterListener listener = new();
-
-        listener.InstrumentPublished = (instrument, active) =>
-        {
-            if (instrument.Meter.Name == "Commerce.Messaging" &&
-                instrument.Name == "messaging.inbox.suppressed")
-            {
-                active.EnableMeasurementEvents(instrument);
-            }
-        };
-
-        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
-        {
-            if (TagValue(tags, "message") == message && TagValue(tags, "endpoint") == endpoint)
-                suppressed.Release();
-        });
-
-        listener.Start();
-        return listener;
-    }
-
-    private static string TagValue(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name)
-    {
-        foreach (KeyValuePair<string, object?> tag in tags)
-        {
-            if (tag.Key == name)
-                return tag.Value?.ToString() ?? string.Empty;
-        }
-
-        return string.Empty;
     }
 
     /// <summary>Sends to <c>ordering-commands</c> by address, as §9.6's saga does.</summary>
