@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Common.Infrastructure.Outbox;
+using Common.TestSupport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Ordering.Domain.Common;
@@ -33,6 +34,10 @@ public class OutboxSerialisationTests
             JsonSerializer
                 .Serialize(read, type, options)
                 .ShouldBe(json, $"{type.Name} cannot survive the Local lane");
+
+            // And against the sample, member by member: a loss on write is in both strings above, and the
+            // sample is what a converter that rounds or omits a member must be held to.
+            MemberWalk.Of(read).ShouldBe(MemberWalk.Of(sample), $"{type.Name} lost a member on the Local lane");
         }
     }
 
