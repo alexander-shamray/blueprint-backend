@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using Common.Application;
 using Common.Contracts.Inventory.V1;
@@ -279,21 +280,56 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
         // §9.8's ContractMappingException path: the claim is only that the aggregate is untouched.
         Guid orderId = await fixture.SeedOrderAsync(Customer);
 
+        FaultedConsumes faults = new();
+        using ConnectHandle observing = fixture.Factory.Services.GetRequiredService<IBus>()
+            .ConnectConsumeObserver(faults);
+
         // Undrained: it faults in the mapper, so the filter never writes its row.
-        await SendAsync(new CancelOrder(orderId, "reason_from_a_newer_deployment"), drain: false);
+        Guid messageId = await SendAsync(new CancelOrder(orderId, "reason_from_a_newer_deployment"), drain: false);
 
-        // A valid command for a second order bounds the wait; the unmappable one is not retried (§9.8).
-        Guid sentinelOrderId = await fixture.SeedOrderAsync(Customer);
-        await SendAsync(new CancelOrder(sentinelOrderId, CancelReasons.OutOfStock));
-        await EventuallyStatus(
-            sentinelOrderId,
-            "Cancelled",
-            because: "a command sent after the unmappable one has been handled, so the endpoint has " +
-                "had the unmappable one in front of it");
+        // The consume's own fault, keyed on this message: another command finishing proves nothing about it.
+        Exception fault = await faults.WaitForAsync(messageId, DeliveryBudget, TestContext.Current.CancellationToken);
 
+        fault.ShouldBeOfType<ContractMappingException>("the mapper has to refuse the reason, not default it");
         (await StatusAsync(orderId)).ShouldBe(
             "AwaitingStock",
             "an unmappable reason must not reach Order.Cancel with a defaulted value");
+    }
+
+    /// <summary>The exception each faulted consume ended with, by the message it was consuming.</summary>
+    private sealed class FaultedConsumes : IConsumeObserver
+    {
+        private readonly ConcurrentDictionary<Guid, Exception> _faults = new();
+
+        public Task PreConsume<T>(ConsumeContext<T> context)
+            where T : class => Task.CompletedTask;
+
+        public Task PostConsume<T>(ConsumeContext<T> context)
+            where T : class => Task.CompletedTask;
+
+        public Task ConsumeFault<T>(ConsumeContext<T> context, Exception exception)
+            where T : class
+        {
+            if (context.MessageId is Guid messageId)
+                _faults[messageId] = exception;
+
+            return Task.CompletedTask;
+        }
+
+        public async Task<Exception> WaitForAsync(Guid messageId, TimeSpan budget, CancellationToken ct)
+        {
+            DateTimeOffset deadline = DateTimeOffset.UtcNow + budget;
+
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                if (_faults.TryGetValue(messageId, out Exception? fault))
+                    return fault;
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
+            }
+
+            throw new TimeoutException($"Message {messageId} did not fault in its consume within {budget}.");
+        }
     }
 
     private Task<int> ReviewCountAsync(Guid orderId) =>
