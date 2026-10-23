@@ -298,8 +298,10 @@ with `orders:write` and a GUID `sub`, which `slo.js`'s header states as an
 obligation, and whether the realm should carry one is not decided here. The
 `commerce-api` client scope already maps a client's `commerce-api` roles into
 the `permission` claim, so a service account holding the roles is enough. The
-block reads the client before creating it, grants both roles either way, since
-granting a held role changes nothing, and exports the secret for step 5:
+list of default scopes names `basic` as well: naming the list replaces the
+realm's, and `basic` carries the mapper that writes `sub`, which step 3 checks.
+The block reads the client before creating it, grants both roles either way,
+since granting a held role changes nothing, and exports the secret for step 5:
 
 ```bash
 kcadm="docker exec commerce-keycloak-1 /opt/keycloak/bin/kcadm.sh"
@@ -309,7 +311,7 @@ id=$($kcadm get clients -r commerce -q clientId=slo-run --fields id --format csv
 [ -n "$id" ] || id=$($kcadm create clients -r commerce -i -s clientId=slo-run -s enabled=true \
     -s publicClient=false -s serviceAccountsEnabled=true \
     -s standardFlowEnabled=false -s directAccessGrantsEnabled=false \
-    -s 'defaultClientScopes=["commerce-api"]' | tr -d '\r')
+    -s 'defaultClientScopes=["basic","commerce-api"]' | tr -d '\r')
 for role in orders:write inventory:admin; do
     $kcadm add-roles -r commerce --uusername service-account-slo-run \
         --cclientid commerce-api --rolename "$role"
