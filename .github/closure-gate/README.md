@@ -39,8 +39,10 @@ issue this repository tracks lives in it.
 ## The Dependabot description
 
 Dependabot copies the upstream release notes into its description, inside
-`<details>`, and a note there reads "Fixes #7565" about the upstream
-repository. The gate would refuse the pull request, and Dependabot writes the
+`<details>`, and a note there reads "Fixes" and an upstream issue number,
+which Dependabot breaks with a zero-width space after the hash. That leaves a
+keyword-shaped token naming no issue here, so the gate refuses the pull
+request, and Dependabot writes the
 description again on every update, so a hand edit does not last. The
 description's `<details>` blocks are therefore not read for unresolvable
 keywords, and only when `author` is the Dependabot bot. Commits and every
