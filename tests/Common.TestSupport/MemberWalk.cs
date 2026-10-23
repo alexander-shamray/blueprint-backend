@@ -23,7 +23,8 @@ public static class MemberWalk
 
         Type type = value.GetType();
 
-        if (type.IsPrimitive || type.IsEnum || value is string or decimal or Guid or DateTimeOffset or DateTime or TimeSpan)
+        if (type.IsPrimitive || type.IsEnum ||
+            value is string or decimal or Guid or DateTimeOffset or DateTime or TimeSpan)
         {
             yield return $"{path}={Convert.ToString(value, CultureInfo.InvariantCulture)}";
             yield break;
