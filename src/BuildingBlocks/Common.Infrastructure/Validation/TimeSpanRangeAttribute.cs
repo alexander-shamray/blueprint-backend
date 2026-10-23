@@ -4,11 +4,9 @@ using System.Globalization;
 namespace Common.Infrastructure.Validation;
 
 /// <summary>A <see cref="TimeSpan"/> between two inclusive bounds, parsed once when the attribute is built.</summary>
-/// <remarks>
-/// <see cref="RangeAttribute"/> converts its string bounds on first use and writes them back to the attribute, which
-/// is shared per property, so two hosts first validating one options type at once can cast a bound already converted.
-/// The bounds here are fields set in the constructor and never written again.
-/// </remarks>
+/// <remarks>Unlike <see cref="RangeAttribute"/>, which writes its converted bounds back to the instance it shares per
+/// property on first use, so two hosts validating at once can cast a bound already converted, nothing here is written
+/// after the constructor.</remarks>
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter)]
 public sealed class TimeSpanRangeAttribute : ValidationAttribute
 {
