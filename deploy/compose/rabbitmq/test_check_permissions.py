@@ -313,6 +313,26 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
                 self.assertTrue(
                     any(f"catalog-svc: {verb} COVERS `ordering-commands`" in f for f in failures), failures)
 
+    def test_a_service_grant_reaching_a_built_in_exchange(self):
+        # The default exchange delivers to any queue by name, and no other probe names it, so a literal escapes.
+        for verb in ("configure", "write", "read"):
+            for exchange in gate.BUILT_IN_EXCHANGES:
+                with self.subTest(verb=verb, exchange=exchange):
+                    definitions = real()
+                    entry = permission(definitions, "ordering-svc")
+                    entry[verb] = f"{entry[verb]}|^{re.escape(exchange)}$"
+                    failures = run_against(definitions)
+                    self.assertTrue(
+                        any(f"ordering-svc: {verb} COVERS `{exchange}`, a built-in exchange" in f for f in failures),
+                        failures)
+
+    def test_the_real_grants_cover_no_built_in_exchange(self):
+        permissions = {e["user"]: e for e in real()["permissions"]}
+        for user, entry in permissions.items():
+            for verb in ("configure", "write", "read"):
+                with self.subTest(user=user, verb=verb):
+                    self.assertIsNone(gate.first_covered(entry[verb], gate.BUILT_IN_EXCHANGES))
+
     def test_the_operator_on_one_peer_event_exchange(self):
         definitions = real()
         entry = permission(definitions, gate.OPERATOR)
