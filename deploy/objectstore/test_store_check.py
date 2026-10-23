@@ -122,6 +122,26 @@ class CheckTests(unittest.TestCase):
         self.assertTrue(all("/check-" in path for path in deletes))
 
 
+class NoGrantTests(unittest.TestCase):
+    """A bucket that exists and grants the pairs nothing refuses every probe, as the right one does."""
+
+    README = pathlib.Path(__file__).resolve().parent / "README.md"
+
+    def test_an_existing_bucket_the_pairs_have_no_grant_on_reads_as_a_pass(self):
+        store = Store({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
+        self.addCleanup(store.close)
+
+        violations = store_check.check(store.env(**{store_check.BUCKET: "another-accounts-bucket"}))
+
+        self.assertEqual(violations, [])
+
+    def test_the_readme_says_so_rather_than_claiming_a_404_covers_it(self):
+        text = " ".join(self.README.read_text(encoding="utf-8").split())
+
+        self.assertIn("a wrong `OBJECT_STORE_BUCKET` reads as a pass", text)
+        self.assertIn("a `404` is a bucket that does not exist", text)
+
+
 class RedirectTests(unittest.TestCase):
     def test_a_redirect_is_judged_and_never_followed(self):
         elsewhere = Store({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
