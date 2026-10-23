@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
 using Common.Infrastructure.Inbox;
@@ -250,25 +251,23 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
         await PublishReservationFailedAsync(orderId, Guid.CreateVersion7());
         await Eventually(() => SagaRowsAsync(orderId), expected: 0, because: "the saga must finish first");
 
+        // Counted by the filter itself, so the wait is on the replay's own drop and not on another message.
+        using SemaphoreSlim suppressed = new(0);
+        using MeterListener listener = InboxSuppression.Listen(
+            nameof(OrderPlaced),
+            DependencyInjection.FulfilmentSagaQueue,
+            suppressed);
+
         // The same message, again, which is what the outbox does after a crash.
         await PublishPlacedAsync(orderId, messageId);
 
-        // A sentinel with a fresh id, so the wait is on a row rather than a clock and the teardown drains it.
-        var sentinelOrderId = Guid.CreateVersion7();
-        await PublishPlacedAsync(sentinelOrderId, Guid.CreateVersion7());
-        await Eventually(
-            () => SagaRowsAsync(sentinelOrderId),
-            expected: 1,
-            because: "a message published after the replay has been consumed, so the endpoint has had " +
-                "the replay in front of it — five seconds was generous on this machine and a guess " +
-                "about every other one");
+        (await suppressed.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("the saga's inbox has to drop the replay, not run it and start the saga again");
 
         (await SagaRowsAsync(orderId)).ShouldBe(
             0,
             "a replayed OrderPlaced must not start fulfilment again — a second ReserveStock and a second " +
             "AuthorisePayment for one order is a double charge, and the row is the observable half of it");
-
-        // A bound, not a proof of ordering: nothing pins this endpoint to one message at a time.
     }
 
     [Fact]
