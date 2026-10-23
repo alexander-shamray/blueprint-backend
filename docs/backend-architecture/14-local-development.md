@@ -139,14 +139,23 @@ rabbitmq:
   ports: [ "127.0.0.1:5672:5672", "127.0.0.1:15672:15672" ]
   volumes: [ rabbit-data:/var/lib/rabbitmq ]
   healthcheck:
-    test: ["CMD-SHELL", "rabbitmq-diagnostics check_running && rabbitmq-plugins is_enabled rabbitmq_delayed_message_exchange"]
-    interval: 10s
-    retries: 5
+    test: ["CMD", "rabbitmqctl", "eval", "A = [N || {N, _, _} <- application:which_applications()], [rabbit, rabbitmq_delayed_message_exchange] -- A =:= [] orelse erlang:error(not_running)."]
+    interval: 30s
+    start_period: 60s
+    start_interval: 2s
+    retries: 3
 ```
 
-`is_enabled` reports its answer in its exit status, and that is the only part
-of the command that does. `rabbitmq-plugins list -e` piped to `grep` matches
-the pattern the command echoes in its own banner, and passes on a stock broker.
+The check is one `rabbitmqctl eval` that asks the running node for both
+applications, and it is one call because each `rabbitmq` CLI call boots an
+Erlang VM that takes every core for its start-up: the former pair of calls
+every 10 s was over half a core on an idle stack, with peaks of seven or eight.
+`erlang:error` is the non-zero exit, where `halt` would stop the broker, and a
+stock broker, which lacks the plugin, exits 69. The steady-state interval is
+30 s, with a 2 s `start_interval` so `up --wait` is not held for it; that key
+needs Compose 2.20 and Engine 25. A pipe of `rabbitmq-plugins list -e` into
+`grep` would match the pattern the command echoes in its own banner, and pass
+on a stock broker.
 
 The same image enables `rabbitmq_prometheus` with per-object metrics on
 (both in `rabbitmq/Dockerfile`), because `rabbitmq_queue_messages` carries a
