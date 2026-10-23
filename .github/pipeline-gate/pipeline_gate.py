@@ -811,8 +811,8 @@ def _matches(pattern: str, path: str) -> bool:
 # shards
 # --------------------------------------------------------------------------
 
-# A dotted name, trailing dot allowed: a pipe, parenthesis or tilde is a filter VSTest reads as more than one
-# namespace, which the cascade below cannot check, so it fails to match and is reported.
+# A dotted name, trailing dot allowed. Anything else, a pipe-joined pair for one, is a single term to the split on
+# the ampersand below but not a single namespace, so it fails to match here and is reported, not read as one.
 SELECTS_TERM = re.compile(r"FullyQualifiedName(!?)~([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\.?)")
 
 
