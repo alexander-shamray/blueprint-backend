@@ -22,7 +22,7 @@
          advisories — every 10.0 below 10.0.13 carries CVE-2026-84008 — which
          NU1903 turns into a failed restore in every project with a database. -->
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.11.0" />
     <!-- HybridCache's L2 (§8.2): AddStackExchangeRedisCache and
          RedisCacheOptions. The IDistributedCache implementation over
          StackExchange.Redis — a separate package from both, and the one that
