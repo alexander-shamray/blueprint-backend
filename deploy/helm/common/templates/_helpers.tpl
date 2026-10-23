@@ -171,7 +171,14 @@ word; `service.version` cannot, since every build reports 1.0.0. Two values,
 so one extra series per track. */}}
 OTEL_RESOURCE_ATTRIBUTES: {{ printf "deployment.track=%s" (include "commerce.track" .) | quote }}
 Identity__Authority: {{ include "commerce.requireUrl" (list .Values.identity.authority "identity.authority is required for every host, the gateway included (§15.4) — AddJwtAuthentication reads it eagerly and throws naming the key, so an unset value is a pod that never starts.") | quote }}
-OTEL_EXPORTER_OTLP_ENDPOINT: {{ include "commerce.require" (list .Values.observability.otlpEndpoint "observability.otlpEndpoint is required: UseOtlpExporter reads the OpenTelemetry standard variable, and left unset it exports to localhost:4317, where nothing listens in a pod (§15.4).") | quote }}
+{{- /* Not requireUrl, which is HTTPS only: the collector is in-cluster and plain HTTP by default. The scheme is
+required, because the SDK reads the value as a URI and a bare host:port has the host as its scheme, and
+commerce.urlPort cannot find its port. */}}
+{{- $otlp := include "commerce.require" (list .Values.observability.otlpEndpoint "observability.otlpEndpoint is required: UseOtlpExporter reads the OpenTelemetry standard variable, and left unset it exports to localhost:4317, where nothing listens in a pod (§15.4).") }}
+{{- if not (regexMatch "^https?://[\\p{L}\\p{N}\\p{M}._-]+(:[0-9]+)?(/[^?#]*)?$" $otlp) }}
+{{- fail (printf "observability.otlpEndpoint is %q, which is not an http or https address this chart will accept, as in http://otel-collector.observability:4317. Without its scheme the exporter reads the host as one and exports nothing, and the NetworkPolicy opens port 80 for it (§15.4)." $otlp) }}
+{{- end }}
+OTEL_EXPORTER_OTLP_ENDPOINT: {{ $otlp | quote }}
 {{- if .Values.identity.clientCredentials }}
 {{- /* Two of the three client-credential keys are Config; the secret is a Secret
 (§15.4). The hosts that call out under a grant of their own (ADR-052) bind
@@ -333,6 +340,10 @@ is built from (§10.8), and the host refuses a base that is not https, loopback 
 ProductImages__Store__Endpoint: {{ include "commerce.requireUrl" (list $store.endpoint "objectStore.endpoint is required when objectStore.enabled: the host binds ProductImages:Store and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
 ProductImages__Store__Bucket: {{ include "commerce.require" (list $store.bucket "objectStore.bucket is required when objectStore.enabled (§15.4).") | quote }}
 ProductImages__Store__Region: {{ include "commerce.require" (list $store.region "objectStore.region is required when objectStore.enabled: a signature is scoped to it (§15.4).") | quote }}
+{{- /* A bool option the host binds and validates on start: any other spelling renders and crashes the pod. */}}
+{{- if not (or (kindIs "bool" $store.pathStyle) (kindIs "invalid" $store.pathStyle) (has $store.pathStyle (list "true" "false"))) }}
+{{- fail (printf "objectStore.pathStyle is %v, which is not a boolean. The host binds it to a bool and ValidateOnStart refuses anything but true or false, so a value such as 1, yes or on renders cleanly and the pod never starts (§15.4)." $store.pathStyle) }}
+{{- end }}
 ProductImages__Store__PathStyle: {{ $store.pathStyle | default false | toString | quote }}
 {{- if eq .Chart.Name "catalog" }}
 ProductImages__Store__PublicBaseUrl: {{ include "commerce.requireUrl" (list $store.publicBaseUrl "objectStore.publicBaseUrl is required on the catalog chart when objectStore.enabled: it is where products/ is served from, and the stored image URL is built from it (§10.8).") | quote }}

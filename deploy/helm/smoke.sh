@@ -861,6 +861,18 @@ render_policy notifications "$OUT/port-admin.yaml" --set-string 'contactSource.b
 check 'notifications reaches the identity provider and its admin API on the one stated pod port' \
     test "$(egress_ports "$OUT/port-admin.yaml" "$(peer_pattern identity)")" = 18443
 
+# commerce.require trims an address into the ConfigMap, so the policy must read the trimmed text too: a padded
+# value passes the shape check and the pod dials it correctly, and an untrimmed port is a hop the policy blocks.
+render_policy notifications "$OUT/port-padded.yaml" --set-string 'contactSource.baseUrl= https://id.example.invalid:8443/ '
+check 'a padded admin API address opens the port the pod dials' \
+    test "$(egress_ports "$OUT/port-padded.yaml" "$(peer_pattern identity)")" = '443 8443'
+render_policy catalog "$OUT/port-padded.yaml" --set-string 'objectStore.endpoint=https://objects.example.com:9000 '
+check 'a store address padded after its port opens that port' \
+    test "$(egress_ports "$OUT/port-padded.yaml" "$(peer_pattern objectStore)")" = 9000
+render_policy catalog "$OUT/port-padded.yaml" --set-string 'objectStore.endpoint= https://objects.example.com'
+check 'a store address padded before its scheme opens its scheme port' \
+    test "$(egress_ports "$OUT/port-padded.yaml" "$(peer_pattern objectStore)")" = 443
+
 # --------------------------------------------------------------------------
 section 'paymentProvider is a capability, and its address is required'
 # --------------------------------------------------------------------------
@@ -895,17 +907,24 @@ check 'payments: no ConfigMap carries PaymentProvider__ApiKey' \
 if "$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY --set-string image.tag="$TAG" >/dev/null 2>&1; then
     fail 'payments: rendered with no paymentProvider.baseUrl; a deploy that forgot it must fail here, not at start'
 fi
-if "$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
+# Two guards, and each is held by its own message so that neither can stand in for the other. The library's
+# coherence guard refuses a setting while the capability is off, and is the only refusal on every chart but
+# payments, which renders it first; capabilities.yaml refuses the switch itself, whatever else is set, once
+# nothing is left set for the library to refuse.
+refuses_chart payments 'payments: an address with the capability off is refused by the library guard' \
+    'paymentProvider.enabled is false but a paymentProvider setting is set' \
     --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
-    --set-string paymentProvider.baseUrl=https://psp.example.invalid/ >/dev/null 2>&1; then
-    fail 'payments: rendered an address with the capability off; a setting nothing reads must be refused'
-fi
-if "$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
+    --set-string paymentProvider.baseUrl=https://psp.example.invalid/
+refuses_chart payments 'payments: the capability off and cleared is refused by the chart' \
+    'paymentProvider.enabled is false on the payments chart' \
     --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
-    --set-string paymentProvider.baseUrl= >/dev/null 2>&1; then
-    fail 'payments: rendered with the capability off and cleared; the host registers it unconditionally'
-fi
-pass 'paymentProvider renders both keys and refuses an empty address or an address while off'
+    --set-string paymentProvider.baseUrl=
+refuses_chart catalog 'a paymentProvider address with the capability off is refused by the library' \
+    'paymentProvider.enabled is false but a paymentProvider setting is set' \
+    --set-string paymentProvider.baseUrl=https://psp.example.invalid/
+refuses_chart catalog 'a paymentProvider key reference with the capability off is refused by the library' \
+    'paymentProvider.enabled is false but a paymentProvider setting is set' \
+    --set paymentProvider.apiKeySecretRef.name=psp-key --set paymentProvider.apiKeySecretRef.key=key
 
 # --------------------------------------------------------------------------
 section "ADR-106's object store is a capability of two charts, and each key is placed"
@@ -943,6 +962,15 @@ for chart in $SERVICE_CHARTS; do
         'HTTPS address this chart will accept' --set-string 'objectStore.endpoint=http://objects.example.invalid'
     refuses_chart "$chart" "$chart: a store setting with the capability off fails the render" \
         'objectStore.enabled is false but an objectStore setting is set' --set objectStore.enabled=false
+    # The host binds pathStyle to a bool, so any other spelling is a pod that never starts.
+    refuses_chart "$chart" "$chart: a non-boolean pathStyle fails the render" \
+        'objectStore.pathStyle is yes, which is not a boolean' --set-string 'objectStore.pathStyle=yes'
+    refuses_chart "$chart" "$chart: a numeric pathStyle fails the render" \
+        'objectStore.pathStyle is 1, which is not a boolean' --set 'objectStore.pathStyle=1'
+    "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
+        --set-string 'objectStore.pathStyle=true' >"$OUT/$chart-path-style.yaml"
+    check "$chart: the string true is a boolean the host binds" \
+        grep -q '^ *ProductImages__Store__PathStyle: "true"$' "$OUT/$chart-path-style.yaml"
 done
 
 # The public base is the product service's alone (§10.8): stored there, and read by nothing in the BFF.
@@ -2084,6 +2112,11 @@ refuses 'a whitespace-only authority fails the render' 'identity.authority is re
     $GATEWAY_OVERLAY --set-string 'identity.authority= '
 refuses 'a whitespace-only OTLP endpoint fails the render' 'observability.otlpEndpoint is required' \
     $GATEWAY_OVERLAY --set-string 'observability.otlpEndpoint=   '
+# Non-blank is not an address: without its scheme the exporter reads the host as one, and the NetworkPolicy opens 80.
+refuses 'a scheme-less OTLP endpoint fails the render' 'is not an http or https address' \
+    $GATEWAY_OVERLAY --set-string 'observability.otlpEndpoint=otel-collector.observability:4317'
+refuses 'an OTLP endpoint with a query fails the render' 'is not an http or https address' \
+    $GATEWAY_OVERLAY --set-string 'observability.otlpEndpoint=http://otel-collector.observability:4317/?x=1'
 refuses 'a whitespace-only workload name fails the render' 'workload.name is required' \
     $GATEWAY_OVERLAY --set-string 'workload.name= '
 # Aimed at a chart with no Service, where a message naming one would be false.
@@ -2246,6 +2279,13 @@ refuses 'a trusted network with a bad octet fails the render' 'octet above 255' 
     --set 'ingress.trustedNetworks={10.0.300.0/8}'
 refuses 'a trusted network with a bad prefix fails the render' 'prefix length above 32' \
     --set 'ingress.trustedNetworks={10.0.0.0/64}'
+
+# The flags themselves: the chart branches on them by truthiness and the gateway binds them as bools, so the string
+# false is on to one and off to the other.
+refuses 'a quoted false ingress.enabled fails the render' 'ingress.enabled is false, which is not a boolean' \
+    $GATEWAY_OVERLAY --set-string 'ingress.enabled=false'
+refuses 'a quoted false cors.enabled fails the render' 'cors.enabled is false, which is not a boolean' \
+    $GATEWAY_OVERLAY --set-string 'cors.enabled=false'
 # The security case rather than a tidiness one: IPNetwork.Parse("010.0.0.0/8")
 # returns 8.0.0.0/8, because a leading zero is read as octal, so the operator
 # writes one network and the gateway trusts another.
@@ -2707,6 +2747,11 @@ for chart in $SERVICE_CHARTS; do
         check "$chart: throwing a switch leaves the pod template's checksum alone" \
             test "$(grep 'checksum/values:' "$OUT/switch-base-$chart.txt")" = \
             "$(grep 'checksum/values:' "$OUT/switch-on-$chart.txt")"
+        # A list binds from child keys only, so a bare name renders and switches nothing off.
+        refuses_chart "$chart" "$chart: a scalar switch is refused" 'switches.off is not a list' \
+            $GATEWAY_OVERLAY --set-string 'switches.off=probe-queue'
+        refuses_chart "$chart" "$chart: a blank switch name is refused" 'switches.off\[0\] is blank' \
+            $GATEWAY_OVERLAY --set-string 'switches.off[0]= '
     else
         check "$chart: renders no switches ConfigMap" \
             test "$(count '^  name: .*-switches$' "$OUT/switch-base-$chart.txt")" -eq 0

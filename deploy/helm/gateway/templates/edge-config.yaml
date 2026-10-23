@@ -4,6 +4,14 @@ required (§15.4): off is valid, and on but unconfigured is refused at render.
 The data is a named template so the pod-template checksum can hash it. Its
 name and metadata must match the `extraConfigMaps` suffix the mount uses. */}}
 {{- define "gateway.edge" -}}
+{{- /* The templates branch on these by Helm truthiness and the host binds them as bools, so a quoted false is
+truthy to the chart and false to the gateway, which then trusts no forwarded header and rate-limits every client as
+the ingress controller. */}}
+{{- range $flag, $value := dict "ingress.enabled" .Values.ingress.enabled "cors.enabled" (.Values.cors).enabled }}
+{{- if not (kindIs "bool" $value) }}
+{{- fail (printf "%s is %v, which is not a boolean. The chart branches on it by truthiness and the gateway binds it as a bool, so the string false would enable it in one and disable it in the other (§15.4)." $flag $value) }}
+{{- end }}
+{{- end }}
 Ingress__Enabled: {{ .Values.ingress.enabled | quote }}
 {{- if .Values.ingress.enabled }}
 {{- /* Indexed keys, because .NET binds an array from `Ingress__TrustedNetworks__0`
