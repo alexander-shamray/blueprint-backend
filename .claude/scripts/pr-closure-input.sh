@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Feed the closure gate — a PR's number, url, body, commits, GitHub's own
-# closing-issue parse and the head oid, as JSON on stdout. Read-only, fixed
+# closing-issue parse, the head oid and the author, as JSON on stdout. Read-only, fixed
 # field set.
 #
 # pr.md reads through this rather than holding a `gh pr view` grant. The field
@@ -14,4 +14,4 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"
 pr="${1:?usage: pr-closure-input.sh <pr-number>}"
 [[ "$pr" =~ ^[0-9]+$ ]] || { echo "pr must be a number" >&2; exit 2; }
-gh_read pr view "$pr" --json number,url,body,commits,closingIssuesReferences,headRefOid
+gh_read pr view "$pr" --json number,url,body,commits,closingIssuesReferences,headRefOid,author
