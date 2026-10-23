@@ -147,7 +147,7 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         due.ShouldBeGreaterThanOrEqualTo(
             before + wait,
             "a failed poll is never due sooner than the ladder or a healthy poll");
-        due.ShouldBeLessThanOrEqualTo(after + wait, "nor later than the ladder, however far up it is");
+        due.ShouldBeLessThanOrEqualTo(after + wait, "nor later than the ladder or a healthy poll, however far up it is");
     }
 
     // A real SQL fault in the backoff write and nowhere else: the claim's UPDATE leaves the column alone, and the
