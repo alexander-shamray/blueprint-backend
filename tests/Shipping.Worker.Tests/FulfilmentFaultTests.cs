@@ -5,6 +5,7 @@ using Common.TestSupport;
 using Grpc.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Shipping.Application.Carrier;
+using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Carrier;
 using Shipping.Infrastructure.Fulfilment;
 using Shipping.TestSupport;
@@ -73,7 +74,7 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
     {
         Guid order = await ConfirmAsync("SIM-DOWN");
         int attemptsBefore = OutboxDispatcher.BackoffAttemptCap + 3;
-        await _steps.SetAttemptsAsync(order, attemptsBefore);
+        await _fixture.SetAttemptsAsync(new ShipmentId(await _steps.ShipmentIdAsync(order)), attemptsBefore);
 
         DateTimeOffset before = await _steps.DatabaseNowAsync();
         (await PassAsync()).ShouldBe(0);
@@ -81,21 +82,6 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
 
         (await _steps.AttemptsAsync(order)).ShouldBe(attemptsBefore + 1);
         await AssertAttemptDueWithinAsync(order, before, after, attemptsBefore);
-    }
-
-    // The dispatcher's ladder (ADR-054), held at both ends: a unit slipped to minutes, a dropped cap or a wrong
-    // multiplier moves the due time past the top, and a dropped step moves it under the bottom.
-    private async Task AssertAttemptDueWithinAsync(
-        Guid order,
-        DateTimeOffset before,
-        DateTimeOffset after,
-        int attemptsBefore)
-    {
-        TimeSpan wait = OutboxBackoffRule.Ladder(attemptsBefore);
-        DateTimeOffset due = await _steps.NextAttemptAtAsync(order);
-
-        due.ShouldBeGreaterThanOrEqualTo(before + wait, "a failed pass is never due sooner than the ladder");
-        due.ShouldBeLessThanOrEqualTo(after + wait, "nor later than the ladder, however far up it is");
     }
 
     [Fact]
@@ -183,6 +169,21 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
     // The postal code is the only part a case varies, and it is what the simulator scripts.
     private Task<Guid> ConfirmAsync(string postalCode) =>
         _steps.ConfirmAsync(new DeliveryAddress("1 Abay Avenue", null, "Almaty", postalCode, "KZ"));
+
+    // FulfilmentClaims.FailSql's wait, the dispatcher's ladder, held at both ends: a unit slipped to minutes or a
+    // dropped cap moves the due time past the top, and a dropped step moves it under the bottom.
+    private async Task AssertAttemptDueWithinAsync(
+        Guid order,
+        DateTimeOffset before,
+        DateTimeOffset after,
+        int attemptsBefore)
+    {
+        TimeSpan wait = OutboxBackoffRule.Ladder(attemptsBefore);
+        DateTimeOffset due = await _steps.NextAttemptAtAsync(order);
+
+        due.ShouldBeGreaterThanOrEqualTo(before + wait, "a failed pass is never due sooner than the ladder");
+        due.ShouldBeLessThanOrEqualTo(after + wait, "nor later than the ladder, however far up it is");
+    }
 
     // A real SQL fault in the backoff write and nowhere else: the claim's UPDATE leaves the column alone, and the
     // backoff's adds one to it. NOCHECK, so the rows already there are not judged.

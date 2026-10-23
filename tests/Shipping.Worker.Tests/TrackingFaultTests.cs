@@ -79,22 +79,6 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         await AssertPollDueWithinAsync(shipment.Id, before, after, attemptsBefore);
     }
 
-    // The ladder floored at the healthy interval (ADR-054), held at both ends: a unit slipped to minutes, a dropped
-    // cap or a wrong multiplier moves the due time past the top, and a dropped floor moves it under the bottom.
-    private async Task AssertPollDueWithinAsync(
-        ShipmentId id,
-        DateTimeOffset before,
-        DateTimeOffset after,
-        int attemptsBefore)
-    {
-        TimeSpan ladder = OutboxBackoffRule.Ladder(attemptsBefore);
-        TimeSpan wait = ladder > CarrierHop.TrackingPollInterval ? ladder : CarrierHop.TrackingPollInterval;
-        DateTimeOffset due = (await _fixture.NextPollAtAsync(id)).ShouldNotBeNull();
-
-        due.ShouldBeGreaterThanOrEqualTo(before + wait, "a failed poll is never due sooner than the ladder");
-        due.ShouldBeLessThanOrEqualTo(after + wait, "nor later than the ladder, however far up it is");
-    }
-
     [Fact]
     public async Task A_backoff_the_database_refuses_is_logged_as_the_backoffs_and_the_pass_still_ends()
     {
@@ -147,6 +131,24 @@ public sealed class TrackingFaultTests : IAsyncLifetime
     }
 
     private TrackingWorker Worker() => _host.Services.GetRequiredService<TrackingWorker>();
+
+    // TrackingClaims.FailSql's wait, the dispatcher's ladder floored at the healthy interval, held at both ends: a
+    // unit slipped to minutes or a dropped cap moves the due time past the top, a dropped floor under the bottom.
+    private async Task AssertPollDueWithinAsync(
+        ShipmentId id,
+        DateTimeOffset before,
+        DateTimeOffset after,
+        int attemptsBefore)
+    {
+        TimeSpan ladder = OutboxBackoffRule.Ladder(attemptsBefore);
+        TimeSpan wait = ladder > CarrierHop.TrackingPollInterval ? ladder : CarrierHop.TrackingPollInterval;
+        DateTimeOffset due = (await _fixture.NextPollAtAsync(id)).ShouldNotBeNull();
+
+        due.ShouldBeGreaterThanOrEqualTo(
+            before + wait,
+            "a failed poll is never due sooner than the ladder or a healthy poll");
+        due.ShouldBeLessThanOrEqualTo(after + wait, "nor later than the ladder, however far up it is");
+    }
 
     // A real SQL fault in the backoff write and nowhere else: the claim's UPDATE leaves the column alone, and the
     // backoff's adds one to it. NOCHECK, so the rows already there are not judged.

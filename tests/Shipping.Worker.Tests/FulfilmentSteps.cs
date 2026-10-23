@@ -101,13 +101,6 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
     public Task<int> AttemptsAsync(Guid order) =>
         fixture.ScalarAsync<int>("SELECT Value = Attempts FROM shipping.Shipments WHERE OrderId = {0}", order);
 
-    /// <summary>Sets the fulfilment pass's failed passes, so a test starts the ladder part-way up.</summary>
-    public Task SetAttemptsAsync(Guid order, int attempts) =>
-        fixture.ExecuteAsync(
-            "UPDATE shipping.Shipments SET Attempts = {1} WHERE OrderId = {0};",
-            order,
-            attempts);
-
     public Task<Guid> ShipmentIdAsync(Guid order) =>
         fixture.ScalarAsync<Guid>("SELECT Value = Id FROM shipping.Shipments WHERE OrderId = {0}", order);
 
