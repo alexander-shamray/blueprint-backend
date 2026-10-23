@@ -1,6 +1,7 @@
 """check.py's per-service outbox-gauge check, over a throwaway source tree."""
 
 import pathlib
+import shutil
 import tempfile
 import unittest
 from unittest import mock
@@ -16,6 +17,7 @@ class OutboxMetricsTests(unittest.TestCase):
     def tree(self, registrations: str, domain: bool = True) -> pathlib.Path:
         """A src/Services tree holding one service, `Svc`, whose infrastructure registers `registrations`."""
         root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
         service = root / "src" / "Services" / "Svc"
         if domain:
             (service / "Svc.Domain").mkdir(parents=True)
@@ -26,8 +28,12 @@ class OutboxMetricsTests(unittest.TestCase):
         return root
 
     def failures_for(self, root: pathlib.Path) -> list[str]:
-        """What the check reports about `Svc`, with the real tree's own exemptions kept out of the way."""
-        with mock.patch.object(check, "ROOT", root), mock.patch.object(check, "failures", []) as failures:
+        """Every failure the check raises over `root`, with the real tree's exemptions set aside."""
+        with (
+            mock.patch.object(check, "ROOT", root),
+            mock.patch.object(check, "OUTBOX_METRICS_EXEMPT", {}),
+            mock.patch.object(check, "failures", []) as failures,
+        ):
             check.check_outbox_metrics_per_service()
             return list(failures)
 
