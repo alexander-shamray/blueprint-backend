@@ -75,6 +75,33 @@ public class StartRefusalTests
     }
 
     [Fact]
+    public async Task An_awaited_host_that_loses_the_race_on_every_ask_fails_with_the_last_one_as_the_cause()
+    {
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
+            () => StartRefusal.AskAsync(() => new Host(), _ => Task.FromException(Race())));
+
+        thrown.InnerException.ShouldBeOfType<ObjectDisposedException>();
+    }
+
+    [Fact]
+    public async Task Every_awaited_host_asked_is_disposed()
+    {
+        List<Host> hosts = [];
+
+        await StartRefusal.AskAsync(
+            () =>
+            {
+                Host host = new();
+                hosts.Add(host);
+                return host;
+            },
+            _ => Task.FromException(hosts.Count < 2 ? Race() : new InvalidOperationException("why")));
+
+        hosts.Count.ShouldBe(2);
+        hosts.ShouldAllBe(h => h.Disposed);
+    }
+
+    [Fact]
     public async Task An_awaited_start_that_succeeds_is_not_a_refusal()
     {
         InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
