@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Common.Infrastructure.Outbox;
+using Common.TestSupport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Payments.Domain.Intents.Events;
@@ -30,10 +31,12 @@ public class OutboxSerialisationTests
             string json = JsonSerializer.Serialize(sample, type, options);
             object? read = JsonSerializer.Deserialize(json, type, options);
 
-            // Compared by re-serialising, which catches a member dropped on write or on read alike.
+            // Re-serialising catches a member dropped on read; one dropped on write is in both strings, so the
+            // read object is also held to the sample member by member.
             JsonSerializer
                 .Serialize(read, type, options)
                 .ShouldBe(json, $"{type.Name} cannot survive the Local lane");
+            MemberWalk.Of(read).ShouldBe(MemberWalk.Of(sample), $"{type.Name} lost a member on the Local lane");
         }
     }
 
