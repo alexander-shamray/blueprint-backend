@@ -70,12 +70,30 @@ public class RedactingScopeProviderTests
     [Fact]
     public void A_redacted_scope_does_not_render_the_secret_from_ToString()
     {
-        // A provider that formats a scope rather than enumerating it would print the value back out.
+        // A provider that formats a scope rather than enumerating it would print the value back out. A
+        // Dictionary's ToString never shows values, so the scope here is one whose ToString does, as a
+        // templated BeginScope's is.
         RedactingScopeProvider provider = Provider();
 
-        using IDisposable _ = provider.Push(new Dictionary<string, object?> { ["Token"] = "hunter2" });
+        using IDisposable _ = provider.Push(new RenderingScope("Token", "hunter2"));
 
-        ScopesOf(provider).Single()!.ToString()!.ShouldNotContain("hunter2");
+        object? scope = ScopesOf(provider).Single();
+
+        scope!.ToString()!.ShouldNotContain("hunter2");
+        Pairs(scope).Single().Value.ShouldBe("[redacted]");
+    }
+
+    /// <summary>A keyed scope whose <c>ToString</c> prints its values, unlike a Dictionary's.</summary>
+    private sealed class RenderingScope(string key, object? value) : IEnumerable<KeyValuePair<string, object?>>
+    {
+        public IEnumerator<KeyValuePair<string, object?>> GetEnumerator()
+        {
+            yield return new KeyValuePair<string, object?>(key, value);
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public override string ToString() => $"{key}={value}";
     }
 
     [Fact]
