@@ -118,8 +118,9 @@ def fault_of(prefix: str) -> str:
 # read a consumer does need is on its peer's concrete contract exchange.
 INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 
-# The exchanges every vhost carries. A write on the default exchange reaches any queue by name, so an account that
-# covers one can publish to a peer's queue however its other patterns are bounded; MassTransit declares none of them.
+# The exchanges every vhost carries, none of which MassTransit uses. A write on amq.default reaches any queue by name,
+# however else the account is bounded; a read on amq.rabbitmq.trace receives every message published in the vhost; the
+# rest reach only queues bound to them, and binding a peer's queue is refused below.
 BUILT_IN_EXCHANGES = ["amq.default", "amq.direct", "amq.fanout", "amq.headers", "amq.match", "amq.rabbitmq.trace",
                       "amq.topic"]
 
@@ -582,8 +583,8 @@ def main() -> int:
         for verb in ("configure", "write", "read"):
             resource = first_covered(entry[verb], BUILT_IN_EXCHANGES)
             if resource:
-                fail(f"{user}: {verb} COVERS `{resource}`, a built-in exchange. The default exchange delivers to "
-                     f"any queue by name, so a write there bypasses every bound above (#44)")
+                fail(f"{user}: {verb} COVERS `{resource}`, a built-in exchange. No MassTransit topology uses one, "
+                     f"and a write on the default exchange delivers to any queue by name (#44)")
 
         service = next(k for k in directories if k.lower() == name)
         for prefix in sorted(prefixes - {owned_contract(user)}):
