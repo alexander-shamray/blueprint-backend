@@ -25,6 +25,7 @@ public static class SensitiveKeys
         "card_number",
         "ssn",
         "nationalid",
+        "national_id",
         "cvv",
         "otp",
         "sessionid",

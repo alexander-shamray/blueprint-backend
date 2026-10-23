@@ -27,6 +27,7 @@ public class SensitiveKeysTests
         "card_number",
         "ssn",
         "nationalid",
+        "national_id",
         "cvv",
         "otp",
         "sessionid",
@@ -63,6 +64,8 @@ public class SensitiveKeysTests
     [InlineData("SessionId")]
     [InlineData("AccountKey")]
     [InlineData("Signature")]
+    [InlineData("nationalId")]
+    [InlineData("national_id")]
     public void A_key_this_codebase_actually_uses_is_matched(string key)
     {
         // Named cases, each a spelling from this repository's own vocabulary.
