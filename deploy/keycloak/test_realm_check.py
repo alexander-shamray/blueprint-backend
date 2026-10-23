@@ -324,6 +324,17 @@ class TheFlagsAreBooleans(Fixture):
         self.assertIn("rather than a boolean", found[0])
         self.assertIn("standard flow", found[1])
 
+    def test_a_string_public_client_on_an_unnamed_client_is_refused_not_taken_for_confidential(self):
+        """The PKCE obligation is judged only for a client that is `True`, so a
+        `"true"` with no S256 method would otherwise skip it, and Keycloak's
+        import coerces the string to a public client."""
+        stray = {"clientId": "stray-spa", "publicClient": "true", "standardFlowEnabled": True,
+                 "redirectUris": ["https://stray.example/*"], "attributes": {}}
+        found = self.problems(realm(browser(), stray))
+        self.assertTrue(
+            any("stray-spa" in p and "publicClient" in p and "rather than a boolean" in p for p in found),
+            found)
+
     def test_a_null_flag_is_left_to_the_check_that_reads_it(self):
         """`null` is not typed here, because what it means differs per obligation.
 
