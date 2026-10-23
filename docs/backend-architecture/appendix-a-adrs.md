@@ -153,7 +153,7 @@ decision looks wrong.
 | **ADR-144** | [A receive endpoint switched off when its bus is configured is not configured until its switch is on (#1289), amending ADR-113](adr/ADR-144-a-receive-endpoint-switched-off-when-its-bus-is-configured-is-not-configured-until-its-switch-is-on-1289-amending-adr-113.md) |
 | **ADR-145** | [A receive endpoint off at start has its topology declared by a bus that only deploys it (#1360), amending ADR-144 and ADR-026](adr/ADR-145-a-receive-endpoint-off-at-start-has-its-topology-declared-by-a-bus-that-only-deploys-it-1360-amending-adr-144-and-adr-026.md) |
 | **ADR-146** | [Shipping's erasure empties a shipment's request ids before it deletes the address, in two statements of one unit (#1320), amending ADR-103](adr/ADR-146-shippings-erasure-empties-a-shipments-request-ids-before-it-deletes-the-address-in-two-statements-of-one-unit-1320-amending-adr-103.md) |
-| **ADR-147** | [A scalar `Switches:Off` refuses the host at start and is reported Degraded on a reload (#1291), amending ADR-113 and ADR-115](adr/ADR-147-a-scalar-switches-off-refuses-the-host-at-start-and-is-reported-degraded-on-a-reload-1291-amending-adr-113-and-adr-115.md) |
+| **ADR-147** | [A scalar `Switches:Off` refuses the host at start and is reported Degraded on a reload (#1291), amending ADR-113 and ADR-115](adr/ADR-147-a-scalar-switchesoff-refuses-the-host-at-start-and-is-reported-degraded-on-a-reload-1291-amending-adr-113-and-adr-115.md) |
 
 ---
 

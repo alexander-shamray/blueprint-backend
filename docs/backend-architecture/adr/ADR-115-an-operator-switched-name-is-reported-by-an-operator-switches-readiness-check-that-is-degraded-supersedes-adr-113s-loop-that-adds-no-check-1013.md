@@ -30,7 +30,7 @@ needs a different mechanism than this one. ADR-113 is otherwise unchanged.
 no check"; its stopped-endpoint, file and name decisions stand.
 
 **Amended by
-[ADR-147](ADR-147-a-scalar-switches-off-refuses-the-host-at-start-and-is-reported-degraded-on-a-reload-1291-amending-adr-113-and-adr-115.md)**:
+[ADR-147](ADR-147-a-scalar-switchesoff-refuses-the-host-at-start-and-is-reported-degraded-on-a-reload-1291-amending-adr-113-and-adr-115.md)**:
 the check is also Degraded, naming the indexed form, while `Switches:Off`
 holds a single value, which binds as no name and so would read Healthy; the
 host refuses to start with one. It stays Degraded and never Unhealthy. This

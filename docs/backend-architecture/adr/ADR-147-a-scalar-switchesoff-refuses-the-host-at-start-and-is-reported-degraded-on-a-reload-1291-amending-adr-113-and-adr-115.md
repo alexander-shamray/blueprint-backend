@@ -26,3 +26,7 @@ still bind it as none, so every switch that was off comes back on until the file
 is fixed, and the signal is a Degraded readiness entry that must be read.
 ADR-113 and ADR-115 are otherwise unchanged; this decision is read beside them,
 as an ADR is amended and never rewritten.
+
+---
+
+[Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
