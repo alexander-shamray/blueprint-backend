@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Common.Infrastructure.Validation;
 
 namespace Notifications.Infrastructure.Jurisdiction;
 
@@ -28,19 +29,18 @@ public sealed class NotificationsJurisdictionOptions
     public string? TimeZone { get; init; }
 
     /// <summary>How long a terminal notice must be kept: statutory, as the row is the evidence (ADR-053).</summary>
-    // RangeAttribute's string limits go through TimeSpanConverter, which reads the current culture.
     [Required]
-    [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumWindow, MaximumWindow)]
     public TimeSpan? LogRetention { get; init; }
 
     /// <summary>How long an unrefreshed contact row may be kept; never shorter than its stale ceiling.</summary>
     [Required]
-    [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumWindow, MaximumWindow)]
     public TimeSpan? ContactRetention { get; init; }
 
     /// <summary>How long an order record may be kept once no pending notice names its order.</summary>
     [Required]
-    [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumWindow, MaximumWindow)]
     public TimeSpan? OrderRetention { get; init; }
 
     /// <summary>The pairs the service must send, each <c>topic/channel</c>, which take no preference.</summary>
@@ -52,6 +52,6 @@ public sealed class NotificationsJurisdictionOptions
 
     /// <summary>How long a journal entry is kept once no longer current: statutory, as it is evidence.</summary>
     [Required]
-    [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumWindow, MaximumWindow)]
     public TimeSpan? ConsentRetention { get; init; }
 }

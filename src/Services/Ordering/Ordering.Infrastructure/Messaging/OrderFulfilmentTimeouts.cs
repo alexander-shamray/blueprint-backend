@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Common.Infrastructure.Validation;
 
 namespace Ordering.Infrastructure.Messaging;
 
@@ -20,22 +21,22 @@ public sealed class OrderFulfilmentTimeouts
     public const string MaximumDelay = "3650.00:00:00";
 
     /// <summary>Armed in <c>AwaitingStock</c>.</summary>
-    [Range(typeof(TimeSpan), MinimumDelay, MaximumDelay, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumDelay, MaximumDelay)]
     public TimeSpan StockTimeoutDelay { get; init; } = OrderFulfilmentSaga.StockTimeoutDelay;
 
     /// <summary>Armed in <c>AwaitingPayment</c>.</summary>
-    [Range(typeof(TimeSpan), MinimumDelay, MaximumDelay, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumDelay, MaximumDelay)]
     public TimeSpan PaymentTimeoutDelay { get; init; } = OrderFulfilmentSaga.PaymentTimeoutDelay;
 
     /// <summary>Armed in <c>AwaitingConfirmation</c>.</summary>
-    [Range(typeof(TimeSpan), MinimumDelay, MaximumDelay, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumDelay, MaximumDelay)]
     public TimeSpan ConfirmationTimeoutDelay { get; init; } = OrderFulfilmentSaga.ConfirmationTimeoutDelay;
 
     /// <summary>Armed in <c>Compensating</c>, for a <c>ReleaseStock</c> the saga sent.</summary>
-    [Range(typeof(TimeSpan), MinimumDelay, MaximumDelay, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumDelay, MaximumDelay)]
     public TimeSpan ReleaseTimeoutDelay { get; init; } = OrderFulfilmentSaga.ReleaseTimeoutDelay;
 
     /// <summary>Armed in <c>Confirmed</c>.</summary>
-    [Range(typeof(TimeSpan), MinimumDelay, MaximumDelay, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumDelay, MaximumDelay)]
     public TimeSpan DespatchTimeoutDelay { get; init; } = OrderFulfilmentSaga.DespatchTimeoutDelay;
 }

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Common.Infrastructure.Validation;
 
 namespace Notifications.Infrastructure.Delivery;
 
@@ -19,8 +20,7 @@ public sealed class DeliveryOptions
     public const string MaximumGiveUpAge = "3650.00:00:00";
 
     /// <summary>Measured from the row's <c>CreatedAt</c>; nullable so <c>[Required]</c> sees a missing key.</summary>
-    // RangeAttribute's string limits go through TimeSpanConverter, which reads the current culture.
     [Required]
-    [Range(typeof(TimeSpan), MinimumGiveUpAge, MaximumGiveUpAge, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumGiveUpAge, MaximumGiveUpAge)]
     public TimeSpan? GiveUpAge { get; init; }
 }

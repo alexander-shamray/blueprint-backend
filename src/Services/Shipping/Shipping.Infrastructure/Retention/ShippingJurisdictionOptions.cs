@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Common.Infrastructure.Validation;
 
 namespace Shipping.Infrastructure.Retention;
 
@@ -16,13 +17,12 @@ public sealed class ShippingJurisdictionOptions
     public const string MaximumWindow = "3650.00:00:00";
 
     /// <summary>Kept after the shipment turns terminal; nullable so <c>[Required]</c> sees a missing key.</summary>
-    // RangeAttribute's string limits go through TimeSpanConverter, which reads the current culture.
     [Required]
-    [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumWindow, MaximumWindow)]
     public TimeSpan? AddressRetention { get; init; }
 
     /// <summary>Kept after delivery; its own window, since the address is about a person and this a parcel.</summary>
     [Required]
-    [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumWindow, MaximumWindow)]
     public TimeSpan? TrackingRetention { get; init; }
 }

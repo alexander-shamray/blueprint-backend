@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Common.Infrastructure.Validation;
 using Shipping.Infrastructure.Tracking;
 
 namespace Shipping.Infrastructure.Fulfilment;
@@ -17,9 +18,8 @@ public sealed class FulfilmentOptions : IValidatableObject
     public const string MaximumGiveUpAge = "3650.00:00:00";
 
     /// <summary>From <c>CreatedAt</c> when pending, from <c>CancellationRequestedAt</c> for a cancellation.</summary>
-    // RangeAttribute's string limits go through TimeSpanConverter, which reads the current culture.
     [Required]
-    [Range(typeof(TimeSpan), MinimumGiveUpAge, MaximumGiveUpAge, ParseLimitsInInvariantCulture = true)]
+    [TimeSpanRange(MinimumGiveUpAge, MaximumGiveUpAge)]
     public TimeSpan? GiveUpAge { get; init; }
 
     /// <summary>Refuses an age at or past <c>TrackingWorker.GiveUpAge</c>, measured alike (ADR-054).</summary>
