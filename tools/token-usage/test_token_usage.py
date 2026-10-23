@@ -105,6 +105,26 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(rows["/ship", "main"]["calls"], 2)
         self.assertEqual(rows["/ship", "main"]["cache_read"], 150)
 
+    def test_a_responses_output_is_its_final_count_not_the_first_lines_snapshot(self):
+        # One response read 16, 16 and 309 across its three lines; the input and cache counts repeat.
+        self.files.write("s.jsonl", [
+            ship(),
+            reply("m1", read=100, output=16, model="opus"),
+            reply("m1", read=100, output=16, model="opus"),
+            reply("m1", read=100, output=309, model="opus"),
+            reply("m2", read=50, output=7, model="opus"),
+            reply("m2", read=50, output=5, model="opus"),
+        ])
+        report = Report()
+        report.read_project(self.root)
+        rows = {(r["command"], r["agent"]): r for r in report.rows()}
+        self.assertEqual(rows["/ship", "main"]["output"], 309 + 7)
+        self.assertEqual(rows["/ship", "main"]["calls"], 2)
+        self.assertEqual(rows["/ship", "main"]["cache_read"], 150)
+        by_model = {r["model"]: r for r in report.rows(by_model=True) if r["command"] == "/ship"}
+        self.assertEqual(by_model["opus"]["output"], 309 + 7)
+        self.assertEqual(report.rows()[-1]["output"], 309 + 7)
+
     def test_usage_before_any_prompt_and_after_a_plain_prompt_has_no_command(self):
         self.files.write("s.jsonl", [reply("m0", read=1), ship(), reply("m1", read=2),
                                      prompt("thanks", "2026-10-07T11:00:00.000Z"), reply("m2", read=4)])

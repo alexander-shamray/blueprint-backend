@@ -150,7 +150,7 @@ class Report:
         self.session = session
         self.groups: dict[tuple[str, str], Usage] = {}
         self.by_model: dict[tuple[str, str, str], Usage] = {}
-        self.seen: set[str] = set()
+        self.counted: dict[str, tuple[Usage, Usage, int]] = {}
         self.skipped = 0
         self.span: list[str] = []
         self.spawns: list[dict] = []
@@ -173,18 +173,31 @@ class Report:
             return None
         if self.since and str(entry.get("timestamp", self.since))[:10] < self.since:
             return None
-        # A response is written once per content block, each line carrying the same usage.
+        # A response is written once per content block. The input and cache counts are the same on every line,
+        # but output_tokens grows from a snapshot to its final count, so a later line only raises the output.
         key = message.get("id") or entry.get("requestId") or entry.get("uuid")
-        if key in self.seen:
+        if key in self.counted:
+            self.grow(key, usage)
             return None
-        if key:
-            self.seen.add(key)
-        self.groups.setdefault((command, agent), Usage()).add(usage, context, woken)
+        group = self.groups.setdefault((command, agent), Usage())
+        group.add(usage, context, woken)
         model = text_field(message, "model") or UNKNOWN_MODEL
-        self.by_model.setdefault((command, agent, model), Usage()).add(usage, context, woken)
+        by_model = self.by_model.setdefault((command, agent, model), Usage())
+        by_model.add(usage, context, woken)
+        if key:
+            self.counted[key] = (group, by_model, usage.get("output_tokens") or 0)
         if day := str(entry.get("timestamp", ""))[:10]:
             self.span = [min(self.span[0], day), max(self.span[1], day)] if self.span else [day, day]
         return usage
+
+    def grow(self, key: str, usage: dict) -> None:
+        """Raise a counted response's output to a later line's count, in the rows it was counted under."""
+        group, by_model, counted = self.counted[key]
+        latest = usage.get("output_tokens") or 0
+        if latest > counted:
+            group.output += latest - counted
+            by_model.output += latest - counted
+            self.counted[key] = (group, by_model, latest)
 
     def read_project(self, project: Path, start: str = NO_COMMAND) -> None:
         for main in sorted(project.glob(glob.escape(self.session) + "*.jsonl")):
