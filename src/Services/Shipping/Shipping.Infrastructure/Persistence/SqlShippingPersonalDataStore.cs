@@ -31,8 +31,9 @@ internal sealed class SqlShippingPersonalDataStore(ShippingDbContext db, IDbConn
         """;
 
     // Run first, while the address row still names the order's customer: the list names the buyer to whoever can
-    // join it to an open request (ADR-103), and the shipment beside it stays whole. The range lock is taken first and
-    // on its own, because the update is driven from Shipments and probes no address range when it has none (ADR-146).
+    // join it to an open request (ADR-103), and the shipment beside it stays whole. It opens with a locking read of
+    // the subject's rows: the update holds no address lock to the commit, so a row saved before the delete would be
+    // deleted with its list kept (ADR-146).
     internal const string EmptyErasedUnderSql =
         $"""
         DECLARE @held int = (
