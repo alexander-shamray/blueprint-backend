@@ -1511,7 +1511,9 @@ Rules for each service's consumer:
   the request as one it was placed after
   ([ADR-097](adr/ADR-097-a-holder-that-writes-from-a-feed-asks-its-own-erasure-rows-after-it-writes.md),
   [ADR-099](adr/ADR-099-an-order-carries-the-erasure-requests-its-customer-was-already-under-when-it-was-placed.md),
-  [ADR-103](adr/ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md)).
+  [ADR-103](adr/ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md),
+  and for Payments'
+  [ADR-141](adr/ADR-141-payments-keeps-the-erasure-requests-an-order-was-placed-under-and-its-erasure-spares-that-order-1322-amending-adr-092.md)).
   The check asks no request that closed, by the time `PersonalDataDeleteClosed`
   stamps on the holder's row, before its data left the owner, less a margin
   for the clocks ([ADR-139](adr/ADR-139-an-erasure-check-asks-no-request-that-closed-before-its-data-left-the-owner-882-amending-adr-092-adr-097-adr-099-adr-135-adr-136-and-adr-138.md)).
