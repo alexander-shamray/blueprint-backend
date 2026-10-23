@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Common.Infrastructure.Validation;
 using Shouldly;
 using Xunit;
@@ -61,17 +62,42 @@ public class TimeSpanRangeAttributeTests
         Should.Throw<ArgumentException>(() => new TimeSpanRangeAttribute("02:00:00", "01:00:00"));
 
     [Fact]
-    public void Validating_writes_nothing_to_the_attribute_because_every_field_is_readonly()
+    public void Validating_writes_nothing_to_the_attribute_because_no_field_it_can_reach_is_writable()
     {
         // RangeAttribute fails at random because its first use converts its string bounds and writes them back to
-        // a shared instance. A field that cannot be written after construction cannot race.
+        // a shared instance, in its base fields; a field that cannot be written after construction cannot race.
         FieldInfo[] written = [.. typeof(TimeSpanRangeAttribute)
-            .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-            .Where(field => !field.IsInitOnly)
+            .GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
+            .Where(field => !field.IsInitOnly && !field.IsLiteral)
             .Where(field => field.DeclaringType == typeof(TimeSpanRangeAttribute))];
 
         written.ShouldBeEmpty("a field written after the constructor is the race this attribute exists to remove");
+        typeof(TimeSpanRangeAttribute).BaseType.ShouldBe(
+            typeof(ValidationAttribute),
+            "a base class that converts and caches would move the state this test reads out of reach");
     }
+
+    // Any spelling of the stock attribute with a TimeSpan operand: qualified, spaced, or named in full.
+    private static readonly Regex StockTimeSpanRange = new(
+        @"\bRange(?:Attribute)?\s*\(\s*typeof\s*\(\s*(?:System\s*\.\s*)?TimeSpan\s*\)",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromSeconds(5));
+
+    [Theory]
+    [InlineData("[Range(typeof(TimeSpan), \"00:00:01\", \"01:00:00\")]")]
+    [InlineData("[Range(typeof(TimeSpan), Min, Max, ParseLimitsInInvariantCulture = true)]")]
+    [InlineData("[Range( typeof( System.TimeSpan ), Min, Max)]")]
+    [InlineData("[RangeAttribute(typeof(TimeSpan), Min, Max)]")]
+    [InlineData("[Required, Range(\n typeof(TimeSpan), Min, Max)]")]
+    public void The_scan_below_matches_every_spelling_it_hunts(string declaration) =>
+        StockTimeSpanRange.IsMatch(declaration).ShouldBeTrue();
+
+    [Theory]
+    [InlineData("[TimeSpanRange(Min, Max)]")]
+    [InlineData("[Range(1, 65535)]")]
+    [InlineData("[Range(typeof(decimal), \"0\", \"1\")]")]
+    public void The_scan_below_leaves_alone_what_it_does_not_hunt(string declaration) =>
+        StockTimeSpanRange.IsMatch(declaration).ShouldBeFalse();
 
     [Fact]
     public void No_options_type_in_src_bounds_a_time_span_with_a_range_attribute()
@@ -82,7 +108,7 @@ public class TimeSpanRangeAttributeTests
 
         sources.ShouldContain(path => path.EndsWith("TimeSpanRangeAttribute.cs", StringComparison.Ordinal));
         sources
-            .Where(path => File.ReadAllText(path).Contains("Range(typeof(TimeSpan", StringComparison.Ordinal))
+            .Where(path => StockTimeSpanRange.IsMatch(File.ReadAllText(path)))
             .ShouldBeEmpty("a string-bounded RangeAttribute on a TimeSpan is the attribute that races on first use");
     }
 
