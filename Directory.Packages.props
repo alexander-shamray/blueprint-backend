@@ -203,7 +203,7 @@
          2.16.0 needs a Microsoft.OpenApi above the pin in this file, which
          NU1109 refuses as a downgrade. -->
     <PackageVersion Include="WireMock.Net" Version="2.12.0" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.10.0" />
     <!-- ServiceCollection itself. §6.2's registration test and §6.3's ordering
          test resolve from a real container, and the abstractions package the
          source references has none to build — it is contracts only. -->
