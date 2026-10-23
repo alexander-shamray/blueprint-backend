@@ -1,5 +1,4 @@
 using Common.Infrastructure.Messaging;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Shouldly;
 using Web.Bff.Observability;
