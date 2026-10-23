@@ -61,14 +61,12 @@ concurrency:
   # Deployment serving traffic with nothing left to promote or retire it, which
   # is the one state this file exists to avoid. A second run queues.
 
-  # Keyed by workload rather than by ref. Two manual dispatches of the same
-  # workload from different branches are two runs against one stable release,
-  # one HPA floor and one `<workload>-canary`; under a ref-scoped key they
-  # proceed in parallel, each restoring a floor the other moved and each
-  # uninstalling the other's canary. What must serialise is the cluster object,
-  # and the branch a dispatch was launched from says nothing about which one
-  # that is.
-  group: deploy-${{ inputs.workload }}
+  # Keyed by workload rather than by ref: dispatches of one workload from two
+  # branches share one stable release, HPA floor and `<workload>-canary`, so
+  # they serialise. A pull request or push run has no workload and takes its
+  # run id, so it queues behind nothing: it reaches no cluster object and
+  # must not cancel another run's pending check.
+  group: deploy-${{ inputs.workload || github.run_id }}
   cancel-in-progress: false
 
 jobs:
