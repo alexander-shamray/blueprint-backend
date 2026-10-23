@@ -105,8 +105,8 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(rows["/ship", "main"]["calls"], 2)
         self.assertEqual(rows["/ship", "main"]["cache_read"], 150)
 
-    def test_a_responses_output_is_its_final_count_not_the_first_lines_snapshot(self):
-        # One response read 16, 16 and 309 across its three lines; the input and cache counts repeat.
+    def test_a_responses_output_is_the_largest_count_its_lines_carry_not_the_first_lines_snapshot(self):
+        # One response's lines carry output counts of 16, 16 and 309; the input and cache counts repeat.
         self.files.write("s.jsonl", [
             ship(),
             reply("m1", read=100, output=16, model="opus"),
@@ -350,6 +350,17 @@ class ReportTests(unittest.TestCase):
         self.assertEqual((spawn["command"], spawn["agent"], spawn["description"]),
                          ("/ship", "general-purpose", "Review the diff"))
         self.assertEqual((spawn["calls"], spawn["cache_read"], spawn["started"]), (2, 30, "2026-10-07"))
+
+    def test_a_spawns_output_is_the_largest_count_each_response_carries(self):
+        self.files.write("s.jsonl", [ship(), reply("m1", read=1)])
+        self.files.write("s/subagents/agent-a6.jsonl", [
+            reply("x6", at="2026-10-07T09:20:00.000Z", read=10, output=16),
+            reply("x6", at="2026-10-07T09:20:01.000Z", read=10, output=309),
+            reply("x7", at="2026-10-07T09:21:00.000Z", read=20, output=4)])
+        (self.root / "s/subagents/agent-a6.meta.json").write_text('{"agentType": "general-purpose"}')
+        _, report = self.rows()
+        spawn, = report.spawns
+        self.assertEqual((spawn["calls"], spawn["cache_read"], spawn["output"]), (2, 30, 309 + 4))
 
 
     def test_tool_results_are_counted_per_command_and_tool_in_the_main_session(self):
