@@ -24,6 +24,20 @@ public class OperatorSwitchHealthCheckTests
         return services.BuildServiceProvider(validateScopes: true);
     }
 
+    /// <summary>A provider whose whole contents the test replaces, which is what a reloaded file does.</summary>
+    private sealed class ReplaceableSource : ConfigurationProvider, IConfigurationSource
+    {
+        public ReplaceableSource(string key, string value) => Data[key] = value;
+
+        public IConfigurationProvider Build(IConfigurationBuilder builder) => this;
+
+        public void Replace(string key, string value)
+        {
+            Data = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase) { [key] = value };
+            OnReload();
+        }
+    }
+
     private static async Task<HealthReportEntry> Ready(ServiceProvider provider)
     {
         HealthReport report = await provider
@@ -58,10 +72,8 @@ public class OperatorSwitchHealthCheckTests
     [Fact]
     public async Task A_scalar_that_arrives_on_a_reload_is_degraded_and_names_the_indexed_form()
     {
-        IConfigurationRoot configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                [KeyValuePair.Create($"{OperatorSwitchOptions.SectionName}:Off:0", (string?)"orders")])
-            .Build();
+        ReplaceableSource file = new($"{OperatorSwitchOptions.SectionName}:Off:0", "orders");
+        IConfigurationRoot configuration = new ConfigurationBuilder().Add(file).Build();
         ServiceCollection services = new();
         services.AddSingleton<IConfiguration>(configuration);
         services.AddLogging();
@@ -69,13 +81,34 @@ public class OperatorSwitchHealthCheckTests
         using ServiceProvider provider = services.BuildServiceProvider(validateScopes: true);
 
         // What a reloaded file does: the list is replaced by a single value, which binds as nothing off.
-        configuration[$"{OperatorSwitchOptions.SectionName}:Off:0"] = null;
-        configuration[$"{OperatorSwitchOptions.SectionName}:Off"] = "orders";
+        file.Replace($"{OperatorSwitchOptions.SectionName}:Off", "orders");
 
         HealthReportEntry entry = await Ready(provider);
 
         entry.Status.ShouldBe(HealthStatus.Degraded, "Degraded answers 200, so the pod stays in service");
         entry.Description.ShouldNotBeNull().ShouldContain("Switches__Off__0", Case.Sensitive);
+    }
+
+    [Fact]
+    public async Task A_value_beside_an_indexed_list_is_not_a_scalar_because_the_binder_reads_the_children()
+    {
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+            [
+                KeyValuePair.Create($"{OperatorSwitchOptions.SectionName}:Off", (string?)"stale"),
+                KeyValuePair.Create($"{OperatorSwitchOptions.SectionName}:Off:0", (string?)"orders")
+            ])
+            .Build();
+        ServiceCollection services = new();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddLogging();
+        services.AddOperatorSwitches(configuration);
+        using ServiceProvider provider = services.BuildServiceProvider(validateScopes: true);
+
+        HealthReportEntry entry = await Ready(provider);
+
+        entry.Description.ShouldNotBeNull().ShouldContain("orders");
+        entry.Description.ShouldNotContain("single value");
     }
 
     [Fact]

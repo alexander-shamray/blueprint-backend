@@ -7,12 +7,14 @@ namespace Common.Infrastructure.Switching;
 /// Nothing is then off, and nothing throws or logs, while the operator believes a queue is stopped (ADR-113).</remarks>
 internal sealed class OperatorSwitchSource(IConfigurationSection section)
 {
-    /// <summary>Why <c>Off</c> cannot be read, or null when it holds no scalar; an empty value names nothing.</summary>
+    /// <summary>Why <c>Off</c> cannot be read, or null when it holds no scalar; an empty value names nothing, and
+    /// a value beside indexed children is let by, since the binder reads the children.</summary>
     public string? Scalar()
     {
-        string? value = section.GetSection(nameof(OperatorSwitchOptions.Off)).Value;
+        IConfigurationSection off = section.GetSection(nameof(OperatorSwitchOptions.Off));
+        string? value = off.Value;
 
-        return string.IsNullOrEmpty(value)
+        return string.IsNullOrEmpty(value) || off.GetChildren().Any()
             ? null
             : $"{OperatorSwitchOptions.SectionName}:Off holds the single value '{value}', which binds as an empty " +
               $"list and switches nothing off. Write each name as an indexed key, {OperatorSwitchOptions.SectionName}" +
