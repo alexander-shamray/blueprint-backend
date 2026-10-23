@@ -143,11 +143,13 @@ tool resolves names from the contracts alone, so a row stored under a type's
 name from before a rename ([§9.4](../../docs/backend-architecture/09-messaging.md))
 is one it cannot select or send. Before anything is deleted it reads every
 name the window's rows carry; a name the contracts do not carry stops a
-`--reset` and names the publisher, the name and the row count, because the
-reset would delete facts only those rows could restore. A repair deletes
-nothing, so it runs and prints the same names as not replayed. The refusal
-lifts when retention purges the rows; a rebuild wanted sooner is the BFF
-database's backup, restored.
+`--reset` and names the publisher, the name and the row count. The tool
+cannot tell whether such a name was one of the eight, so a retired contract
+version (§9.2) stops a reset as a rename does, and for the same reason: the
+reset could delete facts the replay cannot resend. A repair deletes nothing,
+so it runs and prints the same names as not replayed. The refusal lifts when
+retention purges the rows; a rebuild wanted sooner is the BFF database's
+backup, restored.
 
 ## Reading what it prints
 
