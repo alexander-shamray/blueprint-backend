@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -101,9 +102,17 @@ public sealed class ErasureCompletionsTests(ServiceFixture fixture) : IAsyncLife
     {
         Guid request = await RaiseAsync();
         PersonalDataDeleteCompleted first = Completion(request, "ordering", 5);
+        using SemaphoreSlim suppressed = new(0);
+        using MeterListener listener = ListenForSuppression(suppressed);
 
         await SendAsync(first);
         await SendAsync(first, awaitInbox: false);
+
+        // The aggregate keeps the larger count, so a duplicate that got through would change nothing below: the
+        // inbox filter's own count of the drop is the only evidence that it ran (§9.5).
+        (await suppressed.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("the redelivery has to be dropped by the inbox, not absorbed by the aggregate");
+
         await SendAsync(Completion(request, "ordering", 0));
 
         (await fixture.ScalarAsync<int>(
@@ -171,6 +180,43 @@ public sealed class ErasureCompletionsTests(ServiceFixture fixture) : IAsyncLife
     {
         message.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
         message.Headers.Add(TestAuthHandler.PermissionsHeader, PrivacyPermissions.Erase);
+    }
+
+    private static MeterListener ListenForSuppression(SemaphoreSlim suppressed)
+    {
+        MeterListener listener = new();
+
+        listener.InstrumentPublished = (instrument, active) =>
+        {
+            if (instrument.Meter.Name == "Commerce.Messaging" &&
+                instrument.Name == "messaging.inbox.suppressed")
+            {
+                active.EnableMeasurementEvents(instrument);
+            }
+        };
+
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            if (TagValue(tags, "message") == nameof(PersonalDataDeleteCompleted) &&
+                TagValue(tags, "endpoint") == DependencyInjection.CompletionsQueue)
+            {
+                suppressed.Release();
+            }
+        });
+
+        listener.Start();
+        return listener;
+    }
+
+    private static string TagValue(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name)
+    {
+        foreach (KeyValuePair<string, object?> tag in tags)
+        {
+            if (tag.Key == name)
+                return tag.Value?.ToString() ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 
     private static PersonalDataDeleteCompleted Completion(Guid request, string responder, int count) =>
