@@ -962,7 +962,7 @@ for chart in $SERVICE_CHARTS; do
         'HTTPS address this chart will accept' --set-string 'objectStore.endpoint=http://objects.example.invalid'
     refuses_chart "$chart" "$chart: a store setting with the capability off fails the render" \
         'objectStore.enabled is false but an objectStore setting is set' --set objectStore.enabled=false
-    # The host binds pathStyle to a bool, so any other spelling is a pod that never starts.
+    # The host binds pathStyle to a bool, so 1, yes and on are a pod that never starts; the chart lets only the two by.
     refuses_chart "$chart" "$chart: a non-boolean pathStyle fails the render" \
         'objectStore.pathStyle is yes, which is not a boolean' --set-string 'objectStore.pathStyle=yes'
     refuses_chart "$chart" "$chart: a numeric pathStyle fails the render" \
@@ -2115,6 +2115,8 @@ refuses 'a whitespace-only OTLP endpoint fails the render' 'observability.otlpEn
 # Non-blank is not an address: without its scheme the exporter reads the host as one, and the NetworkPolicy opens 80.
 refuses 'a scheme-less OTLP endpoint fails the render' 'is not an http or https address' \
     $GATEWAY_OVERLAY --set-string 'observability.otlpEndpoint=otel-collector.observability:4317'
+refuses 'an OTLP endpoint with a port past 65535 fails the render' 'whose port is outside 1-65535' \
+    $GATEWAY_OVERLAY --set-string 'observability.otlpEndpoint=http://otel-collector.observability:70000'
 refuses 'an OTLP endpoint with a query fails the render' 'is not an http or https address' \
     $GATEWAY_OVERLAY --set-string 'observability.otlpEndpoint=http://otel-collector.observability:4317/?x=1'
 refuses 'a whitespace-only workload name fails the render' 'workload.name is required' \

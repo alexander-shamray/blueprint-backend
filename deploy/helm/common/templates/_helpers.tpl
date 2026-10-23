@@ -178,6 +178,12 @@ commerce.urlPort cannot find its port. */}}
 {{- if not (regexMatch "^https?://[\\p{L}\\p{N}\\p{M}._-]+(:[0-9]+)?(/[^?#]*)?$" $otlp) }}
 {{- fail (printf "observability.otlpEndpoint is %q, which is not an http or https address this chart will accept, as in http://otel-collector.observability:4317. Without its scheme the exporter reads the host as one and exports nothing, and the NetworkPolicy opens port 80 for it (§15.4)." $otlp) }}
 {{- end }}
+{{- /* The port's range, which the digits above do not bound: the policy would carry it and the cluster refuse
+it on apply. */}}
+{{- $otlpPort := regexFind ":[0-9]+$" (regexFind "^https?://[^/]+" $otlp) }}
+{{- if and $otlpPort (or (lt (atoi (trimPrefix ":" $otlpPort)) 1) (gt (atoi (trimPrefix ":" $otlpPort)) 65535)) }}
+{{- fail (printf "observability.otlpEndpoint is %q, whose port is outside 1-65535 (§15.4)." $otlp) }}
+{{- end }}
 OTEL_EXPORTER_OTLP_ENDPOINT: {{ $otlp | quote }}
 {{- if .Values.identity.clientCredentials }}
 {{- /* Two of the three client-credential keys are Config; the secret is a Secret
@@ -340,9 +346,11 @@ is built from (§10.8), and the host refuses a base that is not https, loopback 
 ProductImages__Store__Endpoint: {{ include "commerce.requireUrl" (list $store.endpoint "objectStore.endpoint is required when objectStore.enabled: the host binds ProductImages:Store and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
 ProductImages__Store__Bucket: {{ include "commerce.require" (list $store.bucket "objectStore.bucket is required when objectStore.enabled (§15.4).") | quote }}
 ProductImages__Store__Region: {{ include "commerce.require" (list $store.region "objectStore.region is required when objectStore.enabled: a signature is scoped to it (§15.4).") | quote }}
-{{- /* A bool option the host binds and validates on start: any other spelling renders and crashes the pod. */}}
+{{- /* A bool option the host binds and validates on start. The chart is stricter than the binder, which also
+reads other spellings of true and false: a value such as 1, yes or on renders and crashes the pod, so only the two
+are let by. */}}
 {{- if not (or (kindIs "bool" $store.pathStyle) (kindIs "invalid" $store.pathStyle) (has $store.pathStyle (list "true" "false"))) }}
-{{- fail (printf "objectStore.pathStyle is %v, which is not a boolean. The host binds it to a bool and ValidateOnStart refuses anything but true or false, so a value such as 1, yes or on renders cleanly and the pod never starts (§15.4)." $store.pathStyle) }}
+{{- fail (printf "objectStore.pathStyle is %v, which is not a boolean. The host binds it to a bool, so a value such as 1, yes or on renders cleanly and the pod never starts; this chart accepts true or false only (§15.4)." $store.pathStyle) }}
 {{- end }}
 ProductImages__Store__PathStyle: {{ $store.pathStyle | default false | toString | quote }}
 {{- if eq .Chart.Name "catalog" }}
