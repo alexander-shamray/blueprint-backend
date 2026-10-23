@@ -31,17 +31,51 @@ public static class StartRefusal
                 refusal = thrown;
             }
 
-            if (refusal is null)
-                throw new InvalidOperationException("The host started, so it refused nothing.");
-
-            if (refusal is not ObjectDisposedException { ObjectName: nameof(IServiceProvider) })
+            if (Answered(refusal))
                 return refusal;
 
             last = refusal;
         }
 
-        throw new InvalidOperationException(
-            "Every host started here reported a disposed provider, so none of them said why it refused to start.",
-            last);
+        throw Exhausted(last);
     }
+
+    /// <summary><see cref="Ask{TFactory}"/> for a start that is awaited.</summary>
+    public static async Task<Exception> AskAsync<TFactory>(Func<TFactory> unstartable, Func<TFactory, Task> start)
+        where TFactory : IDisposable
+    {
+        Exception? last = null;
+
+        for (int attempt = 0; attempt < Attempts; attempt++)
+        {
+            using TFactory factory = unstartable();
+            Exception? refusal = null;
+
+            try
+            {
+                await start(factory);
+            }
+            catch (Exception thrown)
+            {
+                refusal = thrown;
+            }
+
+            if (Answered(refusal))
+                return refusal;
+
+            last = refusal;
+        }
+
+        throw Exhausted(last);
+    }
+
+    /// <summary>True when the host said why it refused; false for the race, which asks again.</summary>
+    private static bool Answered([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] Exception? refusal) =>
+        refusal is null
+            ? throw new InvalidOperationException("The host started, so it refused nothing.")
+            : refusal is not ObjectDisposedException { ObjectName: nameof(IServiceProvider) };
+
+    private static InvalidOperationException Exhausted(Exception? last) => new(
+        "Every host started here reported a disposed provider, so none of them said why it refused to start.",
+        last);
 }
