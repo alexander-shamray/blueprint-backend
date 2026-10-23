@@ -148,12 +148,13 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
             .GetRequiredKeyedService<IConnectionMultiplexer>(RedisConnections.Coordination)
             .GetDatabase();
 
-        string claim = await ClaimedAsync(store, "expiring", Retention);
+        await ClaimedAsync(store, "expiring", Retention);
 
         TimeSpan? claimTtl = await database.KeyTimeToLiveAsync("ttl:idem:expiring");
         claimTtl.ShouldNotBeNull();
+        // Both ends: a store that passed seconds for the minutes would sit under the retention too.
         claimTtl.Value.ShouldBeLessThanOrEqualTo(Retention);
-
+        claimTtl.Value.ShouldBeGreaterThan(Retention - TimeSpan.FromMinutes(1));
     }
 
     [Fact]
