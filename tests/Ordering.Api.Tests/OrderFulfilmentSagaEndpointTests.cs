@@ -248,6 +248,12 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
         await PublishPlacedAsync(orderId, messageId);
         await Eventually(() => SagaRowsAsync(orderId), expected: 1, because: "the arrange half");
 
+        // The filter writes its row in a commit of its own, after the saga's, so the replay needs it to match.
+        await Eventually(
+            async () => (await SagaInboxRowsAsync(messageId)).Count,
+            expected: 1,
+            because: "the first delivery's inbox row, which the replay has to find");
+
         await PublishReservationFailedAsync(orderId, Guid.CreateVersion7());
         await Eventually(() => SagaRowsAsync(orderId), expected: 0, because: "the saga must finish first");
 
