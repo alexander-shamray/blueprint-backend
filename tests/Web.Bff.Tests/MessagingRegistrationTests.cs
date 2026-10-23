@@ -131,7 +131,7 @@ public sealed class MessagingRegistrationTests
         RegisteredProjectionEvents().ShouldBe(
             Consumed,
             ignoreOrder: true,
-            "a registered consumer outside the BFF's Consumes cell is bound by no test and read by no replay");
+            "a registered projection consumer outside the BFF's Consumes cell is bound by no test");
     }
 
     [Fact]
