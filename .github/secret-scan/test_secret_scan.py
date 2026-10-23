@@ -344,7 +344,8 @@ class Values(unittest.TestCase):
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD-Tr0ub4dor}"), "Tr0ub4dor")
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD=Tr0ub4dor}"), "Tr0ub4dor")
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD}"), "")
-        # An error message and an alternative are not defaults, so neither is judged as one.
+        # An error message is never a value and is not peeled; an alternative is a committed literal, so it is
+        # judged like a default.
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD:?Tr0ub4dor required}"), "")
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD:+Tr0ub4dor}"), "Tr0ub4dor")
 
