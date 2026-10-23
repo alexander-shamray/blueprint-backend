@@ -118,6 +118,11 @@ def fault_of(prefix: str) -> str:
 # read a consumer does need is on its peer's concrete contract exchange.
 INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 
+# The exchanges every vhost carries. A write on the default exchange reaches any queue by name, so an account that
+# covers one can publish to a peer's queue however its other patterns are bounded; MassTransit declares none of them.
+BUILT_IN_EXCHANGES = ["amq.default", "amq.direct", "amq.fanout", "amq.headers", "amq.match", "amq.rabbitmq.trace",
+                      "amq.topic"]
+
 # The one account here that is not a service's, and the one tag any account may
 # hold: ADR-072 decides both, main holds the tag and check_operator the grant.
 OPERATOR = "dead-letter-operator"
@@ -574,6 +579,12 @@ def main() -> int:
                          f"addressed by its source. Configure deletes it, write puts another "
                          f"service's business command on it, and read consumes it (#44)")
 
+        for verb in ("configure", "write", "read"):
+            resource = first_covered(entry[verb], BUILT_IN_EXCHANGES)
+            if resource:
+                fail(f"{user}: {verb} COVERS `{resource}`, a built-in exchange. The default exchange delivers to "
+                     f"any queue by name, so a write there bypasses every bound above (#44)")
+
         service = next(k for k in directories if k.lower() == name)
         for prefix in sorted(prefixes - {owned_contract(user)}):
             if prefix == f"{INTERFACE_EXCHANGE.split(':')[0]}:":
@@ -634,7 +645,7 @@ def check_operator(definitions: dict, permissions: dict, code: dict, prefixes: s
     entry = permissions[OPERATOR]
     endpoints = sorted(set().union(*(consumes for _, consumes in code.values())))
     # Somebody else's vocabulary, and the default exchange, whose write reaches every queue by name.
-    foreign = [[f"{FRAMEWORK_PREFIX}ReceiveFault"], [INTERFACE_EXCHANGE], ["amq.default"],
+    foreign = [[f"{FRAMEWORK_PREFIX}ReceiveFault"], [INTERFACE_EXCHANGE], BUILT_IN_EXCHANGES,
                *(probes(prefix, names) for prefix in sorted(prefixes)),
                *(probes(prefix, names) for prefix in sorted(set().union(*private.values())))]
     for queue in endpoints:
