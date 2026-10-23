@@ -142,7 +142,7 @@ class NoGrantTests(unittest.TestCase):
         text = " ".join(self.README.read_text(encoding="utf-8").split())
 
         self.assertIn("a wrong `OBJECT_STORE_BUCKET` reads as a pass", text)
-        self.assertIn("a `404`, such as `NoSuchBucket`, names no bucket the store holds", text)
+        self.assertIn("a `404` is not a refusal, and `NoSuchBucket` names no bucket the store holds", text)
 
 
 class RedirectTests(unittest.TestCase):
