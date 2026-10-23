@@ -48,12 +48,15 @@ class Sweeps(unittest.TestCase):
 
     def test_a_hash_quoted_before_the_pin_is_not_the_pin(self):
         action = "b" * 40
-        quoted = f"## Affected lines\n\n`uses: actions/checkout@{action}` in ci.yml\n\n"
+        quoted = f"## Affected lines\n\n`uses: actions/checkout@{action}` in ci.yml\n\n## Fix\n\ny\n\n"
         with mock.patch.object(qs, "resolve_commit", lambda text: SHA if text == SHA else None):
             for pin in (f"at the pinned commit {SHA}.", f"Pinned commit: {SHA}", f"Found by the sweep at {SHA}."):
                 self.assertEqual(qs.pinned_commit(quoted + pin), SHA, pin)
             self.assertEqual(qs.pinned_commit(f"{quoted}the tree was {SHA}"), SHA, "an unlabelled hash the clone holds")
             self.assertIsNone(qs.pinned_commit(quoted), "a quoted hash the clone lacks is no pin")
+            echoed = (f"## Affected lines\n\nFound by the #433 sweep at {'c' * 40}.\n\n## Fix\n\ny\n\n"
+                      f"Found by the #433 sweep at {SHA}.")
+            self.assertEqual(qs.pinned_commit(echoed), SHA, "a found-by line quoted in the affected lines")
 
     def test_paths_come_from_affected_lines_and_only_those_that_exist_at_the_commit(self):
         body = sweep_body("deploy/helm/smoke.sh line 390 and docs/gone.md and check_permissions.py")
@@ -279,8 +282,8 @@ class Runs(unittest.TestCase):
     def test_a_run_with_no_usage_reports_zeros(self):
         self.assertEqual(qs.tokens(collections.Counter())["total"], 0)
 
-    def failed_run(self, stdout, spent=None):
-        done = mock.Mock(stdout=stdout, stderr="boom", returncode=1)
+    def failed_run(self, stdout, spent=None, stderr="boom"):
+        done = mock.Mock(stdout=stdout, stderr=stderr, returncode=1)
         with mock.patch.object(qs, "run", return_value=done) as call:
             result = qs.ask("claude", "bug-auditor", "p", "dir", spent=spent)
         self.assertFalse(call.call_args.kwargs["check"], "a non-zero exit is read, not raised inside run")
@@ -292,6 +295,10 @@ class Runs(unittest.TestCase):
         with self.assertRaises(qs.UsageLimit):
             self.failed_run(envelope, spent)
         self.assertEqual(qs.tokens(spent)["total"], 9)
+
+    def test_a_usage_limit_notice_only_on_stderr_ends_the_run_too(self):
+        with self.assertRaises(qs.UsageLimit):
+            self.failed_run("", stderr="Claude AI usage limit reached")
 
     def test_a_non_zero_exit_with_no_findings_is_refused_by_its_code_and_its_tokens_are_counted(self):
         envelope = json.dumps({"subtype": "error_max_turns", "usage": {"input_tokens": 4}})
