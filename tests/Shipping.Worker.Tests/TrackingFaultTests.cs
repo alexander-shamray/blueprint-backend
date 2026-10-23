@@ -1,3 +1,5 @@
+using Common.Infrastructure.Outbox;
+using Common.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Carrier;
@@ -51,14 +53,46 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         DateTimeOffset before = await _fixture.DatabaseNowAsync();
 
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+        DateTimeOffset after = await _fixture.DatabaseNowAsync();
 
         (await _fixture.StatusAsync(shipment.Id)).ShouldBe("Booked", "an outage is never an answer");
         (await _fixture.PollAttemptsAsync(shipment.Id)).ShouldBe(1);
         (await _fixture.AttemptsAsync(shipment.Id)).ShouldBe(0, "the fulfilment pass's ladder is its own (ADR-054)");
         (await _fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull("a backed-off row is released, not held");
-        (await _fixture.NextPollAtAsync(shipment.Id)).ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(
-            before + CarrierHop.TrackingPollInterval,
-            "the ladder's first step is five seconds, and a failed poll is never due sooner than a healthy one");
+        await AssertPollDueWithinAsync(shipment.Id, before, after, attemptsBefore: 0);
+    }
+
+    [Fact]
+    public async Task A_row_past_the_ladders_cap_waits_the_capped_step_and_no_longer()
+    {
+        Shipment shipment = await _fixture.BookedAsync("SIM-TRANSIT");
+        await _fixture.SetCarrierReferenceAsync(shipment.Id, "crr_down");
+        using IDisposable down = ServiceFixture.CarrierAnswers(_carrier, "/v1/shipments/crr_down/events", 503);
+        int attemptsBefore = OutboxDispatcher.BackoffAttemptCap + 3;
+        await _fixture.SetPollAttemptsAsync(shipment.Id, attemptsBefore);
+
+        DateTimeOffset before = await _fixture.DatabaseNowAsync();
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+        DateTimeOffset after = await _fixture.DatabaseNowAsync();
+
+        (await _fixture.PollAttemptsAsync(shipment.Id)).ShouldBe(attemptsBefore + 1);
+        await AssertPollDueWithinAsync(shipment.Id, before, after, attemptsBefore);
+    }
+
+    // The ladder floored at the healthy interval (ADR-054), held at both ends: a unit slipped to minutes, a dropped
+    // cap or a wrong multiplier moves the due time past the top, and a dropped floor moves it under the bottom.
+    private async Task AssertPollDueWithinAsync(
+        ShipmentId id,
+        DateTimeOffset before,
+        DateTimeOffset after,
+        int attemptsBefore)
+    {
+        TimeSpan ladder = OutboxBackoffRule.Ladder(attemptsBefore);
+        TimeSpan wait = ladder > CarrierHop.TrackingPollInterval ? ladder : CarrierHop.TrackingPollInterval;
+        DateTimeOffset due = (await _fixture.NextPollAtAsync(id)).ShouldNotBeNull();
+
+        due.ShouldBeGreaterThanOrEqualTo(before + wait, "a failed poll is never due sooner than the ladder");
+        due.ShouldBeLessThanOrEqualTo(after + wait, "nor later than the ladder, however far up it is");
     }
 
     [Fact]
