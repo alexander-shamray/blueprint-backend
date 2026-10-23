@@ -26,6 +26,7 @@ LINE_WINDOW = 10
 TEXT_CAP = 400
 TOKEN_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 SHA = re.compile(r"\b[0-9a-f]{40}\b")
+PINNED = re.compile(r"(?i)\bpinned commit:?\s+([0-9a-f]{7,40})\b")
 FOUND_AT = re.compile(r"(?i)\bfound by\b.*?\bat ([0-9a-f]{7,40})\b")
 PATH = re.compile(r"[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)*\.(?:cs|py|sh|ps1|md|ya?ml|json|props|csproj|sql|tpl|txt|slnx)\b")
 
@@ -66,12 +67,18 @@ def resolve_commit(text):
 
 
 def pinned_commit(body):
-    """The commit a sweep issue was found on: its pinned sha, else 'found ... at <sha>'."""
-    full = SHA.search(body)
-    if full:
-        return full.group(0)
-    short = FOUND_AT.search(body)
-    return resolve_commit(short.group(1)) if short else None
+    """The commit a sweep issue was found on: its 'pinned commit' or 'found ... at', else a sha this clone holds.
+
+    A bare 40-hex word is not a pin: the affected lines quote action pins before the pin is named.
+    """
+    named = PINNED.search(body) or FOUND_AT.search(body)
+    if named:
+        text = named.group(1)
+        return text if len(text) == 40 else resolve_commit(text)
+    for text in reversed(SHA.findall(body)):
+        if resolved := resolve_commit(text):
+            return resolved
+    return None
 
 
 def affected_text(title, body):
@@ -143,7 +150,8 @@ def review_entries(comments, base_of):
         if comment["user"]["login"] not in REVIEWERS or comment.get("in_reply_to_id"):
             continue
         pr = int(comment["pull_request_url"].rsplit("/", 1)[-1])
-        line = comment.get("line") or comment.get("original_line")
+        # original_line belongs to original_commit_id; line is reported against the comment's latest commit.
+        line = comment.get("original_line") or comment.get("line")
         head = comment["original_commit_id"]
         if not line or pr not in base_of or tree_paths(head) is None:
             continue
@@ -251,11 +259,12 @@ def tokens(spent):
 def ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
     """One non-interactive agent run; its findings, or SystemExit when it returned no JSON.
 
-    spent, a Counter, gains the run's tokens whether or not it returned findings.
+    spent, a Counter, gains the run's tokens whether or not it returned findings, and a non-zero
+    exit is read for its usage and a usage-limit notice before it is refused.
     """
     extra = [arg for d in add_dirs for arg in ("--add-dir", str(d))]
     done = run(claude, "-p", prompt, "--agents", agent_definition(agent), "--agent", agent,
-               "--output-format", "json", *extra, cwd=cwd)
+               "--output-format", "json", *extra, cwd=cwd, check=False)
     text, usage = unwrap(done.stdout)
     if spent is not None:
         spent.update({key: usage[key] for key in TOKEN_KEYS if isinstance(usage.get(key), int)})
@@ -263,6 +272,8 @@ def ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
     if value is None:
         if "usage limit" in text.lower():
             raise UsageLimit(f"{agent} stopped on a usage-limit notice: {text.strip()[:200]}")
+        if done.returncode:
+            raise SystemExit(f"{claude} exited {done.returncode}: {(done.stderr.strip() or text.strip())[:300]}")
         raise SystemExit(f"{agent} returned no findings JSON: {text.strip()[:200]}")
     return value["findings"]
 
