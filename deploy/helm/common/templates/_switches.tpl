@@ -7,7 +7,7 @@ and every other chart refuses a name, so a service on the order's critical path
 cannot be switched by a typo in an overlay. */}}
 {{- define "commerce.switches" -}}
 {{- $off := ((.Values.switches).off) | default list }}
-{{- /* A list binds from child keys only, so a scalar renders and switches nothing off, with the health check green. */}}
+{{- /* A list binds from child keys only, so a scalar renders and switches nothing off, health check green. */}}
 {{- if not (kindIs "slice" $off) }}
 {{- fail "switches.off is not a list. ADR-113's names render as a JSON list, and the host binds a list only from its children, so a bare name would switch nothing off and report healthy: write switches.off={name}." }}
 {{- end }}
