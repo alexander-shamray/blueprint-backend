@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
@@ -553,6 +554,34 @@ class Landing(unittest.TestCase):
         found = game_day.hold(module, Stack().world, report=report, grace=0.05)
         self.assertEqual([[]], reports)
         self.assertIn("died after it had landed", found[0])
+
+    def test_a_loop_declares_its_own_grace_and_a_finite_cause_is_not_told_before_it_returns(self):
+        import threading
+        landed, reports, seen = threading.Event(), [], []
+
+        def loop(world):
+            self.assertTrue(landed.wait(5), "the declared grace never ran out while the cause was still going")
+
+        def slow(world):
+            # A warm-up that outlasts any grace: nothing may have been told while it is still going.
+            time.sleep(0.3)
+            seen.extend(reports)
+
+        def report(findings):
+            reports.append(findings)
+            landed.set()
+
+        game_day.hold(types.SimpleNamespace(cause=loop, LANDED_AFTER_SECONDS=0.05), Stack().world, report=report)
+        self.assertEqual([[]], reports)
+        reports.clear()
+        game_day.hold(types.SimpleNamespace(cause=slow), Stack().world, report=report, sleep=lambda s: None)
+        self.assertEqual([], seen)
+        self.assertEqual([[]], reports)
+
+    def test_only_the_cause_that_is_a_loop_declares_a_grace_and_it_is_shorter_than_the_wait(self):
+        declared = {name for name in coverage.scripts() if hasattr(fresh(name), "LANDED_AFTER_SECONDS")}
+        self.assertEqual({"queue_backlog"}, declared)
+        self.assertLess(fresh("queue_backlog").LANDED_AFTER_SECONDS, game_day.LANDING_SECONDS)
 
     def test_a_report_is_read_back_whole_and_a_missing_one_is_not_a_landing(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -144,11 +144,13 @@ backlog half of `queue-backlog`) and the lag half's rounds of pause and unpause
 end with the process that runs them, so `--cause` starts
 `game_day.py RUNBOOK --hold` detached, with its output in
 `artifacts/game-day/<runbook>.log` and its pid beside it. The child writes
-`<runbook>.status` as soon as `cause` returns or raises, or after
-`LANDING_GRACE_SECONDS` of neither (the lag half's cause is the loop, so it
-never returns), and `--cause` waits for that, up to `LANDING_SECONDS`. A
-cause that failed, or a child that ended without saying, is a finding and
-exit 1; one that fails after the grace is in the log only. `--restore` ends
+`<runbook>.status` as soon as `cause` returns or raises, or, for a scenario
+that declares `LANDED_AFTER_SECONDS` (the lag half's cause is a loop of
+rounds), after that long of neither; a finite cause such as `latency`'s
+warm-up declares none, so it is told only by returning or raising. `--cause`
+waits for that, up to `LANDING_SECONDS`. A cause that failed, or a child
+that ended without saying, is a finding and exit 1; one that fails after the
+report is in the log only. `--restore` ends
 the child and its tree before it restores, and checks the pid is that
 runbook's own `--hold` child first, because a pid file outlives a reboot and
 the number may now be a person's own `game_day.py` run. The child ends by

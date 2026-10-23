@@ -148,10 +148,9 @@ def phase_of(scenario: ModuleType, alert: str | None):
 STATE = harness.ROOT / "artifacts" / "game-day"
 HOLD_LIMIT_SECONDS = 2 * 60 * 60
 HOLD_POLL_SECONDS = 2.0
-# --cause waits this long for the child to say its cause landed. A cause that is itself a loop (queue-backlog's lag
-# half) never returns to say so, so the child calls it landed once it has run this long without failing.
-LANDING_SECONDS = 120.0
-LANDING_GRACE_SECONDS = 20.0
+# --cause waits this long for the child to say its cause landed: the longest finite cause is a warm-up of
+# WARM_SECONDS (latency, error-rate) and then its fault, with a margin.
+LANDING_SECONDS = 360.0
 LANDING_POLL_SECONDS = 0.5
 
 
@@ -280,12 +279,16 @@ def cause_only(scenario: ModuleType, world: harness.World, *, spawn=spawn_hold, 
 
 def hold(scenario: ModuleType, world: harness.World, *, sleep=time.sleep, clock=time.monotonic,
          limit: float = HOLD_LIMIT_SECONDS, report=lambda findings: None,
-         grace: float = LANDING_GRACE_SECONDS) -> list[str]:
+         grace: float | None = None) -> list[str]:
     """--hold, the detached child: the cause, then alive for as long as a thread of the cause's has work to do.
 
     `report` tells the --cause that started it whether the cause landed, once: when `cause` returns or raises, or
-    when it has run `grace` seconds without either. A failure after that is in the log and not the report.
+    for a cause that is a loop, when it has run `grace` seconds without either (the scenario's LANDED_AFTER_SECONDS
+    unless given). A finite cause has no grace, because its warm-up outlasts any, and a failure after the report is
+    in the log and not the report.
     """
+    if grace is None:
+        grace = getattr(scenario, "LANDED_AFTER_SECONDS", None)
     lock = threading.Lock()
     told: list[bool] = []
 
@@ -295,9 +298,10 @@ def hold(scenario: ModuleType, world: harness.World, *, sleep=time.sleep, clock=
                 told.append(True)
                 report(findings)
 
-    timer = threading.Timer(grace, tell, args=([],))
+    timer = threading.Timer(grace if grace is not None else 0, tell, args=([],))
     timer.daemon = True
-    timer.start()
+    if grace is not None:
+        timer.start()
     world.caused_at = time.time()
     try:
         scenario.cause(world)
