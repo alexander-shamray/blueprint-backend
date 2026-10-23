@@ -281,6 +281,8 @@ class NearMisses(unittest.TestCase):
         self.assertEqual(found("yaml-credential-value", "secretName: secretName"), [])
         # A count, YAML 1.1's other booleans, and an annotation in a language that shares the shape.
         self.assertEqual(found("yaml-credential-value", "tokenTtlSeconds: 3600"), [])
+        # A longer all-numeric value under a credential name is a PIN or a numeric password, and is read.
+        self.assertEqual(found("yaml-credential-value", "password: 12345678"), ["12345678"])
         self.assertEqual(found("yaml-credential-value", "requireToken: yes"), [])
         self.assertEqual(found("yaml-credential-value", "    client_secret: str"), [])
         # A C# named argument ends in a parenthesis, a comma or a semicolon, which no YAML value does.
@@ -344,7 +346,7 @@ class Values(unittest.TestCase):
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD}"), "")
         # An error message and an alternative are not defaults, so neither is judged as one.
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD:?Tr0ub4dor required}"), "")
-        self.assertEqual(secret_scan.literal("${SQL_PASSWORD:+Tr0ub4dor}"), "")
+        self.assertEqual(secret_scan.literal("${SQL_PASSWORD:+Tr0ub4dor}"), "Tr0ub4dor")
 
     def test_a_nested_default_is_unwrapped(self):
         self.assertEqual(secret_scan.literal("${A:-${B:-Tr0ub4dor}}"), "Tr0ub4dor")

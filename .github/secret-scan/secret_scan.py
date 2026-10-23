@@ -106,7 +106,7 @@ REFERENCE = re.compile(
 # value, not against writing it down. So the wrapper is peeled and the default
 # judged, and Section 14.1's local-development defaults reach the allow-list as
 # decisions with reasons.
-DEFAULTED_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:?[-=](.*)\}$", re.S)
+DEFAULTED_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:?[-=+](.*)\}$", re.S)
 
 # Characters a mask is made of. A value composed only of these carries nothing.
 MASK_CHARS = "*xX#.…_- \t"
@@ -327,7 +327,7 @@ RULES: list[Rule] = [
         "yaml-credential-value",
         "a credential-shaped YAML key is given an unquoted literal",
         rf"^[ \t]*(?:-[ \t]+)?(?P<name>{CREDENTIAL_NAME})[ \t]*:[ \t]+"
-        r"(?!(?:true|false|null|yes|no|on|off|~|[0-9][0-9._]*"
+        r"(?!(?:true|false|null|yes|no|on|off|~|[0-9]{1,5}(?:\.[0-9]+)?"
         r"|str|string|int|integer|bool|boolean|float|number|any|object)(?:[ \t]+#.*)?[ \t]*$)"
         r"(?P<value>[^\s\"'()\[\]{}|>&*!%@`#,;][^\s\"'();,]*)(?:[ \t]+#.*)?[ \t]*$",
         group="value",
