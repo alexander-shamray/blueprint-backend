@@ -36,10 +36,23 @@ because a prefix of one page and a complete list of one page read alike.
 every page. A cross-repository reference is refused by name, because every
 issue this repository tracks lives in it.
 
+## The Dependabot description
+
+Dependabot copies the upstream release notes into its description, inside
+`<details>`, and a note there reads "Fixes #7565" about the upstream
+repository. The gate would refuse the pull request, and Dependabot writes the
+description again on every update, so a hand edit does not last. The
+description's `<details>` blocks are therefore not read for unresolvable
+keywords, and only when `author` is the Dependabot bot. Commits and every
+other author are read whole, because the exemption is for text this repository
+did not write. `closingIssuesReferences` is still compared in full, so a
+keyword GitHub links in this repository is still caught.
+
 ## What it reads
 
 One JSON document on stdin — the pull request's number, URL, body, commits,
-closing references and head, each one of `REQUIRED_FIELDS`; the repository
+closing references and head, each one of `REQUIRED_FIELDS`, and its `author`,
+which is optional and read only for the exemption above; the repository
 is read from the URL — fetched by the workflow, so the deciding is
 testable without a network. `docs/testing.md` has the live invocation.
 

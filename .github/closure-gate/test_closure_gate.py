@@ -25,6 +25,7 @@ def payload(
     number: int = 999,
     url: str | None = None,
     head_ref_oid: str | None = None,
+    author: dict | None = None,
 ) -> dict:
     commits = [
         {"oid": oid(index), "messageHeadline": message.split("\n")[0],
@@ -41,6 +42,7 @@ def payload(
         # A test wanting a stale read says so by passing something else.
         "headRefOid": head_ref_oid if head_ref_oid is not None
         else (commits[-1]["oid"] if commits else oid(0)),
+        "author": author if author is not None else {"is_bot": False, "login": "alexander-shamray"},
     }
 
 
@@ -372,6 +374,48 @@ class FailsClosed(unittest.TestCase):
             commit_messages=("fix: a\n\nCloses elsewhere/repo#5",),
         ))
         self.assertTrue(any("elsewhere/repo#5" in problem for problem in problems), problems)
+
+
+class DependabotDescription(unittest.TestCase):
+    NOTES = (
+        "Updated a from 1 to 2.\n\n<details>\n<summary>Release notes</summary>\n\n"
+        "* Fix a range check - Fixes #​7565 #7566\n\n</details>\n"
+    )
+    DEPENDABOT = {"is_bot": True, "login": "app/dependabot"}
+
+    def test_a_note_in_the_release_notes_is_not_read(self):
+        self.assertEqual(check(payload(body=self.NOTES, author=self.DEPENDABOT)), [])
+
+    def test_the_same_note_is_a_problem_for_any_other_author(self):
+        problems = check(payload(body=self.NOTES))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("7565", problems[0])
+
+    def test_a_human_cannot_borrow_the_login(self):
+        human = {"is_bot": False, "login": "app/dependabot"}
+        self.assertEqual(len(check(payload(body=self.NOTES, author=human))), 1)
+
+    def test_a_keyword_outside_the_details_block_is_still_read(self):
+        problems = check(payload(body=self.NOTES + "\nFixes elsewhere/repo#5\n", author=self.DEPENDABOT))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("elsewhere/repo#5", problems[0])
+
+    def test_a_commit_keyword_is_read_whatever_the_author(self):
+        problems = check(payload(
+            body=self.NOTES,
+            commit_messages=("chore: bump\n\nFixes elsewhere/repo#5",),
+            author=self.DEPENDABOT,
+        ))
+        self.assertTrue(any("elsewhere/repo#5" in problem for problem in problems), problems)
+
+    def test_a_link_github_makes_is_still_compared(self):
+        problems = check(payload(body=self.NOTES, linked=(12,), author=self.DEPENDABOT))
+        self.assertTrue(any("#12" in problem for problem in problems), problems)
+
+    def test_a_payload_without_author_is_read_whole(self):
+        legacy = payload(body=self.NOTES)
+        del legacy["author"]
+        self.assertEqual(len(check(legacy)), 1)
 
 
 if __name__ == "__main__":

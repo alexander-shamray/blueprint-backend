@@ -51,6 +51,12 @@ TABLE_ROW = re.compile(
 
 ISSUE_NUMBER = re.compile(r"#(\d+)\b")
 
+# Dependabot copies the upstream release notes into its description, inside
+# `<details>`, and a note there can carry a closing keyword about the upstream
+# repository. The README's *The Dependabot description* owns the argument.
+DEPENDABOT = "app/dependabot"
+DETAILS = re.compile(r"<details>.*?</details>", re.IGNORECASE | re.DOTALL)
+
 REQUIRED_FIELDS = ("number", "url", "body", "commits", "closingIssuesReferences", "headRefOid")
 
 # One page of `gh pr view`. The commit list is not preloaded, so a list this
@@ -208,7 +214,11 @@ def check(payload: dict) -> list[str]:
     # description *closes* is `closingIssuesReferences`, which is GitHub's own
     # answer rather than this file's, and there is no reason to prefer a second
     # opinion to the authority.
-    _, body_unreadable = closing_references(payload["body"] or "", repository)
+    body = payload["body"] or ""
+    author = payload.get("author") or {}
+    if author.get("is_bot") and author.get("login") == DEPENDABOT:
+        body = DETAILS.sub("", body)
+    _, body_unreadable = closing_references(body, repository)
     for phrase in body_unreadable:
         problems.append(
             f"the description carries `{phrase}`, which is keyword-shaped and "

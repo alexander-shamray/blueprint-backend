@@ -130,5 +130,5 @@ jobs:
         run: |
           gh pr view "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
-            --json number,url,body,commits,closingIssuesReferences,headRefOid |
+            --json number,url,body,commits,closingIssuesReferences,headRefOid,author |
             python "$RUNNER_TEMP/closure-gate/closure_gate.py"

@@ -209,7 +209,7 @@ gate asserts, and why it needs both, is
 runs take a number and a `gh` session that CI has and a checkout does not:
 
 ```bash
-gh pr view <n> --json number,url,body,commits,closingIssuesReferences,headRefOid |
+gh pr view <n> --json number,url,body,commits,closingIssuesReferences,headRefOid,author |
     py -3.12 .github/closure-gate/closure_gate.py
 
 gh api "repos/{owner}/{repo}/pulls/<n>/files" --paginate --jq '.[] | {filename, previous_filename, status}' |
