@@ -47,6 +47,26 @@ public sealed class MessagingRegistrationTests
                 : [new KeyValuePair<string, string?>("ConnectionStrings:RabbitMq", rabbitConnectionString)])
             .Build();
 
+    /// <summary>The events the production registration adds an <see cref="IntegrationEventConsumer{T}"/> for, less
+    /// the erasure pair: what the projection really consumes, read from the registrations and not from a list.</summary>
+    public static Type[] RegisteredProjectionEvents()
+    {
+        ServiceCollection services = new();
+
+        services.AddMassTransitMessaging(Configuration());
+
+        return
+        [
+            .. services
+                .SelectMany(d => new[] { d.ServiceType, d.ImplementationType })
+                .OfType<Type>()
+                .Where(t => t.IsGenericType && t.GetGenericTypeDefinition() == typeof(IntegrationEventConsumer<>))
+                .Select(t => t.GenericTypeArguments[0])
+                .Distinct()
+                .Except(Erasure)
+        ];
+    }
+
     public sealed record ProbeMessage(Guid Id);
 
     public sealed class ProbeConsumer : IConsumer<ProbeMessage>
