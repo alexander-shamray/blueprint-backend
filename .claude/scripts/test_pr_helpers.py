@@ -206,6 +206,18 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
                 self.assertNotEqual(0, r.returncode, r.stderr)
                 self.assertIn("did not answer within 1 s", r.stderr)
 
+    def test_the_closure_input_asks_for_every_field_the_workflow_does(self):
+        # The gate reads `author` for the Dependabot exemption, and a helper
+        # that left it out would refuse here what CI passes.
+        fields = re.compile(r"--json\s+([\w,]+)")
+        helper = fields.search((SCRIPTS / "pr-closure-input.sh").read_text(encoding="utf-8"))
+        workflow = fields.search(
+            (SCRIPTS.parent.parent / ".github" / "workflows" / "closure-gate.yml").read_text(encoding="utf-8")
+        )
+        self.assertIsNotNone(helper)
+        self.assertIsNotNone(workflow)
+        self.assertEqual(set(workflow.group(1).split(",")), set(helper.group(1).split(",")))
+
     def test_no_pr_helper_calls_gh_past_the_bound(self):
         # The case above proves the first read of each helper is bounded; a
         # second read spelt `gh` directly would pass it, so every call line
