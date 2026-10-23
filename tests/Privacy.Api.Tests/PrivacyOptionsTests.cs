@@ -1,5 +1,4 @@
 using Common.TestSupport;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Privacy.Application.ErasureRequests;
