@@ -2,7 +2,7 @@ using System.Diagnostics.Metrics;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>The inbox filter's own count of the redeliveries it dropped, the signal that a replay was consumed.</summary>
+/// <summary>The inbox filter's own count of the redeliveries it dropped, the signal that a replay ran.</summary>
 internal static class InboxSuppression
 {
     /// <summary>Releases <paramref name="suppressed"/> for each drop the inbox counts, as §9.5's filter does before it
