@@ -46,8 +46,9 @@ request, and Dependabot writes the description again on every update, so a
 hand edit does not last. The description's `<details>` blocks are therefore
 not read for unresolvable keywords, and only when `author` is the Dependabot
 bot. Commits and every other author are read whole, because the exemption is
-for text this repository did not write. `closingIssuesReferences` is still compared in full, so a
-keyword GitHub links in this repository is still caught.
+for text this repository did not write. `closingIssuesReferences` is still
+compared in full, so a keyword GitHub links in this repository is still
+caught.
 
 ## What it reads
 
