@@ -370,7 +370,7 @@ class ReferenceServiceTests(unittest.TestCase):
                     if path.startswith("deploy/compose/services/") and path.endswith(".yml"):
                         with self.subTest(source=source.name, block=heading.group(1), entry=path):
                             self.assertEqual(path, unit)
-        self.assertGreaterEqual(blocks, 6, "no rendered block was found, so nothing was checked")
+        self.assertGreaterEqual(blocks, 6, "fewer rendered blocks were found than the real allow-lists carry")
 
     def test_a_block_before_the_bff_does_not_take_the_bffs_with_it(self):
         """ENV_MARKER skips "The BFF's", and Ordering's block sits directly above it."""
