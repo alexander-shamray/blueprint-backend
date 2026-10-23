@@ -778,8 +778,17 @@ foreach (Type type in provider.GetRequiredService<MessageTypeMap>().StageableDom
     JsonSerializer
         .Serialize(read, type, options)
         .ShouldBe(json, $"{type.Name} cannot survive the Local lane");
+
+    // And against the sample, member by member: a loss on write is in both strings above.
+    MemberWalk.Of(read).ShouldBe(MemberWalk.Of(sample), $"{type.Name} lost a member on the Local lane");
 }
 ```
+
+Re-serialising alone misses a loss on write — a converter that rounds an amount
+or omits an optional member, a `JsonIgnore` — because the lost value is absent
+from the first string and the second alike. `MemberWalk` (Common.TestSupport)
+lists every public property and field of both values, collections by element,
+so the read object is held to the sample itself.
 
 `DomainEventSamples.Create` is the same deliberate obstacle `ContractSamples` is
 (§12.6): a new domain event with no sample fails here instead of being skipped,
