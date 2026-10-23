@@ -2130,6 +2130,25 @@ class RefusesToRun(unittest.TestCase):
                 self.assertIn(COMPOSE_INDEX, str(raised.exception))
                 self.assertIn("is not an entry", str(raised.exception))
 
+    def test_a_comment_at_the_left_margin_or_beside_the_key_leaves_every_unit_visible(self):
+        # Both are legal YAML, and Compose still includes every entry after them, so the port check must still see
+        # the payments unit: it refuses its port rather than rendering past it.
+        plain = "  - services/payments.yml"
+        for case, old, new in (
+            ("a comment at column 0", plain, "# the payments unit\n" + plain),
+            ("a comment beside the key", "\ninclude:\n", "\ninclude:  # the units\n"),
+        ):
+            with self.subTest(case), tempfile.TemporaryDirectory() as directory:
+                root = template_copy(Path(directory))
+                index = root / COMPOSE_INDEX
+                text = index.read_bytes().decode("utf-8").replace("\r\n", "\n")
+                self.assertIn(old, text, "the substitution would miss")
+                index.write_bytes(text.replace(old, new, 1).encode("utf-8"))
+
+                with self.assertRaises(ScaffoldError) as raised:
+                    render(repo_root=root, port=5104)
+                self.assertIn("port 5104 is already published", str(raised.exception))
+
     def test_a_template_whose_api_block_is_not_bound_to_loopback(self):
         # The other half of the loopback rule, which a render-and-read
         # assertion cannot reach: the prefix is required of the template, so
