@@ -2,15 +2,18 @@
 
 **Decision.** Shipping's own erasure sends two statements on the unit's
 transaction, not one batch: the first empties the `ErasedUnder` of each
-shipment whose address row names the subject, the second deletes those address
-rows. The emptying runs first, while the address row still names the order's
-customer, and both statements leave an order placed under the request being
-run, as [ADR-140](ADR-140-shippings-erasure-keeps-an-order-placed-under-its-request-1275-amending-adr-052.md)
-decides. The statements stay separate: the unit is what makes them one erasure.
+shipment whose address row names the subject, the second deletes the
+subject's address rows. The emptying runs first, while the address row still
+names the order's customer, and both statements leave an order placed under
+the request being run, as [ADR-140](ADR-140-shippings-erasure-keeps-an-order-placed-under-its-request-1275-amending-adr-052.md)
+decides. The statements stay separate: the unit is what makes them one erasure,
+and an address row saved between them is deleted by the second while its
+shipment keeps its list, the case ADR-103 already allows for a shipment with no
+address row when the emptying runs.
 **Why.** [ADR-103](ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md)
 says the emptying runs in the same statement batch and unit as the address
-delete. The code sends two commands, and the word batch is the only part of
-that sentence the code does not honour. What the rule rests on holds: both
+delete. The code sends two commands, and the word batch is what
+the code does not honour. What the rule rests on holds: both
 commit or neither does, and the emptying cannot follow the delete, because
 once the address row is gone nothing joins the shipment to the subject. Merging
 the two into one batch would make the word true and change nothing the rule
