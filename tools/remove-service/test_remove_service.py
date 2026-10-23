@@ -354,6 +354,24 @@ class ReferenceServiceTests(unittest.TestCase):
         self.assertEqual([line for line in kept if line not in after], [])
         self.assertFalse([line for line in after if line.startswith("deploy/compose/services/notifications.yml |")])
 
+    def test_no_rendered_block_in_the_real_allow_lists_holds_another_units_entries(self):
+        """A block is cut whole on removal, so an entry for another service's unit inside it would go too."""
+        blocks = 0
+        for source in sorted((REPO_ROOT / remove_service.SCAN_ALLOW_LIST).glob("*.txt")):
+            lines = source.read_text(encoding="utf-8").split("\n")
+            for at, line in enumerate(lines):
+                heading = remove_service.RENDERED_HEADING.fullmatch(line)
+                if not heading:
+                    continue
+                blocks += 1
+                unit = f"deploy/compose/services/{heading.group(1).lower()}.yml"
+                for entry in lines[at:remove_service.block_end(lines, at)]:
+                    path = entry.split("|")[0].strip()
+                    if path.startswith("deploy/compose/services/") and path.endswith(".yml"):
+                        with self.subTest(source=source.name, block=heading.group(1), entry=path):
+                            self.assertEqual(path, unit)
+        self.assertGreaterEqual(blocks, 6, "no rendered block was found, so nothing was checked")
+
     def test_a_block_before_the_bff_does_not_take_the_bffs_with_it(self):
         """ENV_MARKER skips "The BFF's", and Ordering's block sits directly above it."""
         rendered = remove_service.plan(REPO_ROOT, "Ordering")
