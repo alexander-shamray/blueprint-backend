@@ -1,48 +1,9 @@
 #!/usr/bin/env python3
 """What a pull request says it closes must match what merging it will close.
 
-It says it three times, each handled separately and none compared with the
-others except by this gate:
-
-1. The `| Closes |` row in the house body form, which GitHub's linker does not
-   read.
-2. `closingIssuesReferences`, GitHub's parse of the pull request body.
-3. A closing keyword in a commit body, honoured on merge whatever the
-   description says, and not editable.
-
-A table pipe between `Closes` and the reference leaves GitHub no
-keyword-reference pair, so a row alone closes nothing; and `gh pr view --json
-closingIssuesReferences` reports the body only, so a commit keyword the
-description omits closes an issue from a place no reviewer looks.
-
-What must agree is what the merge does, `closingIssuesReferences` with the
-commit keywords, and what the pull request says, in the table and the
-description. An issue the description closes and no commit repeats is the
-ordinary case, not a disagreement: comparing that direction would make a commit
-keyword mandatory, a rule nothing in this repository states.
-
-The commit half is this file's regex, so a regex that matches too little is a
-fail-open: a keyword it drops from the commits, and that the description also
-omits, is missing from both sides, so the comparison agrees. The parser is
-therefore literal, matching inside backticks and quoted prose as GitHub's
-linker does, and a keyword-shaped token it cannot resolve is a problem rather
-than a skip.
-
-`gh pr view --json commits` returns one page and a prefix looks complete, so a
-list at or above `GH_PAGE_SIZE` is refused rather than judged.
-`closingIssuesReferences` gets no such guard because `gh` preloads it through
-every page, and a guard there would refuse a correct pull request.
-
-Stdlib only, on the licence gate's terms. The deciding takes JSON on stdin and
-the fetching is one `gh` call in the workflow, `deploy/canary/canary.py`'s
-split:
-
+The README beside this file owns the argument. It takes JSON on stdin:
     gh pr view <n> --json number,url,body,commits,closingIssuesReferences,headRefOid |
         py -3.12 .github/closure-gate/closure_gate.py
-
-A cross-repository `Closes owner/other#<n>` is refused by name: every issue this
-repository tracks lives in it, so that form is a mistake or an unconsidered
-case.
 """
 
 from __future__ import annotations
