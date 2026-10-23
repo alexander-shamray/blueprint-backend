@@ -956,7 +956,7 @@ class ShardTests(Fixture):
             "Payments.*",
         ):
             with self.subTest(namespace=namespace):
-                # Every later shard repeats the string, as the issue's scenario does, so only the term's shape can fail.
+                # Every later shard repeats the string, so only the term's shape can fail.
                 self.write(WORKFLOW + SHARDS.replace("~Payments.", f"~{namespace}"))
 
                 problems = pipeline_gate.check_shards()
