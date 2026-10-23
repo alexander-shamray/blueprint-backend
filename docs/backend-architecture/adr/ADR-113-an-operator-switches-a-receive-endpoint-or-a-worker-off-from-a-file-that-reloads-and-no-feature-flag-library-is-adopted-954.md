@@ -61,13 +61,13 @@ to the bus check; the `operator-switches` check still reports it. An endpoint
 switched off after the bus was configured is still stopped as this record
 decides.
 
----
-
-[Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
-
 **Amended by
 [ADR-147](ADR-147-a-scalar-switches-off-refuses-the-host-at-start-and-is-reported-degraded-on-a-reload-1291-amending-adr-113-and-adr-115.md)**:
 a single value at `Switches:Off` is refused when the host registers the switch,
 and reported Degraded by the `operator-switches` check when a reload brings one
 in, since a list binds only from indexed keys and a scalar would switch nothing
 off. This record is otherwise unchanged.
+
+---
+
+[Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
