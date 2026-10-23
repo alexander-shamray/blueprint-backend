@@ -87,6 +87,13 @@ internal sealed class PublisherOutboxes(string serverConnectionString)
         }
     }
 
+    /// <summary>Rewrites every row's type to a name, as a row stored before a rename is (§9.4).</summary>
+    public async Task StoreUnderAsync(Publisher publisher, string name)
+    {
+        await using SqlConnection connection = new(ConnectionString);
+        await connection.ExecuteAsync($"UPDATE {publisher.Outbox} SET MessageType = @name;", new { name });
+    }
+
     /// <summary>Rewrites every payload in one publisher's outbox to JSON that is no event at all.</summary>
     public async Task CorruptPayloadsAsync(Publisher publisher)
     {

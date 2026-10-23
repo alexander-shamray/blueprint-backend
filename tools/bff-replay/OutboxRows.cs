@@ -14,6 +14,9 @@ public sealed record OutboxRow(
     string Payload,
     DateTimeOffset OccurredAt);
 
+/// <summary>A stored <c>MessageType</c> and how many processed Broker-lane rows carry it.</summary>
+public sealed record StoredName(string Name, int Total);
+
 /// <summary>Step four of the rebuild: a publisher's processed Broker-lane rows of its share of the eight.</summary>
 public static class OutboxRows
 {
@@ -45,6 +48,24 @@ public static class OutboxRows
             AND {nameof(OutboxMessage.MessageType)} IN @Names
         ORDER BY {nameof(OutboxMessage.OccurredAt)}, {nameof(OutboxMessage.Id)};
         """;
+
+    /// <summary>Every name the window's rows were stored under, because a renamed type's old name selects nothing.</summary>
+    public static string NamesSql(Publisher publisher) =>
+        $"""
+        SELECT {nameof(OutboxMessage.MessageType)} AS Name, COUNT(*) AS Total
+        FROM {publisher.Outbox}
+        WHERE {nameof(OutboxMessage.ProcessedAt)} <= @Cutoff
+            AND {nameof(OutboxMessage.Lane)} = @Lane
+        GROUP BY {nameof(OutboxMessage.MessageType)};
+        """;
+
+    public static async Task<IReadOnlyList<StoredName>> NamesAsync(
+        SqlConnection connection,
+        Publisher publisher,
+        DateTimeOffset cutoff) =>
+        [.. await connection.QueryAsync<StoredName>(
+            NamesSql(publisher),
+            new { Lane = nameof(OutboxLane.Broker), Cutoff = cutoff })];
 
     /// <summary>Unbuffered, since a window is whatever the publisher kept, not this process's to hold.</summary>
     public static IAsyncEnumerable<OutboxRow> ReadAsync(

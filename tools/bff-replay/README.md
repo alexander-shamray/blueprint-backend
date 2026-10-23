@@ -138,6 +138,17 @@ Before it deletes or sends anything it opens the BFF's database and all
 four outboxes and waits for the broker to answer, so an unreachable
 connection stops a repair or a `--reset` with the projection untouched.
 
+**A rename in flight is refused for a reset and reported for a repair.** The
+tool resolves names from the contracts alone, so a row stored under a type's
+name from before a rename ([§9.4](../../docs/backend-architecture/09-messaging.md))
+is one it cannot select or send. Before anything is deleted it reads every
+name the window's rows carry; a name the contracts do not carry stops a
+`--reset` and names the publisher, the name and the row count, because the
+reset would delete facts only those rows could restore. A repair deletes
+nothing, so it runs and prints the same names as not replayed. The refusal
+lifts when retention purges the rows; a rebuild wanted sooner is the BFF
+database's backup, restored.
+
 ## Reading what it prints
 
 One line per publisher as it finishes — how many events it sent, and the
