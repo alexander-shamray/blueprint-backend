@@ -167,8 +167,8 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     // container cannot move a reading of a few hundred milliseconds.
     private Task AgeOnServerClockAsync(OutboxMessage row, int milliseconds) =>
         fixture.ExecuteAsync(
-            "UPDATE shipping.OutboxMessages SET OccurredAt = DATEADD(millisecond, -{0}, SYSDATETIMEOFFSET()) "
-            + "WHERE MessageId = {1};",
+            "UPDATE shipping.OutboxMessages SET OccurredAt = DATEADD(millisecond, -{0}, SYSDATETIMEOFFSET()) " +
+            "WHERE MessageId = {1};",
             milliseconds,
             row.MessageId);
 }
