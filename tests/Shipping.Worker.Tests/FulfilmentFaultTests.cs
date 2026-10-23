@@ -1,5 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Common.Infrastructure.Outbox;
+using Common.TestSupport;
 using Grpc.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Shipping.Application.Carrier;
@@ -56,15 +58,44 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
         DateTimeOffset before = await _steps.DatabaseNowAsync();
 
         (await PassAsync()).ShouldBe(0);
+        DateTimeOffset after = await _steps.DatabaseNowAsync();
 
         (await _steps.StatusAsync(order)).ShouldBe("Pending");
         (await _steps.AttemptsAsync(order)).ShouldBe(1);
-        (await _steps.NextAttemptAtAsync(order)).ShouldBeGreaterThanOrEqualTo(
-            before.AddSeconds(5),
-            "the dispatcher's ladder is 2^min(Attempts, 8) x 5 s, so the first backoff is at least five seconds");
+        await AssertAttemptDueWithinAsync(order, before, after, attemptsBefore: 0);
         FulfilmentSteps.BookingCalls(_carrier).ShouldBe(
             CarrierHop.MaxRetryAttempts + 1,
             "the pipeline retries a 503 inside the one call");
+    }
+
+    [Fact]
+    public async Task A_row_past_the_ladders_cap_waits_the_capped_step_and_no_longer()
+    {
+        Guid order = await ConfirmAsync("SIM-DOWN");
+        int attemptsBefore = OutboxDispatcher.BackoffAttemptCap + 3;
+        await _steps.SetAttemptsAsync(order, attemptsBefore);
+
+        DateTimeOffset before = await _steps.DatabaseNowAsync();
+        (await PassAsync()).ShouldBe(0);
+        DateTimeOffset after = await _steps.DatabaseNowAsync();
+
+        (await _steps.AttemptsAsync(order)).ShouldBe(attemptsBefore + 1);
+        await AssertAttemptDueWithinAsync(order, before, after, attemptsBefore);
+    }
+
+    // The dispatcher's ladder (ADR-054), held at both ends: a unit slipped to minutes, a dropped cap or a wrong
+    // multiplier moves the due time past the top, and a dropped step moves it under the bottom.
+    private async Task AssertAttemptDueWithinAsync(
+        Guid order,
+        DateTimeOffset before,
+        DateTimeOffset after,
+        int attemptsBefore)
+    {
+        TimeSpan wait = OutboxBackoffRule.Ladder(attemptsBefore);
+        DateTimeOffset due = await _steps.NextAttemptAtAsync(order);
+
+        due.ShouldBeGreaterThanOrEqualTo(before + wait, "a failed pass is never due sooner than the ladder");
+        due.ShouldBeLessThanOrEqualTo(after + wait, "nor later than the ladder, however far up it is");
     }
 
     [Fact]
