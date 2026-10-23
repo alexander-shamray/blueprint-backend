@@ -642,7 +642,9 @@ def check_outbox_metrics_per_service() -> None:
         for source in service.rglob("*.cs"):
             if "/obj/" in source.as_posix() or "/bin/" in source.as_posix():
                 continue
-            body = read(source)
+            # Comments blanked, as for the instruments: a commented-out
+            # registration is not one, and a mention in prose is not a host.
+            body = strip_comments(read(source))
             if "AddHostedService<OutboxDispatcher>" in body:
                 dispatching.add(service.name)
             if "AddSingleton<OutboxMetrics>" in body:
