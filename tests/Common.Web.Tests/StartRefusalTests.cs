@@ -61,6 +61,29 @@ public class StartRefusalTests
     }
 
     [Fact]
+    public async Task An_awaited_start_is_asked_again_past_the_race_and_returns_the_reason()
+    {
+        int starts = 0;
+        InvalidOperationException reason = new("a duplicate persisted name");
+
+        Exception refusal = await StartRefusal.AskAsync(
+            () => new Host(),
+            _ => ++starts < 3 ? Task.FromException(Race()) : Task.FromException(reason));
+
+        refusal.ShouldBeSameAs(reason);
+        starts.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task An_awaited_start_that_succeeds_is_not_a_refusal()
+    {
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
+            () => StartRefusal.AskAsync(() => new Host(), _ => Task.CompletedTask));
+
+        thrown.Message.ShouldContain("refused nothing");
+    }
+
+    [Fact]
     public void Every_host_asked_is_disposed()
     {
         List<Host> hosts = [];
