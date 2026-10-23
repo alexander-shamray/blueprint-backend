@@ -409,6 +409,51 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         (await fixture.InboxAsync()).Count.ShouldBe(1);
     }
 
+    // The name OrderPlaced was stored under before a section 9.4 rename, which the contracts' map does not carry.
+    private const string OldName = "Ordering.Domain.Orders.Events.OrderPlaced";
+
+    [Fact]
+    public async Task A_row_stored_under_a_name_the_contracts_do_not_carry_stops_a_reset_before_anything_is_deleted()
+    {
+        Guid order = Guid.CreateVersion7();
+        OrderPlaced placed = OrderEvents.Placed(order, Guid.CreateVersion7(), At);
+        await fixture.DeliverAsync(placed);
+        await _outboxes.StageAsync(Named("Ordering"), Processed, placed);
+        await _outboxes.StoreUnderAsync(Named("Ordering"), OldName);
+
+        InvalidOperationException refused = await Should.ThrowAsync<InvalidOperationException>(() =>
+            Replay.RunAsync(
+                Settings(),
+                reset: true,
+                TextWriter.Null,
+                Replay.BrokerDeadline,
+                TestContext.Current.CancellationToken));
+
+        refused.Message.ShouldContain(OldName);
+        refused.Message.ShouldContain("Ordering");
+        (await fixture.OrderAsync(order)).ShouldNotBeNull();
+        (await fixture.InboxAsync()).Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_repair_says_which_stored_names_it_could_not_replay()
+    {
+        OrderPlaced placed = OrderEvents.Placed(Guid.CreateVersion7(), Guid.CreateVersion7(), At);
+        await _outboxes.StageAsync(Named("Ordering"), Processed, placed);
+        await _outboxes.StoreUnderAsync(Named("Ordering"), OldName);
+
+        StringWriter output = new();
+        ReplayReport report = await Replay.RunAsync(
+            Settings(),
+            reset: false,
+            output,
+            Replay.BrokerDeadline,
+            TestContext.Current.CancellationToken);
+
+        report.SentMessageIds.ShouldBeEmpty();
+        output.ToString().ShouldContain($"Ordering: {OldName} (1 row(s))");
+    }
+
     // The account's name with a key it was never given, spelt as a URI so no connection string is written out.
     private static string WithKey(string address, string key)
     {

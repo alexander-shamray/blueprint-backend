@@ -28,6 +28,7 @@ public static class Replay
         OutboxJson json = new([]);
         List<SqlConnection> sources = [];
         List<DateTimeOffset> cutoffs = [];
+        List<string> unread = [];
         Uri broker = new(settings.Broker);
         IBusControl bus = Bus.Factory.CreateUsingRabbitMq(cfg => cfg.Host(broker, host =>
         {
@@ -59,6 +60,27 @@ public static class Replay
                 cutoffs.Add(
                     await connection.ExecuteScalarAsync<DateTimeOffset>(
                         new CommandDefinition(OutboxRows.CutoffSql, cancellationToken: ct)));
+
+                // The map is the contracts' alone, so a name it cannot resolve is one the replay would skip unseen.
+                foreach (StoredName stored in await OutboxRows.NamesAsync(connection, source.Publisher, cutoffs[^1]))
+                {
+                    if (!Resolves(types, stored.Name))
+                        unread.Add($"{source.Publisher.Name}: {stored.Name} ({stored.Total} row(s))");
+                }
+            }
+
+            if (unread.Count > 0)
+            {
+                string names = string.Join("; ", unread);
+                if (reset)
+                {
+                    throw new InvalidOperationException(
+                        "The window holds rows stored under names the contracts do not carry, so a reset would " +
+                        $"delete projected facts the replay cannot send: {names}. Nothing was deleted or sent.");
+                }
+
+                await output.WriteLineAsync(
+                    $"Not replayed, stored under names the contracts do not carry: {names}.");
             }
 
             started = await StartAsync(bus, settings.Broker, brokerDeadline, ct);
@@ -135,6 +157,19 @@ public static class Replay
 
             foreach (SqlConnection connection in sources)
                 await connection.DisposeAsync();
+        }
+    }
+
+    private static bool Resolves(MessageTypeMap types, string name)
+    {
+        try
+        {
+            types.Resolve(name);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
         }
     }
 
