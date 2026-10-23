@@ -150,7 +150,7 @@ class Report:
         self.session = session
         self.groups: dict[tuple[str, str], Usage] = {}
         self.by_model: dict[tuple[str, str, str], Usage] = {}
-        self.counted: dict[str, tuple[Usage, Usage, int]] = {}
+        self.counted: dict[str, tuple[list[Usage], int]] = {}
         self.skipped = 0
         self.span: list[str] = []
         self.spawns: list[dict] = []
@@ -163,8 +163,9 @@ class Report:
         self.printed: dict[str, str] = {}
         self.trees: set[str] = set()
 
-    def add(self, command: str, agent: str, entry: dict, context: str, woken: bool = False) -> dict | None:
-        """Count a response once, and return its usage when it was counted."""
+    def add(self, command: str, agent: str, entry: dict, context: str, woken: bool = False,
+            into: Usage | None = None, into_context: str = "") -> dict | None:
+        """Count a response once, and return its usage when it was counted; `into` is counted with it."""
         message = entry.get("message")
         if entry.get("type") != "assistant" or not isinstance(message, dict):
             return None
@@ -179,25 +180,28 @@ class Report:
         if key in self.counted:
             self.grow(key, usage)
             return None
-        group = self.groups.setdefault((command, agent), Usage())
-        group.add(usage, context, woken)
         model = text_field(message, "model") or UNKNOWN_MODEL
-        by_model = self.by_model.setdefault((command, agent, model), Usage())
-        by_model.add(usage, context, woken)
+        rows = [self.groups.setdefault((command, agent), Usage()),
+                self.by_model.setdefault((command, agent, model), Usage())]
+        for row in rows:
+            row.add(usage, context, woken)
+        if into is not None:
+            into.add(usage, into_context, woken)
+            rows.append(into)
         if key:
-            self.counted[key] = (group, by_model, usage.get("output_tokens") or 0)
+            self.counted[key] = (rows, usage.get("output_tokens") or 0)
         if day := str(entry.get("timestamp", ""))[:10]:
             self.span = [min(self.span[0], day), max(self.span[1], day)] if self.span else [day, day]
         return usage
 
     def grow(self, key: str, usage: dict) -> None:
-        """Raise a counted response's output to a later line's count, in the rows it was counted under."""
-        group, by_model, counted = self.counted[key]
+        """Raise a counted response's output to a later line's count, in every row it was counted under."""
+        rows, counted = self.counted[key]
         latest = usage.get("output_tokens") or 0
         if latest > counted:
-            group.output += latest - counted
-            by_model.output += latest - counted
-            self.counted[key] = (group, by_model, latest)
+            for row in rows:
+                row.output += latest - counted
+            self.counted[key] = (rows, latest)
 
     def read_project(self, project: Path, start: str = NO_COMMAND) -> None:
         for main in sorted(project.glob(glob.escape(self.session) + "*.jsonl")):
@@ -257,8 +261,7 @@ class Report:
             spawn = Usage()
             for entry in entries:
                 self.count_reads(entry, SUBAGENT, f"{session}/{agent_id}")
-                if counted := self.add(spawned_in, agent, entry, f"{session}/{agent_id}", after_wake):
-                    spawn.add(counted, agent_id, after_wake)
+                self.add(spawned_in, agent, entry, f"{session}/{agent_id}", after_wake, spawn, agent_id)
             if spawn.calls:
                 self.spawns.append({"command": spawned_in, "agent": agent, "started": started[:10],
                                     "description": text_field(meta, "description") or "", **spawn.row()})
