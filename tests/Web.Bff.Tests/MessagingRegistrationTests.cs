@@ -127,6 +127,11 @@ public sealed class MessagingRegistrationTests
                 d => d.ImplementationType == consumer || d.ServiceType == consumer,
                 $"{consumer.Name} is in the BFF's Consumes cell and has no AddConsumer");
         }
+
+        RegisteredProjectionEvents().ShouldBe(
+            Consumed,
+            ignoreOrder: true,
+            "a registered consumer outside the BFF's Consumes cell is bound by no test and read by no replay");
     }
 
     [Fact]
