@@ -2109,6 +2109,27 @@ class RefusesToRun(unittest.TestCase):
             self.assertEqual(
                 "services:\n  hand-written:\n", unit.read_text(encoding="utf-8"))
 
+    def test_an_include_line_the_scaffold_cannot_read_stops_it_rather_than_hiding_a_unit(self):
+        # A unit whose include line was dropped silently is invisible to the port check and to the guard against
+        # including it twice, so the render succeeds with two units on one host port.
+        plain = "  - services/payments.yml"
+        for case, line in (
+            ("a trailing comment", plain + "  # the payments unit"),
+            ("trailing whitespace", plain + " "),
+            ("the long form", "  - path: services/payments.yml"),
+        ):
+            with self.subTest(case), tempfile.TemporaryDirectory() as directory:
+                root = template_copy(Path(directory))
+                index = root / COMPOSE_INDEX
+                text = index.read_bytes().decode("utf-8")
+                self.assertIn(plain, text, "the substitution would miss")
+                index.write_bytes(text.replace(plain, line, 1).encode("utf-8"))
+
+                with self.assertRaises(ScaffoldError) as raised:
+                    render(repo_root=root, port=5104)
+                self.assertIn(COMPOSE_INDEX, str(raised.exception))
+                self.assertIn("is not an entry", str(raised.exception))
+
     def test_a_template_whose_api_block_is_not_bound_to_loopback(self):
         # The other half of the loopback rule, which a render-and-read
         # assertion cannot reach: the prefix is required of the template, so

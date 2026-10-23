@@ -992,11 +992,21 @@ def compose_included(repo_root: Path) -> list[tuple[int, str]]:
     file no line includes is not part of the model.
     """
     text, _ = read(repo_root, COMPOSE_INDEX)
-    entries = [
-        (number, match.group(1))
-        for number, line in enumerate(text.split("\n"))
-        if (match := INCLUDE_ENTRY.fullmatch(line))
-    ]
+    entries: list[tuple[int, str]] = []
+    listing = False
+    for number, line in enumerate(text.split("\n")):
+        if line.rstrip() == "include:":
+            listing = True
+        elif listing and line.strip() and not line.startswith(" "):
+            listing = False
+        elif (match := INCLUDE_ENTRY.fullmatch(line)) and listing:
+            entries.append((number, match.group(1)))
+        elif listing and line.strip() and not line.lstrip().startswith("#"):
+            # A comment, padding or the long form hides a unit from both checks that read this list.
+            raise ScaffoldError(
+                f"{COMPOSE_INDEX} line {number + 1} is under `include:` and is not an entry this script "
+                f"recognises (two spaces, a dash, a space, a path): {line!r}"
+            )
     if not entries:
         raise ScaffoldError(
             f"{COMPOSE_INDEX} declares no `include:` entry this script recognises "
