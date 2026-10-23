@@ -11,6 +11,11 @@ public class MemberWalkTests
 
     private sealed record Holder(Amount Total, string? Note, IReadOnlyList<Amount> Lines);
 
+    private sealed class Loop
+    {
+        public Loop Next => this;
+    }
+
     private sealed class WithField
     {
         public int Kept = 1;
@@ -45,6 +50,21 @@ public class MemberWalkTests
         Amount one = new(1m, "EUR");
 
         MemberWalk.Of(new Holder(one, null, [one, one])).ShouldNotBe(MemberWalk.Of(new Holder(one, null, [one])));
+    }
+
+    [Fact]
+    public void A_timestamp_truncated_to_whole_seconds_differs_from_the_original()
+    {
+        DateTimeOffset moment = new(2026, 8, 16, 12, 0, 0, 123, TimeSpan.Zero);
+
+        MemberWalk.Of(moment).ShouldNotBe(MemberWalk.Of(new DateTimeOffset(2026, 8, 16, 12, 0, 0, TimeSpan.Zero)));
+        MemberWalk.Of(moment).ShouldBe(MemberWalk.Of(new DateTimeOffset(2026, 8, 16, 12, 0, 0, 123, TimeSpan.Zero)));
+    }
+
+    [Fact]
+    public void A_value_that_reaches_itself_fails_naming_the_path_rather_than_overflowing_the_stack()
+    {
+        Should.Throw<InvalidOperationException>(() => MemberWalk.Of(new Loop())).Message.ShouldContain("a cycle");
     }
 
     [Fact]
