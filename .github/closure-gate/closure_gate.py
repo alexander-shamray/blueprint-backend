@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """What a pull request says it closes must match what merging it will close.
 
-The README beside this file owns the argument. It takes JSON on stdin:
-    gh pr view <n> --json number,url,body,commits,closingIssuesReferences,headRefOid |
-        py -3.12 .github/closure-gate/closure_gate.py
+The README beside this file owns the argument; docs/testing.md, the invocation.
 """
 
 from __future__ import annotations
