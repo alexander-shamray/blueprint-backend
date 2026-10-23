@@ -114,7 +114,10 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
                 TestContext.Current.CancellationToken);
 
             // The row is claimed and its delivery has not finished.
-            (await fixture.ProcessOutboxBatchAsync()).ShouldBe(
+            // Bounded: a lease that lets this pass claim the row too blocks it on the closed gate, and the finally
+            // below opens that gate, so the regression fails here and not at the job's timeout.
+            Task<int> concurrent = fixture.ProcessOutboxBatchAsync();
+            (await concurrent.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)).ShouldBe(
                 0,
                 "a leased row must be invisible to a concurrent pass");
 
