@@ -152,6 +152,7 @@ decision looks wrong.
 | **ADR-143** | [Privacy's migrator republishes the close of each request it may announce, on ADR-090's gate (#1300), amending ADR-090 and ADR-139](adr/ADR-143-privacys-migrator-republishes-the-close-of-each-request-it-may-announce-on-adr-090s-gate-1300-amending-adr-090-and-adr-139.md) |
 | **ADR-144** | [A receive endpoint switched off when its bus is configured is not configured until its switch is on (#1289), amending ADR-113](adr/ADR-144-a-receive-endpoint-switched-off-when-its-bus-is-configured-is-not-configured-until-its-switch-is-on-1289-amending-adr-113.md) |
 | **ADR-145** | [A receive endpoint off at start has its topology declared by a bus that only deploys it (#1360), amending ADR-144 and ADR-026](adr/ADR-145-a-receive-endpoint-off-at-start-has-its-topology-declared-by-a-bus-that-only-deploys-it-1360-amending-adr-144-and-adr-026.md) |
+| **ADR-146** | [Shipping's erasure empties a shipment's request ids before it deletes the address, in two statements of one unit (#1320), amending ADR-103](adr/ADR-146-shippings-erasure-empties-a-shipments-request-ids-before-it-deletes-the-address-in-two-statements-of-one-unit-1320-amending-adr-103.md) |
 
 ---
 
