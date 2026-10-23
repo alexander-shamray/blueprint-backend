@@ -60,6 +60,13 @@ class Sweeps(unittest.TestCase):
             last = f"## Summary\n\nx\n\n## Affected lines\n\nci.yml\n\nPinned commit: {SHA}."
             self.assertEqual(qs.pinned_commit(last), SHA, "the pin follows the last heading and no later one ends it")
 
+    def test_a_bare_hash_outside_the_affected_lines_beats_one_quoted_in_them(self):
+        quoted = "d" * 40
+        body = f"the tree was {SHA}\n\n## Affected lines\n\nregressed in {quoted}\n\n## Fix\n\ny"
+        with mock.patch.object(qs, "resolve_commit", lambda text: text if text in (SHA, quoted) else None):
+            self.assertEqual(qs.pinned_commit(body), SHA)
+            self.assertEqual(qs.pinned_commit(f"## Affected lines\n\nregressed in {quoted}\n"), quoted)
+
     def test_paths_come_from_affected_lines_and_only_those_that_exist_at_the_commit(self):
         body = sweep_body("deploy/helm/smoke.sh line 390 and docs/gone.md and check_permissions.py")
         entry = qs.sweep_entry(issue(7, body, "bug", "low"))

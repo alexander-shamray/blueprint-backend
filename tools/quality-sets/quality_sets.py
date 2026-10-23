@@ -78,9 +78,10 @@ def pinned_commit(body):
     if named:
         text = named.group(1)
         return text if len(text) == 40 else resolve_commit(text)
-    for text in reversed(SHA.findall(body)):
-        if resolved := resolve_commit(text):
-            return resolved
+    for source in (outside, body):
+        for text in reversed(SHA.findall(source)):
+            if resolved := resolve_commit(text):
+                return resolved
     return None
 
 
