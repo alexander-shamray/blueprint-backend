@@ -119,8 +119,8 @@ def fault_of(prefix: str) -> str:
 INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 
 # The exchanges every vhost carries, none of which MassTransit uses. A write on amq.default reaches any queue by name,
-# however else the account is bounded; a read on amq.rabbitmq.trace receives every message published in the vhost; the
-# rest reach only queues bound to them, and binding a peer's queue is refused below.
+# however else the account is bounded; a read on amq.rabbitmq.trace receives every message published in the vhost once
+# tracing is on; the rest reach only queues bound to them, and binding a peer's queue is refused below.
 BUILT_IN_EXCHANGES = ["amq.default", "amq.direct", "amq.fanout", "amq.headers", "amq.match", "amq.rabbitmq.trace",
                       "amq.topic"]
 
