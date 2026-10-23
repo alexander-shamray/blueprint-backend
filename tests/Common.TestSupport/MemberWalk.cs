@@ -4,11 +4,10 @@ using System.Reflection;
 
 namespace Common.TestSupport;
 
-/// <summary>Every public member of a value, flattened to <c>path=value</c> lines, whatever its serialiser says.</summary>
+/// <summary>Every public member of a value as <c>path=value</c> lines, whatever its serialiser writes.</summary>
 /// <remarks>
-/// For a round trip: two values with the same lines have the same members, where a re-serialisation compares only
-/// what the serialiser chose to write, and a <c>JsonIgnore</c>, a field or a rounding converter is in both strings.
-/// Collections compare by element whatever their type, which structural equivalence does not.
+/// A rounding converter or a <c>JsonIgnore</c> is in both strings of a <see cref="System.Text.Json.JsonSerializer"/>
+/// round trip; collections compare by element whatever their type, which structural equivalence does not.
 /// </remarks>
 public static class MemberWalk
 {
