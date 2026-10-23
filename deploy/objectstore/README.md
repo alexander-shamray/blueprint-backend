@@ -67,8 +67,8 @@ grace period will do, with a period a little over a day.
   a pass. Only a request a pair must be allowed would tell the two apart. The
   BFF pair's only allowed request is a write under `uploads/`, and the Catalog
   pair's read of an absent key is refused on both buckets, since a store
-  answers a pair without list permission `403 AccessDenied`. Asking for the write
-  would make the check write, which
+  answers a pair without list permission `403 AccessDenied`. Asking for the
+  write would make the check write, which
   [ADR-110](../../docs/backend-architecture/adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)
   decided it does not.
 - **Anything outside the store's own policy**, such as a CDN or a bucket ACL
