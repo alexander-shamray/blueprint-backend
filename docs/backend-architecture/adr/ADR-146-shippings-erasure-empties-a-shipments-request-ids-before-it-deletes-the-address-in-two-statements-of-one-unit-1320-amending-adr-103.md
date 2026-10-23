@@ -12,12 +12,13 @@ shipment keeps its list, the case ADR-103 already allows for a shipment with no
 address row when the emptying runs.
 **Why.** [ADR-103](ADR-103-shipping-keeps-the-erasure-requests-an-order-was-placed-under-on-its-shipment.md)
 says the emptying runs in the same statement batch and unit as the address
-delete. The code sends two commands, and the word batch is what
-the code does not honour. What the rule rests on holds: both
-commit or neither does, and the emptying cannot follow the delete, because
-once the address row is gone nothing joins the shipment to the subject. Merging
-the two into one batch would make the word true and change nothing the rule
-depends on, so the code stays as it is and the sentence is amended.
+delete. The code sends two commands, so it does not honour the word batch, nor
+each shipment whose address row it deletes where a row is saved between them:
+the emptying reaches the rows present when it runs. What the rule rests on
+holds: both commit or neither does, and the emptying cannot follow the delete,
+because once the address row is gone nothing joins the shipment to the subject.
+Merging the two into one batch would make the word true and change nothing
+the rule depends on, so the code stays as it is and the sentence is amended.
 **Consequences.** A reader of ADR-103 finds the word batch there, as an ADR is
 amended and never rewritten, and reads this decision beside it. A change that
 reorders the two statements, or runs the delete in a unit that does not also
