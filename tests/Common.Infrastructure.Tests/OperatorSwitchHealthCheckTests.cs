@@ -42,6 +42,43 @@ public class OperatorSwitchHealthCheckTests
     }
 
     [Fact]
+    public void A_scalar_at_off_refuses_the_host_and_names_the_indexed_form()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([KeyValuePair.Create($"{OperatorSwitchOptions.SectionName}:Off", (string?)"orders")])
+            .Build();
+
+        InvalidOperationException refused = Should.Throw<InvalidOperationException>(
+            () => new ServiceCollection().AddOperatorSwitches(configuration));
+
+        refused.Message.ShouldContain("'orders'");
+        refused.Message.ShouldContain("Switches__Off__0", Case.Sensitive, "the form the operator should write");
+    }
+
+    [Fact]
+    public async Task A_scalar_that_arrives_on_a_reload_is_degraded_and_names_the_indexed_form()
+    {
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                [KeyValuePair.Create($"{OperatorSwitchOptions.SectionName}:Off:0", (string?)"orders")])
+            .Build();
+        ServiceCollection services = new();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddLogging();
+        services.AddOperatorSwitches(configuration);
+        using ServiceProvider provider = services.BuildServiceProvider(validateScopes: true);
+
+        // What a reloaded file does: the list is replaced by a single value, which binds as nothing off.
+        configuration[$"{OperatorSwitchOptions.SectionName}:Off:0"] = null;
+        configuration[$"{OperatorSwitchOptions.SectionName}:Off"] = "orders";
+
+        HealthReportEntry entry = await Ready(provider);
+
+        entry.Status.ShouldBe(HealthStatus.Degraded, "Degraded answers 200, so the pod stays in service");
+        entry.Description.ShouldNotBeNull().ShouldContain("Switches__Off__0", Case.Sensitive);
+    }
+
+    [Fact]
     public async Task A_loop_switched_off_is_degraded_and_names_it()
     {
         using ServiceProvider provider = Build("booking-loop");

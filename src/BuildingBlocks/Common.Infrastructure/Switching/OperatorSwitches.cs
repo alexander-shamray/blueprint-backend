@@ -39,6 +39,9 @@ public sealed class OperatorSwitches(IOptionsMonitor<OperatorSwitchOptions> opti
         }
     }
 
+    /// <summary>Why the switches cannot be read as written, or null: a scalar <c>Off</c> binds as none.</summary>
+    public string? Unreadable => services.GetService<OperatorSwitchSource>()?.Scalar();
+
     public void DeclareEndpoint(string queue) => _endpoints.TryAdd(queue, 0);
 
     public bool IsOff(string name) => options.CurrentValue.Off.Contains(name, StringComparer.Ordinal);
