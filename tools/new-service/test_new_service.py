@@ -2117,6 +2117,7 @@ class RefusesToRun(unittest.TestCase):
             ("a trailing comment", plain + "  # the payments unit"),
             ("trailing whitespace", plain + " "),
             ("the long form", "  - path: services/payments.yml"),
+            ("a quoted path", '  - "services/payments.yml"'),
         ):
             with self.subTest(case), tempfile.TemporaryDirectory() as directory:
                 root = template_copy(Path(directory))

@@ -475,7 +475,7 @@ COMPOSE_DIR = "deploy/compose"
 COMPOSE_INDEX = f"{COMPOSE_DIR}/docker-compose.yml"
 COMPOSE_UNITS = "services"
 COMPOSE_TEMPLATE_UNIT = f"{COMPOSE_UNITS}/{TEMPLATE.lower()}.yml"
-INCLUDE_ENTRY = re.compile(r"^  - (\S+)$")
+INCLUDE_ENTRY = re.compile(r"^  - ([^\s\"']\S*)$")
 INCLUDE_KEY = re.compile(r"^include:[ \t]*(?:#.*)?$")
 
 # One service's `environment:` mapping in that file, and the keys inside it,
