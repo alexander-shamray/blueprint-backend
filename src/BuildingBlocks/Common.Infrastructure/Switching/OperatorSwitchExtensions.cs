@@ -14,9 +14,18 @@ public static class OperatorSwitchExtensions
             return services;
 
         // The configuration the host was given, not the container's, as a suite builds a bus without registering one.
+        IConfigurationSection section = configuration.GetSection(OperatorSwitchOptions.SectionName);
+        OperatorSwitchSource source = new(section);
+
+        // Refused here rather than by a validator, which a reload would run on the monitor's thread: the health
+        // check reports a scalar that arrives later.
+        if (source.Scalar() is { } scalar)
+            throw new InvalidOperationException(scalar);
+
+        services.AddSingleton(source);
         services
             .AddOptions<OperatorSwitchOptions>()
-            .Bind(configuration.GetSection(OperatorSwitchOptions.SectionName));
+            .Bind(section);
         services.AddSingleton<OperatorSwitches>();
         services.AddSingleton<ReceiveEndpointSwitch>();
 

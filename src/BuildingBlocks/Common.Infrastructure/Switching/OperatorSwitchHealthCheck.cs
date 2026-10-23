@@ -13,6 +13,10 @@ public sealed class OperatorSwitchHealthCheck(OperatorSwitches switches) : IHeal
         HealthCheckContext context,
         CancellationToken cancellationToken = default)
     {
+        // Before the names: a scalar reloaded in binds as nothing off, which would otherwise read as healthy.
+        if (switches.Unreadable is { } unreadable)
+            return Task.FromResult(HealthCheckResult.Degraded(unreadable));
+
         IReadOnlyCollection<string> off = switches.Off;
         HealthCheckResult result = off.Count == 0
             ? HealthCheckResult.Healthy()
