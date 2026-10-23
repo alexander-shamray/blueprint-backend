@@ -28,8 +28,9 @@ nothing: authorisation is decided before existence. The check writes nothing.
 **Anything else fails the run**, and the reasons are the suite's cases: a `2xx`
 is a permission that exists; a `403` with another code (`InvalidAccessKeyId`,
 `SignatureDoesNotMatch`) is a pair the store does not know, which would read as
-a refusal and pass a rotated secret; a `404` is a bucket that is not the one
-named; an unreachable store and an unset variable are not answers.
+a refusal and pass a rotated secret; a `404` is a bucket that does not exist,
+so not the one named; an unreachable store and an unset variable are not
+answers.
 
 ## What it needs
 
@@ -60,6 +61,13 @@ grace period will do, with a period a little over a day.
 ## What it does not check
 
 - **That the policy allows what the services need.** A deployed upload does.
+- **That the bucket is the one the pairs are scoped to.** A bucket that exists
+  and grants the pairs nothing refuses all six probes with `403 AccessDenied`,
+  as the right bucket's policy does, so a wrong `OBJECT_STORE_BUCKET` reads as
+  a pass. Only a request each pair must be allowed would tell the two apart,
+  and a request the pair is allowed makes the check write, which
+  [ADR-110](../../docs/backend-architecture/adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)
+  decided it does not.
 - **Anything outside the store's own policy**, such as a CDN or a bucket ACL
   that grants a delete around it.
 - **That the monitor exists.** A green run requests the heartbeat URL, so a
