@@ -66,3 +66,7 @@ docs/superpowers/plans/2026-10-02-notifications-pr3-worker-client-and-contact-re
 
 # The chapter's excerpt of the gateway's values.
 docs/backend-architecture/15-cicd-deployment.md | yaml-credential-value | e34cac71a8b3 | The excerpt names the gateway's TLS Secret, a reference and no value.
+
+# Section 14.1 and the PR-6 plan quoting Keycloak's local bootstrap admin password.
+docs/backend-architecture/14-local-development.md | yaml-credential-value | 8c6976e5b541 | Section 14.1 quoting Keycloak's local bootstrap admin password.
+docs/superpowers/plans/2026-08-07-pr06-compose.md | yaml-credential-value | 8c6976e5b541 | The PR-6 plan's copy of the same local default.
