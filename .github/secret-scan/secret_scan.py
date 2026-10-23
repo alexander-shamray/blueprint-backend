@@ -321,8 +321,9 @@ RULES: list[Rule] = [
         reject=names_itself),
 
     # The same, for a YAML mapping value: how the Helm values and Compose's map form are written. A YAML indicator
-    # may not start the value but may sit inside it, so `P@ss!` and `${X:-default}` are read. Booleans, numbers of up to
-    # five digits and a type name are what a switch, a count or an annotation is made of, and are skipped.
+    # may not start the value but may sit inside it, so `P@ss!` and `${X:-default}` are read. Booleans, an unsigned
+    # number of up to five digits before an optional fraction, and a type name are what a switch, a count or an
+    # annotation is made of, and are skipped.
     Rule(
         "yaml-credential-value",
         "a credential-shaped YAML key is given an unquoted literal",
