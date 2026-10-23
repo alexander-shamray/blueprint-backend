@@ -98,6 +98,8 @@ class Detects(unittest.TestCase):
             ["-----BEGIN RSA PRIVATE KEY-----"])
         self.assertEqual(len(found("private-key-block", "-----BEGIN PRIVATE KEY-----")), 1)
         self.assertEqual(len(found("private-key-block", "-----BEGIN OPENSSH PRIVATE KEY-----")), 1)
+        # RFC 4880 section 6.2 ends an armoured secret key with BLOCK, so the header is not the PEM shape.
+        self.assertEqual(len(found("private-key-block", "-----BEGIN PGP PRIVATE KEY BLOCK-----")), 1)
 
     def test_connection_string_password(self):
         line = 'Server=sql,1433;Database=Catalog;User Id=sa;Password=Tr0ub4dor;Encrypt=False'
@@ -154,6 +156,17 @@ class Detects(unittest.TestCase):
     def test_env_assignment(self):
         self.assertEqual(found("env-assignment", "SQL_PASSWORD=Tr0ub4dor"), ["Tr0ub4dor"])
         self.assertEqual(found("env-assignment", "export API_TOKEN=Tr0ub4dor"), ["Tr0ub4dor"])
+        # A Compose list item and a Dockerfile ENV or ARG line, whose prefix is not the line start.
+        self.assertEqual(found("env-assignment", "      - MSSQL_SA_PASSWORD=Tr0ub4dor"), ["Tr0ub4dor"])
+        self.assertEqual(found("env-assignment", "ENV SQL_PASSWORD=Tr0ub4dor"), ["Tr0ub4dor"])
+        self.assertEqual(found("env-assignment", "ARG API_TOKEN=Tr0ub4dor"), ["Tr0ub4dor"])
+
+    def test_yaml_credential_value(self):
+        self.assertEqual(found("yaml-credential-value", "password: Tr0ub4dor"), ["Tr0ub4dor"])
+        self.assertEqual(found("yaml-credential-value", "    clientSecret: Tr0ub4dor"), ["Tr0ub4dor"])
+        self.assertEqual(found("yaml-credential-value", "  - api_key: Tr0ub4dor"), ["Tr0ub4dor"])
+        # A trailing comment is not part of the value.
+        self.assertEqual(found("yaml-credential-value", "token: Tr0ub4dor  # rotate"), ["Tr0ub4dor"])
 
 
 class NearMisses(unittest.TestCase):
@@ -245,6 +258,26 @@ class NearMisses(unittest.TestCase):
         self.assertEqual(found("env-assignment", "        _token = someOtherToken;"), [])
         self.assertEqual(found("env-assignment", "# SQL_PASSWORD=Tr0ub4dor"), [])
 
+    def test_private_key_block(self):
+        # Armoured public keys and certificates are ordinary and harmless.
+        self.assertEqual(found("private-key-block", "-----BEGIN PGP PUBLIC KEY BLOCK-----"), [])
+        self.assertEqual(found("private-key-block", "-----BEGIN CERTIFICATE-----"), [])
+        # The header that no tool emits.
+        self.assertEqual(found("private-key-block", "-----BEGIN PGP PRIVATE KEY-----"), [])
+
+    def test_yaml_credential_value(self):
+        # A boolean and a null are the YAML scalars a switch is made of.
+        self.assertEqual(found("yaml-credential-value", "automountServiceAccountToken: false"), [])
+        self.assertEqual(found("yaml-credential-value", "tokenRequired: null  # unset"), [])
+        # A reference names a secret without carrying one, and a quoted value is the rule above's.
+        self.assertEqual(found("yaml-credential-value", "password: ${SQL_PASSWORD}"), [])
+        self.assertEqual(found("yaml-credential-value", "password: {{ .Values.db.password }}"), [])
+        self.assertEqual(found("yaml-credential-value", "password: 'abc12'"), [])
+        # A key with no value, a comment, and a field storing the name it carries.
+        self.assertEqual(found("yaml-credential-value", "password:"), [])
+        self.assertEqual(found("yaml-credential-value", "# password: Tr0ub4dor"), [])
+        self.assertEqual(found("yaml-credential-value", "secretName: secretName"), [])
+
 
 class Coverage(unittest.TestCase):
     """The gate's own subject: what the tests are looking at, not what they found.
@@ -294,6 +327,12 @@ class Values(unittest.TestCase):
         # out of the tree, so the default is what gets judged — and then
         # accepted by name in the allow-list rather than by the pattern.
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD:-Tr0ub4dor}"), "Tr0ub4dor")
+
+    def test_a_default_without_a_colon_is_judged_too(self):
+        # POSIX and Compose both spell "default when unset" with the dash alone.
+        self.assertEqual(secret_scan.literal("${SQL_PASSWORD-Tr0ub4dor}"), "Tr0ub4dor")
+        self.assertEqual(secret_scan.literal("${SQL_PASSWORD=Tr0ub4dor}"), "Tr0ub4dor")
+        self.assertEqual(secret_scan.literal("${SQL_PASSWORD}"), "")
 
     def test_a_nested_default_is_unwrapped(self):
         self.assertEqual(secret_scan.literal("${A:-${B:-Tr0ub4dor}}"), "Tr0ub4dor")

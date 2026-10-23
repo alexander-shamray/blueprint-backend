@@ -18,6 +18,7 @@
 .github/secret-scan/test_secret_scan.py | private-key-block | 8bcac7908eb9 | Positive control for the RSA PEM header. A header, not key material.
 .github/secret-scan/test_secret_scan.py | private-key-block | 3021d90eb943 | Positive control for the unqualified PEM header.
 .github/secret-scan/test_secret_scan.py | private-key-block | 03d104c669e3 | Positive control for the OpenSSH PEM header.
+.github/secret-scan/test_secret_scan.py | private-key-block | 8a1ddaa7dab8 | Positive control for the armoured PGP header. A header, not key material.
 .github/secret-scan/test_secret_scan.py | connection-string-password | a612e6c33089 | Invented value in the connection-string positive control.
 .github/secret-scan/test_secret_scan.py | aws-access-key-id | 1a5d44a2dca1 | Amazon's own published example identifier, which belongs to nobody.
 .github/secret-scan/test_secret_scan.py | credential-assignment | 356f5a3587ba | The AWS secret-key fixture, seen a second time by the name rule.
@@ -29,3 +30,6 @@
 .github/secret-scan/test_secret_scan.py | credential-assignment | 9c56cc51b374 | The eight-character floor asserted from the passing side.
 .github/secret-scan/test_secret_scan.py | credential-assignment | 4e5f83f2e200 | A JSON-shaped positive control for the name rule.
 .github/secret-scan/test_secret_scan.py | credential-assignment | 72399361da6a | A YAML-shaped positive control for the name rule.
+
+# A workflow permission level under a key that says token.
+.github/workflows/ci.yml | yaml-credential-value | 10fd874b68da | id-token: write grants the job an OIDC token and holds no value.
