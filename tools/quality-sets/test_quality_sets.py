@@ -28,10 +28,10 @@ def sweep_body(affected, found=f"Found by the #433 security sweep (round 6) at {
     return f"## Summary\n\nx\n\n## Affected lines\n\n{affected}\n\n## Fix\n\ny `README.md`\n\n{found}\n\n{TRAILER}"
 
 
-def comment(cid, pr, path="a.cs", line=10, login="Copilot", head="h1", reply=None):
+def comment(cid, pr, path="a.cs", line=10, login="Copilot", head="h1", reply=None, original_line=None):
     return {"id": cid, "user": {"login": login}, "pull_request_url": f"https://api.github.com/repos/o/r/pulls/{pr}",
-            "path": path, "line": line, "original_commit_id": head, "body": "  a\n  finding ",
-            "in_reply_to_id": reply}
+            "path": path, "line": line, "original_line": original_line, "original_commit_id": head,
+            "body": "  a\n  finding ", "in_reply_to_id": reply}
 
 
 class Sweeps(unittest.TestCase):
@@ -45,6 +45,15 @@ class Sweeps(unittest.TestCase):
         with mock.patch.object(qs, "resolve_commit", lambda text: SHA if text == "5bea8b2" else None):
             self.assertEqual(qs.pinned_commit("Found by the #433 security sweep at 5bea8b2."), SHA)
             self.assertIsNone(qs.pinned_commit("Found by hand, no commit."))
+
+    def test_a_hash_quoted_before_the_pin_is_not_the_pin(self):
+        action = "b" * 40
+        quoted = f"## Affected lines\n\n`uses: actions/checkout@{action}` in ci.yml\n\n"
+        with mock.patch.object(qs, "resolve_commit", lambda text: SHA if text == SHA else None):
+            for pin in (f"at the pinned commit {SHA}.", f"Pinned commit: {SHA}", f"Found by the sweep at {SHA}."):
+                self.assertEqual(qs.pinned_commit(quoted + pin), SHA, pin)
+            self.assertEqual(qs.pinned_commit(f"{quoted}the tree was {SHA}"), SHA, "an unlabelled hash the clone holds")
+            self.assertIsNone(qs.pinned_commit(quoted), "a quoted hash the clone lacks is no pin")
 
     def test_paths_come_from_affected_lines_and_only_those_that_exist_at_the_commit(self):
         body = sweep_body("deploy/helm/smoke.sh line 390 and docs/gone.md and check_permissions.py")
@@ -81,6 +90,13 @@ class Reviews(unittest.TestCase):
         got = qs.review_entries([comment(1, 5)], {5: "base5"})
         self.assertEqual(got, [{"id": 1, "pr": 5, "base": "base5", "head": "h1", "reviewer": "Copilot",
                                 "path": "a.cs", "line": 10, "text": "a finding"}])
+
+    def test_the_line_is_the_one_the_head_was_reviewed_at_not_the_latest_commits(self):
+        moved = comment(1, 5, line=55, original_line=40)
+        self.assertEqual(qs.review_entries([moved], {5: "b"})[0]["line"], 40)
+        outdated = comment(2, 5, line=None, original_line=74)
+        self.assertEqual(qs.review_entries([outdated], {5: "b"})[0]["line"], 74)
+        self.assertEqual(qs.review_entries([comment(3, 5, line=12)], {5: "b"})[0]["line"], 12)
 
     def test_replies_other_authors_unmerged_prs_and_lost_commits_are_dropped(self):
         comments = [comment(1, 5, reply=99), comment(2, 5, login="alexander-shamray"),
@@ -262,6 +278,30 @@ class Runs(unittest.TestCase):
 
     def test_a_run_with_no_usage_reports_zeros(self):
         self.assertEqual(qs.tokens(collections.Counter())["total"], 0)
+
+    def failed_run(self, stdout, spent=None):
+        done = mock.Mock(stdout=stdout, stderr="boom", returncode=1)
+        with mock.patch.object(qs, "run", return_value=done) as call:
+            result = qs.ask("claude", "bug-auditor", "p", "dir", spent=spent)
+        self.assertFalse(call.call_args.kwargs["check"], "a non-zero exit is read, not raised inside run")
+        return result
+
+    def test_a_usage_limit_notice_on_a_non_zero_exit_still_ends_the_run_with_its_tokens_counted(self):
+        envelope = json.dumps({"result": "Paused: the weekly usage limit is reached.", "usage": {"output_tokens": 9}})
+        spent = collections.Counter()
+        with self.assertRaises(qs.UsageLimit):
+            self.failed_run(envelope, spent)
+        self.assertEqual(qs.tokens(spent)["total"], 9)
+
+    def test_a_non_zero_exit_with_no_findings_is_refused_by_its_code_and_its_tokens_are_counted(self):
+        envelope = json.dumps({"subtype": "error_max_turns", "usage": {"input_tokens": 4}})
+        spent = collections.Counter()
+        with self.assertRaisesRegex(SystemExit, "claude exited 1: boom"):
+            self.failed_run(envelope, spent)
+        self.assertEqual(qs.tokens(spent)["total"], 4)
+
+    def test_a_non_zero_exit_that_returned_findings_is_still_a_result(self):
+        self.assertEqual(self.failed_run('{"findings": [{"file": "a", "line": 1}]}'), [{"file": "a", "line": 1}])
 
     def test_the_slice_directory_is_handed_to_the_auditor(self):
         done = mock.Mock(stdout='{"findings": []}', returncode=0)
