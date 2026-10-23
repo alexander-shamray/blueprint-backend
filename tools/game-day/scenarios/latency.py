@@ -75,11 +75,20 @@ def _cpu(pod: dict[str, str]) -> float:
         return 0.0
 
 
+# The Compose service for a service_name that is not its lowercase with dots as dashes: the gateway's is `gateway`
+# (deploy/compose/services/gateway.yml), not `gateway-api`.
+COMPOSE_SERVICES = {"Gateway.Api": "gateway"}
+
+
+def compose_service(service_name: str) -> str:
+    return COMPOSE_SERVICES.get(service_name, service_name.lower().replace(".", "-"))
+
+
 def _everything_is_slow(world: harness.World, service_name: str) -> str:
     """latency.md's *Everything is slow*, run in the runbook's order: pods, nodes, then the slow pod's resources."""
     pods = world.compose.stats()
     cpus, memory = world.compose.host()
-    service = service_name.lower().replace(".", "-")
+    service = compose_service(service_name)
     memory_limit, cpu_limit = world.compose.limits(service)
     hottest = max(pods, key=_cpu, default=None)
     top = f"{hottest['name']} {hottest['cpu']}" if hottest else "no container"

@@ -414,6 +414,22 @@ class Latency(unittest.TestCase):
         self.assertIn("ordering-api memory limit none, CPU limit none", detail)
         self.assertEqual([("limits", "ordering-api")], stack.calls)
 
+    def test_the_gateway_is_read_through_the_compose_service_it_is_named_for(self):
+        stack = self.stack(query=self.answers([("Gateway.Api", "/a", "29.0"), ("Catalog.Api", "/b", "12.0")]))
+        ok, detail = self.module().first_step(stack.world)
+        self.assertTrue(ok, detail)
+        self.assertIn("gateway memory limit none", detail)
+        self.assertEqual([("limits", "gateway")], stack.calls)
+
+    def test_every_service_the_loop_reaches_names_a_compose_service(self):
+        defined = set(re.findall(r"^  ([a-z][a-z0-9-]*):$", "\n".join(
+            path.read_text(encoding="utf-8") for path in (harness.ROOT / "deploy/compose/services").glob("*.yml")),
+            re.MULTILINE))
+        module = self.module()
+        for service_name in ("Gateway.Api", "Ordering.Api", "Catalog.Api"):
+            with self.subTest(service_name):
+                self.assertIn(module.compose_service(service_name), defined)
+
     def test_one_service_slow_stops_at_the_query_as_the_runbook_does(self):
         stack = self.stack(query=self.answers([("Ordering.Api", "/a", "29.0")]))
         ok, detail = self.module().first_step(stack.world)
