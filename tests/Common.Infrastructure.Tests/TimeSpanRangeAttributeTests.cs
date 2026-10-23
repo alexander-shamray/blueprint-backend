@@ -62,10 +62,10 @@ public class TimeSpanRangeAttributeTests
         Should.Throw<ArgumentException>(() => new TimeSpanRangeAttribute("02:00:00", "01:00:00"));
 
     [Fact]
-    public void Validating_writes_nothing_to_the_attribute_because_no_field_it_can_reach_is_writable()
+    public void Validating_writes_nothing_to_the_attribute_because_no_field_it_declares_is_writable()
     {
         // RangeAttribute fails at random because its first use converts its string bounds and writes them back to
-        // a shared instance, in its base fields; a field that cannot be written after construction cannot race.
+        // its own fields, which a subclass inherits. ValidationAttribute's own fields are trusted, not checked.
         FieldInfo[] written = [.. typeof(TimeSpanRangeAttribute)
             .GetFields(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
             .Where(field => !field.IsInitOnly && !field.IsLiteral)
@@ -77,9 +77,10 @@ public class TimeSpanRangeAttributeTests
             "a base class that converts and caches would move the state this test reads out of reach");
     }
 
-    // Any spelling of the stock attribute with a TimeSpan operand: qualified, spaced, or named in full.
+    // The stock attribute with a TimeSpan operand: Range or RangeAttribute, spaced, System- or global-qualified, the
+    // operand named or not.
     private static readonly Regex StockTimeSpanRange = new(
-        @"\bRange(?:Attribute)?\s*\(\s*typeof\s*\(\s*(?:System\s*\.\s*)?TimeSpan\s*\)",
+        @"\bRange(?:Attribute)?\s*\(\s*(?:type\s*:\s*)?typeof\s*\(\s*(?:global\s*::\s*)?(?:System\s*\.\s*)?TimeSpan\s*\)",
         RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(5));
 
@@ -89,6 +90,8 @@ public class TimeSpanRangeAttributeTests
     [InlineData("[Range( typeof( System.TimeSpan ), Min, Max)]")]
     [InlineData("[RangeAttribute(typeof(TimeSpan), Min, Max)]")]
     [InlineData("[Required, Range(\n typeof(TimeSpan), Min, Max)]")]
+    [InlineData("[Range(typeof(global::System.TimeSpan), Min, Max)]")]
+    [InlineData("[Range(type: typeof(TimeSpan), minimum: Min, maximum: Max)]")]
     public void The_scan_below_matches_every_spelling_it_hunts(string declaration) =>
         StockTimeSpanRange.IsMatch(declaration).ShouldBeTrue();
 
