@@ -253,8 +253,7 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
         sent.CustomerId.ShouldBeNull();
         sent.Languages.ShouldBeNull();
         (await DeviceAsync(installation)).ShouldNotBeNull().SubjectId.ShouldBeNull("ADR-117 clears, keeping the id");
-        // One per statement that touched a row: the ended notice anonymised, both deliveries (one deleted, one
-        // anonymised), the order record, the contact and both devices. No waiting notice and no consent entry exist.
+        // Ended notice 1, both deliveries 2, order record 1, contact 1, both devices 2.
         erased.Value.ShouldBe(1 + 2 + 1 + 1 + 2, "each statement's rows are counted once, and none is lost");
     }
 
