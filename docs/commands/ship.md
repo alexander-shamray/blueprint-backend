@@ -554,6 +554,19 @@ the JSON its file declares — is the review not having run, reported so, and it
 stops the chain under the runbook's stop table; it is never replaced by a review
 this session writes of its own diff.
 
+**Why the ceiling fixes small findings and batches the lows.** Filing one
+issue per open finding left about one new issue behind each pull request, so
+the backlog drained no faster than it filled: from 2026-10-15 to 2026-10-23
+the three repositories opened roughly as many issues as they closed, and over
+half of blueprint-admin's were `low`. A finding inside the touch set that
+takes a few lines costs less to fix than to file, read and schedule, so the
+ceiling fixes it and the report names it; the price is no review round over
+that fix, which step 2's checks still cover. The lows a pull request leaves
+are one issue with a checklist: still recorded and searchable, without each
+taking a row in the plan. Findings that share one cause and one fix are one
+issue because they are one change; filing them apart splits a single pull
+request into several. The bar for `medium` and above is unchanged.
+
 ## Step 6: the gates
 
 **Merge, then tear the workspace down.** The review has ended — clean,

@@ -511,6 +511,15 @@ must fail in.
 A candidate that fails any gate is not a clean round's absence of findings — it
 is a finding handled without a new issue. Say which in the summary.
 
+**One issue per cause, and fifteen a run.** Filing every confirmed site on
+its own turns one missing check repeated across six charts into six issues
+and six pull requests, though one change closes them all; blueprint-backend's
+run of 2026-10-21 filed 101 issues in a day. Sites that share a cause and a
+fix are one issue naming every site, at the highest severity among them. A
+run files at most fifteen and ranks the rest in its summary, where the next
+run meets them again if they still hold: nothing is lost, and the queue stays
+one that can be worked through.
+
 ## The round: fan out
 
 **Fan out.** Spawn the audit subagents as the **`bug-auditor` agent type**

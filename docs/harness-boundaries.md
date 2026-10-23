@@ -14,6 +14,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | Settings self-lock and permission root | The settings.json self-lock and its delay, settings.local.json, how EnterWorktree moves rules, and the hooks deny. |
 | Grant semantics | allowed-tools as auto-approval rather than whitelist, and a deny as the only refusal; where the external reviewers' machinery went. |
 | Prefix grants and wildcard denies | Table of over-wide git grants, the reset-grant lesson, mid-pattern deny wildcards and the quoting bypass. |
+| The guards' threat model | What the guard hooks are written against, which guard findings are filed, and which are recorded as out of scope. |
 | Git argv guard hook | How guard-git-argv.py resolves the executed argv, its successive bypasses, git -c and stated residuals. |
 | The ext transport and pinned grants | Why ext:: cannot be written as a rule, hook coverage, and fetch and pull grant pinning. |
 | Grant inventory and push helpers | Frontmatter grants, the numbered inventory, /ship's closed entries, sweep helpers and the force-push rebase helper. |
@@ -569,6 +570,48 @@ concatenation is now MEASURED**, where this paragraph used to say it was not:
 the earlier probe was refused by the classifier layer — a second net worth
 noting and not evidence. It is evidence now, and it says the deny was genuinely
 defeatable rather than theoretically so.
+
+## The guards' threat model
+
+**The guard hooks catch an agent's honest mistakes; they are not a sandbox
+against a session that sets out to defeat them.** `guard-git-argv.py`,
+`guard-edit-target.py` and `guard-index-argv.py` are written against a
+session that types a dangerous command by accident or by a plausible
+shortcut — a forced push, a write into a denied tree, a removal of a parent
+of the checkout — in any spelling a shell user writes in ordinary work:
+quoting, `-C` and `--work-tree`, environment prefixes, `cd` chains, the
+launchers and wrappers, heredocs, pipes into a shell.
+
+They are not written against a session that builds a command so the hook
+cannot read it. A reader that runs before expansion can always be
+out-spelled: prompt and indirect expansion (`${x@P}`, `${!x}`), an escape
+placed to split a token or hide a pipe, text assembled and then evaluated,
+another interpreter's string arithmetic, a file redirection into a group
+that launches a second shell, input sized to outrun the hook's timeout. Each
+such spelling found and closed exposed another — the run in blueprint-admin
+from #297 to #461 is the record — and none of them is how an agent doing
+ordinary work goes wrong. What bounds a session that sets out to do harm is
+elsewhere: the permission deny list, auto mode's classifier, `main`'s branch
+protection (no direct push, no force push, required checks), and the owner's
+review of every merged pull request.
+
+**A finding against a guard is in scope, and filed, when one of these
+holds:**
+
+1. the spelling is one an agent types while doing ordinary work: it appears
+   in a transcript, a runbook or a helper, or it is a routine shell idiom;
+2. the guard fails open on input given in good faith, by a crash, a decode
+   error or a timeout on ordinary input, because then it admits the honest
+   mistake it exists to stop;
+3. the guard refuses a command it should allow, because a false refusal
+   blocks work and teaches sessions to route around the hook.
+
+**Out of scope, and not filed:** a spelling whose only purpose is to hide a
+command from the hook. A review or a sweep that finds one records it in its
+summary as outside the guards' threat model and moves on; an issue already
+open for one is closed as not planned, with a link to this section. This
+section is the owner for all three repositories; blueprint-admin and
+blueprint-frontend cite it rather than restate it.
 
 ## Git argv guard hook
 

@@ -137,6 +137,9 @@ or high.** Three gates:
 - **Confirmed.** A subagent's claim is raw data, never a filing, until the
   verifier has read it, reproduced it and run it past the test corpus.
 - **Critical or high.** Everything below the bar goes in the round summary.
+- **One cause, one issue; fifteen a run.** Sites that share one cause and
+  one fix are one issue naming every site. Past fifteen filings in a run,
+  the rest are ranked in the summary for the next run.
 - **Not already tracked.** Enumerate the **whole** issue set through
   `gh-issue-list.sh` and match each finding against it, **regardless of
   label**. An open issue **opened by the repository owner** blocks a re-file —

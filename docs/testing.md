@@ -355,6 +355,26 @@ filter are deliberate:
 > it relaxes an architecture rule everywhere, for ever, and in every service
 > the scaffold renders, to accommodate a test tool.
 
+## What an assertion must hold
+
+**A test that cannot fail is the costliest defect here**: it reads as
+coverage while the behaviour behind it goes unverified, and from 2026-10-15
+to 2026-10-23 about a third of the issues filed in this repository were
+tests of that kind. Four rules close the shapes those issues share, and a
+reviewer reads a new test against them.
+
+- **Bound both sides.** A time, count, size or age is asserted between a
+  lower and an upper bound, or exactly; never against a floor alone.
+- **Wait on the test's own signal.** A test waits for the event it is about
+  (the inbox's suppressed count, its own message's consumed signal, a
+  `TaskCompletionSource` the handler completes), never for a fixed delay, a
+  sentinel message, or the harness recording a fault before the code under
+  test has unwound.
+- **Assert the exact count.** `Assert.Equal(n, …)`, not a floor of `n`,
+  unless the test says why more is correct.
+- **Show that it fails.** A test added for a fix is run once against the
+  unfixed code, and the pull request says it failed there.
+
 ## Where a test goes
 
 [§12.1](backend-architecture/12-test-strategy.md)'s table is the answer and
