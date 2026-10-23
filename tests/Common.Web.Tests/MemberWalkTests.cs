@@ -64,7 +64,10 @@ public class MemberWalkTests
     [Fact]
     public void A_value_that_reaches_itself_fails_naming_the_path_rather_than_overflowing_the_stack()
     {
-        Should.Throw<InvalidOperationException>(() => MemberWalk.Of(new Loop())).Message.ShouldContain("a cycle");
+        string message = Should.Throw<InvalidOperationException>(() => MemberWalk.Of(new Loop())).Message;
+
+        message.ShouldContain("a cycle");
+        message.ShouldContain("$.Next.Next");
     }
 
     [Fact]
