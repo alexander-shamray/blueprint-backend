@@ -106,7 +106,7 @@ REFERENCE = re.compile(
 # value, not against writing it down. So the wrapper is peeled and the default
 # judged, and Section 14.1's local-development defaults reach the allow-list as
 # decisions with reasons.
-DEFAULTED_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[-=]?|[-=])(.*)\}$", re.S)
+DEFAULTED_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:?[-=](.*)\}$", re.S)
 
 # Characters a mask is made of. A value composed only of these carries nothing.
 MASK_CHARS = "*xX#.…_- \t"
@@ -196,6 +196,11 @@ class Rule:
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
+def names_exactly(match: re.Match[str]) -> bool:
+    """`password: password` — a value equal to the key it sits under, which is a placeholder."""
+    return match.group("value").lower() == match.group("name").lower()
+
+
 def names_itself(match: re.Match[str]) -> bool:
     """`self.secret = secret` — a constructor storing a parameter, not a value.
 
@@ -217,7 +222,7 @@ RULES: list[Rule] = [
     # CERTIFICATE — both ordinary, both harmless — cannot reach it.
     Rule(
         "private-key-block",
-        "a PEM private key block: the key material itself, not a reference to it",
+        "a PEM or OpenPGP private key block: the key material itself, not a reference to it",
         r"(-----BEGIN (?:(?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY|PGP PRIVATE KEY BLOCK)-----)"),
 
     # §14.1 uses this shape with local defaults, which is why a real one would
@@ -315,16 +320,19 @@ RULES: list[Rule] = [
         flags=re.IGNORECASE,
         reject=names_itself),
 
-    # The same, for a YAML mapping value, which is how this repository's Helm values are written. A boolean or a
-    # null is the scalar a switch is made of, and a reference or a quoted value is not a bare word.
+    # The same, for a YAML mapping value: how the Helm values and Compose's map form are written. A YAML indicator
+    # may not start the value but may sit inside it, so `P@ss!` and `${X:-default}` are read. Booleans, numbers and
+    # a type name are what a switch, a count or an annotation is made of, and are skipped.
     Rule(
         "yaml-credential-value",
         "a credential-shaped YAML key is given an unquoted literal",
-        rf"^[ \t]*(?:-[ \t]+)?(?P<name>{CREDENTIAL_NAME})[ \t]*:[ \t]+(?!(?:true|false|null)[ \t]*(?:#.*)?$)"
-        r"(?P<value>[^\s\"'()\[\]<>;,{}#|>&*!%@`]+)[ \t]*(?:#.*)?$",
+        rf"^[ \t]*(?:-[ \t]+)?(?P<name>{CREDENTIAL_NAME})[ \t]*:[ \t]+"
+        r"(?!(?:true|false|null|yes|no|on|off|~|[0-9][0-9._]*"
+        r"|str|string|int|integer|bool|boolean|float|number|any|object)(?:[ \t]+#.*)?[ \t]*$)"
+        r"(?P<value>[^\s\"'()\[\]{}|>&*!%@`#,;][^\s\"'();,]*)(?:[ \t]+#.*)?[ \t]*$",
         group="value",
         flags=re.IGNORECASE,
-        reject=names_itself),
+        reject=names_exactly),
 ]
 
 

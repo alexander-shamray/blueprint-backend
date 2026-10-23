@@ -167,6 +167,12 @@ class Detects(unittest.TestCase):
         self.assertEqual(found("yaml-credential-value", "  - api_key: Tr0ub4dor"), ["Tr0ub4dor"])
         # A trailing comment is not part of the value.
         self.assertEqual(found("yaml-credential-value", "token: Tr0ub4dor  # rotate"), ["Tr0ub4dor"])
+        # An indicator inside the value is part of it, and a defaulted reference is judged on its default.
+        self.assertEqual(found("yaml-credential-value", "password: P@ssw0rd!"), ["P@ssw0rd!"])
+        self.assertEqual(
+            found("yaml-credential-value", "      SQL_PASSWORD: ${SQL_PASSWORD:-Tr0ub4dor}"), ["Tr0ub4dor"])
+        # A value contained in its key name is still a value here, unlike a field storing its parameter.
+        self.assertEqual(found("yaml-credential-value", "KC_BOOTSTRAP_ADMIN_PASSWORD: admin"), ["admin"])
 
 
 class NearMisses(unittest.TestCase):
@@ -177,6 +183,9 @@ class NearMisses(unittest.TestCase):
         # algorithm words rather than writing `\\w+` is what keeps them out.
         self.assertEqual(found("private-key-block", "-----BEGIN PUBLIC KEY-----"), [])
         self.assertEqual(found("private-key-block", "-----BEGIN CERTIFICATE-----"), [])
+        # Armoured public keys are harmless too, and the PGP header no tool emits is not read.
+        self.assertEqual(found("private-key-block", "-----BEGIN PGP PUBLIC KEY BLOCK-----"), [])
+        self.assertEqual(found("private-key-block", "-----BEGIN PGP PRIVATE KEY-----"), [])
 
     def test_connection_string_password(self):
         self.assertEqual(found("connection-string-password", "Password=;Encrypt=False"), [])
@@ -258,13 +267,6 @@ class NearMisses(unittest.TestCase):
         self.assertEqual(found("env-assignment", "        _token = someOtherToken;"), [])
         self.assertEqual(found("env-assignment", "# SQL_PASSWORD=Tr0ub4dor"), [])
 
-    def test_private_key_block(self):
-        # Armoured public keys and certificates are ordinary and harmless.
-        self.assertEqual(found("private-key-block", "-----BEGIN PGP PUBLIC KEY BLOCK-----"), [])
-        self.assertEqual(found("private-key-block", "-----BEGIN CERTIFICATE-----"), [])
-        # The header that no tool emits.
-        self.assertEqual(found("private-key-block", "-----BEGIN PGP PRIVATE KEY-----"), [])
-
     def test_yaml_credential_value(self):
         # A boolean and a null are the YAML scalars a switch is made of.
         self.assertEqual(found("yaml-credential-value", "automountServiceAccountToken: false"), [])
@@ -277,6 +279,13 @@ class NearMisses(unittest.TestCase):
         self.assertEqual(found("yaml-credential-value", "password:"), [])
         self.assertEqual(found("yaml-credential-value", "# password: Tr0ub4dor"), [])
         self.assertEqual(found("yaml-credential-value", "secretName: secretName"), [])
+        # A count, YAML 1.1's other booleans, and an annotation in a language that shares the shape.
+        self.assertEqual(found("yaml-credential-value", "tokenTtlSeconds: 3600"), [])
+        self.assertEqual(found("yaml-credential-value", "requireToken: yes"), [])
+        self.assertEqual(found("yaml-credential-value", "    client_secret: str"), [])
+        # A C# named argument ends in a parenthesis, a comma or a semicolon, which no YAML value does.
+        self.assertEqual(found("yaml-credential-value", "        cancellationToken: ct);"), [])
+        self.assertEqual(found("yaml-credential-value", "        token: TestContext.Current.Token,"), [])
 
 
 class Coverage(unittest.TestCase):
@@ -333,6 +342,9 @@ class Values(unittest.TestCase):
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD-Tr0ub4dor}"), "Tr0ub4dor")
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD=Tr0ub4dor}"), "Tr0ub4dor")
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD}"), "")
+        # An error message and an alternative are not defaults, so neither is judged as one.
+        self.assertEqual(secret_scan.literal("${SQL_PASSWORD:?Tr0ub4dor required}"), "")
+        self.assertEqual(secret_scan.literal("${SQL_PASSWORD:+Tr0ub4dor}"), "")
 
     def test_a_nested_default_is_unwrapped(self):
         self.assertEqual(secret_scan.literal("${A:-${B:-Tr0ub4dor}}"), "Tr0ub4dor")
