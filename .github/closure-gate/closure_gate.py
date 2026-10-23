@@ -55,7 +55,7 @@ ISSUE_NUMBER = re.compile(r"#(\d+)\b")
 # `<details>`, and a note there can carry a closing keyword about the upstream
 # repository. The README's *The Dependabot description* owns the argument.
 DEPENDABOT = "app/dependabot"
-DETAILS = re.compile(r"<details>.*?</details>", re.IGNORECASE | re.DOTALL)
+DETAILS = re.compile(r"<details>(?:(?!<details>).)*?</details>", re.IGNORECASE | re.DOTALL)
 
 REQUIRED_FIELDS = ("number", "url", "body", "commits", "closingIssuesReferences", "headRefOid")
 
@@ -217,7 +217,10 @@ def check(payload: dict) -> list[str]:
     body = payload["body"] or ""
     author = payload.get("author") or {}
     if author.get("is_bot") and author.get("login") == DEPENDABOT:
-        body = DETAILS.sub("", body)
+        # DETAILS matches an innermost block, so a nested one takes passes.
+        stripped = DETAILS.sub("", body)
+        while stripped != body:
+            body, stripped = stripped, DETAILS.sub("", stripped)
     _, body_unreadable = closing_references(body, repository)
     for phrase in body_unreadable:
         problems.append(

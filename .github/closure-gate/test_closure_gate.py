@@ -412,6 +412,14 @@ class DependabotDescription(unittest.TestCase):
         problems = check(payload(body=self.NOTES, linked=(12,), author=self.DEPENDABOT))
         self.assertTrue(any("#12" in problem for problem in problems), problems)
 
+    def test_a_block_nested_in_the_release_notes_is_skipped_whole(self):
+        nested = (
+            "<details>\n<summary>Release notes</summary>\n"
+            "<details>\n<summary>Inner</summary>\nx\n</details>\n"
+            "* Fixes #​7565\n</details>\n"
+        )
+        self.assertEqual(check(payload(body=nested, author=self.DEPENDABOT)), [])
+
     def test_a_payload_without_author_is_read_whole(self):
         legacy = payload(body=self.NOTES)
         del legacy["author"]
