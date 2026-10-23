@@ -62,10 +62,15 @@ public static class Replay
                         new CommandDefinition(OutboxRows.CutoffSql, cancellationToken: ct)));
 
                 // The map is the contracts' alone, so a name it cannot resolve is one the replay would skip unseen.
-                foreach (StoredName stored in await OutboxRows.NamesAsync(connection, source.Publisher, cutoffs[^1], ct))
+                IReadOnlyList<StoredName> stored = await OutboxRows.NamesAsync(
+                    connection,
+                    source.Publisher,
+                    cutoffs[^1],
+                    ct);
+                foreach (StoredName name in stored)
                 {
-                    if (!Resolves(types, stored.Name))
-                        unread.Add($"{source.Publisher.Name}: {stored.Name} ({stored.Total} row(s))");
+                    if (!Resolves(types, name.Name))
+                        unread.Add($"{source.Publisher.Name}: {name.Name} ({name.Total} row(s))");
                 }
             }
 
