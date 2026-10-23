@@ -58,9 +58,10 @@ services:
     healthcheck:
       # Both applications, asked of the running node in one call (§14.1): a
       # broker without the plugin runs healthy while every saga schedule hangs
-      # on a declare it refuses (ADR-021). erlang:error is the non-zero exit,
-      # and halt would stop the broker.
-      test: ["CMD", "rabbitmqctl", "eval", "A = [N || {N, _, _} <- application:which_applications()], [rabbit, rabbitmq_delayed_message_exchange] -- A =:= [] orelse erlang:error(not_running)."]
+      # (ADR-021). The cookie test comes first, because this runs as root and a
+      # call that creates the cookie ahead of the broker leaves it unreadable.
+      # erlang:error is the non-zero exit, and halt would stop the broker.
+      test: ["CMD-SHELL", "test -f /var/lib/rabbitmq/.erlang.cookie && rabbitmqctl eval 'A =[N || {N, _, _} <- application:which_applications()], [rabbit, rabbitmq_delayed_message_exchange] -- A =:= [] orelse erlang:error(not_running).'"]
       interval: 30s
       # Quick while starting so `up --wait` is not held for a steady-state
       # interval; the key's floor is §14.1's.

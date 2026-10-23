@@ -140,7 +140,7 @@ rabbitmq:
   ports: [ "127.0.0.1:5672:5672", "127.0.0.1:15672:15672" ]
   volumes: [ rabbit-data:/var/lib/rabbitmq ]
   healthcheck:
-    test: ["CMD", "rabbitmqctl", "eval", "A = [N || {N, _, _} <- application:which_applications()], [rabbit, rabbitmq_delayed_message_exchange] -- A =:= [] orelse erlang:error(not_running)."]
+    test: ["CMD-SHELL", "test -f /var/lib/rabbitmq/.erlang.cookie && rabbitmqctl eval 'A = [N || {N, _, _} <- application:which_applications()], [rabbit, rabbitmq_delayed_message_exchange] -- A =:= [] orelse erlang:error(not_running).'"]
     interval: 30s
     start_period: 60s
     start_interval: 2s
@@ -157,6 +157,13 @@ stock broker, which lacks the plugin, exits 69. The steady-state interval is
 that key adds is stated where `include` states its own. A pipe of
 `rabbitmq-plugins list -e` into `grep` would match the pattern the command
 echoes in its own banner, and pass on a stock broker.
+
+**The check opens with a test for the Erlang cookie, and the fast start-up
+interval is why.** A healthcheck runs as root, and a `rabbitmqctl` call that
+finds no cookie writes one, root-owned and mode 0400, before the broker has
+written its own. The broker, which runs as `rabbitmq`, then cannot read it and
+exits 1 with `eacces`. The former first call came ten seconds in, after the
+broker had written it; at 2 s it is a race, and CI's smoke job lost it.
 
 The same image enables `rabbitmq_prometheus` with per-object metrics on
 (both in `rabbitmq/Dockerfile`), because `rabbitmq_queue_messages` carries a
