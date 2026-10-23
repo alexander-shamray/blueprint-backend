@@ -32,6 +32,7 @@ half-checked, as an IPv6 origin is below. */}}
 {{- if gt $prefix 32 }}
 {{- fail (printf "ingress.trustedNetworks[%d] has a prefix length above 32." $i) }}
 {{- end }}
+{{- $value := 0 }}
 {{- range $octet := splitList "." $addr }}
 {{- if gt (atoi $octet) 255 }}
 {{- fail (printf "ingress.trustedNetworks[%d] has an octet above 255." $i) }}
@@ -44,6 +45,18 @@ whole test, as it is for the port below. */}}
 {{- if ne $octet (printf "%d" (atoi $octet)) }}
 {{- fail (printf "ingress.trustedNetworks[%d] spells an octet non-canonically (%q). IPNetwork.Parse reads a leading zero as OCTAL — 010.0.0.0/8 parses to 8.0.0.0/8, measured — so the gateway would trust a different network from the one written, silently (§10.3, §15.3)." $i $octet) }}
 {{- end }}
+{{- $value = add (mul $value 256) (atoi $octet) }}
+{{- end }}
+{{- /* The host bits, which `IPNetwork.Parse` refuses: `10.42.0.1/16` has a base
+address with bits set past its prefix, and the gateway throws on it when it
+first resolves ForwardedHeadersOptions, after the rollout has begun. The address
+as an integer must divide by the size of its block. */}}
+{{- $block := 1 }}
+{{- range until (int (sub 32 $prefix)) }}
+{{- $block = mul $block 2 }}
+{{- end }}
+{{- if ne (mod $value $block) 0 }}
+{{- fail (printf "ingress.trustedNetworks[%d] has bits set past its prefix length. IPNetwork.Parse refuses a base address that is not the network's first, so the pods die at startup after the rollout has begun; write the network address (§15.4)." $i) }}
 {{- end }}
 {{- /* The trimmed value, for the reason the origins list gives below. */}}
 Ingress__TrustedNetworks__{{ $i }}: {{ $n | quote }}

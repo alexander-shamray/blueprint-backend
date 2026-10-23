@@ -2251,6 +2251,16 @@ refuses 'a trusted network with a bad prefix fails the render' 'prefix length ab
 # writes one network and the gateway trusts another.
 refuses 'a trusted network with an octal octet fails the render' 'non-canonically' \
     --set 'ingress.trustedNetworks={010.0.0.0/8}'
+# IPNetwork.Parse refuses a base address with bits set past its prefix, so
+# 10.42.0.1/16 renders and then kills the pods; the network's own address and
+# the two ends of the prefix range render.
+refuses 'a trusted network with host bits set fails the render' 'bits set past its prefix' \
+    --set 'ingress.trustedNetworks={10.42.0.1/16}'
+"$HELM" template gateway "$CHARTS_DIR/gateway" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+    --set 'ingress.trustedNetworks={10.42.0.0/16,192.168.1.7/32,0.0.0.0/0,10.0.0.0/8}' \
+    >"$OUT/networks.txt" 2>&1 || true
+check 'a trusted network on its prefix boundary renders' \
+    grep -q 'Ingress__TrustedNetworks__3: "10.0.0.0/8"' "$OUT/networks.txt"
 
 # The rendered value has to be the validated one: a guard that checks one
 # string and ships another passes every test above and fails the host's exact
