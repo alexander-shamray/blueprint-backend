@@ -27,10 +27,11 @@ include:
   - services/notifications.yml
 ```
 
-**`include` is what raises the floor, and it is the one prerequisite this
-section has.** Compose gained the top-level element in **v2.20.0**; an older
-v2 rejects this model before anything starts, which is a failure at parse time
-rather than a service that misbehaves. Docker Desktop and a current
+**`include` is what raises the floor, and it is the one Compose prerequisite
+this section has.** Compose gained the top-level element in **v2.20.0**; an
+older v2 rejects this model before anything starts, which is a failure at parse
+time rather than a service that misbehaves. The broker's `start_interval`
+below adds Docker Engine 25 to it. Docker Desktop and a current
 `docker-compose-plugin` are both well past it, so "only Docker" holds — the
 version is stated because a floor nobody writes down is one a stale
 installation discovers.
@@ -152,10 +153,10 @@ Erlang VM that takes every core for its start-up: the former pair of calls
 every 10 s was over half a core on an idle stack, with peaks of seven or eight.
 `erlang:error` is the non-zero exit, where `halt` would stop the broker, and a
 stock broker, which lacks the plugin, exits 69. The steady-state interval is
-30 s, with a 2 s `start_interval` so `up --wait` is not held for it; that key
-needs Compose 2.20 and Engine 25. A pipe of `rabbitmq-plugins list -e` into
-`grep` would match the pattern the command echoes in its own banner, and pass
-on a stock broker.
+30 s, with a 2 s `start_interval` so `up --wait` is not held for it; the floor
+that key adds is stated where `include` states its own. A pipe of
+`rabbitmq-plugins list -e` into `grep` would match the pattern the command
+echoes in its own banner, and pass on a stock broker.
 
 The same image enables `rabbitmq_prometheus` with per-object metrics on
 (both in `rabbitmq/Dockerfile`), because `rabbitmq_queue_messages` carries a

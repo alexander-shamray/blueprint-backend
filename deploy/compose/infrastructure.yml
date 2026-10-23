@@ -63,7 +63,7 @@ services:
       test: ["CMD", "rabbitmqctl", "eval", "A = [N || {N, _, _} <- application:which_applications()], [rabbit, rabbitmq_delayed_message_exchange] -- A =:= [] orelse erlang:error(not_running)."]
       interval: 30s
       # Quick while starting so `up --wait` is not held for a steady-state
-      # interval (Compose 2.20, Engine 25).
+      # interval; the key's floor is §14.1's.
       start_period: 60s
       start_interval: 2s
       retries: 3
