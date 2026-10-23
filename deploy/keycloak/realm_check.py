@@ -256,10 +256,10 @@ ENVIRONMENT = (
 )
 BASE_URL_VARIABLE, REALM_VARIABLE = ENVIRONMENT[0], ENVIRONMENT[1]
 
-# Every flag this gate reads, and it reads no other. Keycloak serialises these
-# as JSON booleans in both an export and an admin-API answer, so anything else
-# is a hand-edited realm — and `check_flags_are_booleans` refuses one rather
-# than comparing it. The comparisons below are all identity tests against
+# Every client flag this gate reads, and it reads no other. Keycloak serialises
+# these as JSON booleans in both an export and an admin-API answer, so anything
+# else is a hand-edited realm — and `check_flags_are_booleans` refuses one
+# rather than comparing it. The comparisons below are all identity tests against
 # `True` or `False`, which means a string `"true"` would be neither enabled nor
 # disabled but *unjudged*, and an unjudged flag is a pass.
 FLAGS = (
