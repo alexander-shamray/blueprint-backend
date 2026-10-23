@@ -476,6 +476,7 @@ COMPOSE_INDEX = f"{COMPOSE_DIR}/docker-compose.yml"
 COMPOSE_UNITS = "services"
 COMPOSE_TEMPLATE_UNIT = f"{COMPOSE_UNITS}/{TEMPLATE.lower()}.yml"
 INCLUDE_ENTRY = re.compile(r"^  - (\S+)$")
+INCLUDE_KEY = re.compile(r"^include:[ \t]*(?:#.*)?$")
 
 # One service's `environment:` mapping in that file, and the keys inside it,
 # read off the block just rendered rather than the template, because the
@@ -995,13 +996,15 @@ def compose_included(repo_root: Path) -> list[tuple[int, str]]:
     entries: list[tuple[int, str]] = []
     listing = False
     for number, line in enumerate(text.split("\n")):
-        if line.rstrip() == "include:":
+        if INCLUDE_KEY.fullmatch(line):
             listing = True
-        elif listing and line.strip() and not line.startswith(" "):
+        elif not listing or not line.strip() or line.lstrip().startswith("#"):
+            continue
+        elif not line.startswith(" "):
             listing = False
-        elif (match := INCLUDE_ENTRY.fullmatch(line)) and listing:
+        elif match := INCLUDE_ENTRY.fullmatch(line):
             entries.append((number, match.group(1)))
-        elif listing and line.strip() and not line.lstrip().startswith("#"):
+        else:
             # A comment, padding or the long form hides a unit from both checks that read this list.
             raise ScaffoldError(
                 f"{COMPOSE_INDEX} line {number + 1} is under `include:` and is not an entry this script "
