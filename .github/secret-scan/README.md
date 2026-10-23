@@ -33,6 +33,10 @@ suppression whose finding has gone is a decision nobody has re-read.
 - **Anything it has no rule for.** It is a pattern scanner, not an entropy
   oracle: the list of rules is the list of things it can find, and a
   high-entropy string under a name nobody predicted passes.
+- **A credential-named key in a shape no rule reads.** The name rules read a
+  quoted value, a bare value after `=` (also behind a list dash, `ENV` or
+  `ARG`) and a bare YAML mapping value; a block scalar, a flow mapping or a
+  value split across lines is not read.
 - **Whether a value is live.** A sample password and a production one are the
   same shape, which is why the accepted ones are enumerated rather than
   guessed at.

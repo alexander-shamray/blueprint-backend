@@ -172,3 +172,10 @@ deploy/compose/services/catalog.yml | credential-assignment | e5d152deced8 | The
 # hands out a fixed literal and verifies nothing, and TokenUri is a URL whose key happens to say token.
 deploy/compose/push-simulator/mappings/token.json | credential-assignment | 2b4543fd9d28 | The simulator's fixed access token, which no provider issues or checks.
 deploy/compose/services/notifications.yml | credential-assignment | 5e9846d95da2 | Fcm__TokenUri, the simulator's token endpoint address and no credential.
+
+# Helm values that name a Kubernetes Secret, a key inside one, or a provider's endpoint: references by name, with
+# no value in them. The YAML rule reads a key that says secret or token and cannot tell a name from a value.
+deploy/helm/catalog/values.yaml | yaml-credential-value | 85dbe15d75ef | secretKeyKey names the key inside the referenced Secret, and is no credential.
+deploy/helm/web-bff/values.yaml | yaml-credential-value | 85dbe15d75ef | The same key name, in the BFF's values.
+deploy/helm/gateway/values.yaml | yaml-credential-value | e34cac71a8b3 | secretName is the TLS Secret's name, a reference and no value.
+deploy/helm/notifications/values.yaml | yaml-credential-value | 5ca0daa691cd | tokenUri is the provider's token endpoint address, a URL whose key says token.

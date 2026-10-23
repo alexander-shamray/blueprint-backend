@@ -106,7 +106,7 @@ REFERENCE = re.compile(
 # value, not against writing it down. So the wrapper is peeled and the default
 # judged, and Section 14.1's local-development defaults reach the allow-list as
 # decisions with reasons.
-DEFAULTED_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:[-=]?(.*)\}$", re.S)
+DEFAULTED_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[-=]?|[-=])(.*)\}$", re.S)
 
 # Characters a mask is made of. A value composed only of these carries nothing.
 MASK_CHARS = "*xX#.…_- \t"
@@ -218,7 +218,7 @@ RULES: list[Rule] = [
     Rule(
         "private-key-block",
         "a PEM private key block: the key material itself, not a reference to it",
-        r"(-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----)"),
+        r"(-----BEGIN (?:(?:RSA |DSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY|PGP PRIVATE KEY BLOCK)-----)"),
 
     # §14.1 uses this shape with local defaults, which is why a real one would
     # be pasted in unnoticed. The value runs to the next `;` or quote, where a
@@ -301,7 +301,7 @@ RULES: list[Rule] = [
         group="value",
         flags=re.IGNORECASE),
 
-    # The one shape the rule above cannot see: a `.env` file, where the value
+    # A `.env` file, a Compose list item or a Dockerfile `ENV` or `ARG` line, where the value
     # is not quoted. The value has to be a bare word, or this fires on every
     # module-level assignment in Python and C#: whitespace, brackets, quotes and
     # a trailing `;` or `,` describe an expression, not a password. The quoted
@@ -309,8 +309,19 @@ RULES: list[Rule] = [
     Rule(
         "env-assignment",
         "an environment-style assignment gives a credential-shaped name a value",
-        rf"^[ \t]*(?:export[ \t]+)?(?P<name>{CREDENTIAL_NAME})[ \t]*=[ \t]*"
+        rf"^[ \t]*(?:-[ \t]+|(?:ENV|ARG)[ \t]+)?(?:export[ \t]+)?(?P<name>{CREDENTIAL_NAME})[ \t]*=[ \t]*"
         r"(?P<value>[^\s\"'()\[\]<>;,]+)[ \t]*$",
+        group="value",
+        flags=re.IGNORECASE,
+        reject=names_itself),
+
+    # The same, for a YAML mapping value, which is how this repository's Helm values are written. A boolean or a
+    # null is the scalar a switch is made of, and a reference or a quoted value is not a bare word.
+    Rule(
+        "yaml-credential-value",
+        "a credential-shaped YAML key is given an unquoted literal",
+        rf"^[ \t]*(?:-[ \t]+)?(?P<name>{CREDENTIAL_NAME})[ \t]*:[ \t]+(?!(?:true|false|null)[ \t]*(?:#.*)?$)"
+        r"(?P<value>[^\s\"'()\[\]<>;,{}#|>&*!%@`]+)[ \t]*(?:#.*)?$",
         group="value",
         flags=re.IGNORECASE,
         reject=names_itself),
