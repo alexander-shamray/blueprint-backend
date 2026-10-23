@@ -1,3 +1,4 @@
+using Common.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -85,12 +86,12 @@ public class PrivacyOptionsTests
     [Fact]
     public void A_host_with_an_impossible_service_level_does_not_start()
     {
-        using WebApplicationFactory<Program> factory = new HostSmokeTests.AuthenticatedUnreachableFactory()
-            .WithWebHostBuilder(web => web.ConfigureAppConfiguration((_, configuration) =>
-                configuration.AddInMemoryCollection(
-                    new Dictionary<string, string?> { ["Privacy:CompletionSlo"] = "00:00:00" })));
-
-        Exception refused = Should.Throw<Exception>(() => factory.CreateClient());
+        Exception refused = StartRefusal.Ask(
+            () => new HostSmokeTests.AuthenticatedUnreachableFactory()
+                .WithWebHostBuilder(web => web.ConfigureAppConfiguration((_, configuration) =>
+                    configuration.AddInMemoryCollection(
+                        new Dictionary<string, string?> { ["Privacy:CompletionSlo"] = "00:00:00" }))),
+            factory => factory.CreateClient());
 
         refused.ToString().ShouldContain("CompletionSlo", Case.Sensitive, "ValidateOnStart names the setting");
     }
@@ -98,12 +99,12 @@ public class PrivacyOptionsTests
     [Fact]
     public void A_host_with_a_holder_that_is_not_a_name_does_not_start()
     {
-        using WebApplicationFactory<Program> factory = new HostSmokeTests.AuthenticatedUnreachableFactory()
-            .WithWebHostBuilder(web => web.ConfigureAppConfiguration((_, configuration) =>
-                configuration.AddInMemoryCollection(
-                    new Dictionary<string, string?> { ["Privacy:Responders:0"] = "Not A Name" })));
-
-        Exception refused = Should.Throw<Exception>(() => factory.CreateClient());
+        Exception refused = StartRefusal.Ask(
+            () => new HostSmokeTests.AuthenticatedUnreachableFactory()
+                .WithWebHostBuilder(web => web.ConfigureAppConfiguration((_, configuration) =>
+                    configuration.AddInMemoryCollection(
+                        new Dictionary<string, string?> { ["Privacy:Responders:0"] = "Not A Name" }))),
+            factory => factory.CreateClient());
 
         refused.ToString().ShouldContain("Privacy:Responders", Case.Sensitive, "ValidateOnStart names the setting");
     }
