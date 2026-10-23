@@ -81,9 +81,9 @@ public static class Replay
                 {
                     throw new InvalidOperationException(
                         "The window holds rows stored under names the contracts do not carry, and the tool cannot " +
-                        $"tell whether one is of the eight, so a reset could delete facts it cannot resend. Unread: {names}. " +
-                        "A rename or a retired contract version leaves such rows until retention purges them. " +
-                        "Nothing was deleted or sent.");
+                        "tell whether one is of the eight, so a reset could delete facts it cannot resend. " +
+                        $"Unread: {names}. A rename or a retired contract version leaves such rows until " +
+                        "retention purges them. Nothing was deleted or sent.");
                 }
 
                 await output.WriteLineAsync(
