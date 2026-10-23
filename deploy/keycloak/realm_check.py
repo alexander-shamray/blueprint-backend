@@ -269,6 +269,7 @@ FLAGS = (
     "serviceAccountsEnabled",
     "enabled",
     "fullScopeAllowed",
+    "publicClient",
 )
 
 
