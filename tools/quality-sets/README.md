@@ -24,21 +24,21 @@ One entry per issue that carries the sweeps' trailer, so a hand filing is not
 one. Each names the issue, its kind and severity from the labels, the
 **commit it was found on**, and the **files** its *Affected lines* section
 names that exist at that commit. The commit is the issue's pinned sha or its
-*found by … at <sha>* abbreviation, named by those words; a hash quoted in the
-affected lines is not a pin, and counts only when no words name one and this
-clone holds it. An issue that names none, or one this clone does not hold, keeps
-`commit: null` and is listed but never scored.
+*found by … at <sha>* abbreviation, named by those words outside the affected
+lines; a hash quoted in them is not a pin, and a bare hash elsewhere counts only
+when no words name one and this clone holds it. An issue that names none, or one
+this clone does not hold, keeps `commit: null` and is listed but never scored.
 
 ## `reviews.json`: what earlier review rounds raised
 
 One entry per top-level inline comment by Copilot on a merged pull request: the
-pull request, its base, the **head the comment was raised on** (one head is
-one round), the file, the line it was raised on at that head (`original_line`,
-since `line` is reported against the comment's latest commit) and the first 400
-characters of the text. The
-external reviewers are archived (`token-plan.md` step 4), so these comments are
-the whole of what they found; the local reviewer's own findings are not
-recorded anywhere a set could read, because a round's JSON is not posted.
+pull request, its base, the **head the comment was raised on** (one head is one
+round), the file, the line it was raised on at that head (`original_line`, since
+`line` is reported against the comment's latest commit) and the first 400
+characters of the text. The external reviewers are archived (`token-plan.md`
+step 4), so these comments are the whole of what they found; the local
+reviewer's own findings are not recorded anywhere a set could read, because a
+round's JSON is not posted.
 
 ## What a score is
 
@@ -57,13 +57,14 @@ its files, so recall is an upper bound, and a finding on the right line about
 something else is a hit. A run reports `reported`, `entries`, `found`, `recall`
 and the `missed` ids, scored over the entries pinned to the run's commit only.
 
-It also reports `tokens`: the input, cache-creation, cache-read and output counts
-that each `claude -p` result carries, and their `total`, summed over the run, a
-retried or failed slice's included. A review prints them per attempt; a sweep's
-progress line gives each slice's total. A run that ends on a usage-limit notice
-reports none, whatever `claude`'s exit code. A run's sessions are also in the transcripts, filed under its
-worktree's path, which `tools/token-usage` reads by the names `review_workspace`
-and `sweep_root` give it; renaming either is that report's change too.
+It also reports `tokens`: the input, cache-creation, cache-read and output
+counts that each `claude -p` result carries, and their `total`, summed over the
+run, a retried or failed slice's included. A review prints them per attempt; a
+sweep's progress line gives each slice's total. A run that ends on a usage-limit
+notice reports none, whatever `claude`'s exit code. A run's sessions are also in
+the transcripts, filed under its worktree's path, which `tools/token-usage`
+reads by the names `review_workspace` and `sweep_root` give it; renaming either
+is that report's change too.
 
 Recall is noisy: the same head scored 0 of 12 and 2 of 12 on two runs
 (`docs/token-usage.md`, 2026-10-11). Read a score as a sample, and run a head

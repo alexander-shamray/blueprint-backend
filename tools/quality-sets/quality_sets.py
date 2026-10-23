@@ -26,6 +26,7 @@ LINE_WINDOW = 10
 TEXT_CAP = 400
 TOKEN_KEYS = ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")
 SHA = re.compile(r"\b[0-9a-f]{40}\b")
+AFFECTED = re.compile(r"(?ms)^## Affected lines\s*\n(.*?)(?=^## |\Z)")
 PINNED = re.compile(r"(?i)\bpinned commit:?\s+([0-9a-f]{7,40})\b")
 FOUND_AT = re.compile(r"(?i)\bfound by\b.*?\bat ([0-9a-f]{7,40})\b")
 PATH = re.compile(r"[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)*\.(?:cs|py|sh|ps1|md|ya?ml|json|props|csproj|sql|tpl|txt|slnx)\b")
@@ -69,8 +70,10 @@ def resolve_commit(text):
 def pinned_commit(body):
     """The commit a sweep issue was found on: its 'pinned commit' or 'found ... at', else a sha this clone holds.
 
-    A bare 40-hex word is not a pin: the affected lines quote action pins before the pin is named.
+    Outside the affected lines, which quote action pins and other hashes before the pin is named. A bare
+    40-hex word is a pin only when no words name one and this clone resolves it.
     """
+    body = AFFECTED.sub("", body)
     named = PINNED.search(body) or FOUND_AT.search(body)
     if named:
         text = named.group(1)
@@ -83,7 +86,7 @@ def pinned_commit(body):
 
 def affected_text(title, body):
     """Where a sweep issue says the defect is: its Affected lines section, else everything."""
-    section = re.search(r"(?ms)^## Affected lines\s*\n(.*?)(?=^## |\Z)", body)
+    section = AFFECTED.search(body)
     return title + "\n" + (section.group(1) if section else body)
 
 
@@ -259,8 +262,8 @@ def tokens(spent):
 def ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
     """One non-interactive agent run; its findings, or SystemExit when it returned no JSON.
 
-    spent, a Counter, gains the run's tokens whether or not it returned findings, and a non-zero
-    exit is read for its usage and a usage-limit notice before it is refused.
+    spent, a Counter, gains the run's tokens whether or not it returned findings. A non-zero exit is
+    read for its usage, findings and a usage-limit notice; it is refused only when it returned none.
     """
     extra = [arg for d in add_dirs for arg in ("--add-dir", str(d))]
     done = run(claude, "-p", prompt, "--agents", agent_definition(agent), "--agent", agent,
@@ -270,7 +273,7 @@ def ask(claude, agent, prompt, cwd, add_dirs=(), spent=None):
         spent.update({key: usage[key] for key in TOKEN_KEYS if isinstance(usage.get(key), int)})
     value = agent_json(text)
     if value is None:
-        if "usage limit" in text.lower():
+        if "usage limit" in f"{text}\n{done.stderr}".lower():
             raise UsageLimit(f"{agent} stopped on a usage-limit notice: {text.strip()[:200]}")
         if done.returncode:
             raise SystemExit(f"{claude} exited {done.returncode}: {(done.stderr.strip() or text.strip())[:300]}")
