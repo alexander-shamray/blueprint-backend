@@ -37,8 +37,8 @@ ended: nothing carries the order back.
 **Amended by
 [ADR-146](ADR-146-shippings-erasure-empties-a-shipments-request-ids-before-it-deletes-the-address-in-two-statements-of-one-unit-1320-amending-adr-103.md)**,
 under which the emptying and the address delete are two statements of one
-unit, the emptying first, and not one batch, and reaches the shipments of the
-address rows present when it runs.
+unit, the emptying first, and not one batch; the emptying reaches the shipments
+of the address rows present when it runs.
 
 ---
 
