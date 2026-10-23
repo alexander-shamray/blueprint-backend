@@ -31,9 +31,13 @@ internal sealed class SqlShippingPersonalDataStore(ShippingDbContext db, IDbConn
         """;
 
     // Run first, while the address row still names the order's customer: the list names the buyer to whoever can
-    // join it to an open request (ADR-103), and the shipment beside it stays whole.
-    private const string EmptyErasedUnderSql =
+    // join it to an open request (ADR-103), and the shipment beside it stays whole. The range lock is taken first and
+    // on its own, because the update is driven from Shipments and probes no address range when it has none (ADR-146).
+    internal const string EmptyErasedUnderSql =
         $"""
+        DECLARE @held int = (
+            SELECT COUNT(*) FROM shipping.DeliveryAddresses WITH (UPDLOCK, HOLDLOCK) WHERE CustomerId = @SubjectId);
+
         UPDATE s
         SET ErasedUnder = N'[]'
         FROM shipping.Shipments AS s

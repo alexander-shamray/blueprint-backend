@@ -4,6 +4,7 @@ using Shipping.Application.Addresses;
 using Shipping.Application.Carrier;
 using Shipping.Application.Privacy;
 using Shipping.Domain.Shipments;
+using Shipping.Infrastructure.Persistence;
 using Shipping.TestSupport;
 using Shouldly;
 using Xunit;
@@ -56,6 +57,47 @@ public sealed class ErasureFenceTests(ServiceFixture fixture) : IAsyncLifetime
             () => save.WaitAsync(TimeSpan.FromSeconds(3), ct),
             "an insert the erasure's range lock does not hold back lands before the audit row, " +
             "and the worker books it");
+
+        commit.SetResult();
+        await erasure.WaitAsync(TimeSpan.FromSeconds(30), ct);
+        await save.WaitAsync(TimeSpan.FromSeconds(30), ct);
+    }
+
+    [Fact]
+    public async Task An_address_saved_between_the_emptying_and_the_delete_waits_for_the_commit()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Guid subject = Guid.CreateVersion7();
+        OrderId order = new(Guid.CreateVersion7());
+        TaskCompletionSource emptied = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource commit = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Only the emptying has run; the delete's own lock is not yet taken, so this lock is the only thing held.
+        await using AsyncServiceScope erasing = fixture.Factory.Services.CreateAsyncScope();
+        IUnitOfWork unit = erasing.ServiceProvider.GetRequiredService<IUnitOfWork>();
+        Task erasure = unit.ExecuteAsync(
+            async inner =>
+            {
+                await unit.ExecuteRawAsync(
+                    SqlShippingPersonalDataStore.EmptyErasedUnderSql,
+                    new { SubjectId = subject, RequestId = Guid.CreateVersion7().ToString() },
+                    inner);
+                emptied.SetResult();
+                await commit.Task;
+
+                return 0;
+            },
+            ct);
+        await emptied.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+
+        await using AsyncServiceScope saving = fixture.Factory.Services.CreateAsyncScope();
+        Task save = saving.ServiceProvider
+            .GetRequiredService<IDeliveryAddressStore>()
+            .SaveAsync(order, subject, Address, Now, ct);
+
+        await Should.ThrowAsync<TimeoutException>(
+            () => save.WaitAsync(TimeSpan.FromSeconds(3), ct),
+            "a row saved before the delete would be deleted with its shipment's list kept (ADR-146)");
 
         commit.SetResult();
         await erasure.WaitAsync(TimeSpan.FromSeconds(30), ct);
