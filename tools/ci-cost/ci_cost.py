@@ -146,8 +146,14 @@ def jobs_of(fetch: Fetch, repo: str, run: dict) -> list[dict]:
 
 
 def count_prs(fetch: Fetch, repo: str, window: Window) -> int:
-    query = f"repo:{repo}+is:pr+created:{window.first.isoformat()}..{window.last.isoformat()}"
-    return fetch(f"search/issues?q={query}&per_page=1")["total_count"]
+    """PRs opened in the window, from the repository's own listing: some tokens are refused the search API."""
+    count = 0
+    for pull in paged(fetch, f"repos/{repo}/pulls?state=all&sort=created&direction=desc"):
+        created = parse(pull["created_at"])
+        if created < window.start:
+            break
+        count += created < window.end
+    return count
 
 
 def count_label_events(fetch: Fetch, repo: str, window: Window) -> int:
@@ -234,9 +240,9 @@ def table(usages: list[Usage], plan: str) -> str:
     row("List price if private, per 30 days", lambda u: money(u.monthly(u.dollars)))
     row(f"Over the {plan} allowance, per 30 days",
         lambda u: money(max(0.0, u.monthly(u.dollars) - ALLOWANCES[plan] * RATES["Linux"])))
-    row("PRs opened", lambda u: "n/a" if u.prs is None else u.prs)
-    row("Commits pushed that ran a workflow", lambda u: u.pushes)
-    row("Label events", lambda u: "n/a" if u.label_events is None else u.label_events)
+    row("PRs opened", lambda u: "n/a" if u.prs is None else f"{u.prs:,}")
+    row("Commits pushed that ran a workflow", lambda u: f"{u.pushes:,}")
+    row("Label events", lambda u: "n/a" if u.label_events is None else f"{u.label_events:,}")
     row("List price per run", lambda u: per(u.dollars, u.runs))
     row("List price per PR", lambda u: per(u.dollars, u.prs))
     row("GHCR container versions, at the window's end",
