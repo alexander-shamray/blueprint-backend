@@ -178,6 +178,7 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
             'setsid git push --force origin "$branch"',
             'command -p git push --force origin "$branch"',
             'git' + chr(9) + 'push --force origin "$branch"',
+            'git push origin ' + chr(92) + chr(10) + '  --force "$branch"',
         )
         baseline = git_commands(self.source)
         for line in hidden:
