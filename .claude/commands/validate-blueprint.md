@@ -10,8 +10,8 @@ for contradictions and, once code exists, drift from it. Checks 1–8 and 10
 cover the roadmap, 1–9 `docs/testing.md`. Appendix C beats the roadmap; §12
 beats `docs/testing.md`. (why: docs/commands/validate-blueprint.md, *Scope*)
 
-Scope: $1 — empty, sweep all three; a filename, audit that chapter against
-every other; a topic, trace it everywhere.
+Scope: $ARGUMENTS — empty, sweep all three; a filename, audit that chapter
+against every other; a topic, trace it everywhere.
 
 **First, establish the phase.** If `Platform.slnx` (or any `src/`) exists,
 run check 9; else skip it — say which you ran.

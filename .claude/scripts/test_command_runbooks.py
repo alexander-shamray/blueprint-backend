@@ -85,14 +85,11 @@ class EachSplitCommandHasBothHalves(unittest.TestCase):
 
     def test_free_text_arrives_through_arguments(self):
         # A positional placeholder is the first word only, so an unquoted title or a second path is cut off.
-        # validate-blueprint takes one filename, which is why it alone may, and the control keeps that true.
-        for path in sorted(COMMANDS.glob("*.md")):
+        paths = sorted(COMMANDS.glob("*.md"))
+        self.assertGreater(len(paths), len(CEILINGS), "the glob stopped finding the commands")
+        for path in paths:
             with self.subTest(command=path.name):
-                positional = re.findall(r"\$[1-9]", path.read_text(encoding="utf-8"))
-                if path.name == "validate-blueprint.md":
-                    self.assertTrue(positional, "the one exemption no longer uses a positional placeholder")
-                else:
-                    self.assertEqual([], positional)
+                self.assertEqual([], re.findall(r"\$[1-9]", path.read_text(encoding="utf-8")))
 
 
 if __name__ == "__main__":
