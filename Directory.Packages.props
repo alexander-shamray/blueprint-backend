@@ -141,7 +141,7 @@
          transitively by the package above too. It sits at the floor the pinned patch above reaches it at,
          as anything lower fails NU1109. The pin came in when that floor was 2.0.0, which carries
          GHSA-v5pm-xwqc-g5wc and failed the restore on NU1903. -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="3.11.0" />
   </ItemGroup>
   <ItemGroup Label="Telemetry">
     <PackageVersion Include="OpenTelemetry" Version="1.17.0" />
