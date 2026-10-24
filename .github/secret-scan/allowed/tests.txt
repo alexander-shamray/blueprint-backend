@@ -123,3 +123,4 @@ tests/Privacy.Api.Tests/MetricsRegistrationTests.cs | connection-string-password
 tests/Web.Bff.Tests/SigV4PresignerTests.cs | aws-access-key-id | 1a5d44a2dca1 | AWS's documented example access key id, which belongs to no account.
 tests/Web.Bff.Tests/SigV4PresignerTests.cs | credential-assignment | 78314b11be2e | AWS's documented example secret key, which belongs to no account.
 tests/Catalog.Api.Tests/ProductImageStoreOptionsTests.cs | credential-assignment | ed24bc0bb03d | A placeholder key for an options object the suite validates and never uses against a store.
+tests/Common.Assistant.Anthropic.Tests/Support.cs | credential-assignment | cdba95a3170e | An invented Anthropic key the SDK client is built with, sent only to the suite's own HTTP handler fake.
