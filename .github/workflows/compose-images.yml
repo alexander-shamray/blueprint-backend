@@ -1,0 +1,38 @@
+name: Compose images
+
+# Split from `compose.yml` because path filtering is per-workflow: that smoke pulls and builds every image, so a job
+# sharing its filter would run it on an edit to dependabot.yml. This one reads text and needs no Docker.
+on:
+  pull_request:
+    paths:
+      - 'deploy/compose/**'
+      - '.github/dependabot.yml'
+      - '.github/workflows/compose-images.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/compose/**'
+      - '.github/dependabot.yml'
+      - '.github/workflows/compose-images.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compose-images-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      # The floor every Python job here pins, for the reason CLAUDE.md gives.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: The Dependabot mirror names the images the stack runs
+        run: python -m unittest discover -s deploy/compose/images

@@ -45,7 +45,7 @@ updates:
         update-types: [version-update:semver-major]
 
   # Every service image, the broker's, and the mirror of the Compose stack's third-party images, which the
-  # docker-compose ecosystem cannot reach through `include` (deploy/compose/images/test_images.py).
+  # docker-compose ecosystem cannot reach through `include`.
   - package-ecosystem: docker
     directories:
       - /src/**/*

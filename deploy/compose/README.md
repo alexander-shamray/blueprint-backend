@@ -555,8 +555,10 @@ directory it is given and does not follow `include`, so it sees none of the
 images in `infrastructure.yml` or `services/`. `images/Dockerfile` mirrors
 them as `FROM` lines, which its docker ecosystem does read, and
 `images/test_images.py` holds the mirror equal to the Compose files, in CI
-through `compose.yml`. A Dependabot bump of one line is then a red pull
-request until the Compose line moves with it, and an image added to a Compose
-file is a red one until it is mirrored. `redis:7-alpine` and
-`quay.io/keycloak/keycloak:26.0` float within a line; pinning them to a patch
+through `compose-images.yml`. A Dependabot bump of one line is then a red
+pull request until every file that holds that image moves with it, the
+WireMock.Net pin's other homes included
+([§14.1](../../docs/backend-architecture/14-local-development.md)), and an
+image added to a Compose file is a red one until it is mirrored. The two
+Redis instances and Keycloak float within a line; pinning them to a patch
 release is a separate decision, because the stack's behaviour moves with it.
