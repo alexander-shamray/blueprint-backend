@@ -318,11 +318,12 @@ as a store configured to taste. Its `deployed` job runs the check daily and on
 [§10.8](10-api-gateway.md)'s two credential pairs it asks the deployed store to
 delete a key nothing holds and to list the bucket, and fails the run unless
 every answer is `AccessDenied`. Before those, the BFF's pair writes an empty
-object under `uploads/` and Catalog's reads it back, and the run fails unless
-both are allowed, so a bucket the pairs have no grant on is not a pass
-([ADR-148](adr/ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md)). It is opted in by a repository variable, on the
-realm job's reasoning, and a red run files a tracker issue or comments on the
-open one ([ADR-111](adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)).
+object under `uploads/` and the attaching service's reads it back, and the run
+fails unless both are allowed, so a bucket the pairs have no grant on is not a
+pass
+([ADR-148](adr/ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md)).
+It is opted in by a repository variable, on the realm job's reasoning, and a red
+run files a tracker issue or comments on the open one ([ADR-111](adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)).
 A green run then requests a monitor's URL, so a schedule that stops is heard as
 silence, and `provision.py` sets what the Environment needs
 ([ADR-114](adr/ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md)).
