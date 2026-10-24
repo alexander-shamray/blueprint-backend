@@ -1,7 +1,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using Common.Application;
-using Common.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Devices;
@@ -138,17 +137,14 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
         (Guid customer, Notification notice) = await OwedAsync("en");
         await RegisterAsync(customer, FcmPushProvider.Name, "unavailable-1");
         await FanOutAsync();
-        DateTimeOffset before = DateTimeOffset.UtcNow;
+        DateTimeOffset before = await fixture.DatabaseNowAsync();
 
         (await PushPassAsync()).ShouldBe(new SendPass(1, 0));
 
         PushDelivery waiting = (await DeliveriesAsync(notice.NotificationId)).ShouldHaveSingleItem();
         waiting.Status.ShouldBe(NotificationStatus.Pending);
         waiting.Attempts.ShouldBe(1);
-        waiting.NextAttemptAt.ShouldBeInRange(
-            before.AddSeconds(OutboxDispatcher.BackoffBaseSeconds - 2),
-            DateTimeOffset.UtcNow.AddSeconds(OutboxDispatcher.BackoffBaseSeconds + 2),
-            "the first fault waits the ladder's first step, not none and not a later one");
+        BackOffWindow.ShouldBeFirstStep(waiting.NextAttemptAt, before, await fixture.DatabaseNowAsync());
         (await PushPassAsync()).ShouldBe(new SendPass(0, 0), "a delivery still backing off is not claimed again");
     }
 
