@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The comments and C# lines a pull request adds, against the style guide.
+"""The comments, C# lines and Markdown prose lines a pull request adds, against the style guide.
 
 The guide's *Comments* and *Wrapping* rule; exit 1 is a finding, 2 a refusal.
 """
@@ -22,6 +22,15 @@ BLOCK_LIMIT = 5
 # files it exempts: a migration and its snapshot, and a designer.
 WIDTH_LIMIT = 120
 GENERATED = re.compile(r"(?:^|/)Migrations/|\.Designer\.cs$")
+
+# The same section's budget for a line of Markdown prose. The specs under docs/superpowers are never edited to match
+# the code that followed them (CLAUDE.md), so a line added there is a record and not prose.
+PROSE_LIMIT = 80
+PROSE_EXEMPT = ("docs/superpowers/", ".remember/")
+# A table row, an HTML line or a heading is not wrapped prose, and a line carrying a link or an address cannot be
+# wrapped inside it.
+UNWRAPPABLE = re.compile(r"^\s*(?:\||<|#)|\]\(|\]:|https?://")
+FENCE = re.compile(r"^\s*(?:```|~~~)")
 
 # A section, an Appendix E section, an ADR or a symbol: the owners a
 # `<remarks>` may exist to cite.
@@ -737,6 +746,34 @@ def judge(path, text, added):
     return findings(path, scan(path, text), added)
 
 
+def is_prose(path):
+    """Whether the gate holds a path to the prose width: Markdown, outside the records it exempts."""
+    return path.endswith(".md") and not path.startswith(PROSE_EXEMPT)
+
+
+def prose_width(path, text, added):
+    """Findings for the added Markdown prose lines that run past PROSE_LIMIT.
+
+    Code blocks and a leading front matter block are not prose, and the guide's other exemptions are UNWRAPPABLE.
+    """
+    found = []
+    fenced = False
+    lines = [line.rstrip("\r") for line in text.split("\n")]
+    front = lines[:1] == ["---"] and "---" in lines[1:]
+    front_end = lines.index("---", 1) + 1 if front else 0
+    for number, line in enumerate(lines, 1):
+        if number <= front_end:
+            continue
+        if FENCE.match(line):
+            fenced = not fenced
+            continue
+        if fenced or UNWRAPPABLE.search(line) or number not in added:
+            continue
+        if len(line) > PROSE_LIMIT:
+            found.append((path, number, f"a prose line runs {len(line)} columns, over {PROSE_LIMIT}"))
+    return found
+
+
 def findings(path, lines, added):
     """Findings for one scanned file, given the line numbers to judge."""
     found = []
@@ -988,7 +1025,7 @@ def main(argv):
         # The file list, not the hunks, says what is read, so a file the diff
         # is silent about is still opened.
         for path in sorted(paths):
-            if reader_for(path) is None:
+            if reader_for(path) is None and not is_prose(path):
                 continue
             numbers = added.get(path, set())
             raw = _git("show", f"{args.head}:{path}")
@@ -997,6 +1034,9 @@ def main(argv):
             except UnicodeDecodeError:
                 raise Unreadable(f"{path} is not UTF-8") from None
             judged += 1
+            if is_prose(path):
+                found.extend(prose_width(path, text, numbers))
+                continue
             try:
                 lines = scan(path, text)
             except Unreadable as error:

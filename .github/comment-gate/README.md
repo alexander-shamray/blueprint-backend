@@ -4,8 +4,9 @@
 row, a reviewer or a history, stresses a word, sits in a comment block
 longer than `BLOCK_LIMIT`, or is part of a C# `<remarks>` that cites no
 section, ADR or `cref`; no pull request but a docs one or a sweep adds
-more lines of C# comment than of C# code; and no line it adds to a C# file
-runs past `WIDTH_LIMIT` columns.**
+more lines of C# comment than of C# code; no line it adds to a C# file
+runs past `WIDTH_LIMIT` columns; and no prose line it adds to a Markdown
+file runs past `PROSE_LIMIT`.**
 [`docs/style-guide.md`](../../docs/style-guide.md)'s
 *Comments* section is the rule, and its *Wrapping* section owns the width;
 this gate is their mechanical half.
@@ -21,10 +22,10 @@ this gate is their mechanical half.
   not know refuses the run with exit 2 rather than passing it.
 - **Each changed file as the head commit holds it**, in the languages the
   rule names: `.cs`, `.py`, `.sh`, `.yml` and `.yaml`, the MSBuild files
-  (`.csproj`, `.props`, `.targets`) and `.editorconfig`. Anything else — the
-  Markdown, a Dockerfile, a Helm template, PowerShell — is
-  not read. A file that is not UTF-8, or Python that does not parse, refuses
-  the run.
+  (`.csproj`, `.props`, `.targets`) and `.editorconfig`, for comments; and
+  `.md`, for the width of its prose alone. Anything else — a Dockerfile, a
+  Helm template, PowerShell — is not read. A file that is not UTF-8, or
+  Python that does not parse, refuses the run.
 - **Every comment token, and nothing inside another literal as one.** A
   trailing comment is judged as much as a whole-line one, so
   `Call(); // PR-1` fails, and a Python docstring is a comment. A string, a
@@ -77,6 +78,17 @@ the inside of a literal. A file under a `Migrations/` directory or named
 suite also holds every tracked C# file to the width, so a line no diff added
 — one the gate's base copy judged before the width was in it — fails the
 suite rather than staying.
+
+**The width of a Markdown prose line.** An added line of a `.md` file longer
+than `PROSE_LIMIT` characters, its line break not counted, is a finding at
+that line, unless the guide exempts it: a table row, an HTML line, a heading,
+a line carrying a link or an address, a line inside a fenced code block, or
+one of a file's leading front matter. A file under `docs/superpowers/` or
+`.remember/` is exempt, since a spec is never edited to match the code that
+followed it. Markdown has no comments, so the check sits beside the comment
+rule and reads the same added lines. The suite does not hold the tracked
+files to it: about 212 old lines are over, and rewrapping them is a
+separate mechanical commit that this gate does not wait for.
 
 **Added lines only.** The corpus is brought under the rule by the sweeps in
 [`docs/churn-plan.md`](../../docs/churn-plan.md) and
