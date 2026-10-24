@@ -243,8 +243,8 @@ public sealed class RequestTests
     public async Task
         Bounds_a_strict_schema_may_not_carry_move_into_the_description_and_a_property_named_like_one_stays()
     {
-        // recent_logs' schema as the host's AdminReadTools declares it, plus a string length, an array floor, and a
-        // property called `minimum` that is a name, not a bound.
+        // A recent_logs schema as a host might declare it, plus a string length, an array floor, and a property
+        // called `minimum` that is a name, not a bound.
         TurnRequest request = Given.Request(new UserMessage("hi")) with
         {
             Tools =
