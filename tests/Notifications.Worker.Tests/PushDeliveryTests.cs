@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using Common.Application;
+using Common.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Devices;
@@ -129,6 +130,26 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
         string body = FcmSends().ShouldHaveSingleItem().Body!;
         body.ShouldContain(notice.EventId.ToString("N"), Case.Sensitive, "a resend replaces rather than stacks");
         body.ShouldContain(notice.OrderId.ToString("D"));
+    }
+
+    [Fact]
+    public async Task A_delivery_the_provider_cannot_take_backs_off_and_is_not_claimed_again_until_it_is_due()
+    {
+        (Guid customer, Notification notice) = await OwedAsync("en");
+        await RegisterAsync(customer, FcmPushProvider.Name, "unavailable-1");
+        await FanOutAsync();
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
+        (await PushPassAsync()).ShouldBe(new SendPass(1, 0));
+
+        PushDelivery waiting = (await DeliveriesAsync(notice.NotificationId)).ShouldHaveSingleItem();
+        waiting.Status.ShouldBe(NotificationStatus.Pending);
+        waiting.Attempts.ShouldBe(1);
+        waiting.NextAttemptAt.ShouldBeInRange(
+            before.AddSeconds(OutboxDispatcher.BackoffBaseSeconds - 2),
+            DateTimeOffset.UtcNow.AddSeconds(OutboxDispatcher.BackoffBaseSeconds + 2),
+            "the first fault waits the ladder's first step, not none and not a later one");
+        (await PushPassAsync()).ShouldBe(new SendPass(0, 0), "a delivery still backing off is not claimed again");
     }
 
     [Fact]

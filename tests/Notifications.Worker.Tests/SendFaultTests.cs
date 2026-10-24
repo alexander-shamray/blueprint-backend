@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Common.Infrastructure.Outbox;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Mail;
 using Notifications.Application.Records;
@@ -41,6 +42,7 @@ public sealed class SendFaultTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.DeliverAsync(OrderEvents.Placed(order, customer, At));
         await fixture.WaitUntilDueAsync(order);
         await relay.StopAsync(Ct);
+        DateTimeOffset before = DateTimeOffset.UtcNow;
 
         (await PassAsync(host)).ShouldBe(new SendPass(1, 0));
 
@@ -48,6 +50,8 @@ public sealed class SendFaultTests(ServiceFixture fixture) : IAsyncLifetime
         waiting.Status.ShouldBe(NotificationStatus.Pending);
         waiting.Attempts.ShouldBe(1);
         waiting.SendStartedAt.ShouldNotBeNull("the intent precedes every send, a failed one included");
+        ShouldBeBackedOff(waiting, before);
+        (await PassAsync(host)).ShouldBe(new SendPass(0, 0), "a row still backing off is not claimed again");
         (await fixture.QueueDepthAsync(ErrorQueue)).ShouldBe(0, "a dead relay is no consumer's fault (ADR-052)");
 
         await relay.StartAsync(Ct);
@@ -113,6 +117,7 @@ public sealed class SendFaultTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.StageContactAsync(customer, Mailbox, "en", TimeSpan.FromHours(25));
         fixture.ContactAnswers(customer, 503);
         Notification owed = await OwedAsync(order, customer);
+        DateTimeOffset before = DateTimeOffset.UtcNow;
 
         (await PassAsync(host)).ShouldBe(new SendPass(1, 0));
 
@@ -120,6 +125,8 @@ public sealed class SendFaultTests(ServiceFixture fixture) : IAsyncLifetime
         waiting.Status.ShouldBe(NotificationStatus.Pending);
         waiting.Attempts.ShouldBe(1);
         waiting.SendStartedAt.ShouldBeNull("nothing was rendered without a contact");
+        ShouldBeBackedOff(waiting, before);
+        (await PassAsync(host)).ShouldBe(new SendPass(0, 0), "a row still backing off is not claimed again");
         (await fixture.Relay.MessagesAsync(Ct)).ShouldBeEmpty();
     }
 
@@ -132,12 +139,15 @@ public sealed class SendFaultTests(ServiceFixture fixture) : IAsyncLifetime
         fixture.ContactAnswers(customer, 403);
         Notification owed = await OwedAsync(order, customer);
         using OutboundCount refused = OutboundCounter.ContactRefused(host.Services);
+        DateTimeOffset before = DateTimeOffset.UtcNow;
 
         (await PassAsync(host)).ShouldBe(new SendPass(1, 0));
 
         Notification waiting = await fixture.NotificationAsync(owed.NotificationId);
         waiting.Status.ShouldBe(NotificationStatus.Pending);
         waiting.Attempts.ShouldBe(1);
+        ShouldBeBackedOff(waiting, before);
+        (await PassAsync(host)).ShouldBe(new SendPass(0, 0), "a row still backing off is not claimed again");
         (await fixture.Relay.MessagesAsync(Ct)).ShouldBeEmpty("a refusal never proceeds on a stale row (ADR-052)");
         refused.Value.ShouldBe(1);
         host.CapturedLogs.Everything.ShouldContain(
@@ -192,6 +202,13 @@ public sealed class SendFaultTests(ServiceFixture fixture) : IAsyncLifetime
 
     private static Task<SendPass> PassAsync(NotificationsWorkerFactory host) =>
         host.Services.GetRequiredService<SendWorker>().RunOnceAsync(Ct);
+
+    // The ladder's first step, stamped on the engine's clock, which can differ from this host's by a moment.
+    private static void ShouldBeBackedOff(Notification row, DateTimeOffset before) =>
+        row.NextAttemptAt.ShouldBeInRange(
+            before.AddSeconds(OutboxDispatcher.BackoffBaseSeconds - 2),
+            DateTimeOffset.UtcNow.AddSeconds(OutboxDispatcher.BackoffBaseSeconds + 2),
+            "the first fault waits the ladder's first step, not none and not a later one");
 
     // Bound and released here, so Docker can bind it next; a port another process takes between is a rerun.
     private static int FreeLoopbackPort()
