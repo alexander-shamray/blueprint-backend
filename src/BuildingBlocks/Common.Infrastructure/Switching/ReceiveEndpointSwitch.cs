@@ -327,10 +327,11 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         catch (Exception ex)
         {
             // Retried on its own, since nothing else may come: a stop that failed leaves the queue consuming. The claim
-            // is taken under the gate, so a failure behind this one finds it and a late arming cannot add a chain.
+            // is taken under the gate, so a failure behind this one finds it and a late arming cannot add a chain, and
+            // last, so a log call that throws cannot leave a claim with no timer behind it.
             retry = Backoff(attempt);
-            claimed = ClaimRetry(queue);
             ApplyFailed(_log, queue, retry.Value, ex);
+            claimed = ClaimRetry(queue);
         }
         finally
         {
