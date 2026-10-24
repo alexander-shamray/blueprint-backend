@@ -364,8 +364,8 @@ deploy/objectstore/          §10.8's permissions asked of a deployed store.
                              prefix and a list of the bucket with each
                              credential pair, and requires AccessDenied; the
                              suite starts a local server that answers as a
-                             store configured to taste. It reads only its
-                             own tree
+                             store configured to taste. Of the repository,
+                             it reads only its own tree
 deploy/keycloak/             §11's token obligations against a Keycloak realm
                              representation. `realm_check.py` decides,
                              `read_admin.py` is the one file that talks to
