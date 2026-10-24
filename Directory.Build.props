@@ -43,10 +43,9 @@
     <AnalysisLevel>latest-Recommended</AnalysisLevel>
 
     <!--
-      CA1716 flags a name that is a reserved word in another .NET language, and
-      fires on `Error` (§10.5). It protects a VB or F# consumer of a published
-      library, and there is none: every project is consumed by C# inside this
-      repository, and §4.3 permits one assembly to cross a service boundary.
+      CA1716 flags a name reserved in another .NET language, and fires on `Error` (§10.5). It protects a VB or F#
+      consumer, and there is none: every consumer is C#, here or, for ADR-149's two packages, in blueprint-admin.
+      And §4.3 permits one assembly to cross a service boundary.
     -->
     <NoWarn>$(NoWarn);CA1716</NoWarn>
 

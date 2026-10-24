@@ -1,0 +1,35 @@
+{
+  "id": "0123456789abcdef0123456789abcdef",
+  "items": [
+    {
+      "kind": "operator",
+      "text": "где логи?"
+    },
+    {
+      "kind": "reply",
+      "text": "Открываю «Logs». "
+    },
+    {
+      "kind": "tool",
+      "callId": "call-1",
+      "name": "open_screen",
+      "side": "client",
+      "args": {
+        "path": "logs"
+      },
+      "ok": true
+    },
+    {
+      "kind": "reply",
+      "text": "Экран «Logs» открыт."
+    },
+    {
+      "kind": "end",
+      "reason": "done",
+      "category": null
+    }
+  ],
+  "running": false,
+  "lastEventId": 7,
+  "pendingCalls": []
+}

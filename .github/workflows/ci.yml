@@ -492,8 +492,8 @@ jobs:
   # CI never rebuilds. `pipeline-gate` asserts the list below is complete.
   changes:
     runs-on: ubuntu-latest
-    # A dispatch has no change to read, so every output is true: the run exists
-    # to build and sign every image once (ADR-109).
+    # A dispatch has no change to read, so every output but the two package
+    # ones is true: the run exists to build and sign every image once (ADR-109).
     outputs:
       catalog: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.catalog }}
       ordering: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.ordering }}
@@ -505,6 +505,10 @@ jobs:
       gateway: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.gateway }}
       bff: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.bff }}
       deploy: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.deploy }}
+      # Empty on a dispatch, which has no change to read: the packages job
+      # pushes only on a push to main, so they gate nothing else (ADR-149).
+      assistant: ${{ steps.changes.outputs.assistant }}
+      anthropic: ${{ steps.changes.outputs.anthropic }}
     steps:
       - uses: actions/checkout@v7
 
@@ -599,6 +603,12 @@ jobs:
             deploy:
               - 'deploy/**'
               - '!deploy/compose/**'
+            # The two packages ADR-149 publishes, one filter each, because
+            # each carries its own Version and only a changed one is pushed.
+            assistant:
+              - 'src/BuildingBlocks/Common.Assistant/**'
+            anthropic:
+              - 'src/BuildingBlocks/Common.Assistant.Anthropic/**'
 
   # What IDE0055 cannot read — the byte-order mark and the final newline —
   # over every C# file but generated code; docs/style-guide.md
@@ -1188,3 +1198,46 @@ jobs:
           fi
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
+
+  # ADR-149's two packages. Packed on every run once the test stages pass, so a
+  # project that cannot pack fails its own pull request; pushed only from main,
+  # and only the package whose project changed. There is no --skip-duplicate:
+  # the feed refuses a version it holds, so a changed project that kept its
+  # Version fails here instead of leaving a stale package.
+  packages:
+    needs: [changes, stage-gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    env:
+      FEED: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # RepositoryUrl links each package to this repository on GitHub
+      # Packages, which is what lets this job's own token push it.
+      - name: Pack both packages
+        run: |
+          for project in Common.Assistant Common.Assistant.Anthropic; do
+            dotnet pack "src/BuildingBlocks/$project/$project.csproj" --configuration Release \
+              "-p:RepositoryUrl=${{ github.server_url }}/${{ github.repository }}"
+          done
+
+      - name: Push Common.Assistant
+        if: env.PUSH == 'true' && needs.changes.outputs.assistant == 'true'
+        run: dotnet nuget push artifacts/package/release/Common.Assistant.[0-9]*.nupkg --source "$FEED" --api-key "$TOKEN"
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Common.Assistant.Anthropic
+        if: env.PUSH == 'true' && needs.changes.outputs.anthropic == 'true'
+        run: dotnet nuget push artifacts/package/release/Common.Assistant.Anthropic.*.nupkg --source "$FEED" --api-key "$TOKEN"
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}

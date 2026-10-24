@@ -1,0 +1,8 @@
+{
+  "callId": "call-2",
+  "name": "stack_down",
+  "args": {
+    "wipe": true
+  },
+  "confirmation": "down -v"
+}

@@ -20,6 +20,12 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │   │                               a host holding an outbound client (§9.7)
 │   │   │                               keeps that client's policy beside it.
 │   │   │                               (Aspire's template calls this ServiceDefaults.)
+│   │   ├── Common.Assistant/           The AI assistant's core: its protocol,
+│   │   │                               read-only tools and loop; it references
+│   │   │                               no package
+│   │   ├── Common.Assistant.Anthropic/ Its Anthropic adapter. Both published
+│   │   │                               as packages, and no service's to
+│   │   │                               reference (ADR-149)
 │   │   └── Common.Contracts/           Integration event DTOs — the ONLY shared types
 │   │
 │   ├── Gateway/
@@ -59,6 +65,10 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │                                   Common.Web is a library with no entry
 │   │                                   point, so its suite drives a TestServer
 │   │                                   rather than a WebApplicationFactory
+│   ├── Common.Assistant.Tests/         The assistant's two suites, with no
+│   ├── Common.Assistant.Anthropic.Tests/
+│   │                                   network: a scripted provider, and
+│   │                                   recorded stream bodies
 │   ├── Common.TestSupport/             The body every service's
 │   │                                   ServiceFixture derives from (ADR-056).
 │   │                                   Not a test project, and not a
@@ -230,9 +240,9 @@ Api ──────────► Application ──────────
 |---|---|---|
 | `*.Domain` | `Common.Domain` and nothing else | EF Core, ASP.NET, Redis, MassTransit, `System.Text.Json` |
 | `*.Application` | its own Domain, `Common.Application`, `Common.Contracts`; `FluentValidation`, for its commands' validators; `Dapper`, for §6.5's query handlers alone ([ADR-005](adr/ADR-005-ef-core-for-writes-dapper-for-reads.md)) | EF Core, ASP.NET, any other concrete infrastructure |
-| `*.Infrastructure` | Domain, Application, any package | another service's projects |
-| `*.Migrator` | Infrastructure, for the `DbContext` it migrates | another service's projects; anything it does not need to apply a migration |
-| `*.Api` | Application, Infrastructure (**composition root only**) | another service's projects |
+| `*.Infrastructure` | Domain, Application, any package | another service's projects; the AI assistant's two building blocks ([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md)) |
+| `*.Migrator` | Infrastructure, for the `DbContext` it migrates | another service's projects; the AI assistant's two building blocks; anything it does not need to apply a migration |
+| `*.Api` | Application, Infrastructure (**composition root only**) | another service's projects; the AI assistant's two building blocks |
 
 **The migrator's row is the narrowest, and deliberately.** It is not a second
 composition root: it builds a host, resolves the `DbContext` and calls
@@ -366,9 +376,9 @@ it enforces:
 |---|---|---|
 | `*.Domain` | allow-list | every referenced assembly is on a list |
 | `*.Application` | allow-list | the same, one layer out |
-| `*.Infrastructure` | any package | no assembly from another service, and none from the migrator |
+| `*.Infrastructure` | any package | no assembly from another service or from the assistant's building blocks, and none from the migrator |
 | `*.Migrator` | allow-list, narrowest | every referenced assembly is on a list |
-| `*.Api` | composition root, plus any package | the root rule above, no assembly from another service, and none from the migrator |
+| `*.Api` | composition root, plus any package | the root rule above, no assembly from another service or from the assistant's building blocks, and none from the migrator |
 
 **The cross-service rule is one test over all five assemblies**, and it is
 stated as an allow-list rather than a deny-list of service names, which is
@@ -376,7 +386,11 @@ what makes it cover a service before it exists: this service's own
 assemblies and the building blocks, both *by name*, because a test library
 shares each one's prefix and is neither — `Common.TestSupport` (§4.1) is named
 like a building block, and `<Service>.TestSupport` like one of the service's
-own projects. A service with two hosts splits the rule: the first host's
+own projects. The building blocks on that list are the five a service is built
+from; `Common.Assistant` and its adapter are not on it, because no service
+hosts the assistant
+([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md)).
+A service with two hosts splits the rule: the first host's
 suite holds it over every assembly of the service but the second host, and
 the second host's suite over that host's own, because one suite cannot load
 two `Program` types
@@ -853,6 +867,11 @@ will fill it before writing the mapper, not after.
 *mechanism*, not shared *model*: base classes, the dispatcher, the outbox. That
 is legitimate, but keep them small and treat every addition sceptically — a
 shared library used by seven services and the BFF is a coordination point.
+`Common.Assistant` and `Common.Assistant.Anthropic` are neither mechanism nor
+model: they are the AI assistant's core and its Anthropic adapter, built for
+two hosts — `blueprint-admin`'s console and the BFF — and referenced by no
+service, so what they are kept free of is any host's code
+([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md)).
 
 `CurrencyMinorUnits` in `Common.Domain` is the one reference table among them
 ([ADR-067](adr/ADR-067-a-currencys-minor-unit-is-iso-4217s-held-once.md)):

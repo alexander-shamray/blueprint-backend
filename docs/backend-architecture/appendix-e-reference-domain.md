@@ -350,7 +350,7 @@ assemblies, and the helper its test calls once for each of them; the
 excerpt leaves out the lines between the first two:
 
 ```csharp
-    /// <summary>§4.1's building blocks by name, because Common.TestSupport is named like one and is not.</summary>
+    /// <summary>§4.2's five building blocks by name, because Common.TestSupport is named like one and is not.</summary>
     private static readonly string[] BuildingBlocks =
         ["Common.Application", "Common.Contracts", "Common.Domain", "Common.Infrastructure", "Common.Web"];
 

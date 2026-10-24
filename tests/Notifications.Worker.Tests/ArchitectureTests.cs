@@ -70,7 +70,7 @@ public class ArchitectureTests
     private static bool IsFirstParty(AssemblyName reference) =>
         reference.GetPublicKeyToken() is null or [] && reference.Name != "Dapper";
 
-    /// <summary>§4.1's building blocks by name, because Common.TestSupport is named like one and is not.</summary>
+    /// <summary>§4.2's five building blocks by name, because Common.TestSupport is named like one and is not.</summary>
     private static readonly string[] BuildingBlocks =
         ["Common.Application", "Common.Contracts", "Common.Domain", "Common.Infrastructure", "Common.Web"];
 

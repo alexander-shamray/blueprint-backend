@@ -1,0 +1,14 @@
+{
+  "reason": "refused",
+  "category": "cyber",
+  "usage": {
+    "input": 120,
+    "output": 8,
+    "cached": 100
+  },
+  "total": {
+    "input": 240,
+    "output": 30,
+    "cached": 100
+  }
+}

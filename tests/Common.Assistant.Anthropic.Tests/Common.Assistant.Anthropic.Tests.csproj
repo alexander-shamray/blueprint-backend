@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- xUnit v3 test projects are self-executing, so the assembly is an Exe. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\Common.Assistant.Anthropic\Common.Assistant.Anthropic.csproj" />
+  </ItemGroup>
+
+  <!-- The recorded stream bodies the adapter is tested against: no network (AI assistant design §14). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Streams\*.sse" LogicalName="%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

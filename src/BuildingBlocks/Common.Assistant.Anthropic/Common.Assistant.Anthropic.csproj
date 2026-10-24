@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Anthropic adapter (AI assistant design §8.2): the one project that carries the vendor SDK, so the core holds no
+       package and a host with the assistant off never loads this assembly. The other package ADR-149 publishes,
+       versioned apart from the core: its dependency on the core is the core's Version when this one was packed. -->
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Version>0.1.0</Version>
+    <Description>The Anthropic provider for Common.Assistant, over the SDK client its host builds.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Common.Assistant.Anthropic.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Anthropic" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Common.Assistant\Common.Assistant.csproj" />
+  </ItemGroup>
+
+</Project>

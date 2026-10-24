@@ -2,6 +2,8 @@
   <Folder Name="/src/" />
   <Folder Name="/src/BuildingBlocks/">
     <Project Path="src/BuildingBlocks/Common.Application/Common.Application.csproj" />
+    <Project Path="src/BuildingBlocks/Common.Assistant/Common.Assistant.csproj" />
+    <Project Path="src/BuildingBlocks/Common.Assistant.Anthropic/Common.Assistant.Anthropic.csproj" />
     <Project Path="src/BuildingBlocks/Common.Contracts/Common.Contracts.csproj" />
     <Project Path="src/BuildingBlocks/Common.Domain/Common.Domain.csproj" />
     <Project Path="src/BuildingBlocks/Common.Infrastructure/Common.Infrastructure.csproj" />
@@ -71,6 +73,8 @@
     <Project Path="tests/Catalog.Domain.Tests/Catalog.Domain.Tests.csproj" />
     <Project Path="tests/Catalog.TestSupport/Catalog.TestSupport.csproj" />
     <Project Path="tests/Common.Application.Tests/Common.Application.Tests.csproj" />
+    <Project Path="tests/Common.Assistant.Anthropic.Tests/Common.Assistant.Anthropic.Tests.csproj" />
+    <Project Path="tests/Common.Assistant.Tests/Common.Assistant.Tests.csproj" />
     <Project Path="tests/Common.Domain.Tests/Common.Domain.Tests.csproj" />
     <Project Path="tests/Common.Infrastructure.Tests/Common.Infrastructure.Tests.csproj" />
     <Project Path="tests/Common.TestSupport/Common.TestSupport.csproj" />
