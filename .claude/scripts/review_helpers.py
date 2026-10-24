@@ -123,7 +123,7 @@ GIT_GLOBAL_OPTIONS = re.compile(
 
 
 def git_commands(source):
-    """Every `git …` command in a shell script, however it is introduced.
+    """The `git …` commands of a shell script that the leads and wrappers above introduce.
 
     The text is cut where a command can begin, whitespace is one space, and the
     assignments, keywords and wrappers in front of a command are stripped.
