@@ -173,7 +173,7 @@
          and xunit.v3 does not carry one. Without this line the build succeeds,
          the run reports zero tests, and CI is green on a suite it never ran. -->
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
     <!-- TestServer without a host project. Mvc.Testing carries this
          transitively, but WebApplicationFactory<T> needs an entry point and
