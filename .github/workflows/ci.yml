@@ -437,8 +437,10 @@ jobs:
       # `tools/new-service/README.md` gives; here the checkout is discarded
       # with the runner.
 
-  # It gates nothing: the report reads local transcripts, and a red job is the
-  # whole signal that its parser drifted from what its suite pins.
+  # It gates nothing: the report reads local transcripts and the measurement
+  # the Actions API, and a red job is the whole signal that a parser or the
+  # arithmetic drifted from what its suite pins. One job for both, because
+  # each job bills at least a whole minute.
   token-usage:
     runs-on: ubuntu-latest
     steps:
@@ -450,6 +452,10 @@ jobs:
 
       - name: Test the token-usage report
         working-directory: tools/token-usage
+        run: python -m unittest
+
+      - name: Test the Actions cost measurement
+        working-directory: tools/ci-cost
         run: python -m unittest
 
   # It gates nothing: the sets are read by a person's runs, and a red job is

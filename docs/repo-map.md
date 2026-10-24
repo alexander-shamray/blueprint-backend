@@ -55,6 +55,9 @@ docs/change-locality.md      the operating contract — the trust order, the
                              one rule, the change classes; the paths each
                              class may reach live in classes.yml, cited
 docs/change-locality-plan.md the PRs that make the contract fully true
+docs/ci-cost-comparison.md   what tools/ci-cost measured before and after
+                             the Actions cost changes, and the decision it
+                             informs
 docs/churn-plan.md           where the corpus churns, measured on a named
                              commit, and the refactor sequence that reduces
                              it
@@ -272,6 +275,9 @@ deploy/workflow_paths/       the one reader of a workflow's `paths:` filter and
                              the four Python gates import and `smoke.sh`
                              calls (ADR-132). Stdlib Python with a suite, run
                              by the `pipeline-gate` job
+tools/ci-cost/               the Actions bill per dated window, from the
+                             REST API through `gh api`; stdlib Python with
+                             a suite, for docs/ci-cost-comparison.md
 tools/new-service/           §4.5's scaffold — see the notes below
 tools/bff-replay/            ADR-051's rebuild — a console replaying the
                              publishers' processed outbox rows to the BFF's
