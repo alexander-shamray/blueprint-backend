@@ -77,8 +77,8 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.7" />
     <!-- Notifications' SMTP client and the message it submits (Appendix B). MimeKit is MailKit's own dependency at
          exactly this version, pinned because the adapter names its types; the two ship as one release. -->
-    <PackageVersion Include="MailKit" Version="4.18.1" />
-    <PackageVersion Include="MimeKit" Version="4.18.1" />
+    <PackageVersion Include="MailKit" Version="4.18.2" />
+    <PackageVersion Include="MimeKit" Version="4.18.2" />
     <!-- The S3 client behind the product image store (ADR-106), Catalog.Infrastructure's alone; AWSSDK.Core
          arrives with it. -->
     <PackageVersion Include="AWSSDK.S3" Version="4.0.104.6" />
