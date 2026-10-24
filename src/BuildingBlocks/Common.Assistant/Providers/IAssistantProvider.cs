@@ -23,7 +23,8 @@ public sealed record ProviderStatus(bool Available, string Model, string? Reason
 
 /// <summary>
 /// One provider round, in cache order (design §7): the tools, the fixed system text and the catalogue (which do not
-/// change between rounds), then the history. The turn's context and the language rule are already in the last user message.
+/// change between rounds), then the history. The turn's context and the language rule are already in the last user
+/// message.
 /// </summary>
 public sealed record TurnRequest(
     IReadOnlyList<ToolDescriptor> Tools,
