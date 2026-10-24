@@ -2,7 +2,7 @@ namespace Common.Assistant;
 
 /// <summary>
 /// The bounds the core enforces (AI assistant design §9). A host sets them from its own configuration; the defaults are
-/// the builder's call (§16).
+/// the builder's call (design §16).
 /// </summary>
 public sealed record AssistantLimits
 {

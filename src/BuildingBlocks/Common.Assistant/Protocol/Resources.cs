@@ -6,7 +6,7 @@ namespace Common.Assistant.Protocol;
 
 // The bodies of /api/assistant (AI assistant design §5.1), camelCase JSON with web defaults. These records own the
 // protocol: the browser client's protocol.ts mirrors them, and the golden files under Protocol/golden/ pin the JSON
-// both sides read and write (§14).
+// both sides read and write (design §14).
 
 /// <summary><c>GET /api/assistant</c>. Never the credential, nor where it came from.</summary>
 public sealed record AssistantStatus(bool Enabled, string? Provider, string? Model, string? Reason)
@@ -14,7 +14,7 @@ public sealed record AssistantStatus(bool Enabled, string? Provider, string? Mod
     public static AssistantStatus Off { get; } = new(false, null, null, StatusReason.Off);
 }
 
-/// <summary>Why the assistant is not enabled, as a code the client words in its own language (§5.4).</summary>
+/// <summary>Why the assistant is not enabled, as a code the client words in its own language (design §5.4).</summary>
 public static class StatusReason
 {
     public const string Off = "off";
@@ -26,8 +26,8 @@ public static class StatusReason
 public sealed record ClientInfo(string Name, string Version);
 
 /// <summary>
-/// One thing the client can explain (§6.1): its id, its label as the client shows it in the active locale, where it
-/// lives, and its help. The client's registry owns the text; the client sends it.
+/// One thing the client can explain (design §6.1): its id, its label as the client shows it in the active locale,
+/// where it lives, and its help. The client's registry owns the text; the client sends it.
 /// </summary>
 public sealed record CatalogueEntry(string Id, string Label, string Where, string Help);
 

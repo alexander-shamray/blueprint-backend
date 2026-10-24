@@ -484,7 +484,7 @@ public sealed class AssistantSession : IDisposable
                 $"\n[cut to {core.Limits.MaxToolResultChars} characters]");
 
     /// <summary>
-    /// The few input values a label shows (§5.3): top-level strings, numbers and booleans, each short.
+    /// The few input values a label shows (design §5.3): top-level strings, numbers and booleans, each short.
     /// </summary>
     private static JsonObject LabelArgs(JsonObject input)
     {
@@ -520,5 +520,5 @@ public sealed class AssistantSession : IDisposable
     }
 }
 
-/// <summary>What a host logs of a turn (§10): provider, conversation, end reason and usage; never its text.</summary>
+/// <summary>What a host logs of a turn (design §10): provider, conversation, end reason, usage; never text.</summary>
 public sealed record TurnSummary(string Provider, string ConversationId, string Reason, Usage Usage, Usage Total);

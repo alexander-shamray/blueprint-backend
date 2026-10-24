@@ -2,8 +2,8 @@ namespace Common.Assistant.Tools;
 
 /// <summary>
 /// The tools one conversation offers: every host source's and the client's, each admitted by the policy (AI assistant
-/// design §6.3), names unique across both sides, sorted by name so the cached prefix is deterministic (§6.5). A client
-/// tool cannot shadow a server tool, and a client cannot hand in a tool that claims to be the host's.
+/// design §6.3), names unique across both sides, sorted by name so the cached prefix is deterministic (design
+/// §6.5). A client tool cannot shadow a server tool, and a client cannot hand in a tool that claims to be the host's.
 /// </summary>
 public sealed class ToolRegistry
 {
