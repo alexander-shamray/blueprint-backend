@@ -312,6 +312,24 @@ internal static class OrderBuilder
 }
 ```
 
+### The assistant's core, against a scripted provider
+
+The AI assistant's two suites
+([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md))
+apply this section's rule to a loop instead of an aggregate: no I/O, and the
+one dependency the core does not own, its provider, replaced by a
+`ScriptedProvider` that plays the rounds a test wrote. `AssistantSessionTests`'
+`MaxSteps` case scripts two tool rounds under
+`AssistantLimits { MaxSteps = 1 }`, and asserts that the turn ends `MaxSteps`,
+that the tool ran once, and that the call it never ran still has a failed
+result in the history. The adapter's suite reads recorded stream bodies
+through the SDK's own parser over a `FakeHttp` handler, so `StreamTests`'
+truncated-stream case proves a reply cut off before `message_stop` fails
+without a network. That departs from §12.7's
+row for a third-party API, WireMock.Net with a nightly contract test against
+the sandbox, because no host in this repository calls the provider yet; the
+host that does (#1347) inherits the row.
+
 ## 12.4 Application tests — real infrastructure
 
 > **Decision — integration tests use real SQL Server and Redis, not in-memory
