@@ -29,8 +29,8 @@ PROSE_LIMIT = 80
 PROSE_EXEMPT = ("docs/superpowers/",)
 # A table row, an HTML line, a heading or a reference definition is not wrapped prose. A link's target and a bare
 # address may run long, and the prose around them may not, so each is measured as one character.
-UNWRAPPABLE = re.compile(r"^\s*(?:\||<|#|\[[^\]]*\]:)")
-LINK_TARGET = re.compile(r"\]\([^)]*\)")
+UNWRAPPABLE = re.compile(r"^\s*(?:\||<(?!https?://)|#|\[[^\]]*\]:)")
+LINK_TARGET = re.compile(r"\]\((?:[^()]|\([^()]*\))*\)")
 ADDRESS = re.compile(r"https?://\S+")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 
@@ -786,7 +786,7 @@ def prose_width(path, text, added):
         width = len(ADDRESS.sub("u", LINK_TARGET.sub("](t)", line)))
         if width > PROSE_LIMIT:
             found.append((path, number, f"a prose line runs {width} columns, over {PROSE_LIMIT}"))
-    if fence is not None and fence[2] in added:
+    if fence is not None and any(number >= fence[2] for number in added):
         found.append((path, fence[2], "a code fence opens here and is never closed, so the lines after it are unread"))
     return found
 

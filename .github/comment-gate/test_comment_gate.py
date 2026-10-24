@@ -483,13 +483,15 @@ class TheProseWidth(unittest.TestCase):
     def test_the_guides_exemptions_are_not_prose(self):
         long = "x" * 100
         lines = ["| " + self.prose(90), "<p>" + self.prose(90), "# " + self.prose(90), "[a]: " + self.prose(90),
-                 "see [the page](" + long + ") for more", "see https://x.example/" + long + " ok"]
+                 "see [the page](" + long + ") for more", "see https://x.example/" + long + " ok",
+                 "see [a](b_(" + long + ").md) for more", "<https://x.example/" + long + "> is the page"]
         for line in lines:
             with self.subTest(line=line[:12]):
                 self.assertEqual(self.wide(line + "\n"), [])
 
     def test_prose_around_a_link_or_an_address_is_still_measured(self):
-        lines = (self.prose(90) + " [a](b.md)", self.prose(90) + " https://x.example", "[" + self.prose(90) + "](b.md)")
+        lines = (self.prose(90) + " [a](b.md)", self.prose(90) + " https://x.example", "[" + self.prose(90) + "](b.md)",
+                 "<https://x.example> " + self.prose(90))
         for line in lines:
             with self.subTest(line=line[:12]):
                 self.assertEqual(len(self.wide(line + "\n")), 1)
@@ -513,7 +515,8 @@ class TheProseWidth(unittest.TestCase):
         text = f"x\n```\n{self.prose(90)}\n"
         self.assertEqual(self.wide(text), [("docs/a.md", 2, "a code fence opens here and is never closed, "
                                                              "so the lines after it are unread")])
-        self.assertEqual(self.wide(text, added={3}), [])
+        self.assertEqual(self.wide(text, added={3}), self.wide(text), "an added line after it is unread too")
+        self.assertEqual(self.wide(text, added={1}), [])
 
     def test_a_leading_thematic_break_is_not_front_matter_when_a_blank_line_follows_it(self):
         text = f"---\n\n{self.prose(90)}\n---\n{self.prose(90)}\n"

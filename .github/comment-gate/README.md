@@ -87,8 +87,9 @@ a reference definition, a line inside a fenced code block, or one of a file's
 leading front matter. A link's target and a bare address are measured as one
 character, since the guide lets them run long and not the prose around them.
 A fence ends on the character that opened it, at least as long, and one never
-closed is a finding where it opens. Front matter is a leading block with no
-blank line before its closing rule. A file under `docs/superpowers/` is
+closed is a finding where it opens whenever a line at or after it is
+added. Front matter is a leading block with no blank line before its
+closing rule. A file under `docs/superpowers/` is
 exempt, since a spec is never edited to match the code that followed it.
 Markdown has no comments, so the check sits beside the comment rule and
 reads the same added lines. The suite does not hold the tracked files to it:
