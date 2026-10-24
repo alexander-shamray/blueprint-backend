@@ -129,7 +129,7 @@ def git_commands(source):
     assignments, keywords and wrappers in front of a command are stripped.
     """
     commands = []
-    for piece in COMMAND_SEPARATOR.split(source):
+    for piece in COMMAND_SEPARATOR.split(source.replace(chr(92) + chr(10), " ")):
         piece = re.sub(r"\s+", " ", piece).strip()
         while COMMAND_LEAD.match(piece) or COMMAND_WRAPPER.match(piece):
             piece = (COMMAND_LEAD if COMMAND_LEAD.match(piece) else COMMAND_WRAPPER).sub("", piece, count=1)
