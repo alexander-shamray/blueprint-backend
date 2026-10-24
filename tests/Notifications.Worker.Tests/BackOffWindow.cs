@@ -3,7 +3,7 @@ using Shouldly;
 
 namespace Notifications.Worker.Tests;
 
-/// <summary>Where a first fault leaves a row's NextAttemptAt, on the engine's clock read either side of the pass.</summary>
+/// <summary>Where a first fault leaves NextAttemptAt, on the engine's clock read either side of the pass.</summary>
 internal static class BackOffWindow
 {
     public static void ShouldBeFirstStep(DateTimeOffset nextAttemptAt, DateTimeOffset before, DateTimeOffset after) =>
