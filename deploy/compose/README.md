@@ -547,3 +547,16 @@ export ConnectionStrings__CatalogMigrator='Server=localhost;Database=Catalog;Use
 export DOTNET_ENVIRONMENT=Development   # the job host's default is Production, where ADR-079 refuses that string
 dotnet run --project src/Services/Catalog/Catalog.Migrator
 ```
+
+## Keeping the third-party images current
+
+Dependabot's docker-compose ecosystem reads files named for Compose in the
+directory it is given and does not follow `include`, so it sees none of the
+images in `infrastructure.yml` or `services/`. `images/Dockerfile` mirrors
+them as `FROM` lines, which its docker ecosystem does read, and
+`images/test_images.py` holds the mirror equal to the Compose files, in CI
+through `compose.yml`. A Dependabot bump of one line is then a red pull
+request until the Compose line moves with it, and an image added to a Compose
+file is a red one until it is mirrored. `redis:7-alpine` and
+`quay.io/keycloak/keycloak:26.0` float within a line; pinning them to a patch
+release is a separate decision, because the stack's behaviour moves with it.

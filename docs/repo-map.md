@@ -301,6 +301,10 @@ deploy/compose/              §14.1's model, laid out in its `README.md`: one
                              `rabbitmq/` is the one infrastructure
                              image that is BUILT — ADR-021's delayed-exchange
                              plugin — so its build rides on the compose smoke.
+                             `images/` is never built: a Dockerfile of the
+                             third-party images the files pin, which
+                             Dependabot reads where it cannot follow
+                             `include`, held equal by its test.
                              It also carries `definitions.json`, the
                              per-service broker accounts (ADR-036) and
                              tools/dead-letters' passwordless operator, and
