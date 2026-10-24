@@ -16,6 +16,7 @@ from pathlib import Path
 from review_helpers import (
     SCRIPTS,
     code_lines,
+    git_commands,
     setUpModule,
     run_bash as _run_bash,
 )
@@ -37,47 +38,6 @@ def run_bash(script, subject="", **env_extra):
                      GIT_CONFIG_SYSTEM="/dev/null",
                      GIT_CONFIG_NOSYSTEM="1",
                      **env_extra)
-
-
-# What can introduce a command, beyond the `VAR=value` run: a shell keyword, a
-# negation, or one of the wrappers that takes a command as its argument.
-# Stripped in a loop, because they stack — `if ! GIT_DIR=x git push …`.
-COMMAND_LEAD = re.compile(
-    r"^(?:\w+=\S*|then|else|elif|do|done|if|while|until|!|command|exec|time|eval|env|nohup|builtin)\s+")
-
-# A command can begin after any of these. `{` and `}` are not in the class,
-# because they also spell `"${branch}"` and splitting there cuts a command off
-# before its flags. A brace group's braces are space-delimited, so those are
-# matched on their own.
-COMMAND_SEPARATOR = re.compile(r"[\n;&|()`]+|(?<=\s)\{(?=\s)|(?<=\s)\}")
-
-
-# git's own options sit between `git` and the subcommand, so `git -C . push`
-# would not read as a push at all. Dropped, so the subcommand comes first.
-GIT_GLOBAL_OPTIONS = re.compile(
-    r"^git(?:\s+(?:-[Cc]\s+(?:\"[^\"]*\"|'[^']*'|\S+)"
-    r"|--(?:git-dir|work-tree|namespace|exec-path)(?:=|\s+)\S+"
-    r"|-{1,2}[A-Za-z][\w-]*))+\s+")
-
-
-def git_commands(source):
-    """Every `git …` command in a shell script, however it is introduced.
-
-    A scan of line starts sees only a command opening a physical line, and the
-    script already has `GIT_EDITOR=true git rebase --continue` and same-line
-    brace groups. So the text is cut where a command can begin, and the
-    assignments and keywords in front of it are stripped. It does not parse
-    shell; `test_the_scan_sees_what_a_line_scan_misses` is what it answers to.
-    """
-    commands = []
-    for piece in COMMAND_SEPARATOR.split(source):
-        piece = piece.strip()
-        while COMMAND_LEAD.match(piece):
-            piece = COMMAND_LEAD.sub("", piece, count=1)
-        piece = GIT_GLOBAL_OPTIONS.sub("git ", piece)
-        if piece.startswith("git "):
-            commands.append(piece)
-    return commands
 
 
 # A remote, a checkout of it, a branch with one commit, and a `main` that has
@@ -208,6 +168,16 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
             'env git push --force origin "$branch"',
             'git --no-pager push origin +$branch',
             'git -c "k=a b" push --force origin "$branch"',
+            'timeout 60 git push --force origin "$branch"',
+            'timeout -k 5 60 git push --force origin "$branch"',
+            'echo "$branch" | xargs git push --force origin',
+            'echo "$branch" | xargs -n 1 git push origin +$branch',
+            'sudo git push --force origin "$branch"',
+            'nice -n 5 git push --force origin "$branch"',
+            'stdbuf -oL git push --force origin "$branch"',
+            'setsid git push --force origin "$branch"',
+            'command -p git push --force origin "$branch"',
+            'git' + chr(9) + 'push --force origin "$branch"',
         )
         baseline = git_commands(self.source)
         for line in hidden:

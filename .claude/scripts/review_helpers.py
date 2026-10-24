@@ -94,3 +94,49 @@ def code_lines(text):
         line for line in text.splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
+
+
+# What can introduce a command, beyond the `VAR=value` run: a shell keyword or
+# a negation. Stripped in a loop, because they stack, as in
+# `if ! GIT_DIR=x git push …`.
+COMMAND_LEAD = re.compile(
+    r"^(?:\w+=\S*|then|else|elif|do|done|if|while|until|!|exec|time|eval|env|nohup|builtin)\s+")
+
+# A wrapper that takes a command as its argument, with the options and the
+# one numeric argument they may carry (`timeout -k 5 60`, `xargs -n 1`).
+COMMAND_WRAPPER = re.compile(
+    r"^(?:timeout(?:\s+-\S+\s+\d\S*|\s+-\S+)*\s+\d\S*"
+    r"|(?:xargs|sudo|nice|stdbuf|setsid|command)(?:\s+-\S+(?:\s+\d\S*)?)*)\s+")
+
+# A command can begin after any of these. `{` and `}` are not in the class,
+# because they also spell `"${branch}"` and splitting there cuts a command off
+# before its flags. A brace group's braces are space-delimited, so those are
+# matched on their own.
+COMMAND_SEPARATOR = re.compile(r"[\n;&|()`]+|(?<=\s)\{(?=\s)|(?<=\s)\}")
+
+# git's own options sit between `git` and the subcommand, so `git -C . push`
+# would not read as a push at all. Dropped, so the subcommand comes first.
+GIT_GLOBAL_OPTIONS = re.compile(
+    r"^git(?:\s+(?:-[Cc]\s+(?:\"[^\"]*\"|'[^']*'|\S+)"
+    r"|--(?:git-dir|work-tree|namespace|exec-path)(?:=|\s+)\S+"
+    r"|-{1,2}[A-Za-z][\w-]*))+\s+")
+
+
+def git_commands(source):
+    """Every `git …` command in a shell script, however it is introduced.
+
+    A scan of line starts sees only a command opening a physical line. So the
+    text is cut where a command can begin, whitespace runs are one space, and
+    the assignments, keywords and wrappers in front of a command are stripped.
+    It does not parse shell; the suites that use it each hold a test whose
+    subject is the scan, not what it found.
+    """
+    commands = []
+    for piece in COMMAND_SEPARATOR.split(source):
+        piece = re.sub(r"\s+", " ", piece).strip()
+        while COMMAND_LEAD.match(piece) or COMMAND_WRAPPER.match(piece):
+            piece = (COMMAND_LEAD if COMMAND_LEAD.match(piece) else COMMAND_WRAPPER).sub("", piece, count=1)
+        piece = GIT_GLOBAL_OPTIONS.sub("git ", piece)
+        if piece.startswith("git "):
+            commands.append(piece)
+    return commands
