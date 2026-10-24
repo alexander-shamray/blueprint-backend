@@ -317,10 +317,11 @@ internal static class OrderBuilder
 The AI assistant's two suites
 ([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md))
 sit beside this section rather than in it: they share its lack of I/O but not
-its lack of doubles. What the core is handed, it does not own, so each is
-replaced: the provider by a `ScriptedProvider` that plays the rounds a test
-wrote, a host's tool sources by `ScriptedTools`, its redactor by a planted
-one, and the clock by §12.7's `FakeTimeProvider`. `AssistantSessionTests`'
+its lack of doubles. What the core is handed and does not own is replaced:
+the provider by a `ScriptedProvider` that plays the rounds a test wrote, a
+host's tool sources by `ScriptedTools`, its redactor by a planted one, and,
+where a test reads time, the clock by §12.7's `FakeTimeProvider`. Its own
+`ToolPolicy` and `AssistantLimits` are handed in real. `AssistantSessionTests`'
 `MaxSteps` case scripts two tool rounds under
 `AssistantLimits { MaxSteps = 1 }`, and asserts that the turn ends `MaxSteps`,
 that the tool ran once, and that the call it never ran still has a failed
