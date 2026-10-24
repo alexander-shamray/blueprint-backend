@@ -259,6 +259,7 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
     private async Task ApplyAsync(string queue, int attempt = 0)
     {
         TimeSpan? retry = null;
+        bool claimed = false;
         Action<IReceiveEndpointConfigurator>? declare = null;
 
         await _gate.WaitAsync();
@@ -325,8 +326,10 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         }
         catch (Exception ex)
         {
-            // Retried on its own, since nothing else may come: a stop that failed leaves the queue consuming.
+            // Retried on its own, since nothing else may come: a stop that failed leaves the queue consuming. The claim
+            // is taken under the gate, so a failure behind this one finds it and a late arming cannot add a chain.
             retry = Backoff(attempt);
+            claimed = ClaimRetry(queue);
             ApplyFailed(_log, queue, retry.Value, ex);
         }
         finally
@@ -339,20 +342,21 @@ public sealed class ReceiveEndpointSwitch : IReceiveEndpointObserver, IDisposabl
         if (declare is not null)
             _ = DeclareTopologyAsync(queue, declare, attempt);
 
-        if (retry is TimeSpan delay)
-            ScheduleRetry(queue, delay, attempt);
+        if (claimed && retry is TimeSpan delay)
+            _ = RetryAsync(queue, delay, attempt + 1);
     }
 
     // One pending retry per queue: a reload during a long broker fault would otherwise add a chain each time.
     private void ScheduleRetry(string queue, TimeSpan delay, int attempt)
     {
-        lock (_endpoints)
-        {
-            if (!_retrying.Add(queue))
-                return;
-        }
+        if (ClaimRetry(queue))
+            _ = RetryAsync(queue, delay, attempt + 1);
+    }
 
-        _ = RetryAsync(queue, delay, attempt + 1);
+    private bool ClaimRetry(string queue)
+    {
+        lock (_endpoints)
+            return _retrying.Add(queue);
     }
 
     // Called under the gate. The endpoint is kept the moment it exists, still counted stopped, so one whose Ready

@@ -535,13 +535,13 @@ public class OperatorSwitchTests
         await endpoints.Ready(ReadyFor(endpoint));
         await Until(() => Volatile.Read(ref stops) == 1);
 
-        // A change during the fault fails again, and finds the first failure's retry already waiting; awaited, so
+        // A change during the fault fails again, and finds the first failure's retry already claimed; awaited, so
         // its retry decision is made before the clock moves.
         await endpoints.ApplyAllAsync();
         Volatile.Read(ref stops).ShouldBe(2);
 
-        // Advanced on every poll, since the chain that won the race to schedule arms its timer after the call that
-        // lost it has returned: a single advance in that gap moves the clock past a timer that does not yet exist.
+        // Advanced on every poll, since the call that holds the claim may arm its timer after the one that found it
+        // has returned: a single advance in that gap moves the clock past a timer that does not yet exist.
         await Until(() =>
         {
             clock.Advance(ReceiveEndpointSwitch.FirstRetry);
