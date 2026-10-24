@@ -13,7 +13,7 @@ namespace Common.Assistant.Tests;
 /// </summary>
 public sealed class ProtocolGoldenTests
 {
-    // The SPA's protocol.spec.ts reads the same files, so the C# owner and the TypeScript mirror cannot drift.
+    // This suite pins the C# side to these files; nothing in this repository reads a client's mirror (ADR-149).
     // How the host writes both its JSON answers and its event data.
     private static readonly JsonSerializerOptions Web = new(JsonSerializerOptions.Web);
 

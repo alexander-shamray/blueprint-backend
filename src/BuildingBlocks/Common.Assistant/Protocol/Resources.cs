@@ -5,8 +5,8 @@ using Common.Assistant.Tools;
 namespace Common.Assistant.Protocol;
 
 // The bodies of /api/assistant (AI assistant design §5.1), camelCase JSON with web defaults. These records own the
-// protocol: the browser client's protocol.ts mirrors them, and the golden files under Protocol/golden/ pin the JSON
-// both sides read and write (design §14).
+// protocol: a client's protocol.ts mirrors them, and the golden files under Protocol/golden/ pin the JSON they read
+// and write (design §14). Nothing in this repository reads a client's mirror (ADR-149).
 
 /// <summary><c>GET /api/assistant</c>. Never the credential, nor where it came from.</summary>
 public sealed record AssistantStatus(bool Enabled, string? Provider, string? Model, string? Reason)
