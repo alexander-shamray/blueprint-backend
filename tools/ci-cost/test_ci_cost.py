@@ -28,8 +28,9 @@ def run(run_id, created, name="CI", event="pull_request", sha="a"):
 class FakeApi:
     """Answers the paths ci_cost asks for from in-memory runs, jobs and events, paging as GitHub does."""
 
-    def __init__(self, runs, jobs, events=(), prs=0, packages=None, cap=ci_cost.SEARCH_CAP):
-        self.runs, self.jobs, self.events, self.prs = runs, jobs, list(events), prs
+    def __init__(self, runs, jobs, events=(), prs=(), packages=None, cap=ci_cost.SEARCH_CAP):
+        self.runs, self.jobs, self.events = runs, jobs, list(events)
+        self.prs = [{"created_at": created} for created in prs]
         self.packages, self.cap, self.paths = packages, cap, []
 
     def __call__(self, path):
@@ -47,8 +48,8 @@ class FakeApi:
             return {"total_count": len(inside), "workflow_runs": window(inside[:self.cap])}
         if match := re.search(r"actions/runs/(\d+)/jobs", path):
             return {"jobs": window(self.jobs.get(int(match[1]), []))}
-        if path.startswith("search/issues"):
-            return {"total_count": self.prs}
+        if "/pulls?" in path:
+            return window(self.prs)
         if "issues/events" in path:
             return window(self.events)
         if self.packages is None:
@@ -90,7 +91,8 @@ class Measure(unittest.TestCase):
         api = FakeApi([run(1, "2026-10-10T05:00:00Z"), run(2, "2026-10-11T23:59:59Z", event="push", sha="b")], {
             1: [job("2026-10-10T05:00:00Z", "2026-10-10T05:04:30Z"),
                 job("2026-10-10T05:00:00Z", "2026-10-10T05:02:00Z", ["windows-latest"])],
-            2: [job("2026-10-11T23:59:59Z", "2026-10-12T00:00:59Z", ["macos-latest"])]}, prs=2)
+            2: [job("2026-10-11T23:59:59Z", "2026-10-12T00:00:59Z", ["macos-latest"])]},
+            prs=["2026-10-12T00:00:00Z", "2026-10-11T08:00:00Z", "2026-10-10T08:00:00Z", "2026-10-09T08:00:00Z"])
         usage = ci_cost.measure(api, REPO, A, workers=1)
         self.assertEqual((usage.runs, usage.jobs, usage.pushes, usage.prs), (2, 3, 1, 2))
         self.assertEqual(usage.minutes, {"Linux": 5, "Windows": 2, "macOS": 1})
