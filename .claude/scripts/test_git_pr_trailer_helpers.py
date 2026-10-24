@@ -4,12 +4,13 @@ that succeeds on the same fixture, so a refusal is not a helper failing for anot
 """
 
 import os
+import re
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
 
-from review_helpers import SCRIPTS, code_lines, run_bash, setUpModule  # noqa: F401
+from review_helpers import SCRIPTS, code_lines, git_commands, run_bash, setUpModule  # noqa: F401
 
 TRAILER = SCRIPTS / "git-trailer-pr.sh"
 REVERT = SCRIPTS / "git-revert-pr.sh"
@@ -200,11 +201,38 @@ class TrailerHelper(Fixture):
             with self.subTest(pr=bad):
                 self.assertEqual(2, self.run_helper(TRAILER, pr=bad).returncode)
 
+    @staticmethod
+    def unleased(source):
+        """Why each `git push` in the script is not a leased update, whatever else sits between its words."""
+        found = []
+        for command in git_commands("\n".join(code_lines(source))):
+            if not command.startswith("git push"):
+                continue
+            tokens = command.split()
+            if not any(t.startswith("--force-with-lease=") for t in tokens):
+                found.append(f"no lease: {command}")
+            found += [f"{t!r} forces without a lease: {command}" for t in tokens
+                      if t in ("--force", "--force-if-includes") or t.startswith("--force=")
+                      or re.fullmatch(r"-[A-Za-z]*f[A-Za-z]*", t) or re.match(r'"?\+', t)]
+        return found
+
     def test_the_helper_spells_its_rewrite_and_its_lease_itself(self):
-        code = "\n".join(code_lines(TRAILER.read_text(encoding="utf-8")))
-        self.assertIn('--force-with-lease="refs/heads/$branch:$remote"', code)
-        self.assertNotIn("git push --force ", code)
-        self.assertNotIn("git push -f", code)
+        source = TRAILER.read_text(encoding="utf-8")
+        self.assertEqual([], self.unleased(source))
+        pushes = [c for c in git_commands("\n".join(code_lines(source))) if c.startswith("git push")]
+        self.assertEqual(1, len(pushes), "one push, and it names its lease on the branch and the remote")
+        self.assertIn('--force-with-lease="refs/heads/$branch:$remote"', pushes[0])
+
+    def test_the_scan_sees_an_unleased_force_in_the_helpers_own_shape(self):
+        # The old check forbade two substrings and the helper's quiet flag sat between them.
+        for line in ('git push --quiet --force origin "HEAD:refs/heads/$branch"',
+                     'git push -q -f origin "HEAD:refs/heads/$branch"',
+                     'git push --quiet origin "+HEAD:refs/heads/$branch"',
+                     'git push --quiet origin "HEAD:refs/heads/$branch"',
+                     'timeout 60 git push --quiet --force origin "$branch"'):
+            with self.subTest(line=line):
+                source = TRAILER.read_text(encoding="utf-8") + chr(10) + line
+                self.assertNotEqual([], self.unleased(source))
 
 
 class RevertHelper(Fixture):
