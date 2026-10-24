@@ -4,11 +4,12 @@ argument-hint: "<number> <title>  e.g. 16 Data migration"
 allowed-tools: Read, Grep, Glob, Write, Edit, Bash(ls:*)
 ---
 
-Add a chapter to `docs/backend-architecture/`: number `$1`, title `$2`.
+Add a chapter to `docs/backend-architecture/` from `$ARGUMENTS`: its first word
+is the number and the rest is the title, so an unquoted title stays whole.
 
 ## Steps
 
-1. **Check the number is free.** If `$1` collides with an existing chapter,
+1. **Check the number is free.** If it collides with an existing chapter,
    stop and ask whether to insert (renumbering everything after) or append.
    Renumbering touches every `§n` reference in the blueprint — never do it
    without confirmation.
