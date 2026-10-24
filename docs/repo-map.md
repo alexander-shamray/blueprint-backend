@@ -146,6 +146,10 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              observability files it mounts — config -q,
                              up --wait, the local Grafana's loaded rules and
                              dashboards, down -v, and an image build
+.github/workflows/compose-images.yml  text-only: the Dependabot mirror of
+                             the third-party images, held equal to the
+                             Compose files; kept out of compose.yml, whose
+                             filter would run the smoke for it
 .github/workflows/helm.yml   path-filtered smoke on deploy/helm/** — and on
                              every input smoke.sh reads outside it. **That list
                              is not written down here on purpose**: it lives

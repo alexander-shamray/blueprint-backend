@@ -1,6 +1,6 @@
 # Never built. Dependabot's docker ecosystem reads FROM lines and does not follow Compose's `include`, so this
-# mirrors the third-party images the Compose files pin. test_images.py holds the two equal: a bump here is a red
-# pull request until the Compose line moves with it.
+# mirrors the third-party images the Compose files pin, and a bump here is a red pull request until the files
+# that hold the image move with it.
 FROM mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04 AS sql
 FROM redis:7-alpine AS redis
 FROM quay.io/keycloak/keycloak:26.0 AS keycloak
