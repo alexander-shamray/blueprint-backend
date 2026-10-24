@@ -85,7 +85,7 @@ class EachSplitCommandHasBothHalves(unittest.TestCase):
                 self.assertIn(f".claude/commands/{name}", collapsed(ARGUMENTS / name))
 
     def test_free_text_arrives_through_arguments(self):
-        # A positional placeholder is the first word only, so an unquoted title or a second path is cut off.
+        # A positional placeholder carries one shell-quoted word, so an unquoted title, topic or path list is cut off.
         paths = sorted(COMMANDS.glob("*.md"))
         self.assertGreater(len(paths), len(CEILINGS), "the glob stopped finding the commands")
         for path in paths:
