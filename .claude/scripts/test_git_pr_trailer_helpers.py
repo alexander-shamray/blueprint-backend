@@ -225,14 +225,20 @@ class TrailerHelper(Fixture):
 
     def test_the_scan_sees_an_unleased_force_in_the_helpers_own_shape(self):
         # The old check forbade two substrings and the helper's quiet flag sat between them.
+        lease = '--force-with-lease="refs/heads/$branch:$remote"'
         for line in ('git push --quiet --force origin "HEAD:refs/heads/$branch"',
                      'git push -q -f origin "HEAD:refs/heads/$branch"',
-                     'git push --quiet origin "+HEAD:refs/heads/$branch"',
                      'git push --quiet origin "HEAD:refs/heads/$branch"',
-                     'timeout 60 git push --quiet --force origin "$branch"'):
+                     'timeout 60 git push --quiet --force origin "$branch"',
+                     f'git push --quiet {lease} --force origin "HEAD:refs/heads/$branch"',
+                     f'git push --quiet {lease} origin "+HEAD:refs/heads/$branch"',
+                     f'git push -qf {lease} origin "HEAD:refs/heads/$branch"',
+                     f'git push --quiet {lease} origin ' + chr(92) + chr(10) + ' --force "HEAD:refs/heads/$branch"'):
             with self.subTest(line=line):
                 source = TRAILER.read_text(encoding="utf-8") + chr(10) + line
                 self.assertNotEqual([], self.unleased(source))
+                if lease in line:
+                    self.assertTrue(any("forces without a lease" in why for why in self.unleased(source)))
 
 
 class RevertHelper(Fixture):
