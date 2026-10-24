@@ -16,14 +16,27 @@ py -3.12 deploy/objectstore/store_check.py check     # needs the variables below
 
 ## What it asserts
 
-With each pair, the store answers `403` with the code `AccessDenied` to:
+First, the two requests the pairs are allowed
+([ADR-148](../../docs/backend-architecture/adr/ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md)):
+
+- the BFF's pair writes an empty object under `uploads/`, at a key named for
+  this run, and the store answers `200`;
+- Catalog's pair reads it back, and the store answers `200` with an empty body.
+
+A bucket the pairs have no grant on refuses every probe below exactly as the
+right bucket does, so only an allowed request tells the two apart: a wrong
+`OBJECT_STORE_BUCKET` fails at the write. So does a bucket that does not exist
+on a store that answers it `403 AccessDenied` rather than `404`, as Compose's
+SeaweedFS does. The object is left for `uploads/`'s
+one-day expiry, since neither pair can delete. Then, with each pair, the store
+answers `403` with the code `AccessDenied` to:
 
 - a delete of a key nothing holds under `uploads/`;
 - the same under `products/`;
 - a list of the bucket.
 
 A delete names an absent key so that a store which wrongly allows it removes
-nothing: authorisation is decided before existence. The check writes nothing.
+nothing: authorisation is decided before existence.
 
 **Anything else fails the run**, and the reasons are the suite's cases: a `2xx`
 is a permission that exists; a `403` with another code (`InvalidAccessKeyId`,
@@ -60,17 +73,13 @@ grace period will do, with a period a little over a day.
 
 ## What it does not check
 
-- **That the policy allows what the services need.** A deployed upload does.
-- **That the bucket is the one the pairs are scoped to.** A bucket that exists
-  and grants the pairs nothing refuses all six probes with `403 AccessDenied`,
-  as the right bucket's policy does, so a wrong `OBJECT_STORE_BUCKET` reads as
-  a pass. Only a request a pair must be allowed would tell the two apart. The
-  BFF pair's only allowed request is a write under `uploads/`, and the Catalog
-  pair's read of an absent key is refused on both buckets, since a store
-  answers a pair without list permission `403 AccessDenied`. Asking for the
-  write would make the check write, which
-  [ADR-110](../../docs/backend-architecture/adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)
-  decided it does not.
+- **That the policy allows everything the services need.** The check makes
+  the BFF's write and Catalog's read of `uploads/`, and never Catalog's write
+  under `products/`, which would leave a public object that never expires. A
+  deployed upload proves the rest.
+- **That `uploads/` expires.** The check relies on the expiry to remove its
+  sentinels and does not verify it; a store without the rule keeps one empty
+  object a day.
 - **Anything outside the store's own policy**, such as a CDN or a bucket ACL
   that grants a delete around it.
 - **That the monitor exists.** A green run requests the heartbeat URL, so a
@@ -81,8 +90,12 @@ grace period will do, with a period a little over a day.
 
 A red run of the deployed check files an issue labelled `security` and
 `high`, or comments on the open one ([ADR-111](../../docs/backend-architecture/adr/ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)).
-The run log says which of two things it was, per credential pair:
+The run log says which of three things it was, per credential pair:
 
+- **The store refused the sentinel's write or its read `AccessDenied`.** Either
+  `OBJECT_STORE_BUCKET` names a bucket the pairs are not granted on, or the
+  policy has lost an access the services need. Correct whichever it is, then
+  dispatch the workflow and close the issue on the green run.
 - **The store allowed a delete or a list**, or answered with a code other than
   `AccessDenied`. The policy has drifted from §10.8: correct it, then dispatch
   the workflow and close the issue on the green run.

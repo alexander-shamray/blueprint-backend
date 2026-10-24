@@ -2,7 +2,8 @@
 """Ask a deployed object store whether it refuses the two image credential pairs a delete and a list.
 
 §10.8 states that neither pair can list a bucket or delete; Compose proves it of the local store and this
-proves it of a deployed one (ADR-110): `py -3.12 deploy/objectstore/store_check.py check`."""
+proves it of a deployed one (ADR-110), once a write and a read the pairs are allowed show the bucket is the
+one they are granted on (ADR-148): `py -3.12 deploy/objectstore/store_check.py check`."""
 
 from __future__ import annotations
 
@@ -41,6 +42,11 @@ REQUIRED = (ENDPOINT, BUCKET, REGION) + tuple(name for pair in PAIRS.values() fo
 # Both prefixes a pair may write, because a delete refused under one and
 # allowed under the other is the policy a copy-paste produces.
 PREFIXES = ("uploads/", "products/")
+
+# Where the BFF's pair writes the sentinel and Catalog's reads it (ADR-148):
+# the one prefix both may reach, and private; the web-bff chart's values
+# state its expiry, which removes each sentinel.
+SENTINEL_PREFIX = "uploads/"
 
 TIMEOUT_SECONDS = 30
 
@@ -130,18 +136,27 @@ def code_of(body: str) -> str:
     return match.group(1) if match else ""
 
 
+def base_url(endpoint: str, bucket: str, addressing: str = "path") -> tuple[str, str]:
+    """The bucket's URL, which an object's key follows after a slash, and the suffix that lists it."""
+    name = urllib.parse.quote(bucket, safe="")
+    if addressing == "virtual":
+        root = urllib.parse.urlsplit(endpoint)
+        return f"{root.scheme}://{name}.{root.netloc}", "/?list-type=2&max-keys=1"
+    return f"{endpoint.rstrip('/')}/{name}", "?list-type=2&max-keys=1"
+
+
+def sentinel(endpoint: str, bucket: str, addressing: str = "path") -> str:
+    """A key named for this run alone, so a read that finds it found this run's write (ADR-148)."""
+    base, _ = base_url(endpoint, bucket, addressing)
+    return f"{base}/{SENTINEL_PREFIX}check-{uuid.uuid4().hex}"
+
+
 def probes(endpoint: str, bucket: str, addressing: str = "path") -> list[tuple[str, str, str]]:
     """(label, method, url) for each request a pair must be refused.
 
     The delete names a key nothing holds, so a store that wrongly allows it
     removes nothing: authorization is decided before existence."""
-    name = urllib.parse.quote(bucket, safe="")
-    if addressing == "virtual":
-        root = urllib.parse.urlsplit(endpoint)
-        base, listing = f"{root.scheme}://{name}.{root.netloc}", "/?list-type=2&max-keys=1"
-    else:
-        base = f"{endpoint.rstrip('/')}/{name}"
-        listing = "?list-type=2&max-keys=1"
+    base, listing = base_url(endpoint, bucket, addressing)
     absent = f"check-{uuid.uuid4().hex}"
     found = [(f"delete under {prefix}", "DELETE", f"{base}/{prefix}{absent}") for prefix in PREFIXES]
     found.append(("list the bucket", "GET", f"{base}{listing}"))
@@ -155,6 +170,33 @@ def judge(label: str, status: int, body: str) -> str | None:
     if status == REFUSED:
         return f"{label}: refused with {code_of(body) or 'no code'}, which is not a policy refusing it ({REFUSAL_CODE})"
     return f"{label}: answered {status}, so the pair is not refused it"
+
+
+def refused(label: str, status: int, body: str, may: str) -> str:
+    """Why an allowed request failed. Only AccessDenied says the bucket is not the pair's: another 403 is a
+    pair the store does not know, as judge() reads it for a probe (ADR-110)."""
+    code = code_of(body)
+    if status == REFUSED and code == REFUSAL_CODE:
+        return f"{label}: answered {status} {code}, so this is not a bucket the pair may {may}"
+    if status == REFUSED:
+        return f"{label}: refused with {code or 'no code'}, so the store does not know the pair"
+    return f"{label}: answered {status}{' ' + code if code else ''}, so the pair is not allowed it"
+
+
+def control(env: dict[str, str], addressing: str) -> list[str]:
+    """What stops the two allowed requests: a bucket the pairs have no grant on refuses them, and it refuses
+    every probe as the right one does (ADR-148). A write not taken leaves nothing to read, so none is asked."""
+    url = sentinel(env[ENDPOINT], env[BUCKET], addressing)
+    (bff_access, bff_secret), (catalog_access, catalog_secret) = PAIRS["bff"], PAIRS["catalog"]
+    status, body = ask("PUT", url, env[bff_access], env[bff_secret], env[REGION])
+    if status != 200:
+        return [refused(f"bff pair, write a sentinel under {SENTINEL_PREFIX}", status, body, "write")]
+    status, body = ask("GET", url, env[catalog_access], env[catalog_secret], env[REGION])
+    if status != 200:
+        return [refused("catalog pair, read the sentinel back", status, body, "read")]
+    if body:
+        return ["catalog pair, read the sentinel back: it held a body, so the read found another object"]
+    return []
 
 
 def require_https(name: str, value: str, reason: str) -> None:
@@ -188,7 +230,7 @@ def check(env: dict[str, str]) -> list[str]:
     addressing = env.get(ADDRESSING) or ADDRESSINGS[0]
     if addressing not in ADDRESSINGS:
         raise Refusal(f"{ADDRESSING} must be one of {', '.join(ADDRESSINGS)} when set")
-    violations = []
+    violations = control(env, addressing)
     for host, (access, secret) in PAIRS.items():
         for label, method, url in probes(env[ENDPOINT], env[BUCKET], addressing):
             status, body = ask(method, url, env[access], env[secret], env[REGION])
@@ -215,7 +257,7 @@ def main(argv: list[str]) -> int:
         print(f"::error::{line}")
     if violations:
         return 1
-    print("Neither credential pair can delete or list the bucket.")
+    print("Both credential pairs reach the bucket, and neither can delete or list it.")
     return 0
 
 
