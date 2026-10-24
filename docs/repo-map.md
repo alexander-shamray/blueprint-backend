@@ -55,6 +55,9 @@ docs/change-locality.md      the operating contract — the trust order, the
                              one rule, the change classes; the paths each
                              class may reach live in classes.yml, cited
 docs/change-locality-plan.md the PRs that make the contract fully true
+docs/ci-cost-comparison.md   what tools/ci-cost measured before and after
+                             the Actions cost changes, and the decision it
+                             informs
 docs/churn-plan.md           where the corpus churns, measured on a named
                              commit, and the refactor sequence that reduces
                              it
