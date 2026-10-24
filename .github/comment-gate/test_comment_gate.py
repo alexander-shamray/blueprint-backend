@@ -481,11 +481,18 @@ class TheProseWidth(unittest.TestCase):
         self.assertEqual(self.wide(self.prose(80) + "\r\n"), [])
 
     def test_the_guides_exemptions_are_not_prose(self):
-        lines = ["| " + self.prose(90), "<p>" + self.prose(90), "# " + self.prose(90),
-                 self.prose(90) + " [a](b.md)", "[a]: " + self.prose(90), self.prose(90) + " https://x.example"]
+        long = "x" * 100
+        lines = ["| " + self.prose(90), "<p>" + self.prose(90), "# " + self.prose(90), "[a]: " + self.prose(90),
+                 "see [the page](" + long + ") for more", "see https://x.example/" + long + " ok"]
         for line in lines:
             with self.subTest(line=line[:12]):
                 self.assertEqual(self.wide(line + "\n"), [])
+
+    def test_prose_around_a_link_or_an_address_is_still_measured(self):
+        lines = (self.prose(90) + " [a](b.md)", self.prose(90) + " https://x.example", "[" + self.prose(90) + "](b.md)")
+        for line in lines:
+            with self.subTest(line=line[:12]):
+                self.assertEqual(len(self.wide(line + "\n")), 1)
 
     def test_a_code_block_and_front_matter_are_not_prose(self):
         for fence in ("```", "~~~"):
@@ -496,14 +503,29 @@ class TheProseWidth(unittest.TestCase):
         self.assertEqual([n for _, n, _ in self.wide(front)], [4])
         self.assertEqual([n for _, n, _ in self.wide(f"x\n---\n{self.prose(90)}\n")], [3])
 
+    def test_a_fence_ends_on_its_own_character_and_length(self):
+        nested = f"````md\n```\n{self.prose(90)}\n```\n{self.prose(90)}\n````\n{self.prose(90)}\n"
+        self.assertEqual([n for _, n, _ in self.wide(nested)], [7])
+        tilde = f"~~~\n```\n{self.prose(90)}\n~~~\n{self.prose(90)}\n"
+        self.assertEqual([n for _, n, _ in self.wide(tilde)], [5])
+
+    def test_a_fence_never_closed_is_a_finding_when_it_is_added(self):
+        text = f"x\n```\n{self.prose(90)}\n"
+        self.assertEqual(self.wide(text), [("docs/a.md", 2, "a code fence opens here and is never closed, "
+                                                             "so the lines after it are unread")])
+        self.assertEqual(self.wide(text, added={3}), [])
+
+    def test_a_leading_thematic_break_is_not_front_matter_when_a_blank_line_follows_it(self):
+        text = f"---\n\n{self.prose(90)}\n---\n{self.prose(90)}\n"
+        self.assertEqual([n for _, n, _ in self.wide(text)], [3, 5])
+
     def test_only_added_lines_are_measured(self):
         text = self.prose(90) + "\n" + self.prose(90) + "\n"
         self.assertEqual([n for _, n, _ in self.wide(text, added={2})], [2])
 
     def test_which_paths_are_prose(self):
         for path, expected in (("docs/a.md", True), ("README.md", True), (".claude/commands/x.md", True),
-                               ("docs/superpowers/specs/a.md", False), (".remember/now.md", False),
-                               ("a.cs", False), ("a.txt", False)):
+                               ("docs/superpowers/specs/a.md", False), ("a.cs", False), ("a.txt", False)):
             with self.subTest(path=path):
                 self.assertEqual(gate.is_prose(path), expected)
 
