@@ -46,7 +46,7 @@ def drift(names: set[str], mirror: set[str]) -> tuple[set[str], set[str]]:
 def docker_directories(config: str) -> str:
     """The text of the `package-ecosystem: docker` entry, up to the next entry."""
     entries = re.split(r"(?m)^  - package-ecosystem:", config)
-    return next((entry for entry in entries if entry.lstrip().startswith("docker")), "")
+    return next((entry for entry in entries if entry.split(None, 1)[:1] == ["docker"]), "")
 
 
 def read(path: Path) -> list[str]:
@@ -80,6 +80,7 @@ class MirrorTests(unittest.TestCase):
 
     def test_an_ecosystem_other_than_docker_naming_the_path_does_not_count(self):
         config = ("updates:\n  - package-ecosystem: nuget\n    directories:\n      - /deploy/compose/images\n"
+                  "  - package-ecosystem: docker-compose\n    directories:\n      - /deploy/compose/images\n"
                   "  - package-ecosystem: docker\n    directories:\n      - /src\n")
         self.assertNotRegex(docker_directories(config), r"/deploy/compose/images")
 
