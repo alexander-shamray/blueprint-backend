@@ -17,7 +17,8 @@ public static class Prompt
     public const string Separator = "\n\n---\n";
 
     /// <summary>
-    /// The core's fixed instructions, English as every tool name and schema is (§5.4). A host adds its own after.
+    /// The core's fixed instructions, English as every tool name and schema is (design §5.4). A host adds its own
+    /// after.
     /// </summary>
     public const string Core = """
     You are an assistant inside a client application. You explain what its parts are for, take the user to the part

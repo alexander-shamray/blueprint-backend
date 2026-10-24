@@ -6,7 +6,7 @@ namespace Common.Assistant.Protocol;
 
 /// <summary>
 /// One Server-Sent Event of a conversation (AI assistant design §5.3): <see cref="EventName"/> is the SSE event name
-/// and the record the data. Every sentence-like field is a code the client words itself (§5.4).
+/// and the record the data. Every sentence-like field is a code the client words itself (design §5.4).
 /// </summary>
 public abstract record AssistantEvent
 {
@@ -43,7 +43,7 @@ public sealed record ClientToolCallEvent(string CallId, string Name, JsonObject 
 
 /// <summary>
 /// The turn is over, by <see cref="TurnEndReason"/>, with the provider's refusal category if it gave one, this turn's
-/// usage and the conversation's running total, so spend is visible (§9).
+/// usage and the conversation's running total, so spend is visible (design §9).
 /// </summary>
 public sealed record TurnEndedEvent(string Reason, string? Category, Usage Usage, Usage Total) : AssistantEvent
 {
@@ -59,7 +59,7 @@ public sealed record ErrorEvent(string Type, string Title, int Status, string? D
 }
 
 /// <summary>
-/// Reserved (§6.3): an action awaiting the operator's confirmation. Never emitted until actions are allowed, and
+/// Reserved (design §6.3): an action awaiting the operator's confirmation. Never emitted until actions are allowed, and
 /// a client ignores it until then.
 /// </summary>
 public sealed record ConfirmationRequiredEvent(
@@ -81,7 +81,7 @@ public sealed record Usage(long Input, long Output, long Cached)
         new(a.Input + b.Input, a.Output + b.Output, a.Cached + b.Cached);
 }
 
-/// <summary>Why a turn ended (§5.3).</summary>
+/// <summary>Why a turn ended (design §5.3).</summary>
 public static class TurnEndReason
 {
     public const string Done = "done";

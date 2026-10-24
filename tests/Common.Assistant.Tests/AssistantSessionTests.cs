@@ -7,7 +7,7 @@ using Shouldly;
 
 namespace Common.Assistant.Tests;
 
-/// <summary>The loop of AI assistant design §7 against a scripted provider (§14, "Core").</summary>
+/// <summary>The loop of AI assistant design §7 against a scripted provider (design §14, "Core").</summary>
 public sealed class AssistantSessionTests
 {
     private static readonly Caller Operator = new("operator", "Operator");
