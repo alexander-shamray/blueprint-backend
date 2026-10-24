@@ -213,7 +213,7 @@ class TrailerHelper(Fixture):
                 found.append(f"no lease: {command}")
             found += [f"{t!r} forces without a lease: {command}" for t in tokens
                       if t in ("--force", "--force-if-includes") or t.startswith("--force=")
-                      or re.fullmatch(r"-[A-Za-z]*f[A-Za-z]*", t) or re.match(r'"?\+', t)]
+                      or re.fullmatch(r"-[A-Za-z]*f[A-Za-z]*", t) or re.match(r'''["']?\+''', t)]
         return found
 
     def test_the_helper_spells_its_rewrite_and_its_lease_itself(self):
@@ -233,6 +233,7 @@ class TrailerHelper(Fixture):
                      f'git push --quiet {lease} --force origin "HEAD:refs/heads/$branch"',
                      f'git push --quiet {lease} origin "+HEAD:refs/heads/$branch"',
                      f'git push -qf {lease} origin "HEAD:refs/heads/$branch"',
+                     f"git push --quiet {lease} origin '+HEAD:refs/heads/$branch'",
                      f'git push --quiet {lease} origin ' + chr(92) + chr(10) + ' --force "HEAD:refs/heads/$branch"'):
             with self.subTest(line=line):
                 source = TRAILER.read_text(encoding="utf-8") + chr(10) + line

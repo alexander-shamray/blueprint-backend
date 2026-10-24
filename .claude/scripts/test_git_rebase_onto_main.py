@@ -139,7 +139,7 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
         # where the space was.
         for command in commands.splitlines():
             if command.startswith("git push") or " push " in command:
-                self.assertNotRegex(command, r'(?:^|\s)"?\+\S',
+                self.assertNotRegex(command, r'''(?:^|\s)["']?\+\S''',
                                     "a `+` refspec forces without naming a flag")
 
     def test_the_scan_sees_what_a_line_scan_misses(self):
