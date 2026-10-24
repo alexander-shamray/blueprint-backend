@@ -33,6 +33,7 @@ RESIDENT = {
 }
 
 CITATION = re.compile(r"docs/commands/([a-z-]+\.md)`?, \*([^*]+)\*")
+POSITIONAL = re.compile(r"\$\d+|\$ARGUMENTS\[")
 
 
 def collapsed(path):
@@ -89,7 +90,13 @@ class EachSplitCommandHasBothHalves(unittest.TestCase):
         self.assertGreater(len(paths), len(CEILINGS), "the glob stopped finding the commands")
         for path in paths:
             with self.subTest(command=path.name):
-                self.assertEqual([], re.findall(r"\$[1-9]", path.read_text(encoding="utf-8")))
+                self.assertEqual([], POSITIONAL.findall(path.read_text(encoding="utf-8")))
+
+    def test_the_positional_pattern_sees_each_spelling(self):
+        for spelling in ("$0", "$1", "$9 x", "$12", "$ARGUMENTS[0]", "$ARGUMENTS[12]"):
+            with self.subTest(spelling=spelling):
+                self.assertTrue(POSITIONAL.search(spelling))
+        self.assertIsNone(POSITIONAL.search("`$ARGUMENTS` and $HOME"))
 
 
 if __name__ == "__main__":
