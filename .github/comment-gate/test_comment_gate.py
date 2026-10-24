@@ -462,6 +462,55 @@ class TheWidthRule(unittest.TestCase):
                 self.assertEqual(judged(path, "x" * 121 + "\n"), [])
 
 
+class TheProseWidth(unittest.TestCase):
+    def prose(self, width):
+        return "a " * (width // 2) + ("a" if width % 2 else "")
+
+    def wide(self, text, path="docs/a.md", added=None):
+        every = set(range(1, text.count("\n") + 2)) if added is None else added
+        return gate.prose_width(path, text, every)
+
+    def test_the_budget_is_80_columns_and_one_more_fails(self):
+        self.assertEqual(gate.PROSE_LIMIT, 80)
+        self.assertEqual(len(self.prose(81)), 81)
+        self.assertEqual(self.wide(self.prose(80) + "\n"), [])
+        self.assertEqual(self.wide("x\n" + self.prose(81) + "\n"),
+                         [("docs/a.md", 2, "a prose line runs 81 columns, over 80")])
+
+    def test_a_line_break_is_not_a_column(self):
+        self.assertEqual(self.wide(self.prose(80) + "\r\n"), [])
+
+    def test_the_guides_exemptions_are_not_prose(self):
+        lines = ["| " + self.prose(90), "<p>" + self.prose(90), "# " + self.prose(90),
+                 self.prose(90) + " [a](b.md)", "[a]: " + self.prose(90), self.prose(90) + " https://x.example"]
+        for line in lines:
+            with self.subTest(line=line[:12]):
+                self.assertEqual(self.wide(line + "\n"), [])
+
+    def test_a_code_block_and_front_matter_are_not_prose(self):
+        for fence in ("```", "~~~"):
+            with self.subTest(fence=fence):
+                text = f"{fence}bash\n{self.prose(90)}\n{fence}\n{self.prose(90)}\n"
+                self.assertEqual([n for _, n, _ in self.wide(text)], [4])
+        front = f"---\ndescription: {self.prose(90)}\n---\n{self.prose(90)}\n"
+        self.assertEqual([n for _, n, _ in self.wide(front)], [4])
+        self.assertEqual([n for _, n, _ in self.wide(f"x\n---\n{self.prose(90)}\n")], [3])
+
+    def test_only_added_lines_are_measured(self):
+        text = self.prose(90) + "\n" + self.prose(90) + "\n"
+        self.assertEqual([n for _, n, _ in self.wide(text, added={2})], [2])
+
+    def test_which_paths_are_prose(self):
+        for path, expected in (("docs/a.md", True), ("README.md", True), (".claude/commands/x.md", True),
+                               ("docs/superpowers/specs/a.md", False), (".remember/now.md", False),
+                               ("a.cs", False), ("a.txt", False)):
+            with self.subTest(path=path):
+                self.assertEqual(gate.is_prose(path), expected)
+
+    def test_markdown_still_has_no_comment_reader(self):
+        self.assertIsNone(gate.reader_for("docs/a.md"))
+
+
 class TheDiff(unittest.TestCase):
     def test_hunks_give_the_added_line_numbers(self):
         diff = ("diff --git a/A.cs b/A.cs\n"
@@ -500,7 +549,9 @@ class TheGateOnARepository(unittest.TestCase):
         subprocess.run(["git", "-C", self.repo, "clean", "-qfdx"])
 
     def write(self, name, text, encoding="utf-8"):
-        Path(self.repo, name).write_bytes(text.encode(encoding))
+        target = Path(self.repo, name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(text.encode(encoding))
 
     def commit(self, message):
         git(self.repo, "add", "-A")
@@ -519,6 +570,21 @@ class TheGateOnARepository(unittest.TestCase):
             [sys.executable, str(GATE), "--base", base, "--head", head],
             cwd=self.repo, capture_output=True, text=True, encoding="utf-8",
             env=env)
+
+    def test_an_added_prose_line_past_80_columns_fails_and_an_old_one_does_not(self):
+        wide, fine = "a " * 41, "a " * 40
+        self.write("docs/Old.md", wide.rstrip() + " word\n")
+        self.write("docs/superpowers/Spec.md", wide + "\n")
+        self.commit("old")
+        self.write("docs/Old.md", wide.rstrip() + " word\n" + wide + "\n" + fine.rstrip() + "\n")
+        self.write("docs/superpowers/Spec.md", wide + "\n" + wide + "\n")
+        self.commit("change")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("docs/Old.md:2: a prose line runs 82 columns, over 80", result.stdout)
+        self.assertNotIn("docs/Old.md:1:", result.stdout)
+        self.assertNotIn("docs/Old.md:3:", result.stdout)
+        self.assertNotIn("Spec.md", result.stdout)
 
     def test_an_added_finding_fails_and_old_ones_stay_unjudged(self):
         self.write("New.cs", "x(); // see #3\n")
