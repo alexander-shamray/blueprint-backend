@@ -15,6 +15,7 @@ on:
   pull_request:
     paths:
       - 'deploy/compose/**'
+      - '.github/dependabot.yml'
       - 'deploy/observability/alerts/platform-alerts.yaml'
       - 'deploy/observability/dashboards/**'
       - 'src/BuildingBlocks/Common.Web/HealthProbe.cs'
@@ -27,6 +28,7 @@ on:
     branches: [main]
     paths:
       - 'deploy/compose/**'
+      - '.github/dependabot.yml'
       - 'deploy/observability/alerts/platform-alerts.yaml'
       - 'deploy/observability/dashboards/**'
       - 'src/BuildingBlocks/Common.Web/HealthProbe.cs'
@@ -129,3 +131,18 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose -f deploy/compose/docker-compose.yml down -v
+
+  # Dependabot's docker-compose ecosystem does not follow `include`, so the stack's third-party images are mirrored
+  # in a Dockerfile it reads. Text only, no Docker: the mirror may not drift from the files Compose runs.
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: The Dependabot mirror names the images the stack runs
+        run: python -m unittest discover -s deploy/compose/images
