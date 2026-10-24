@@ -224,7 +224,7 @@ class TrailerHelper(Fixture):
         self.assertIn('--force-with-lease="refs/heads/$branch:$remote"', pushes[0])
 
     def test_the_scan_sees_an_unleased_force_in_the_helpers_own_shape(self):
-        # The old check forbade two substrings and the helper's quiet flag sat between them.
+        # A flag between `push` and `--force` must not hide the force, with a lease beside it or without.
         lease = '--force-with-lease="refs/heads/$branch:$remote"'
         for line in ('git push --quiet --force origin "HEAD:refs/heads/$branch"',
                      'git push -q -f origin "HEAD:refs/heads/$branch"',
