@@ -4,8 +4,8 @@ argument-hint: "[title — omit to derive it from the commits]"
 allowed-tools: Read, Grep, Glob, Write, Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git push -u origin:*), Bash(git push origin:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-closure-input.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*)
 ---
 
-Open a PR for the current branch. Title: $1 — if empty, derive it from the
-commits.
+Open a PR for the current branch. Title: $ARGUMENTS — if empty, derive it
+from the commits.
 
 ## Push the branch first
 

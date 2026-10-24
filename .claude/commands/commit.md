@@ -4,8 +4,8 @@ argument-hint: "[what to commit — omit for everything staged and unstaged]"
 allowed-tools: Read, Grep, Glob, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(wc:*)
 ---
 
-Commit the working tree. Scope: $1 — if empty, everything modified and
-untracked.
+Commit the working tree. Scope: $ARGUMENTS — if empty, everything modified
+and untracked.
 
 ## Before anything
 
