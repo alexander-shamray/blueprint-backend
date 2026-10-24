@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Ask a deployed object store whether it refuses the two image credential pairs a delete and a list.
 
-§10.8 states that neither pair can list a bucket or delete; Compose proves it of the local store and this
-proves it of a deployed one (ADR-110), once a write and a read the pairs are allowed show the bucket is the
-one they are granted on (ADR-148): `py -3.12 deploy/objectstore/store_check.py check`."""
+§10.8 says neither pair can list a bucket or delete; Compose proves it locally and this of a deployed store
+(ADR-110), once an allowed write and read show the bucket is theirs (ADR-148): `store_check.py check`."""
 
 from __future__ import annotations
 
