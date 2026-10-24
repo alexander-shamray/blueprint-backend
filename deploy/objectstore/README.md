@@ -101,4 +101,4 @@ The run log says which of three things it was, per credential pair:
   the workflow and close the issue on the green run.
 - **The store could not be asked**: an unreachable endpoint, an unset variable
   or a pair the store does not know. Nothing is established either way, so
-  treat it as the first until the run is green.
+  treat it as an allowed delete or list until the run is green.

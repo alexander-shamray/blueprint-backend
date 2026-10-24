@@ -354,13 +354,18 @@ deploy/observability/        §13.8's dashboards, §13.6's alert rules and
 deploy/objectstore/          §10.8's permissions asked of a deployed store.
                              `provision.py` names what the production
                              Environment lacks and sets it; `store_check.py`
-                             also sends the green run's heartbeat. It signs
-                             a delete of an absent key
-                             under each prefix and a list of the bucket with
-                             each credential pair, and requires AccessDenied;
-                             the suite starts a local server that answers as
-                             a store configured to taste. It writes nothing
-                             to the store, and reads only its own tree
+                             also sends the green run's heartbeat. It first
+                             writes an empty sentinel under uploads/ with
+                             the BFF's pair and reads it back with Catalog's,
+                             both of which must be allowed, so a bucket the
+                             pairs have no grant on fails (ADR-148); the
+                             sentinel is left for the uploads/ expiry. It
+                             then signs a delete of an absent key under each
+                             prefix and a list of the bucket with each
+                             credential pair, and requires AccessDenied; the
+                             suite starts a local server that answers as a
+                             store configured to taste. It reads only its
+                             own tree
 deploy/keycloak/             §11's token obligations against a Keycloak realm
                              representation. `realm_check.py` decides,
                              `read_admin.py` is the one file that talks to
