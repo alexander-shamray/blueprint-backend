@@ -46,7 +46,10 @@ internal sealed class EventLog(int capacity)
         return id;
     }
 
-    /// <summary>Ends every follower; nothing more is appended.</summary>
+    /// <summary>
+    /// Ends every follower once it has read what is held. <see cref="Append"/> still stores an event after this, as a
+    /// disposed session's last events are, and a follower that starts later reads it before it ends.
+    /// </summary>
     public void Close()
     {
         TaskCompletionSource woken;
