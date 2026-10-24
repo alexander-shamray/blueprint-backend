@@ -8,8 +8,9 @@ more lines of C# comment than of C# code; no line it adds to a C# file
 runs past `WIDTH_LIMIT` columns; and no prose line it adds to a Markdown
 file runs past `PROSE_LIMIT`.**
 [`docs/style-guide.md`](../../docs/style-guide.md)'s
-*Comments* section is the rule, and its *Wrapping* section owns the width;
-this gate is their mechanical half.
+*Comments* section is the rule, its *Wrapping* section owns the width of
+code, and its *Prose conventions* section the width of prose; this gate is
+their mechanical half.
 
 ## What it reads
 
@@ -82,13 +83,17 @@ suite rather than staying.
 **The width of a Markdown prose line.** An added line of a `.md` file longer
 than `PROSE_LIMIT` characters, its line break not counted, is a finding at
 that line, unless the guide exempts it: a table row, an HTML line, a heading,
-a line carrying a link or an address, a line inside a fenced code block, or
-one of a file's leading front matter. A file under `docs/superpowers/` or
-`.remember/` is exempt, since a spec is never edited to match the code that
-followed it. Markdown has no comments, so the check sits beside the comment
-rule and reads the same added lines. The suite does not hold the tracked
-files to it: about 212 old lines are over, and rewrapping them is a
-separate mechanical commit that this gate does not wait for.
+a reference definition, a line inside a fenced code block, or one of a file's
+leading front matter. A link's target and a bare address are measured as one
+character, since the guide lets them run long and not the prose around them.
+A fence ends on the character that opened it, at least as long, and one never
+closed is a finding where it opens. Front matter is a leading block with no
+blank line before its closing rule. A file under `docs/superpowers/` is
+exempt, since a spec is never edited to match the code that followed it.
+Markdown has no comments, so the check sits beside the comment rule and
+reads the same added lines. The suite does not hold the tracked files to it:
+about 212 old lines are over, and rewrapping them is a separate mechanical
+commit that this gate does not wait for.
 
 **Added lines only.** The corpus is brought under the rule by the sweeps in
 [`docs/churn-plan.md`](../../docs/churn-plan.md) and
@@ -106,9 +111,9 @@ another way.
 The suite pairs each reader's comments with the literals beside them that it
 must not judge, each pattern with its innocent neighbour, and runs the whole
 gate over a throwaway git repository, so the diff half is observed rather
-than assumed. It also reads every tracked file in a language the gate reads,
-so a file the lexers cannot parse fails the suite before it fails a pull
-request.
+than assumed. It also reads every tracked file in a language the gate reads
+for comments, so a file the lexers cannot parse fails the suite before it
+fails a pull request; `.md` is read in diff mode only.
 
 ## What it reports, and the ratio it refuses
 

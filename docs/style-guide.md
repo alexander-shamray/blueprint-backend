@@ -64,7 +64,9 @@ from this list without its section is how one gets "corrected" back.
 
 ## Prose conventions
 
-- **Wrap prose at 80 columns.** Tables, links and code blocks may exceed it.
+- **Wrap prose at 80 columns.** Tables, code blocks, headings, HTML lines and
+  front matter may exceed it, and so may a link's target, though the prose
+  around it may not.
 - **British spelling in prose** — `behaviour`, `serialisation`, `licence`,
   `normalise`, `organised`. **Identifiers keep their real spelling**:
   `IPipelineBehavior`, `AddAuthorization`, `[Authorize]`. Never "correct" a type

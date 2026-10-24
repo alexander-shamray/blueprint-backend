@@ -23,14 +23,16 @@ BLOCK_LIMIT = 5
 WIDTH_LIMIT = 120
 GENERATED = re.compile(r"(?:^|/)Migrations/|\.Designer\.cs$")
 
-# The same section's budget for a line of Markdown prose. The specs under docs/superpowers are never edited to match
-# the code that followed them (CLAUDE.md), so a line added there is a record and not prose.
+# The style guide's *Prose conventions* budget for a line of Markdown prose. The specs under docs/superpowers are never
+# edited to match the code that followed them (CLAUDE.md), so a line added there is a record and not prose.
 PROSE_LIMIT = 80
-PROSE_EXEMPT = ("docs/superpowers/", ".remember/")
-# A table row, an HTML line or a heading is not wrapped prose, and a line carrying a link or an address cannot be
-# wrapped inside it.
-UNWRAPPABLE = re.compile(r"^\s*(?:\||<|#)|\]\(|\]:|https?://")
-FENCE = re.compile(r"^\s*(?:```|~~~)")
+PROSE_EXEMPT = ("docs/superpowers/",)
+# A table row, an HTML line, a heading or a reference definition is not wrapped prose. A link's target and a bare
+# address may run long, and the prose around them may not, so each is measured as one character.
+UNWRAPPABLE = re.compile(r"^\s*(?:\||<|#|\[[^\]]*\]:)")
+LINK_TARGET = re.compile(r"\]\([^)]*\)")
+ADDRESS = re.compile(r"https?://\S+")
+FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 
 # A section, an Appendix E section, an ADR or a symbol: the owners a
 # `<remarks>` may exist to cite.
@@ -754,23 +756,38 @@ def is_prose(path):
 def prose_width(path, text, added):
     """Findings for the added Markdown prose lines that run past PROSE_LIMIT.
 
-    Code blocks and a leading front matter block are not prose, and the guide's other exemptions are UNWRAPPABLE.
+    A code block ends on the fence character that opened it, at least as long; front matter is a leading block with
+    no blank line before its closing rule.
     """
     found = []
-    fenced = False
+    fence = None
     lines = [line.rstrip("\r") for line in text.split("\n")]
-    front = lines[:1] == ["---"] and "---" in lines[1:]
-    front_end = lines.index("---", 1) + 1 if front else 0
+    front_end = 0
+    if lines[:1] == ["---"]:
+        for number, line in enumerate(lines[1:], 2):
+            if not line.strip():
+                break
+            if line == "---":
+                front_end = number
+                break
     for number, line in enumerate(lines, 1):
         if number <= front_end:
             continue
-        if FENCE.match(line):
-            fenced = not fenced
+        if fence is not None:
+            if re.match(rf"^\s*{re.escape(fence[0])}{{{fence[1]},}}\s*$", line):
+                fence = None
             continue
-        if fenced or UNWRAPPABLE.search(line) or number not in added:
+        opening = FENCE.match(line)
+        if opening:
+            fence = (opening.group(1)[0], len(opening.group(1)), number)
             continue
-        if len(line) > PROSE_LIMIT:
-            found.append((path, number, f"a prose line runs {len(line)} columns, over {PROSE_LIMIT}"))
+        if number not in added or UNWRAPPABLE.search(line):
+            continue
+        width = len(ADDRESS.sub("u", LINK_TARGET.sub("](t)", line)))
+        if width > PROSE_LIMIT:
+            found.append((path, number, f"a prose line runs {width} columns, over {PROSE_LIMIT}"))
+    if fence is not None and fence[2] in added:
+        found.append((path, fence[2], "a code fence opens here and is never closed, so the lines after it are unread"))
     return found
 
 
