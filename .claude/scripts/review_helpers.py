@@ -125,11 +125,8 @@ GIT_GLOBAL_OPTIONS = re.compile(
 def git_commands(source):
     """Every `git …` command in a shell script, however it is introduced.
 
-    A scan of line starts sees only a command opening a physical line. So the
-    text is cut where a command can begin, whitespace runs are one space, and
-    the assignments, keywords and wrappers in front of a command are stripped.
-    It does not parse shell; the suites that use it each hold a test whose
-    subject is the scan, not what it found.
+    The text is cut where a command can begin, whitespace is one space, and the
+    assignments, keywords and wrappers in front of a command are stripped.
     """
     commands = []
     for piece in COMMAND_SEPARATOR.split(source):
