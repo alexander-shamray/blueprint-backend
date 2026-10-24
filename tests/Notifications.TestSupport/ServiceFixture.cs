@@ -443,7 +443,7 @@ public sealed class ServiceFixture()
         throw new TimeoutException($"A notice was still pending after {maxPasses} passes.");
     }
 
-    /// <summary>The engine's clock, which stamps every NextAttemptAt, so a test never reads the host's.</summary>
+    /// <summary>The engine's clock, which stamps every back-off, so a test reads the window where it is written.</summary>
     public Task<DateTimeOffset> DatabaseNowAsync() =>
         ScalarAsync<DateTimeOffset>("SELECT Value = SYSDATETIMEOFFSET()");
 
