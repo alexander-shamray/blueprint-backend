@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "provider": "fake",
+  "model": "scripted",
+  "reason": null
+}

@@ -391,6 +391,12 @@ src/BuildingBlocks/
                                of §6.3's behaviours; §6.5's CursorPage<T>;
                                §7.5's ports; and §8.5's marker port and its
                                scoped key carrier
+  Common.Assistant/            the AI assistant's provider-neutral core,
+                               referencing no package, and
+  Common.Assistant.Anthropic/  its adapter over the Anthropic SDK: the two
+                               projects this repository publishes as NuGet
+                               packages, and no service's to reference
+                               (ADR-149)
   Common.Contracts/            §4.3's one assembly that crosses a service
                                boundary. No packages and no project references,
                                and both absences are the point — anything this
@@ -512,9 +518,10 @@ line per resource per service, not one deletion (§14.2).
 
 ## Edges between building blocks
 
-Three exist, and every one waited for a type that could not be written without
+Four exist, and every one waited for a type that could not be written without
 it. **An unused project reference is a claim about the dependency graph that
-nothing makes true**, which is why each was drawn late and deliberately:
+nothing makes true**, which is why the first three were drawn late and
+deliberately:
 
 - `Common.Application → Common.Domain`. §4.2 permitted it from the start;
   what it lacked was a member naming a domain type. §7.5's
@@ -525,6 +532,8 @@ nothing makes true**, which is why each was drawn late and deliberately:
   two arrive together.
 - `Common.Web → Common.Application`, the oldest, because `ToHttpResult` maps an
   `Error` and cannot be written without one.
+- `Common.Assistant.Anthropic → Common.Assistant`, the newest, drawn with the
+  adapter itself, which implements the core's `IAssistantProvider` (ADR-149).
 
 **The reference existing is not permission to start using it.** §6.3's
 `TransactionBehavior` still reads `ModifiedAggregateCount` as an `int`, because

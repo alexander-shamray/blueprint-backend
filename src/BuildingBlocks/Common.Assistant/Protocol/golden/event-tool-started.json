@@ -1,0 +1,8 @@
+{
+  "callId": "call-1",
+  "name": "open_screen",
+  "side": "client",
+  "args": {
+    "path": "logs"
+  }
+}

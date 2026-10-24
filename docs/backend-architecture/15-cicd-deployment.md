@@ -59,7 +59,12 @@ first push to `main`. What `actionlint` reads and claims is
 > which amends
 > [ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md)):
 > a pull request builds and inventories and pushes nothing, and the rollout
-> verifies the signature before Helm runs. No `Deploy:` node is live: there is no dev, staging or production environment,
+> verifies the signature before Helm runs. The only other thing `main`
+> publishes is a node the diagram does not draw: the `packages` job, after
+> the test stages, pushes each of the AI assistant's two NuGet packages
+> whose project changed to GitHub Packages
+> ([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md)).
+> No `Deploy:` node is live: there is no dev, staging or production environment,
 > which is why §15.5's canary is `workflow_dispatch` only and why the k6 SLO
 > run, the node after staging, waits on an environment this repository does
 > not have. It has been made only locally, and
@@ -154,7 +159,12 @@ filter otherwise reads as "this service's own tree".
 do.** Every path under `src/` must be matched by **some** filter — the
 deployables (`Gateway`, `BFF`, and each directory under `Services/`) by their
 own, and `BuildingBlocks` by `shared`, which is the anchor every service
-inherits rather than a filter of its own. Everything under `deploy/` except
+inherits rather than a filter of its own. Two filters are not deployables:
+`assistant` and `anthropic` match the AI assistant's two building blocks for
+the `packages` job alone, which pushes their NuGet packages
+([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md)),
+and those blocks still rebuild every image through `shared`. Everything under
+`deploy/` except
 `deploy/compose/**` is matched by `deploy` — `deploy/helm/**` included, whose
 own workflow renders the charts but deploys nothing. Charts are deliberately
 not attached to a service, because a chart change deploys without building and
@@ -1596,8 +1606,9 @@ every HPA.
 the chart supplies through `OTEL_RESOURCE_ATTRIBUTES` (§15.4).
 `service.version` is the obvious discriminator and is not one:
 [§13.2](13-observability.md)'s `BuildInfo` strips the source-revision suffix on
-purpose, and nothing in the solution sets an assembly version, so every build in
-the platform reports `1.0.0`. Without a discriminator the analysis compares a
+purpose, and no host sets an assembly version — ADR-149's two packages set one,
+and no host holds them — so every build in the platform reports `1.0.0`.
+Without a discriminator the analysis compares a
 release against itself, which passes every time — including on a canary that is
 on fire.
 

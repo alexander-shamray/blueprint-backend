@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The provider-neutral core (AI assistant design §4): the protocol, the tools, the provider interface and the loop.
+       It holds no host type and no package beyond the BCL, so another host can take it whole (design §13). One of the
+       two packages this repository publishes (ADR-149): a change to it ships under a new Version. -->
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Version>0.1.0</Version>
+    <Description>The AI assistant's provider-neutral core: its protocol, read-only tool registry, provider interface and loop.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Common.Assistant.Tests" />
+  </ItemGroup>
+
+</Project>

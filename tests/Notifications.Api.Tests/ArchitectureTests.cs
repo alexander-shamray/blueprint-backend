@@ -56,7 +56,7 @@ public class ArchitectureTests
     /// <summary>The service's projects this host may emit a reference to (ADR-118).</summary>
     private static readonly string[] OwnProjects = ["Notifications.Application", "Notifications.Infrastructure"];
 
-    /// <summary>§4.1's building blocks by name, because Common.TestSupport is named like one and is not.</summary>
+    /// <summary>§4.2's five building blocks by name, because Common.TestSupport is named like one and is not.</summary>
     private static readonly string[] BuildingBlocks =
         ["Common.Application", "Common.Contracts", "Common.Domain", "Common.Infrastructure", "Common.Web"];
 

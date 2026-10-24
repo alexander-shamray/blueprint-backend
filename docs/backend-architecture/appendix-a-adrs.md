@@ -155,6 +155,7 @@ decision looks wrong.
 | **ADR-146** | [Shipping's erasure empties a shipment's request ids before it deletes the address, in two statements of one unit (#1320), amending ADR-103](adr/ADR-146-shippings-erasure-empties-a-shipments-request-ids-before-it-deletes-the-address-in-two-statements-of-one-unit-1320-amending-adr-103.md) |
 | **ADR-147** | [A scalar `Switches:Off` refuses the host at start and is reported Degraded on a reload (#1291), amending ADR-113 and ADR-115](adr/ADR-147-a-scalar-switchesoff-refuses-the-host-at-start-and-is-reported-degraded-on-a-reload-1291-amending-adr-113-and-adr-115.md) |
 | **ADR-148** | [The object store check writes a sentinel with the BFF's pair and reads it back with Catalog's (#1221)](adr/ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md) |
+| **ADR-149** | [The AI assistant's core and its adapter are two building blocks this repository publishes as NuGet packages (#1346)](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md) |
 
 ---
 

@@ -1,0 +1,6 @@
+{
+  "type": "provider-error",
+  "title": "The assistant's provider failed",
+  "status": 502,
+  "detail": "connection reset"
+}

@@ -1,0 +1,44 @@
+{
+  "client": {
+    "name": "blueprint-admin",
+    "version": "1"
+  },
+  "locale": "ru-RU",
+  "catalogue": [
+    {
+      "id": "logs",
+      "label": "Logs",
+      "where": "/logs",
+      "help": "Follows the platform's log lines."
+    }
+  ],
+  "clientTools": [
+    {
+      "name": "open_screen",
+      "title": "Open a screen",
+      "description": "Routes the console to a screen by its id.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      },
+      "side": "client"
+    }
+  ],
+  "hostOptions": {
+    "identity": "demo"
+  }
+}
