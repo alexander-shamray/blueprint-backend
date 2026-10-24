@@ -49,6 +49,8 @@ clause that a red run files no issue.
 
 **Also superseded in part by [ADR-114](ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md)**: the clauses on a store addressed only by a virtual-hosted name and on a monitor outside GitHub.
 
+**Also superseded in part by [ADR-148](ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md)**: the Decision's clauses that each pair signs three requests and that a request passes only on `403 AccessDenied`, and the Why's clause that the check never writes to a production bucket.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

@@ -1240,7 +1240,11 @@ deployment's to do, and `object-store.yml` checks that it has, in a deployment
 that has opted in
 ([ADR-110](adr/ADR-110-the-deployed-object-store-is-checked-between-rollouts-each-image-credential-pair-is-asked-to-delete-and-to-list-and-must-be-refused-985.md)):
 each pair is asked to delete and to list on a daily schedule, and a store that
-allows either fails the run.
+allows either fails the run. The BFF's pair first writes an empty object under
+the upload prefix and the attaching service's reads it back, and a store that
+refuses either fails the run too, since only an allowed request tells the
+bucket the pairs are granted on from one that grants them nothing
+([ADR-148](adr/ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md)).
 
 **The file is served by the store, or a CDN in front of it, from the published
 prefix alone.** It is not served through the gateway, because the gateway would

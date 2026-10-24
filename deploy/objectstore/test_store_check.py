@@ -14,6 +14,10 @@ DENIED = ("403", "<Error><Code>AccessDenied</Code></Error>")
 UNKNOWN_KEY = ("403", "<Error><Code>InvalidAccessKeyId</Code></Error>")
 ALLOWED = ("204", "")
 
+# The bucket the pairs are granted on: the sentinel is written and read back
+# empty, and every probe is refused (ADR-148).
+HOLDING = {"PUT": ("200", ""), "GET": ("200", ""), "DELETE": DENIED, "list": DENIED}
+
 
 class Store:
     """A server whose answer is chosen per (method, path prefix) and recorded."""
@@ -32,7 +36,7 @@ class Store:
                 self.end_headers()
                 self.wfile.write(body.encode())
 
-            do_GET = do_DELETE = _answer
+            do_GET = do_DELETE = do_PUT = _answer
 
             def log_message(self, *args):
                 pass
@@ -55,6 +59,9 @@ class Store:
                 store_check.ENDPOINT: self.endpoint,
                 store_check.BUCKET: "product-images",
                 store_check.REGION: "us-east-1",
+                # Distinct, so a test can tell which pair signed a request.
+                "OBJECT_STORE_BFF_ACCESS_KEY": "bff-key",
+                "OBJECT_STORE_CATALOG_ACCESS_KEY": "catalog-key",
             }
         )
         env.update(over)
@@ -86,68 +93,112 @@ class CheckTests(unittest.TestCase):
         self.addCleanup(store.close)
         return store, store_check.check(store.env(**over))
 
-    def test_a_store_that_refuses_every_probe_has_no_violation(self):
-        store, violations = self.run_against({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
+    def test_a_store_that_holds_the_policy_has_no_violation(self):
+        store, violations = self.run_against(HOLDING)
         self.assertEqual(violations, [])
-        # Two pairs, each asked two deletes and a list: the check asked, rather than found nothing to ask.
-        self.assertEqual(len(store.seen), 6)
+        # The sentinel's write and read, then two pairs each asked two deletes and a list: the check asked,
+        # rather than found nothing to ask.
+        self.assertEqual(len(store.seen), 8)
         self.assertTrue(all(auth.startswith("AWS4-HMAC-SHA256") for _, _, auth in store.seen))
 
     def test_a_delete_the_store_allows_is_a_violation_for_each_pair_and_prefix(self):
-        _, violations = self.run_against({"DELETE": ALLOWED, "GET": DENIED, "list": DENIED})
+        _, violations = self.run_against({**HOLDING, "DELETE": ALLOWED})
         self.assertEqual(len(violations), 4)
         self.assertTrue(any("bff pair, delete under uploads/" in v for v in violations))
         self.assertTrue(any("catalog pair, delete under products/" in v for v in violations))
 
     def test_a_list_the_store_allows_is_a_violation(self):
-        _, violations = self.run_against({"DELETE": DENIED, "GET": DENIED, "list": ("200", "<ListBucketResult/>")})
+        _, violations = self.run_against({**HOLDING, "list": ("200", "<ListBucketResult/>")})
         self.assertEqual(len(violations), 2)
         self.assertTrue(all("list the bucket" in v for v in violations))
 
     def test_a_pair_the_store_does_not_know_is_not_a_refusal(self):
-        _, violations = self.run_against({"DELETE": UNKNOWN_KEY, "GET": UNKNOWN_KEY, "list": UNKNOWN_KEY})
-        self.assertEqual(len(violations), 6)
+        _, violations = self.run_against({"PUT": UNKNOWN_KEY, "GET": UNKNOWN_KEY, "DELETE": UNKNOWN_KEY,
+                                          "list": UNKNOWN_KEY})
+        # The sentinel's refused write, and no read of what was never written, then the six probes.
+        self.assertEqual(len(violations), 7)
         self.assertTrue(all("InvalidAccessKeyId" in v for v in violations))
 
     def test_a_missing_bucket_is_not_a_refusal(self):
         missing = ("404", "<Error><Code>NoSuchBucket</Code></Error>")
-        _, violations = self.run_against({"DELETE": missing, "GET": DENIED, "list": DENIED})
-        self.assertEqual(len(violations), 4)
+        _, violations = self.run_against({"PUT": missing, "GET": missing, "DELETE": missing, "list": DENIED})
+        self.assertEqual(len(violations), 5)
+        self.assertIn("write a sentinel under uploads/: answered 404 NoSuchBucket", violations[0])
 
     def test_the_delete_names_a_key_nothing_holds(self):
-        store, _ = self.run_against({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
+        store, _ = self.run_against(HOLDING)
         deletes = [path for method, path, _ in store.seen if method == "DELETE"]
         self.assertEqual(len(deletes), 4)
         self.assertEqual(len(set(deletes)), 4)  # a fresh key per probe
         self.assertTrue(all("/check-" in path for path in deletes))
 
 
-class NoGrantTests(unittest.TestCase):
-    """The limit the README's *What it does not check* states, held to the check's behaviour."""
+class ControlTests(unittest.TestCase):
+    """The two allowed requests that tell the bucket the pairs are granted on from one granting nothing (ADR-148)."""
 
     README = pathlib.Path(__file__).resolve().parent / "README.md"
 
-    def test_an_existing_bucket_the_pairs_have_no_grant_on_reads_as_a_pass(self):
-        store = Store({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
+    def run_against(self, answers, **over):
+        store = Store(answers)
         self.addCleanup(store.close)
+        return store, store_check.check(store.env(**over))
 
-        violations = store_check.check(store.env(**{store_check.BUCKET: "another-accounts-bucket"}))
+    def test_an_existing_bucket_the_pairs_have_no_grant_on_fails(self):
+        # Every request refused AccessDenied, which the six probes alone could not tell from the right bucket.
+        store, violations = self.run_against({"PUT": DENIED, "GET": DENIED, "DELETE": DENIED, "list": DENIED},
+                                             **{store_check.BUCKET: "another-accounts-bucket"})
 
-        self.assertEqual(violations, [])
-        # The wrong bucket was the one asked, six times, and still passed.
-        self.assertEqual(len(store.seen), 6)
+        self.assertEqual(len(violations), 1, violations)
+        self.assertIn("bff pair, write a sentinel under uploads/: answered 403 AccessDenied", violations[0])
         self.assertTrue(all(path.startswith("/another-accounts-bucket") for _, path, _ in store.seen), store.seen)
 
-    def test_the_readme_says_so_rather_than_claiming_a_404_covers_it(self):
+    def test_a_write_by_a_pair_the_store_does_not_know_does_not_blame_the_bucket(self):
+        _, violations = self.run_against({**HOLDING, "PUT": UNKNOWN_KEY})
+        self.assertEqual(violations, ["bff pair, write a sentinel under uploads/: refused with InvalidAccessKeyId, "
+                                      "so the store does not know the pair"])
+
+    def test_a_write_answered_otherwise_names_the_status(self):
+        _, violations = self.run_against({**HOLDING, "PUT": ("500", "")})
+        self.assertEqual(violations, ["bff pair, write a sentinel under uploads/: answered 500, "
+                                      "so the pair is not allowed it"])
+
+    def test_a_refused_write_asks_for_no_read(self):
+        store, _ = self.run_against({**HOLDING, "PUT": DENIED})
+        reads = [path for method, path, _ in store.seen if method == "GET" and "list-type" not in path]
+        self.assertEqual(reads, [])
+
+    def test_a_read_refused_after_the_write_fails(self):
+        _, violations = self.run_against({**HOLDING, "GET": DENIED})
+        self.assertEqual(violations, ["catalog pair, read the sentinel back: answered 403 AccessDenied, "
+                                      "so this is not a bucket the pair may read"])
+
+    def test_a_read_that_finds_a_body_fails(self):
+        _, violations = self.run_against({**HOLDING, "GET": ("200", "an object the check never wrote")})
+        self.assertEqual(len(violations), 1)
+        self.assertIn("read found another object", violations[0])
+
+    def test_the_bff_pair_writes_under_uploads_and_catalogs_reads_the_same_fresh_key(self):
+        store, _ = self.run_against(HOLDING)
+        (put, put_path, put_auth), (get, get_path, get_auth) = store.seen[:2]
+        self.assertEqual((put, get), ("PUT", "GET"))
+        self.assertRegex(put_path, r"^/product-images/uploads/check-[0-9a-f]{32}$")
+        self.assertEqual(get_path, put_path)
+        self.assertIn("Credential=bff-key/", put_auth)
+        self.assertIn("Credential=catalog-key/", get_auth)
+
+        again, _ = self.run_against(HOLDING)
+        self.assertNotEqual(again.seen[0][1], put_path, "a key reused across runs could be found from an earlier one")
+
+    def test_the_readme_names_the_control_and_the_404_rule(self):
         text = " ".join(self.README.read_text(encoding="utf-8").split())
 
-        self.assertIn("a wrong `OBJECT_STORE_BUCKET` reads as a pass", text)
+        self.assertIn("a wrong `OBJECT_STORE_BUCKET` fails at the write", text)
         self.assertIn("a `404` is not a refusal, and `NoSuchBucket` names no bucket the store holds", text)
 
 
 class RedirectTests(unittest.TestCase):
     def test_a_redirect_is_judged_and_never_followed(self):
-        elsewhere = Store({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
+        elsewhere = Store(HOLDING)
         self.addCleanup(elsewhere.close)
 
         class Redirecting(http.server.BaseHTTPRequestHandler):
@@ -156,7 +207,7 @@ class RedirectTests(unittest.TestCase):
                 self.send_header("Location", elsewhere.endpoint + self.path)
                 self.end_headers()
 
-            do_GET = do_DELETE = _go
+            do_GET = do_DELETE = do_PUT = _go
 
             def log_message(self, *args):
                 pass
@@ -167,7 +218,8 @@ class RedirectTests(unittest.TestCase):
         self.addCleanup(server.shutdown)
         env = elsewhere.env(**{store_check.ENDPOINT: f"http://127.0.0.1:{server.server_port}"})
         violations = store_check.check(env)
-        self.assertEqual(len(violations), 6)
+        # The redirected write, and no read of it, then the six probes.
+        self.assertEqual(len(violations), 7)
         self.assertTrue(all("answered 307" in v for v in violations))
         self.assertEqual(elsewhere.seen, [])
 
@@ -189,7 +241,7 @@ class RefusalTests(unittest.TestCase):
             store_check.check(env)
 
     def test_plain_http_is_refused_off_loopback(self):
-        store = Store({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
+        store = Store(HOLDING)
         self.addCleanup(store.close)
         with self.assertRaisesRegex(store_check.Refusal, "https"):
             store_check.check(store.env(**{store_check.ENDPOINT: "http://store.example"}))
@@ -217,13 +269,19 @@ class AddressingTests(unittest.TestCase):
         self.assertRegex(urls[0], r"^https://[^/]+/uploads/check-[0-9a-f]{32}$")
         self.assertEqual(urls[2], "https://product-images.s3.example:9000/?list-type=2&max-keys=1")
 
+    def test_the_sentinel_is_named_by_the_same_addressing(self):
+        self.assertRegex(store_check.sentinel("https://s3.example:9000/", "product-images", "virtual"),
+                         r"^https://product-images\.s3\.example:9000/uploads/check-[0-9a-f]{32}$")
+        self.assertRegex(store_check.sentinel("https://s3.example:9000/", "product-images", "path"),
+                         r"^https://s3\.example:9000/product-images/uploads/check-[0-9a-f]{32}$")
+
     def test_the_signed_host_is_the_virtual_host(self):
         now = datetime.datetime(2026, 10, 13, 8, 0, 0, tzinfo=datetime.timezone.utc)
         url = self.urls("https://s3.example", "virtual")[0]
         self.assertEqual(store_check.sign("DELETE", url, "AK", "SK", "eu-1", now)["Host"], "product-images.s3.example")
 
     def test_an_unset_addressing_is_path_style(self):
-        store = Store({"DELETE": DENIED, "GET": DENIED, "list": DENIED})
+        store = Store(HOLDING)
         self.addCleanup(store.close)
         self.assertEqual(store_check.check(store.env(**{store_check.ADDRESSING: ""})), [])
         self.assertTrue(all(path.startswith("/product-images") for _, path, _ in store.seen))
