@@ -540,8 +540,13 @@ public class OperatorSwitchTests
         await endpoints.ApplyAllAsync();
         Volatile.Read(ref stops).ShouldBe(2);
 
-        clock.Advance(ReceiveEndpointSwitch.FirstRetry);
-        await Until(() => Volatile.Read(ref stops) == 3);
+        // Advanced on every poll, since the chain that won the race to schedule arms its timer after the call that
+        // lost it has returned: a single advance in that gap moves the clock past a timer that does not yet exist.
+        await Until(() =>
+        {
+            clock.Advance(ReceiveEndpointSwitch.FirstRetry);
+            return Volatile.Read(ref stops) == 3;
+        });
         await Task.Delay(500, TestContext.Current.CancellationToken);
 
         Volatile.Read(ref stops).ShouldBe(3, "two retry chains would each have stopped again");
