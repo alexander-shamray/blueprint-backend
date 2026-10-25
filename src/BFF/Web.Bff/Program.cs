@@ -6,6 +6,7 @@ using Microsoft.Extensions.Http.Resilience;
 using Polly;
 using Web.Bff;
 using Web.Bff.Addresses;
+using Web.Bff.Assistant;
 using Web.Bff.Devices;
 using Web.Bff.Endpoints;
 using Web.Bff.Messaging;
@@ -111,9 +112,12 @@ builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(BffPermissions.CatalogWrite, p => p.RequirePermission(BffPermissions.CatalogWrite));
 
+// ADR-151's assistant: off unless Assistant:Provider names one, then a per-customer limit on opening and on turns.
+builder.Services.AddCustomerAssistant();
+
 WebApplication app = builder.Build();
 
-// Middleware order is behaviour, not formatting (§4.2); forwarded headers, CORS and the limiter are the edge's.
+// Middleware order is behaviour, not formatting (§4.2); forwarded headers and CORS are the edge's.
 app.UseSecurityHeaders();
 app.UseExceptionHandler();        // §10.5 — catches every fault below it
 app.UseCorrelationId();           // §10.4 — above everything else that logs
@@ -123,6 +127,7 @@ app.UseRequestTimeouts();         // §9.7 — below the exception handler, whic
 app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4
+app.UseRateLimiter();             // ADR-151 — below authentication, as its partition is the subject
 
 // SQL and the bus gate readiness (§13.5); no hop's service does, or its outage would unready this host too.
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
@@ -132,6 +137,7 @@ app.MapSavedAddressEndpoints();   // E.6.12 — ADR-107's saved address, no hop
 app.MapProductImageEndpoints();   // E.6.11 — signs a URL locally, no hop
 app.MapDeviceEndpoints();         // E.6.13 — ADR-117's registration, one hop to Notifications
 app.MapPreferenceEndpoints();     // E.6.14 — ADR-120's journal, one hop to Notifications
+app.MapAssistantEndpoints();      // ADR-151 — the AI assistant, off by default
 
 app.Run();
 

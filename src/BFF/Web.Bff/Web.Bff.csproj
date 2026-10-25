@@ -25,6 +25,8 @@
     <PackageReference Include="MassTransit.RabbitMQ" />
     <!-- The projection's statements, §6.6's form; named directly though Common.Infrastructure carries it. -->
     <PackageReference Include="Dapper" />
+    <!-- AnthropicClient, which ADR-151's provider factory builds; the adapter carries it, and this project names it. -->
+    <PackageReference Include="Anthropic" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,6 +46,9 @@
     <ProjectReference Include="..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
     <!-- ADR-051's schema, which the migrator applies and this host reads and writes. -->
     <ProjectReference Include="..\Web.Bff.Persistence\Web.Bff.Persistence.csproj" />
+    <!-- ADR-151's assistant: the core and its Anthropic adapter (ADR-149), which no service references. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Common.Assistant\Common.Assistant.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\Common.Assistant.Anthropic\Common.Assistant.Anthropic.csproj" />
   </ItemGroup>
 
   <ItemGroup>
