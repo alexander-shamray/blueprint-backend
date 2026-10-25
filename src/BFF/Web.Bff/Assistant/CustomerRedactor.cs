@@ -74,8 +74,8 @@ public sealed partial class CustomerRedactor : IRedactor
     [GeneratedRegex(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")]
     private static partial Regex EmailAddress();
 
-    // Digits grouped by single spaces or hyphens, as a card is written; not inside a longer run of word characters.
-    [GeneratedRegex(@"(?<![\w-])\d(?:[ -]?\d){12,18}(?![\w-])")]
+    // The whole run of grouped digits, unbounded so RedactCard sees groups on both sides of a card; never mid-word.
+    [GeneratedRegex(@"(?<![\w-])\d(?:[ -]?\d){12,}(?![\w-])")]
     private static partial Regex CardNumber();
 
     [GeneratedRegex(@"\d+")]
