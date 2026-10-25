@@ -43,6 +43,8 @@ public class BffFactory : WebApplicationFactory<Program>
 
     public Uri? PricingAddress { get; set; }
 
+    public Uri? StockAddress { get; set; }
+
     public Uri? NotificationsAddress { get; set; }
 
     /// <summary>The runtime key (§7.1), which <c>BffServiceFixture</c> points at its container.</summary>
@@ -107,6 +109,13 @@ public class BffFactory : WebApplicationFactory<Program>
                 services.Configure<GrpcClientFactoryOptions>(
                     PricingHop.ClientName,
                     o => o.Address = PricingAddress);
+            }
+
+            if (StockAddress is not null)
+            {
+                services.Configure<GrpcClientFactoryOptions>(
+                    StockHop.ClientName,
+                    o => o.Address = StockAddress);
             }
 
             if (NotificationsAddress is not null)

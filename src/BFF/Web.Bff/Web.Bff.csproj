@@ -67,6 +67,11 @@
       Include="..\..\Services\Notifications\Notifications.Api\Protos\preferences.proto"
       Link="Protos\preferences.proto"
       GrpcServices="Client" />
+    <!-- ADR-154's availability read, linked from Inventory.Api, which serves it, on the same terms. -->
+    <Protobuf
+      Include="..\..\Services\Inventory\Inventory.Api\Protos\stock.proto"
+      Link="Protos\stock.proto"
+      GrpcServices="Client" />
   </ItemGroup>
 
 </Project>

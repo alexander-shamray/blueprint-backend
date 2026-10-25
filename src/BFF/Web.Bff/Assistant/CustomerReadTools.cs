@@ -6,6 +6,7 @@ using Common.Application;
 using Common.Assistant.Tools;
 using Grpc.Core;
 using Grpc.Net.ClientFactory;
+using Inventory.Stock.V1;
 using Web.Bff.Orders;
 
 namespace Web.Bff.Assistant;
@@ -13,7 +14,7 @@ namespace Web.Bff.Assistant;
 /// <summary>The customer assistant's read tools, each scoped to the caller the core passes (ADR-151).</summary>
 /// <remarks>
 /// <c>list_orders</c> and <c>get_order</c> read ADR-051's projection by the caller's subject, <c>get_product</c>
-/// Catalog's pricing hop (§9.7); a refusal is a result the model reads, never an exception that ends the turn.
+/// Catalog's pricing hop and <c>get_stock</c> Inventory's availability hop (§9.7, ADR-154); a refusal is a result the model reads, never an exception that ends the turn.
 /// </remarks>
 public sealed class CustomerReadTools(OrderReader orders, GrpcClientFactory clients) : IToolSource
 {
@@ -22,6 +23,8 @@ public sealed class CustomerReadTools(OrderReader orders, GrpcClientFactory clie
     public const string GetOrder = "get_order";
 
     public const string GetProduct = "get_product";
+
+    public const string GetStock = "get_stock";
 
     /// <summary>The most recent orders <c>list_orders</c> returns; older ones are the web client's to page.</summary>
     public const int ListLimit = 10;
@@ -71,6 +74,14 @@ public sealed class CustomerReadTools(OrderReader orders, GrpcClientFactory clie
                 "product_id",
                 "currency"),
             Reads,
+            ToolSide.Server),
+        new(
+            GetStock,
+            "Is a product in stock",
+            "Whether a product can be bought now: in stock or not, never how many. Nothing comes back for a " +
+            "product Inventory holds no stock for, which is not the same as out of stock.",
+            Schema(new JsonObject { ["product_id"] = Uuid("The product's id, as an order line carries it.") }, "product_id"),
+            Reads,
             ToolSide.Server)
     ];
 
@@ -91,14 +102,42 @@ public sealed class CustomerReadTools(OrderReader orders, GrpcClientFactory clie
                 ListOrders => Found(await orders.ListAsync(customer, cursor: null, ListLimit, cancellationToken)),
                 GetOrder => await OrderAsync(customer, input, cancellationToken),
                 GetProduct => await ProductAsync(input, cancellationToken),
+                GetStock => await StockAsync(input, cancellationToken),
                 _ => Refused("unknown_tool")
             };
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
             // A code, not the message the core would pass on: a database's text is no customer's to send (ADR-151).
-            return Refused(e is RpcException ? "catalog_unavailable" : "orders_unavailable");
+            return Refused(
+                e is RpcException ? (name == GetStock ? "inventory_unavailable" : "catalog_unavailable")
+                                  : "orders_unavailable");
         }
+    }
+
+    private async Task<ToolOutcome> StockAsync(JsonObject input, CancellationToken cancellationToken)
+    {
+        if (!TryGuid(input, "product_id", out Guid product))
+            return Refused("product_id_not_a_uuid");
+
+        Stock.StockClient stock = clients.CreateClient<Stock.StockClient>(StockHop.ClientName);
+        GetAvailabilityRequest request = new();
+        request.ProductId.Add(product.ToString());
+
+        GetAvailabilityReply reply = await stock.GetAvailabilityAsync(request, cancellationToken: cancellationToken);
+
+        // An empty reply is the one answer that is no fault: Inventory holds no stock row for this product.
+        if (reply.Availability.Count == 0)
+            return Refused("stock_not_known");
+
+        // §9.7's rule 6, as the price is checked: a reply that breaks stock.proto is Inventory's fault, not an answer.
+        if (reply.Availability is not [{ } availability] ||
+            !Guid.TryParse(availability.ProductId, out Guid answered) || answered != product)
+        {
+            return Refused("inventory_unavailable");
+        }
+
+        return Found(new { ProductId = product, availability.InStock });
     }
 
     private async Task<ToolOutcome> OrderAsync(Guid customer, JsonObject input, CancellationToken cancellationToken)

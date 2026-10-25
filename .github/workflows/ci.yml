@@ -570,6 +570,7 @@ jobs:
               - 'src/BFF/**'
               - 'src/Services/Catalog/Catalog.Api/Protos/**'
               - 'src/Services/Notifications/Notifications.Api/Protos/**'
+              - 'src/Services/Inventory/Inventory.Api/Protos/**'
             # A chart or values change produces no new image and must still
             # reach the cluster (§15.1's "a config-only deploy needs a tag it
             # did not build"). deploy/compose/** is excluded because it reaches

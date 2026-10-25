@@ -55,6 +55,8 @@ COPY src/Services/Catalog/Catalog.Api/Protos/ src/Services/Catalog/Catalog.Api/P
 # Notifications' devices.proto and preferences.proto, on the same terms, for ADR-117's
 # registration and ADR-120's preferences.
 COPY src/Services/Notifications/Notifications.Api/Protos/ src/Services/Notifications/Notifications.Api/Protos/
+# Inventory's stock.proto, on the same terms, for ADR-154's availability hop.
+COPY src/Services/Inventory/Inventory.Api/Protos/ src/Services/Inventory/Inventory.Api/Protos/
 
 RUN dotnet publish src/BFF/Web.Bff/Web.Bff.csproj \
     -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false
