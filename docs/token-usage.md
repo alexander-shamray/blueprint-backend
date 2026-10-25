@@ -6,6 +6,13 @@ measurement, for [`token-plan.md`](token-plan.md)'s
 baseline and each step's exit test. Every figure is a record of its day,
 per the contract's §2, and none is kept current.
 
+**The output totals read far too low.** Four asides below give a total for
+output, each measured before `token_usage.py` counted a response's final
+output (issue 1273): it kept the first line of each response, a partial
+snapshot. They are left as printed, because the transcripts they came from
+are not in the tree to recompute, and nothing in this file or in
+[`token-plan.md`](token-plan.md) is decided from output.
+
 ## 2026-10-07 — a cloud session against `main` at 0163787
 
 **Not the baseline.** Transcripts live on the machine that ran the
