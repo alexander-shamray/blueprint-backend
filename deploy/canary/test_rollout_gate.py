@@ -138,14 +138,21 @@ class SharedValuesTests(unittest.TestCase):
             [("notifications-api", "jurisdiction.required"), ("web-bff", "push.apps")],
             descriptor_model.shared_values("notifications", plan))
         self.assertEqual([("notifications", "jurisdiction.required")], descriptor_model.shared_values("notifications-api", plan))
-        self.assertEqual([("notifications", "push.apps")], descriptor_model.shared_values("web-bff", plan))
+        assistant = sorted(descriptor_model.entries(plan["workloads"])["web-bff-assistant"]["sharesValues"]["web-bff"])
+        self.assertEqual(
+            [("notifications", "push.apps")] + [("web-bff-assistant", key) for key in assistant],
+            descriptor_model.shared_values("web-bff", plan))
+        self.assertEqual([("web-bff", key) for key in assistant],
+                         descriptor_model.shared_values("web-bff-assistant", plan))
+        # ADR-153: the two releases of one host are given its accounts and Secrets, so each is held to the other.
+        self.assertIn("identity.clientSecretRef", assistant)
         self.assertEqual([], descriptor_model.shared_values("catalog-api", plan))
 
     def test_the_cli_prints_one_pair_a_line_and_refuses_an_unknown_workload(self) -> None:
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            code = canary.main(["canary", "shared-values", "--workload", "web-bff"])
-        self.assertEqual((0, "notifications push.apps\n"), (code, out.getvalue()))
+            code = canary.main(["canary", "shared-values", "--workload", "notifications-api"])
+        self.assertEqual((0, "notifications jurisdiction.required\n"), (code, out.getvalue()))
 
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(1, canary.main(["canary", "shared-values", "--workload", "nobody"]))
@@ -289,8 +296,10 @@ class SharedValuesTests(unittest.TestCase):
 
                 failures = rollout_gate._rollout_holds_shared_values(self.workloads, self._workflow(pinned))
 
-                self.assertEqual(1, len(failures), failures)
-                self.assertIn(f"names {key}, which", failures[0])
+                # One per descriptor naming the key: push.apps is declared beside both of web-bff's peers.
+                self.assertTrue(failures)
+                for failure in failures:
+                    self.assertIn(f"names {key}, which", failure)
 
     def test_no_spelling_of_a_set_flag_hides_a_key_it_pins(self) -> None:
         """A superset: a list member may read as a key, which refuses; a pinned key never reads as none."""
@@ -351,6 +360,7 @@ class SharedValuesTests(unittest.TestCase):
     def test_with_no_pair_declared_there_is_nothing_to_compare(self) -> None:
         workloads = self.workloads
         del workloads["notifications"]["sharesValues"]
+        del workloads["web-bff-assistant"]["sharesValues"]
 
         self.assertEqual([], rollout_gate._rollout_holds_shared_values(workloads, self._workflow("")))
 
@@ -483,6 +493,7 @@ class EmptyUntilTests(unittest.TestCase):
         """Check 14 is silent with no `sharesValues` declared, so check 15 cannot lean on it."""
         workloads = self.workloads
         del workloads["notifications"]["sharesValues"]
+        del workloads["web-bff-assistant"]["sharesValues"]
         self.assertEqual([], rollout_gate._rollout_holds_shared_values(workloads, self._workflow("")))
         for mutation, message in [
             (('-n "$NAMESPACE" -o yaml > "$RUNNER_TEMP/overrides.yaml"',
@@ -798,6 +809,110 @@ class RolloutBindingTests(unittest.TestCase):
             ['python read_prometheus.py --source "$IMAGE_SOURCE"'],
             rollout_gate._invocations(lines, "read_prometheus.py"),
         )
+
+
+class OffLadderTests(unittest.TestCase):
+    """Check 16 and the descriptor field behind it: a release off the ladder rolls in place (ADR-153)."""
+
+    def _workflow(self, text: str) -> Path:
+        path = Path(tempfile.mkdtemp()) / "deploy.yml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    @property
+    def shipped(self) -> str:
+        return workflow_reads.WORKFLOW.read_text(encoding="utf-8")
+
+    @property
+    def workloads(self) -> dict:
+        return descriptor_model.entries(descriptor_model.load_plan()["workloads"])
+
+    def _cli(self, *argv: str) -> tuple[int, str, str]:
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = canary.main(["canary", *argv])
+        return code, out.getvalue(), err.getvalue()
+
+    def test_the_shipped_assistant_release_is_off_the_ladder_and_web_bff_is_on_it(self) -> None:
+        self.assertEqual((0, "off\n"), self._cli("ladder", "--workload", "web-bff-assistant")[:2])
+        self.assertEqual((0, "on\n"), self._cli("ladder", "--workload", "web-bff")[:2])
+
+    def test_every_command_a_rung_asks_refuses_a_release_off_the_ladder(self) -> None:
+        readings = Path(tempfile.mkdtemp()) / "readings.json"
+        readings.write_text("{}", encoding="utf-8")
+        for argv in (
+            ("required", "--step", "0", "--workload", "web-bff-assistant"),
+            ("plan", "--workload", "web-bff-assistant", "--stable", "19", "--step", "0"),
+            ("analyse", "--workload", "web-bff-assistant", "--readings", str(readings)),
+        ):
+            with self.subTest(command=argv[0]):
+                code, out, err = self._cli(*argv)
+
+                self.assertEqual((1, ""), (code, out))
+                self.assertIn("off the ladder", err)
+
+    def test_required_without_a_workload_answers_as_before(self) -> None:
+        self.assertEqual(0, self._cli("required", "--step", "0")[0])
+
+    def test_the_shipped_workflow_rolls_it_in_place(self) -> None:
+        self.assertEqual([], rollout_gate._rollout_rolls_off_ladder_in_place(self.workloads))
+
+    def test_check_runs_check_16(self) -> None:
+        with mock.patch.object(repo_gate, "_rollout_rolls_off_ladder_in_place", return_value=["sentinel"]):
+            self.assertIn("sentinel", repo_gate.check(descriptor_model.load_plan()))
+
+    def test_a_workflow_that_never_asks_is_refused(self) -> None:
+        without = "\n".join(line for line in self.shipped.splitlines() if "canary.py ladder" not in line)
+
+        failures = rollout_gate._rollout_rolls_off_ladder_in_place(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("id: ladder", failures[0])
+
+    def test_a_climbing_step_without_its_condition_is_refused(self) -> None:
+        lines = self.shipped.splitlines()
+        first = next(i for i, line in enumerate(lines) if line.strip() == rollout_gate.LADDER_ON)
+        without = "\n".join(lines[:first] + lines[first + 1:])
+
+        failures = rollout_gate._rollout_rolls_off_ladder_in_place(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("climbs the ladder without", failures[0])
+
+    def test_a_required_that_names_no_workload_is_refused(self) -> None:
+        without = self.shipped.replace('required --step 0 --workload "$WORKLOAD"', "required --step 0")
+
+        failures = rollout_gate._rollout_rolls_off_ladder_in_place(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("scales a release off the ladder", failures[0])
+
+    def test_a_workflow_with_no_in_place_upgrade_is_refused(self) -> None:
+        without = self.shipped.replace(rollout_gate.LADDER_OFF, "if: false")
+
+        failures = rollout_gate._rollout_rolls_off_ladder_in_place(self.workloads, self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("rolls nothing, reported green", failures[0])
+
+    def test_an_in_place_step_that_installs_a_second_release_is_refused(self) -> None:
+        with_canary = self.shipped.replace(
+            "            --atomic --wait --timeout 20m\n        env:\n          WORKLOAD: ${{ inputs.workload }}\n"
+            "          TAG: ${{ inputs.tag }}\n\n      # One mechanism",
+            "            --atomic --wait --timeout 20m\n          kubectl scale deployment \"$WORKLOAD\" --replicas=2\n"
+            "        env:\n          WORKLOAD: ${{ inputs.workload }}\n          TAG: ${{ inputs.tag }}\n\n"
+            "      # One mechanism")
+        self.assertNotEqual(self.shipped, with_canary, "the mutation found nothing to change")
+
+        failures = rollout_gate._rollout_rolls_off_ladder_in_place(self.workloads, self._workflow(with_canary))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("second pod", failures[0])
+
+    def test_with_no_release_off_the_ladder_there_is_no_branch_to_hold(self) -> None:
+        on_ladder = {name: entry for name, entry in self.workloads.items() if "offLadder" not in entry}
+
+        self.assertEqual([], rollout_gate._rollout_rolls_off_ladder_in_place(on_ladder, self._workflow("")))
 
 
 if __name__ == "__main__":

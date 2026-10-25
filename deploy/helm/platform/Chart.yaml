@@ -45,3 +45,8 @@ dependencies:
   - name: web-bff
     version: 0.1.0
     repository: file://../web-bff
+  # After web-bff, whose hook migrates the schema this release reads (ADR-153),
+  # on notifications-api's terms above.
+  - name: web-bff-assistant
+    version: 0.1.0
+    repository: file://../web-bff-assistant

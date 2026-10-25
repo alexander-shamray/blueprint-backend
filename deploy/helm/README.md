@@ -19,6 +19,9 @@ privacy/           │
 web-bff/           ┘
 notifications-api/ the same, with no migrate-job.yaml: the worker's chart
                    migrates the schema it reads, and is rolled first (ADR-118)
+web-bff-assistant/ the same over web-bff's image and schema, one replica under
+                   Recreate with the model provider on, rolled in place and
+                   never up the canary ladder (ADR-153)
 gateway/           the same, plus edge-config.yaml — the two keys no service
                    has (§15.3), in a template only this chart carries
 platform/          the umbrella — one dependency per service chart and no
@@ -76,6 +79,9 @@ helm upgrade --install catalog-api deploy/helm/catalog \
 already serves, because the two roll in lockstep and the rollout refuses the
 worker's next tag otherwise
 ([ADR-122](../../docs/backend-architecture/adr/ADR-122-notifications-two-hosts-roll-in-lockstep-so-a-migrations-previous-release-is-the-one-both-hosts-run-1038.md)).
+`web-bff-assistant` is installed at the tag `web-bff` serves on the same
+terms, and the rollout upgrades it in place rather than through a canary
+([ADR-153](../../docs/backend-architecture/adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
 
 A tag can be overwritten in the registry, so a render can also pin the bytes:
 `--set-string image.digest=sha256:…` and `image.migratorDigest=sha256:…` turn

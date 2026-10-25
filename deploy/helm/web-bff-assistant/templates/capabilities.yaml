@@ -1,0 +1,10 @@
+{{- /* What makes this release the assistant's (ADR-153), refused here because each renders cleanly without it: no
+provider is a release serving only the status route, and a second replica, an autoscaler, a canary or a rolling
+update each runs a second pod, where a conversation the gateway sends to it answers 404. The library refuses each
+beside Recreate; this chart refuses Recreate's absence. */}}
+{{- if not (.Values.assistant).enabled }}
+{{- fail "assistant.enabled is false on the web-bff-assistant chart. This release exists to run the provider the main web-bff release keeps off (ADR-153)." }}
+{{- end }}
+{{- if ne (toString .Values.strategy) "Recreate" }}
+{{- fail "strategy is not Recreate on the web-bff-assistant chart: a rolling update starts the new pod before the old one stops, so a rollout runs two (ADR-153)." }}
+{{- end }}

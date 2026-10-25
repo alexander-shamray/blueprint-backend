@@ -271,8 +271,9 @@ the rollout's absolute thresholds are [§13.6](13-observability.md)'s alert
 thresholds **read out of the rules file rather than restated**, that each
 workload's `serviceName` is an entry assembly this solution actually builds —
 §13.2 takes `service.name` from `ApplicationName`, so a query spelled from the
-deployment's vocabulary matches no series — and that every metric its queries
-read is vouched for as
+deployment's vocabulary matches no series, and a host's release under a
+chart of its own reports the `telemetryName` its chart sets — and that every
+metric its queries read is vouched for as
 [`deploy/canary/README.md`](../../deploy/canary/README.md) states: by a loaded
 alert the observability gate has proved published, or, for MassTransit's
 series, on
@@ -358,7 +359,8 @@ deciding whether an alert's signal exists means reading every instrument
 declaration in C#, and
 `docs/runbooks/**`, because a renamed runbook is an alert with no procedure
 behind it; the canary one names `deploy/helm/**`, because its plan asserts each
-workload's chart exists and can render a canary track, `src/**`, because it
+workload's chart exists and reads its strategy and service name from the
+chart's values, `src/**`, because it
 checks each `serviceName` against a real entry assembly,
 `deploy/observability/**`, because it takes §13.6's thresholds out of the rules
 file rather than restating them, and `Directory.Packages.props`, because the
@@ -1431,12 +1433,13 @@ namespace read access.
 | `Identity__Authority` | Config | Helm `identity.authority` → ConfigMap | ✓ — **every host**, including the gateway |
 | `Identity__Client__ClientId` | Config | Helm `identity.clientId` | ✓ **for a host that calls out under a grant of its own** — the BFF ([§9.7](09-messaging.md), [§11.5](11-identity-authorization.md)), and each worker [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md) gives a read |
 | `Identity__Client__Scope` | Config | Helm `identity.scope` | ✓ **for a host that calls out under a grant of its own**, as above |
-| `Identity__Client__ClientSecret` | Secret | `web-bff-identity`, `shipping-identity` and `notifications-identity`; one per host, never shared — two hosts on one grant is one host able to act as the other (§11.5) | ✓ **for a host that calls out under a grant of its own**, as above |
+| `Identity__Client__ClientSecret` | Secret | `web-bff-identity`, `shipping-identity` and `notifications-identity`; one per host, never shared — two hosts on one grant is one host able to act as the other (§11.5). The BFF's two releases are one host and read `web-bff-identity` both ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)) | ✓ **for a host that calls out under a grant of its own**, as above |
 | `Cors__Enabled` | Config | Helm `cors.enabled` → ConfigMap — **gateway only** | ✓ |
 | `Cors__Origins__0…n` | Config | Helm `cors.origins` → ConfigMap — **gateway only** | ✓ **when `Cors__Enabled`** |
 | `Ingress__Enabled` | Config | Helm `ingress.enabled` → ConfigMap — **gateway only** | ✓ — true in Kubernetes, false only where the gateway is the edge (Compose) |
 | `Ingress__TrustedNetworks__0…n` | Config | Helm `ingress.trustedNetworks` → ConfigMap — **gateway only** | ✓ **when `Ingress__Enabled`**; CIDRs of the LB/Ingress, without which the rate limiter partitions everyone together |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Config | Helm `observability.otlpEndpoint` → ConfigMap | ✓ — **every host**. The SDK does default, which is the argument for requiring it rather than against — see above |
+| `OTEL_SERVICE_NAME` | Config | Helm `observability.telemetryName` → ConfigMap, absent on every chart but `web-bff-assistant` | ✗ — a host's release under a chart of its own reports a name of its own, which §15.5's canary tells it from the first by ([§13.2](13-observability.md), [ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)) |
 | `OTEL_RESOURCE_ATTRIBUTES` | Config | Helm — derived from `canary.enabled`, never set by hand | ✓ — **every host**, as `deployment.track=stable` or `=canary`. §15.5's rollout compares the two tracks and this is the only thing that tells them apart ([ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)) |
 | Host-specific keys | Config or Secret | Helm values → ConfigMap, or External Secrets | ✓ **for the host whose code reads them**, which refuses to start without a required one — a key joins a chart when its host's code reads it ([Appendix E.9](appendix-e-reference-domain.md#e9-15-cicd-and-deployment) lists the reference domain's) |
 
@@ -1597,6 +1600,17 @@ and no rollout controller — and no ingress-controller weight either, which is
 disqualified by topology rather than taste: this platform has one Ingress, the
 gateway's ([§10.1](10-api-gateway.md)), and everything behind it is reached by
 Service name, so an edge weight cannot canary a service at all.
+
+**One release is off the ladder.** The BFF's assistant release holds each
+conversation in its one replica's memory, so a canary, being a second pod,
+would split conversations the gateway sends to one Service
+([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
+Its descriptor says so in `offLadder`, its chart states `strategy: Recreate`,
+and the rollout upgrades it in place, ending every open conversation; the
+steps that climb run only for a release on the ladder, and the commands they
+ask refuse one off it, so a lost condition stops rather than scales.
+[`deploy/canary/README.md`](../../deploy/canary/README.md)'s check 16 holds
+the workflow to that.
 
 **Two things the ladder above does not say.**
 

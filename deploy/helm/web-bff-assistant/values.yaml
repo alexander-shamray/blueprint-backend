@@ -1,0 +1,172 @@
+# The BFF's assistant release (ADR-153): web-bff's image with the provider on,
+# in one replica, because a conversation lives in the memory of the process
+# that opened it (ADR-151). What is specific here is the single replica and
+# what keeps it single, the provider, and the one route that reaches it; the
+# host is web-bff's, so its accounts and Secrets are too.
+
+workload:
+  # §10.2's route file dials `http://web-bff-assistant:8080/` for the
+  # assistant's paths, so the Service's name is the routing configuration.
+  name: web-bff-assistant
+
+# One, and the chart refuses another value: a second replica holds none of
+# the first's conversations, and the gateway's destination is one Service.
+replicaCount: 1
+
+# Recreate stops the old pod before the new one starts, so a rollout never
+# runs two (ADR-153); every open conversation ends with it, which is the
+# release's stated availability.
+strategy: Recreate
+
+# Off, and refused on: the canary is a second Deployment, and this release is
+# off §15.5's ladder, which its descriptor says and the rollout reads.
+canary:
+  enabled: false
+
+image:
+  registry: registry.example.com/commerce
+  # web-bff's image: the same host, which serves the assistant's routes only
+  # with a provider configured (ADR-151).
+  api: web-bff
+  # No migrator key, and no templates/migrate-job.yaml: web-bff's chart
+  # migrates the schema both releases read, since two hooks over one schema
+  # race (ADR-118). smoke.sh asserts the two halves agree.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+ports:
+  - name: http
+    containerPort: 8080
+
+# web-bff's, with room for the conversations one replica holds (ADR-151's
+# limits, which the core counts per process).
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { memory: 512Mi }
+
+# Off, and refused on beside Recreate: an autoscaler runs a second replica.
+autoscaling:
+  enabled: false
+
+# Off, and refused on beside Recreate: a budget over one replica either blocks
+# every drain or admits the eviction it names, and this release accepts it.
+podDisruptionBudget:
+  enabled: false
+
+# One pod spreads over nothing, and the constraint is still stated because the
+# library requires it of every Deployment (§15.3).
+topologySpread:
+  maxSkew: 1
+  whenUnsatisfiable:
+    node: DoNotSchedule
+    zone: ScheduleAnyway
+
+terminationGracePeriodSeconds: 45
+
+probes:
+  probePort: http
+  liveness:  { path: /health/live,  initialDelaySeconds: 10, periodSeconds: 10 }
+  readiness: { path: /health/ready, initialDelaySeconds: 5,  periodSeconds: 5 }
+  startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
+
+service:
+  enabled: true
+
+ingress:
+  # False: the gateway reaches it, as it reaches web-bff (§10.2).
+  enabled: false
+
+# web-bff's client, read from web-bff's Secret: two releases of one host are
+# one host to the realm, so this release adds no client (ADR-153).
+identity:
+  authority: https://id.example.com/realms/commerce
+  clientCredentials: true
+  clientId: web-bff
+  scope: commerce-api
+  clientSecretRef:
+    name: web-bff-identity
+    key: client-secret
+
+# ADR-051's projection, on web-bff's runtime login. No migrator Secret: the
+# hook that would mount it is web-bff's chart's.
+database:
+  enabled: true
+  connectionName: Bff
+  runtimeSecretRef:
+    name: web-bff-database
+    key: connection-string
+
+# web-bff's account (ADR-036): the host registers the projection's consumers
+# whichever release runs it, so this replica is one more competing consumer on
+# the same queues.
+broker:
+  enabled: true
+  secretRef:
+    name: web-bff-rabbitmq
+    key: connection-string
+
+redis:
+  enabled: false
+
+# web-bff's store and pair: the host registers its upload signer and refuses
+# to start without the store (ADR-106), though no route here reaches it. As on
+# web-bff, it never dials the store, so the policy carries no rule for it.
+objectStore:
+  enabled: true
+  endpoint: https://objects.example.com
+  bucket: product-images
+  region: us-east-1
+  pathStyle: false
+  secretRef:
+    name: web-bff-object-store
+    accessKeyKey: access-key
+    secretKeyKey: secret-key
+
+push:
+  apps: []
+
+# A service name of its own, so the canary analysis of web-bff, which selects
+# its baseline by service name, never counts this release's streams (ADR-153).
+# Its descriptor's telemetryName states the same name.
+observability:
+  otlpEndpoint: http://otel-collector.observability:4317
+  telemetryName: Web.Bff.Assistant
+
+# ADR-151's provider. The key is its own Secret, mounted here and nowhere
+# else; the address is the one the network policy opens.
+assistant:
+  enabled: true
+  provider: anthropic
+  baseUrl: https://api.anthropic.com
+  apiKeySecretRef:
+    name: web-bff-assistant-provider
+    key: api-key
+
+extraConfigMaps: []
+
+# ADR-065's fence, as ADR-153 amends it: the gateway in, and out to Catalog's
+# gRPC port for get_product's pricing hop, the stores, the identity provider
+# and the model provider. Not Notifications: the device hop is a route the
+# gateway never sends here.
+networkPolicy:
+  ingressFrom:
+    - { workload: gateway, port: http }
+  egressTo:
+    - { workload: catalog-api, port: grpc }
+  dns:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+        podSelector: { matchLabels: { k8s-app: kube-dns } }
+  telemetry:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
+  identity: { to: [] }
+  database: { port: 1433, to: [] }
+  broker: { port: 5671, to: [] }   # amqps, as ADR-079 requires
+  assistant: { to: [] }
+
+transport:
+  plaintext: []
+
+suspendable: false
+suspended: false

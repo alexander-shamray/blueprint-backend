@@ -201,6 +201,7 @@ networkPolicy:
   ingressFrom:
     - { workload: gateway, port: http }
     - { workload: web-bff, port: grpc }
+    - { workload: web-bff-assistant, port: grpc }   # get_product's pricing hop (ADR-153)
   egressTo: []
   dns:
     to:

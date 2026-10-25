@@ -1,0 +1,13 @@
+apiVersion: v2
+name: web-bff-assistant
+description: >-
+  The BFF's assistant release (ADR-153) — the same image with the AI assistant on,
+  one replica that holds each conversation in memory, routed the assistant's
+  paths alone. No migration Job of its own: web-bff's chart migrates the schema,
+  and the two roll in lockstep.
+type: application
+version: 0.1.0
+dependencies:
+  - name: commerce-common
+    version: 0.1.0
+    repository: file://../common

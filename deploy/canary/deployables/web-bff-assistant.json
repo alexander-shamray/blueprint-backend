@@ -1,0 +1,28 @@
+{
+  "serviceName": "Web.Bff",
+  "telemetryName": "Web.Bff.Assistant",
+  "chart": "web-bff-assistant",
+  "source": "src/BFF/Web.Bff",
+  "signals": ["http", "consume"],
+  "offLadder": "ADR-153: one replica holds each conversation in its memory, and the ladder's canary is a second Deployment, so a rung would run a second pod the gateway's one destination splits conversations across, each answering 404 for the other's. The release rolls in place under Recreate, ending every open conversation, which is the availability ADR-153 states. Its signals are declared for what the host runs and read by no rung.",
+  "migratedBy": "web-bff",
+  "sharesValues": {
+    "web-bff": [
+      "identity.clientId",
+      "identity.scope",
+      "identity.clientSecretRef",
+      "database.connectionName",
+      "database.runtimeSecretRef",
+      "broker.secretRef",
+      "objectStore",
+      "push.apps"
+    ]
+  },
+  "smoke": {
+    "migrator": false,
+    "database": true,
+    "autoscaled": false,
+    "capabilities": ["clientCredentials", "objectStore", "assistant"],
+    "overlay": []
+  }
+}

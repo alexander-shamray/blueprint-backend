@@ -21,7 +21,7 @@ import urllib.request
 from pathlib import Path
 
 from analysis import queries
-from descriptor_model import ROOT, PlanError, entries, load_plan
+from descriptor_model import ROOT, PlanError, entries, load_plan, telemetry_name
 
 TIMEOUT_SECONDS = 30
 
@@ -80,12 +80,8 @@ def read(base_url: str, workload: str, window: str, plan: dict,
          candidate: Path = ROOT, installed: Path | None = None) -> dict:
     """Both tracks' readings of the signals `workload` declares, and no others.
 
-    The service name is the plan's, so it has one spelling, and an unknown
-    workload raises KeyError rather than reading nothing. Each track's probe
-    exclusion is scanned from the image that track is running (ADR-050): the
-    candidate on the canary, and the release being replaced on the baseline.
-    One exclusion for both would filter the stable track's probes by the
-    candidate's routes, which is the mismatch this is here to close.
+    Selected by the descriptor's telemetry name (ADR-153); an unknown workload raises KeyError. Each track's
+    probe exclusion is scanned from the image it runs, so neither is filtered by the other's routes (ADR-050).
     """
     entry = entries(plan["workloads"])[workload]
     trees = {
@@ -102,7 +98,7 @@ def read(base_url: str, workload: str, window: str, plan: dict,
                 name: query(
                     base_url,
                     expression
-                    .replace("$SERVICE", entry["serviceName"])
+                    .replace("$SERVICE", telemetry_name(entry))
                     .replace("$TRACK", label)
                     .replace("$WINDOW", window),
                 )

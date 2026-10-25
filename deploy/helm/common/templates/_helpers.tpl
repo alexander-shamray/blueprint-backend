@@ -126,6 +126,32 @@ objects; `commerce.name` stays the workload name, and the two differ only on a c
 {{- end -}}
 {{- end -}}
 
+{{- /* The Deployment's strategy: Kubernetes' RollingUpdate unless a chart states Recreate, which stops the old
+pod before the new one starts and so keeps a single in-memory replica single through a rollout (ADR-153). More
+than one replica, an autoscaler, a canary or a disruption budget beside it is an outage on every rollout or a
+contradiction, so each is refused. */}}
+{{- define "commerce.strategy" -}}
+{{- $strategy := .Values.strategy | default "" | toString -}}
+{{- if and $strategy (ne $strategy "Recreate") }}
+{{- fail (printf "strategy is %q, and a chart states Recreate or nothing: unset is Kubernetes' RollingUpdate, which every chart but web-bff-assistant runs (ADR-153)." $strategy) }}
+{{- end }}
+{{- if $strategy }}
+{{- if ne (int .Values.replicaCount) 1 }}
+{{- fail (printf "strategy is Recreate and replicaCount is %v. Recreate stops every pod before starting the next, which is one replica's way to roll and an outage for more; the release it exists for holds conversations in one replica's memory (ADR-153)." .Values.replicaCount) }}
+{{- end }}
+{{- if .Values.autoscaling.enabled }}
+{{- fail "strategy is Recreate and autoscaling.enabled is true: an autoscaler would run a second replica, which a Recreate release exists not to (ADR-153)." }}
+{{- end }}
+{{- if .Values.canary.enabled }}
+{{- fail "strategy is Recreate and canary.enabled is true: the canary is a second Deployment, which runs a second pod beside the one Recreate keeps single (ADR-153)." }}
+{{- end }}
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- fail "strategy is Recreate and podDisruptionBudget.enabled is true: a budget over one replica either blocks every node drain or admits the eviction it names, and the release it exists for accepts the eviction (ADR-153)." }}
+{{- end }}
+{{- $strategy -}}
+{{- end }}
+{{- end -}}
+
 {{- /* A Deployment's selector: the shared one plus the track, so neither track's
 Deployment adopts the other's pods, while a Service, where there is one,
 selects without the track and sends traffic to both. It is immutable, so
@@ -185,6 +211,24 @@ it on apply. */}}
 {{- fail (printf "observability.otlpEndpoint is %q, whose port is outside 1-65535 (§15.4)." $otlp) }}
 {{- end }}
 OTEL_EXPORTER_OTLP_ENDPOINT: {{ $otlp | quote }}
+{{- /* A host released under a chart of its own reports a name of its own, which the canary's baseline selects by (ADR-153);
+the descriptor's telemetryName is the other half, and canary.py check holds the two equal. */}}
+{{- with (.Values.observability).telemetryName }}
+{{- if not (regexMatch "^[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$" (toString .)) }}
+{{- fail (printf "observability.telemetryName is %q, which is not a service name this chart will accept: dot-separated words of letters and digits, as in Web.Bff.Assistant (ADR-153)." (toString .)) }}
+{{- end }}
+OTEL_SERVICE_NAME: {{ . | quote }}
+{{- end }}
+{{- if (.Values.assistant).enabled }}
+{{- /* ADR-153's model provider: which one, and its address, which the SDK reads as ANTHROPIC_BASE_URL, are
+Config; the key is commerce.env's. HTTPS unconditionally, as `commerce.requireUrl` argues. */}}
+{{- $provider := include "commerce.require" (list .Values.assistant.provider "assistant.provider is required when assistant.enabled: it is the provider the release runs, and the host reads an unset one as off (ADR-151).") }}
+{{- if ne $provider "anthropic" }}
+{{- fail (printf "assistant.provider is %q, and this chart accepts anthropic alone: off is the main web-bff release, which carries no assistant block (ADR-153)." $provider) }}
+{{- end }}
+Assistant__Provider: {{ $provider | quote }}
+ANTHROPIC_BASE_URL: {{ include "commerce.requireUrl" (list .Values.assistant.baseUrl "assistant.baseUrl is required when assistant.enabled: it is the provider's address, which the network policy opens and the SDK dials (ADR-153).") | quote }}
+{{- end }}
 {{- if .Values.identity.clientCredentials }}
 {{- /* Two of the three client-credential keys are Config; the secret is a Secret
 (§15.4). The hosts that call out under a grant of their own (ADR-052) bind
@@ -485,8 +529,10 @@ it. */}}
 {{- if and (or (.Values.objectStore).endpoint (.Values.objectStore).bucket (.Values.objectStore).region (.Values.objectStore).publicBaseUrl (.Values.objectStore).secretRef) (not (.Values.objectStore).enabled) }}
 {{- fail "objectStore.enabled is false but an objectStore setting is set. The host validates ProductImages:Store when it starts (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
 {{- end }}
-{{- if and (.Values.objectStore).enabled (not (has .Chart.Name (list "web-bff" "catalog"))) }}
-{{- fail (printf "objectStore.enabled is true on the %s chart, and only web-bff (which signs an upload) and catalog (which attaches it) touch the store (ADR-106). This would mount a credential pair into a pod that never reads it." .Chart.Name) }}
+{{- /* web-bff-assistant runs the BFF's host, which registers its upload signer whether or not a route reaches it
+and refuses to start without the store (ADR-153). */}}
+{{- if and (.Values.objectStore).enabled (not (has .Chart.Name (list "web-bff" "web-bff-assistant" "catalog"))) }}
+{{- fail (printf "objectStore.enabled is true on the %s chart, and only the BFF's releases (which sign an upload) and catalog (which attaches it) touch the store (ADR-106, ADR-153). This would mount a credential pair into a pod that never reads it." .Chart.Name) }}
 {{- end }}
 {{- if and (.Values.objectStore).publicBaseUrl (ne .Chart.Name "catalog") }}
 {{- fail "objectStore.publicBaseUrl is set on a chart that is not catalog. Only the service that stores a published image's URL builds it from a base (§10.8); on the BFF it would be a value nothing reads." }}
@@ -516,8 +562,16 @@ charts, so a further chart growing one is a design change made here. */}}
 {{- if and (.Values.mail).enabled (ne .Chart.Name "notifications") }}
 {{- fail (printf "mail.enabled is true on the %s chart, and only notifications submits to a relay (§3.2). This would mount the relay's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
 {{- end }}
-{{- if and .Values.identity.clientCredentials (not (has .Chart.Name (list "web-bff" "shipping" "notifications"))) }}
-{{- fail (printf "identity.clientCredentials is true on the %s chart, and the hosts that call out under a grant of their own are the BFF (§9.7, ADR-017) and the workers ADR-052 gives a read. This would mount one of their client secrets into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- if and .Values.identity.clientCredentials (not (has .Chart.Name (list "web-bff" "web-bff-assistant" "shipping" "notifications"))) }}
+{{- fail (printf "identity.clientCredentials is true on the %s chart, and the hosts that call out under a grant of their own are the BFF's two releases (§9.7, ADR-017, ADR-153) and the workers ADR-052 gives a read. This would mount one of their client secrets into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- end }}
+{{- if and (or (.Values.assistant).provider (.Values.assistant).baseUrl (.Values.assistant).apiKeySecretRef) (not (.Values.assistant).enabled) }}
+{{- fail "assistant.enabled is false but an assistant setting is set. A capability is a fact about the release, not an environment setting: the provider's key would be mounted into a pod that never reads it, or its address opened for one that never dials it (ADR-153)." }}
+{{- end }}
+{{- /* The main web-bff release keeps the provider off: it runs three or more replicas, and a conversation lives
+in the memory of the one replica that opened it (ADR-151, ADR-153). */}}
+{{- if and (.Values.assistant).enabled (ne .Chart.Name "web-bff-assistant") }}
+{{- fail (printf "assistant.enabled is true on the %s chart, and only web-bff-assistant runs the model provider: its single replica is what holds a conversation, and the provider's key crossing to any other pod is a credential with no reader (ADR-153)." .Chart.Name) }}
 {{- end }}
 {{- if .Values.database.enabled }}
 {{- /* The runtime connection string (DML only) — §7.1's split identity. The migrator
@@ -588,6 +642,14 @@ product service's reads it and writes products/, and neither lists or deletes (�
     secretKeyRef:
       name: {{ include "commerce.require" (list (.Values.objectStore.secretRef).name "objectStore.secretRef.name is required when objectStore.enabled.") | quote }}
       key: {{ include "commerce.require" (list (.Values.objectStore.secretRef).secretKeyKey "objectStore.secretRef.secretKeyKey is required when objectStore.enabled.") | quote }}
+{{- end }}
+{{- if (.Values.assistant).enabled }}
+{{- /* The SDK's own variable (ADR-151): the host's Assistant section refuses a key named like a secret. */}}
+- name: ANTHROPIC_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "commerce.require" (list (.Values.assistant.apiKeySecretRef).name "assistant.apiKeySecretRef.name is required when assistant.enabled. The key is a reference, never a value (§15.3).") | quote }}
+      key: {{ include "commerce.require" (list (.Values.assistant.apiKeySecretRef).key "assistant.apiKeySecretRef.key is required when assistant.enabled.") | quote }}
 {{- end }}
 {{- if (.Values.mail).enabled }}
 - name: Mail__Password

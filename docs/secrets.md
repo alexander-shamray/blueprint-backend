@@ -140,7 +140,9 @@ flip.
 2. Update the vault entry — `web-bff-identity` for the BFF,
    `shipping-identity` for Shipping's worker, `notifications-identity` for
    Notifications' worker. Each chart names its own under
-   `identity.clientSecretRef`, and they are never one Secret.
+   `identity.clientSecretRef`, and they are never one Secret; the BFF's
+   assistant release is the same host and names `web-bff-identity` too, so
+   restart both of the BFF's releases (ADR-153).
 3. Wait for External Secrets to reconcile, then restart the pods of the host
    whose secret this is — configuration is read at startup, so a reconciled
    Secret does not reach a running process.
