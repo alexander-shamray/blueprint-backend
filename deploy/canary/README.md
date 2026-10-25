@@ -81,7 +81,8 @@ entries in lists kept separately, which §15.3 names with their owners.
 
 | Field | What it is |
 |---|---|
-| `serviceName` | The entry assembly, which §13.2 makes the `service_name` every query selects on — not the chart's name, because a query spelled in the deployment's vocabulary matches no series and an empty result rolls every canary back |
+| `serviceName` | The entry assembly, which §13.2 makes the `service_name` every query selects on unless `telemetryName` is set — not the chart's name, because a query spelled in the deployment's vocabulary matches no series and an empty result rolls every canary back |
+| `telemetryName` | The `service.name` a host's release under a chart of its own reports instead of its `serviceName`, which its chart sets as `observability.telemetryName`; absent, the release reports its host's own, and no two descriptors may report one name (ADR-153) |
 | `chart` | The directory under `deploy/helm` the release installs; one descriptor per chart |
 | `source` | The host's tree under `src/`, which `smoke.sh` holds the chart to |
 | `signals` | What the workload is judged on, from `analysis.py`'s `SIGNALS` (ADR-047) |
@@ -89,6 +90,7 @@ entries in lists kept separately, which §15.3 names with their owners.
 | `migratedBy` | The workload whose chart's hook migrates this one's schema, named exactly when `smoke.database` is true and `smoke.migrator` false; the rollout refuses a tag whose revision is not the one that release serves (ADR-118, ADR-122), and that release's tag while this one serves any revision but its own (ADR-122) |
 | `sharesValues` | The workloads whose release is given a value this one is too, each with the dotted values paths both read, declared on one of the two descriptors; the rollout refuses either release while the two differ (ADR-125) |
 | `emptyUntil` | Each dotted values path whose rows a revision older than the one named, a whole commit object name, misreads; the rollout refuses this release while the path names anything and either track serves an older revision (ADR-126), and refuses an older tag while the stable track serves that revision or later (ADR-127) |
+| `offLadder` | The argument for a release that rolls in place under its chart's `Recreate` rather than up the ladder, named exactly when the chart states `strategy: Recreate`; `canary.py ladder` answers `off` for it, `required`, `plan` and `analyse` refuse it, and `smoke.sh` renders it no canary and no disruption budget (ADR-153) |
 | `smoke.migrator` | Whether the chart renders §7.4's migration Job |
 | `smoke.database` | Whether the chart mounts a database connection, with a Job or, under `migratedBy`, without one |
 | `smoke.autoscaled` | Whether the chart runs an HPA or a fixed replica count (§15.3) |
@@ -116,7 +118,10 @@ because a branch driven by the file it judges asserts nothing. Every value
    `migratedBy` is present exactly when its chart has a database and no Job,
    naming another workload whose chart runs one. Its `sharesValues`, where
    present, names other workloads, each with dotted values paths, and a pair
-   is declared on one of its two descriptors alone.
+   is declared on one of its two descriptors alone. Its `offLadder` argues,
+   and is present exactly when its chart states `strategy: Recreate`; its
+   `telemetryName` is the name its chart sets and not its `serviceName`; and
+   no two descriptors report one service name (ADR-153).
 5. Every series the query templates read is vouched for: either a loaded alert
    reads it — and `deploy/observability/check.py` has already established
    that something publishes it — or it is an instrument of a meter
@@ -179,6 +184,13 @@ because a branch driven by the file it judges asserts nothing. Every value
     with its own `--set`. So a release never names a value while a worker
     that misreads its rows claims from the same table, and never rolls back
     to such a worker past rows it may have left.
+16. While any descriptor names `offLadder`, `deploy.yml` asks
+    `canary.py ladder` for the dispatched workload in a step `id: ladder`,
+    runs each step that asks `required` or `plan` only on `on` and passes
+    `required` the workload, and upgrades the release in place, scaling and
+    installing nothing else, in a step run only on `off` (ADR-153). So a
+    release that holds what it serves in one pod never gets a second, and a
+    step that lost its condition is refused by `required` before it scales.
 
 ## What a workload is judged on
 

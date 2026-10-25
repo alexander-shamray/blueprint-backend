@@ -464,3 +464,80 @@ def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
                     f"{wanted}, so the tree is given without {cost} (ADR-050)"
                 )
     return failures
+
+
+# ADR-153's branch: the condition each side of it carries.
+LADDER_ON = "if: steps.ladder.outputs.ladder == 'on'"
+
+LADDER_OFF = "if: steps.ladder.outputs.ladder == 'off'"
+
+STEP_START = re.compile(r"^[ \t]*- (?:name|uses):")
+
+
+def _steps(live: list[str]) -> list[list[str]]:
+    """The workflow's live lines cut at each `- name:` or `- uses:`, so a condition is read with its own run."""
+    steps: list[list[str]] = []
+    for line in live:
+        if STEP_START.match(line) or not steps:
+            steps.append([])
+        steps[-1].append(line)
+    return steps
+
+
+def _rollout_rolls_off_ladder_in_place(workloads: dict, workflow: Path = WORKFLOW) -> list[str]:
+    """Check 16: where a descriptor is `offLadder`, the rollout asks, climbs only `on` and upgrades in place `off`.
+
+    Only while one is: with none, every dispatch climbs and the branch has nothing to send elsewhere.
+    """
+    if not any("offLadder" in entry for entry in workloads.values()):
+        return []
+    try:
+        text = workflow.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"{WORKFLOW_PATH} is not readable, so ADR-153's in-place rollout is unchecked: {error}"]
+    live = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+    steps = _steps(live)
+    workload = _argument("--workload", "WORKLOAD")
+
+    asks = [step for step in steps if any(workload in run for run in _invocations(step, "canary.py ladder"))]
+    if not any(any(line.strip() == "id: ladder" for line in step) and
+               any('"$GITHUB_OUTPUT"' in line and "ladder=" in line for line in step) for step in asks):
+        return [
+            f"{WORKFLOW_PATH} has no step `id: ladder` that asks `canary.py ladder` for the dispatched "
+            f"{workload} and writes the answer as an output, so nothing tells a release off the ladder "
+            "from one on it (ADR-153)"
+        ]
+
+    failures = []
+    climbing = [step for step in steps
+                if _invocations(step, "canary.py required") or _invocations(step, "canary.py plan")]
+    if not climbing:
+        failures.append(f"{WORKFLOW_PATH} runs no `canary.py required` or `plan`, so this check's subject is missing")
+    for step in climbing:
+        if not any(line.strip() == LADDER_ON for line in step):
+            failures.append(
+                f"the {WORKFLOW_PATH} step {step[0].strip()!r} climbs the ladder without `{LADDER_ON}`, so a "
+                "release off it is refused there rather than rolled (ADR-153)"
+            )
+    for run in (run for step in steps for run in _invocations(step, "canary.py required")):
+        if workload not in run:
+            failures.append(
+                f"a `canary.py required` run takes no {workload}, so a step that lost its condition scales a "
+                "release off the ladder before anything refuses it (ADR-153)"
+            )
+
+    in_place = [step for step in steps if any(line.strip() == LADDER_OFF for line in step)]
+    upgrades = [step for step in in_place
+                if any(run.startswith('helm upgrade "$WORKLOAD" ') for run in _invocations(step, "helm upgrade"))]
+    if not upgrades:
+        failures.append(
+            f"{WORKFLOW_PATH} has no step under `{LADDER_OFF}` that upgrades the dispatched release, so a "
+            "release off the ladder skips the climb and rolls nothing, reported green (ADR-153)"
+        )
+    for step in in_place:
+        if any(_invocations(step, command) for command in ("kubectl scale", "--install", "canary.enabled")):
+            failures.append(
+                f"the {WORKFLOW_PATH} step {step[0].strip()!r} runs under `{LADDER_OFF}` and scales or installs a "
+                "second release, which is the second pod the branch exists to avoid (ADR-153)"
+            )
+    return failures

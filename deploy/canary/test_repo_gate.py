@@ -657,5 +657,91 @@ class TrackSourceTests(unittest.TestCase):
         self.assertEqual(Path("stable-tree"), seen["installed"])
 
 
+class SecondReleaseTests(unittest.TestCase):
+    """Check 4 for ADR-153's fields: off the ladder exactly under Recreate, and a service name of its own."""
+
+    def _plan_with(self, change) -> dict:
+        plan = json.loads(json.dumps(descriptor_model.load_plan()))
+        change(plan["workloads"])
+        return plan
+
+    def test_the_shipped_descriptors_pass(self) -> None:
+        workloads = descriptor_model.entries(descriptor_model.load_plan()["workloads"])
+        for name, entry in workloads.items():
+            with self.subTest(workload=name):
+                self.assertEqual([], repo_gate._ladder_reads(name, entry, descriptor_model.ROOT))
+                self.assertEqual([], repo_gate._telemetry_reads(name, entry, descriptor_model.ROOT))
+
+    def test_the_regexes_read_the_assistant_chart_and_find_nothing_on_web_bff(self) -> None:
+        """The gate's own subject: a pattern that matched nothing would pass every chart that states nothing."""
+        root = descriptor_model.ROOT / "deploy" / "helm"
+        assistant = (root / "web-bff-assistant" / "values.yaml").read_text(encoding="utf-8")
+        main = (root / "web-bff" / "values.yaml").read_text(encoding="utf-8")
+
+        self.assertEqual("Recreate", repo_gate.STRATEGY.search(assistant).group(1))
+        self.assertEqual("Web.Bff.Assistant", repo_gate.TELEMETRY_NAME.search(assistant).group(1))
+        self.assertIsNone(repo_gate.STRATEGY.search(main))
+        self.assertIsNone(repo_gate.TELEMETRY_NAME.search(main))
+
+    def test_a_release_off_the_ladder_without_an_argument_is_refused(self) -> None:
+        for argued in ("", "  ", None, 1):
+            with self.subTest(argued=argued):
+                plan = self._plan_with(lambda w: w["web-bff-assistant"].__setitem__("offLadder", argued))
+
+                failures = repo_gate.check(plan)
+
+                self.assertTrue(any("offLadder" in f and "unargued" in f for f in failures), failures)
+
+    def test_a_recreate_chart_on_the_ladder_is_refused(self) -> None:
+        plan = self._plan_with(lambda w: w["web-bff-assistant"].pop("offLadder"))
+
+        failures = repo_gate.check(plan)
+
+        self.assertTrue(any("rolls under Recreate" in f for f in failures), failures)
+
+    def test_a_release_off_the_ladder_whose_chart_rolls_updates_is_refused(self) -> None:
+        plan = self._plan_with(lambda w: w["web-bff"].__setitem__("offLadder", "an argument"))
+
+        failures = repo_gate.check(plan)
+
+        self.assertTrue(any("workloads.web-bff is off the ladder" in f for f in failures), failures)
+
+    def test_two_releases_reporting_one_service_name_are_refused(self) -> None:
+        plan = self._plan_with(lambda w: w["web-bff-assistant"].pop("telemetryName"))
+
+        failures = repo_gate.check(plan)
+
+        self.assertTrue(any("report the service name 'Web.Bff'" in f for f in failures), failures)
+
+    def test_a_telemetry_name_the_chart_does_not_set_is_refused(self) -> None:
+        plan = self._plan_with(lambda w: w["web-bff-assistant"].__setitem__("telemetryName", "Web.Bff.Other"))
+
+        failures = repo_gate.check(plan)
+
+        self.assertTrue(any("observability.telemetryName is 'Web.Bff.Assistant'" in f for f in failures), failures)
+
+    def test_a_telemetry_name_that_is_the_host_s_own_or_not_a_name_is_refused(self) -> None:
+        for named, needle in (("Web.Bff", "repeats its serviceName"), ("web bff", "is not a service name")):
+            with self.subTest(named=named):
+                plan = self._plan_with(lambda w: w["web-bff-assistant"].__setitem__("telemetryName", named))
+
+                failures = repo_gate.check(plan)
+
+                self.assertTrue(any(needle in f for f in failures), failures)
+
+    def test_read_prometheus_selects_the_release_by_its_own_name(self) -> None:
+        plan = descriptor_model.load_plan()
+        seen: list[str] = []
+        original = read_prometheus.query
+        try:
+            read_prometheus.query = lambda _base, expression: seen.append(expression)
+            read_prometheus.read("http://prometheus.invalid", "web-bff-assistant", "10m", plan)
+        finally:
+            read_prometheus.query = original
+
+        self.assertTrue(seen)
+        self.assertTrue(all("Web.Bff.Assistant" in expression for expression in seen), seen[:2])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -102,6 +102,23 @@ def migrated_by(workload: str, plan_document: dict) -> str | None:
     return named
 
 
+def off_ladder(workload: str, plan_document: dict) -> bool:
+    """Whether `workload` rolls in place rather than up §15.5's ladder (ADR-153).
+
+    The descriptor's `offLadder` argues why; any other value is check 4's to
+    refuse, and is read here as off, the side that runs no second pod.
+    """
+    workloads = entries(plan_document["workloads"])
+    if workload not in workloads:
+        raise PlanError(f"no workload {workload!r} in the plan")
+    return "offLadder" in workloads[workload]
+
+
+def telemetry_name(entry: dict) -> str:
+    """The service.name a workload's release reports: its telemetryName, or its host's own (ADR-153)."""
+    return entry.get("telemetryName") or entry.get("serviceName")
+
+
 def migrates(workload: str, plan_document: dict) -> list[str]:
     """The workloads whose schema `workload`'s chart migrates, which ADR-122 rolls it beside."""
     workloads = entries(plan_document["workloads"])

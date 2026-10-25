@@ -162,6 +162,20 @@ jobs:
         env:
           WORKLOAD: ${{ inputs.workload }}
 
+      # ADR-153: a release whose one replica holds what it serves in memory is
+      # off the ladder, since a rung's canary is a second pod. The two steps
+      # that climb run only `on` and the in-place upgrade only `off`; `required`
+      # and `plan` refuse such a workload too, so a condition lost here stops
+      # the climb before it scales anything rather than running it.
+      - name: Whether the workload climbs the ladder
+        id: ladder
+        run: |
+          set -euo pipefail
+          LADDER=$(python deploy/canary/canary.py ladder --workload "$WORKLOAD")
+          echo "ladder=$LADDER" >> "$GITHUB_OUTPUT"
+        env:
+          WORKLOAD: ${{ inputs.workload }}
+
       # No step authenticates to a cluster, and naming that is better than a
       # comment implying it is handled. `ubuntu-latest` is a fresh hosted
       # runner with no kubeconfig, and a GitHub Environment scopes secrets
@@ -538,9 +552,10 @@ jobs:
             >> "$GITHUB_ENV"
 
       - name: The first rung has a price, and it is paid before anything rolls
+        if: steps.ladder.outputs.ladder == 'on'
         run: |
           set -euo pipefail
-          NEEDED=$(python deploy/canary/canary.py required --step 0)
+          NEEDED=$(python deploy/canary/canary.py required --step 0 --workload "$WORKLOAD")
           echo "The first step needs $NEEDED stable replicas (ADR-022)."
           # §15.5's 5% is one pod in twenty, so a three-replica service cannot
           # express it: one canary already serves 25%. Scaling up is what
@@ -620,6 +635,7 @@ jobs:
           WORKLOAD: ${{ inputs.workload }}
 
       - name: Climb the ladder
+        if: steps.ladder.outputs.ladder == 'on'
         run: |
           set -euo pipefail
 
@@ -766,6 +782,30 @@ jobs:
               exit 1
             fi
           done
+        env:
+          WORKLOAD: ${{ inputs.workload }}
+          TAG: ${{ inputs.tag }}
+
+      # ADR-153's release off the ladder is upgraded where it stands, under
+      # its chart's Recreate, so the old pod stops before the new one starts.
+      # The promotion's terms otherwise: its own overrides over the checked-out
+      # chart, the verified digests and the checked authority, and `--atomic`
+      # because this mutates the one release there is.
+      - name: Roll a release off the ladder in place
+        if: steps.ladder.outputs.ladder == 'off'
+        run: |
+          set -euo pipefail
+          CHART_DIR="deploy/helm/$(python deploy/canary/canary.py chart --workload "$WORKLOAD")"
+          helm dependency update "$CHART_DIR"
+          helm get values "$WORKLOAD" -n "$NAMESPACE" -o yaml > stable-values.yaml
+          helm upgrade "$WORKLOAD" "$CHART_DIR" \
+            -n "$NAMESPACE" \
+            -f stable-values.yaml --set-string image.tag="$TAG" \
+            --set-string image.registry="$REGISTRY" \
+            --set-string image.digest="$API_DIGEST" \
+            --set-string image.migratorDigest="$MIGRATOR_DIGEST" \
+            --set-string identity.authority="$CHECKED_AUTHORITY" \
+            --atomic --wait --timeout 20m
         env:
           WORKLOAD: ${{ inputs.workload }}
           TAG: ${{ inputs.tag }}

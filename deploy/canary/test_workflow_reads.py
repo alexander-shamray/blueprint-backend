@@ -274,6 +274,15 @@ on:
 """
         self.assertEqual(workflow_reads._dispatch_options(text), {"catalog-api", "gateway"})
 
+    def test_each_chart_is_classified_on_the_ladder_or_off_it(self) -> None:
+        """smoke.sh renders no canary and no disruption budget for a chart off the ladder (ADR-153)."""
+        cases = workflow_reads.smoke_cases(self.workloads)
+        ladder = {case.split()[0]: case.split()[2] for case in cases if case.split()[1] == "ladder"}
+
+        self.assertEqual(
+            {entry["chart"] for entry in descriptor_model.entries(self.workloads).values()}, set(ladder))
+        self.assertEqual({"web-bff-assistant"}, {chart for chart, value in ladder.items() if value == "no"})
+
 
 if __name__ == "__main__":
     unittest.main()

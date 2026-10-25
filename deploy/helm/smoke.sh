@@ -41,6 +41,7 @@ mail=10.96.0.0/16
 push=10.90.0.0/16
 paymentProvider=10.97.0.0/16
 objectStore=10.99.0.0/16
+assistant=10.89.0.0/16
 "
 NETPOL_OVERLAY=''
 for pair in $NETPOL_PEERS; do
@@ -248,6 +249,20 @@ if [ "$scaled" = "$listed" ]; then
     pass 'every chart is classified as autoscaled or fixed-replica'
 else
     fail "AUTOSCALED_CHARTS + FIXED_REPLICA_CHARTS ($scaled) do not partition SERVICE_CHARTS ($listed)"
+fi
+
+# ADR-153's release off §15.5's ladder runs one replica under Recreate, with no
+# canary and no disruption budget, so the sections that render those ask the
+# ladder's charts alone and hold the others to the release's own shape.
+LADDER_CHARTS="$(charts_where ladder yes)"
+OFF_LADDER_CHARTS="$(charts_where ladder no)"
+on_ladder() { case " $LADDER_CHARTS " in *" $1 "*) return 0 ;; esac; return 1; }
+
+laddered="$(printf '%s\n' $LADDER_CHARTS $OFF_LADDER_CHARTS | sort | tr '\n' ' ' | sed 's/ *$//')"
+if [ "$laddered" = "$listed" ]; then
+    pass 'every chart is classified as on the ladder or off it'
+else
+    fail "LADDER_CHARTS + OFF_LADDER_CHARTS ($laddered) do not partition SERVICE_CHARTS ($listed)"
 fi
 
 # The charts whose host calls out under a grant of its own (ADR-052), named by
@@ -598,7 +613,7 @@ for chart in $SERVICE_CHARTS; do
         grep -q "cidr: $(cidr_of identity)$" "$OUT/$chart.policy.yaml"
     # Egress follows the values: a destination's peers appear exactly when the
     # chart declares the capability that dials it.
-    for cap in database redis broker carrier mail paymentProvider objectStore; do
+    for cap in database redis broker carrier mail paymentProvider objectStore assistant; do
         if dials "$chart" "$cap"; then
             check "$chart declares $cap, so its policy reaches $cap's peers" \
                 grep -q "cidr: $(cidr_of "$cap")$" "$OUT/$chart.policy.yaml"
@@ -617,7 +632,7 @@ for chart in $SERVICE_CHARTS; do
     # capability's peer and, on the gateway, the ingress controller. Presence
     # alone stays green beside an extra peer, however narrow.
     addresses=1
-    for cap in database redis broker carrier mail paymentProvider objectStore; do
+    for cap in database redis broker carrier mail paymentProvider objectStore assistant; do
         if dials "$chart" "$cap"; then addresses=$((addresses + 1)); fi
     done
     if [ "$chart" = gateway ]; then addresses=$((addresses + 1)); fi
@@ -696,8 +711,9 @@ check 'the in-namespace ingress edges were read from the renders' test "$admitte
 
 # The canary is fenced exactly as the stable track is, or the rollout judges a
 # differently fenced workload (ADR-022): its own object, its own pods, the
-# same rules.
-for chart in $SERVICE_CHARTS; do
+# same rules. A chart off the ladder renders no canary, which the canary
+# section below holds it to.
+for chart in $LADDER_CHARTS; do
     "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         $GATEWAY_OVERLAY $(overlay_for "$chart") --set canary.enabled=true \
         --set autoscaling.enabled=false >"$OUT/$chart.canary.yaml"
@@ -851,6 +867,7 @@ notifications identity 443
 notifications mail 587
 payments paymentProvider 443
 shipping carrier 443
+web-bff-assistant assistant 443
 EOF
 # The admin API is the identity provider's too, so its stated port covers both.
 render_policy notifications "$OUT/port-admin.yaml" --set-string 'contactSource.baseUrl=https://id.example.invalid:8443/'
@@ -927,7 +944,57 @@ refuses_chart catalog 'a paymentProvider key reference with the capability off i
     --set paymentProvider.apiKeySecretRef.name=psp-key --set paymentProvider.apiKeySecretRef.key=key
 
 # --------------------------------------------------------------------------
-section "ADR-106's object store is a capability of two charts, and each key is placed"
+section "ADR-153's model provider is a capability of one release, and each key is placed"
+# --------------------------------------------------------------------------
+# The release exists to run the provider, so each key is asserted by placement as paymentProvider's are: the
+# provider and its address are Config, the key a Secret reference no ConfigMap carries. The descriptors say
+# which charts own it, so the loop reaches a second one the day it declares it.
+for chart in $SERVICE_CHARTS; do
+    owns "$chart" assistant || continue
+    ASSISTANT_RENDER="$OUT/$chart-assistant.yaml"
+    "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string image.tag="$TAG" >"$ASSISTANT_RENDER"
+    check "$chart: Assistant__Provider is in the ConfigMap" \
+        in_configmap "$ASSISTANT_RENDER" '^  Assistant__Provider: "anthropic"$'
+    check "$chart: ANTHROPIC_BASE_URL is in the ConfigMap" \
+        in_configmap "$ASSISTANT_RENDER" '^  ANTHROPIC_BASE_URL: "https://api.anthropic.com"$'
+    check "$chart: ANTHROPIC_API_KEY comes from a secretKeyRef, not a literal" \
+        awk '/^ *- name: ANTHROPIC_API_KEY$/ { at = NR }
+             at && NR == at + 1 && /^ *valueFrom:$/ { vf = 1 }
+             vf && NR == at + 2 && /^ *secretKeyRef:$/ { found = 1 }
+             END { exit found ? 0 : 1 }' "$ASSISTANT_RENDER"
+    check "$chart: no ConfigMap carries ANTHROPIC_API_KEY" outside_configmap "$ASSISTANT_RENDER" 'ANTHROPIC_API_KEY'
+    refuses_chart "$chart" "$chart: a provider other than anthropic fails the render" \
+        'assistant.provider is "off", and this chart accepts anthropic alone' --set-string assistant.provider=off
+    refuses_chart "$chart" "$chart: a cleared provider address fails the render" \
+        'assistant.baseUrl is required' --set-string assistant.baseUrl=
+    refuses_chart "$chart" "$chart: a provider with no peer stated fails the render" \
+        'networkPolicy.assistant.to is required' --set networkPolicy.assistant.to=null
+    refuses_chart "$chart" "$chart: a provider setting with the capability off fails the render" \
+        'assistant.enabled is false but an assistant setting is set' --set assistant.enabled=false
+    refuses_chart "$chart" "$chart: the capability off and cleared is refused by the chart" \
+        "assistant.enabled is false on the $chart chart" --set assistant.enabled=false \
+        --set assistant.provider=null --set assistant.baseUrl=null --set assistant.apiKeySecretRef=null
+done
+# The main release keeps the provider off (ADR-153): its replicas share no conversation.
+check 'web-bff: no render carries Assistant__Provider or the provider key' \
+    test "$(grep -cE 'Assistant__Provider|ANTHROPIC_' "$OUT/web-bff.yaml")" -eq 0
+
+# The release's own service name, which the canary's selector tells it from web-bff by (ADR-153): set where the
+# chart states one, and nowhere else, so every other host still reports its assembly's name.
+for chart in $SERVICE_CHARTS; do
+    named="$(awk '/^observability:/ { o = 1; next } /^[a-z]/ { o = 0 } o && /^  telemetryName:/ { print $2 }' \
+        "$CHARTS_DIR/$chart/values.yaml")"
+    if [ -n "$named" ]; then
+        check "$chart reports the service name $named" in_configmap "$OUT/$chart.yaml" "^  OTEL_SERVICE_NAME: \"$named\"\$"
+    else
+        check "$chart reports its host's own service name" test "$(count 'OTEL_SERVICE_NAME' "$OUT/$chart.yaml")" -eq 0
+    fi
+done
+refuses_chart catalog 'a service name that is not one fails the render' \
+    'observability.telemetryName is "web bff", which is not a service name' --set-string 'observability.telemetryName=web bff'
+
+# --------------------------------------------------------------------------
+section "ADR-106's object store is a capability of the charts that sign or attach an upload, and each key is placed"
 # --------------------------------------------------------------------------
 # The host binds ProductImages:Store and validates it at start, so every state that renders cleanly and is
 # wrong is a pod that never starts. Asserted by placement, as the capabilities above are: the address, the
@@ -1536,10 +1603,36 @@ for chart in $FIXED_REPLICA_CHARTS; do
     check "$chart carries a replica count of its own" test "$(count '^ *replicas:' "$OUT/$chart.yaml")" -eq 1
 done
 
-for chart in $SERVICE_CHARTS; do
+for chart in $LADDER_CHARTS; do
     check "$chart renders a PodDisruptionBudget" \
         test "$(count '^kind: PodDisruptionBudget$' "$OUT/$chart.yaml")" -eq 1
 done
+
+# ADR-153's shape, which is the whole of what keeps a release off the ladder at
+# one pod: Recreate and one replica, no budget over it, and each of the four
+# things that would run a second pod refused rather than rendered.
+for chart in $OFF_LADDER_CHARTS; do
+    check "$chart renders no PodDisruptionBudget" \
+        test "$(count '^kind: PodDisruptionBudget$' "$OUT/$chart.yaml")" -eq 0
+    check "$chart rolls under Recreate" \
+        awk '/^  strategy:$/ { s = 1; next } s && /^    type: Recreate$/ { f = 1 } { s = 0 } END { exit f ? 0 : 1 }' \
+        "$OUT/$chart.yaml"
+    check "$chart runs one replica" grep -q '^  replicas: 1$' "$OUT/$chart.yaml"
+    refuses_chart "$chart" "$chart: a second replica fails the render" \
+        'strategy is Recreate and replicaCount is 2' --set replicaCount=2
+    refuses_chart "$chart" "$chart: an autoscaler fails the render" \
+        'strategy is Recreate and autoscaling.enabled is true' --set autoscaling.enabled=true
+    refuses_chart "$chart" "$chart: a disruption budget fails the render" \
+        'strategy is Recreate and podDisruptionBudget.enabled is true' --set podDisruptionBudget.enabled=true
+    refuses_chart "$chart" "$chart: a rolling update fails the render" \
+        "strategy is not Recreate on the $chart chart" --set strategy=null
+done
+check 'every other chart rolls by the default RollingUpdate' \
+    test "$(cat $(for chart in $LADDER_CHARTS; do printf '%s ' "$OUT/$chart.yaml"; done) | count '^  strategy:$' /dev/stdin)" -eq 0
+refuses_chart catalog 'a strategy other than Recreate fails the render' \
+    'strategy is "RollingUpdate", and a chart states Recreate or nothing' --set-string strategy=RollingUpdate
+refuses_chart catalog 'Recreate over three replicas fails the render' \
+    'strategy is Recreate and replicaCount is 3' --set-string strategy=Recreate
 
 # --------------------------------------------------------------------------
 section 'Replicas spread across nodes and zones (§15.3)'
@@ -1804,23 +1897,37 @@ for chart in $CREDENTIALED_CHARTS; do
     check "$chart is one of them" \
         test "$(count 'Identity__Client__ClientSecret' "$OUT/$chart.yaml")" -eq 1
 done
-# And they read DIFFERENT Secrets, which the counts above cannot see: a values
-# file copied from the BFF's leaves Shipping's pod mounting the BFF's grant,
-# renders cleanly, passes every count above, and gives one host another's
-# identity (§11.5).
-check 'and each reads a Secret of its own' \
-    test "$(awk '/- name: Identity__Client__ClientSecret/ { want = 1; next }
-                 want && /name: / { print $2; want = 0 }' "$OUT/platform.yaml" |
-        sort -u | wc -l)" -eq "$credentialed_count"
+# And each host reads a Secret of its own, which the counts above cannot see: a
+# values file copied from the BFF's leaves Shipping's pod mounting the BFF's
+# grant, renders cleanly, passes every count above, and gives one host another's
+# identity (§11.5). Per host rather than per chart, because ADR-153's second
+# release of the BFF is the same host and reads the same Secret.
+secret_of() {
+    awk '/- name: Identity__Client__ClientSecret/ { want = 1; next }
+         want && /name: / { print $2; want = 0 }' "$OUT/$1.yaml"
+}
+for chart in $CREDENTIALED_CHARTS; do
+    printf '%s %s\n' "$(secret_of "$chart")" "$(field "$chart" host)"
+done | sort -u >"$OUT/secret-hosts.txt"
+check 'and each host reads a Secret of its own' \
+    test "$(cut -d' ' -f1 "$OUT/secret-hosts.txt" | uniq -d | wc -l)" -eq 0
+check 'and no host reads two' \
+    test "$(cut -d' ' -f2 "$OUT/secret-hosts.txt" | sort | uniq -d | wc -l)" -eq 0
+check 'and the Secrets were read from the renders' \
+    test "$(grep -c '^"' "$OUT/secret-hosts.txt")" -eq "$(for chart in $CREDENTIALED_CHARTS; do field "$chart" host; done | sort -u | wc -l)"
 
 # The assertions above read the default render, and Helm accepts values a
 # chart's values.yaml never declares, so an environment file could put one
 # service's Secret in another's pod by turning a credential-bearing capability
 # on. The library holds which chart owns each and the descriptors declare it;
 # the two are held to each other here in both directions.
-CREDENTIAL_CAPABILITIES="paymentProvider carrier mail clientCredentials objectStore"
+CREDENTIAL_CAPABILITIES="paymentProvider carrier mail clientCredentials objectStore assistant"
 enable_args() {
     case "$1" in
+        assistant) printf '%s' "--set assistant.enabled=true --set-string assistant.provider=anthropic
+            --set-string assistant.baseUrl=https://provider.example.invalid
+            --set-string assistant.apiKeySecretRef.name=web-bff-assistant-provider
+            --set-string assistant.apiKeySecretRef.key=api-key" ;;
         paymentProvider) printf '%s' "--set paymentProvider.enabled=true
             --set-string paymentProvider.baseUrl=https://psp.example.invalid/
             --set-string paymentProvider.apiKeySecretRef.name=payments-provider
@@ -2546,7 +2653,12 @@ section 'The canary track (§15.5, ADR-022)'
 # rendered rather than a representative one: the mechanism lives in the
 # library, so a chart that failed to pick it up would be a service with no
 # canary and a rollout that promoted it without ever splitting traffic.
-for chart in $SERVICE_CHARTS; do
+for chart in $OFF_LADDER_CHARTS; do
+    # The one chart that must not render one (ADR-153).
+    refuses_chart "$chart" "$chart is off the ladder and refuses a canary" \
+        'strategy is Recreate and canary.enabled is true' --set canary.enabled=true
+done
+for chart in $LADDER_CHARTS; do
     "$HELM" template "$chart-canary" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         --set canary.enabled=true --set autoscaling.enabled=false \
         $GATEWAY_OVERLAY $(overlay_for "$chart") >"$OUT/$chart-canary.yaml"
@@ -2655,6 +2767,7 @@ for chart in $MIGRATOR_CHARTS; do
 done
 
 for chart in $DATABASELESS_CHARTS $MIGRATED_ELSEWHERE_CHARTS; do
+    on_ladder "$chart" || continue
     check "$chart: the canary renders no migration Job either" \
         test "$(count '^kind: Job$' "$OUT/$chart-canary.yaml")" -eq 0
 done

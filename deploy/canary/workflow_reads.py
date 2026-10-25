@@ -173,6 +173,8 @@ def _smoke_case(name: str, entry: dict) -> list[str]:
                 f"true or false, so smoke.sh cannot classify the chart {chart!r}"
             )
         lines.append(f"{chart} {key} {'yes' if smoke[key] else 'no'}")
+    # ADR-153's release off the ladder renders no canary and no disruption budget, which smoke.sh asks of the rest.
+    lines.append(f"{chart} ladder {'no' if 'offLadder' in entry else 'yes'}")
     if smoke["migrator"] and not smoke["database"]:
         raise PlanError(
             f"workloads.{name}.smoke says the chart {chart!r} migrates a database "

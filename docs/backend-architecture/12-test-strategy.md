@@ -329,8 +329,10 @@ truncated-stream case proves a reply cut off before `message_stop` fails
 without a network. That departs from §12.7's
 row for a third-party API, WireMock.Net with a nightly contract test against
 the sandbox, and `Web.Bff.Tests` departs from it too, driving the host with a
-scripted provider in the adapter's place, because no deployment turns the BFF's
-assistant on; the change that does (#1451) inherits the row
+scripted provider in the adapter's place. The `web-bff-assistant` release turns
+the assistant on
+([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)),
+and the row it inherits is owed by #1471, ADR-153's follow-up
 ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
 
 ## 12.4 Application tests — real infrastructure

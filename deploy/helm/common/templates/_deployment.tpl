@@ -20,6 +20,10 @@ spec:
   (§15.3). */}}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
+  {{- with include "commerce.strategy" . }}
+  strategy:
+    type: {{ . }}
+  {{- end }}
   selector:
     {{- /* The shared selector plus the track, so two Deployments never count
     each other's pods as their own. Immutable, which is why ADR-022 took it

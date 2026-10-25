@@ -125,6 +125,9 @@ spec:
     {{- if (.Values.paymentProvider).enabled }}
     {{- include "commerce.networkPolicyEgress" (list ($np.paymentProvider).to "paymentProvider.to" "paymentProvider.enabled says this host calls the provider (§3.2)." (($np.paymentProvider).port | default (include "commerce.urlPort" .Values.paymentProvider.baseUrl))) | nindent 4 }}
     {{- end }}
+    {{- if (.Values.assistant).enabled }}
+    {{- include "commerce.networkPolicyEgress" (list ($np.assistant).to "assistant.to" "assistant.enabled says this host calls the model provider (ADR-153)." (($np.assistant).port | default (include "commerce.urlPort" .Values.assistant.baseUrl))) | nindent 4 }}
+    {{- end }}
     {{- if (.Values.carrier).enabled }}
     {{- include "commerce.networkPolicyEgress" (list ($np.carrier).to "carrier.to" "carrier.enabled says this host calls the carrier (§3.2)." (($np.carrier).port | default (include "commerce.urlPort" .Values.carrier.baseUrl))) | nindent 4 }}
     {{- end }}

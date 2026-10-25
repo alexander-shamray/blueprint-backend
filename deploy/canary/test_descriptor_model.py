@@ -174,7 +174,7 @@ class DescriptorTests(unittest.TestCase):
         cases = workflow_reads.smoke_cases(workloads)
         failures = repo_gate.check({**descriptor_model.load_plan(), "workloads": workloads})
 
-        self.assertFalse(any(" migratedBy " in case for case in cases), cases)
+        self.assertFalse(any(case.startswith("notifications-api migratedBy ") for case in cases), cases)
         self.assertTrue(any("notifications-api.migratedBy" in f for f in failures), failures)
         with self.assertRaisesRegex(descriptor_model.PlanError, "names no workload"):
             descriptor_model.migrated_by("notifications-api", {"workloads": workloads})

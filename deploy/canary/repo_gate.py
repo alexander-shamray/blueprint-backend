@@ -15,13 +15,13 @@ from csharp_sources import (
     CONSUMER_REGISTRATION, SAGA_REGISTRATION, _host_assemblies, _literal_arguments,
     _probe_routes_are_readable, _registers,
 )
-from descriptor_model import ROOT, SHARED_KEY, entries
+from descriptor_model import ROOT, SHARED_KEY, entries, telemetry_name
 from release_inputs import IMAGE_REVISION, RELEASE_NAME
 from rollout_gate import (
     _rollout_follows_the_migrator, _rollout_holds_shared_values, _rollout_keeps_values_empty,
-    _rollout_reads_the_image_source,
+    _rollout_reads_the_image_source, _rollout_rolls_off_ladder_in_place,
 )
-from workflow_reads import WORKFLOW, WORKFLOW_PATH, _descriptors_agree, _smoke_reads
+from workflow_reads import HOST_NAME, WORKFLOW, WORKFLOW_PATH, _descriptors_agree, _smoke_reads
 
 
 # Every path outside deploy/canary that this script reads, declared once, bar
@@ -164,9 +164,19 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
         failures += _migrated_by_reads(name, workloads)
         failures += _shared_values_reads(name, workloads)
         failures += _empty_until_reads(name, workloads)
+        failures += _ladder_reads(name, entry, root)
+        failures += _telemetry_reads(name, entry, root)
     charts = [entry.get("chart") for entry in workloads.values()]
     for chart in sorted({chart for chart in charts if chart and charts.count(chart) > 1}):
         failures.append(f"two descriptors name the chart {chart!r}, and smoke.sh renders a chart once")
+    #    The analysis selects a baseline by service name and track alone, so two releases reporting one name are
+    #    one baseline, and the rung judges a release by another's streams and failures (ADR-153).
+    reported = [telemetry_name(entry) for entry in workloads.values()]
+    for shared in sorted({name for name in reported if name and reported.count(name) > 1}):
+        failures.append(
+            f"two descriptors report the service name {shared!r}, so the canary's baseline counts both "
+            "releases: give the one under a chart of its own a telemetryName its chart sets (ADR-153)"
+        )
 
     # 5. Every series the query templates read is one something vouches
     #    for: a loaded alert, whose metrics check.py has proved published, or
@@ -248,6 +258,10 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     # 15. A value earlier revisions misread stays empty while either track
     #     serves one (ADR-126); the rollout asks the descriptors which values.
     failures += _rollout_keeps_values_empty(workloads)
+
+    # 16. A release off the ladder rolls in place and never up it (ADR-153);
+    #     the rollout asks the descriptors which releases those are.
+    failures += _rollout_rolls_off_ladder_in_place(workloads)
 
     return failures
 
@@ -560,6 +574,69 @@ def _shared_values_reads(name: str, workloads: dict) -> list[str]:
                 f"workloads.{name} and workloads.{peer} each declare sharesValues for the other, and one "
                 "declaration is the pair's owner: drop one of them"
             )
+    return failures
+
+
+# A chart's own `strategy:` and `observability.telemetryName`, read from its values.yaml as workload_images reads
+# `image:`, so the descriptor and the chart cannot each say something different about one release.
+STRATEGY = re.compile(r"(?m)^strategy:[ \t]*(\S+)[ \t]*(?:#.*)?$")
+
+TELEMETRY_NAME = re.compile(r"(?m)^observability:[ \t]*\r?\n(?:[ \t]+.*\r?\n|[ \t]*\r?\n)*?[ \t]+telemetryName:[ \t]*(\S+)")
+
+
+def _chart_values(chart: object, root: Path) -> str | None:
+    if not isinstance(chart, str) or not _chart_exists(chart, root):
+        return None
+    try:
+        return (root / "deploy" / "helm" / chart / "values.yaml").read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _ladder_reads(name: str, entry: dict, root: Path) -> list[str]:
+    """Check 4 for `offLadder`: an argument, and exactly the descriptors whose chart rolls under Recreate (ADR-153)."""
+    failures = []
+    argued = entry.get("offLadder")
+    if "offLadder" in entry and (not isinstance(argued, str) or not argued.strip()):
+        failures.append(f"workloads.{name}.offLadder is {argued!r}, which takes a release off the ladder unargued")
+    values = _chart_values(entry.get("chart"), root)
+    if values is None:
+        return failures
+    stated = STRATEGY.search(values)
+    recreate = stated is not None and stated.group(1) == "Recreate"
+    if recreate and "offLadder" not in entry:
+        failures.append(
+            f"workloads.{name}'s chart rolls under Recreate and its descriptor is on the ladder, whose canary "
+            "is a second pod beside the one Recreate keeps single (ADR-153)"
+        )
+    if "offLadder" in entry and not recreate:
+        failures.append(
+            f"workloads.{name} is off the ladder and its chart states no `strategy: Recreate`, so the rollout's "
+            "in-place upgrade starts a second pod before the first stops (ADR-153)"
+        )
+    return failures
+
+
+def _telemetry_reads(name: str, entry: dict, root: Path) -> list[str]:
+    """Check 4 for `telemetryName`: a name, not the host's own, and the one the chart sets (ADR-153)."""
+    failures = []
+    declared = entry.get("telemetryName")
+    if "telemetryName" in entry:
+        if not isinstance(declared, str) or not HOST_NAME.fullmatch(declared):
+            return [f"workloads.{name}.telemetryName is {declared!r}, which is not a service name"]
+        if declared == entry.get("serviceName"):
+            failures.append(
+                f"workloads.{name}.telemetryName repeats its serviceName, which is what an absent one means")
+    values = _chart_values(entry.get("chart"), root)
+    if values is None:
+        return failures
+    set_by_chart = TELEMETRY_NAME.search(values)
+    chart_name = set_by_chart.group(1) if set_by_chart else None
+    if chart_name != declared:
+        failures.append(
+            f"workloads.{name}.telemetryName is {declared!r} and its chart's observability.telemetryName is "
+            f"{chart_name!r}, so the release reports a name the canary does not select by (ADR-153)"
+        )
     return failures
 
 

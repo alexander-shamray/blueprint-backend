@@ -14,7 +14,7 @@ from pathlib import Path
 from analysis import PROMOTE, SIGNALS, _shout, analyse, plan, required_stable
 from descriptor_model import (
     DEPLOYABLES, PlanError, SHARED_KEY, _ABSENT, _value_at, empty_until, entries, load_plan,
-    migrated_by, migrates, shared_values, values_agree, values_named, workload_images,
+    migrated_by, migrates, off_ladder, shared_values, values_agree, values_named, workload_images,
 )
 from release_inputs import (
     image_revision, installed_tag, migration_prefix, validate_digest, validate_tag, verified_digest,
@@ -58,6 +58,14 @@ def main(argv: list[str]) -> int:
     # shell can read it without a JSON parser.
     required = sub.add_parser("required", help="stable replicas the first step needs")
     required.add_argument("--step", type=int, default=0)
+    # The workload the rung is for, so one off the ladder is refused before
+    # the step that reads this scales anything (ADR-153).
+    required.add_argument("--workload")
+
+    # ADR-153's branch, `on` or `off`, for the steps that climb and the one
+    # that rolls a release in place instead.
+    ladder = sub.add_parser("ladder", help="whether a workload climbs the ladder or rolls in place")
+    ladder.add_argument("--workload", required=True)
 
     sub.add_parser("steps", help="how many rungs the ladder has")
 
@@ -309,6 +317,28 @@ def main(argv: list[str]) -> int:
             return 1
         print("\n".join(cases))
         return 0
+
+    if args.command == "ladder":
+        try:
+            print("off" if off_ladder(args.workload, document) else "on")
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        return 0
+
+    # Each command that only a rung asks refuses a workload off the ladder, so
+    # a step that lost its condition stops rather than runs a second pod.
+    if args.command in ("required", "plan", "analyse") and args.workload is not None:
+        try:
+            if off_ladder(args.workload, document):
+                print(
+                    f"canary: {args.workload} is off the ladder and rolls in place (ADR-153), "
+                    f"so it has no {args.command}",
+                    file=sys.stderr)
+                return 1
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
 
     if args.command == "required":
         try:
