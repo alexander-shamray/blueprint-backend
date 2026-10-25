@@ -8,7 +8,7 @@ import io
 import json
 import re
 import unittest
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from unittest import mock
 
 import ci_cost
@@ -131,6 +131,26 @@ class Measure(unittest.TestCase):
         usage = ci_cost.measure(FakeApi([], {}), REPO, A, current=True, workers=1)
         self.assertIsNone(usage.packages)
         self.assertTrue(any(note.startswith("GHCR packages") for note in usage.unavailable))
+
+
+class Gh(unittest.TestCase):
+    def test_gh_output_is_decoded_as_utf8_whatever_the_locale(self):
+        done = mock.Mock(returncode=0, stdout='{"name": "Observability — smoke"}', stderr="")
+        with mock.patch("subprocess.run", return_value=done) as called:
+            ci_cost.gh("repos/owner/repo")
+        self.assertEqual(called.call_args.kwargs["encoding"], "utf-8")
+        self.assertNotIn("text", called.call_args.kwargs)
+
+
+class RunsBetween(unittest.TestCase):
+    def test_a_minute_still_over_the_cap_is_refused_not_undercounted(self):
+        start = datetime(2026, 10, 10, tzinfo=timezone.utc)
+
+        def crowded(path):
+            return {"total_count": ci_cost.SEARCH_CAP + 1, "workflow_runs": []}
+
+        with self.assertRaisesRegex(LookupError, "short"):
+            ci_cost.runs_between(crowded, REPO, start, start + timedelta(minutes=1))
 
 
 class Cli(unittest.TestCase):
