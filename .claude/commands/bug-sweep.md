@@ -251,8 +251,8 @@ Each round is the review done once, end to end:
    form `ISSUE_BODY_END`, and **before the command is composed, every line of
    the payload — title, body, quoted lines — is checked against it**, and a
    payload that contains it gets a different one. **A title must never begin
-   with `/`**; write a command name in backticks — `` `/bug-sweep` ``. (why:
-   docs/commands/bug-sweep.md, *The round: file*)
+   with `/` or `#`**; write a command or directive in backticks —
+   `` `/bug-sweep` ``. (why: docs/commands/bug-sweep.md, *The round: file*)
 
 5. **Summarise the round.** The helper's `mode` line and the pinned commit,
    new issues filed (with numbers), candidates dropped at each gate and why,

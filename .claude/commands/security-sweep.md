@@ -200,8 +200,9 @@ Each round is the review done once, end to end:
      it is a token of the form `ISSUE_BODY_END`, and **before the command is
      composed, every line of the payload is checked against it**; a payload
      containing it gets a different one.
-   - **A title must never begin with `/`**; write a command it names in
-     backticks — `` `/security-sweep` ``.
+   - **A title must never begin with `/` or `#`**; write a command or
+     directive it names in backticks — `` `/security-sweep` ``,
+     `` `#nullable` ``.
 
    (why: docs/commands/security-sweep.md, *File*)
 
