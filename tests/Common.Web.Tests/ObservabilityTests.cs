@@ -235,6 +235,44 @@ public class ObservabilityTests
     }
 
     [Fact]
+    public void The_standard_service_name_variable_names_a_second_release_of_one_host()
+    {
+        // ADR-153's assistant release runs the BFF's image under a name of its own, so the canary's baseline,
+        // selected by service.name, never counts it. The SDK's own variable is overwritten by AddService.
+        ResourceCapturingExporter exporter = new();
+
+        HostApplicationBuilder builder = TelemetryHost.Builder();
+        builder.Configuration.AddInMemoryCollection(
+            new Dictionary<string, string?> { ["OTEL_SERVICE_NAME"] = "Release.Of.Host" });
+
+        List<Metric> exported = [];
+
+        builder.AddObservability();
+        builder.Services
+            .AddOpenTelemetry()
+            .WithMetrics(m => m.AddReader(new BaseExportingMetricReader(exporter)).AddInMemoryExporter(exported));
+
+        using IHost host = builder.Build();
+
+        MeterProvider provider = host.Services.GetRequiredService<MeterProvider>();
+        IMeterFactory meters = host.Services.GetRequiredService<IMeterFactory>();
+        meters.Create("Commerce.Requests").CreateCounter<long>("probe.counter").Add(1);
+        meters.Create("Probe.Own").CreateCounter<long>("probe.counter").Add(1);
+        provider.ForceFlush();
+
+        Dictionary<string, object> attributes = exporter.Captured
+            .ShouldNotBeNull()
+            .Attributes
+            .ToDictionary(a => a.Key, a => a.Value);
+
+        attributes["service.name"].ShouldBe("Release.Of.Host");
+
+        // The host's own meters are still the assembly's prefix, since the code is the same whatever the release.
+        exported.Select(m => m.MeterName).ShouldContain("Probe.Own");
+        attributes["deployment.environment"].ShouldBe(TelemetryHost.EnvironmentName);
+    }
+
+    [Fact]
     public void Health_probes_are_filtered_out_of_traces()
     {
         // On the predicate, because TestServer produces no server spans to filter.
