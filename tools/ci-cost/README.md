@@ -30,9 +30,10 @@ Two limits to know before reading a figure. **The runs endpoint answers at
 most 1,000 results to one query**, so the script halves a span until each
 query fits under it. **Pages are requested by number**, never through the
 `Link` header, because the proxy cloud sessions run behind refuses the
-numeric-id URLs it carries. A read the token is refused — the packages
-listing without `read:packages`, typically — is printed under the table
-rather than failing the run.
+numeric-id URLs it carries. A PRs, label-events or packages read the
+token is refused — the packages listing without `read:packages`, typically —
+is printed under the table rather than failing the run; a refused runs or
+jobs read ends it, because no figure stands without them.
 
 Stdlib only, and the suite answers from a fake API:
 
