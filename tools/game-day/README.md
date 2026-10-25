@@ -191,9 +191,9 @@ no sleep that stands in for a condition. A `Deadline` is a sum written out, as
 `tests/Platform.IntegrationTests/Journey/Deadlines.cs` writes its own: the
 rule's threshold (an age gauge needs that many seconds to cross it), plus its
 `for:`, plus the export interval (60 seconds, the OpenTelemetry SDK's default,
-which the suite fails on the day anything under `src/`, `deploy/compose/` or `deploy/helm/` sets it),
-plus the evaluation interval (60 seconds), plus the same interval again for
-reporting. The bundled Grafana image's Prometheus
+which the suite fails on the day anything under `src/`, `deploy/compose/` or
+`deploy/helm/` sets it), plus the evaluation interval (60 seconds), plus the
+same interval again for reporting. The bundled Grafana image's Prometheus
 configuration sets no `evaluation_interval`, which was read from the running
 container, so the default applies. The first runs, on 2026-10-10, fired
 `OutboxAbandonedRows` after 75 seconds of a 120-second deadline,
@@ -201,8 +201,8 @@ container, so the default applies. The first runs, on 2026-10-10, fired
 209 and 226 of 240. The last is close to its ceiling, which is what a sum of
 ceilings looks like when the cause lands on a bad phase of both intervals.
 `ErasureRequestsOverdue`, run on 2026-10-11, fired after 173 and 213 seconds of
-its deadline. `ErrorQueueDepth` and `SkippedQueueDepth`, run on 2026-10-11,
-each fired after 177 seconds of 240, and `QueueBacklogGrowing` after 712 of 780.
+its deadline. `ErrorQueueDepth` and `SkippedQueueDepth`, run on 2026-10-11, each
+fired after 177 seconds of 240, and `QueueBacklogGrowing` after 712 of 780.
 
 **Reporting is a second evaluation.** Prometheus shows an alert one evaluation
 after the one whose expression first read true: the rule's entry in
