@@ -17,12 +17,13 @@ egress to the provider declared as `paymentProvider`'s is. It runs the
 adds none: the library's allow-lists for client credentials and the object
 store widen to name it, because the host refuses to start without the store
 that ADR-106 gives it, and it reads the same Secret as `web-bff`; Catalog's
-network policy admits it for the pricing hop `get_product` makes. In
-ADR-065's table the release is a workload that admits the gateway and reaches
+network policy admits it for the pricing hop `get_product` makes. In ADR-065's
+table the release is a workload that admits the gateway and reaches
 `catalog-api` on `grpc`, its stores and the provider, and `catalog-api` admits
-it. The chart sets a telemetry attribute that names
-the release, so the canary analysis, which reads one workload's one track,
-leaves it out of `web-bff`'s baseline. The design is this record; the pieces
+it. The release reports a service name of its own, so the canary analysis, whose
+selector matches one service name and track by equality, never counts it in
+`web-bff`'s baseline; whether the chart can set that name or the host needs an
+option for it is the follow-up's to find. The design is this record; the pieces
 that make it true are filed as issues under #1451.
 **Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)
 accepted that a conversation lives in the memory of the process that opened
