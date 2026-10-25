@@ -38,9 +38,9 @@ operates, budgets, tests and fences, so the whole decision is a second
 instance of it. The call is made inside a turn, which runs off the request
 that started it, so it spends no hop of §9.7's budget and is on no request
 path; were it on one, the depth would be one, `Client → Gateway → BFF →
-Inventory`, and Inventory calls nobody. Net of what is reserved is the right flag, because
-`StockItem.Available` already is: the count a stock-take sets is on hand
-minus reserved, so above zero is what the next order could take.
+Inventory`, and Inventory calls nobody. Net of what is reserved is the right
+flag, because `StockItem.Available` already is: the count a stock-take sets is
+on hand minus reserved, so above zero is what the next order could take.
 **Consequences.** Inventory becomes the fourth service to serve gRPC and its
 chart takes a second port and an ingress from `web-bff` on `grpc`, where it
 admitted only the gateway; the BFF's network policy gains the egress, and the
