@@ -164,7 +164,7 @@ known inside the window. GHCR was refused again, this time for want of
 | #1436, `realm.yml`'s schedule | 154 (0.2%), all of it the path-filtered `check` job the change would not touch | Left out of Window B |
 | #1437, no full CI run on `labeled`/`unlabeled` | Not isolable, for the first baseline's reason; CI ran ≈4.2 times per PR opened against 1,025 label events | Only as the change in CI runs per PR |
 | #1438, a self-hosted runner | Whatever share of CI's 85,216 it moves | Left out of Window B |
-| #1461, `ci.yml`'s long jobs waiting on `format` and `workflow-lint` | Not isolable: it saves only on a run that `format` or `workflow-lint` fails, and the tool reads no job's conclusion | Only as the change in CI's minutes per run, 68.4 in A |
+| #1461, `ci.yml`'s long jobs waiting on `format` and `workflow-lint` | Not isolable: it saves on a run that `format` or `workflow-lint` fails and on a branch run cancelled by a newer push before they finish, and the tool reads no job's conclusion to tell either apart | Only as the change in CI's minutes per run, 68.4 in A |
 
 **The first baseline's conclusion stands on these numbers.** CI is 84% of
 the bill; after #1435, the one change here that saves a measurable minute,
