@@ -77,6 +77,15 @@ internal sealed class ConversationStore(AssistantLimits limits, TimeProvider tim
         return true;
     }
 
+    /// <summary>Forgets what is idle past the timeout, for a caller that opens and finds nothing to do it.</summary>
+    public void SweepIdle()
+    {
+        lock (gate)
+        {
+            Sweep();
+        }
+    }
+
     private void Sweep()
     {
         DateTimeOffset cutoff = time.GetUtcNow() - limits.IdleTimeout;

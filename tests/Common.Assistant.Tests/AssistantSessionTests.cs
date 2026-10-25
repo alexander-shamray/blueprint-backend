@@ -493,6 +493,33 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public void An_idle_conversation_is_disposed_by_the_timer_though_nothing_opens_or_finds_one()
+    {
+        FakeTimeProvider time = new();
+        AssistantCore core =
+            Core(new ScriptedProvider(), new AssistantLimits { IdleTimeout = TimeSpan.FromMinutes(5) }, time);
+        AssistantSession session = Open(core);
+
+        time.Advance(TimeSpan.FromMinutes(7));
+
+        session.TryStart(Given.Turn("hello")).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_disposed_core_stops_sweeping()
+    {
+        FakeTimeProvider time = new();
+        AssistantCore core =
+            Core(new ScriptedProvider(), new AssistantLimits { IdleTimeout = TimeSpan.FromMinutes(5) }, time);
+        AssistantSession session = Open(core);
+
+        core.Dispose();
+        time.Advance(TimeSpan.FromMinutes(7));
+
+        session.TryStart(Given.Turn("hello")).ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task A_redactor_that_throws_on_a_tool_result_ends_the_turn_with_error_and_frees_it()
     {
         ScriptedTools tools =
