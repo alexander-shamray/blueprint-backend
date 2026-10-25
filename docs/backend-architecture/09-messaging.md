@@ -3402,8 +3402,8 @@ unpriced product is absent rather than zero, the amount is text to be
 wire, and a reply's currency is the amount's own label rather than an echo of
 the question. All three are stated in `pricing.proto` — in comments.
 
-So this hop is the first relationship in the platform carrying a **consumer-driven
-contract**: `Web.Bff` writes down what it needs, its own suite drives every
+So this hop is the first relationship in the platform carrying a
+**consumer-driven contract**: `Web.Bff` writes down what it needs, its own suite drives every
 expectation through the screen that needs it, and the producer's suite
 verifies the
 same list against the real service.
