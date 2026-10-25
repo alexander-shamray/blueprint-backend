@@ -3093,7 +3093,7 @@ waiting on the answer, so it spends no hop of this budget and §2.3's callout
 records the departure, and the BFF's assistant reads whether a product is in
 stock from Inventory inside a turn, which runs off the request that started it
 ([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)).
-The same record has a Notifications worker read a
+ADR-052 also has a Notifications worker read a
 mailbox from Keycloak's admin API on the same terms, which reaches no service
 of the platform at all, and only a verified one
 ([ADR-086](adr/ADR-086-an-unverified-email-is-no-contact.md)). The fan-out

@@ -120,6 +120,7 @@ graph TB
 
     BFF -->|gRPC, pricing| CAT
     BFF -->|gRPC, device registration| NAPI
+    BFF -->|gRPC, stock availability| INV
 
     SHP -->|gRPC, the address read| ORD
     SHP -.->|client credentials| IDP
@@ -1016,7 +1017,9 @@ negative amount, which the BFF's quote does not rely on. The consumer-driven
 contract's two suites are `tests/Web.Bff.Tests` (`UpstreamRetryTests`,
 `ResilienceHierarchyTests`) and Catalog's own, and the stock hop of
 [ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)
-has the same pair with Inventory's.
+has a pair of its own: `tests/Web.Bff.Tests` (`StockContractTests`,
+`CustomerStockToolTests`, `ResilienceHierarchyTests`) and Inventory's
+`StockContractVerificationTests`.
 
 The two push hops are registered for each platform an app names, and
 `PushSendWorker` calls them, one delivery a call; an unregistered answer
