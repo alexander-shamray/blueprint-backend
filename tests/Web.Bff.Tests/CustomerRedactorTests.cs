@@ -43,6 +43,7 @@ public sealed class CustomerRedactorTests
         Task first = await Task.WhenAny(redacting, Task.Delay(TimeSpan.FromSeconds(5), ct));
 
         first.ShouldBe(redacting, "redaction outran its bound");
+        await redacting;
     }
 
     [Fact]
