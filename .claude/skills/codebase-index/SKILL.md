@@ -65,9 +65,12 @@ or routing remain unclear.
    pass `--session <tag>` to every `search` and `explain`.
 2. Run the best-matching command with `--json`.
 3. Check `index` before trusting the payload:
-   - missing → run `bash .claude/skills/codebase-index/scripts/cbx index`, then repeat;
-   - stale with fewer than 20 changed files → run `bash .claude/skills/codebase-index/scripts/cbx update`;
-   - stale with 20 or more changed files → run `bash .claude/skills/codebase-index/scripts/cbx index`;
+   - missing → run `bash .claude/skills/codebase-index/scripts/cbx index`, then
+     repeat;
+   - stale with fewer than 20 changed files → run
+     `bash .claude/skills/codebase-index/scripts/cbx update`;
+   - stale with 20 or more changed files → run
+     `bash .claude/skills/codebase-index/scripts/cbx index`;
    - fresh → continue.
 4. Start with ranks 1–3. Read only `recommended_reads` line ranges.
 5. Trace one additional hop only when the question requires behaviour,
@@ -88,8 +91,8 @@ unrelated body lines; read the supplied range when the missing body matters.
   longer see it, Read the range.
 - `memory.invalidated` — evidence this session received has changed since.
   Treat your earlier copy as wrong and reread before relying on it.
-- `stale: true` — the index is older than the file. Run `bash .claude/skills/codebase-index/scripts/cbx update`
-  or Read the range.
+- `stale: true` — the index is older than the file. Run
+  `bash .claude/skills/codebase-index/scripts/cbx update` or Read the range.
 - A tag belongs to one context. Never give it to a subagent or another
   conversation. Start a new tag after the context is cleared or compacted, or
   whenever earlier snippets are no longer visible to you.
