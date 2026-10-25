@@ -1350,10 +1350,12 @@ dispatch returns a verdict, the parent opens nothing in `$work`, and
 the two residuals #149 named as one class went in one change, and the raw
 `Bash(gh issue create:*)` is denied by name in both sweeps now that the
 fifth entry's measurement exists. `Bash(gh:*)` is denied beside it for the
-aliases, `gh issue new` and `gh api` (#1287). The residual: an env-prefixed
-or shell-wrapped `gh` matches neither rule and nothing in the tree refuses
-it. The default mode prompts for such a call; in a mode that skips prompts,
-only the helper being the sweeps' one granted route stands in the way.
+aliases, `gh issue new` and `gh api` (#1287). The residual: any spelling
+that does not begin with the literal `gh `, such as an env-prefixed,
+wrapped, path-qualified or `gh.exe` call, matches neither rule and nothing
+in the tree refuses it. The default mode prompts for such a call; in a mode
+that skips prompts, only the helper being the sweeps' one granted route
+stands in the way.
 
 **The two sweeps are one shape asking two questions**, split by what makes a
 finding rather than by where they look. `/security-sweep` files what an
