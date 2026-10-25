@@ -83,7 +83,7 @@ class Usage:
 
 def gh(path: str) -> object:
     """One `gh api` call, so the repository's visibility and the token's scopes are gh's concern."""
-    done = subprocess.run(["gh", "api", path], capture_output=True, text=True)
+    done = subprocess.run(["gh", "api", path], capture_output=True, encoding="utf-8")
     if done.returncode != 0:
         raise LookupError(f"{path}: {done.stderr.strip() or done.stdout.strip()}")
     return json.loads(done.stdout)
@@ -114,6 +114,8 @@ def runs_between(fetch: Fetch, repo: str, start: datetime, end: datetime) -> lis
         middle = start + (end - start) / 2
         middle = middle.replace(microsecond=0)
         return runs_between(fetch, repo, start, middle) + runs_between(fetch, repo, middle, end)
+    if total > SEARCH_CAP:
+        raise LookupError(f"{total} runs in {stamp(start)}, more than a query answers: the count would be short")
     return list(paged(fetch, query, "workflow_runs"))
 
 
@@ -235,7 +237,7 @@ def table(usages: list[Usage], plan: str) -> str:
     row("Linux-equivalent minutes", lambda u: f"{u.linux_equivalent:,.0f}")
     row("Linux-equivalent minutes, per 30 days", lambda u: f"{u.monthly(u.linux_equivalent):,.0f}")
     row(f"Share of the {plan} allowance, per 30 days",
-        lambda u: f"{u.monthly(u.linux_equivalent) / ALLOWANCES[plan]:.0%}")
+        lambda u: f"{u.monthly(u.linux_equivalent) / ALLOWANCES[plan]:,.0%}")
     row("List price if private", lambda u: money(u.dollars))
     row("List price if private, per 30 days", lambda u: money(u.monthly(u.dollars)))
     row(f"Over the {plan} allowance, per 30 days",
@@ -283,7 +285,7 @@ def window_of(text: str, index: int) -> Window:
 
 
 def origin_repo() -> str:
-    url = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True,
+    url = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, encoding="utf-8",
                          cwd=Path(__file__).parent).stdout.strip()
     match = re.search(r"([^/:]+/[^/]+?)(?:\.git)?$", url)
     if not match:
