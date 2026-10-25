@@ -39,9 +39,9 @@ asks for the 14 days before the first change merges; these are the 14 days
 before the effort started, so should the first merge land later, the
 command re-measures the 14 days before it and this section is superseded by
 a dated one. No outage or freeze is known inside the window. GHCR could not
-be read: the session's token is refused `users/{owner}`, which the packages
-listing needs, so the end-of-window storage is owed by a run with
-`read:packages`.
+be read: the session's token is refused `users/{owner}`, so the version counts
+were not read, and the tool reads them only for a window ending now, so
+Window A's cannot be recovered; storage is owed by the billing usage report.
 
 | | A |
 |---|---|
@@ -91,11 +91,11 @@ listing needs, so the end-of-window storage is owed by a run with
 |---|---|---|
 | #1435, edit-target-guard's Windows and macOS legs | ≈15,500 (15%): every Windows and macOS minute is that job's, and a macOS minute costs over ten Linux ones | Yes, as the Windows and macOS rows |
 | #1436, `realm.yml` hourly to six-hourly | 163 (0.2%) | Yes, as the Realm row |
-| #1437, no full CI run on `labeled`/`unlabeled` | Not isolable: a run records `pull_request` without its action. CI ran ≈3.2 times per PR and the label events, issues included, were 1,100, so the bound is wide | Only as the change in CI runs per PR between the windows |
+| #1437, no full CI run on `labeled`/`unlabeled` | Not isolable: a run records `pull_request` without its action. CI ran ≈4.2 times per PR opened, push runs included, and the label events, issues included, were 1,100, so the bound is wide | Only as the change in CI runs per PR between the windows |
 | #1438, a self-hosted runner | Whatever share of CI's 87,058 it moves; its own rate is `RATES["self-hosted"]` | Yes, as the self-hosted row |
 
-**CI is 84% of the bill, and the two changes that can be isolated reach
-about a sixth of it.** After #1435 and #1436 the remainder is ≈87,700
+**CI is 84% of the bill, and the two changes this window can measure,
+#1435 and #1436, reach about 15% of it.** After them the remainder is ≈87,800
 Linux-equivalent minutes per 14 days, over ninety times the Free allowance
 a month, so #1439 is decided by CI's Linux minutes — which only #1437 and
 #1438 reach — and not by the OS legs or the schedule. Copilot's runs are
