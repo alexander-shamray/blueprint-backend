@@ -414,13 +414,13 @@ truncated or wrong-shaped document is exactly what a misconfigured fetch
 produces. **An absent `use.refresh.tokens` is a violation, not a silence**,
 because Keycloak's default is to issue refresh tokens on the standard flow: a
 missing attribute means ADR-034 is violated, and reading it as unspecified
-would make the one setting that record rests on optional. **`standardFlowEnabled`
-is asserted beside it**, because a client that mints no token issues no refresh
-token either and would satisfy the check for the wrong reason. **A non-`https`
-admin URL stops the run**, because the bearer token that fetch carries can read
-every client secret in the realm. **A missing environment variable names every
-missing one**, not the first, so an operator wiring this up learns what it
-needs in one run.
+would make the one setting that record rests on optional.
+**`standardFlowEnabled` is asserted beside it**, because a client that mints no
+token issues no refresh token either and would satisfy the check for the wrong
+reason. **A non-`https` admin URL stops the run**, because the bearer token that
+fetch carries can read every client secret in the realm. **A missing environment
+variable names every missing one**, not the first, so an operator wiring this up
+learns what it needs in one run.
 
 **`ClockSkew` is excluded and the exclusion is written down.** It is the other
 half of ADR-033's 330 and it is not a realm setting at all — it is
@@ -780,11 +780,12 @@ constant without saying which would read as the reverse.
   a smaller predicate over the same moving quantity, and each review found the
   movement it did not cover. The shape that ended it was giving up on
   describing the row and identifying it — which is what the atomic statement
-  had been doing implicitly all along. **A `rowversion` says the same thing and is owed rather than
-  declined** — #173. It costs a column, a migration per service, a scaffold
-  change and an Appendix D row; what it buys is the uniqueness the pair has by
-  construction and not by constraint. The first draft of this entry called it
-  declined, which was the reading before the residual was named.
+  had been doing implicitly all along. **A `rowversion` says the same thing and
+  is owed rather than declined** — #173. It costs a column, a migration per
+  service, a scaffold change and an Appendix D row; what it buys is the
+  uniqueness the pair has by construction and not by constraint. The first draft
+  of this entry called it declined, which was the reading before the residual
+  was named.
 - **Two review rounds were needed to reach that**, and neither the defect nor
   the wrong fix could have been caught by the suite: the interleaving needs
   three purgers, a retry and a clock step, and nothing here stages one. What
@@ -1283,9 +1284,9 @@ of the two does which job.
 run, and the only one whose reasoning was the branch's own rather than
 inherited.** The API name came from an issue and so did the signal; this came
 from a sentence written while deleting the code that contradicted it. Six runs
-cost twelve minutes. Ignoring MassTransit's tables in the reset was the third option
-and stays refused — it leaves rows standing between tests and makes the next
-whole-table assertion over them wrong for a reason nobody would find.
+cost twelve minutes. Ignoring MassTransit's tables in the reset was the third
+option and stays refused — it leaves rows standing between tests and makes the
+next whole-table assertion over them wrong for a reason nobody would find.
 
 **The registration this most wanted to assert was said not to be public, and
 that was a failed `using` directive written up as a property of the library.**
@@ -2346,14 +2347,14 @@ substrings.
 So the gate gained its allow-list half: every member the judged commands may
 carry is enumerated, and a name absent from that list fails the build. **It
 decides nothing** — it cannot tell whether `OwnerId` is a subject — and that
-is the honest claim: it converts a member added silently into a member added over
-a red build, which is the scaffold's rule that a tool refusing input it has
+is the honest claim: it converts a member added silently into a member added
+over a red build, which is the scaffold's rule that a tool refusing input it has
 never been shown beats one that guesses. A second test refuses a **stale**
 entry, because an approved name no command carries is a seat reserved for
 whatever arrives under it next — the deny-list hole reintroduced inside the
-allow-list that replaced one. Both observed red: `OwnerId` on
-`AuthorisePayment` fails only the new test, and a `LegacyPayerId` entry nothing
-carries fails only the pairing.
+allow-list that replaced one. Both observed red: `OwnerId` on `AuthorisePayment`
+fails only the new test, and a `LegacyPayerId` entry nothing carries fails only
+the pairing.
 
 **The first version of that allow-list approved a *name*, and an approval that
 is not scoped is an approval that leaks.** `PaymentReference` is approved for
@@ -2405,13 +2406,13 @@ type is dispatched as a command is not a fact the type system holds: §9.1
 defines a command by what it does *not* implement, and a positive `ICommand`
 marker — the obvious fix — only moves the forgetting to the marker, since a
 new command that omits it is lost exactly as before. What *is* decidable is
-whether a person has classified the type at all. So every non-event contract must
-appear in the declared roots or in a declared payload list, and one in neither
-fails the build. It does not say what the new type is; it refuses to let it
-arrive unlooked-at, which is the scaffold's rule an assembly over and the same
-move the member allow-list makes one level down. A stale entry is refused in
-the same test, for the reason every list here refuses one: a classification for
-a type that has gone is a seat reserved for whatever takes the name next.
+whether a person has classified the type at all. So every non-event contract
+must appear in the declared roots or in a declared payload list, and one in
+neither fails the build. It does not say what the new type is; it refuses to let
+it arrive unlooked-at, which is the scaffold's rule an assembly over and the
+same move the member allow-list makes one level down. A stale entry is refused
+in the same test, for the reason every list here refuses one: a classification
+for a type that has gone is a seat reserved for whatever takes the name next.
 
 **Four rounds in a row found a fail-open in the previous round's fix**, each a
 level up from the last: the spelling cases, the member names, the roots, the
@@ -3506,11 +3507,12 @@ free parameter.
 **Six judgements the whole loop rests on had no test, five of which had already
 shipped wrong.** `test_grok_helpers.py` grew across the review
 rounds — every round but one added cases, and the count is deliberately not
-restated here for the reason this file gives about counts, and each of those five defects is reproduced as one that fails against
-the old behaviour: a gate only ever observed green is one nobody has established
-is looking at anything. The sixth — that the label helper leaves no free
-parameter a finding could steer — never shipped wrong; it is a grant closed by
-moving it into a helper, and the suite is what keeps it closed.
+restated here for the reason this file gives about counts, and each of those
+five defects is reproduced as one that fails against the old behaviour: a gate
+only ever observed green is one nobody has established is looking at anything.
+The sixth — that the label helper leaves no free parameter a finding could steer
+— never shipped wrong; it is a grant closed by moving it into a helper, and the
+suite is what keeps it closed.
 
 **A figure and a list, in a file that already argues against restating either.**
 Both went stale during this branch's own review loop and were corrected from
@@ -4738,9 +4740,9 @@ after.
   wait and then see the row rather than violate the primary key. This is PR-20's
   `MERGE`/`HOLDLOCK` finding one table over, and the third time this repository
   has fixed a duplicate guard that had the defect it was written to prevent.
-  The same block also stopped writing `SYSDATETIMEOFFSET()`: `RetentionPurgeService`
-  already computes its cutoff from `TimeProvider`, and a row on the server's
-  wall clock is one no substituted clock can reason about.
+  The same block also stopped writing `SYSDATETIMEOFFSET()`:
+  `RetentionPurgeService` already computes its cutoff from `TimeProvider`, and a
+  row on the server's wall clock is one no substituted clock can reason about.
 - **`ShippingAddressV1` silently dropped an address line.** The record carried
   `Line1`, `City`, `PostCode` and `Country`, the domain's `Address` carries
   `Line2`, and nothing noticed because nothing had ever populated the contract —
@@ -5134,8 +5136,9 @@ the `web-bff` route's service — and ten of its decisions bind what comes after
   same configuration key from a higher provider is the only thing that can move
   a port this file has claimed.
 - **§9.7's fluent chain does not compile, and only compiling it says so.**
-  `AddStandardResilienceHandler` returns an `IHttpStandardResiliencePipelineBuilder`
-  — a different type, scoped to the pipeline it just registered — so the printed
+  `AddStandardResilienceHandler` returns an
+  `IHttpStandardResiliencePipelineBuilder` — a different type, scoped to the
+  pipeline it just registered — so the printed
   `.AddStandardResilienceHandler(…).AddHttpMessageHandler<T>()` is CS1929. The
   fix holds the `IHttpClientBuilder` in a local and calls both on it, which
   keeps the **order**, which is the part that carries meaning. This is PR-17's
@@ -5147,12 +5150,13 @@ the `web-bff` route's service — and ten of its decisions bind what comes after
   raises. The three `Grpc.*` rows had been unrestorable since they were written.
 - **An HTTP resilience pipeline cannot retry a gRPC status, and the
   configuration §9.7 prints does not say so.** gRPC carries its outcome in
-  `grpc-status` — a trailer on an HTTP **200** — so `AddStandardResilienceHandler`
-  sees a successful response and hands it straight back. A Catalog answering
-  `Unavailable` is asked **once**, whatever `MaxRetryAttempts` says. What the
-  retries do cover is a transport fault, which is the shape a service that is
-  genuinely down produces. Both halves are measured in `UpstreamRetryTests`;
-  the test that found it was written expecting three calls and got one.
+  `grpc-status` — a trailer on an HTTP **200** — so
+  `AddStandardResilienceHandler` sees a successful response and hands it
+  straight back. A Catalog answering `Unavailable` is asked **once**, whatever
+  `MaxRetryAttempts` says. What the retries do cover is a transport fault, which
+  is the shape a service that is genuinely down produces. Both halves are
+  measured in `UpstreamRetryTests`; the test that found it was written expecting
+  three calls and got one.
 
   **The fix is deliberately not a second retry loop.** gRPC's own retry lives
   on the channel and does understand status codes — and sits *outside* the
@@ -5740,20 +5744,22 @@ decisions bind what comes after:
   endpoint binds which contract, and that stays in each service's
   `AddMassTransitMessaging`.
 - **The filter's `DbContext` is an alias, and the delegate in it is
-  load-bearing.** `AddScoped<DbContext>(sp => sp.GetRequiredService<CatalogDbContext>())`
-  is the registration; `AddScoped<DbContext, CatalogDbContext>()` compiles,
-  resolves, and builds a **second** context in the same scope — so the inbox
-  row commits in its own transaction and §9.5's atomic row silently becomes its
-  non-atomic one. Nothing fails, which is why a test asserts the two
-  resolutions are one instance.
+  load-bearing.**
+  `AddScoped<DbContext>(sp => sp.GetRequiredService<CatalogDbContext>())` is the
+  registration; `AddScoped<DbContext, CatalogDbContext>()` compiles, resolves,
+  and builds a **second** context in the same scope — so the inbox row commits
+  in its own transaction and §9.5's atomic row silently becomes its non-atomic
+  one. Nothing fails, which is why a test asserts the two resolutions are one
+  instance.
 - **Catalog binds no receive endpoint, and that is asserted rather than
   assumed.** §3.2 gives it one Consumes cell — `StockLevelChanged`, Inventory's
   — and no `IIntegrationEventHandler` for it exists until §8.4's cache
   invalidator has a cached query to invalidate. Binding a type with no handler
   is one of the two sites §9.4 says must throw, so the endpoint would fault
   every message it received. This is PR-14's `Local`-lane shape exactly: the
-  consumers are proven by the in-memory harness in `Common.Infrastructure.Tests`,
-  and the inbox and purge by container tests over the real host.
+  consumers are proven by the in-memory harness in
+  `Common.Infrastructure.Tests`, and the inbox and purge by container tests over
+  the real host.
 - **The inbox table ships to every service anyway, for `AddOutbox`'s reason
   inverted.** The purge runs from first boot and deletes from both tables, so a
   service carrying it without the table logs a failed delete every pass —
@@ -6068,14 +6074,14 @@ comes after:
 
 PR-09 landed §6.3's `TransactionBehavior` and did **not** draw the
 `Common.Application → Common.Domain` edge — the behaviour reads
-`ModifiedAggregateCount` as an `int` and calls `DispatchAsync(CancellationToken)`,
-so neither signature names a domain type. PR-14 drew it, with §7.5's
-`IDomainEventCollector`, exactly as predicted — and the argument survives the
-edge: `TransactionBehavior` still reads an `int`, because counting behind the
-port is what keeps EF's change tracker on Infrastructure's side of §4.2. A
-reference existing is not permission to start using it. PR-09 brought
-`IDomainEventDispatcher` forward as an interface only, over Catalog's
-`NullDomainEventDispatcher`, which PR-14 deleted.
+`ModifiedAggregateCount` as an `int` and calls
+`DispatchAsync(CancellationToken)`, so neither signature names a domain type.
+PR-14 drew it, with §7.5's `IDomainEventCollector`, exactly as predicted — and
+the argument survives the edge: `TransactionBehavior` still reads an `int`,
+because counting behind the port is what keeps EF's change tracker on
+Infrastructure's side of §4.2. A reference existing is not permission to start
+using it. PR-09 brought `IDomainEventDispatcher` forward as an interface only,
+over Catalog's `NullDomainEventDispatcher`, which PR-14 deleted.
 
 PR-09 also shipped PR #15's retry fix — `db.ChangeTracker.Clear()` at the top
 of every `EfUnitOfWork.ExecuteAsync` attempt, so a transient fault cannot
@@ -6257,15 +6263,15 @@ access the file*.
 second failed EVERY test in under 100 ms while passing alone, and it was not
 always the same suite — a fixture fault wearing a suite-wide failure. The tell
 is arithmetic rather than a message: a failure count equal to the suite's size,
-at a duration too short to have run anything. **One image name per fixture was the first fix, and it was the wrong axis.**
-It was measured green locally and failed on CI, because the unit is the
-PROCESS: `Catalog.Api.Tests` and `Catalog.Application.Tests` both instantiate
-that one fixture class and `dotnet test` runs them as separate hosts, so they
-raced each other under the new name exactly as they had under the old one — 60
-failures in 128 ms and 11 in 51 ms, with `Cannot locate specified Dockerfile`
-where Windows had said the file was in use. A per-class name is per-process
-only while the class has one caller, which is a premise about callers rather
-than a property of anything.
+at a duration too short to have run anything. **One image name per fixture was
+the first fix, and it was the wrong axis.** It was measured green locally and
+failed on CI, because the unit is the PROCESS: `Catalog.Api.Tests` and
+`Catalog.Application.Tests` both instantiate that one fixture class and
+`dotnet test` runs them as separate hosts, so they raced each other under the
+new name exactly as they had under the old one — 60 failures in 128 ms and 11 in
+51 ms, with `Cannot locate specified Dockerfile` where Windows had said the file
+was in use. A per-class name is per-process only while the class has one caller,
+which is a premise about callers rather than a property of anything.
 
 **What ended it was declining to build.** Catalog needs the broker's
 *configuration* — the accounts of #44 — and not ADR-021's delayed-exchange

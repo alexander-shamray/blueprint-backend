@@ -539,10 +539,11 @@ checks no signature, so `Fcm__PrivateKey` and `Apns__PrivateKey` are absent
 from the unit rather than defaulted, and the tests sign with keys they
 generate.
 
-Note how the connection strings nest — `${CATALOG_CONNECTION:-…Password=${SQL_PASSWORD:-…}…}`
-— so overriding the password alone keeps every connection string correct. That
-is why `.env.example` leaves the per-service connection variables commented out:
-uncommenting one freezes the password inside it and it quietly stops following.
+Note how the connection strings nest —
+`${CATALOG_CONNECTION:-…Password=${SQL_PASSWORD:-…}…}` — so overriding the
+password alone keeps every connection string correct. That is why `.env.example`
+leaves the per-service connection variables commented out: uncommenting one
+freezes the password inside it and it quietly stops following.
 
 ## What must never be committed
 
