@@ -28,7 +28,10 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
             ["privacy"] = "/v1/privacy/erasure-requests",
 
             // A second namespace (§10.2), stripped whole; only the BFF's versioned API is routed.
-            ["web-bff"] = "/v1"
+            ["web-bff"] = "/v1",
+
+            // The same host's assistant group, on its own release (ADR-153).
+            ["web-bff-assistant"] = "/v1/assistant"
         };
 
     /// <summary><see cref="IProxyStateLookup"/> is YARP's answer, so a dropped route shows as a missing id.</summary>

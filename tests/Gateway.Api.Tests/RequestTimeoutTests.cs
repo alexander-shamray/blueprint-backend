@@ -10,6 +10,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
+using Yarp.ReverseProxy;
+using Yarp.ReverseProxy.Model;
 
 namespace Gateway.Api.Tests;
 
@@ -33,6 +35,35 @@ public sealed class RequestTimeoutTests(StubDestination stub) : IClassFixture<St
         // §15.3: a request in flight at SIGTERM has to finish inside the drain.
         deadline.ShouldBeLessThan(
             factory.Services.GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout);
+    }
+
+    /// <summary>
+    /// The edge's deadline is every route's, so a stream a service ends inside its own deadline (§9.7), the BFF's
+    /// order and assistant streams among them, is cut first by nothing between (ADR-108, ADR-153).
+    /// </summary>
+    [Fact]
+    public void No_route_or_cluster_cuts_a_request_before_the_edge_deadline()
+    {
+        using GatewayFactory factory = new();
+        IProxyStateLookup lookup = factory.Services.GetRequiredService<IProxyStateLookup>();
+
+        RouteModel[] routes = [.. lookup.GetRoutes()];
+        routes.ShouldNotBeEmpty();
+
+        foreach (RouteModel route in routes)
+        {
+            route.Config.Timeout.ShouldBeNull(route.Config.RouteId);
+            route.Config.TimeoutPolicy.ShouldBeNull(route.Config.RouteId);
+        }
+
+        // Unset is YARP's default activity timeout, 100 seconds, which the edge's deadline sits well inside.
+        foreach (ClusterState cluster in lookup.GetClusters())
+        {
+            TimeSpan? activity = cluster.Model.Config.HttpRequest?.ActivityTimeout;
+
+            if (activity is not null)
+                activity.Value.ShouldBeGreaterThanOrEqualTo(GatewayLimits.RequestTimeout, cluster.ClusterId);
+        }
     }
 
     [Fact]

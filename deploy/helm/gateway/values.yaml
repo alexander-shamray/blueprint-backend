@@ -173,6 +173,7 @@ networkPolicy:
     - { workload: payments-api, port: http }
     - { workload: privacy-api, port: http }
     - { workload: web-bff, port: http }
+    - { workload: web-bff-assistant, port: http }
   dns:
     to:
       - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }

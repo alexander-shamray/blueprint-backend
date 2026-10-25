@@ -1047,7 +1047,7 @@ intake. All three read `StagedTrace` and map `StagedTraceColumns` in
 
 The route file is the `ReverseProxy` section of
 `src/Gateway/Gateway.Api/appsettings.json`, and it is the owner of the list;
-this section says only what the chapter's rules were drawn from. Its eight
+this section says only what the chapter's rules were drawn from. Its nine
 routes, by cluster and policy:
 
 | Route | Cluster | Policy | Matches |
@@ -1060,6 +1060,7 @@ routes, by cluster and policy:
 | `payments-admin` | `payments` | `payments:admin` | `/api/v1/payments/{**catch-all}` |
 | `privacy-erase` | `privacy` | `privacy:erase` | `/api/v1/privacy/{**catch-all}` |
 | `web-bff` | `web-bff` | `authenticated` | `/bff/v1/{**catch-all}` |
+| `web-bff-assistant` | `web-bff-assistant` | `authenticated` | `/bff/v1/assistant/{**catch-all}` |
 
 **Catalog's one-product read is served by the public catch-all**, under
 `anonymous`, so a product's deep link needs no route of its own. The one Catalog

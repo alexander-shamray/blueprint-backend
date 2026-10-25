@@ -328,6 +328,9 @@ without them; the unit's values are local ones, and production mounts a
 secret. The unit is named `web-bff`, matching the Aspire resource (§14.2) and
 the YARP destination ([§10.2](10-api-gateway.md)): the gateway resolves the
 destination by hostname, so the container name is the routing configuration.
+It answers to `web-bff-assistant` too, as a network alias: Compose runs one
+BFF, so the assistant's own destination is the same container
+([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
 
 Each application unit lands with the change that builds its image: the
 scaffold of [§4.5](04-solution-structure.md) writes the service's own unit file

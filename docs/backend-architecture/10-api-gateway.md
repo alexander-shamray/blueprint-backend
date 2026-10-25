@@ -111,7 +111,7 @@ set of products
 ## 10.2 YARP configuration
 
 The route file is the `ReverseProxy` section of
-`src/Gateway/Gateway.Api/appsettings.json`. Four of its eight routes carry the
+`src/Gateway/Gateway.Api/appsettings.json`. Four of its nine routes carry the
 rules below; `catalog-write` and `catalog-own` are described after them, and
 `payments-admin` and `privacy-erase` have `inventory-admin`'s shape:
 
@@ -228,6 +228,16 @@ listens on, and a catch-all over `/bff` would publish them to every signed-in
 caller, its readiness and startup probes each a database check.
 `ProxiedRouteTests` holds the three health paths, and an unversioned one, to a
 404 that never reaches the BFF.
+
+**The assistant's paths are the one BFF route of their own.**
+`web-bff-assistant` matches `/bff/v1/assistant/{**catch-all}` on the `web-bff`
+route's policies and strip, and sends it to the single-replica release that
+holds the assistant's conversations in memory
+([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
+A literal segment outranks the catch-all, so it needs no `Order`, and
+`AssistantRouteTests` puts each release behind a stub of its own to show which
+one a path reaches. Compose runs one BFF, so there the destination is a second
+name for that container ([§14.1](14-local-development.md)).
 
 **This file ships whole, ahead of the services it routes to** — which is the
 opposite of the rule [§14.1](14-local-development.md)'s Compose file follows —
@@ -1142,8 +1152,8 @@ matches the BFF's whole `/bff/v1` API, and the service's own path repeats its
 `/v1` prefix deliberately: §10.2 strips a different prefix to reach each, and
 `/api` and `/bff` are the two namespaces that distinction exists to keep apart.
 A feature added to the BFF is a service route, its contract and its test.
-The one exception is the assistant's `/bff/v1/assistant` paths, which a second
-release is to serve once #1451 lands ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
+The one exception is the assistant's `/bff/v1/assistant` paths, which §10.2's
+`web-bff-assistant` route sends to a release of their own ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
 
 **The subject is bound from the principal and never from the request** —
 §11.4's rule, which §6.5 states for a read in the words that matter here: a
@@ -1193,7 +1203,9 @@ row's `asOf` differs from the last one sent, and an event's `id` is that
 moves. A heartbeat comment serves the proxies that close a connection they see
 idle, and a `retry` field has the server and not each client's default pace a
 reconnect. The stream ends by itself, after a lifetime inside
-`ServiceOptions.OperationTimeout` (§9.7) and so inside every layer above it, at
+`ServiceOptions.OperationTimeout` (§9.7) and so inside every layer above it,
+which no gateway route or cluster sets shorter than the edge's own deadline
+(`RequestTimeoutTests`), at
 once on a terminal status and when the row is gone. A client that wants more
 reconnects, and one that missed an event reads the read. Each open stream reads
 its one row by key every poll interval and holds nothing between reads, so any
