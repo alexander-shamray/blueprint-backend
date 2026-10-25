@@ -84,10 +84,7 @@ public static class AssistantEndpoints
                     }
                     catch (ToolRefusedException refused)
                     {
-                        return TypedResults.Problem(
-                            statusCode: StatusCodes.Status400BadRequest,
-                            title: "A client tool was refused",
-                            detail: refused.Message);
+                        return NotValid("clientTools", refused.Message);
                     }
                 })
             .RequireRateLimiting(StartPolicy);

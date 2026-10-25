@@ -104,6 +104,42 @@ public sealed class AssistantEndpointTests
     }
 
     [Fact]
+    public async Task A_client_tool_the_read_only_policy_refuses_is_a_400_keyed_by_client_tools()
+    {
+        await using AssistantFactory factory = new();
+        using HttpClient client = As(factory, _customer);
+        var destructive = new
+        {
+            name = "empty_basket",
+            title = "Empty the basket",
+            description = "Removes every line.",
+            inputSchema = new { type = "object" },
+            annotations = new
+            {
+                readOnlyHint = false,
+                destructiveHint = true,
+                idempotentHint = true,
+                openWorldHint = false
+            }
+        };
+
+        HttpResponseMessage open = await client.PostAsJsonAsync(
+            "/v1/assistant/conversations",
+            new
+            {
+                client = new { name = "web", version = "1.0.0" },
+                locale = "en-GB",
+                catalogue = Array.Empty<object>(),
+                clientTools = new[] { destructive }
+            },
+            Ct);
+
+        open.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await open.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors")
+            .TryGetProperty("clientTools", out _).ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task On_a_customer_opens_a_conversation_and_reads_the_reply()
     {
         await using AssistantFactory factory = new();
