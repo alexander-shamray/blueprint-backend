@@ -5,9 +5,8 @@ namespace Web.Bff.Assistant;
 
 /// <summary>ADR-151's data policy over the caller's text and each tool result, before the provider sees it.</summary>
 /// <remarks>
-/// An email address, an international phone number and a payment card number are replaced by a marker. A card is 13
-/// to 19 digits that pass the Luhn check, alone or as whole groups of a longer run, so an order's ids are left alone
-/// (ADR-151).
+/// Email addresses, international phone numbers and card numbers become markers. A card is 13 to 19 digits that
+/// pass the Luhn check, alone or as whole groups of a longer run, so an order's ids are left alone (ADR-151).
 /// </remarks>
 public sealed partial class CustomerRedactor : IRedactor
 {
