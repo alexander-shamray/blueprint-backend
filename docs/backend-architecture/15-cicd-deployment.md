@@ -88,17 +88,20 @@ names it):
     # quantifier ('some') never evaluates the exclusion below.
     predicate-quantifier: 'some-with-excludes'
     filters: |
-      # Inputs shared by every service, including the three repo-root files.
-      shared: &shared
+      # Inputs every deployable compiles, including the three repo-root files.
+      inputs: &inputs
         - 'Directory.Build.props'
         - 'Directory.Packages.props'
         - 'global.json'
         - '.dockerignore'
         - '.editorconfig'
         - 'src/BuildingBlocks/**'
+        - 'tests/Platform.*/**'
+      # What every service shares: the inputs less the assistant's two blocks.
+      shared: &shared
+        - *inputs
         - '!src/BuildingBlocks/Common.Assistant/**'
         - '!src/BuildingBlocks/Common.Assistant.Anthropic/**'
-        - 'tests/Platform.*/**'
       <service>:
         - *shared
         - 'src/Services/<Service>/**'
@@ -114,7 +117,7 @@ names it):
         - *shared
         - 'src/Gateway/**'
       bff:
-        - *shared
+        - *inputs
         - 'src/BFF/**'
         - 'src/Services/<Service>/<Service>.Api/Protos/**'
       # A chart or values change produces no new image and must still
@@ -160,13 +163,18 @@ filter otherwise reads as "this service's own tree".
 **A filter list is a deployable inventory, and it drifts the way inventories
 do.** Every path under `src/` must be matched by **some** filter — the
 deployables (`Gateway`, `BFF`, and each directory under `Services/`) by their
-own, and `BuildingBlocks` by `shared`, which is the anchor every service
-inherits rather than a filter of its own. Two filters are not deployables:
+own, and `BuildingBlocks` by `inputs`, which `shared`, the anchor every
+service inherits, takes whole but for two blocks. Two filters are not
+deployables:
 `assistant` and `anthropic` match the AI assistant's two building blocks for
 the `packages` job alone, which pushes their NuGet packages
 ([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md)),
-and `shared` excludes those blocks, which no image holds yet
-([ADR-150](adr/ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md)).
+and `shared` excludes those blocks
+([ADR-150](adr/ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md)),
+which only the BFF's image holds, so `bff` takes `inputs` instead: a negation
+wins under `some-with-excludes`, so no filter can name back what an anchor it
+takes excludes
+([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
 Everything under `deploy/` except
 `deploy/compose/**` is matched by `deploy` — `deploy/helm/**` included, whose
 own workflow renders the charts but deploys nothing. Charts are deliberately
@@ -429,8 +437,7 @@ bullets above give.
 `BuildingBlocks` appears under every service, so a change there rebuilds
 everything. That is correct, and it is also the reason to keep those projects
 small. The one exception is a change inside the AI assistant's two blocks,
-which `shared` excludes while no image holds them (ADR-150, above), and which
-rebuilds nothing.
+which rebuilds the BFF alone, the one image that holds them (ADR-151, above).
 
 **The filter answers a narrower question than the pipeline asks.** "Which
 service's source changed" is not "what must be rebuilt, retested and
@@ -1612,7 +1619,8 @@ the chart supplies through `OTEL_RESOURCE_ATTRIBUTES` (§15.4).
 `service.version` is the obvious discriminator and is not one:
 [§13.2](13-observability.md)'s `BuildInfo` strips the source-revision suffix on
 purpose, and no host sets an assembly version — ADR-149's two packages set one,
-and no host holds them — so every build in the platform reports `1.0.0`.
+and `BuildInfo` reads the entry assembly, so the BFF that holds them still
+reports its own — so every build in the platform reports `1.0.0`.
 Without a discriminator the analysis compares a
 release against itself, which passes every time — including on a canary that is
 on fire.

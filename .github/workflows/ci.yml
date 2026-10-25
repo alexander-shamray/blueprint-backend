@@ -521,8 +521,8 @@ jobs:
           # quantifier ('some') never evaluates the exclusion below.
           predicate-quantifier: 'some-with-excludes'
           filters: |
-            # Inputs shared by every service, including the three repo-root files.
-            shared: &shared
+            # Inputs every deployable compiles, including the three repo-root files.
+            inputs: &inputs
               - 'Directory.Build.props'
               - 'Directory.Packages.props'
               - 'global.json'
@@ -539,15 +539,18 @@ jobs:
               # with, and the solution build cannot see the Docker context.
               - '.editorconfig'
               - 'src/BuildingBlocks/**'
-              # The assistant's two blocks are in no image until a host
-              # references them, so they rebuild none; the packages job reads
-              # its own filters below (ADR-150).
-              - '!src/BuildingBlocks/Common.Assistant/**'
-              - '!src/BuildingBlocks/Common.Assistant.Anthropic/**'
               # The contract suite (§12.6) guards compatibility between
               # services, so it belongs to all of them. Owned by none, it
               # would run for none.
               - 'tests/Platform.*/**'
+            # What every service shares: the inputs less the assistant's two
+            # blocks, which only the BFF's image holds. A negation wins under
+            # some-with-excludes, so the BFF takes the inputs instead; the
+            # packages job reads its own filters below (ADR-150, ADR-151).
+            shared: &shared
+              - *inputs
+              - '!src/BuildingBlocks/Common.Assistant/**'
+              - '!src/BuildingBlocks/Common.Assistant.Anthropic/**'
             catalog:
               - *shared
               - 'src/Services/Catalog/**'
@@ -596,7 +599,7 @@ jobs:
             # whether a deployable is reachable rather than whether a filter is
             # complete.
             bff:
-              - *shared
+              - *inputs
               - 'src/BFF/**'
               - 'src/Services/Catalog/Catalog.Api/Protos/**'
               - 'src/Services/Notifications/Notifications.Api/Protos/**'
