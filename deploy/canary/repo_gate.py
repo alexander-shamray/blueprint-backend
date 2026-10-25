@@ -581,7 +581,18 @@ def _shared_values_reads(name: str, workloads: dict) -> list[str]:
 # `image:`, so the descriptor and the chart cannot each say something different about one release.
 STRATEGY = re.compile(r"(?m)^strategy:[ \t]*(\S+)[ \t]*(?:#.*)?$")
 
-TELEMETRY_NAME = re.compile(r"(?m)^observability:[ \t]*\r?\n(?:[ \t]+.*\r?\n|[ \t]*\r?\n)*?[ \t]+telemetryName:[ \t]*(\S+)")
+TELEMETRY_NAME = re.compile(r"[ \t]+telemetryName:[ \t]*(\S+)")
+
+
+def _chart_telemetry_name(values: str) -> str | None:
+    """`observability.telemetryName` in a values file, read a line at a time: a block ends at its next top-level key."""
+    inside = False
+    for line in values.splitlines():
+        if line[:1] not in ("", " ", "\t", "#"):
+            inside = line.rstrip() == "observability:"
+        elif inside and (found := TELEMETRY_NAME.match(line)):
+            return found.group(1)
+    return None
 
 
 def _chart_values(chart: object, root: Path) -> str | None:
@@ -630,8 +641,7 @@ def _telemetry_reads(name: str, entry: dict, root: Path) -> list[str]:
     values = _chart_values(entry.get("chart"), root)
     if values is None:
         return failures
-    set_by_chart = TELEMETRY_NAME.search(values)
-    chart_name = set_by_chart.group(1) if set_by_chart else None
+    chart_name = _chart_telemetry_name(values)
     if chart_name != declared:
         failures.append(
             f"workloads.{name}.telemetryName is {declared!r} and its chart's observability.telemetryName is "
