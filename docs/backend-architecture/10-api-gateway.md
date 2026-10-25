@@ -701,7 +701,10 @@ Synchronously there is nothing to carry it, and the synchronous calls with an
 inbound request behind them are the BFF's hops, one per request, to the
 services it calls
 ([§9.7](09-messaging.md), [ADR-017](adr/ADR-017-one-synchronous-hop.md),
-[Appendix E.6.1](appendix-e-reference-domain.md#e61-the-gateway-routes)).
+[Appendix E.6.1](appendix-e-reference-domain.md#e61-the-gateway-routes)), and
+the AI assistant's status probe to its model provider, which is cached and
+shared across requests and so carries no one request's ID
+([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
 Without a header on it the callee mints an ID from its own trace, and one
 incident has two of them.
 
@@ -834,7 +837,7 @@ no host can take the one without the others.
 | A route an operator has switched off | 503 | The gateway only (§10.2), `code` `service.suspended`, with `Retry-After`; nothing is forwarded. Not the row above: that one is a fault and this is a decision ([ADR-116](adr/ADR-116-a-gateway-route-to-a-service-an-operator-may-stop-is-switched-off-in-its-configuration-and-answers-503-at-the-edge-955.md)) |
 | A lock the request needed was not taken, because it stayed held or the wait ended as a deadlock victim | 503 | An exception thrown by the repository method that takes the lock, with `Retry-After` and a `code`. Contention inside this service, so not the row above, and 503 because the lock is taken before any work, so nothing took effect. A consumer meets the same exception and its retry stands. In the reference domain two services take such a lock, and [Appendix E.6.2](appendix-e-reference-domain.md#e62-error-catalogue-and-refusals) names each one's exception, method and `code` |
 | The request outlived its host's deadline | **504** | From the request-timeout middleware every host registers ([§9.7](09-messaging.md), [ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)), `code` `request.timed_out`. Not 503, which says nothing was done: the deadline can fall after a commit, so whether the request took effect is unknown, and a write is retried under its own command identifier rather than a new one |
-| Rate limited | 429 | With `Retry-After` |
+| Rate limited | 429 | With `Retry-After`, but for the BFF's AI assistant, whose 429s carry none ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)) |
 | Unhandled | 500 | **Never** include the exception message or stack trace |
 
 ### `Error`, and why its code is a closed vocabulary

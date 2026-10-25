@@ -3217,7 +3217,14 @@ other kind call third parties — Payments' `ProviderHop`, behind the
 anti-corruption layer that, in the reference domain, [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map) gives Payments, Shipping's `CarrierHop`, to the
 carrier, and Notifications' `MailHop`, to its relay, and `FcmHop` and
 `ApnsHop`, to the two push providers — and each is registered by the service
-that makes the call. A call under the caller's own token is a
+that makes the call. The BFF's call to the AI assistant's model provider is
+none of these rules' subject: no request waits on a turn's call, which runs off
+the request that started it, and the status route waits only on the adapter's
+model probe, cached and bounded by its own timeout inside
+`ServiceOptions.OperationTimeout`. It is the provider SDK's own client, with
+that SDK's timeout and retries
+([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
+A call under the caller's own token is a
 third kind, and §4.2's helper registers none of it either: in the reference
 domain the BFF's hop to Notifications forwards the buyer's access token
 unchanged and holds no grant for it

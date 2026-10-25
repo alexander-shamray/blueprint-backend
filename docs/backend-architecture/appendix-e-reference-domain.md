@@ -982,6 +982,7 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 | Mail relay | Notifications' worker | the relay | `Notifications.Infrastructure/Mail/MailHop.cs` |
 | FCM | Notifications' worker | FCM, and Google's token endpoint | `Notifications.Infrastructure/Push/FcmHop.cs` |
 | APNs | Notifications' worker | APNs | `Notifications.Infrastructure/Push/ApnsHop.cs` |
+| Model provider | `Web.Bff`'s assistant turn, and its status route's cached probe; off by default | the AI assistant's provider | `src/BFF/Web.Bff/Assistant/AnthropicProviderFactory.cs`, the SDK's own client ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)) |
 
 Catalog owns `pricing.proto` in `Catalog.Api/Protos`, and `Web.Bff` links it;
 Notifications owns `devices.proto` and `preferences.proto` in

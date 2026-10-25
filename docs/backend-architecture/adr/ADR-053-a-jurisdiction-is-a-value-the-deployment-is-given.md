@@ -173,6 +173,13 @@ still a new ADR before it is a pull request. The consent record among the
 four things an adopter must bring is the lawful basis for holding the data,
 which that record does not supply.
 
+**Amended by
+[ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)**,
+the Web BFF's AI assistant. Rule 3's chart value is owed for its model
+provider, which `Assistant:Provider` names and the SDK's own address reaches,
+for as long as no deployment turns the assistant on; #1451 gives the chart the
+value before one does.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
