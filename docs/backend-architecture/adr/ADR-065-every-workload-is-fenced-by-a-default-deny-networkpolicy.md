@@ -99,6 +99,11 @@ which adds a workload to the table: the single-replica `web-bff-assistant`
 release admits the gateway and reaches `catalog-api` on `grpc`, its stores and
 the assistant's provider, and `catalog-api` admits it.
 
+**Amended by [ADR-154](ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)**,
+which adds an edge to the table: `web-bff` reaches `inventory-api` on `grpc`
+for the assistant's stock read, and `inventory-api` admits it on that port as
+well as the gateway on `http`. This record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

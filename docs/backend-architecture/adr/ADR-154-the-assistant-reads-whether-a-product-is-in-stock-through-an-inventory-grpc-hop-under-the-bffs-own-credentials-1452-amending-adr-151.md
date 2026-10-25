@@ -15,8 +15,9 @@ is authenticated and requires no permission, because the BFF's service account
 carries none and the reply holds nothing a permission would guard. The BFF
 reaches it under its own client credentials, never a customer's token, which
 a turn does not hold ([ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)),
-through `StockHop`, whose address and resilience budget are `PricingHop`'s
-value for value, registered in the same order with the credential and
+through `StockHop`, whose resilience budget is `PricingHop`'s value for value
+and whose address is the same shape, the Service name on the h2c port,
+registered in the same order with the credential and
 correlation handlers inside the resilience pipeline. The gateway routes
 nothing to 8081 and its `inventory:admin` read of `/v1/inventory/stock` is
 unchanged. The consumer-driven contract is `StockContract`, linked into
@@ -43,7 +44,11 @@ flag, because `StockItem.Available` already is: the count a stock-take sets is
 on hand minus reserved, so above zero is what the next order could take.
 **Consequences.** Inventory becomes the fourth service to serve gRPC and its
 chart takes a second port and an ingress from `web-bff` on `grpc`, where it
-admitted only the gateway; the BFF's network policy gains the egress, and the
+admitted only the gateway; the BFF's network policy gains the egress, which
+adds an edge to [ADR-065](ADR-065-every-workload-is-fenced-by-a-default-deny-networkpolicy.md)'s
+table, and the consumer-driven contract of
+[ADR-023](ADR-023-the-consumer-driven-contract-is-a-linked-file-not-pact.md)
+gains its second relationship; the
 smoke script's list of dialled Services reads `StockHop.cs`. The `bff` filter
 in `ci.yml` names `Inventory.Api/Protos`, because the BFF image copies that
 path and a filter that does not name it never builds the image. An in-stock

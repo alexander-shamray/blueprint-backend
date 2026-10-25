@@ -92,6 +92,14 @@ the deployed BFF runs the assistant on its own single-replica release behind its
 own gateway route, so the main release keeps it off by design and #1451 is
 the set of pieces that make that true. This record is otherwise unchanged.
 
+**Amended by
+[ADR-154](ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)**:
+`get_stock` answers whether a product is in stock, through an Inventory hop
+under this host's own credentials, so the host's instructions no longer say
+that stock cannot be answered, and the in-stock flag joins a product's name and
+price in what the provider is shown of a product. This record is otherwise
+unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
