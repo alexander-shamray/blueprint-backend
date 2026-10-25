@@ -78,7 +78,7 @@
     <!-- Notifications' SMTP client and the message it submits (Appendix B). MimeKit is MailKit's own dependency at
          exactly this version, pinned because the adapter names its types; the two ship as one release. -->
     <PackageVersion Include="MailKit" Version="4.18.1" />
-    <PackageVersion Include="MimeKit" Version="4.18.1" />
+    <PackageVersion Include="MimeKit" Version="4.18.2" />
     <!-- The S3 client behind the product image store (ADR-106), Catalog.Infrastructure's alone; AWSSDK.Core
          arrives with it. -->
     <PackageVersion Include="AWSSDK.S3" Version="4.0.104.6" />
@@ -177,7 +177,7 @@
          and xunit.v3 does not carry one. Without this line the build succeeds,
          the run reports zero tests, and CI is green on a suite it never ran. -->
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
     <!-- TestServer without a host project. Mvc.Testing carries this
          transitively, but WebApplicationFactory<T> needs an entry point and
@@ -185,7 +185,7 @@
          actually used keeps the register honest. -->
     <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.13" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
-    <PackageVersion Include="NSubstitute" Version="5.3.0" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.6.0" />
     <PackageVersion Include="Testcontainers.Redis" Version="4.6.0" />
     <PackageVersion Include="Testcontainers.RabbitMq" Version="4.6.0" />
