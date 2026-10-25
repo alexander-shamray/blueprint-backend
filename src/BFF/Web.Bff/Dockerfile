@@ -29,6 +29,8 @@ COPY src/BuildingBlocks/Common.Application/Common.Application.csproj src/Buildin
 COPY src/BuildingBlocks/Common.Contracts/Common.Contracts.csproj src/BuildingBlocks/Common.Contracts/
 COPY src/BuildingBlocks/Common.Infrastructure/Common.Infrastructure.csproj src/BuildingBlocks/Common.Infrastructure/
 COPY src/BuildingBlocks/Common.Web/Common.Web.csproj src/BuildingBlocks/Common.Web/
+COPY src/BuildingBlocks/Common.Assistant/Common.Assistant.csproj src/BuildingBlocks/Common.Assistant/
+COPY src/BuildingBlocks/Common.Assistant.Anthropic/Common.Assistant.Anthropic.csproj src/BuildingBlocks/Common.Assistant.Anthropic/
 COPY src/BFF/Web.Bff.Persistence/Web.Bff.Persistence.csproj src/BFF/Web.Bff.Persistence/
 COPY src/BFF/Web.Bff/Web.Bff.csproj src/BFF/Web.Bff/
 RUN dotnet restore src/BFF/Web.Bff/Web.Bff.csproj

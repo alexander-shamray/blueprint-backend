@@ -1,6 +1,7 @@
 using System.Reflection;
 using Common.TestSupport;
 using Shouldly;
+using Web.Bff.Assistant;
 using Xunit;
 
 namespace Web.Bff.Tests;
@@ -8,7 +9,7 @@ namespace Web.Bff.Tests;
 /// <summary>docs/personal-data.md names every retention window this host's types hold (§11.7).</summary>
 public class RetentionMapTests
 {
-    private static readonly Type[] Declared = [.. RetentionMapRule.BuildingBlocks];
+    private static readonly Type[] Declared = [.. RetentionMapRule.BuildingBlocks, typeof(AssistantOptions)];
 
     private static readonly Assembly Host = typeof(RetentionMapTests).Assembly;
 
