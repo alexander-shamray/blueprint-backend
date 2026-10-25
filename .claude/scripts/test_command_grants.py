@@ -37,7 +37,7 @@ def bash_deny_matches(rule, command):
                         re.DOTALL) is not None
 
 
-# Built in to Claude Code and each carrying Edit, Write and Bash, so only a deny refuses a spawn of one.
+# Built in to Claude Code, so no profile under .claude/agents lists them and only a deny refuses a spawn of one.
 BUILT_IN_AGENTS = {"general-purpose", "claude", "Explore", "Plan", "claude-code-guide", "statusline-setup"}
 
 
