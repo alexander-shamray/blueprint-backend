@@ -326,6 +326,7 @@ jobs:
   # parallel with `build`. It gates nothing, for the reason the job above
   # gives: a broken scaffold does not make the solution wrong.
   scaffold-build:
+    needs: [licence-gate, pipeline-gate, format, workflow-lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -607,8 +608,13 @@ jobs:
       - name: The source matches .editorconfig
         run: dotnet format whitespace --folder --verify-no-changes
 
+  # The four checks that answer in under a minute, with no restore, gate the
+  # three jobs that bill minutes: `build`, `integration` and `scaffold-build`.
+  # A whitespace or workflow-syntax error is known in seconds, and each of the
+  # three would otherwise run to the end on a verdict already in. No run-wide
+  # cancel: it hides every failure but the first and cannot apply on main.
   build:
-    needs: [licence-gate, pipeline-gate]
+    needs: [licence-gate, pipeline-gate, format, workflow-lint]
     runs-on: ubuntu-latest
     # Forty green runs before 2026-10-09 took at most 5.4 minutes here and 6.2
     # in the slowest integration shard, so 30 fails a hanging test in half an
@@ -774,7 +780,7 @@ jobs:
   integration:
     # Unnamed, a leg is labelled with every matrix value, `selects` included.
     name: integration (${{ matrix.shard }})
-    needs: [licence-gate, pipeline-gate]
+    needs: [licence-gate, pipeline-gate, format, workflow-lint]
     runs-on: ubuntu-latest
     # Sized with the build job's, above.
     timeout-minutes: 30
