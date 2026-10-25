@@ -14,7 +14,8 @@ namespace Web.Bff.Assistant;
 /// <summary>The customer assistant's read tools, each scoped to the caller the core passes (ADR-151).</summary>
 /// <remarks>
 /// <c>list_orders</c> and <c>get_order</c> read ADR-051's projection by the caller's subject, <c>get_product</c>
-/// Catalog's pricing hop and <c>get_stock</c> Inventory's availability hop (§9.7, ADR-154); a refusal is a result the model reads, never an exception that ends the turn.
+/// Catalog's pricing hop and <c>get_stock</c> Inventory's availability hop (§9.7, ADR-154); a refusal is a result
+/// the model reads, never an exception that ends the turn.
 /// </remarks>
 public sealed class CustomerReadTools(OrderReader orders, GrpcClientFactory clients) : IToolSource
 {
@@ -80,7 +81,9 @@ public sealed class CustomerReadTools(OrderReader orders, GrpcClientFactory clie
             "Is a product in stock",
             "Whether a product can be bought now: in stock or not, never how many. Nothing comes back for a " +
             "product Inventory holds no stock for, which is not the same as out of stock.",
-            Schema(new JsonObject { ["product_id"] = Uuid("The product's id, as an order line carries it.") }, "product_id"),
+            Schema(
+                new JsonObject { ["product_id"] = Uuid("The product's id, as an order line carries it.") },
+                "product_id"),
             Reads,
             ToolSide.Server)
     ];

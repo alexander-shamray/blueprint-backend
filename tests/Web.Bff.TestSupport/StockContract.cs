@@ -4,8 +4,8 @@ namespace Web.Bff.TestSupport;
 
 /// <summary>What <c>Web.Bff</c> needs of Inventory's availability RPC (ADR-154, ADR-023).</summary>
 /// <remarks>
-/// The BFF asks about one product at a time, so a request ceiling is no expectation of its own: the provider's
-/// refusal past <c>GetAvailabilityValidator.MaxProductIds</c> is that suite's, and no consumer reads it.
+/// The BFF asks about one product at a time (ADR-154), so a request ceiling is no expectation of its own: the
+/// provider's refusal past <c>GetAvailabilityValidator.MaxProductIds</c> is that suite's, and no consumer reads it.
 /// </remarks>
 public static class StockContract
 {
@@ -151,7 +151,7 @@ public sealed record StockInteraction(
     int PlusUnknownIds,
     IReadOnlyList<(string Alias, bool InStock)> Then);
 
-/// <summary>A stock row the provider holds when an interaction runs, by alias: the unreserved count it carries.</summary>
+/// <summary>A stock row the provider holds when an interaction runs, by alias, with its unreserved count.</summary>
 public sealed record ContractStock(string Alias, int Available);
 
 /// <summary>A reply or request the contract forbids, as a type both sides can throw without Shouldly.</summary>

@@ -408,9 +408,9 @@ which is the shape the second callout below argues for.
 
 Each of the Helm filter's outside paths is an input `smoke.sh` actually reads:
 
-- §10.2's route file and the BFF's hop files, `PricingHop.cs` among them, which hold their destination hosts as
-  literals on the stated grounds that "the host is the Kubernetes Service
-  name" — so renaming a destination without them is a green pull request that
+- §10.2's route file and the BFF's hop files, `PricingHop.cs` among them,
+  which hold their destination hosts as literals on the stated grounds that
+  "the host is the Kubernetes Service name" — so renaming a destination without them is a green pull request that
   breaks the next deploy;
 - each deployable's source, named by its descriptor, and the
   `appsettings.json` in it that declares the Kestrel endpoints its Service

@@ -12,8 +12,8 @@ namespace Web.Bff.Tests;
 
 /// <summary>ADR-023's consumer half: each <see cref="StockContract"/> entry driven through <c>get_stock</c>.</summary>
 /// <remarks>
-/// The tool asks about one product per call, so the stub's replies are gathered into the one reply the provider
-/// suite sees; the BFF's own client and message types are Web.Bff's alone, and no test names them (CS0433).
+/// The tool asks about one product per call (ADR-154), so the stub's replies are gathered into the one reply the
+/// provider suite sees; the BFF's own message types are Web.Bff's alone, and no test names them (CS0433).
 /// </remarks>
 public sealed class StockContractTests : IAsyncLifetime
 {

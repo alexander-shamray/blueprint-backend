@@ -1,7 +1,7 @@
 namespace Web.Bff;
 
 /// <summary>This host's availability hop to Inventory, named in one place (§9.7, ADR-154).</summary>
-/// <remarks>The budget is <see cref="PricingHop"/>'s, value for value, because the two hops are the same shape.</remarks>
+/// <remarks>The budget is <see cref="PricingHop"/>'s, value for value: the two hops are one shape.</remarks>
 public static class StockHop
 {
     /// <summary>Explicit, because the resilience options are registered under a name derived from it.</summary>

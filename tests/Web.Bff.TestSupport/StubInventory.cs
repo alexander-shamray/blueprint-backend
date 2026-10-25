@@ -69,7 +69,7 @@ public sealed class StubInventory : IAsyncLifetime
     }
 
     /// <summary>Every reply sent so far as one, for a consumer that asks one product per call.</summary>
-    /// <remarks>Here so a suite compiled beside Web.Bff never names the message, which both assemblies define.</remarks>
+    /// <remarks>Here so a suite beside Web.Bff never names the message, which both define (ADR-154).</remarks>
     public GetAvailabilityReply GatheredReply()
     {
         GetAvailabilityReply gathered = new();
