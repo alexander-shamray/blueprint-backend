@@ -137,7 +137,7 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
             with self.subTest(title=title):
                 result = self.run_helper("bug", "low", "sweep", body=f"{title}\n\nthe body\n\n{self.TRAILER}\n")
                 self.assert_refused_before_gh(result)
-                self.assertIn("title, blank line, body", result.stderr)
+                self.assertIn("begins with a hash", result.stderr)
 
     def test_a_title_with_a_hash_inside_is_filed(self):
         # The control: only a leading hash is refused, so a title naming C# or an issue still files.
