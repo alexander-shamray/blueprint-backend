@@ -140,7 +140,11 @@ class NoCommandGrantsABareBashOrALeadingWildcard(unittest.TestCase):
     BROAD_BASH = re.compile(r"Bash(?:\(\*.*\))?")
 
     def test_no_allowed_tools_entry_is_a_bare_bash_or_a_leading_wildcard(self):
-        for path in sorted(COMMANDS.glob("*.md")):
+        paths = sorted(COMMANDS.glob("*.md"))
+        # A frontmatter the parser cannot read gives no entries and would pass in silence.
+        silent = [p.name for p in paths if not frontmatter_list(p.read_text(encoding="utf-8"), "allowed-tools")]
+        self.assertEqual([], silent, "these commands gave no allowed-tools entries, so nothing was checked")
+        for path in paths:
             for entry in frontmatter_list(path.read_text(encoding="utf-8"), "allowed-tools"):
                 with self.subTest(command=path.name, entry=entry):
                     self.assertIsNone(self.BROAD_BASH.fullmatch(entry))
