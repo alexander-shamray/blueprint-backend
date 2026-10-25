@@ -247,6 +247,10 @@ web-bff:
   push:
     # The same apps, which a registration must name (ADR-117).
     apps: *apps
+web-bff-assistant:
+  push:
+    # The same again: the BFF's second chart runs the same host (ADR-153).
+    apps: *apps
 ```
 
 ## What is deliberately not here
