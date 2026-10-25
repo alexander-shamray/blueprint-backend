@@ -45,15 +45,15 @@ def matching_ignore_file(root, directory):
     """The ignore file git says excludes `directory`, or None if none does."""
     probe = directory.relative_to(root).as_posix()
     result = subprocess.run(
-        [GIT, "check-ignore", "-v", "--no-index", probe],
+        [GIT, "check-ignore", "-v", "-z", "--stdin", "--no-index"], input=probe + chr(0),
         cwd=str(root), capture_output=True, text=True, encoding="utf-8",
     )
     if result.returncode != 0:
         return None
-    # `<source>:<line>:<pattern>` then a tab and the path. The source is
-    # repository-relative, so the first colon is the one after it. Exit 0 is
-    # also a negated pattern, which un-ignores the path, so it is no match.
-    source, _, pattern = result.stdout.split("\t")[0].split(":", 2)
+    # `-z` ends the source, line, pattern and path each with a NUL, so a drive
+    # colon in an absolute source, or one in the pattern, shifts no field.
+    # Exit 0 is also a negated pattern, which un-ignores the path: no match.
+    source, _, pattern = result.stdout.split("\0")[:3]
     return None if pattern.startswith("!") else source
 
 
@@ -109,6 +109,17 @@ class TheCheckFailsWhereTheRootRuleIsAbsent(unittest.TestCase):
 
         self.assertEqual(blanking_directories(root), [scratch])
         self.assertEqual(matching_ignore_file(root, scratch), ".gitignore")
+
+    def test_a_negation_in_the_global_excludes_file_is_not_a_match(self):
+        # That file's source is absolute, with a drive colon on Windows, which a colon split would take for the line.
+        root, scratch = self.scratch_repository("scratch/")
+        excludes = root.parent / (root.name + "-excludes")
+        excludes.write_text("scratch/" + NEWLINE + "!scratch/" + NEWLINE, encoding="utf-8", newline=NEWLINE)
+        self.addCleanup(excludes.unlink)
+        (root / ".gitignore").write_text("", encoding="utf-8")
+        subprocess.run([GIT, "config", "core.excludesFile", excludes.as_posix()], cwd=str(root), check=True)
+
+        self.assertIsNone(matching_ignore_file(root, scratch))
 
     def test_a_root_negation_is_not_a_match(self):
         # `check-ignore -v` exits 0 for a negated pattern too, and names it as the rule.
