@@ -8,6 +8,7 @@ readers agree on. The shared harness, and the reason this shells out rather
 than re-implementing, are `review_helpers.py`'s.
 """
 
+import os
 import subprocess
 import tempfile
 import unittest
@@ -111,9 +112,10 @@ class TheCheckFailsWhereTheRootRuleIsAbsent(unittest.TestCase):
         self.assertEqual(matching_ignore_file(root, scratch), ".gitignore")
 
     def test_a_negation_in_the_global_excludes_file_is_not_a_match(self):
-        # That file's source is absolute, with a drive colon on Windows, which a colon split would take for the line.
+        # That file's source is absolute, so a colon in its path, a drive's on Windows and in the name elsewhere,
+        # is what a colon split would take for the line.
         root, scratch = self.scratch_repository("scratch/")
-        excludes = root.parent / (root.name + "-excludes")
+        excludes = root.parent / (root.name + ("-" if os.name == "nt" else ":") + "excludes")
         excludes.write_text("scratch/" + NEWLINE + "!scratch/" + NEWLINE, encoding="utf-8", newline=NEWLINE)
         self.addCleanup(excludes.unlink)
         (root / ".gitignore").write_text("", encoding="utf-8")
