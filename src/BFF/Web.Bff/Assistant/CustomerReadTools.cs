@@ -137,7 +137,7 @@ public sealed class CustomerReadTools(OrderReader orders, GrpcClientFactory clie
 
         // §9.7's rule 6, as the quote checks it: a reply that breaks pricing.proto is Catalog's fault, not a price.
         if (reply.Price is not [{ } price] ||
-            price.ProductId != product.ToString() ||
+            !Guid.TryParse(price.ProductId, out Guid priced) || priced != product ||
             !string.Equals(price.Currency, request.Currency, StringComparison.OrdinalIgnoreCase) ||
             !decimal.TryParse(
                 price.Amount,

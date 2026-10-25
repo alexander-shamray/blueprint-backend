@@ -63,6 +63,16 @@ public sealed class CustomerProductToolTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_id_echoed_in_another_spelling_of_the_same_guid_is_still_a_price()
+    {
+        _catalog.BracedIds = true;
+
+        ToolOutcome outcome = await GetProductAsync(Chair, "GBP");
+
+        outcome.Ok.ShouldBeTrue(outcome.Content);
+    }
+
+    [Fact]
     public async Task A_product_not_sold_in_the_currency_is_a_refusal_the_model_reads()
     {
         ToolOutcome outcome = await GetProductAsync(Chair, "EUR");

@@ -41,6 +41,9 @@ public sealed class StubCatalog : IAsyncLifetime
     /// <summary>A currency to answer with instead of the stored one.</summary>
     public string? RawCurrency { get; set; }
 
+    /// <summary>Echo each id in braces, another spelling of the same GUID.</summary>
+    public bool BracedIds { get; set; }
+
     /// <summary>Ids to price in every reply whether or not the request named them.</summary>
     public List<Guid> AlsoAnswerWith { get; } = [];
 
@@ -165,7 +168,7 @@ public sealed class StubCatalog : IAsyncLifetime
 
                 reply.Price.Add(new ProductPrice
                 {
-                    ProductId = id,
+                    ProductId = stub.BracedIds ? productId.ToString("B") : id,
                     Name = price.Name,
                     // "F4", as the column is decimal(19,4) (§7.2) and 49.99 leaves Catalog as "49.9900".
                     Amount = stub.RawAmount ?? price.Amount.ToString("F4", CultureInfo.InvariantCulture),
