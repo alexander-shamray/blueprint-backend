@@ -57,8 +57,9 @@ deployed BFF keeps the assistant off: its chart carries no `Assistant` key,
 no egress to the provider and no secret, and #1451 owns turning it on. Local
 Compose runs one BFF, where it works. Stock cannot be answered, since no
 stock read is open to a customer, and the host's instructions tell the model
-so; #1452 owns it. A conversation's text is personal data held for
-`AssistantOptions.IdleTimeout` with no erasure path, which
+so; #1452 owns it. A conversation's text is personal data held past
+`AssistantOptions.IdleTimeout` until the replica next opens or finds a
+conversation (#1457), with no erasure path, which
 `docs/personal-data.md` records as lifetime only, and `MaxCallers` bounds the
 customers one replica holds at once. The redactor also replaces a tracking
 number that happens to pass the Luhn check. The provider's call is the SDK's
