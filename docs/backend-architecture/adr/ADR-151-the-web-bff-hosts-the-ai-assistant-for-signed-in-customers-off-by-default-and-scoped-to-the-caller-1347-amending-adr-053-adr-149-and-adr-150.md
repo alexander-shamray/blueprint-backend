@@ -80,6 +80,12 @@ gateway's `RetryAfterHeader`, which this host does not reference. ADR-053,
 ADR-149 and ADR-150 are otherwise unchanged; this decision is read beside
 them, as an ADR is amended and never rewritten.
 
+**Amended by
+[ADR-152](ADR-152-the-assistant-core-sweeps-idle-conversations-on-a-timer-so-idletimeout-plus-a-quarter-bounds-retention-1457-amending-adr-151.md)**:
+the core now sweeps idle conversations on a timer, so the retention bound above
+is `IdleTimeout` plus a quarter of it (a second where that is longer), not the next open or find. This record is
+otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
