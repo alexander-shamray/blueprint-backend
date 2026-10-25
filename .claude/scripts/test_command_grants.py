@@ -37,6 +37,20 @@ def bash_deny_matches(rule, command):
                         re.DOTALL) is not None
 
 
+# Built in to Claude Code and each carrying Edit, Write and Bash, so only a deny refuses a spawn of one.
+BUILT_IN_AGENTS = {"general-purpose", "claude", "Explore", "Plan", "claude-code-guide", "statusline-setup"}
+
+
+def undenied_agents(text, profiles):
+    """The agent types a command that grants some neither grants nor denies, or None if it grants none."""
+    granted = {m for t in frontmatter_list(text, "allowed-tools")
+               for m in re.findall(r"^Agent\((.+)\)$", t)}
+    if not granted:
+        return None
+    denied = set(frontmatter_list(text, "disallowed-tools"))
+    return sorted(n for n in (profiles | BUILT_IN_AGENTS) - granted if f"Agent({n})" not in denied)
+
+
 class AnAgentIsGrantedByExactType(unittest.TestCase):
 
     def test_the_reviewer_holds_no_shell_no_edit_and_no_agent(self):
@@ -76,18 +90,25 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
         for path in sorted(COMMANDS.glob("*.md")):
             if path.name == "ship.md":
                 continue
-            text = path.read_text(encoding="utf-8")
-            granted = {m for t in frontmatter_list(text, "allowed-tools")
-                       for m in re.findall(r"^Agent\((.+)\)$", t)}
-            if not granted:
+            missing = undenied_agents(path.read_text(encoding="utf-8"), profiles)
+            if missing is None:
                 continue
             granting += 1
-            denied = set(frontmatter_list(text, "disallowed-tools"))
-            for name in sorted(profiles - granted):
-                with self.subTest(command=path.name, agent=name):
-                    self.assertIn(f"Agent({name})", denied)
+            with self.subTest(command=path.name):
+                self.assertEqual([], missing, "granted an agent type, and these others are neither granted nor denied")
         # The two sweeps: fewer means the grant pattern stopped matching and the loop passed over nothing.
         self.assertGreaterEqual(granting, 2)
+
+
+class ABuiltInDenyIsHeldToo(unittest.TestCase):
+    def test_a_sweep_that_drops_a_built_in_deny_is_seen(self):
+        text = (COMMANDS / "bug-sweep.md").read_text(encoding="utf-8")
+        profiles = {"branch-reviewer", "bug-auditor", "security-auditor"}
+        self.assertEqual([], undenied_agents(text, profiles))
+        stripped = text.replace("Agent(general-purpose), ", "")
+        self.assertNotEqual(text, stripped)
+        self.assertEqual(["general-purpose"], undenied_agents(stripped, profiles))
+        self.assertIsNone(undenied_agents("---\nname: x\n---\n", profiles))
 
 
 class NothingShipChainsDeniesPush(unittest.TestCase):
