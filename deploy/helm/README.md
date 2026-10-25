@@ -87,12 +87,12 @@ verified ([ADR-109](../../docs/backend-architecture/adr/ADR-109-images-are-pushe
 **`--timeout` is not tuning, and leaving it off puts a §13.6 alert outside the
 window it watches.** Helm always blocks on a hook — `--wait` governs the
 release's own resources, never this — so the migration Job (§7.4) gets whatever
-`--timeout` allows, and the default is **5 minutes**. §13.6's `MigrationJobFailed`
-has a second branch for a Job that is *stuck*: active for more than 900 seconds,
-plus `for: 1m`, so it needs **16 minutes** before it will page. At the default
-those two never overlap. Helm gives up first, and a Job that then finishes at,
-say, eight minutes takes `kube_job_status_active` back to zero with nothing
-having fired — a failed release and no alert.
+`--timeout` allows, and the default is **5 minutes**. §13.6's
+`MigrationJobFailed` has a second branch for a Job that is *stuck*: active for
+more than 900 seconds, plus `for: 1m`, so it needs **16 minutes** before it will
+page. At the default those two never overlap. Helm gives up first, and a Job
+that then finishes at, say, eight minutes takes `kube_job_status_active` back to
+zero with nothing having fired — a failed release and no alert.
 
 Two numbers, and the deploy is the one that moves. Pinning the alert under five
 minutes instead would page on a migration that is merely slow, on a deploy that
@@ -318,23 +318,22 @@ bash deploy/helm/smoke.sh          # HELM=/path/to/helm if it is not on PATH
 ```
 
 **Every deliberate defect run through it but one turned a green run red**, and
-`smoke.sh`'s own refusal cases keep many of them — a renamed Service, a CPU limit, a grace period back at the
-Kubernetes default, a dropped hook annotation, a connection string moved into a
-ConfigMap, a second chart growing client credentials, an `envFrom` naming a
-ConfigMap nothing renders, a rollout checksum that missed the gateway's own, a
-Service publishing only its first port, a chart renumbering the port its
-callers dial, a fifth chart the gate never looked at, an Ingress with no
-backend, an Ingress with no TLS, a blank CIDR, a blank origin, a
-whitespace-only authority, an origin carrying credentials, a pod remounting the
-service-account token, a listener moved out from under its own Service, a
-validator that checked one string and shipped another, an uppercase host, a
-CIDR that is not one, a CIDR octet read as octal, a migrator pod answering its
-own service's traffic, a
-routed service switching its own Service off, a capability cleared by an
-overlay, a health route renamed in the source that maps it, a tag that is legal
-for a registry and illegal for Kubernetes, in six spellings, a tag that overruns
-the name it derives, an image reference missing its registry, a canary whose
-pods the stable Service would never select.
+`smoke.sh`'s own refusal cases keep many of them — a renamed Service, a CPU
+limit, a grace period back at the Kubernetes default, a dropped hook annotation,
+a connection string moved into a ConfigMap, a second chart growing client
+credentials, an `envFrom` naming a ConfigMap nothing renders, a rollout checksum
+that missed the gateway's own, a Service publishing only its first port, a chart
+renumbering the port its callers dial, a fifth chart the gate never looked at,
+an Ingress with no backend, an Ingress with no TLS, a blank CIDR, a blank
+origin, a whitespace-only authority, an origin carrying credentials, a pod
+remounting the service-account token, a listener moved out from under its own
+Service, a validator that checked one string and shipped another, an uppercase
+host, a CIDR that is not one, a CIDR octet read as octal, a migrator pod
+answering its own service's traffic, a routed service switching its own Service
+off, a capability cleared by an overlay, a health route renamed in the source
+that maps it, a tag that is legal for a registry and illegal for Kubernetes, in
+six spellings, a tag that overruns the name it derives, an image reference
+missing its registry, a canary whose pods the stable Service would never select.
 
 **The list grows**; what does not grow is the count of defects that got past
 the gate, which is one. That is the number worth reading,
