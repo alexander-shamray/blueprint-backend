@@ -990,8 +990,8 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 Catalog owns `pricing.proto` in `Catalog.Api/Protos`, and `Web.Bff` links it;
 Inventory owns `stock.proto` in `Inventory.Api/Protos`, which `Web.Bff` links on
 the pricing hop's numbers and calls under its client credentials, answering
-whether a product is in stock and never how many; Notifications owns `devices.proto` and `preferences.proto` in
-`Notifications.Api/Protos`, and `Web.Bff` links both too, one gRPC client each
+whether a product is in stock and never how many; Notifications owns
+`devices.proto` and `preferences.proto` in `Notifications.Api/Protos`, and `Web.Bff` links both too, one gRPC client each
 on the one hop's numbers. The command path never calls Catalog: it reads
 Ordering's price projection. The deepest chains on a request path are
 `Client → Gateway → BFF → Catalog` and `Client → Gateway → BFF →

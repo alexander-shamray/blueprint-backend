@@ -31,7 +31,7 @@ public sealed class StockServiceTests(ServiceFixture fixture) : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    /// <summary>A client-credentials principal (§11.3) carrying no permission, per call so a call can arrive without.</summary>
+    /// <summary>A client-credentials principal (§11.3) with no permission, per call so one can arrive without it.</summary>
     private static Metadata Authenticated() =>
         [new Metadata.Entry(TestAuthHandler.UserHeader, "service-account-web-bff")];
 
@@ -86,7 +86,9 @@ public sealed class StockServiceTests(ServiceFixture fixture) : IAsyncLifetime
         // No principal, which is what makes §11.5's client credentials load-bearing rather than ceremonial.
         RpcException thrown = await Should.ThrowAsync<RpcException>(
             () => Stock
-                .GetAvailabilityAsync(new GetAvailabilityRequest(), cancellationToken: TestContext.Current.CancellationToken)
+                .GetAvailabilityAsync(
+                    new GetAvailabilityRequest(),
+                    cancellationToken: TestContext.Current.CancellationToken)
                 .ResponseAsync);
 
         thrown.StatusCode.ShouldBe(StatusCode.Unauthenticated);
@@ -103,7 +105,10 @@ public sealed class StockServiceTests(ServiceFixture fixture) : IAsyncLifetime
 
         RpcException thrown = await Should.ThrowAsync<RpcException>(
             () => Stock
-                .GetAvailabilityAsync(request, Authenticated(), cancellationToken: TestContext.Current.CancellationToken)
+                .GetAvailabilityAsync(
+                    request,
+                    Authenticated(),
+                    cancellationToken: TestContext.Current.CancellationToken)
                 .ResponseAsync);
 
         thrown.StatusCode.ShouldBe(StatusCode.InvalidArgument);
@@ -123,7 +128,10 @@ public sealed class StockServiceTests(ServiceFixture fixture) : IAsyncLifetime
 
         RpcException thrown = await Should.ThrowAsync<RpcException>(
             () => Stock
-                .GetAvailabilityAsync(request, Authenticated(), cancellationToken: TestContext.Current.CancellationToken)
+                .GetAvailabilityAsync(
+                    request,
+                    Authenticated(),
+                    cancellationToken: TestContext.Current.CancellationToken)
                 .ResponseAsync);
 
         // ValidationInterceptor's job: untranslated this is Unknown, which the BFF maps to a 500.
