@@ -58,6 +58,13 @@ service is built from (§4.2, §4.3): these two are a product's core and its
 adapter, kept small for a different reason — a host's code stays out of them so
 that two hosts can take them whole.
 
+**Amended by
+[ADR-150](ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md)**:
+a changed package that keeps its base's `Version` is refused on its pull
+request, with the feed's refusal on `main` kept as the backstop, and §15.1's
+`shared` filter excludes the two blocks while no image holds them. This record
+is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

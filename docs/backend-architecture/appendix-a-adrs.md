@@ -156,6 +156,7 @@ decision looks wrong.
 | **ADR-147** | [A scalar `Switches:Off` refuses the host at start and is reported Degraded on a reload (#1291), amending ADR-113 and ADR-115](adr/ADR-147-a-scalar-switchesoff-refuses-the-host-at-start-and-is-reported-degraded-on-a-reload-1291-amending-adr-113-and-adr-115.md) |
 | **ADR-148** | [The object store check writes a sentinel with the BFF's pair and reads it back with Catalog's (#1221)](adr/ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md) |
 | **ADR-149** | [The AI assistant's core and its adapter are two building blocks this repository publishes as NuGet packages (#1346)](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md) |
+| **ADR-150** | [The assistant packages' Version rule is checked on the pull request, and their blocks leave the shared filter (#1447), amending ADR-149](adr/ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md) |
 
 ---
 
