@@ -679,9 +679,15 @@ class SecondReleaseTests(unittest.TestCase):
         main = (root / "web-bff" / "values.yaml").read_text(encoding="utf-8")
 
         self.assertEqual("Recreate", repo_gate.STRATEGY.search(assistant).group(1))
-        self.assertEqual("Web.Bff.Assistant", repo_gate.TELEMETRY_NAME.search(assistant).group(1))
+        self.assertEqual("Web.Bff.Assistant", repo_gate._chart_telemetry_name(assistant))
         self.assertIsNone(repo_gate.STRATEGY.search(main))
-        self.assertIsNone(repo_gate.TELEMETRY_NAME.search(main))
+        self.assertIsNone(repo_gate._chart_telemetry_name(main))
+
+    def test_a_telemetry_name_outside_the_observability_block_is_not_read(self) -> None:
+        values = "other:\n  telemetryName: Wrong\nobservability:\n  # comment\n\n  telemetryName: Right\nnext:\n"
+
+        self.assertEqual("Right", repo_gate._chart_telemetry_name(values))
+        self.assertIsNone(repo_gate._chart_telemetry_name("observability:\n  otlp: x\nnext:\n  telemetryName: No\n"))
 
     def test_a_release_off_the_ladder_without_an_argument_is_refused(self) -> None:
         for argued in ("", "  ", None, 1):
