@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using Common.Assistant;
 
@@ -24,32 +25,56 @@ public sealed partial class CustomerRedactor : IRedactor
         return InternationalPhone().Replace(scrubbed, Phone);
     }
 
-    // A run that fails the check may be a card with its expiry or security code after it, so each span of whole
-    // groups inside it is tried, longest first.
+    // A run may hold a card beside an expiry, a security code or another card, so every card in it is replaced, left
+    // to right; each group starts at most 19 spans, so a long run costs time in proportion to its length.
     private static string RedactCard(string run)
     {
-        if (PassesLuhn(run))
-            return Card;
-
         MatchCollection groups = DigitGroup().Matches(run);
+        StringBuilder redacted = new();
+        int copied = 0;
+        int first = 0;
 
-        for (int length = groups.Count - 1; length >= 1; length--)
+        while (first < groups.Count)
         {
-            for (int first = 0; first + length <= groups.Count; first++)
+            if (LongestCard(run, groups, first) is not { } last)
             {
-                int start = groups[first].Index;
-                int end = groups[first + length - 1].Index + groups[first + length - 1].Length;
-                string span = run[start..end];
+                first++;
 
-                if (span.Count(char.IsAsciiDigit) is >= 13 and <= 19 && PassesLuhn(span))
-                    return string.Concat(run[..start], Card, run[end..]);
+                continue;
             }
+
+            int start = groups[first].Index;
+            redacted.Append(run, copied, start - copied).Append(Card);
+            copied = groups[last].Index + groups[last].Length;
+            first = last + 1;
         }
 
-        return run;
+        return copied == 0 ? run : redacted.Append(run, copied, run.Length - copied).ToString();
     }
 
-    private static bool PassesLuhn(string candidate)
+    // The last group of the longest span of whole groups from first that holds 13 to 19 digits and passes the check.
+    private static int? LongestCard(string run, MatchCollection groups, int first)
+    {
+        int digits = 0;
+        int next = first;
+
+        while (next < groups.Count && digits + groups[next].Length <= 19)
+            digits += groups[next++].Length;
+
+        for (int last = next - 1; last >= first && digits >= 13; last--)
+        {
+            int start = groups[first].Index;
+
+            if (PassesLuhn(run.AsSpan(start, groups[last].Index + groups[last].Length - start)))
+                return last;
+
+            digits -= groups[last].Length;
+        }
+
+        return null;
+    }
+
+    private static bool PassesLuhn(ReadOnlySpan<char> candidate)
     {
         int sum = 0;
         bool doubled = false;
