@@ -3079,12 +3079,15 @@ concurrent fan-out costs only the slowest call. That is the rule; [§10.1](10-ap
 two-BFF diagram illustrates it, and is a picture of the pattern rather than of
 this platform.
 
-`Web.Bff`'s pricing hop to Catalog (below) and its hop to Notifications, for
-the device registration and the preferences, are, in the reference domain
+`Web.Bff`'s pricing hop to Catalog (below), its hop to Notifications, for
+the device registration and the preferences, and its hop to Inventory, for the
+assistant's stock tool ([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)),
+are, in the reference domain
 ([E.5.4](appendix-e-reference-domain.md#e54-the-synchronous-hops)), the
-platform's two synchronous calls on a request path, each the one hop of its
-own request, and neither callee calls anybody, so the deepest chain is
-`Client → Gateway → BFF → Catalog`, or the same ending at Notifications.
+platform's three synchronous calls on a request path, each the one hop of its
+own request, and no callee calls anybody, so the deepest chain is
+`Client → Gateway → BFF → Catalog`, or the same ending at Notifications or
+Inventory.
 There is a third synchronous call between services and it is on no request
 path at all:
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
