@@ -32,17 +32,19 @@ before the totals. An outage, a release freeze or a burst of automated PRs
 inside a window is named in its section, since the API cannot tell one from
 ordinary use.
 
-## Window A — 2026-10-10 to 2026-10-23, the baseline
+## Window A — 2026-10-10 to 2026-10-23, the first baseline
 
-Measured on 2026-10-24 against GitHub Free at the rates read that day,
-before any of the four changes had a pull request. The issue's own wording
-asks for the 14 days before the first change merges; these are the 14 days
-before the effort started, so should the first merge land later, the
-command re-measures the 14 days before it and this section is superseded by
-a dated one. No outage or freeze is known inside the window. GHCR could not
-be read: the session's token is refused `users/{owner}`, so the version counts
-were not read, and the tool reads them only for a window ending now, so
-Window A's cannot be recovered; storage is owed by the billing usage report.
+Superseded by the next section, which measures the 14 days the method names;
+this one stays as the record of its day. Measured on 2026-10-24 against GitHub
+Free at the rates read that day, before any of the four changes had a pull
+request. The issue's own wording asks for the 14 days before the first change
+merges; these are the 14 days before the effort started, so should the first
+merge land later, the command re-measures the 14 days before it and this section
+is superseded by a dated one. No outage or freeze is known inside the window.
+GHCR could not be read: the session's token is refused `users/{owner}`, so the
+version counts were not read, and the tool reads them only for a window ending
+now, so Window A's cannot be recovered; storage is owed by the billing usage
+report.
 
 | | A |
 |---|---|
@@ -101,6 +103,73 @@ Linux-equivalent minutes per 14 days, over ninety times the Free allowance
 a month, so #1439 is decided by CI's Linux minutes — which only #1437 and
 #1438 reach — and not by the OS legs or the schedule. Copilot's runs are
 the second-largest line and none of the four changes touches them.
+
+## Window A — 2026-10-11 to 2026-10-24, at the first merge
+
+Measured on 2026-10-25 against GitHub Free at `RATES` as read on 2026-10-24. The
+first change merged at 08:24 UTC that day, when #1463 landed #1435 and #1437
+together, so these are the 14 full UTC days before it and the baseline the
+comparison reads. Thirteen of the days are the first baseline's, which is why
+its minutes and price agree with that one's to within 3%. No outage or freeze is
+known inside the window. GHCR was refused again, this time for want of
+`read:packages`; storage is still owed by the billing usage report.
+
+| | A |
+|---|---|
+| Runs | 8,371 |
+| Runs on `pull_request` | 6,165 |
+| Runs on `push` | 927 |
+| Runs on `schedule` | 84 |
+| Runs on `workflow_dispatch` | 2 |
+| Runs on other events (`dynamic`: Copilot and Dependabot) | 1,193 |
+| Jobs, every attempt | 52,702 |
+| Billed minutes, Linux | 85,767 |
+| Billed minutes, Windows | 1,222 |
+| Billed minutes, macOS | 1,263 |
+| Linux-equivalent minutes | 100,855 |
+| Linux-equivalent minutes, per 30 days | 216,117 |
+| Share of the Free allowance, per 30 days | 10,806% |
+| List price if private | $605.13 |
+| List price if private, per 30 days | $1,296.70 |
+| Over the Free allowance, per 30 days | $1,284.70 |
+| PRs opened | 298 |
+| Commits pushed that ran a workflow | 280 |
+| Label events, issues and PRs | 1,025 |
+| List price per run | $0.07 |
+| List price per PR | $2.03 |
+
+| Workflow | Runs | Linux-equivalent minutes |
+|---|---|---|
+| CI | 1,245 | 85,216 |
+| Copilot's `PR #n` runs, 286 workflows | 874 | 6,128 |
+| Push on main | 280 | 2,555 |
+| Closure gate | 1,130 | 1,128 |
+| Compose | 138 | 1,035 |
+| Locality gate | 1,130 | 1,004 |
+| Broker permissions | 542 | 550 |
+| Commit gate | 600 | 543 |
+| Game day | 526 | 527 |
+| Deploy | 516 | 514 |
+| Dependabot updates and the rest, 37 workflows | 99 | 440 |
+| Observability | 425 | 425 |
+| Helm | 404 | 404 |
+| Merge notification | 235 | 232 |
+| Realm | 227 | 154 |
+
+### What this baseline says about each change
+
+| | Its share of A, in Linux-equivalent minutes | Isolable from the run data |
+|---|---|---|
+| #1435, edit-target-guard's Windows and macOS legs | ≈15,100 (15%) | Yes, as the Windows and macOS rows |
+| #1436, `realm.yml`'s schedule | 154 (0.2%), all of it the path-filtered `check` job the change would not touch | Left out of Window B |
+| #1437, no full CI run on `labeled`/`unlabeled` | Not isolable, for the first baseline's reason; CI ran ≈4.2 times per PR opened against 1,025 label events | Only as the change in CI runs per PR |
+| #1438, a self-hosted runner | Whatever share of CI's 85,216 it moves | Left out of Window B |
+| #1461, `ci.yml`'s long jobs waiting on `format` and `workflow-lint` | Not isolable: it saves only on a run that `format` or `workflow-lint` fails, and the tool reads no job's conclusion | Only as the change in CI's minutes per run, 68.4 in A |
+
+**The first baseline's conclusion stands on these numbers.** CI is 84% of
+the bill; after #1435 and #1436 the remainder is ≈85,600 Linux-equivalent
+minutes per 14 days, about ninety-two times the Free allowance a month, and
+only #1437, #1461 and #1438 reach it.
 
 ## Window B and the comparison
 
