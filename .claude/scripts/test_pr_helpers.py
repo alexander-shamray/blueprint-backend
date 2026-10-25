@@ -22,8 +22,8 @@ from review_helpers import (
 )
 
 
-# A `gh` grant in any spelling: the bare prefix, a wildcard or a subcommand.
-GH_GRANT = re.compile(r"gh(?:\s|\*|$)")
+# A `gh` grant in any spelling: the bare prefix, a wildcard, a subcommand, `.exe`, any case, an env prefix.
+GH_GRANT = re.compile(r"(?:\w+=\S*\s+)*gh(?:\.exe)?(?:\s|\*|$)", re.IGNORECASE)
 
 
 def code_lines(text):
@@ -88,7 +88,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             self.assertNotIn(banned, self.GH_GRANTS_THAT_CANNOT_REACH_A_FEED)
 
     def test_a_gh_grant_is_seen_in_every_spelling(self):
-        for grant in ("gh:*", "gh", "gh*", "gh issue:*", "gh api:*"):
+        for grant in ("gh:*", "gh", "gh*", "gh issue:*", "gh api:*", "gh.exe:*", "GH:*", "GH_TOKEN=x gh:*"):
             command = grant[:-2] if grant.endswith(":*") else grant
             with self.subTest(grant=grant):
                 self.assertTrue(GH_GRANT.match(command))

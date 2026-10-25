@@ -246,8 +246,8 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
         absent = [n for n in self.AUTO_IMPORTED if n not in tracked]
         self.assertIn("Directory.Build.targets", absent)
 
-    # A `dotnet` grant in any spelling: `dotnet test`, the bare prefix and a wildcard admit a free-form run.
-    DOTNET_GRANT = re.compile(r"dotnet(?:[\s*:]|$)")
+    # A `dotnet` grant in any spelling: a subcommand, the bare prefix, a wildcard, `.exe`, any case or an env prefix.
+    DOTNET_GRANT = re.compile(r"(?:\w+=\S*\s+)*dotnet(?:\.exe)?(?:[\s*:]|$)", re.IGNORECASE)
 
     def test_no_command_grants_a_free_form_dotnet(self):
         # `dotnet test:*` admits an arbitrary project path and
@@ -266,7 +266,8 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
                         self.assertIsNone(self.DOTNET_GRANT.match(grant))
 
     def test_a_dotnet_grant_is_seen_in_every_spelling(self):
-        for grant in ("dotnet:*", "dotnet*", "dotnet", "dotnet test", "dotnet test:*"):
+        for grant in ("dotnet:*", "dotnet*", "dotnet", "dotnet test", "dotnet test:*", "dotnet.exe test:*", "DOTNET:*",
+                      "DOTNET_CLI_HOME=x dotnet test"):
             with self.subTest(grant=grant):
                 self.assertIsNotNone(self.DOTNET_GRANT.match(grant))
         self.assertIsNone(self.DOTNET_GRANT.match("bash .claude/scripts/dotnet-test.sh:*"))
