@@ -427,11 +427,12 @@ export ASPNETCORE_ENVIRONMENT=Development
 export Identity__Authority='http://localhost:8080/realms/commerce'
 export ReverseProxy__Clusters__catalog__Destinations__d1__Address='http://localhost:5102/'
 export ReverseProxy__Clusters__ordering__Destinations__d1__Address='http://localhost:5101/'
-export ReverseProxy__Clusters__web-bff__Destinations__d1__Address='http://localhost:5200/'
-export ReverseProxy__Clusters__web-bff-assistant__Destinations__d1__Address='http://localhost:5200/'
 export ReverseProxy__Clusters__inventory__Destinations__d1__Address='http://localhost:5103/'
 export ReverseProxy__Clusters__payments__Destinations__d1__Address='http://localhost:5104/'
-dotnet run --project src/Gateway/Gateway.Api
+# A hyphen is no shell identifier, so the BFF's two clusters go through env.
+env 'ReverseProxy__Clusters__web-bff__Destinations__d1__Address=http://localhost:5200/' \
+    'ReverseProxy__Clusters__web-bff-assistant__Destinations__d1__Address=http://localhost:5200/' \
+    dotnet run --project src/Gateway/Gateway.Api
 ```
 
 **A destination joins this block with the PR that builds its service**, the
