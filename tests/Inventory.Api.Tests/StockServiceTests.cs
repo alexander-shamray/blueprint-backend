@@ -31,7 +31,7 @@ public sealed class StockServiceTests(ServiceFixture fixture) : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
-    /// <summary>A client-credentials principal (§11.3) with no permission, per call so one can arrive without it.</summary>
+    /// <summary>A client-credentials principal (§11.3) with no permission, per call so a call can lack it.</summary>
     private static Metadata Authenticated() =>
         [new Metadata.Entry(TestAuthHandler.UserHeader, "service-account-web-bff")];
 

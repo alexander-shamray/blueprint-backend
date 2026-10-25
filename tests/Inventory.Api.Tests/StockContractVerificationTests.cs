@@ -56,7 +56,7 @@ public sealed class StockContractVerificationTests(ServiceFixture fixture) : IAs
 
     private StockGrpc.StockClient Stock => new(_channel);
 
-    /// <summary>Seeds each <c>Given</c> row by SQL, since the admin PUT sets a count and cannot choose Reserved.</summary>
+    /// <summary>Seeds each <c>Given</c> row by SQL, since the admin PUT cannot choose Reserved.</summary>
     private async Task<IReadOnlyDictionary<string, Guid>> PublishAsync(StockInteraction interaction)
     {
         Dictionary<string, Guid> published = [];
