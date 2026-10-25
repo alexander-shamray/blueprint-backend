@@ -17,6 +17,9 @@ public sealed class ScriptedProvider : IAssistantProvider
 
     public IReadOnlyList<TurnRequest> Requests => [.. _requests];
 
+    /// <summary>While set and not completed, a turn waits before its round, so a test can find it running.</summary>
+    public TaskCompletionSource? Hold { get; set; }
+
     /// <summary>Queues one round; a turn with none queued answers <see cref="Reply"/> and ends.</summary>
     public void Then(params ProviderEvent[] round) => _rounds.Enqueue(round);
 
@@ -28,6 +31,9 @@ public sealed class ScriptedProvider : IAssistantProvider
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         _requests.Enqueue(request);
+
+        if (Hold is { } hold)
+            await hold.Task.WaitAsync(cancellationToken);
 
         ProviderEvent[] round = _rounds.TryDequeue(out ProviderEvent[]? scripted)
             ? scripted

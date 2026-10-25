@@ -29,6 +29,9 @@ public static class AssistantEndpoints
     /// <summary>The largest body a route takes, so no field a client sends reaches a prompt unbounded.</summary>
     public const long MaxBodyBytes = 128 * 1024;
 
+    /// <summary>The 409's <c>code</c> for a turn sent while the last one runs (§10.5).</summary>
+    public const string TurnRunningCode = "assistant.turn_running";
+
     /// <summary>The rate limiter policy on the two routes that start work: opening a conversation and a turn.</summary>
     public const string StartPolicy = "assistant-start";
 
@@ -63,7 +66,9 @@ public static class AssistantEndpoints
         group
             .MapPost(
                 "/conversations",
-                Results<Ok<ConversationOpened>, ProblemHttpResult> (OpenConversation? request, ICurrentUser user) =>
+                Results<Ok<ConversationOpened>, ProblemHttpResult, ValidationProblem> (
+                    OpenConversation? request,
+                    ICurrentUser user) =>
                 {
                     if (Invalid(request) is { } problem)
                         return problem;
@@ -95,7 +100,10 @@ public static class AssistantEndpoints
         group
             .MapPost(
                 "/conversations/{id}/turns",
-                Results<Accepted, ProblemHttpResult> (string id, StartTurn? request, ICurrentUser user) =>
+                Results<Accepted, ProblemHttpResult, ValidationProblem> (
+                    string id,
+                    StartTurn? request,
+                    ICurrentUser user) =>
                 {
                     if (core.Find(CallerOf(user), id) is not { } session)
                         return Unknown(id);
@@ -103,10 +111,7 @@ public static class AssistantEndpoints
                     if (request is null || string.IsNullOrWhiteSpace(request.Text) ||
                         request.Text.Length > MaxTextLength)
                     {
-                        return TypedResults.Problem(
-                            statusCode: StatusCodes.Status400BadRequest,
-                            title: "Not a message",
-                            detail: $"A turn needs text, at most {MaxTextLength} characters.");
+                        return NotValid("text", $"A turn needs text, at most {MaxTextLength} characters.");
                     }
 
                     return session.TryStart(request)
@@ -114,7 +119,8 @@ public static class AssistantEndpoints
                         : TypedResults.Problem(
                             statusCode: StatusCodes.Status409Conflict,
                             title: "A turn is running",
-                            detail: "Wait for the running turn to end, or cancel it.");
+                            detail: "Wait for the running turn to end, or cancel it.",
+                            extensions: new Dictionary<string, object?> { ["code"] = TurnRunningCode });
                 })
             .RequireRateLimiting(StartPolicy);
 
@@ -134,17 +140,19 @@ public static class AssistantEndpoints
 
         group.MapPost(
             "/conversations/{id}/tool-results",
-            Results<NoContent, ProblemHttpResult> (string id, ClientToolResult? result, ICurrentUser user) =>
+            Results<NoContent, ProblemHttpResult, ValidationProblem> (
+                string id,
+                ClientToolResult? result,
+                ICurrentUser user) =>
             {
                 if (core.Find(CallerOf(user), id) is not { } session)
                     return Unknown(id);
 
                 if (result is null || result.CallId is null || result.Content is null)
                 {
-                    return TypedResults.Problem(
-                        statusCode: StatusCodes.Status400BadRequest,
-                        title: "Not a tool result",
-                        detail: "Send callId, ok and content.");
+                    return NotValid(
+                        result is null ? "body" : result.CallId is null ? "callId" : "content",
+                        "Send callId, ok and content.");
                 }
 
                 return session.TryAnswer(result)
@@ -224,31 +232,30 @@ public static class AssistantEndpoints
         }
     }
 
-    private static ProblemHttpResult? Invalid(OpenConversation? request)
+    private static ValidationProblem? Invalid(OpenConversation? request)
     {
-        string? why = request switch
+        (string Field, string Why)? error = request switch
         {
-            null => "The body is not a conversation to open.",
-            { Client: null } => "Send client, its name and version.",
-            { Locale: null or "" } => "Send locale, a BCP 47 tag such as en-GB.",
-            { Catalogue: null } => "Send catalogue, empty when the client has none.",
-            { Catalogue.Count: > MaxCatalogue } => $"A catalogue holds at most {MaxCatalogue} entries.",
-            { ClientTools: null } => "Send clientTools, empty when the client has none.",
+            null => ("body", "The body is not a conversation to open."),
+            { Client: null } => ("client", "Send client, its name and version."),
+            { Locale: null or "" } => ("locale", "Send locale, a BCP 47 tag such as en-GB."),
+            { Catalogue: null } => ("catalogue", "Send catalogue, empty when the client has none."),
+            { Catalogue.Count: > MaxCatalogue } => ("catalogue", $"A catalogue holds at most {MaxCatalogue} entries."),
+            { ClientTools: null } => ("clientTools", "Send clientTools, empty when the client has none."),
             _ when request.Catalogue.Any(e => e is null || e.Id is null || e.Label is null || e.Help is null ||
-                e.Where is null) => "Every catalogue entry needs id, label, where and help.",
+                e.Where is null) => ("catalogue", "Every catalogue entry needs id, label, where and help."),
             _ when request.ClientTools.Any(t => t is null || t.Name is null || t.Title is null ||
                 t.Description is null || t.InputSchema is null || t.Annotations is null) =>
-                "Every client tool needs name, title, description, inputSchema and annotations.",
+                ("clientTools", "Every client tool needs name, title, description, inputSchema and annotations."),
             _ => null
         };
 
-        return why is null
-            ? null
-            : TypedResults.Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Not a conversation",
-                detail: why);
+        return error is { } e ? NotValid(e.Field, e.Why) : null;
     }
+
+    // §10.5's validation row: a field-keyed errors member, the shape Common.Web writes for a ValidationException.
+    private static ValidationProblem NotValid(string field, string why) =>
+        TypedResults.ValidationProblem(new Dictionary<string, string[]> { [field] = [why] }, detail: why);
 
     // Routing applies it to the server's body limit, below Kestrel's default, which no prompt needs (ADR-151).
     private sealed record BodyLimit(long? MaxRequestBodySize) : IRequestSizeLimitMetadata;
