@@ -127,8 +127,8 @@ jobs:
   # toolchain on every platform in the matrix.
 
   # Only when `.claude/` or this workflow changed, which `changes` answers: a
-  # Windows minute bills as two Linux ones and a macOS minute as ten, and what
-  # the matrix proves is a property of the hooks and scripts it tests, which
+  # Windows or macOS minute costs several Linux ones, by tools/ci-cost's RATES,
+  # and what the matrix proves is a property of the hooks and scripts it tests, which
   # read across `.claude/`, not of every commit. Nothing requires the job, so a
   # skipped one holds no merge.
   edit-target-guard:
@@ -455,8 +455,9 @@ jobs:
   # CI never rebuilds. `pipeline-gate` asserts the list below is complete.
   changes:
     runs-on: ubuntu-latest
-    # A dispatch has no change to read, so every output but the two package
-    # ones is true: the run exists to build and sign every image once (ADR-109).
+    # A dispatch has no change to read, so every output but the package and
+    # guard ones is true: the run exists to build and sign every image once
+    # (ADR-109).
     outputs:
       catalog: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.catalog }}
       ordering: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.ordering }}
@@ -472,7 +473,7 @@ jobs:
       # packages job's pull-request check and its push to main (ADR-149, ADR-150).
       assistant: ${{ steps.changes.outputs.assistant }}
       anthropic: ${{ steps.changes.outputs.anthropic }}
-      # Empty on a dispatch too, which builds images and has no guard to test.
+      # Empty on a dispatch, which builds images and has no guard to test.
       guard: ${{ steps.changes.outputs.guard }}
     steps:
       - uses: actions/checkout@v7
