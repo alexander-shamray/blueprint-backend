@@ -141,6 +141,34 @@ class Gh(unittest.TestCase):
         self.assertEqual(called.call_args.kwargs["encoding"], "utf-8")
         self.assertNotIn("text", called.call_args.kwargs)
 
+    def answers(self, *bodies):
+        return [mock.Mock(returncode=code, stdout=out, stderr=err) for code, out, err in bodies]
+
+    def test_an_exhausted_rate_limit_waits_for_its_reset_then_retries(self):
+        replies = self.answers((1, "", "gh: API rate limit exceeded for user ID 1. (HTTP 403)"),
+                               (0, '{"resources": {"core": {"remaining": 0, "reset": 1300}}}', ""),
+                               (0, '{"ok": true}', ""))
+        with mock.patch("subprocess.run", side_effect=replies), mock.patch("time.time", return_value=1000), \
+                mock.patch("time.sleep") as slept:
+            self.assertEqual(ci_cost.gh("repos/owner/repo"), {"ok": True})
+        slept.assert_called_once_with(301)
+
+    def test_a_secondary_limit_waits_a_minute_while_the_hour_has_requests_left(self):
+        replies = self.answers((1, "", "gh: You have exceeded a secondary rate limit. (HTTP 403)"),
+                               (0, '{"resources": {"core": {"remaining": 4000, "reset": 3000}}}', ""),
+                               (0, "{}", ""))
+        with mock.patch("subprocess.run", side_effect=replies), mock.patch("time.time", return_value=1000), \
+                mock.patch("time.sleep") as slept:
+            ci_cost.gh("repos/owner/repo")
+        slept.assert_called_once_with(60)
+
+    def test_any_other_refusal_ends_the_call_without_waiting(self):
+        replies = self.answers((1, "", "gh: Not Found (HTTP 404)"))
+        with mock.patch("subprocess.run", side_effect=replies), mock.patch("time.sleep") as slept, \
+                self.assertRaisesRegex(LookupError, "Not Found"):
+            ci_cost.gh("repos/owner/repo")
+        slept.assert_not_called()
+
 
 class RunsBetween(unittest.TestCase):
     def test_a_minute_still_over_the_cap_is_refused_not_undercounted(self):

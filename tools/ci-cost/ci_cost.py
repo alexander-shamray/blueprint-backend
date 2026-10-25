@@ -12,6 +12,7 @@ import math
 import re
 import subprocess
 import sys
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -29,6 +30,9 @@ PAGE = 100
 # The runs endpoint returns at most this many results for one query, whatever the pages say.
 SEARCH_CAP = 1000
 WORKERS = 16
+# A 14-day window reads about 9,000 runs' jobs, past the 5,000 requests an hour a user token is allowed, so a
+# refused call waits and retries; GitHub asks a secondary limit to wait at least a minute.
+SECONDARY_WAIT = 60
 EVENTS = ("pull_request", "push", "schedule", "workflow_dispatch")
 WINDOW = re.compile(r"(?:([^=]+)=)?(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})")
 
@@ -83,10 +87,21 @@ class Usage:
 
 def gh(path: str) -> object:
     """One `gh api` call, so the repository's visibility and the token's scopes are gh's concern."""
-    done = subprocess.run(["gh", "api", path], capture_output=True, encoding="utf-8")
-    if done.returncode != 0:
-        raise LookupError(f"{path}: {done.stderr.strip() or done.stdout.strip()}")
-    return json.loads(done.stdout)
+    while True:
+        done = subprocess.run(["gh", "api", path], capture_output=True, encoding="utf-8")
+        if done.returncode == 0:
+            return json.loads(done.stdout)
+        message = done.stderr.strip() or done.stdout.strip()
+        if "rate limit" not in message.lower():
+            raise LookupError(f"{path}: {message}")
+        time.sleep(rate_limit_wait())
+
+
+def rate_limit_wait() -> int:
+    """Seconds until the hourly limit resets when it is spent, else a secondary limit's minute, as GitHub asks."""
+    core = json.loads(subprocess.run(["gh", "api", "rate_limit"], capture_output=True,
+                                     encoding="utf-8").stdout)["resources"]["core"]
+    return max(SECONDARY_WAIT, core["reset"] - int(time.time()) + 1) if core["remaining"] == 0 else SECONDARY_WAIT
 
 
 def paged(fetch: Fetch, path: str, key: str | None = None):
