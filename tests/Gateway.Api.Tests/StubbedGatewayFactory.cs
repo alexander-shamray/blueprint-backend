@@ -17,6 +17,8 @@ public class StubbedGatewayFactory(string destination) : GatewayFactory
         new("ReverseProxy:Clusters:privacy:Destinations:d1:Address", destination),
         new("ReverseProxy:Clusters:privacy:HealthCheck:Active:Enabled", "false"),
         new("ReverseProxy:Clusters:web-bff:Destinations:d1:Address", destination),
-        new("ReverseProxy:Clusters:web-bff:HealthCheck:Active:Enabled", "false")
+        new("ReverseProxy:Clusters:web-bff:HealthCheck:Active:Enabled", "false"),
+        new("ReverseProxy:Clusters:web-bff-assistant:Destinations:d1:Address", destination),
+        new("ReverseProxy:Clusters:web-bff-assistant:HealthCheck:Active:Enabled", "false")
     ];
 }

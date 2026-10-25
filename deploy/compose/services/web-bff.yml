@@ -80,6 +80,11 @@ services:
       Push__Apps__1__Platform: "apns"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     ports: [ "127.0.0.1:5200:8080" ]
+    # Compose runs one replica, so the gateway's assistant destination (ADR-153)
+    # is this container under a second name rather than a second container.
+    networks:
+      default:
+        aliases: [ web-bff-assistant ]
     # §13.5's readiness, asked by the host itself through HealthProbe, because
     # the image has no shell or HTTP client; the timeout outlasts the probe's.
     healthcheck:
