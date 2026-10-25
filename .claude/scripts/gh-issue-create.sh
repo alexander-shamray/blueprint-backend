@@ -65,8 +65,8 @@ esac
 
 # The title is the first line of stdin and the second must be blank, so a body
 # that arrives without its title line is refused rather than filed under its
-# first sentence; so is a heading in the title's place, since a house body opens
-# with one. An empty title is refused, and so is a stdin that ends before the
+# first sentence; so is a heading in its place, which passes the separator
+# check. An empty title is refused, and so is a stdin that ends before the
 # second line: `read` fails at EOF, and an unset separator is not a blank one.
 IFS= read -r title || true
 title="${title%$'\r'}"

@@ -131,8 +131,8 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         self.assert_refused_before_gh(self.run_helper("bug", "low", "sweep", body=""))
 
     def test_a_title_that_is_a_heading_is_refused(self):
-        # A house body opens with a heading and a blank line, so one handed over without its title line passes the
-        # blank-separator check and would be filed under the heading.
+        # A body that opens with a heading and a blank line passes the blank-separator check when it is handed
+        # over without its title line, and would be filed under the heading.
         for title in ("## Summary", "# Summary", "#Summary", "### Where"):
             with self.subTest(title=title):
                 result = self.run_helper("bug", "low", "sweep", body=f"{title}\n\nthe body\n\n{self.TRAILER}\n")
