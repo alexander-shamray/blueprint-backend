@@ -5,8 +5,8 @@ the conversation store every quarter of `AssistantLimits.IdleTimeout`, never
 more often than once a second, and it is `IDisposable`: disposing it stops the
 timer. A conversation idle past `IdleTimeout` is therefore forgotten within a
 quarter of `IdleTimeout` more, or a second where that is longer, whether or
-not anything opens or finds a conversation. `Web.Bff`'s `AssistantRuntime` disposes the core with the host's
-container. Both packages move to 0.1.1 under
+not anything opens or finds a conversation. `Web.Bff`'s `AssistantRuntime`
+disposes the core with the host's container. Both packages move to 0.1.1 under
 [ADR-150](ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md)'s
 rule.
 **Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)
