@@ -1,4 +1,5 @@
 using Catalog.Pricing.V1;
+using Inventory.Stock.V1;
 using Common.Infrastructure.Identity;
 using Common.Web;
 using FluentValidation;
@@ -85,6 +86,32 @@ pricing.AddHttpMessageHandler<ClientCredentialsHandler>();
 // §10.4's outbound half: the correlation ID crosses the synchronous hop (§9.7).
 builder.Services.AddTransient<CorrelationIdHandler>();
 pricing.AddHttpMessageHandler<CorrelationIdHandler>();
+
+// ADR-154's availability hop to Inventory, on the pricing hop's terms and in the same order (§9.7, §11.5).
+IHttpClientBuilder stock = builder.Services
+    .AddGrpcClient<Stock.StockClient>(StockHop.ClientName, o => o.Address = StockHop.Address);
+
+stock
+    .AddStandardResilienceHandler(options =>
+    {
+        options.TotalRequestTimeout.Timeout = StockHop.TotalRequestTimeout;
+
+        options.Retry.MaxRetryAttempts = StockHop.MaxRetryAttempts;
+        options.Retry.BackoffType = DelayBackoffType.Exponential;
+        options.Retry.UseJitter = true;
+        options.Retry.Delay = StockHop.RetryDelay;
+
+        options.Retry.MaxDelay = StockHop.MaxRetryDelay;
+
+        options.AttemptTimeout.Timeout = StockHop.AttemptTimeout;
+
+        options.CircuitBreaker.FailureRatio = StockHop.CircuitBreakerFailureRatio;
+        options.CircuitBreaker.MinimumThroughput = StockHop.CircuitBreakerMinimumThroughput;
+        options.CircuitBreaker.BreakDuration = StockHop.CircuitBreakerBreakDuration;
+    });
+
+stock.AddHttpMessageHandler<ClientCredentialsHandler>();
+stock.AddHttpMessageHandler<CorrelationIdHandler>();
 
 // ADR-051's projection and the bus that feeds it; the bus's check joins SQL's in readiness (§13.5).
 builder.Services.AddOrderProjection();

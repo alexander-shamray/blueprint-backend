@@ -16,6 +16,7 @@ public class ResilienceHierarchyTests
     public static TheoryData<string> Hops =>
     [
         PricingHop.ResilienceOptionsName,
+        StockHop.ResilienceOptionsName,
         NotificationsHop.ResilienceOptionsName,
         NotificationsHop.PreferencesResilienceOptionsName
     ];

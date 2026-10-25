@@ -1923,7 +1923,8 @@ section 'Service names are routing configuration (§10.2, §9.7)'
 grep -ohE 'http://[a-z0-9-]+:[0-9]+' \
     "$ROOT/src/Gateway/Gateway.Api/appsettings.json" \
     "$ROOT/src/BFF/Web.Bff/PricingHop.cs" \
-    "$ROOT/src/BFF/Web.Bff/NotificationsHop.cs" |
+    "$ROOT/src/BFF/Web.Bff/NotificationsHop.cs" \
+    "$ROOT/src/BFF/Web.Bff/StockHop.cs" |
     sed -E 's|http://([a-z0-9-]+):([0-9]+)|\1 \2|' | sort -u >"$OUT/pairs.txt"
 
 cut -d' ' -f1 "$OUT/pairs.txt" | sort -u >"$OUT/dialled.txt"

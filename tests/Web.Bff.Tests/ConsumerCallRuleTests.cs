@@ -55,7 +55,8 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
                 "DevicesClient",
                 "HttpClient",
                 "PreferencesClient",
-                "PricingClient"
+                "PricingClient",
+                "StockClient"
             ]);
     }
 
