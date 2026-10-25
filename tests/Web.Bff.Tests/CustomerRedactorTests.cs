@@ -17,6 +17,8 @@ public sealed class CustomerRedactorTests
     [InlineData("my number is +44 (20) 7946-0958", CustomerRedactor.Phone)]
     [InlineData("I paid with 4111 1111 1111 1111 yesterday", CustomerRedactor.Card)]
     [InlineData("card 5555-5555-5555-4444", CustomerRedactor.Card)]
+    [InlineData("card 4111 1111 1111 1111 123 is the one", CustomerRedactor.Card)]
+    [InlineData("card 4111 1111 1111 1111 12/27", CustomerRedactor.Card)]
     public void A_contact_or_card_detail_is_replaced_by_its_marker(string text, string marker)
     {
         string redacted = _redactor.Redact(text, Customer);
