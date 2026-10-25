@@ -276,8 +276,8 @@ host's rather than a service's — is built on them.
 simplest possible service and the last one built, and those two facts are not in
 tension. It contains almost no domain logic, which is what makes it cheap; it
 also publishes nothing and subscribes to eight events owned by other services,
-which is what makes it impossible to exercise before they exist ([Appendix
-C.1](appendix-c-delivery-plan.md#c1-service-build-order)). Simple to write is not the same as ready to build.
+which is what makes it impossible to exercise before they exist
+([Appendix C.1](appendix-c-delivery-plan.md#c1-service-build-order)). Simple to write is not the same as ready to build.
 
 ## 3.3 Rules for creating a new service
 
