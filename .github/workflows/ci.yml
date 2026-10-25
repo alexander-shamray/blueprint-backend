@@ -505,8 +505,8 @@ jobs:
       gateway: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.gateway }}
       bff: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.bff }}
       deploy: ${{ github.event_name == 'workflow_dispatch' || steps.changes.outputs.deploy }}
-      # Empty on a dispatch, which has no change to read: the packages job
-      # pushes only on a push to main, so they gate nothing else (ADR-149).
+      # Empty on a dispatch, which has no change to read: they gate only the
+      # packages job's pull-request check and its push to main (ADR-149, ADR-150).
       assistant: ${{ steps.changes.outputs.assistant }}
       anthropic: ${{ steps.changes.outputs.anthropic }}
     steps:
@@ -1202,8 +1202,8 @@ jobs:
   # ADR-149's two packages. Packed on every run once the test stages pass, so a
   # project that cannot pack fails its own pull request; pushed only from main,
   # and only the package whose project changed. There is no --skip-duplicate:
-  # the feed refuses a version it holds, so a changed project that kept its
-  # Version fails here instead of leaving a stale package.
+  # a changed project that kept its Version and got past the pull request's
+  # check is refused by the feed here, instead of leaving a stale package.
   packages:
     needs: [changes, stage-gate]
     runs-on: ubuntu-latest
@@ -1216,6 +1216,37 @@ jobs:
       PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@v7
+
+      # The feed's refusal of a held version is the backstop on main; this moves
+      # the version rule to the pull request (ADR-150). A project absent at the
+      # base is new and has no version to repeat.
+      - name: A changed package carries a new Version
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$BASE"
+          version() { sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p'; }
+          failed=0
+          for pair in "Common.Assistant:$ASSISTANT" "Common.Assistant.Anthropic:$ANTHROPIC"; do
+            project=${pair%%:*}
+            [ "${pair#*:}" = true ] || continue
+            path="src/BuildingBlocks/$project/$project.csproj"
+            head=$(version < "$path")
+            if [ -z "$head" ]; then
+              echo "::error::No <Version> read from $path, so the version rule cannot be checked."
+              exit 1
+            fi
+            git cat-file -e "$BASE:$path" 2>/dev/null || continue
+            if [ "$(git show "$BASE:$path" | version)" = "$head" ]; then
+              echo "::error file=$path::$project changed and keeps the base's Version $head; a changed package ships under a new one (ADR-149)."
+              failed=1
+            fi
+          done
+          exit "$failed"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          ASSISTANT: ${{ needs.changes.outputs.assistant }}
+          ANTHROPIC: ${{ needs.changes.outputs.anthropic }}
 
       - uses: actions/setup-dotnet@v6
         with:
