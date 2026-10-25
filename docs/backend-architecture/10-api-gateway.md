@@ -1027,7 +1027,9 @@ exactly this: `request.concurrency_conflict`, `request.in_progress`,
 `command.already_committed`, `command.id_reused` for
 `CommandIdReusedException`
 ([ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)),
-and `device.stale_sequence` for §10.10's out-of-order registration.
+`device.stale_sequence` for §10.10's out-of-order registration, and
+`assistant.turn_running` for a turn sent while the conversation's last one
+still runs ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
 The `Error` path carries a `code` on the same terms, and so does the one 412,
 `preference.precondition_failed`.
 

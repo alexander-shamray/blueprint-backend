@@ -73,6 +73,37 @@ public sealed class AssistantEndpointTests
     }
 
     [Fact]
+    public async Task A_turn_sent_while_one_runs_is_a_409_with_its_code_and_a_bad_one_names_its_field()
+    {
+        await using AssistantFactory factory = new();
+        using HttpClient client = As(factory, _customer);
+        string id = await OpenAsync(client);
+        factory.Provider.Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        HttpResponseMessage first = await client.PostAsJsonAsync(
+            $"/v1/assistant/conversations/{id}/turns",
+            new { text = "Hello" },
+            Ct);
+        HttpResponseMessage second = await client.PostAsJsonAsync(
+            $"/v1/assistant/conversations/{id}/turns",
+            new { text = "Hello again" },
+            Ct);
+        factory.Provider.Hold.SetResult();
+        HttpResponseMessage empty = await client.PostAsJsonAsync(
+            $"/v1/assistant/conversations/{id}/turns",
+            new { text = "" },
+            Ct);
+
+        first.StatusCode.ShouldBe(HttpStatusCode.Accepted);
+        second.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await second.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("code").GetString()
+            .ShouldBe(AssistantEndpoints.TurnRunningCode);
+        empty.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await empty.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors").TryGetProperty("text", out _)
+            .ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task On_a_customer_opens_a_conversation_and_reads_the_reply()
     {
         await using AssistantFactory factory = new();
