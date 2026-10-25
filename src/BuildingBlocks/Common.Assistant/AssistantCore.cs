@@ -14,6 +14,7 @@ namespace Common.Assistant;
 public sealed class AssistantCore : IDisposable
 {
     private static readonly TimeSpan MinSweepPeriod = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaxSweepPeriod = TimeSpan.FromDays(1);
 
     private readonly IReadOnlyList<IToolSource> sources;
     private readonly ToolPolicy policy;
@@ -44,7 +45,10 @@ public sealed class AssistantCore : IDisposable
         TurnEnded = turnEnded;
         store = new ConversationStore(limits, time);
 
-        TimeSpan period = TimeSpan.FromTicks(Math.Max(MinSweepPeriod.Ticks, limits.IdleTimeout.Ticks / 4));
+        // Capped, because a timer refuses a period past about 49 days and a long IdleTimeout is valid; a shorter
+        // period only tightens the bound.
+        TimeSpan period = TimeSpan.FromTicks(
+            Math.Clamp(limits.IdleTimeout.Ticks / 4, MinSweepPeriod.Ticks, MaxSweepPeriod.Ticks));
         sweep = time.CreateTimer(_ => store.SweepIdle(), null, period, period);
     }
 

@@ -506,6 +506,17 @@ public sealed class AssistantSessionTests
     }
 
     [Fact]
+    public void An_IdleTimeout_of_a_year_still_builds_a_core_on_the_system_clock()
+    {
+        AssistantCore core = Core(
+            new ScriptedProvider(),
+            new AssistantLimits { IdleTimeout = TimeSpan.FromDays(365) },
+            TimeProvider.System);
+
+        core.Dispose();
+    }
+
+    [Fact]
     public void A_disposed_core_stops_sweeping()
     {
         FakeTimeProvider time = new();
