@@ -63,15 +63,16 @@ case "$route" in
   *) echo "not a route this helper will file under: $route" >&2; exit 2 ;;
 esac
 
-# The title is the first line of stdin and the second line must be blank, so a
-# body that arrives without its title line is refused rather than filed under
-# its own first sentence. An empty title files an issue nobody can find in the
-# tracker; a title cannot contain a newline, because a line is what it is. A
-# stdin that ends before the second line is refused too: `read` fails at EOF,
-# and an unset separator is not a blank one.
+# The title is the first line of stdin and the second must be blank, so a body
+# that arrives without its title line is refused rather than filed under its
+# first sentence; so is a heading in the title's place, since a house body opens
+# with one. An empty title is refused, and so is a stdin that ends before the
+# second line: `read` fails at EOF, and an unset separator is not a blank one.
 IFS= read -r title || true
 title="${title%$'\r'}"
 [ -n "$title" ] || { echo "the title is empty" >&2; exit 2; }
+[ "${title:0:1}" != "#" ] ||
+  { echo "the title begins with a hash, so it is a heading: title, blank line, body" >&2; exit 2; }
 IFS= read -r separator ||
   { echo "stdin ended before the blank line: title, blank line, body" >&2; exit 2; }
 separator="${separator%$'\r'}"

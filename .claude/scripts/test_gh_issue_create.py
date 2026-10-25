@@ -130,6 +130,20 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         self.assert_refused_before_gh(self.run_helper("bug", "low", "sweep", body="\n\nthe body\n"))
         self.assert_refused_before_gh(self.run_helper("bug", "low", "sweep", body=""))
 
+    def test_a_title_that_is_a_heading_is_refused(self):
+        # A house body opens with a heading and a blank line, so one handed over without its title line passes the
+        # blank-separator check and would be filed under the heading.
+        for title in ("## Summary", "# Summary", "#Summary", "### Where"):
+            with self.subTest(title=title):
+                result = self.run_helper("bug", "low", "sweep", body=f"{title}\n\nthe body\n\n{self.TRAILER}\n")
+                self.assert_refused_before_gh(result)
+                self.assertIn("title, blank line, body", result.stderr)
+
+    def test_a_title_with_a_hash_inside_is_filed(self):
+        # The control: only a leading hash is refused, so a title naming C# or an issue still files.
+        result = self.run_helper("bug", "low", "sweep", body=f"fix: C# parsing of #12\n\nthe body\n\n{self.TRAILER}\n")
+        self.assertEqual(0, result.returncode, result.stderr)
+
     def test_a_body_without_the_blank_separator_is_refused(self):
         # A body piped without its title line would otherwise file under its
         # own first sentence, with the second sentence lost into the title.
