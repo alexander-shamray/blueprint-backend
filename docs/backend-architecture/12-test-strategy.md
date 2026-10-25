@@ -330,8 +330,10 @@ through the SDK's own parser over a `FakeHttp` handler, so `StreamTests`'
 truncated-stream case proves a reply cut off before `message_stop` fails
 without a network. That departs from §12.7's
 row for a third-party API, WireMock.Net with a nightly contract test against
-the sandbox, because no host in this repository calls the provider yet; the
-host that does (#1347) inherits the row.
+the sandbox, and `Web.Bff.Tests` departs from it too, driving the host with a
+scripted provider in the adapter's place, because no deployment turns the BFF's
+assistant on; the change that does (#1451) inherits the row
+([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
 
 ## 12.4 Application tests — real infrastructure
 

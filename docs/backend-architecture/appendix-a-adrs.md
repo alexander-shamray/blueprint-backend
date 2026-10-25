@@ -157,6 +157,7 @@ decision looks wrong.
 | **ADR-148** | [The object store check writes a sentinel with the BFF's pair and reads it back with Catalog's (#1221)](adr/ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md) |
 | **ADR-149** | [The AI assistant's core and its adapter are two building blocks this repository publishes as NuGet packages (#1346)](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md) |
 | **ADR-150** | [The assistant packages' Version rule is checked on the pull request, and their blocks leave the shared filter (#1447), amending ADR-149](adr/ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md) |
+| **ADR-151** | [The Web BFF hosts the AI assistant for signed-in customers, off by default and scoped to the caller (#1347), amending ADR-053, ADR-149 and ADR-150](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md) |
 
 ---
 

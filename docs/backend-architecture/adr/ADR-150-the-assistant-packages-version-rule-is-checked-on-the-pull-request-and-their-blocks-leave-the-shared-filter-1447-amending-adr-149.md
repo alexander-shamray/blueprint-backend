@@ -33,6 +33,12 @@ back while it takes the anchor: the change that makes a host reference them
 drops them and rebuilds every image again. ADR-149 is otherwise unchanged; this
 decision is read beside it, as an ADR is amended and never rewritten.
 
+**Amended by
+[ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)**:
+the BFF now holds the two blocks, and its filter takes an `inputs` anchor that
+keeps them, while `shared` is `inputs` less the two blocks. This record is
+otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

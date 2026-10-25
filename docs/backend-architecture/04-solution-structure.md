@@ -531,6 +531,7 @@ because each one produces a defect that no test catches by accident:
 | `UseRequestTimeouts` below `UseExceptionHandler` | Above it, the handler answers the cancelled request first, as a 499, and §10.5's 504 is never written ([ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)) |
 | `UseAuthentication` before `UseAuthorization` | **Every authenticated request 401s** — in a `WebApplication` too. Omitting a call is repaired by auto-insertion; writing both in the wrong order is not, because the markers they set suppress it. See the callout below |
 | `UseAuthentication` before `UseRateLimiter` (gateway only) | Same empty `User`, but this one does not 403 — §10.3's per-user partition key silently degrades to per-IP, and everyone behind one NAT shares a single bucket. **Silent is the measured half**: reversing the two leaves every test in `Gateway.Api.Tests` green, the authenticated-partition test included, so nothing in the repository is watching this line (see below) |
+| `UseRateLimiter` below `UseAuthorization` (BFF only) | The assistant's partition is the caller's subject ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)), read through `ICurrentUser`, which throws without one: above authorization, an anonymous request to a limited route answers 500 rather than §11.4's 401, and `AssistantEndpointTests`' anonymous case fails |
 | `UseForwardedHeaders` above the limiter, and **below** the handler and the correlation ID (gateway only) | Two rules meeting: putting it first means a fault parsing a forwarded header unwinds past no exception handler, and anything the middleware logs runs outside the correlation scope. Neither of those two reads the address, so nothing is lost by letting them wrap it — while the limiter, which does read it, stays below. `ForwardedHeadersTests` covers the lower half: below `UseRateLimiter`, two forwarded addresses collapse onto the one connection the gateway can see |
 | Both before endpoint mapping | `RequireAuthorization` has nothing to evaluate against |
 | Health endpoints mapped **anonymous** | Probes 401, Kubernetes reads that as unhealthy, and the pod is killed in a loop |
@@ -578,8 +579,11 @@ confidence nobody checked.
 > the claim: it drives all three pipelines and is the regression guard if a
 > release ever stops auto-inserting.
 
-The **gateway** has its own pipeline and is the only place rate limiting is
-applied (§10.1); a service behind it does not call `UseRateLimiter`.
+The **gateway** has its own pipeline and is the only place the platform's
+capacity limit is applied (§10.1); no service behind it calls `UseRateLimiter`,
+and the BFF calls it only for
+[ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)'s per-customer limit on the assistant's routes
+that start work: opening a conversation and starting a turn.
 `src/Gateway/Gateway.Api/Program.cs` follows in three excerpts. Its
 registrations, up to the reverse proxy:
 
@@ -783,8 +787,8 @@ different reasons and each message says which.
 > reasoned from the code and is not observed by anything. Keep the order, and
 > do not believe a test is holding it.
 
-Rate limiting sits **between** authentication and authorization, and both halves
-of that are load-bearing.
+In the gateway, rate limiting sits **between** authentication and
+authorization, and both halves of that are load-bearing.
 
 It must come *after* `UseAuthentication` because §10.3's `authenticated` policy
 partitions on the subject claim. Before that line the claim lookup returns null
