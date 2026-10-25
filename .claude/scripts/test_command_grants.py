@@ -135,7 +135,7 @@ class TheSweepsDenyEveryGhCommand(unittest.TestCase):
                     self.assertFalse(any(bash_deny_matches(rule, command) for rule in self.denies(name)))
 
 
-class NoCommandGrantsEveryShellCommand(unittest.TestCase):
+class NoCommandGrantsABareBashOrALeadingWildcard(unittest.TestCase):
     # The bare tool and a leading wildcard each grant what the per-command checks look for by name.
     BROAD_BASH = re.compile(r"Bash(?:\(\*.*\))?")
 
