@@ -131,9 +131,10 @@ because rewording a comment adds comment and no code; and one labelled
 `comment-sweep`, the gate's `SWEEP_LABEL`, because a sweep rewrites comments
 shorter, so what it adds is comment. CI hands the gate the title in
 `PR_TITLE` and the labels, a JSON list of names, in `PR_LABELS`, as the
-event that started the run carried them. CI's `pull_request` types include
-`labeled` and `unlabeled`, so a label added starts a run that reads it;
-re-running the failed job would not, as it replays the old event. A title
+event that started the run carried them. The gate's workflow takes
+`labeled` and `unlabeled` among its `pull_request` types, so a label added
+starts a run that reads it; re-running the failed job would not, as it
+replays the old event. A title
 changed counts from the next push. A run without either, as a local one is,
 takes no exception, and a `PR_LABELS` that is not a list of names refuses
 the run.
@@ -145,8 +146,11 @@ that a tree is under the rule; CI does not run it.
 
 ## How it runs
 
-The `comment-gate` job in [`ci.yml`](../workflows/ci.yml). The suite runs the
-head copy on every run; on a pull request, **the gate that judges is read out
+The `comment-gate` job in
+[`comment-gate.yml`](../workflows/comment-gate.yml), a workflow of its own
+because a label has to start a run of this gate, and in `ci.yml` it would
+start a build and every suite as well. The suite runs the head copy on
+every run; on a pull request, **the gate that judges is read out
 of the base commit**, on the closure gate's design, so a pull request cannot
 loosen the rule it is judged by. A base with no gate directory is judged by
 the head copy under a warning, as the locality gate's bootstrap is, because
