@@ -977,6 +977,7 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 |---|---|---|---|
 | Pricing | `Web.Bff` | Catalog, `pricing.proto` | `src/BFF/Web.Bff/PricingHop.cs` |
 | Device registration and preferences | `Web.Bff` | Notifications.Api, `devices.proto` and `preferences.proto` | `src/BFF/Web.Bff/NotificationsHop.cs` |
+| Stock availability, for the assistant's `get_stock` | `Web.Bff` | Inventory.Api, `stock.proto` | `src/BFF/Web.Bff/StockHop.cs` ([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)) |
 | Delivery address | Shipping's worker | Ordering | `Shipping.Infrastructure/Addresses/AddressHop.cs` |
 | Contact | Notifications' worker | Keycloak's admin API | `Notifications.Infrastructure/Contacts/ContactHop.cs` |
 | Payment provider | Payments' consumers | the provider | `Payments.Infrastructure/Provider/ProviderHop.cs` |
@@ -987,7 +988,9 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 | Model provider | `Web.Bff`'s assistant turn, and its status route's cached probe; off by default | the AI assistant's provider | `src/BFF/Web.Bff/Assistant/AnthropicProviderFactory.cs`, the SDK's own client ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)) |
 
 Catalog owns `pricing.proto` in `Catalog.Api/Protos`, and `Web.Bff` links it;
-Notifications owns `devices.proto` and `preferences.proto` in
+Inventory owns `stock.proto` in `Inventory.Api/Protos`, which `Web.Bff` links on
+the pricing hop's numbers and calls under its client credentials, answering
+whether a product is in stock and never how many; Notifications owns `devices.proto` and `preferences.proto` in
 `Notifications.Api/Protos`, and `Web.Bff` links both too, one gRPC client each
 on the one hop's numbers. The command path never calls Catalog: it reads
 Ordering's price projection. The deepest chains on a request path are
@@ -1069,10 +1072,11 @@ routes, by cluster and policy:
 **Catalog's write side is `catalog-write`**: the endpoint still requires
 `catalog:write`, and the route's `authenticated` is the edge's coarser check.
 
-**The BFF makes two synchronous calls, to Catalog and to Notifications.Api**
+**The BFF makes three synchronous calls to services, to Catalog, to
+Notifications.Api and, for the assistant's stock tool, to Inventory.Api**
 ([§2.2](02-architecture-at-a-glance.md), [§9.7](09-messaging.md),
 [ADR-017](adr/ADR-017-one-synchronous-hop.md)), each its own request's one
-hop, so those two are the hops `CorrelationIdHandler` is registered on.
+hop, so those three are the hops `CorrelationIdHandler` is registered on.
 
 ### E.6.2 Error catalogue and refusals
 
@@ -2173,7 +2177,7 @@ The two filters that reach into another service's tree:
 
 | Filter | Extra path | Why |
 |---|---|---|
-| `bff` | `src/Services/Catalog/Catalog.Api/Protos/**` and `src/Services/Notifications/Notifications.Api/Protos/**` | Web.Bff compiles Catalog's `pricing.proto` and Notifications' `devices.proto` and `preferences.proto` as linked source files (§9.7) and its Dockerfile copies both paths |
+| `bff` | `src/Services/Catalog/Catalog.Api/Protos/**`, `src/Services/Notifications/Notifications.Api/Protos/**` and `src/Services/Inventory/Inventory.Api/Protos/**` | Web.Bff compiles Catalog's `pricing.proto`, Notifications' `devices.proto` and `preferences.proto` and Inventory's `stock.proto` as linked source files (§9.7) and its Dockerfile copies all three paths |
 | `shipping` | `src/Services/Ordering/Ordering.Api/Protos/**` | Shipping's images copy Ordering's `Protos/` for the delivery-address contract, on the BFF's terms |
 
 `tests/Ordering.*/**` covers `Ordering.TestSupport` as well as Ordering's three

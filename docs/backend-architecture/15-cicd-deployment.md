@@ -148,10 +148,10 @@ services, so it belongs to all of them; owned by none, it would run for none.
 
 **Two filters reach into another service's tree, and each names a file its
 deployable compiles.** In the reference domain, Web.Bff compiles Catalog's
-`pricing.proto` and Notifications' `devices.proto` and `preferences.proto` as
-linked source files (§9.7) and its Dockerfile copies both paths, so a
-proto-only change alters what the BFF ships while matching only `catalog` or
-`notifications`;
+`pricing.proto`, Notifications' `devices.proto` and `preferences.proto` and
+Inventory's `stock.proto` as linked source files (§9.7) and its Dockerfile
+copies all three paths, so a proto-only change alters what the BFF ships while
+matching only `catalog`, `notifications` or `inventory`;
 Shipping's images copy Ordering's `Protos/` on the same terms, and its filter
 names that path too
 ([Appendix E.9](appendix-e-reference-domain.md#e9-15-cicd-and-deployment)).
@@ -406,7 +406,7 @@ which is the shape the second callout below argues for.
 
 Each of the Helm filter's outside paths is an input `smoke.sh` actually reads:
 
-- §10.2's route file and `PricingHop.cs`, which hold their destination hosts as
+- §10.2's route file and the BFF's hop files, `PricingHop.cs` among them, which hold their destination hosts as
   literals on the stated grounds that "the host is the Kubernetes Service
   name" — so renaming a destination without them is a green pull request that
   breaks the next deploy;

@@ -70,10 +70,12 @@ shows first as that route's p99 and nowhere else; no other query reads one.
 
 ### A slow peer
 
-There are two synchronous hops on a request path, each its request's one —
-BFF → Catalog for pricing, and BFF → Notifications.Api for a device
-registration or a notification preference
-([§9.7](../backend-architecture/09-messaging.md), ADR-017, ADR-117, ADR-120) —
+There are three synchronous hops on a request path, each its request's one —
+BFF → Catalog for pricing, BFF → Notifications.Api for a device
+registration or a notification preference, and BFF → Inventory.Api for the
+assistant's stock tool
+([§9.7](../backend-architecture/09-messaging.md), ADR-017, ADR-117, ADR-120,
+ADR-154) —
 and they are the only ones that can make an HTTP request wait. If the BFF is
 the service alerting, check which route is slow, then the callee's
 own p99, then the resilience handler's timeout hierarchy —
