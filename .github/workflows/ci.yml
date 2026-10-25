@@ -124,7 +124,15 @@ jobs:
   # filesystem, where the suite beside them needs `bash`, `grep`, `git` and
   # `jq` on PATH. Widening this job to the directory would adopt that whole
   # toolchain on every platform in the matrix.
+
+  # Only when `.claude/` or this workflow changed, which `changes` answers: a
+  # Windows minute bills as two Linux ones and a macOS minute as ten, and what
+  # the matrix proves is a property of the hooks and scripts it tests, which
+  # read across `.claude/`, not of every commit. Nothing requires the job, so a
+  # skipped one holds no merge.
   edit-target-guard:
+    needs: changes
+    if: needs.changes.outputs.guard == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -515,6 +523,8 @@ jobs:
       # packages job's pull-request check and its push to main (ADR-149, ADR-150).
       assistant: ${{ steps.changes.outputs.assistant }}
       anthropic: ${{ steps.changes.outputs.anthropic }}
+      # Empty on a dispatch too, which builds images and has no guard to test.
+      guard: ${{ steps.changes.outputs.guard }}
     steps:
       - uses: actions/checkout@v7
 
@@ -623,6 +633,13 @@ jobs:
               - 'src/BuildingBlocks/Common.Assistant/**'
             anthropic:
               - 'src/BuildingBlocks/Common.Assistant.Anthropic/**'
+            # What edit-target-guard's two suites read, the hooks, scripts,
+            # settings and skill examples under `.claude/`, and the workflow
+            # that defines its matrix. Whole, so a suite that reads one more
+            # file there needs no edit here.
+            guard:
+              - '.claude/**'
+              - '.github/workflows/ci.yml'
 
   # What IDE0055 cannot read — the byte-order mark and the final newline —
   # over every C# file but generated code; docs/style-guide.md
