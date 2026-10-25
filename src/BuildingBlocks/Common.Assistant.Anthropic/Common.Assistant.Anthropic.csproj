@@ -1,8 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The Anthropic adapter (AI assistant design §8.2): the one building block that carries the vendor SDK, so the core holds
-       no package and a host with the assistant off never loads this assembly. The other package ADR-149 publishes,
-       versioned apart from the core: its dependency on the core is the core's Version when this one was packed. -->
+  <!-- The Anthropic adapter (AI assistant design §8.2): the one building block that carries the vendor SDK, so the
+       core holds no package and a host with the assistant off never loads this assembly. The other package
+       ADR-149 publishes, versioned apart from the core: its dependency on the core is the core's Version when
+       this one was packed. -->
 
   <PropertyGroup>
     <IsPackable>true</IsPackable>
