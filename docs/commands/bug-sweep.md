@@ -712,6 +712,11 @@ lost its last line, and the helper exits 2 instead of filing half an
 issue — after the tail has run, which is why the rule and not the trailer
 is the guard.
 
+**A title must not begin with `#` either.** The helper refuses it: a body
+handed over without its title line opens with a heading and a blank line, and
+would be filed under the heading. Write a directive such as `#nullable` in
+backticks.
+
 **A title must never begin with `/`.** MSYS argument conversion rewrites an
 argument that looks like an absolute POSIX path before the native `gh.exe`
 sees it, so `--title "/health/ready returns 200 …"` files as
