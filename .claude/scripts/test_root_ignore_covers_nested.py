@@ -51,8 +51,10 @@ def matching_ignore_file(root, directory):
     if result.returncode != 0:
         return None
     # `<source>:<line>:<pattern>` then a tab and the path. The source is
-    # repository-relative, so the first colon is the one after it.
-    return result.stdout.strip().split(":")[0]
+    # repository-relative, so the first colon is the one after it. Exit 0 is
+    # also a negated pattern, which un-ignores the path, so it is no match.
+    source, _, pattern = result.stdout.split("\t")[0].split(":", 2)
+    return None if pattern.startswith("!") else source
 
 
 class EveryBlankedDirectoryIsNamedAtTheRoot(unittest.TestCase):
@@ -107,6 +109,13 @@ class TheCheckFailsWhereTheRootRuleIsAbsent(unittest.TestCase):
 
         self.assertEqual(blanking_directories(root), [scratch])
         self.assertEqual(matching_ignore_file(root, scratch), ".gitignore")
+
+    def test_a_root_negation_is_not_a_match(self):
+        # `check-ignore -v` exits 0 for a negated pattern too, and names it as the rule.
+        root, scratch = self.scratch_repository("scratch/" + NEWLINE + "!scratch/")
+
+        self.assertEqual(blanking_directories(root), [scratch])
+        self.assertIsNone(matching_ignore_file(root, scratch))
 
 
 if __name__ == "__main__":
