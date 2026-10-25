@@ -246,6 +246,9 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
         absent = [n for n in self.AUTO_IMPORTED if n not in tracked]
         self.assertIn("Directory.Build.targets", absent)
 
+    # A `dotnet` grant in any spelling: `dotnet test`, the bare prefix and a wildcard admit a free-form run.
+    DOTNET_GRANT = re.compile(r"dotnet(?:[\s*:]|$)")
+
     def test_no_command_grants_a_free_form_dotnet(self):
         # `dotnet test:*` admits an arbitrary project path and
         # `/p:CustomBeforeMicrosoftCommonTargets=<file>`, which imports
@@ -258,8 +261,15 @@ class CommandsEnforceTheEditingBoundariesTheyState(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             granted = re.findall(r"^allowed-tools:\s*(.+)$", text, re.MULTILINE)
             for line in granted:
-                with self.subTest(command=path.name):
-                    self.assertNotIn("Bash(dotnet ", line)
+                for grant in re.findall(r"Bash\(([^)]*)\)", line):
+                    with self.subTest(command=path.name, grant=grant):
+                        self.assertIsNone(self.DOTNET_GRANT.match(grant))
+
+    def test_a_dotnet_grant_is_seen_in_every_spelling(self):
+        for grant in ("dotnet:*", "dotnet*", "dotnet", "dotnet test", "dotnet test:*"):
+            with self.subTest(grant=grant):
+                self.assertIsNotNone(self.DOTNET_GRANT.match(grant))
+        self.assertIsNone(self.DOTNET_GRANT.match("bash .claude/scripts/dotnet-test.sh:*"))
 
     def test_the_test_runner_helper_takes_no_free_parameter(self):
         # The helper leaves nothing to steer: the solution, the filter and the
