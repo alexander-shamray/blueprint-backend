@@ -107,8 +107,8 @@ the second-largest line and none of the four changes touches them.
 ## Window A — 2026-10-11 to 2026-10-24, at the first merge
 
 Measured on 2026-10-25 against GitHub Free at `RATES` as read on 2026-10-24. The
-first change merged at 08:24 UTC that day, when #1463 landed #1435 and #1437
-together, so these are the 14 full UTC days before it and the baseline the
+first change merged at 08:24 UTC on 2026-10-25, when #1463 landed #1435 and
+#1437 together, so these are the 14 full UTC days before it and the baseline the
 comparison reads. Thirteen of the days are the first baseline's, which is why
 its minutes and price agree with that one's to within 3%. No outage or freeze is
 known inside the window. GHCR was refused again, this time for want of
