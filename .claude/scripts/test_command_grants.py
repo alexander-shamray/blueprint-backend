@@ -111,6 +111,30 @@ class ABuiltInDenyIsHeldToo(unittest.TestCase):
         self.assertIsNone(undenied_agents("---\nname: x\n---\n", profiles))
 
 
+class TheSweepsDenyEveryGhCommand(unittest.TestCase):
+    """Raw filing is denied as a whole, not as the one spelling a deny list named (`docs/harness-boundaries.md`)."""
+
+    FILINGS = ("gh issue create --repo a/b --title t", "gh issue new --repo a/b --title t",
+               "gh api repos/a/b/issues -f title=t", "gh issue view 1 --json author,body")
+    HELPERS = ("bash .claude/scripts/gh-issue-create.sh hand", "bash .claude/scripts/gh-issue-list.sh")
+
+    def denies(self, name):
+        return frontmatter_list((COMMANDS / name).read_text(encoding="utf-8"), "disallowed-tools")
+
+    def test_each_sweep_refuses_each_spelling(self):
+        for name in ("bug-sweep.md", "security-sweep.md"):
+            for command in self.FILINGS:
+                with self.subTest(command=name, filing=command):
+                    self.assertTrue(any(bash_deny_matches(rule, command) for rule in self.denies(name)))
+
+    def test_the_helpers_stay_reachable(self):
+        # The control: a deny that refused these would take the sweeps' only route with it.
+        for name in ("bug-sweep.md", "security-sweep.md"):
+            for command in self.HELPERS:
+                with self.subTest(command=name, helper=command):
+                    self.assertFalse(any(bash_deny_matches(rule, command) for rule in self.denies(name)))
+
+
 class NothingShipChainsDeniesPush(unittest.TestCase):
     """A frontmatter deny on a command /ship runs before it pushes refuses /ship's own push a step later.
 

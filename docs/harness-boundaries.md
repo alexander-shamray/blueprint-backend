@@ -993,7 +993,8 @@ load. **It is measured now**, by a throwaway command in a detached worktree
 carrying `Bash(git diff:*)` in both keys: the diff was refused with the
 harness's own "has been denied" text while a `Bash(wc:*)` in the same session
 ran, which separates the two exactly. Both sweeps deny `git push origin`,
-its `-u` form and the raw `gh issue create` by name, and the deny wins over
+its `-u` form, the raw `gh issue create` by name and every `gh` command
+(`Bash(gh:*)`, for `gh issue new` and `gh api`), and the deny wins over
 the global allow because precedence is deny first.
 
 **A frontmatter deny holds for the rest of the user turn, not for the command
@@ -1348,7 +1349,11 @@ dispatch returns a verdict, the parent opens nothing in `$work`, and
 `gh-issue-create.sh` leaves `gh issue create` with no free parameter — so
 the two residuals #149 named as one class went in one change, and the raw
 `Bash(gh issue create:*)` is denied by name in both sweeps now that the
-fifth entry's measurement exists.
+fifth entry's measurement exists. `Bash(gh:*)` is denied beside it for the
+aliases, `gh issue new` and `gh api` (#1287). The residual: an env-prefixed
+or shell-wrapped `gh` matches neither rule and nothing in the tree refuses
+it. The default mode prompts for such a call; in a mode that skips prompts,
+only the helper being the sweeps' one granted route stands in the way.
 
 **The two sweeps are one shape asking two questions**, split by what makes a
 finding rather than by where they look. `/security-sweep` files what an
