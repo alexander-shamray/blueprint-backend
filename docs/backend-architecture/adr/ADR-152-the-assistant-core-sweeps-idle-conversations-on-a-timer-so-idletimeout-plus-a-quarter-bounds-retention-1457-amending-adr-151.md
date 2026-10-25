@@ -2,8 +2,9 @@
 
 **Decision.** `AssistantCore` owns a timer on its `TimeProvider` that sweeps
 the conversation store every quarter of `AssistantLimits.IdleTimeout`, never
-more often than once a second, and it is `IDisposable`: disposing it stops the
-timer. A conversation idle past `IdleTimeout` is therefore forgotten within a
+more often than once a second and never less often than once a day (the
+ceiling is `AssistantCore`'s, because a timer refuses a longer period), and
+it is `IDisposable`: disposing it stops the timer. A conversation idle past `IdleTimeout` is therefore forgotten within a
 quarter of `IdleTimeout` more, or a second where that is longer, whether or
 not anything opens or finds a conversation. `Web.Bff`'s `AssistantRuntime`
 disposes the core with the host's container. Both packages move to 0.1.1 under
