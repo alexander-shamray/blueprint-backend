@@ -143,6 +143,8 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         # The control: only a leading hash is refused, so a title naming C# or an issue still files.
         result = self.run_helper("bug", "low", "sweep", body=f"fix: C# parsing of #12\n\nthe body\n\n{self.TRAILER}\n")
         self.assertEqual(0, result.returncode, result.stderr)
+        create = [c for c in self.calls() if c.startswith("issue create ")]
+        self.assertIn("--title fix: C# parsing of #12", create[0])
 
     def test_a_body_without_the_blank_separator_is_refused(self):
         # A body piped without its title line would otherwise file under its
