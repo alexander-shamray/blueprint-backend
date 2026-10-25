@@ -46,7 +46,8 @@ signed image to verify, and a change to `ci.yml` does not select it: a dispatch
 of `ci.yml` makes every filter true and signs every image once. Each commit on
 `main` has a concurrency group of its own, so no run is cancelled or replaced
 while pending, because one lost between the push and the signature leaves an
-image the verifier then refuses. **Consequences.** Nothing here can be exercised
+image the verifier then refuses.
+**Consequences.** Nothing here can be exercised
 before the first push to `main`, so the first dispatch is where a wrong action
 input shows, or a `cosign verify` output the digest reader cannot parse, which
 refuses the rollout rather than passing it. Keyless signing needs Sigstore's

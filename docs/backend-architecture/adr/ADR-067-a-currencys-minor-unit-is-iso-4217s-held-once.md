@@ -8,10 +8,10 @@ deployment's test currency alike. Catalog's and Ordering's `Money.Of` round to
 it ([§5.3](../05-tactical-ddd.md)), and Payments counts the provider's integer amount in it and
 refuses a command amount finer than it. No other type holds an exponent, and
 nothing new writes one as a literal. This discharges the minor-unit table
-[ADR-053](ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)'s consequences call owed, and nothing else in that record. **Why.**
-A fixed exponent of two is right for the pound and the tenge and wrong for the
-yen, which has none, and the dinar, which has three, so a deployment given
-either would charge a price nobody set. ADR-053 holds that no type names a
+[ADR-053](ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)'s consequences call owed, and nothing else in that record.
+**Why.** A fixed exponent of two is right for the pound and the tenge and wrong
+for the yen, which has none, and the dinar, which has three, so a deployment
+given either would charge a price nobody set. ADR-053 holds that no type names a
 jurisdiction and `Address` keeps that rule by refusing to learn any country's
 postcode format. The minor-unit table is the other side of the same line: it is
 small, closed and published by one body, and a code means the same thing in
@@ -22,7 +22,8 @@ context's while Catalog, Ordering and Payments must all agree on what one unit
 of a currency is. A copy per context is the drift [§4.3](../04-solution-structure.md) admits a shared
 bound into `Common.Contracts` to prevent, and a domain project cannot reference
 that assembly, so the table sits in `Common.Domain`, which every one already
-does. **Consequences.** No column moves: every money column is `decimal(19,4)`,
+does.
+**Consequences.** No column moves: every money column is `decimal(19,4)`,
 whose scale holds every exponent the table answers, so none needs a migration.
 The provider's integer is the one bound a four-place code can exceed before
 storage does, so Payments refuses such an amount at the command, before anything

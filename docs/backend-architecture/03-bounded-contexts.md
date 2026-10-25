@@ -271,7 +271,8 @@ besides the broker, the BFF, which registers a signed-in buyer's device over
 gRPC on a port no gateway route reaches ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)). Only Notifications
 publishes nothing among the services, though: the table in [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) gives
 Shipping two events to publish, and ADR-051's projection — the BFF's row, a
-host's rather than a service's — is built on them. **Notifications** is the
+host's rather than a service's — is built on them.
+**Notifications** is the
 simplest possible service and the last one built, and those two facts are not in
 tension. It contains almost no domain logic, which is what makes it cheap; it
 also publishes nothing and subscribes to eight events owned by other services,
