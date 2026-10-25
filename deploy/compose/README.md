@@ -559,6 +559,6 @@ through `compose-images.yml`. A Dependabot bump of one line is then a red
 pull request until every file that holds that image moves with it, the
 WireMock.Net pin's other homes included
 ([§14.1](../../docs/backend-architecture/14-local-development.md)), and an
-image added to a Compose file is a red one until it is mirrored. Every image
-names a release, the two Redis instances and Keycloak included, so Dependabot
-can propose a bump to any of them.
+image added to a Compose file is a red one until it is mirrored. Every
+mirrored image names a release, the two Redis instances and Keycloak
+included, so the stack moves only through a reviewed bump.
