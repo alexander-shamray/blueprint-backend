@@ -96,6 +96,8 @@ names it):
         - '.dockerignore'
         - '.editorconfig'
         - 'src/BuildingBlocks/**'
+        - '!src/BuildingBlocks/Common.Assistant/**'
+        - '!src/BuildingBlocks/Common.Assistant.Anthropic/**'
         - 'tests/Platform.*/**'
       <service>:
         - *shared
@@ -163,8 +165,9 @@ inherits rather than a filter of its own. Two filters are not deployables:
 `assistant` and `anthropic` match the AI assistant's two building blocks for
 the `packages` job alone, which pushes their NuGet packages
 ([ADR-149](adr/ADR-149-the-ai-assistants-core-and-its-adapter-are-two-building-blocks-this-repository-publishes-as-nuget-packages-1346.md)),
-and those blocks still rebuild every image through `shared`. Everything under
-`deploy/` except
+and `shared` excludes those blocks, which no image holds yet
+([ADR-150](adr/ADR-150-the-assistant-packages-version-rule-is-checked-on-the-pull-request-and-their-blocks-leave-the-shared-filter-1447-amending-adr-149.md)).
+Everything under `deploy/` except
 `deploy/compose/**` is matched by `deploy` — `deploy/helm/**` included, whose
 own workflow renders the charts but deploys nothing. Charts are deliberately
 not attached to a service, because a chart change deploys without building and
@@ -424,8 +427,9 @@ later. What belongs here is why each kind of input matters, which is what the
 bullets above give.
 
 `BuildingBlocks` appears under every service, so a change there rebuilds
-everything. That is correct, and it is also the reason to keep those projects
-small.
+everything but the AI assistant's two blocks, which `shared` excludes while no
+image holds them (ADR-150, above). That is correct, and it is also the reason
+to keep those projects small.
 
 **The filter answers a narrower question than the pipeline asks.** "Which
 service's source changed" is not "what must be rebuilt, retested and

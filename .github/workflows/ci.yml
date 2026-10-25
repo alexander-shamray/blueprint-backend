@@ -539,6 +539,11 @@ jobs:
               # with, and the solution build cannot see the Docker context.
               - '.editorconfig'
               - 'src/BuildingBlocks/**'
+              # The assistant's two blocks are in no image until a host
+              # references them, so they rebuild none; the packages job reads
+              # its own filters below (ADR-150).
+              - '!src/BuildingBlocks/Common.Assistant/**'
+              - '!src/BuildingBlocks/Common.Assistant.Anthropic/**'
               # The contract suite (§12.6) guards compatibility between
               # services, so it belongs to all of them. Owned by none, it
               # would run for none.
