@@ -187,6 +187,12 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              than a job in ci.yml because `edited` there would
                              rebuild the solution on every typo fix in a
                              description
+.github/workflows/comment-gate.yml  the comment gate's run, its own workflow
+                             on the locality gate's reasoning: it is the one
+                             check that reads a label, so `labeled` and
+                             `unlabeled` are its triggers, and ci.yml on them
+                             would rebuild the solution for a change that
+                             alters nothing it builds
 .github/workflows/merge-notify.yml  a Telegram message when a pull
                              request merges into main; a notification, not
                              a gate, so an unset credential skips it.

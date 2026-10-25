@@ -1,0 +1,68 @@
+name: Comment gate
+
+# The style guide's comment and width rules over the lines a pull request adds;
+# what the gate reads and claims is .github/comment-gate/README.md's.
+
+# Its own workflow rather than a job in ci.yml because it is the one check that
+# reads a label, so `labeled` and `unlabeled` have to be triggers, and ci.yml
+# on them would rebuild and retest the solution for a change that alters
+# neither. No `edited`: a title change counts from the next push.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: comment-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  comment-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The diff needs the merge base, and the enforcing copy needs the
+          # base commit; a shallow checkout has neither.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Test the proposed gate
+        working-directory: .github/comment-gate
+        run: python -m unittest
+
+      # The judge comes out of the base commit, so a pull request cannot loosen
+      # the rule it is judged by; the bootstrap branch is the locality gate's.
+      - name: The comments this pull request adds keep the style guide's rule
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          GATE: .github/comment-gate/comment_gate.py
+        run: |
+          set -euo pipefail
+          judge="$RUNNER_TEMP/comment_gate.py"
+          if git cat-file -e "$BASE_SHA:$GATE" 2>/dev/null; then
+            git show "$BASE_SHA:$GATE" > "$judge"
+            # An empty judge would read nothing and pass.
+            if [ ! -s "$judge" ]; then
+              echo "::error::$GATE at $BASE_SHA is empty"
+              exit 1
+            fi
+            echo "enforcing with the gate as of $BASE_SHA"
+          elif git cat-file -e "$BASE_SHA:.github/comment-gate" 2>/dev/null; then
+            echo "::error::base commit $BASE_SHA carries .github/comment-gate but no $GATE"
+            exit 1
+          else
+            echo "::warning::base commit $BASE_SHA carries no comment gate;" \
+              "this pull request is judged by the gate it proposes (bootstrap)"
+            cp "$GATE" "$judge"
+          fi
+          python "$judge" --base "$BASE_SHA" --head "$HEAD_SHA"
