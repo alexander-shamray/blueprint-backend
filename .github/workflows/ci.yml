@@ -1222,9 +1222,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # The feed's refusal of a held version is the backstop on main; this moves
-      # the version rule to the pull request (ADR-150). A project absent at the
-      # base is new and has no version to repeat.
+      # The pull request's half of the version rule; the feed's refusal is main's
+      # backstop (ADR-150). A project absent at the base is new and has no
+      # version to repeat.
       - name: A changed package carries a new Version
         if: github.event_name == 'pull_request'
         run: |
