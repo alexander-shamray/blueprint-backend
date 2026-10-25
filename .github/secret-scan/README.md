@@ -16,11 +16,11 @@ depth — build output, editor and vendored trees, and `.git`, because this
 gate is about the tree and not the history — nor, at the repository root
 only, into a directory `SKIP_ROOT_DIRS` names or a path `SKIP_ROOT_PATHS`
 names, the second being `/branch`'s worktrees, which are other branches'
-checkouts; and it skips a file it reads as binary. A credential written only there is outside its claim.
-Against the rest it
-applies named rules, each with a positive case and a near miss in the suite,
-and it reads the accepted findings from [`allowed/`](allowed/), whose README
-owns what an entry may say and which file an entry goes in.
+checkouts; and it skips a file it reads as binary. A credential written only
+there is outside its claim. Against the rest it applies named rules, each with a
+positive case and a near miss in the suite, and it reads the accepted findings
+from [`allowed/`](allowed/), whose README owns what an entry may say and which file an
+entry goes in.
 
 An allow-list entry that matches no finding **fails the build**, because a
 suppression whose finding has gone is a decision nobody has re-read.
