@@ -127,10 +127,10 @@ jobs:
   # toolchain on every platform in the matrix.
 
   # Only when `.claude/` or this workflow changed, which `changes` answers: a
-  # Windows or macOS minute costs several Linux ones, by tools/ci-cost's RATES,
-  # and what the matrix proves is a property of the hooks and scripts it tests, which
-  # read across `.claude/`, not of every commit. Nothing requires the job, so a
-  # skipped one holds no merge.
+  # Windows or macOS minute costs more than a Linux one, by tools/ci-cost's
+  # RATES, and what the matrix proves is a property of the hooks and scripts
+  # it tests, which read across `.claude/`, not of every commit. Nothing
+  # requires the job, so a skipped one holds no merge.
   edit-target-guard:
     needs: changes
     if: needs.changes.outputs.guard == 'true'
