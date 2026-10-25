@@ -612,7 +612,7 @@ jobs:
   # three jobs that bill minutes: `build`, `integration` and `scaffold-build`.
   # A whitespace or workflow-syntax error is known in seconds, and each of the
   # three would otherwise run to the end on a verdict already in. No run-wide
-  # cancel: it hides every failure but the first and cannot apply on main.
+  # cancel: it hides every failure but the first.
   build:
     needs: [licence-gate, pipeline-gate, format, workflow-lint]
     runs-on: ubuntu-latest
