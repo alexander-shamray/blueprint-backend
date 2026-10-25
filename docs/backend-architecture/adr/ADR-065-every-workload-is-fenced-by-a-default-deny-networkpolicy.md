@@ -94,6 +94,11 @@ which adds the push providers to the worker's row: `notifications` reaches each
 one whose platform the deployment's apps name, by `networkPolicy.push`, on the
 port its address dials.
 
+**Amended by [ADR-153](ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)**,
+which adds a workload to the table: the single-replica `web-bff-assistant`
+release admits the gateway and reaches `catalog-api` on `grpc`, its stores and
+the assistant's provider, and `catalog-api` admits it.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
