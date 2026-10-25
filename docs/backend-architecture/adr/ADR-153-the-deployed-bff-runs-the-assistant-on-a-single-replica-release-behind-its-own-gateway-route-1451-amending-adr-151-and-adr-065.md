@@ -1,4 +1,4 @@
-# ADR-153 — The deployed BFF runs the assistant on a dedicated single-replica release, web-bff-assistant, behind its own gateway route (#1451), amending ADR-151
+# ADR-153 — The deployed BFF runs the assistant on a single-replica release behind its own gateway route (#1451), amending ADR-151 and ADR-065
 
 **Decision.** A deployed BFF turns the assistant on by running it in a second
 release of the BFF image, the chart `web-bff-assistant`, with one replica, no
@@ -17,9 +17,13 @@ egress to the provider declared as `paymentProvider`'s is. It runs the
 adds none: the library's allow-lists for client credentials and the object
 store widen to name it, because the host refuses to start without the store
 that ADR-106 gives it, and it reads the same Secret as `web-bff`; Catalog's
-network policy admits it for the pricing hop `get_product` makes. The
-design is this record; the pieces that make it true are filed as issues
-under #1451.
+network policy admits it for the pricing hop `get_product` makes. In
+ADR-065's table the release is a workload that admits the gateway and reaches
+`catalog-api` on `grpc`, its stores and the provider, and `catalog-api` admits
+it. The chart sets a telemetry attribute that names
+the release, so the canary analysis, which reads one workload's one track,
+leaves it out of `web-bff`'s baseline. The design is this record; the pieces
+that make it true are filed as issues under #1451.
 **Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)
 accepted that a conversation lives in the memory of the process that opened
 it, and the main release runs three to twenty replicas behind a Service with
@@ -34,8 +38,8 @@ making it many is a service discovery change for one feature. A release that
 is routed the assistant's paths alone is the only choice that changes no code
 in the core or the host: the host serves only its status route while the
 assistant is off, and the same image with the provider on serves the rest. One
-replica is what makes in-memory correct, and the assistant's routes then cost
-the main release nothing.
+replica is what makes in-memory correct, and the main release then serves none
+of the assistant's long-lived streams.
 **Consequences.** The assistant has no availability to speak of. A restart, a
 rollout or a node drain ends every open conversation, which a client sees as
 404 and recovers from by opening another, and the customer's text is gone with

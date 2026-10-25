@@ -1143,7 +1143,7 @@ matches the BFF's whole `/bff/v1` API, and the service's own path repeats its
 `/api` and `/bff` are the two namespaces that distinction exists to keep apart.
 A feature added to the BFF is a service route, its contract and its test.
 The one exception is the assistant's `/bff/v1/assistant` paths, which a second
-release is to serve once #1451 lands ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-dedicated-single-replica-release-web-bff-assistant-behind-its-own-gateway-route-1451-amending-adr-151.md)).
+release is to serve once #1451 lands ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
 
 **The subject is bound from the principal and never from the request** —
 §11.4's rule, which §6.5 states for a read in the words that matter here: a
