@@ -438,7 +438,7 @@ src/BFF/                     the third host, Web.Bff, and the one that calls
 src/Services/Catalog/        §4.1's project set — Domain, Application,
                              Infrastructure, Migrator, Api. The first real
                              service, the scaffold's template, and the first
-                             of the platform's three gRPC servers
+                             of the platform's gRPC servers
 src/Services/Ordering/       the same set, rendered by the scaffold rather
                              than written, then given §5's Order aggregate,
                              §6.6's price projection with its withdrawal
@@ -488,7 +488,7 @@ as a **copy of Catalog's, deliberately**, as every suite that needs one does:
 §4.3 permits exactly one assembly to cross a service boundary and a test
 helper is not it.
 `Web.Bff.TestSupport` is the exception that proves the shape — one BFF suite,
-but `StubCatalog` and `StubNotifications` must compile the *server* half of a
+but `StubCatalog`, `StubInventory` and `StubNotifications` must compile the *server* half of a
 `.proto` whose *client* half `Web.Bff` already compiles, and both in one
 assembly makes every message type a CS0436, which ADR-019 turns into an error.
 `Shipping.OrderingStub` is the sibling case and not a `.TestSupport` at all: a

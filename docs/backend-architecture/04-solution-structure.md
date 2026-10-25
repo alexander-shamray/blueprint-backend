@@ -96,8 +96,9 @@ reviewable.
 │   │                                   missing
 │   ├── Web.Bff.TestSupport/            The stubs of the callees, each with the
 │   │                                   SERVER half of its .proto, and the
-│   │                                   PricingContract — the BFF's expectations
-│   │                                   of §9.7's hop (§12.6), authored here
+│   │                                   PricingContract and StockContract, the
+│   │                                   BFF's expectations of §9.7's hops
+│   │                                   (§12.6), authored here
 │   │                                   because only a consumer can write one,
 │   │                                   and LINKED into the callee's Api.Tests
 │   │                                   rather than referenced, exactly as the
