@@ -612,7 +612,7 @@ jobs:
   # minutes: `build`, `integration` and `scaffold-build`. A whitespace or
   # workflow-syntax error is known in seconds. No run-wide cancel: it hides
   # every failure but the first. `workflow-lint` downloads actionlint, so an
-  # outage of that download now holds the three back as well.
+  # outage of that download holds the three back.
   build:
     needs: [licence-gate, pipeline-gate, format, workflow-lint]
     runs-on: ubuntu-latest
