@@ -22,6 +22,10 @@ from review_helpers import (
 )
 
 
+# A `gh` grant in any spelling: the bare prefix, a wildcard or a subcommand.
+GH_GRANT = re.compile(r"gh(?:\s|\*|$)")
+
+
 def code_lines(text):
     """A script's code lines, comments dropped first, since bash continues none, then continued lines joined."""
     code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
@@ -60,7 +64,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         for path in sorted(COMMANDS.glob("*.md")):
             for grant in self.granted_bash(path):
                 command = grant[:-2] if grant.endswith(":*") else grant
-                if not command.startswith("gh "):
+                if not GH_GRANT.match(command):
                     continue
                 with self.subTest(command=path.name, grant=grant):
                     self.assertIn(
@@ -82,6 +86,14 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         self.assertGreaterEqual(len(seen), 3)
         for banned in ("gh pr view", "gh pr list", "gh api"):
             self.assertNotIn(banned, self.GH_GRANTS_THAT_CANNOT_REACH_A_FEED)
+
+    def test_a_gh_grant_is_seen_in_every_spelling(self):
+        for grant in ("gh:*", "gh", "gh*", "gh issue:*", "gh api:*"):
+            command = grant[:-2] if grant.endswith(":*") else grant
+            with self.subTest(grant=grant):
+                self.assertTrue(GH_GRANT.match(command))
+                self.assertNotIn(command, self.GH_GRANTS_THAT_CANNOT_REACH_A_FEED)
+        self.assertIsNone(GH_GRANT.match("ghost"))
 
     def test_the_branch_lookup_goes_through_the_fixed_helper(self):
         # Which pull requests exist for a branch is the harmless thing the

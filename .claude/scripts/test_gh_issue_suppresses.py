@@ -182,6 +182,9 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         self.addCleanup(stub.cleanup)
         return stub
 
+    # A `gh` grant in any spelling, as `granted_bash` returns it: `gh:*`, `gh*`, `gh issue:*` or `gh`.
+    GH_GRANT = re.compile(r"gh(?:[\s*:]|$)")
+
     @staticmethod
     def granted_bash(path):
         """The `Bash(...)` grants on one command's allowed-tools line: what it may run, not what its prose says."""
@@ -276,6 +279,19 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
                         " ".join(self.granted_bash(COMMANDS / name)),
                         f"{forbidden} lets a caller choose fields the helpers withhold",
                     )
+
+    def test_neither_sweep_grants_gh_in_any_spelling(self):
+        # The four substrings above miss the bare prefix, `gh issue` and a wildcard, which reach the same fields.
+        for name in ("security-sweep.md", "bug-sweep.md"):
+            for grant in self.granted_bash(COMMANDS / name):
+                with self.subTest(command=name, grant=grant):
+                    self.assertIsNone(self.GH_GRANT.match(grant))
+
+    def test_the_gh_pattern_sees_every_spelling_of_the_grant(self):
+        for grant in ("gh:*", "gh", "gh*", "gh issue:*", "gh api"):
+            with self.subTest(grant=grant):
+                self.assertIsNotNone(self.GH_GRANT.match(grant))
+        self.assertIsNone(self.GH_GRANT.match("bash .claude/scripts/gh-issue-create.sh:*"))
 
     def test_the_listing_helper_fixes_its_field_set(self):
         code = "\n".join(code_lines(ISSUE_LIST.read_text(encoding="utf-8")))
