@@ -109,7 +109,8 @@ migration this platform has". So the deploy window is set to outlive it, and
 The umbrella takes a tag per subchart, because §15.1 builds and deploys per
 service — a change under `src/Services/Catalog` rebuilds Catalog alone, and
 every other subchart must keep the tag it is already running. Notifications'
-two charts take one tag, because one filter builds all three of its images:
+two charts take one tag, because one filter builds all three of its images,
+and the BFF's two take one, because they run one image (ADR-153):
 
 ```bash
 helm upgrade --install platform deploy/helm/platform \
@@ -125,7 +126,8 @@ helm upgrade --install platform deploy/helm/platform \
     --set-string notifications-api.image.tag="$NOTIFICATIONS_SHA" \
     --set-string privacy.image.tag="$PRIVACY_SHA" \
     --set-string gateway.image.tag="$GATEWAY_SHA" \
-    --set-string web-bff.image.tag="$BFF_SHA"
+    --set-string web-bff.image.tag="$BFF_SHA" \
+    --set-string web-bff-assistant.image.tag="$BFF_SHA"
 ```
 
 **Payments' provider address is required and is deliberately NOT on that command
