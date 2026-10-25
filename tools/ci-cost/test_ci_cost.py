@@ -162,6 +162,20 @@ class Gh(unittest.TestCase):
             ci_cost.gh("repos/owner/repo")
         slept.assert_called_once_with(60)
 
+    def test_a_dropped_connection_or_a_server_error_is_retried(self):
+        replies = self.answers((1, "", 'Get "https://api.github.com/x": dial tcp 140.82.121.6:443: connectex'),
+                               (1, "", "gh: Server Error (HTTP 502)"),
+                               (0, "{}", ""))
+        with mock.patch("subprocess.run", side_effect=replies), mock.patch("time.sleep") as slept:
+            self.assertEqual(ci_cost.gh("repos/owner/repo"), {})
+        self.assertEqual(slept.call_count, 2)
+
+    def test_a_connection_that_keeps_failing_ends_the_call(self):
+        replies = self.answers(*[(1, "", "dial tcp: i/o timeout")] * ci_cost.TRANSIENT_TRIES)
+        with mock.patch("subprocess.run", side_effect=replies), mock.patch("time.sleep"), \
+                self.assertRaisesRegex(LookupError, "i/o timeout"):
+            ci_cost.gh("repos/owner/repo")
+
     def test_any_other_refusal_ends_the_call_without_waiting(self):
         replies = self.answers((1, "", "gh: Not Found (HTTP 404)"))
         with mock.patch("subprocess.run", side_effect=replies), mock.patch("time.sleep") as slept, \

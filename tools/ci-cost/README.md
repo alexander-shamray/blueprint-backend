@@ -32,7 +32,8 @@ fits under it. **Pages are requested by number**, never through the `Link`
 header, because the proxy cloud sessions run behind refuses the numeric-id URLs
 it carries. **A 14-day window takes more requests than a user token's 5,000 an
 hour**, so a call refused for a rate limit waits for the hour's reset, or a
-minute for a secondary limit, and is retried. A PRs, label-events or packages
+minute for a secondary limit, and is retried; a dropped connection or a 5xx is
+retried three times before it counts as refused. A PRs, label-events or packages
 read the token is refused — the packages listing without `read:packages`,
 typically — is printed under the table rather than failing the run; a refused
 runs or jobs read ends it, because no figure stands without them.
