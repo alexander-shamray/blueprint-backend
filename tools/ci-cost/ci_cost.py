@@ -99,7 +99,8 @@ def gh(path: str) -> object:
         if "rate limit" in message.lower():
             time.sleep(rate_limit_wait())
             continue
-        # gh names the status of every answer it got, so a message without one is a connection that failed.
+        # gh names the status of every answer it got, so a message without one is retried as a dropped connection;
+        # a refusal of gh's own, such as no login, fails the same way each time and ends the call after the tries.
         status = re.search(r"\(HTTP (\d{3})\)", message)
         transient += 1
         if (status and not status[1].startswith("5")) or transient >= TRANSIENT_TRIES:
