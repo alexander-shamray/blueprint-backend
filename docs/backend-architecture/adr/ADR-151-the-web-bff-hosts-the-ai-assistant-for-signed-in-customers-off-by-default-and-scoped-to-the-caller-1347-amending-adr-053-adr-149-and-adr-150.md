@@ -86,6 +86,12 @@ the core now sweeps idle conversations on a timer, so the retention bound
 above is `IdleTimeout` plus a quarter of it (a second where that is longer),
 not the next open or find. This record is otherwise unchanged.
 
+**Amended by
+[ADR-153](ADR-153-the-deployed-bff-runs-the-assistant-on-a-dedicated-single-replica-release-web-bff-assistant-behind-its-own-gateway-route-1451-amending-adr-151.md)**:
+the deployed BFF runs the assistant on its own single-replica release behind its
+own gateway route, so the main release keeps it off by design and #1451 is
+the set of pieces that make that true. This record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
