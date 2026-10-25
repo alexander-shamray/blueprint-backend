@@ -561,4 +561,4 @@ WireMock.Net pin's other homes included
 ([§14.1](../../docs/backend-architecture/14-local-development.md)), and an
 image added to a Compose file is a red one until it is mirrored. Every
 mirrored image names a release, the two Redis instances and Keycloak
-included, so the stack moves only through a reviewed bump.
+included, so each of them moves only through a reviewed bump.
