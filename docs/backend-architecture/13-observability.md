@@ -94,10 +94,16 @@ names hosts in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-
 ```csharp
     public static IHostApplicationBuilder AddObservability(this IHostApplicationBuilder builder)
     {
-        string serviceName = builder.Environment.ApplicationName;
+        string assembly = builder.Environment.ApplicationName;
 
-        // "Catalog.Api" and "Catalog.Worker" both own "Catalog.*"; a name with no dot owns itself.
-        string servicePrefix = serviceName.Split('.')[0];
+        // ADR-153's assistant release runs the BFF's image, and the canary selects its baseline by this name.
+        string serviceName = builder.Configuration[ServiceNameKey] is { } named && !string.IsNullOrWhiteSpace(named)
+            ? named.Trim()
+            : assembly;
+
+        // "Catalog.Api" and "Catalog.Worker" both own "Catalog.*"; a name with no dot owns itself. The assembly's,
+        // since the meters are the code's whatever the release is called.
+        string servicePrefix = assembly.Split('.')[0];
 
         // The only provider, because the redactor sees records in this pipeline and nowhere else (§13.4).
         builder.Logging.ClearProviders();
@@ -154,6 +160,15 @@ names hosts in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-
         return builder;
     }
 ```
+
+**`service.name` is the entry assembly's name**, `ApplicationName`, unless the
+release sets the SDK's own `OTEL_SERVICE_NAME`, which `AddService` would
+otherwise overwrite. One release does: the BFF's assistant release runs the
+`Web.Bff` image under `Web.Bff.Assistant`, so §15.5's canary, which selects a
+baseline by service name, never counts it in `web-bff`'s
+([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
+The chart sets it as `observability.telemetryName`, and
+`deploy/canary/canary.py check` holds it to the descriptor's `telemetryName`.
 
 A service's own meters are not listed. Every host adds `<service>.*`, the
 service being the first segment of its `ApplicationName`, so

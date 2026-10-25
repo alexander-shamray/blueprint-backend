@@ -11,12 +11,21 @@ namespace Common.Web;
 /// <summary>The three signals of §13.1, configured once for every service host (§13.2).</summary>
 public static class ObservabilityExtensions
 {
+    /// <summary>The SDK's own variable, which AddService would otherwise overwrite (ADR-153).</summary>
+    public const string ServiceNameKey = "OTEL_SERVICE_NAME";
+
     public static IHostApplicationBuilder AddObservability(this IHostApplicationBuilder builder)
     {
-        string serviceName = builder.Environment.ApplicationName;
+        string assembly = builder.Environment.ApplicationName;
 
-        // "Catalog.Api" and "Catalog.Worker" both own "Catalog.*"; a name with no dot owns itself.
-        string servicePrefix = serviceName.Split('.')[0];
+        // ADR-153's assistant release runs the BFF's image, and the canary selects its baseline by this name.
+        string serviceName = builder.Configuration[ServiceNameKey] is { } named && !string.IsNullOrWhiteSpace(named)
+            ? named.Trim()
+            : assembly;
+
+        // "Catalog.Api" and "Catalog.Worker" both own "Catalog.*"; a name with no dot owns itself. The assembly's,
+        // since the meters are the code's whatever the release is called.
+        string servicePrefix = assembly.Split('.')[0];
 
         // The only provider, because the redactor sees records in this pipeline and nowhere else (§13.4).
         builder.Logging.ClearProviders();

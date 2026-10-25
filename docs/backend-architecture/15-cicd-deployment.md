@@ -1561,10 +1561,12 @@ public sealed class ServiceIdentityOptions
 > test that will one day be run against something real.
 >
 > This is also the argument for *not* making things configuration. The service
-> name is not in `ServiceIdentityOptions` or anywhere else — it comes from
-> `IHostEnvironment.ApplicationName`, which is always populated, needs no
-> binding, cannot drift from the name §13.2 puts on traces, and therefore
-> cannot fail to start.
+> name is in no bound options type, `ServiceIdentityOptions` included — it
+> comes from `IHostEnvironment.ApplicationName`, which is always populated,
+> needs no binding, and therefore cannot fail to start. It is the name §13.2
+> puts on traces unless the host's release under a chart of its own sets
+> `OTEL_SERVICE_NAME`, which is read without a binding too
+> ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
 
 The service-wide constants that are genuinely not configuration stay static —
 not bound, not validated and not deployable, a compile-time invariant — as
