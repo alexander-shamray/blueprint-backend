@@ -560,7 +560,7 @@ jobs:
               - *shared
               - 'src/Gateway/**'
             # The BFF is a deployable too, and §15.1 argues why its filter
-            # reaches into Catalog's and Notifications' trees for the protos
+            # reaches into Catalog's, Inventory's and Notifications' trees for the protos
             # Web.Bff compiles.
             # `pipeline-gate filters` cannot see that case, because it asks
             # whether a deployable is reachable rather than whether a filter is

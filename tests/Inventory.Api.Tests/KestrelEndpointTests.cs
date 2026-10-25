@@ -25,6 +25,6 @@ public sealed class KestrelEndpointTests(HostSmokeTests.UnreachableInfrastructur
         Configuration["Kestrel:Endpoints:Grpc:Protocols"].ShouldBe(
             "Http2",
             "a cleartext endpoint at Http1AndHttp2 refuses a client asking for HTTP/2 exactly, " +
-            "so the address read would fail at the connection (§9.7)");
+            "so the availability read would fail at the connection (§9.7)");
     }
 }

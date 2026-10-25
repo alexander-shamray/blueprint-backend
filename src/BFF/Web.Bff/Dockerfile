@@ -20,8 +20,8 @@ WORKDIR /src
 # on deploy/compose/** while a reference lands under src/.
 #
 # What that job does NOT close is a filter that never fires. The `bff` filter
-# has to name every path this image copies — including Catalog's and
-# Notifications' protos, which is why it reaches into two other services'
+# has to name every path this image copies — including Catalog's, Inventory's
+# and Notifications' protos, which is why it reaches into three other services'
 # trees (§15.1).
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/BuildingBlocks/Common.Domain/Common.Domain.csproj src/BuildingBlocks/Common.Domain/

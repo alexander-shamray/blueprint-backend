@@ -138,7 +138,7 @@ public sealed class CustomerStockToolTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task The_hop_carries_a_bearer_token_for_the_configured_scope_and_a_correlation_id()
+    public async Task The_hop_carries_a_bearer_token_for_the_configured_scope()
     {
         await GetStockAsync(Chair);
 
