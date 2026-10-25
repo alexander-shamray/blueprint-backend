@@ -608,11 +608,11 @@ jobs:
       - name: The source matches .editorconfig
         run: dotnet format whitespace --folder --verify-no-changes
 
-  # The four checks that answer in under a minute, with no restore, gate the
-  # three jobs that bill minutes: `build`, `integration` and `scaffold-build`.
-  # A whitespace or workflow-syntax error is known in seconds, and each of the
-  # three would otherwise run to the end on a verdict already in. No run-wide
-  # cancel: it hides every failure but the first.
+  # The four checks that answer in under a minute gate the three jobs that bill
+  # minutes: `build`, `integration` and `scaffold-build`. A whitespace or
+  # workflow-syntax error is known in seconds. No run-wide cancel: it hides
+  # every failure but the first. `workflow-lint` downloads actionlint, so an
+  # outage of that download now holds the three back as well.
   build:
     needs: [licence-gate, pipeline-gate, format, workflow-lint]
     runs-on: ubuntu-latest
