@@ -162,6 +162,14 @@ class Gh(unittest.TestCase):
             ci_cost.gh("repos/owner/repo")
         slept.assert_called_once_with(60)
 
+    def test_a_rate_limit_read_that_fails_waits_a_minute_rather_than_crashing(self):
+        replies = self.answers((1, "", "gh: API rate limit exceeded for user ID 1. (HTTP 403)"),
+                               (1, "", "dial tcp: i/o timeout"),
+                               (0, "{}", ""))
+        with mock.patch("subprocess.run", side_effect=replies), mock.patch("time.sleep") as slept:
+            ci_cost.gh("repos/owner/repo")
+        slept.assert_called_once_with(ci_cost.SECONDARY_WAIT)
+
     def test_a_dropped_connection_or_a_server_error_is_retried(self):
         replies = self.answers((1, "", 'Get "https://api.github.com/x": dial tcp 140.82.121.6:443: connectex'),
                                (1, "", "gh: Server Error (HTTP 502)"),

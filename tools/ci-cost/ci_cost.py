@@ -109,8 +109,10 @@ def gh(path: str) -> object:
 
 def rate_limit_wait() -> int:
     """Seconds until the hourly limit resets when it is spent, else a secondary limit's minute, as GitHub asks."""
-    core = json.loads(subprocess.run(["gh", "api", "rate_limit"], capture_output=True,
-                                     encoding="utf-8").stdout)["resources"]["core"]
+    done = subprocess.run(["gh", "api", "rate_limit"], capture_output=True, encoding="utf-8")
+    if done.returncode != 0:
+        return SECONDARY_WAIT
+    core = json.loads(done.stdout)["resources"]["core"]
     return max(SECONDARY_WAIT, core["reset"] - int(time.time()) + 1) if core["remaining"] == 0 else SECONDARY_WAIT
 
 
