@@ -14,10 +14,12 @@ anywhere but there, with the provider's address as a chart value, the
 credential as a Secret reference and never a value, and the network policy's
 egress to the provider declared as `paymentProvider`'s is. It runs the
 `web-bff` host, so it uses that host's client, database and broker accounts and
-adds none: the library's allow-lists for client credentials widen to name it,
-it takes no object store, and Catalog's network policy admits it for the
-pricing hop `get_product` makes. The design is this record; the pieces that
-make it true are filed as issues under #1451.
+adds none: the library's allow-lists for client credentials and the object
+store widen to name it, because the host refuses to start without the store
+that ADR-106 gives it, and it reads the same Secret as `web-bff`; Catalog's
+network policy admits it for the pricing hop `get_product` makes. The
+design is this record; the pieces that make it true are filed as issues
+under #1451.
 **Why.** [ADR-151](ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)
 accepted that a conversation lives in the memory of the process that opened
 it, and the main release runs three to twenty replicas behind a Service with
@@ -46,7 +48,9 @@ chart, a descriptor under `deploy/canary/deployables`, an entry in the platform
 chart, the gateway's second cluster and its egress entry, and a smoke case for
 each, with the check that every service chart renders one disruption budget
 made to except this one. Nothing in the descriptor model refuses two charts
-that share an image or a source, so it needs no change. The route needs the
+that share an image or a source, but nothing in it, the rollout workflow or
+smoke can say that a release is off the canary ladder, so the descriptor
+gains a field that says it and those two read it. The route needs the
 gateway's deadline and the stream's lifetime to agree, as they do for the main
 route. Capacity is one pod's, and the day that limit binds is the day a shared
 store is designed, which this record does not pre-empt. The follow-up issues
