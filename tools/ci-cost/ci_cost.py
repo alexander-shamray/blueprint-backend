@@ -33,6 +33,9 @@ WORKERS = 16
 # A 14-day window reads about 9,000 runs' jobs, past the 5,000 requests an hour a user token is allowed, so a
 # refused call waits and retries; GitHub asks a secondary limit to wait at least a minute.
 SECONDARY_WAIT = 60
+# A window's thousands of calls meet the odd dropped connection or 5xx, which one retry usually clears.
+TRANSIENT_TRIES = 4
+TRANSIENT_WAIT = 10
 EVENTS = ("pull_request", "push", "schedule", "workflow_dispatch")
 WINDOW = re.compile(r"(?:([^=]+)=)?(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})")
 
@@ -87,14 +90,21 @@ class Usage:
 
 def gh(path: str) -> object:
     """One `gh api` call, so the repository's visibility and the token's scopes are gh's concern."""
+    transient = 0
     while True:
         done = subprocess.run(["gh", "api", path], capture_output=True, encoding="utf-8")
         if done.returncode == 0:
             return json.loads(done.stdout)
         message = done.stderr.strip() or done.stdout.strip()
-        if "rate limit" not in message.lower():
+        if "rate limit" in message.lower():
+            time.sleep(rate_limit_wait())
+            continue
+        # gh names the status of every answer it got, so a message without one is a connection that failed.
+        status = re.search(r"\(HTTP (\d{3})\)", message)
+        transient += 1
+        if (status and not status[1].startswith("5")) or transient >= TRANSIENT_TRIES:
             raise LookupError(f"{path}: {message}")
-        time.sleep(rate_limit_wait())
+        time.sleep(TRANSIENT_WAIT * transient)
 
 
 def rate_limit_wait() -> int:
