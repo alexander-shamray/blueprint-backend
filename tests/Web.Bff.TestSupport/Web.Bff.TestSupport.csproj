@@ -26,6 +26,11 @@
       Include="..\..\src\Services\Catalog\Catalog.Api\Protos\pricing.proto"
       Link="Protos\pricing.proto"
       GrpcServices="Server" />
+    <!-- StubInventory's half of stock.proto, on the same terms (ADR-154). -->
+    <Protobuf
+      Include="..\..\src\Services\Inventory\Inventory.Api\Protos\stock.proto"
+      Link="Protos\stock.proto"
+      GrpcServices="Server" />
     <!-- StubNotifications' half of devices.proto, on the same terms. -->
     <Protobuf
       Include="..\..\src\Services\Notifications\Notifications.Api\Protos\devices.proto"

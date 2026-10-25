@@ -1,4 +1,4 @@
-# Inventory. HTTP only: nothing calls this service synchronously (§9.7).
+# Inventory. HTTP for the gateway, and one gRPC read for the BFF's assistant (ADR-154).
 
 workload:
   # §10.2's route configuration dials this workload by this literal name —
@@ -31,9 +31,15 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
+# Two, as Catalog's are and for its reason: a cleartext Kestrel endpoint cannot
+# serve HTTP/1.1 and h2c at once, so the BFF's availability hop (ADR-154) takes
+# an HTTP/2-only endpoint of its own. 8081 is cluster-internal, no route reaches
+# it, and the RPC on it still authenticates (§11.2).
 ports:
   - name: http
     containerPort: 8080
+  - name: grpc
+    containerPort: 8081
 
 resources:
   requests: { cpu: 100m, memory: 256Mi }
@@ -148,6 +154,7 @@ extraConfigMaps: []
 networkPolicy:
   ingressFrom:
     - { workload: gateway, port: http }
+    - { workload: web-bff, port: grpc }
   egressTo: []
   dns:
     to:

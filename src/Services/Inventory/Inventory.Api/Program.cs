@@ -1,5 +1,6 @@
 using Inventory.Api;
 using Inventory.Api.Endpoints;
+using Inventory.Api.Grpc;
 using Inventory.Application;
 using Inventory.Infrastructure;
 using Common.Web;
@@ -21,6 +22,9 @@ builder.Services.AddInventoryInfrastructure(builder.Configuration);   // §4.2, 
 
 // Appendix C's OpenAPI deliverable: document only, no UI.
 builder.Services.AddCommonOpenApi();
+
+// ADR-154's server half; the interceptor keeps a malformed request from reaching the BFF as Unknown.
+builder.Services.AddGrpc(o => o.Interceptors.Add<ValidationInterceptor>());
 
 // RequirePermission, so the claim type is PermissionClaim.Type's alone (§11.4).
 builder.Services
@@ -46,6 +50,9 @@ app.MapOpenApi();
 
 app.MapStockEndpoints();          // §11.4 — the group fails closed
 app.MapReservationEndpoints();    // §11.4 — the runbook's admin routes, failing closed
+
+// ADR-154. Reachable only on the Http2 endpoint appsettings.json declares; [Authorize] is on the service class.
+app.MapGrpcService<StockService>().RetrySafe(RetrySafety.ReadOnly);   // GetAvailability reads, and writes nothing
 
 app.Run();
 

@@ -26,12 +26,19 @@
     <PackageReference Include="MassTransit" />
     <!-- Captures the IPipe<PublishContext> the outbox dispatcher hands IPublishEndpoint (§9.1). -->
     <PackageReference Include="NSubstitute" />
+    <!-- GrpcChannel and Grpc.Core's StatusCode, named although Inventory.Api carries them transitively. -->
+    <PackageReference Include="Grpc.Net.ClientFactory" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Inventory\Inventory.Api\Inventory.Api.csproj" />
     <!-- The fixtures, in their own project since test projects cannot reference each other (§4.1). -->
     <ProjectReference Include="..\..\tests\Inventory.TestSupport\Inventory.TestSupport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Web.Bff's consumer-driven contract, linked rather than referenced (ADR-023). -->
+    <Compile Include="..\Web.Bff.TestSupport\StockContract.cs" Link="Contract\StockContract.cs" />
   </ItemGroup>
 
 </Project>

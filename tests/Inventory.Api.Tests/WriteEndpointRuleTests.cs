@@ -36,10 +36,17 @@ public class WriteEndpointRuleTests(HostSmokeTests.UnreachableInfrastructureFact
     {
         // The floor: an offender list is as green over an empty selection.
         Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(
-            ["ReinstateReservation", "ReleaseReservation", "SetOnHand"]);
+            ["ReinstateReservation", "ReleaseReservation", "SetOnHand", "gRPC - /inventory.stock.v1.Stock/GetAvailability"]);
 
         // What the selection leaves out by shape, named, so a route this host maps that way is not left out too.
-        Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe(["Health checks", "Health checks", "Health checks"]);
+        Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe(
+            [
+                "Health checks",
+                "Health checks",
+                "Health checks",
+                "gRPC - Unimplemented method for inventory.stock.v1.Stock",
+                "gRPC - Unimplemented service"
+            ]);
     }
 
     private static string[] Names(IEnumerable<Endpoint> endpoints) =>
