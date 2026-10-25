@@ -2,7 +2,7 @@ apiVersion: v2
 name: catalog
 description: >-
   Catalog (§4.1) — its API, its migrator hook, and the first of the platform's
-  three gRPC servers (§9.7, ADR-052, ADR-117).
+  gRPC servers (§9.7, ADR-052, ADR-117).
 type: application
 version: 0.1.0
 dependencies:

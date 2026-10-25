@@ -638,9 +638,9 @@ which `InternalsVisibleTo` would have to list.
   is in `.Grpc` (ADR-052), outside `.Endpoints`, which is why a namespace
   selector would miss it.
 - **The callees of the BFF's hops.** The stubs that `Web.Bff.TestSupport`
-  holds are Catalog's, with the server half of `pricing.proto`, and
-  Notifications', with the server halves of `devices.proto` and
-  `preferences.proto`; the
+  holds are Catalog's, with the server half of `pricing.proto`,
+  Inventory's, with that of `stock.proto`, and Notifications', with the
+  server halves of `devices.proto` and `preferences.proto`; the
   `PricingContract` is linked into `Catalog.Api.Tests`.
 - **A bound only one service enforces.** Catalog's id ceiling, which
   `GetPricesValidator` holds, is the case to compare against
@@ -977,7 +977,7 @@ one `OrderSummaries` earns ([§6.6](06-cqrs.md)).
 |---|---|---|---|
 | Pricing | `Web.Bff` | Catalog, `pricing.proto` | `src/BFF/Web.Bff/PricingHop.cs` |
 | Device registration and preferences | `Web.Bff` | Notifications.Api, `devices.proto` and `preferences.proto` | `src/BFF/Web.Bff/NotificationsHop.cs` |
-| Stock availability, for the assistant's `get_stock` | `Web.Bff` | Inventory.Api, `stock.proto` | `src/BFF/Web.Bff/StockHop.cs` ([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)) |
+| Stock availability, for the assistant's `get_stock`, off every request path | `Web.Bff` | Inventory.Api, `stock.proto` | `src/BFF/Web.Bff/StockHop.cs` ([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)) |
 | Delivery address | Shipping's worker | Ordering | `Shipping.Infrastructure/Addresses/AddressHop.cs` |
 | Contact | Notifications' worker | Keycloak's admin API | `Notifications.Infrastructure/Contacts/ContactHop.cs` |
 | Payment provider | Payments' consumers | the provider | `Payments.Infrastructure/Provider/ProviderHop.cs` |
@@ -996,7 +996,8 @@ whether a product is in stock and never how many; Notifications owns
 command path never calls Catalog: it reads
 Ordering's price projection. The deepest chains on a request path are
 `Client → Gateway → BFF → Catalog` and `Client → Gateway → BFF →
-Notifications.Api`, and neither callee calls anybody. The registration and the
+Notifications.Api`, and neither callee calls anybody; the stock read runs
+inside an assistant turn and is on no request path. The registration and the
 preferences carry the caller's own token and no client credentials
 ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md),
 [ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)). The two worker reads of the address and the contact are
@@ -1013,7 +1014,9 @@ and `ProviderKillSwitch` in `Payments.Infrastructure/Messaging` stops its
 receive endpoints when the provider is unavailable. Catalog's `Money` refuses a
 negative amount, which the BFF's quote does not rely on. The consumer-driven
 contract's two suites are `tests/Web.Bff.Tests` (`UpstreamRetryTests`,
-`ResilienceHierarchyTests`) and Catalog's own.
+`ResilienceHierarchyTests`) and Catalog's own, and the stock hop of
+[ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)
+has the same pair with Inventory's.
 
 The two push hops are registered for each platform an app names, and
 `PushSendWorker` calls them, one delivery a call; an unregistered answer
@@ -1073,11 +1076,15 @@ routes, by cluster and policy:
 **Catalog's write side is `catalog-write`**: the endpoint still requires
 `catalog:write`, and the route's `authenticated` is the edge's coarser check.
 
-**The BFF makes three synchronous calls to services, to Catalog, to
-Notifications.Api and, for the assistant's stock tool, to Inventory.Api**
+**The BFF makes two synchronous calls on a request path, to Catalog and to
+Notifications.Api**
 ([§2.2](02-architecture-at-a-glance.md), [§9.7](09-messaging.md),
 [ADR-017](adr/ADR-017-one-synchronous-hop.md)), each its own request's one
-hop, so those three are the hops `CorrelationIdHandler` is registered on.
+hop, so those two are the hops whose request the correlation ID crosses. The
+assistant's stock read to Inventory.Api is made inside a turn, off any
+request, and `CorrelationIdHandler` is registered on it all the same, sending
+an ID only when a request is there to supply one
+([ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md)).
 
 ### E.6.2 Error catalogue and refusals
 
@@ -1743,7 +1750,7 @@ The outbound-hop row of §12.1 has three suites in the reference domain:
 
 | Suite | What it holds |
 |---|---|
-| `Web.Bff.Tests` | §9.7's pricing hop: the timeout hierarchy, the credential handler's position and the realm; and the registration hop of [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md): its timeout hierarchy, and the caller's own token in place of a credential handler, against a stub Notifications on loopback |
+| `Web.Bff.Tests` | §9.7's pricing hop: the timeout hierarchy, the credential handler's position and the realm; and the registration hop of [ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md): its timeout hierarchy, and the caller's own token in place of a credential handler, against a stub Notifications on loopback; and the stock hop of [ADR-154](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md): its timeout hierarchy, the tool's answers and the contract, against a stub Inventory on loopback |
 | `Shipping.Worker.Tests` | The first two properties, for the address read of [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md), against a stub Ordering on loopback |
 | `Notifications.Worker.Tests` | All three, for the contact read the same record adds: the first two against a stub Keycloak on loopback, and the realm against a real one, which is also the owner the read asks |
 

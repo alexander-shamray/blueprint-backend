@@ -56,7 +56,7 @@ graph TB
     GW --> API
     GW --> BFF
 
-    BFF -->|gRPC, a read and a registration| API
+    BFF -->|gRPC, reads and a registration| API
 
     WRK -->|gRPC, a read| API
     WRK -.->|client credentials| IDP
