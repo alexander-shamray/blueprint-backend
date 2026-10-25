@@ -13,9 +13,8 @@ namespace Web.Bff.Assistant;
 
 /// <summary>The customer assistant's read tools, each scoped to the caller the core passes (ADR-151).</summary>
 /// <remarks>
-/// <c>list_orders</c> and <c>get_order</c> read ADR-051's projection by the caller's subject, <c>get_product</c>
-/// Catalog's pricing hop and <c>get_stock</c> Inventory's (§9.7, ADR-154); a refusal is a result the model reads,
-/// never an exception that ends the turn.
+/// <c>list_orders</c> and <c>get_order</c> read ADR-051's projection by the caller's subject; <c>get_product</c> and
+/// <c>get_stock</c> use §9.7's hops (ADR-154). A refusal is a result the model reads, never an exception.
 /// </remarks>
 public sealed class CustomerReadTools(OrderReader orders, GrpcClientFactory clients) : IToolSource
 {
