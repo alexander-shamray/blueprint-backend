@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Common.Assistant;
 using Shouldly;
 using Web.Bff.Assistant;
@@ -31,11 +32,31 @@ public sealed class CustomerRedactorTests
         redacted.ShouldNotContain("5555-5555");
     }
 
+    // A client tool's result is redacted at up to the body limit, so a run of many groups must cost its length.
+    [Fact]
+    public void A_long_run_of_groups_is_redacted_in_time_proportional_to_its_length()
+    {
+        string run = string.Join(' ', Enumerable.Repeat("1", 65_000));
+        Stopwatch clock = Stopwatch.StartNew();
+
+        _redactor.Redact(run, Customer);
+
+        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public void Every_card_in_one_run_of_groups_is_replaced()
+    {
+        _redactor.Redact("cards 4111 1111 1111 1111 5555 5555 5555 4444 thanks", Customer)
+            .ShouldBe($"cards {CustomerRedactor.Card} {CustomerRedactor.Card} thanks");
+    }
+
     [Theory]
     [InlineData("order 12345678-1234-1234-1234-123456789012 is late")]
     [InlineData("order 0199a2b4-5c6d-7e8f-9a0b-1c2d3e4f5a6b is late")]
     [InlineData("the total was 1234567890123.45 GBP")]
     [InlineData("tracking number 1234567890123456")]
+    [InlineData("reference 12345678901234567894 passes the check but is no card")]
     [InlineData("it cost 49.99 and arrived on 2026-10-03")]
     public void An_order_s_ids_amounts_dates_and_a_number_that_fails_luhn_are_left_alone(string text)
     {
