@@ -26,7 +26,9 @@ no `Assistant` key may hold one, and the host refuses to start on a key named
 like one. The core's limits are `AssistantOptions`, and
 `Assistant:TurnsPerMinute` is a fixed window per subject on the two routes
 that start work, opening a conversation and starting a turn: a limiter of
-this host's own. The event stream ends
+this host's own, and every route takes a body of at most
+`AssistantEndpoints.MaxBodyBytes`, so nothing a client sends reaches a prompt
+unbounded. The event stream ends
 inside `ServiceOptions.OperationTimeout`, and the client resumes it from
 `Last-Event-ID`, the shape
 [ADR-108](ADR-108-the-buyers-order-has-a-server-sent-event-stream-that-polls-its-row-and-ends-inside-the-deadline-475.md)

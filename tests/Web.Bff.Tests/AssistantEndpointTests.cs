@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Common.Assistant.Protocol;
 using Common.Assistant.Providers;
+using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Web.Bff.Assistant;
 using Xunit;
@@ -49,6 +52,24 @@ public sealed class AssistantEndpointTests
         (await anonymousOn.GetAsync("/v1/assistant", Ct)).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await anonymousOn.PostAsJsonAsync("/v1/assistant/conversations", Opening, Ct)).StatusCode
             .ShouldBe(HttpStatusCode.Unauthorized);
+    }
+
+    // Routing hands the metadata to the server's body limit, which the test server does not have, so the
+    // endpoints' metadata is what this reads.
+    [Fact]
+    public async Task Every_assistant_route_carries_the_body_limit()
+    {
+        await using AssistantFactory factory = new();
+        using HttpClient client = As(factory, _customer);
+        await OpenAsync(client);
+
+        RouteEndpoint[] routes = [.. factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(e => e.RoutePattern.RawText?.StartsWith("/v1/assistant", StringComparison.Ordinal) == true)];
+
+        routes.Length.ShouldBeGreaterThan(5);
+        routes.ShouldAllBe(e =>
+            e.Metadata.GetMetadata<IRequestSizeLimitMetadata>()!.MaxRequestBodySize == AssistantEndpoints.MaxBodyBytes);
     }
 
     [Fact]
