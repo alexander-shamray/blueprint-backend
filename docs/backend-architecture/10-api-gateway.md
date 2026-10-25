@@ -241,8 +241,8 @@ it a route at a time would also make each later PR re-decide the policies,
 which is precisely the mistake the dual-version trap below describes.
 
 Note the shape of the policy name. `inventory:admin` is a **permission**, not a
-role, for the reason [§11.4](11-identity-authorization.md) gives — and the gateway is where role-shaped names
-creep back in, because a route file feels like infrastructure rather than
+role, for the reason [§11.4](11-identity-authorization.md) gives — and the gateway is where role-shaped
+names creep back in, because a route file feels like infrastructure rather than
 authorization code.
 
 **Every route carries a `RateLimiterPolicy`, including the admin ones.** YARP
@@ -374,15 +374,15 @@ the invariant above is asserted for.
 > works in whichever one was tested first.
 >
 > **The in-process API tests do not catch this.** They call the service
-> directly, on `/v1/orders/...` ([§12.4](12-test-strategy.md)), so they exercise everything after the
-> strip and nothing before it. Path composition is gateway configuration, and
-> `Gateway.Api.Tests` is the only place it is checked. Three assertions carry
-> it: every route strips exactly the namespace it matches — one strip per
+> directly, on `/v1/orders/...` ([§12.4](12-test-strategy.md)), so they exercise everything after
+> the strip and nothing before it. Path composition is gateway configuration,
+> and `Gateway.Api.Tests` is the only place it is checked. Three assertions
+> carry it: every route strips exactly the namespace it matches — one strip per
 > namespace, so a route under `/api` cannot remove `/api/v1` — every route's
 > forwarded path is one the service behind it serves, and, over a stub
-> destination on loopback, the path a service actually received is the path
-> with the prefix gone. The last is the only one made against a request rather
-> than against configuration.
+> destination on loopback, the path a service actually received is the path with
+> the prefix gone. The last is the only one made against a request rather than
+> against configuration.
 >
 > **The pair above is an example, and the shipped route file does not carry
 > it.** A `/api/v2/orders` route would forward to a service that maps `/v1`
@@ -523,9 +523,9 @@ hammering and cheap abuse, and a bound that is loose by a factor of the replica
 count still does that. It is **not** acceptable for anything a customer is
 billed against or promised in a contract. Partner quotas, per-tenant plans and
 anything with a number in a service agreement need a shared counter — a sliding
-window on the **coordination** Redis ([§8.1](08-caching-redis.md), `{service}:ratelimit:`), never the
-cache instance, whose `allkeys-lru` policy would evict a counter mid-window and
-reset somebody's quota with no error and no log line.
+window on the **coordination** Redis ([§8.1](08-caching-redis.md), `{service}:ratelimit:`), never
+the cache instance, whose `allkeys-lru` policy would evict a counter mid-window
+and reset somebody's quota with no error and no log line.
 
 Two things to settle before building that, because both are easy to discover
 late: the counter's TTL must outlive the window it measures, and the limiter
@@ -954,9 +954,9 @@ carry the same three fields. `instance` carries the path the service received,
 > caller never asked for, so the test that pins overload resolution is the only
 > thing standing between that and a silently empty response.
 
-**Three of the table's rows are not reachable from here, and that is the point.**
-Each belongs to a mechanism that runs before or beside a handler, and giving
-`Error` a member for it would put two producers on one status:
+**Three of the table's rows are not reachable from here, and that is the
+point.** Each belongs to a mechanism that runs before or beside a handler, and
+giving `Error` a member for it would put two producers on one status:
 
 | Status | Produced by | Why not `Error` |
 |---|---|---|

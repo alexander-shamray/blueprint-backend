@@ -275,21 +275,20 @@ architecture exists to avoid.
 
 ## 9.3 Domain event → integration event: the allow-list mapper
 
-[§5.5](05-tactical-ddd.md) states the principle — never publish a domain event to the bus. This is the
-mechanism that makes it structural rather than aspirational.
+[§5.5](05-tactical-ddd.md) states the principle — never publish a domain event to the bus. This
+is the mechanism that makes it structural rather than aspirational.
 
 Translation is **opt-in**. A mapper registry names each domain event type that
 becomes an integration event, and how. Everything unregistered is local-only.
 
 **Who calls this:** the mapper and publisher below are invoked by
-`DomainEventDispatcher` ([§7.5](07-persistence.md)), not by command handlers. A handler that calls
-either of them directly is a bug: the dispatcher runs at the single point where
-every aggregate has finished changing, and a handler that stages earlier
+`DomainEventDispatcher` ([§7.5](07-persistence.md)), not by command handlers. A handler that
+calls either of them directly is a bug: the dispatcher runs at the single point
+where every aggregate has finished changing, and a handler that stages earlier
 serialises a snapshot the rest of the handler can still move on from. The
-payload is written at `StageAsync` (the port below), not at commit, so a
-total adjusted two lines later commits an outbox row that disagrees with the
-row beside it. Both leave the transaction together and only one of them is
-right.
+payload is written at `StageAsync` (the port below), not at commit, so a total
+adjusted two lines later commits an outbox row that disagrees with the row
+beside it. Both leave the transaction together and only one of them is right.
 
 **The port is common; only the allow-list is per-service.**
 `DomainEventDispatcher` ([§7.5](07-persistence.md)) injects
@@ -747,11 +746,11 @@ Options.MakeReadOnly(populateMissingResolver: true);
 ```
 
 **Domain events on the `Local` lane must round-trip through this instance**, and
-that is asserted in [§12.4](12-test-strategy.md) — `Every_stageable_domain_event_round_trips_through_the_outbox_options`,
-written out there with the other outbox tests. It does **not** join §12.6's
-contract suite, which selects on the `Common.Contracts.` namespace and so can
-never see a domain event, by the same rule that keeps domain types out of
-contracts.
+that is asserted in [§12.4](12-test-strategy.md) —
+`Every_stageable_domain_event_round_trips_through_the_outbox_options`, written
+out there with the other outbox tests. It does **not** join §12.6's contract
+suite, which selects on the `Common.Contracts.` namespace and so can never see a
+domain event, by the same rule that keeps domain types out of contracts.
 
 The assertion catches the private constructor, the
 computed-property-with-no-setter and the interface-typed member on the day it
@@ -1025,9 +1024,9 @@ the table's own hop by `OutboxTraceContextTests`, and the workers' by
 `FulfilmentTraceContextTests` and `SendTraceContextTests`.
 
 `ProjectionInvoker` resolves and calls the handlers for a runtime type. It uses
-the same cached-delegate approach as the dispatcher in [§6.2](06-cqrs.md), so the reflection
-cost is paid once per event type rather than once per message. The body of its
-closed invoker is two decisions:
+the same cached-delegate approach as the dispatcher in [§6.2](06-cqrs.md), so the
+reflection cost is paid once per event type rather than once per message. The
+body of its closed invoker is two decisions:
 
 ```csharp
 IProjectionHandler<TEvent>[] handlers = [.. sp.GetServices<IProjectionHandler<TEvent>>()];
@@ -1970,11 +1969,10 @@ meet.
 > could contradict the name** — here the aggregate can, so the state waits
 > for it. It is worth recognising away from this saga.
 
-Commands are contracts too, owned by the service that accepts them ([§3.2](03-bounded-contexts.md)), and
-each owns its payload types. They live under `Common.Contracts`, one file per
-owning service; these are, in the reference domain, the saga's two outbound
-commands to its peers
-([E.5.1](appendix-e-reference-domain.md#e51-the-contracts)):
+Commands are contracts too, owned by the service that accepts them ([§3.2](03-bounded-contexts.md)),
+and each owns its payload types. They live under `Common.Contracts`, one file
+per owning service; these are, in the reference domain, the saga's two outbound
+commands to its peers ([E.5.1](appendix-e-reference-domain.md#e51-the-contracts)):
 
 ```csharp
 namespace Common.Contracts.Inventory.V1;
@@ -2005,16 +2003,14 @@ public sealed record AuthorisePayment(Guid OrderId, decimal Amount, string Curre
 > *on whose behalf*, which is
 > the deciding service's to derive.
 >
-> **It is not that only one of them is checkable.** Here, in the reference domain
-> ([E.5.1](appendix-e-reference-domain.md#e51-the-contracts)) Payments holds
-> the order — payer included — so a supplied `CustomerId` would be as
-> checkable as the amount. What decides it is stronger: a transported
-> authority is a second
-> source for a decision that must have exactly one, a check that exists is not
-> a check that is performed, and the field that is absent cannot be the one a
-> later code path reads instead of the record.
-> [§11.4](11-identity-authorization.md)'s subject rule reaches the message
-> path on those terms rather than excluding it.
+> **It is not that only one of them is checkable.** Here, in the reference
+> domain ([E.5.1](appendix-e-reference-domain.md#e51-the-contracts)) Payments holds the order — payer included — so a supplied
+> `CustomerId` would be as checkable as the amount. What decides it is stronger:
+> a transported authority is a second source for a decision that must have
+> exactly one, a check that exists is not a check that is performed, and the
+> field that is absent cannot be the one a later code path reads instead of the
+> record. [§11.4](11-identity-authorization.md)'s subject rule reaches the message path on those terms
+> rather than excluding it.
 
 ```csharp
 namespace Common.Contracts.Ordering.V1;
@@ -2932,10 +2928,10 @@ dual write.
 `GET /v1/orders/{id}/saga` answers the instance's own word about one order:
 `orderId`, `currentState`, `startedAt`, `stateEnteredAt` and `cancelReason`,
 which is `null` until the saga compensates. It requires `orders:saga-read`
-(Appendix E.6.5) and nothing else, because the instance holds no customer (ADR-028) to check a
-caller against; the permission is staff's, not a buyer's. The BFF's
-`/bff/v1/orders/{id}` ([E.6.10](appendix-e-reference-domain.md#e610-the-buyers-order-read)) is the buyer's word and a projection of events,
-so the two are separate sources and can differ.
+(Appendix E.6.5) and nothing else, because the instance holds no customer
+(ADR-028) to check a caller against; the permission is staff's, not a buyer's.
+The BFF's `/bff/v1/orders/{id}` ([E.6.10](appendix-e-reference-domain.md#e610-the-buyers-order-read)) is the buyer's word and a
+projection of events, so the two are separate sources and can differ.
 
 **No row is a 404 for two facts at once.** A finalised saga deletes its
 instance (`SetCompletedWhenFinalized`), so a shipped, cancelled or escalated
@@ -3069,7 +3065,8 @@ depends on another service being up is a write that inherits its downtime.
 
 ### The hop budget
 
-> **Decision — maximum one synchronous downstream hop per inbound request.** See [ADR-017](adr/ADR-017-one-synchronous-hop.md).
+> **Decision — maximum one synchronous downstream hop per inbound request.** See
+> [ADR-017](adr/ADR-017-one-synchronous-hop.md).
 
 `Client → Gateway → A → B` is permitted. `A → B → C` is **not**, and neither is
 any deeper chain. Stated as a number rather than as advice, because "avoid long
@@ -3138,8 +3135,8 @@ continues — consuming a connection and a thread for an answer nobody will read
 
 The outer two are the platform's constants ([§15.4](15-cicd-deployment.md));
 the outbound pair is set per hop and differs with what each calls. **The
-ordering is the invariant** — that part is not negotiable, and it is what to assert in a
-configuration-validation test at startup.
+ordering is the invariant** — that part is not negotiable, and it is what to
+assert in a configuration-validation test at startup.
 
 > **All four layers fire.** The outbound total and the per-attempt timeout are
 > properties of the resilience handler. The outer two are request-timeout
@@ -3214,32 +3211,27 @@ gives it, and Notifications' worker the contact read the same record gives it,
 both off every request path, and `ContactHop` sits inside the band because
 Keycloak is the deployment's own and no third party. The outbound clients of the
 other kind call third parties — Payments' `ProviderHop`, behind the
-anti-corruption layer that, in the reference domain, [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map) gives Payments, Shipping's `CarrierHop`, to the
-carrier, and Notifications' `MailHop`, to its relay, and `FcmHop` and
-`ApnsHop`, to the two push providers — and each is registered by the service
-that makes the call. The BFF's call to the AI assistant's model provider is
-none of these rules' subject: no request waits on a turn's call, which runs off
-the request that started it, and the status route waits only on the adapter's
-model probe, cached and bounded by its own timeout inside
-`ServiceOptions.OperationTimeout`. It is the provider SDK's own client, with
-that SDK's timeout and retries
-([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
-A call under the caller's own token is a
-third kind, and §4.2's helper registers none of it either: in the reference
-domain the BFF's hop to Notifications forwards the buyer's access token
-unchanged and holds no grant for it
-([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md),
-[ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)),
-so `NotificationsHop` sizes it as `PricingHop` sizes its own, and no client
-secret counts it (§11.5). `PricingHop`, beside the pricing client's
-registration in `Program.cs`, names the client and Catalog's address once:
-`http`, not `https`, because TLS
-terminates at the ingress and traffic inside the cluster is plain (§10.1); the
-host is the Service name YARP also routes to (§10.2); and a second, HTTP/2-only
-port rather than the REST one, because a cleartext Kestrel endpoint cannot serve
-HTTP/1.1 and h2c at once, which Catalog's own `appsettings.json` argues. The
-configuration satisfies the table rather than merely gesturing at it, and the
-budget is worked out including the waiting:
+anti-corruption layer that, in the reference domain, [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map) gives Payments,
+Shipping's `CarrierHop`, to the carrier, and Notifications' `MailHop`, to its
+relay, and `FcmHop` and `ApnsHop`, to the two push providers — and each is
+registered by the service that makes the call. The BFF's call to the AI
+assistant's model provider is none of these rules' subject: no request waits on
+a turn's call, which runs off the request that started it, and the status route
+waits only on the adapter's model probe, cached and bounded by its own timeout
+inside `ServiceOptions.OperationTimeout`. It is the provider SDK's own client,
+with that SDK's timeout and retries ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)). A call under the caller's
+own token is a third kind, and §4.2's helper registers none of it either: in the
+reference domain the BFF's hop to Notifications forwards the buyer's access
+token unchanged and holds no grant for it ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md), [ADR-120](adr/ADR-120-channel-preferences-are-a-consent-journal-notifications-keeps-per-subject-topic-and-channel-and-an-erasure-anonymises-it-474.md)), so
+`NotificationsHop` sizes it as `PricingHop` sizes its own, and no client secret
+counts it (§11.5). `PricingHop`, beside the pricing client's registration in
+`Program.cs`, names the client and Catalog's address once: `http`, not `https`,
+because TLS terminates at the ingress and traffic inside the cluster is plain
+(§10.1); the host is the Service name YARP also routes to (§10.2); and a second,
+HTTP/2-only port rather than the REST one, because a cleartext Kestrel endpoint
+cannot serve HTTP/1.1 and h2c at once, which Catalog's own `appsettings.json`
+argues. The configuration satisfies the table rather than merely gesturing at
+it, and the budget is worked out including the waiting:
 
 ```csharp
 // The client is NAMED, and the name is load-bearing rather than tidy:

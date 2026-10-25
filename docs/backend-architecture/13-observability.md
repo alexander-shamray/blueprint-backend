@@ -297,7 +297,8 @@ public sealed class OrderMetrics
 
 An instrument with no call site is a metric that reads zero forever, which is
 indistinguishable from a system doing no work. All three call sites are in
-`OrderSummaryProjection` ([§6.6](06-cqrs.md)), and that is a rule rather than a coincidence:
+`OrderSummaryProjection` ([§6.6](06-cqrs.md)), and that is a rule rather than a
+coincidence:
 
 > **A business metric is recorded on the committed path, never inside the
 > write transaction.** A handler runs inside one, so a counter it increments
@@ -307,13 +308,13 @@ indistinguishable from a system doing no work. All three call sites are in
 > point at which "an order was placed" is true.
 >
 > **And exactly once, which rows-affected does not give you.** The `Local` lane
-> is at-least-once *and* unordered ([§9.4](09-messaging.md)), so "did this write change anything"
-> answers the redelivery question and not the ordering one: a cancellation
-> claimed before its placement changes a row, and counting it there records a
-> cancelled order that `orders.placed` has not counted and — if the placement
-> row is later abandoned — never will. `cancelled > placed` is unreachable in
-> the write model, and a metric that can reach it is a metric no reconciliation
-> can trust.
+> is at-least-once *and* unordered ([§9.4](09-messaging.md)), so "did this write change
+> anything" answers the redelivery question and not the ordering one: a
+> cancellation claimed before its placement changes a row, and counting it there
+> records a cancelled order that `orders.placed` has not counted and — if the
+> placement row is later abandoned — never will. `cancelled > placed` is
+> unreachable in the write model, and a metric that can reach it is a metric no
+> reconciliation can trust.
 >
 > So each counter is a **claim against the row**: a flag column, flipped and
 > read in one `UPDATE`, with a predicate naming everything that must already be
@@ -541,10 +542,10 @@ and which `Stage` copies from the message rather than from a clock.
 It has to: the local lane carries domain events, and `ProjectionInvoker<TEvent>`
 is deliberately unconstrained — `IProjectionHandler<T>` is satisfied by any
 type, including the read-model-shaped events a projection may prefer. Every
-`IDomainEvent` does carry `OccurredAt` ([§5.5](05-tactical-ddd.md)), so a constraint would compile
-today; it would also make the metric the reason the invoker cannot accept a
-plain record tomorrow. The row already has the timestamp, and reading it there
-costs a column the claim was going to pay for anyway.
+`IDomainEvent` does carry `OccurredAt` ([§5.5](05-tactical-ddd.md)), so a constraint would
+compile today; it would also make the metric the reason the invoker cannot
+accept a plain record tomorrow. The row already has the timestamp, and reading
+it there costs a column the claim was going to pay for anyway.
 
 `IntegrationEventConsumer<T>`, `CommandConsumer<,>` and `InboxFilter<T>` take
 `MessagingMetrics` as a constructor parameter. `Projected` is recorded by
@@ -769,13 +770,13 @@ Matching is by substring, ordinal and case-insensitive, because the field that
 leaks is never named exactly `password` — it is `NewPassword`, `card_number`,
 `id_token`. The cost is that a term which is a substring of an innocent word
 redacts that word too, which is why `pin` is deliberately absent: an ordinary
-word such as `shipping` contains it. Both spellings of the snake_case entries are listed rather than
-normalised, because normalising a key would have to guess at the separator
-and a miss here is silent. `All` wraps the array once rather than handing it
-out, because returning it would let a caller cast the view back to `string[]`
-and rewrite the vocabulary at run time, where the test that pins the list
-could never see it. `Matches` loops rather than calling `Any`, because a
-lambda capturing the key would allocate on every attribute of every record.
+word such as `shipping` contains it. Both spellings of the snake_case entries
+are listed rather than normalised, because normalising a key would have to guess
+at the separator and a miss here is silent. `All` wraps the array once rather
+than handing it out, because returning it would let a caller cast the view back
+to `string[]` and rewrite the vocabulary at run time, where the test that pins
+the list could never see it. `Matches` loops rather than calling `Any`, because
+a lambda capturing the key would allocate on every attribute of every record.
 
 `LooksLikeSecret`, in the same file, is the half that survives a key nobody
 predicted: the list can only catch a name someone thought of, and that failure
@@ -1375,9 +1376,9 @@ absorb a short RabbitMQ blip or a rolling broker restart without paging anyone.
 
 **These three gauges read the database, not the pod, so aggregate with `max`
 and never `sum`.** Every replica of a service exports the same table-wide
-number — §15.3's chart for a service runs three — so `sum` reports three times the
-backlog and trips a thousand-row threshold at about 334 real rows. Sum *across
-lanes* if a total is wanted, but deduplicate replicas first:
+number — §15.3's chart for a service runs three — so `sum` reports three times
+the backlog and trips a thousand-row threshold at about 334 real rows. Sum
+*across lanes* if a total is wanted, but deduplicate replicas first:
 
 ```promql
 sum by (service_name) (max by (service_name, lane) (outbox_pending_count))
@@ -1859,10 +1860,10 @@ touches the outbox at all — §6.6's price projection is the worked case
 > `MessagingMetrics.Projected` is called by `ProjectionInvoker` only after one
 > succeeds, so a service with no projection declares the instrument and never
 > writes to it — a registered name is not a live signal, as §13.6 records for
-> the HybridCache meter. Concretely, in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), Ordering's is
-> §6.6's `OrderSummaryProjection`, which
-> every placed order reaches, so `deploy/observability/slo/slo.js` asserts
-> this row against the orders its own run places.
+> the HybridCache meter. Concretely, in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)),
+> Ordering's is §6.6's `OrderSummaryProjection`, which every placed order
+> reaches, so `deploy/observability/slo/slo.js` asserts this row against the
+> orders its own run places.
 
 **Broker-fed read-model staleness therefore has no SLO here, and the honest
 move is to say so rather than to point at a row that nearly fits.** The

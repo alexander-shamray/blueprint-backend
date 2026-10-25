@@ -92,14 +92,15 @@ so**, which is why §14.1's healthcheck asserts the plugin is enabled as well as
 that the broker is running: a stock broker is *healthy* and wrong, and the only
 evidence is in a log belonging to something else.
 
-**This scheduler cannot cancel, and that is the cost this ADR most understated.**
-MassTransit 8.5.3's `DelayedScheduleMessageProvider.CancelScheduledSend` returns
+**This scheduler cannot cancel, and that is the cost this ADR most
+understated.** MassTransit 8.5.3's
+`DelayedScheduleMessageProvider.CancelScheduledSend` returns
 `Task.CompletedTask` on both overloads — checked against the tagged source — so
 once the broker holds a delayed message nothing recalls it. Every `Unschedule`
 in §9.6's machine is a no-op here, and **every order keeps all of its timeouts
-until they fire**: five minutes, fifteen minutes and ten minutes on the
-ordinary path, and three days on every order that ships. The token-id columns
-are written and never read back.
+until they fire**: five minutes, fifteen minutes and ten minutes on the ordinary
+path, and three days on every order that ships. The token-id columns are written
+and never read back.
 
 Correctness survives it, and by construction rather than by luck — a timeout
 arriving in a state that does not handle it is ignored, and one arriving after

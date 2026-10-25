@@ -1,12 +1,12 @@
 # ADR-040 — No host accepts a token with more life left than the revocation bound
 
 **Decision.** Every host that composes `AddCommonWebDefaults` refuses an
-inbound access token carrying more than `AuthenticationExtensions.RevocationBound`
-of remaining life — [ADR-033](ADR-033-revocation-is-bounded-by-the-token-lifetime-and-no-denylist-exists.md)'s
-330 seconds, composed from the 300-second lifetime [§11.3](../11-identity-authorization.md)
-states and the 30-second `ClockSkew` beside it. The number becomes a constant
-in `Common.Web` because something now reads it, and
-`RealmImportTests` reads the same constant instead of its own literal.
+inbound access token carrying more than
+`AuthenticationExtensions.RevocationBound` of remaining life — [ADR-033](ADR-033-revocation-is-bounded-by-the-token-lifetime-and-no-denylist-exists.md)'s
+330 seconds, composed from the 300-second lifetime [§11.3](../11-identity-authorization.md) states and the
+30-second `ClockSkew` beside it. The number becomes a constant in `Common.Web`
+because something now reads it, and `RealmImportTests` reads the same constant
+instead of its own literal.
 
 **This gates remaining life and does not enforce the issued lifetime, which is
 the whole of what the title says and the reason it says it.** A five-hour token

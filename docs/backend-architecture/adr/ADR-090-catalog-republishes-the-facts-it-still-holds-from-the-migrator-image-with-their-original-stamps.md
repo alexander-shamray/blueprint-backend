@@ -57,10 +57,10 @@ retention purge ([§9.4](../09-messaging.md)) reclaims, and a repeated run
 repeats it. `messaging.delivery.lag` measures from the payload's stamp
 ([§13.3](../13-observability.md)), so the consumers record lags as old as the
 products while the backlog drains, and `DeliveryLagHigh` can fire on Ordering
-during a republish: that is the republish, not a fault. A product published or repriced while
-the run reads it is announced by its own commit as well, and the later stamp
-wins. The run does not touch Ordering, so it cannot say which rows were
-missing, and it announces nothing for a product Catalog itself has lost.
+during a republish: that is the republish, not a fault. A product published or
+repriced while the run reads it is announced by its own commit as well, and the
+later stamp wins. The run does not touch Ordering, so it cannot say which rows
+were missing, and it announces nothing for a product Catalog itself has lost.
 
 ---
 

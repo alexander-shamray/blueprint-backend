@@ -77,9 +77,9 @@ it sets `X-Content-Type-Options: nosniff` because the store does not
 ([§10.6](10-api-gateway.md#106-response-security-headers)). The BFF is given
 the store's address as the host's browser reaches it, since it signs the URL
 the client uploads to; the product service is given the address on the Compose
-network and the edge's as the base of every URL it stores. `Platform.IntegrationTests`
-starts the same image with the same files and policies, so what it proves is
-what `up` runs.
+network and the edge's as the base of every URL it stores.
+`Platform.IntegrationTests` starts the same image with the same files and
+policies, so what it proves is what `up` runs.
 
 **A developer attaches an image by hand in four calls, and a console that
 drives the platform does the same four.** The wire contract is
@@ -290,13 +290,13 @@ refuses the string's `TrustServerCertificate=True`.
 
 The API carries the authority, to validate inbound tokens
 ([§11.2](11-identity-authorization.md)), and no `Identity__Client__*`: the
-service calls no peer synchronously — prices come from a local projection (§6.4) and
-the rest goes over the broker. [§15.4](15-cicd-deployment.md) says which hosts
-hold client credentials (§11.5, ADR-052). An environment variable nothing reads
-is the container form of an unused registration, so each joins a unit with the
-change whose code first reads it. The unit carries both Redis connections
-because `AddRedisConnections` is a single call by design (§8.2) and reads both
-eagerly, so a host given one key throws naming the other.
+service calls no peer synchronously — prices come from a local projection (§6.4)
+and the rest goes over the broker. [§15.4](15-cicd-deployment.md) says which hosts hold client
+credentials (§11.5, ADR-052). An environment variable nothing reads is the
+container form of an unused registration, so each joins a unit with the change
+whose code first reads it. The unit carries both Redis connections because
+`AddRedisConnections` is a single call by design (§8.2) and reads both eagerly,
+so a host given one key throws naming the other.
 
 The API waits on both Redis instances with `service_healthy`, not
 `service_started`. `AbortOnConnectFail` is false, so the host starts with Redis
@@ -791,14 +791,14 @@ would surface as "Aspire doesn't work on my machine" rather than as a defect.
 Two deliberate local simplifications, both matching what the Compose and test
 environments already do:
 
-- **`<Service>Migrator` points at the same SQL login as the runtime connection.**
-  [§7.1](07-persistence.md)'s two identities are a production control; locally there is one `sa`
-  account, exactly as [§12.4](12-test-strategy.md)'s fixture notes. The *key* still differs, so the
-  migrator reads the name it will read in production.
+- **`<Service>Migrator` points at the same SQL login as the runtime
+  connection.** [§7.1](07-persistence.md)'s two identities are a production control; locally
+  there is one `sa` account, exactly as [§12.4](12-test-strategy.md)'s fixture notes. The *key*
+  still differs, so the migrator reads the name it will read in production.
 - **The client secret is an Aspire parameter**, prompted once and stored in user
-  secrets, rather than a value in the AppHost. It is the same obligation [§15.4](15-cicd-deployment.md)
-  records — a required setting needs a source in every environment — met a third
-  way.
+  secrets, rather than a value in the AppHost. It is the same obligation
+  [§15.4](15-cicd-deployment.md) records — a required setting needs a source in every environment —
+  met a third way.
 
 > **The AppHost is a deployment environment, and drifts like one.** It is the
 > only one with no automated exercise: Compose runs in CI, Helm is rendered and
@@ -844,23 +844,20 @@ enough data to exercise pagination and caching: a catalogue of three products
 hides every performance problem you have.
 
 **in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-and-14-observability-and-local-development)), `CatalogSeeder` and `InventorySeeder`
-write what their services' own commands would have.** Each product goes in with the `ProductPublished`
-outbox row `PublishProduct` stages, and each count with the
-`StockLevelChanged` row `SetOnHand` stages, so Ordering's prices, the BFF's
+write what their services' own commands would have.** Each product goes in with
+the `ProductPublished` outbox row `PublishProduct` stages, and each count with
+the `StockLevelChanged` row `SetOnHand` stages, so Ordering's prices, the BFF's
 names and Catalog's stock levels fill through the platform's own delivery
-([§9.4](09-messaging.md)) and the seeded state is one the system could have
-reached. §14.1's start order is what makes that delivery arrive: a fanout
-publish with no queue bound to it is dropped, so `catalog-api` waits for its
-consumers to be ready and `inventory-api` waits for Catalog. Inventory is
-seeded directly rather than from Catalog's event, because stock reaches it by
-the admin path ([§10.2](10-api-gateway.md)'s
-`inventory-admin` route) and from no event
-([§3.2](03-bounded-contexts.md)). Both write SQL through the migration's own
-`DbContext`, since [§4.2](04-solution-structure.md) keeps the migrator off
-Application and Domain; each skips an id that already has a row, so a second
-run changes nothing; and the ids are stable, owned by
-[`deploy/compose/README.md`](../../deploy/compose/README.md), which
-publishes them.
+([§9.4](09-messaging.md)) and the seeded state is one the system could have reached. §14.1's
+start order is what makes that delivery arrive: a fanout publish with no queue
+bound to it is dropped, so `catalog-api` waits for its consumers to be ready and
+`inventory-api` waits for Catalog. Inventory is seeded directly rather than from
+Catalog's event, because stock reaches it by the admin path ([§10.2](10-api-gateway.md)'s
+`inventory-admin` route) and from no event ([§3.2](03-bounded-contexts.md)). Both write SQL through
+the migration's own `DbContext`, since [§4.2](04-solution-structure.md) keeps the migrator off
+Application and Domain; each skips an id that already has a row, so a second run
+changes nothing; and the ids are stable, owned by
+[`deploy/compose/README.md`](../../deploy/compose/README.md), which publishes them.
 
 **The gate exists because of where they run.** The migrator container is the
 one artefact guaranteed to run in production —

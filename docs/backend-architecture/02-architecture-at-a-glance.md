@@ -98,13 +98,13 @@ Three details in this picture are decisions, not layout:
   idempotency is its provider's key and its own rows, a lease its workers take
   in SQL, or §9.5's inbox and a unique key, as the reference domain's three
   show ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)).
-- **Every service validates its own token**, not just the gateway. [§11.2](11-identity-authorization.md) treats
-  the network as hostile, so a request arriving by any other path is still
-  authenticated. A diagram showing only `GW -.-> IDP` would depict exactly the
-  arrangement that section forbids relying on.
+- **Every service validates its own token**, not just the gateway. [§11.2](11-identity-authorization.md)
+  treats the network as hostile, so a request arriving by any other path is
+  still authenticated. A diagram showing only `GW -.-> IDP` would depict exactly
+  the arrangement that section forbids relying on.
 - **Migrators are absent deliberately.** They are Jobs, not long-running
-  containers — but each holds a *second* SQL identity with DDL rights ([§7.1](07-persistence.md)),
-  which is the part worth knowing that this view cannot show.
+  containers — but each holds a *second* SQL identity with DDL rights
+  ([§7.1](07-persistence.md)), which is the part worth knowing that this view cannot show.
 
 ## 2.3 Principles
 
@@ -145,8 +145,8 @@ strong evidence the data belongs inside a single aggregate.
 
 > **Trap — the distributed monolith.** If deploying service A requires
 > simultaneously deploying service B, you have not built microservices. You have
-> built a monolith with network calls in the middle. The most common causes are a
-> shared database, a shared "Common.Entities" assembly, and synchronous call
+> built a monolith with network calls in the middle. The most common causes are
+> a shared database, a shared "Common.Entities" assembly, and synchronous call
 > chains three services deep.
 
 ---

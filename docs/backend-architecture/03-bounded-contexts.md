@@ -13,23 +13,21 @@ one-word example worked through.
 
 **Every collaboration the saga has with another service is a round trip, and
 the return leg is an event.**
-Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Ordering sends a command and then waits — it
-does not call and block. The return edges drawn in the map are what the fulfilment saga
-([§9.6](09-messaging.md)) transitions on, and drawing only the outbound half
-would depict the request/response topology ADR-002 and ADR-017 exist to reject.
-The saga has a fourth round trip the map does not draw, because both of its ends
-are Ordering: `ConfirmOrder` out to the aggregate and `OrderConfirmed` back. It
-is asynchronous on exactly these terms, and the Consumes cell in
-[E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)
-is where it is recorded.
+Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Ordering sends a command and
+then waits — it does not call and block. The return edges drawn in the map are
+what the fulfilment saga ([§9.6](09-messaging.md)) transitions on, and drawing only the
+outbound half would depict the request/response topology ADR-002 and ADR-017
+exist to reject. The saga has a fourth round trip the map does not draw, because
+both of its ends are Ordering: `ConfirmOrder` out to the aggregate and
+`OrderConfirmed` back. It is asynchronous on exactly these terms, and the
+Consumes cell in [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) is where it is recorded.
 
-Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), ADR-052's reads are of another kind, and the
-map leaves them undrawn because it draws messages: a Shipping worker reads a delivery address from Ordering
-over gRPC, and a Notifications worker reads a mailbox from Keycloak's admin
-API, each off every request path
-([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
-Each is the departure [§2.3](02-architecture-at-a-glance.md)'s callout
-records, not a round trip whose return leg is an event.
+Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), ADR-052's reads are of another
+kind, and the map leaves them undrawn because it draws messages: a Shipping
+worker reads a delivery address from Ordering over gRPC, and a Notifications
+worker reads a mailbox from Keycloak's admin API, each off every request path
+([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). Each is the departure [§2.3](02-architecture-at-a-glance.md)'s callout records, not a round
+trip whose return leg is an event.
 
 Each context is typed core, supporting or generic, and the reason it is a
 separate service is recorded beside its type in [E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)'s table for the
@@ -56,11 +54,12 @@ the table has a row for each service and one for the BFF.
 
 Every cell enumerates. "All customer-relevant events" would be shorter and is
 not a contract: it cannot be versioned, reviewed, or checked against what
-publishers actually emit. Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), Notifications is the
-clearest case: it publishes nothing, so its row is the whole of its contract, and the delivery plan builds
-it last for that reason ([Appendix C.1](appendix-c-delivery-plan.md#c1-service-build-order)) — every name in it belongs to a
-service that has to exist first. A subscription list that grows silently is how
-a consumer ends up bound to a type nobody meant to give it.
+publishers actually emit. Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)),
+Notifications is the clearest case: it publishes nothing, so its row is the
+whole of its contract, and the delivery plan builds it last for that reason
+([Appendix C.1](appendix-c-delivery-plan.md#c1-service-build-order)) — every name in it belongs to a service that has to exist
+first. A subscription list that grows silently is how a consumer ends up bound
+to a type nobody meant to give it.
 
 **The table closes in both directions, and the second one is easier to lose.**
 Every name in a Consumes cell appears in exactly one Publishes cell — an event
@@ -68,19 +67,18 @@ nobody emits is a consumer waiting for ever. Less obviously, every name in a
 Publishes cell appears in at least one Consumes cell: a published event with no
 reader is a contract the platform is committed to versioning and nobody is
 asking for, and it looks identical to the case where its consumer was
-forgotten. Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), `PaymentRefunded` was that row until
-Notifications claimed it. Both
-directions are two set comparisons over that table, automated precisely
-because neither failure produces a symptom: the
-[messaging gate](../../.github/messaging-gate/README.md) makes them, and holds
-every row to what its host's code publishes, consumes and accepts, bar a name
-the gate's `owed.txt` lists as owed: stated in the table and not built yet.
+forgotten. Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), `PaymentRefunded`
+was that row until Notifications claimed it. Both directions are two set
+comparisons over that table, automated precisely because neither failure
+produces a symptom: the [messaging gate](../../.github/messaging-gate/README.md) makes them, and holds every row to
+what its host's code publishes, consumes and accepts, bar a name the gate's
+`owed.txt` lists as owed: stated in the table and not built yet.
 
-Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), the command column is entirely the saga's
-doing: Ordering's `OrderFulfilmentSaga`
-is the only thing that sends commands, and each one lands on the queue of the
-service that owns the decision. `CancelOrder` and `ConfirmOrder` route back to
-Ordering itself — the saga coordinates, the aggregate decides (§9.6).
+Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)), the command column is entirely
+the saga's doing: Ordering's `OrderFulfilmentSaga` is the only thing that sends
+commands, and each one lands on the queue of the service that owns the decision.
+`CancelOrder` and `ConfirmOrder` route back to Ordering itself — the saga
+coordinates, the aggregate decides (§9.6).
 
 **Ordering subscribes to three of its own events, and every entry is the saga
 rather than a duplication.** Concretely, in the reference domain ([E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table)),
@@ -103,27 +101,26 @@ for its effect is what that assumption looked like in the machine
 `AwaitingConfirmation` and that cell entry are one change.
 
 **A round trip whose two ends are the same service is still a round trip**, and
-this is the platform's only one. Concretely, in the reference domain, the context map
-([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) draws no Ordering self-edge, which is a simplification rather than a claim: the collaboration is
-real, it is asynchronous like every one drawn here, and it obeys the same rule
-that the return leg is an event.
+this is the platform's only one. Concretely, in the reference domain, the
+context map ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) draws no Ordering self-edge, which is a simplification
+rather than a claim: the collaboration is real, it is asynchronous like every
+one drawn here, and it obeys the same rule that the return leg is an event.
 
-**Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Payments subscribes to `OrderPlaced` to build
-its own record of the order — the payer, the total and the currency.** The payer is the one it cannot do
-without, and
-[ADR-028](adr/ADR-028-a-money-movement-command-carries-no-subject.md)
+**Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Payments subscribes to
+`OrderPlaced` to build its own record of the order — the payer, the total and
+the currency.** The payer is the one it cannot do without, and [ADR-028](adr/ADR-028-a-money-movement-command-carries-no-subject.md)
 forbids `AuthorisePayment` from carrying one: the subject of a money-movement
 decision is the deciding service's to derive, not the sender's to state, and a
-subject on that command would transport an authority the receiver already
-holds. The subject reaches Payments through the event instead, where it was
-bound from a real principal at Ordering's endpoint (§11.4), and the command's
-arrival is what makes it look the payer up.
+subject on that command would transport an authority the receiver already holds.
+The subject reaches Payments through the event instead, where it was bound from
+a real principal at Ordering's endpoint (§11.4), and the command's arrival is
+what makes it look the payer up.
 
 **The other two fields are not incidental, which is why the record is of the
 order rather than of the payer.** `OrderPlaced` carries `TotalAmount` and
 `Currency` — §9.6's saga reads both off it — and holding them is what lets
-Payments, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), *disagree* with the `AuthorisePayment` it is handed rather than merely
-obey it.
+Payments, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), *disagree* with the
+`AuthorisePayment` it is handed rather than merely obey it.
 
 **That record also settles why the subject is omitted and the other two are
 not, and it is not because only they can be checked.** Once the payer is in
@@ -165,26 +162,25 @@ here, an assertion nobody could verify replaced by a record the service owns.
 > exponential in-memory retries capped at a minute; a reorder outlasting that
 > reaches the error queue [§13.6](13-observability.md) pages on, turning a
 > routine race into an operational fault in about a minute. **A wait needs a
-> mechanism that lasts as long as the wait.** Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)),
-> Payments' command endpoint
-> therefore needs **delayed redelivery** — ADR-021's delayed exchange is
-> already on this broker — with a window reaching §9.6's fifteen-minute payment
-> timeout, so an order whose `OrderPlaced` never arrives compensates on that
-> timeout rather than paging long before it.
+> mechanism that lasts as long as the wait.** Concretely, in the reference
+> domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Payments' command endpoint therefore needs **delayed
+> redelivery** — ADR-021's delayed exchange is already on this broker — with a
+> window reaching §9.6's fifteen-minute payment timeout, so an order whose
+> `OrderPlaced` never arrives compensates on that timeout rather than paging
+> long before it.
 
 **A cancellation can reach Payments ahead of the `AuthorisePayment` it
-follows, too**, and in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) Payments records it rather than racing it: the
-authorisation that arrives after it is declined with a reason Payments owns
-and charges nothing, and `PaymentRefunded` is published only when an
-authorisation is voided or money is returned. That decline is a verdict on the
-order, not on a payer, so the rule in the callout above still holds where
-Payments has no record of the order at all —
-[ADR-049](adr/ADR-049-a-cancellation-payments-has-recorded-declines-the-authorisation-that-follows.md).
+follows, too**, and in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) Payments records it
+rather than racing it: the authorisation that arrives after it is declined with
+a reason Payments owns and charges nothing, and `PaymentRefunded` is published
+only when an authorisation is voided or money is returned. That decline is a
+verdict on the order, not on a payer, so the rule in the callout above still
+holds where Payments has no record of the order at all — [ADR-049](adr/ADR-049-a-cancellation-payments-has-recorded-declines-the-authorisation-that-follows.md).
 
 **A cell names a message; it does not say what the message means when there is
 nothing to do.** `ReleaseStock` is where that gap was load-bearing, and it is
-now closed here rather than assumed in the saga that sends it. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Inventory
-owes two guarantees, both recorded in
+now closed here rather than assumed in the saga that sends it. Concretely, in
+the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Inventory owes two guarantees, both recorded in
 [ADR-024](adr/ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md):
 
 - **A `ReleaseStock` always publishes `StockReleased`**, including for a
@@ -197,9 +193,9 @@ owes two guarantees, both recorded in
   `StockReservationFailed`, which means an out-of-stock decision and requires
   `UnavailableProductIds` a refusal of this kind does not have.
   [§9.4](09-messaging.md) orders nothing between two deliveries,
-  so in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) a cancellation can reach Inventory before the reservation it undoes; without
-  this the reserve creates a hold for an order that is already cancelled and
-  nobody is left waiting to notice.
+  so in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)) a cancellation can reach Inventory
+  before the reservation it undoes; without this the reserve creates a hold for
+  an order that is already cancelled and nobody is left waiting to notice.
 
 **What remembers it is the order's reservation row, and the row is never
 reaped.** Every row, tombstone or not, is the answer a repeated message for
@@ -227,12 +223,12 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
   terms above and returns nothing to the level, because the stock has left.
 
 > **The second producer is what the saga's absorption is for**, and citing this
-> section for it was a mis-citation until this bullet existed. Concretely, in the reference domain
-> ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Payments' `OrderCancelled` → void is argued in prose in §9.6 for the same reason: a
-> table can say which messages cross a boundary and cannot say that one causes
-> another. Where such a derivation becomes load-bearing — and a pager path is
-> as load-bearing as it gets — it belongs in a sentence rather than in the
-> reader's head.
+> section for it was a mis-citation until this bullet existed. Concretely, in
+> the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Payments' `OrderCancelled` → void is argued
+> in prose in §9.6 for the same reason: a table can say which messages cross a
+> boundary and cannot say that one causes another. Where such a derivation
+> becomes load-bearing — and a pager path is as load-bearing as it gets — it
+> belongs in a sentence rather than in the reader's head.
 
 > **Decision — in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Inventory keeps
 > `OrderCancelled`, and the second route is held deliberately rather than
@@ -247,15 +243,14 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
 > it **record** that on the instance rather than discarding it, and guard their
 > forward transitions on what they recorded.
 >
-> **The absence beside it is deliberate too.** Concretely, in the reference domain
-> ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Inventory has no
-> `OrderConfirmed` subscription, so it cannot decline a release for an order it
-> has seen confirmed, and a reservation already being picked is released like
-> any other — §9.6 raises `cancelled_after_confirmation` and
-> [`order-review.md`](../runbooks/order-review.md) has an operator reinstate it
-> by hand. Closing that properly means adding a name to that row, which is
-> Inventory's decision to take against a real picking process rather than that
-> table's to anticipate.
+> **The absence beside it is deliberate too.** Concretely, in the reference
+> domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), Inventory has no `OrderConfirmed` subscription, so it
+> cannot decline a release for an order it has seen confirmed, and a reservation
+> already being picked is released like any other — §9.6 raises
+> `cancelled_after_confirmation` and [`order-review.md`](../runbooks/order-review.md) has an operator
+> reinstate it by hand. Closing that properly means adding a name to that row,
+> which is Inventory's decision to take against a real picking process rather
+> than that table's to anticipate.
 
 > **Both guarantees exist because the saga's only alternative to an answer is a
 > pager.** [§9.6](09-messaging.md)'s `Compensating` settles its stock half
@@ -268,23 +263,20 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
 > exist. This is a rule about a service nobody has written, which is exactly
 > when it is cheapest to write down.
 
-Note the shapes this produces. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)), **Shipping**
-and **Notifications** expose no
-public API at all. Shipping is reached only through the broker, and
-[ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
-settles the one read that would otherwise have asked Shipping for one.
-Notifications has one caller besides the broker, the BFF, which registers a
-signed-in buyer's device over gRPC on a port no gateway route reaches
-([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)).
-Only Notifications publishes nothing among the services, though: the
-table in [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) gives Shipping two events to publish, and ADR-051's projection
-— the BFF's row, a host's rather than a service's — is built on them.
-**Notifications** is the simplest possible service and the last one built,
-and those two facts are not in tension. It contains almost no domain logic,
-which is what makes it cheap; it also publishes nothing and subscribes to
-eight events owned by other services, which is what makes it impossible to
-exercise before they exist
-([Appendix C.1](appendix-c-delivery-plan.md#c1-service-build-order)). Simple to write is not the same as ready to build.
+Note the shapes this produces. Concretely, in the reference domain ([E.1](appendix-e-reference-domain.md#e1-2-and-3-the-service-roster-and-the-context-map)),
+**Shipping** and **Notifications** expose no public API at all. Shipping is
+reached only through the broker, and [ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md) settles the one read that
+would otherwise have asked Shipping for one. Notifications has one caller
+besides the broker, the BFF, which registers a signed-in buyer's device over
+gRPC on a port no gateway route reaches ([ADR-117](adr/ADR-117-a-devices-push-token-is-a-contact-notifications-owns-registered-through-the-bff-and-erased-with-its-subject-474.md)). Only Notifications
+publishes nothing among the services, though: the table in [E.1.1](appendix-e-reference-domain.md#e11-32-the-service-responsibilities-table) gives
+Shipping two events to publish, and ADR-051's projection — the BFF's row, a
+host's rather than a service's — is built on them. **Notifications** is the
+simplest possible service and the last one built, and those two facts are not in
+tension. It contains almost no domain logic, which is what makes it cheap; it
+also publishes nothing and subscribes to eight events owned by other services,
+which is what makes it impossible to exercise before they exist ([Appendix
+C.1](appendix-c-delivery-plan.md#c1-service-build-order)). Simple to write is not the same as ready to build.
 
 ## 3.3 Rules for creating a new service
 

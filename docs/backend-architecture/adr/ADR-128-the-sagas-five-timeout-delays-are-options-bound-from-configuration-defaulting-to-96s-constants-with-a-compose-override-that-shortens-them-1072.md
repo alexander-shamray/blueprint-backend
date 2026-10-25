@@ -10,8 +10,8 @@ and ten years, a value outside refusing the host. The saga reads them once, in
 its constructor, so a change takes a restart. No deployed value sets any of
 them; the only setter is `deploy/compose/docker-compose.short-timeouts.yml`, an
 override a developer adds to the full-stack `up` in `deploy/compose/README.md`
-(never to the infra-only one, whose Ordering runs on the host), which cuts the five waits to seconds so each expiry branch is reached by hand
-([§14.1](../14-local-development.md)).
+(never to the infra-only one, whose Ordering runs on the host), which cuts the
+five waits to seconds so each expiry branch is reached by hand ([§14.1](../14-local-development.md)).
 
 **Why.** Five compensation branches (`StockReservationExpired`,
 `PaymentAuthorisationExpired`, `ConfirmationExpired`, `DespatchExpired` and

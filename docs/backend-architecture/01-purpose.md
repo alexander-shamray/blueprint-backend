@@ -25,8 +25,8 @@ The costs are real and permanent:
 aggregates, the same command handlers, the same integration events — but in one
 process, with events dispatched in-memory and enforced module boundaries. Every
 pattern in sections 5, 6, 7, 8 and 12 of this document applies unchanged. When a
-module genuinely needs independent deployment or independent scaling, extract it:
-the seams are already cut.
+module genuinely needs independent deployment or independent scaling, extract
+it: the seams are already cut.
 
 The rest of this document assumes you have made that decision deliberately.
 

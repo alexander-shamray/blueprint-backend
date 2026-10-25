@@ -4,7 +4,8 @@
 
 A single repository. Independent deployability comes from the CI pipeline
 building and releasing services separately, not from separate git repositories.
-A monorepo makes cross-cutting changes and contract updates atomic and reviewable.
+A monorepo makes cross-cutting changes and contract updates atomic and
+reviewable.
 
 ```
 /
@@ -325,10 +326,10 @@ file, asserts that it has not grown.
 > is worse than one whose gap is written down**, because the first invites
 > nobody to look.
 
-One more, for the rule [§9.3](09-messaging.md) states in prose: application code publishes through
-`IIntegrationEventPublisher` and the outbox, never through the bus directly.
-The saga is the documented exception (§9.6) and it lives in Infrastructure, so
-the boundary is checkable, in a service's
+One more, for the rule [§9.3](09-messaging.md) states in prose: application code publishes
+through `IIntegrationEventPublisher` and the outbox, never through the bus
+directly. The saga is the documented exception (§9.6) and it lives in
+Infrastructure, so the boundary is checkable, in a service's
 `tests/<Service>.Application.Tests/ArchitectureTests.cs` ([E.2.4](appendix-e-reference-domain.md#e24-the-masstransit-gate)).
 
 The saga may send and publish because its receive endpoint carries
@@ -521,8 +522,8 @@ rather than `InternalsVisibleTo` because it does not have to name the
 assemblies that consume it, `<Service>.TestSupport` and `<Service>.Api.Tests`
 among them, each of which `InternalsVisibleTo` would have to list.
 
-Every ordering constraint below is stated rather than left to the sample of [E.2.6](appendix-e-reference-domain.md#e26-the-composition-root),
-because each one produces a defect that no test catches by accident:
+Every ordering constraint below is stated rather than left to the sample of
+[E.2.6](appendix-e-reference-domain.md#e26-the-composition-root), because each one produces a defect that no test catches by accident:
 
 | Rule | What breaks otherwise |
 |---|---|
@@ -828,8 +829,8 @@ services it routes to. The BFF does not pass it, because its projection is a
 schema of its own
 ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md))
 and so a readiness check of its own, which
-the hop of §9.7 is deliberately not part of (§13.5). Every service fails to start
-without its own checks.
+the hop of §9.7 is deliberately not part of (§13.5). Every service fails to
+start without its own checks.
 
 What matters as much is that the probes stay **anonymous**: mapped inline after
 `UseAuthorization`, the gateway would be the one component whose own health
@@ -860,12 +861,12 @@ for free ([§9.2](09-messaging.md)), so read the record against the type that
 will fill it before writing the mapper, not after.
 
 > **Trap — the shared kernel that ate the platform.** A `Common.Entities`
-> assembly containing `Product`, `Customer` and `Order` looks like sensible reuse
-> and is the single most reliable way to destroy service independence. Two
-> contexts sharing an entity class cannot evolve their models separately, so they
-> must deploy together, so they are one service with extra steps. Duplicate the
-> class. The duplication is the point — each context keeps only the fields it
-> actually needs, and they diverge correctly over time.
+> assembly containing `Product`, `Customer` and `Order` looks like sensible
+> reuse and is the single most reliable way to destroy service independence. Two
+> contexts sharing an entity class cannot evolve their models separately, so
+> they must deploy together, so they are one service with extra steps. Duplicate
+> the class. The duplication is the point — each context keeps only the fields
+> it actually needs, and they diverge correctly over time.
 
 `Common.Domain`, `Common.Application` and `Common.Infrastructure` are shared
 *mechanism*, not shared *model*: base classes, the dispatcher, the outbox. That
@@ -986,8 +987,8 @@ the tooling for it is not in this repository.
 > treating the file as a set of minimums to be "reviewed quarterly", means a
 > routine `dotnet restore` can resolve forward across a major boundary. Where
 > that boundary is also a **licence** boundary — MassTransit v8 → v9 is the live
-> example (Appendix B) — the obligation is acquired by a restore rather than by a
-> decision. Pin exact versions and upgrade deliberately.
+> example (Appendix B) — the obligation is acquired by a restore rather than by
+> a decision. Pin exact versions and upgrade deliberately.
 
 Licence drift is only caught reliably by tooling — a convention will not survive
 the twentieth dependency.
@@ -1001,12 +1002,10 @@ the twentieth dependency.
 ## 4.5 Adding a service
 
 **Every** service of §4.1 shares the shape below — as an API host, as a worker
-or as a pure consumer, which [E.2.1](appendix-e-reference-domain.md#e21-the-services-and-their-host-shapes) sorts — and writing one by hand is how it ends up
-subtly different from the rest. A service with both hosts is rendered as one
-of them and has the other added beside the render, a shape the scaffold has
-no mode for
-([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)).
-One command renders it instead:
+or as a pure consumer, which [E.2.1](appendix-e-reference-domain.md#e21-the-services-and-their-host-shapes) sorts — and writing one by hand is how
+it ends up subtly different from the rest. A service with both hosts is rendered
+as one of them and has the other added beside the render, a shape the scaffold
+has no mode for ([ADR-118](adr/ADR-118-notifications-gains-an-api-host-for-device-registration-and-preferences-and-the-push-adapters-stay-in-the-worker-474.md)). One command renders it instead:
 
 ```bash
 python tools/new-service/new_service.py Yankee --port 5199
@@ -1128,12 +1127,13 @@ next PR's clock, not on its own**, and this is the only figure in this section a
 reader cannot check from the tree, so it is the one to distrust first — a number
 three PRs stale looks exactly like a number taken yesterday.
 
-**There is no template directory, and that is the design.** In the reference domain the
-script reads `src/Services/Catalog` at run time ([E.2.8](appendix-e-reference-domain.md#e28-the-scaffold-template)), so there is exactly one copy of the
-wiring — the copy CI builds and `dotnet test` exercises — and an improvement to
-the template reaches the next service the next time it runs. A tokenised copy
-beside it would be a second `DbContext`, a second migrator host and a second
-Dockerfile that nothing builds and nothing reconciles.
+**There is no template directory, and that is the design.** In the reference
+domain the script reads `src/Services/Catalog` at run time ([E.2.8](appendix-e-reference-domain.md#e28-the-scaffold-template)), so
+there is exactly one copy of the wiring — the copy CI builds and `dotnet test`
+exercises — and an improvement to the template reaches the next service the next
+time it runs. A tokenised copy beside it would be a second `DbContext`, a second
+migrator host and a second Dockerfile that nothing builds and nothing
+reconciles.
 
 **It copies no domain.** In the reference domain ([E.2.8](appendix-e-reference-domain.md#e28-the-scaffold-template))
 Catalog's `Product`, its command, its query and its endpoints are excluded by
@@ -1156,13 +1156,14 @@ the gates re-anchor on that aggregate. It is the one generated file written to
 be removed, and its own doc comment says so.
 
 > **The scaffold fails loudly or not at all.** Every piece of Catalog text it
-> names, in the reference domain ([E.2.8](appendix-e-reference-domain.md#e28-the-scaffold-template)), must match exactly once, the whole render is built in memory and
-> validated before a single file is created, and any file under
-> `src/Services/Catalog` it cannot classify as template or slice stops the run.
-> The price of having no second copy is that the first one moves; the price is
-> paid by refusing, never by silently emitting a service that still names
-> Catalog. Its own tests render this repository for the same reason — a fixture
-> tree would test the script against a template that cannot drift.
+> names, in the reference domain ([E.2.8](appendix-e-reference-domain.md#e28-the-scaffold-template)), must match exactly once, the
+> whole render is built in memory and validated before a single file is created,
+> and any file under `src/Services/Catalog` it cannot classify as template or
+> slice stops the run. The price of having no second copy is that the first one
+> moves; the price is paid by refusing, never by silently emitting a service
+> that still names Catalog. Its own tests render this repository for the same
+> reason — a fixture tree would test the script against a template that cannot
+> drift.
 >
 > **That guarantee is about validation, not about the write.** A run the
 > scaffold refuses writes nothing; a disk that fills up halfway through the
@@ -1206,10 +1207,10 @@ gains a template, so a chart emitted to a remembered count would not deploy;
 the thing worth writing down is the rule, not the arithmetic.
 
 **In the reference domain ([E.2.1](appendix-e-reference-domain.md#e21-the-services-and-their-host-shapes)) the scaffold refuses `Shipping`
-without `--worker` and `Notifications` without `--pure-consumer`.** A note is not a guard: without the refusal the
-script would render Shipping in a shape §4.1 does not give it, and
-Notifications in one that is not the render its tree was built on, and
-contradict the chapter quietly.
+without `--worker` and `Notifications` without `--pure-consumer`.** A note is
+not a guard: without the refusal the script would render Shipping in a shape
+§4.1 does not give it, and Notifications in one that is not the render its tree
+was built on, and contradict the chapter quietly.
 
 ---
 

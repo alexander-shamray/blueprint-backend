@@ -49,24 +49,22 @@ Scale, crash durability and a dependency's outage it does not prove, they stay
 with the suites that stage them, and a green journey is cited for none of them.
 
 What those two levels would otherwise carry splits cleanly in two, and both
-halves are cheaper elsewhere. **Saga coordination** — did the right command go out, in the
-right order, after the right event — is exercised by the in-memory harness in
-§12.5, in milliseconds. The exception is an assertion that something did *not*
-happen, which cannot resolve until the harness gives up waiting and so costs
-the whole inactivity timeout — once per test, however many negatives it
+halves are cheaper elsewhere. **Saga coordination** — did the right command go
+out, in the right order, after the right event — is exercised by the in-memory
+harness in §12.5, in milliseconds. The exception is an assertion that something
+did *not* happen, which cannot resolve until the harness gives up waiting and so
+costs the whole inactivity timeout — once per test, however many negatives it
 asserts. §12.5's traps price that and name the correctness hazard that comes
 with it, and between them they are the reason these tests are "a few" rather
-than hundreds. **Contract compatibility** —
-does the message one service publishes still have the shape its consumers were
-built against — is a reflection test over the contract assembly and a record of
-its shape, and it is why
-`Platform.IntegrationTests` exists; what else that suite holds is §12.6's, and
-the journey's.
-Contract compatibility is **not the only thing genuinely between services** —
-§9.7's synchronous calls are another, and §12.6 tests the two in almost
-opposite ways. The calls are deliberately not in this suite: a contract over
-one needs the provider running, so it lives in the provider's own suite rather
-than beside the journey's container set, for six tests.
+than hundreds. **Contract compatibility** — does the message one service
+publishes still have the shape its consumers were built against — is a
+reflection test over the contract assembly and a record of its shape, and it is
+why `Platform.IntegrationTests` exists; what else that suite holds is §12.6's,
+and the journey's. Contract compatibility is **not the only thing genuinely
+between services** — §9.7's synchronous calls are another, and §12.6 tests the
+two in almost opposite ways. The calls are deliberately not in this suite: a
+contract over one needs the provider running, so it lives in the provider's own
+suite rather than beside the journey's container set, for six tests.
 
 What no level above covers is whether the *deployed* system responds under load
 and against real infrastructure. That is the **k6 run against staging**
@@ -517,10 +515,10 @@ protected override Task<AuthenticateResult> HandleAuthenticateAsync()
 ```
 
 > **Do not give the test principal every permission.** A fixture that hands out
-> a blanket claim set makes the [§11.4](11-identity-authorization.md) policies untestable and, worse, makes them
-> *look* tested — the endpoints are reached, the assertions pass, and the one
-> behaviour nobody ever exercises is the refusal. Grant per test exactly what
-> that test's user should have, and keep at least one test per policy that
+> a blanket claim set makes the [§11.4](11-identity-authorization.md) policies untestable and, worse, makes
+> them *look* tested — the endpoints are reached, the assertions pass, and the
+> one behaviour nobody ever exercises is the refusal. Grant per test exactly
+> what that test's user should have, and keep at least one test per policy that
 > grants nothing and expects the rejection.
 
 The handler suite for the place-order command, `PlaceOrderTests`, runs over
@@ -831,17 +829,15 @@ Respawn between tests keeps them isolated at a fraction of the cost.
 > why the library exists.
 >
 > **A service whose handler tests need a principal departs from it, for a
-> reason that is the code's rather than this section's.** Its handler tests live in its
-> `*.Api.Tests`, because `ICurrentUser` is `HttpContextCurrentUser` and a
+> reason that is the code's rather than this section's.** Its handler tests live
+> in its `*.Api.Tests`, because `ICurrentUser` is `HttpContextCurrentUser` and a
 > handler resolved in a bare scope has no principal to bind a subject from — so
 > its `*.Application.Tests` references no `*.TestSupport`, declares no fixture
 > collection, and holds §12.5's saga suite instead, which needs no
 > infrastructure at all. The library is still right for the reason above; it
-> simply has one consumer there rather than two.
-> [E.7.3](appendix-e-reference-domain.md#e73-where-the-handler-tests-live)
-> names the
-> service and its collection, and `docs/testing.md` says the same thing from
-> the other side.
+> simply has one consumer there rather than two. [E.7.3](appendix-e-reference-domain.md#e73-where-the-handler-tests-live) names the service
+> and its collection, and `docs/testing.md` says the same thing from the other
+> side.
 >
 > The `[CollectionDefinition]` does **not** move there. xUnit resolves
 > collections within an assembly, so each test project declares its own, naming
@@ -2138,7 +2134,8 @@ single most common cause of a green suite over a broken application.
 - **One logical assertion per test.** Several `Should` calls verifying one
   outcome is fine; testing two unrelated behaviours is not.
 - **No conditionals in tests.** An `if` in a test means it is two tests.
-- **No shared mutable state between tests.** Every test constructs what it needs.
+- **No shared mutable state between tests.** Every test constructs what it
+  needs.
 - **Deterministic.** No `DateTime.Now`, no unseeded random, no reliance on
   execution order, no `Thread.Sleep` — wait on a condition instead.
 - **Every consumer and projection gets a redelivery test.** Not a convention —

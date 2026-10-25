@@ -1,6 +1,7 @@
 # Backend Architecture Blueprint
 
-**A reference architecture for ASP.NET Core microservices using DDD, CQRS and TDD.**
+**A reference architecture for ASP.NET Core microservices using DDD, CQRS and
+TDD.**
 
 | | |
 |---|---|

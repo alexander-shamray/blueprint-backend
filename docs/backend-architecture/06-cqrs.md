@@ -206,8 +206,8 @@ services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
 > implemented interface to be resolvable. `GetServices<IProjectionHandler<T>>()`
 > returning empty is indistinguishable from "this event has no projection", so
 > the message is marked processed having done nothing and the monitoring stays
-> green. [§9.4](09-messaging.md) closes this by throwing when a `Local` row finds no handler, and
-> the registration test below catches it at build time instead.
+> green. [§9.4](09-messaging.md) closes this by throwing when a `Local` row finds no handler,
+> and the registration test below catches it at build time instead.
 >
 > The trap has a second form worth naming: a *list* of interfaces duplicated
 > between the registration and the test that guards it. Both copies drift
@@ -229,11 +229,11 @@ registration test, starts the service, and fails as *behaviour* — an empty
 Redis key prefix, a token request with no scope.
 
 Worked examples of each: `IProductPriceReader` unregistered fails
-`ValidateOnBuild`, because `PlaceOrderHandler` needs it. `ProductPriceProjection`
-unregistered fails only the test — no constructor names it, so the container
-starts as happily as ever. `ServiceIdentityOptions` unbound fails only
-`ValidateOnStart` — the container resolves `IOptions<T>` happily and hands
-back an empty instance.
+`ValidateOnBuild`, because `PlaceOrderHandler` needs it.
+`ProductPriceProjection` unregistered fails only the test — no constructor names
+it, so the container starts as happily as ever. `ServiceIdentityOptions` unbound
+fails only `ValidateOnStart` — the container resolves `IOptions<T>` happily and
+hands back an empty instance.
 
 **What "fails only the test" does *not* mean is that nothing notices at
 runtime.** Here, in the reference domain, `ordering-catalog-events` binds
@@ -364,11 +364,11 @@ services.AddScoped(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>))
 services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
 ```
 
-> **Unregistered, this fails silently and completely.** `GetServices<IPipelineBehavior<…>>()`
-> returning empty is indistinguishable from "no behaviours configured", so the
-> dispatcher invokes the handler alone. No handler calls `SaveChangesAsync`: on
-> an HTTP command's path its one call site is inside `TransactionBehavior`, so
-> a missing registration means
+> **Unregistered, this fails silently and completely.**
+> `GetServices<IPipelineBehavior<…>>()` returning empty is indistinguishable
+> from "no behaviours configured", so the dispatcher invokes the handler alone.
+> No handler calls `SaveChangesAsync`: on an HTTP command's path its one call
+> site is inside `TransactionBehavior`, so a missing registration means
 > `PlaceOrderHandler` calls `orders.Add(order)`, returns `Result.Success`, and
 > **nothing is ever written**: no order, no outbox row, no saga. The request
 > returns 200.
@@ -668,9 +668,9 @@ and are not miscounted.
 
 ### One aggregate per transaction
 
-Principle 3 ([§2.3](02-architecture-at-a-glance.md)) says a transaction never spans two aggregates, and nothing
-about `SaveChangesAsync` objects if a handler loads two — one save, one commit,
-no complaint. The count in the behaviour above is what makes the rule
+Principle 3 ([§2.3](02-architecture-at-a-glance.md)) says a transaction never spans two aggregates, and
+nothing about `SaveChangesAsync` objects if a handler loads two — one save, one
+commit, no complaint. The count in the behaviour above is what makes the rule
 observable, and it needs two members on the port:
 
 ```csharp
@@ -1169,12 +1169,12 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
 > which contradicts §7.2 and gives the aggregate a second, storable total to
 > disagree with its own.
 
-> **Decision — cursor pagination is the default; `page`/`pageSize` is not.** See [ADR-016](adr/ADR-016-cursor-pagination-by-default.md).
-> `OFFSET @n ROWS` requires SQL Server to produce and discard every skipped row,
-> so page 500 costs roughly 500 times page 1. Worse, rows inserted while a user
-> pages cause items to be skipped or repeated. A keyset cursor over
-> `(PlacedAt DESC, Id DESC)` reads the same number of rows for every page and is
-> stable under concurrent inserts.
+> **Decision — cursor pagination is the default; `page`/`pageSize` is not.** See
+> [ADR-016](adr/ADR-016-cursor-pagination-by-default.md). `OFFSET @n ROWS` requires SQL Server to produce and discard
+> every skipped row, so page 500 costs roughly 500 times page 1. Worse, rows
+> inserted while a user pages cause items to be skipped or repeated. A keyset
+> cursor over `(PlacedAt DESC, Id DESC)` reads the same number of rows for every
+> page and is stable under concurrent inserts.
 >
 > The cursor is **opaque** — base64 of the sort key plus the tiebreaker ID — so
 > its layout stays an implementation detail rather than a public contract. Where
@@ -1597,14 +1597,13 @@ arrived, since `PriceChanged` reaches the same insert branch and lists it.
 > the `ProductPublished` Catalog necessarily emitted, because `Product.Publish`
 > is its factory, nor any later `PriceChanged`, which is optional — this
 > table has no row for the product and every order containing it fails,
-> silently, with a 422 `order.products_unavailable` and no error in any log. Silently is the
-> word that matters: a rule rejection is a *correct* answer from a service with
-> no prices, so nothing about it looks like a fault. Two mitigations, both
-> worth having: Catalog republishing its full catalogue on demand (an
-> operational run of its migrator image, not a code path;
-> [ADR-090](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)),
-> and the [§13.6](13-observability.md) alert on business volume, which catches
-> the case where orders stop for a reason no technical metric shows.
+> silently, with a 422 `order.products_unavailable` and no error in any log.
+> Silently is the word that matters: a rule rejection is a *correct* answer from
+> a service with no prices, so nothing about it looks like a fault. Two
+> mitigations, both worth having: Catalog republishing its full catalogue on
+> demand (an operational run of its migrator image, not a code path;
+> [ADR-090](adr/ADR-090-catalog-republishes-the-facts-it-still-holds-from-the-migrator-image-with-their-original-stamps.md)), and the [§13.6](13-observability.md) alert on business volume, which catches the
+> case where orders stop for a reason no technical metric shows.
 
 > **Here, in the reference domain this projection's rebuild procedure is
 > Catalog's republish** ([E.4.6](appendix-e-reference-domain.md#e46-the-price-projections-rebuild);

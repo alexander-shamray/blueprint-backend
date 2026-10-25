@@ -70,13 +70,14 @@ Refusing is the tempting middle option, on the argument that summing silently
 repairs a caller that has lost track of its own state. Two things rule it out.
 `PlaceOrderHandler` calls a repeated product legitimate in as many words — "a
 caller may legitimately send the same product twice — `Order.AddLine` merges
-those into one line" — and `OrderTests.Place_merges_two_lines_for_the_same_product`
-pins the merge in the domain, so refusing in the host that quotes *for* that
-order is a **second duplicate policy**: a quote that refuses a basket the order
-accepts, which is this record's own defect pointing the other way. And the
-merge is not silent, which is the objection's real force: the reply echoes
-`Quantity` per line, so a caller that sent two lines for one product gets back
-one line carrying their sum and can see what became of it.
+those into one line" — and
+`OrderTests.Place_merges_two_lines_for_the_same_product` pins the merge in the
+domain, so refusing in the host that quotes *for* that order is a **second
+duplicate policy**: a quote that refuses a basket the order accepts, which is
+this record's own defect pointing the other way. And the merge is not silent,
+which is the objection's real force: the reply echoes `Quantity` per line, so a
+caller that sent two lines for one product gets back one line carrying their sum
+and can see what became of it.
 
 **The quantity bound is on the merged quantity, not on a line.** Because a
 repeated product merges, a rule checked per line is not a bound on the order at

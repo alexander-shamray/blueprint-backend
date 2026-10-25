@@ -748,7 +748,8 @@ level 2.
 
 Every service's two registration methods call `AddPluggableFrom` on their own
 assembly: `<Service>.Application/DependencyInjection.cs` and its
-`Infrastructure` sibling. Ordering's are `Ordering.Application/DependencyInjection.cs` and
+`Infrastructure` sibling. Ordering's are
+`Ordering.Application/DependencyInjection.cs` and
 `Ordering.Infrastructure/DependencyInjection.cs`.
 
 The registration test of [§6.2](06-cqrs.md) is Ordering's,
@@ -934,8 +935,9 @@ and `dead-letter-operator` beside them, in
 ([ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md),
 [ADR-072](adr/ADR-072-a-person-replays-dead-letters-as-a-broker-account-of-its-own.md)).
 `catalog-svc` therefore has no `write` matching `ordering-commands` or the
-Ordering contracts' exchanges, and `deploy/compose/rabbitmq/check_permissions.py`
-asserts that no service's `write` covers another's command endpoint.
+Ordering contracts' exchanges, and
+`deploy/compose/rabbitmq/check_permissions.py` asserts that no service's `write`
+covers another's command endpoint.
 
 ### E.5.3 The fulfilment saga
 
@@ -1020,11 +1022,12 @@ outage parks its own platform and neither mail nor the other provider.
 ### E.5.5 The retry ladders
 
 Every service has a `RetryPolicy` in `*.Infrastructure/Messaging`; the values
-are each file's. In Ordering the ladder applies to the receive endpoints that §9.8 prints,
-`ordering-commands` adding the `ContractMappingException` exclusion and
-`ordering-fulfilment-saga` swapping the in-memory outbox for MassTransit's. Inventory's applies to every endpoint its own
-`DependencyInjection` declares, and Catalog's to `catalog-inventory-events`.
-§9.6's confirmation wait has to clear Ordering's ladder and no other.
+are each file's. In Ordering the ladder applies to the receive endpoints that
+§9.8 prints, `ordering-commands` adding the `ContractMappingException` exclusion
+and `ordering-fulfilment-saga` swapping the in-memory outbox for MassTransit's.
+Inventory's applies to every endpoint its own `DependencyInjection` declares,
+and Catalog's to `catalog-inventory-events`. §9.6's confirmation wait has to
+clear Ordering's ladder and no other.
 
 ### E.5.6 The workers that claim their own rows
 
@@ -1360,10 +1363,10 @@ them.
 **Neither the saga's states nor `OrderStatus` reaches the client**, and the
 two do not agree with one another in any case (§9.6, §5.4). `AwaitingStock`
 and `AwaitingPayment` are both `placed` to a buyer, which is also forced:
-`OrderStockConfirmedDomainEvent` is not on the order service's publish allow-list, so
-no consumer can tell them apart. `Compensating` has no buyer meaning at all —
-what the buyer is owed is the outcome it works towards, and that arrives as
-`OrderCancelled`.
+`OrderStockConfirmedDomainEvent` is not on the order service's publish
+allow-list, so no consumer can tell them apart. `Compensating` has no buyer
+meaning at all — what the buyer is owed is the outcome it works towards, and
+that arrives as `OrderCancelled`.
 
 > **`dispatched` and `delivered` are the shipping service's.** In the
 > reference domain Shipping publishes both
@@ -1784,17 +1787,20 @@ The cases of §12.4's order summary section are owed by Ordering's escalated
 history query, over the `ordering.ProductPrices` and `ordering.Products`
 tables, and the products they resolve are Catalog's: each resolved
 `SummaryProduct` carries Catalog's name and its thumbnail. `ordering.Products`
-and that query are not built ([§6.6](06-cqrs.md)); only the price half exists. `ProductPublished.ThumbnailUrl` is `string?`, which is the
-nullable shape Catalog promises, and the late-arrival case rests on it.
+and that query are not built ([§6.6](06-cqrs.md)); only the price half exists.
+`ProductPublished.ThumbnailUrl` is `string?`, which is the nullable shape
+Catalog promises, and the late-arrival case rests on it.
 
-All of the cases will belong in `Ordering.Api.Tests`. `Ordering.Application.Tests`
-deliberately carries no `Ordering.TestSupport` reference and says so in its
-csproj, so Ordering's real-schema tests are homed one project over;
-`ProductPriceProjectionTests` is already there for exactly this reason.
+All of the cases will belong in `Ordering.Api.Tests`.
+`Ordering.Application.Tests` deliberately carries no `Ordering.TestSupport`
+reference and says so in its csproj, so Ordering's real-schema tests are homed
+one project over; `ProductPriceProjectionTests` is already there for exactly
+this reason.
 
 ### E.7.5 The ownership and subject suites
 
-The cancel endpoint's suite is `tests/Ordering.Api.Tests/OrderOwnershipTests.cs`.
+The cancel endpoint's suite is
+`tests/Ordering.Api.Tests/OrderOwnershipTests.cs`.
 
 The subject rule's tests are in `PlaceOrderTests` (the attributed order) and
 `OrderOwnershipTests` (the owner cancelling their own order), and the dispatcher
@@ -1804,7 +1810,8 @@ escalates it, is not built. The buyer's history the BFF serves is under the
 same rule ([§10.7](10-api-gateway.md)), and `Web.Bff.Tests`' `OrderEndpointTests`
 asserts a stranger's page is empty.
 
-The mapper tests are in `tests/Ordering.Application.Tests/CommandMapperTests.cs`.
+The mapper tests are in
+`tests/Ordering.Application.Tests/CommandMapperTests.cs`.
 
 ### E.7.6 The saga suite
 
@@ -2266,8 +2273,8 @@ environment ever sets.
 
 §15.4's inventory holds the keys every host shares, the gateway's own and the
 identity grant of a host that calls out. These are the keys one service's code
-reads and §15.4 does not list, in the same columns. A key joins a chart when its host's
-code reads it, and the host refuses to start without a required one.
+reads and §15.4 does not list, in the same columns. A key joins a chart when its
+host's code reads it, and the host refuses to start without a required one.
 
 | Key | Kind | Source | Required |
 |---|---|---|---|
