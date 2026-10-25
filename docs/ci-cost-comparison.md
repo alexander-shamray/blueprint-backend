@@ -14,7 +14,8 @@ is a record of its day, per the contract's §2, and none is kept current.
 |---|---|
 | Window A | the 14 full UTC days before the first cost change merges |
 | Window B | the 14 full UTC days starting once the last one has merged; a change deliberately left out is named here with its reason |
-| Changes measured | the issues tagged as the effort's optimizations: #1435 edit-target-guard's Windows and macOS legs, #1436 `realm.yml`'s schedule, #1437 the `labeled`/`unlabeled` triggers, #1438 a self-hosted runner |
+| Changes measured | the issues tagged as the effort's optimizations: #1435 edit-target-guard's Windows and macOS legs, #1436 `realm.yml`'s schedule, #1437 the `labeled`/`unlabeled` triggers, #1438 a self-hosted runner, #1461 `ci.yml`'s sub-minute checks gating its long jobs |
+| Left out of Window B | #1436, closed as not planned: a scheduled `realm.yml` run bills nothing while `REALM_CHECK_SCHEDULED` is unset, so the change saves no minute; #1438, whose adopt-or-not decision is priced from this comparison's scenarios, so Window B cannot wait for it |
 | Decision informed | #1439, repository visibility and the GitHub plan |
 | Command | `py -3.12 tools/ci-cost/ci_cost.py --window A=<first>:<last> --window B=<first>:<last>` |
 
@@ -103,7 +104,10 @@ the second-largest line and none of the four changes touches them.
 
 ## Window B and the comparison
 
-Not yet measured. Written when Window B ends: the raw numbers, each
+Not yet measured. #1435 and #1437 merged on 2026-10-25, which fixes Window
+A's end; #1461 was still open that day, so Window B starts on the first
+full UTC day after it merges, or after it is closed and named above as left
+out. Written when Window B ends: the raw numbers, each
 optimization's effect from its workflow's row where one can be isolated, the
 residual cost, a projection for low, normal and high usage, and the
 recommendation for #1439.
