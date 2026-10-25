@@ -856,20 +856,20 @@ does not, and a rerun finishes it, because a commit that has the trailer is
 skipped. `git-revert-pr.sh` writes no remote; it reads trailers off
 `origin/main` and reverts on the current branch, so its grant is a plain one.
 
-**Some of the rebase helper's edges are accepted rather than guarded.** A replay amended after
-a failed push no longer descends from the commit `publish` recorded, so
-`publish` refuses it and names the tip to reset the branch to by hand:
-resetting it for the caller would discard the amend, which is the work. And
-`abort` mid-replay discards uncommitted edits as `git rebase --abort` does,
+**Some of the rebase helper's edges are accepted rather than guarded.** A replay
+amended after a failed push no longer descends from the commit `publish`
+recorded, so `publish` refuses it and names the tip to reset the branch to by
+hand: resetting it for the caller would discard the amend, which is the work.
+And `abort` mid-replay discards uncommitted edits as `git rebase --abort` does,
 because discarding the stop's work is what an abort is for; the helper lists
-them before it aborts. And a two-parent merge on the branch is held to git's
-own merge of its parents in the files that merged cleanly, and in a conflicted
-file it took whole from one side, which must still carry the other side's
-clean hunks. The rest is left to `--cc`, which cannot see a clean hunk dropped
-inside a file: every file of an octopus, a conflicted file resolved by hand, a
-binary one, and one whose parents have no single merge base or whose base
-lacks it. A conflicted name git quotes even with `core.quotePath` off stops
-the run, because a name the check cannot read is not one it may pass.
+them before it aborts. And a two-parent merge on the branch is held to git's own
+merge of its parents in the files that merged cleanly, and in a conflicted file
+it took whole from one side, which must still carry the other side's clean
+hunks. The rest is left to `--cc`, which cannot see a clean hunk dropped inside
+a file: every file of an octopus, a conflicted file resolved by hand, a binary
+one, and one whose parents have no single merge base or whose base lacks it. A
+conflicted name git quotes even with `core.quotePath` off stops the run, because
+a name the check cannot read is not one it may pass.
 
 The third is `Bash(git fetch origin:*)`, which no longer admits a URL but still
 admits a trailing flag; `--upload-pack`, `--receive-pack` and `--exec` are

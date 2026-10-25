@@ -913,10 +913,11 @@ says the machine was not suspended and why.
 on `rundll32` would run any export of any DLL. `system-sleep.sh` spells the
 one call itself and takes no argument but `--dry-run`, which shows the
 command without running it. The suite proves a refusal suspends nothing with
-a probe `rundll32.exe` first on `PATH`. `Bash(bash .claude/scripts/system-sleep.sh)`
-has no `:*`, so the flag is not granted either. Windows hibernates in place of
-sleeping where hibernation is on; `powercfg /a` says which this machine does,
-and `powercfg /hibernate off` makes the call a sleep.
+a probe `rundll32.exe` first on `PATH`.
+`Bash(bash .claude/scripts/system-sleep.sh)` has no `:*`, so the flag is not
+granted either. Windows hibernates in place of sleeping where hibernation is on;
+`powercfg /a` says which this machine does, and `powercfg /hibernate off` makes
+the call a sleep.
 
 **A hook is the wrong home for it.** A `Stop` hook fires at the end of every
 turn, not at the end of a ship that was asked to sleep afterwards, and it

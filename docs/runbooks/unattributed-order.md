@@ -151,8 +151,8 @@ WHERE MessageId = @MessageId;
 - **No row and nothing in either**: the event was published while
   `bff-order-events` was not there to receive it, before the BFF's consumers
   were first deployed to this environment or during a window in which the
-  queue was deleted. The broker drops what no queue is bound for ([E.6.10](../backend-architecture/appendix-e-reference-domain.md#e610-the-buyers-order-read)). Go
-  to 4.
+  queue was deleted. The broker drops what no queue is bound for ([E.6.10](../backend-architecture/appendix-e-reference-domain.md#e610-the-buyers-order-read)).
+  Go to 4.
 
 **4. Repair from Ordering's outbox, or let the row go.**
 
@@ -164,8 +164,8 @@ WHERE MessageId = @MessageId;
   republish the row to the exchange**, which would deliver it a second time to
   every other consumer of the event.
 - **It is gone**: nothing the platform still holds can attribute this order
-  (ADR-051; [E.6.10](../backend-architecture/appendix-e-reference-domain.md#e610-the-buyers-order-read)'s *An order the projection cannot yet attribute*). The row
-  would stay invisible for ever and keep this alert firing. Delete it.
+  (ADR-051; [E.6.10](../backend-architecture/appendix-e-reference-domain.md#e610-the-buyers-order-read)'s *An order the projection cannot yet attribute*). The
+  row would stay invisible for ever and keep this alert firing. Delete it.
 
 ## Delete a row nothing will attribute
 
