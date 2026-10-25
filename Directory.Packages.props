@@ -142,9 +142,9 @@
          as anything lower fails NU1109. The pin came in when that floor was 2.0.0, which carries
          GHSA-v5pm-xwqc-g5wc and failed the restore on NU1903. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
-    <!-- The vendor SDK behind Common.Assistant.Anthropic, the one project that references it, so the core carries
-         none of it and a host with the assistant off never loads it. The version blueprint-admin's adapter was built
-         and tested on. -->
+    <!-- The vendor SDK behind Common.Assistant.Anthropic, referenced by it and by Web.Bff, which builds the
+         client (ADR-151), so the core carries none of it and a host with the assistant off never loads it. The
+         version blueprint-admin's adapter was built and tested on. -->
     <PackageVersion Include="Anthropic" Version="12.54.1" />
   </ItemGroup>
   <ItemGroup Label="Telemetry">
