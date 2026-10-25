@@ -5,11 +5,9 @@ using Common.Assistant.Tools;
 namespace Common.Assistant;
 
 /// <summary>
-/// The core a host builds once (AI assistant design §4): its provider, its tool sources under its policy, its redactor,
-/// its system text and its limits, and the conversations open against them. The host authenticates and passes the
-/// <see cref="Caller"/>; the core keys everything by it. It sweeps idle conversations on a timer of
-/// <see cref="TimeProvider"/>, so a conversation outlives <see cref="AssistantLimits.IdleTimeout"/> by at most a
-/// quarter of it (a second where that is longer), and disposing the core stops the timer.
+/// The core a host builds once (AI assistant design §4): provider, tool sources, policy, redactor, instructions and
+/// limits, and the conversations open against them, keyed by the host's <see cref="Caller"/>. It sweeps idle ones
+/// on a timer (ADR-152), and disposing it stops the timer.
 /// </summary>
 public sealed class AssistantCore : IDisposable
 {
