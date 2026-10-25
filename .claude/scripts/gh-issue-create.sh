@@ -29,9 +29,10 @@
 #
 # The trailer is chosen by route rather than constant, because a provenance
 # sentence every issue carries distinguishes nothing, and a sweep's sentence
-# on a hand filing is false. The sweeps deny raw `gh issue create`, so this is
-# their only route; nothing denies it to a session, so `hand` is what a filer
-# gets by choosing this helper, not a rule that hand filings come here.
+# on a hand filing is false. The sweeps deny every `gh` command, so this is
+# their only route bar an env-prefixed or wrapped one, which nothing refuses;
+# nothing denies it to a session, so `hand` is what a filer gets by choosing
+# this helper, not a rule that hand filings come here.
 set -euo pipefail
 
 [ "$#" -eq 3 ] || {
