@@ -47,7 +47,8 @@ allows what the services need; the deployed upload path does.
 [ADR-111](ADR-111-a-red-object-storeyml-run-files-a-tracker-issue-or-comments-on-the-open-one-988-narrows-adr-110s-consequence-that-a-red-run-files-no-issue.md)**: the Consequences'
 clause that a red run files no issue.
 
-**Also superseded in part by [ADR-114](ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md)**: the clauses on a store addressed only by a virtual-hosted name and on a monitor outside GitHub.
+**Also superseded in part by [ADR-114](ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md)**: the clauses on a store addressed
+only by a virtual-hosted name and on a monitor outside GitHub.
 
 **Also superseded in part by
 [ADR-148](ADR-148-the-object-store-check-writes-a-sentinel-with-the-bffs-pair-and-reads-it-back-with-catalogs-1221.md)**:

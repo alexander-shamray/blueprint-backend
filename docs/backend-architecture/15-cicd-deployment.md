@@ -383,8 +383,8 @@ workflow's triggers cover every entry — a copy of a list drifts exactly as a
 copy of a number does, and the assertion itself is held once, in
 `deploy/workflow_paths`
 ([ADR-132](adr/ADR-132-the-workflow-paths-cover-inputs-check-is-held-once-in-deploy-workflow_paths-1082-used-by-four-python-gates-and-smokesh.md)). All four gates also assert the reads direction — every file the
-gate opens is in the list, the canary's in its suite, `test_repo_gate.py` — which
-is the shape the second callout below argues for.
+gate opens is in the list, the canary's in its suite, `test_repo_gate.py` —
+which is the shape the second callout below argues for.
 
 > **A fifth copy of that pattern exists and is not one of the four above, which
 > is why ADR-042 calls `realm_check.py` the fifth.**
@@ -486,9 +486,10 @@ The tag already in the cluster is the only correct answer, so read it back:
 
 The invariant is worth stating because it is easy to lose: **a config-only
 deploy must not change the running image.** It goes through the same
-`helm upgrade`, the same canary (§15.5) and the same migration hook ([§7.4](07-persistence.md)) — the
-hook is a no-op when the migrator image and its migrations are unchanged, which
-is exactly why the hook has to be idempotent rather than merely correct once.
+`helm upgrade`, the same canary (§15.5) and the same migration hook ([§7.4](07-persistence.md))
+— the hook is a no-op when the migrator image and its migrations are unchanged,
+which is exactly why the hook has to be idempotent rather than merely correct
+once.
 
 ## 15.2 Container images
 
@@ -746,13 +747,12 @@ is the exception and takes no such dependency: it depends on the deployable
 charts, and reaches the library only through them — which is why they have to
 be resolved first, or it packages a subchart whose templates are missing.
 
-That is the same decision §4.5's scaffold takes for the solution — in the reference domain Catalog is
-read at run time ([E.2.8](appendix-e-reference-domain.md#e28-the-scaffold-template))
-so there is one copy of the wiring rather than two that
-drift — arrived at from the other side: without it, every deployable carries
-its own copy of the probe block, and fixing a probe means finding all of them.
-What differs per deployable is its values file, and that is what the fences
-below show.
+That is the same decision §4.5's scaffold takes for the solution — in the
+reference domain Catalog is read at run time ([E.2.8](appendix-e-reference-domain.md#e28-the-scaffold-template)) so there is one copy
+of the wiring rather than two that drift — arrived at from the other side:
+without it, every deployable carries its own copy of the probe block, and fixing
+a probe means finding all of them. What differs per deployable is its values
+file, and that is what the fences below show.
 
 **No count in that sentence, deliberately**: a number describing this tree is
 wrong on the change that adds a deployable chart, and the rule is not.
@@ -887,11 +887,12 @@ than defaulted, because a deploy that cannot name its tag must fail rather than
 roll something; a config-only deploy reads the running value back (§15.1).
 The default is a placeholder: the rollout overrides it with `ci.yml`'s
 `REGISTRY`, so the address has the one owner §15.2 names and no chart carries
-a second copy of it. Every probe addresses the container port named `http`, and not the `grpc` one:
-the health endpoints are mapped on the REST surface, and an HTTP/2-only
-endpoint answers an HTTP/1.1 probe with a 400, which reads as a dead pod.
-`terminationGracePeriodSeconds` must exceed the host's own shutdown timeout,
-and the number is measured at the end of this section rather than chosen.
+a second copy of it. Every probe addresses the container port named `http`, and
+not the `grpc` one: the health endpoints are mapped on the REST surface, and an
+HTTP/2-only endpoint answers an HTTP/1.1 probe with a 400, which reads as a dead
+pod. `terminationGracePeriodSeconds` must exceed the host's own shutdown
+timeout, and the number is measured at the end of this section rather than
+chosen.
 
 `identity` holds the authority, to validate incoming JWTs (§11.2), and nothing
 else. `Identity:Client` is what a host presents when it *calls* a peer (§11.5),
@@ -1492,10 +1493,10 @@ notifications, survive a long outage, which is an operator's call and not a
 build's. The tempting next one is
 a `ServiceOptions`-shaped bag — batch sizes, poll intervals, retry caps — bound
 to a section named for the service that no environment ever sets. It costs
-nothing to write and it is not free: `ValidateOnStart` then gates boot on a section nobody
-supplies, `[Required]` on any member stops every host, and `[Required]` on none
-makes `ValidateDataAnnotations` decorative. There is no third outcome, because
-a key that never varies has nothing to validate.
+nothing to write and it is not free: `ValidateOnStart` then gates boot on a
+section nobody supplies, `[Required]` on any member stops every host, and
+`[Required]` on none makes `ValidateDataAnnotations` decorative. There is no
+third outcome, because a key that never varies has nothing to validate.
 
 > **An options type needs at least one member that differs between
 > environments.** If every value in it would be the same in Compose, in the test

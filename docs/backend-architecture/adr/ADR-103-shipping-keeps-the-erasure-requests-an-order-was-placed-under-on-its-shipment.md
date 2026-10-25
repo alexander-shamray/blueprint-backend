@@ -28,11 +28,11 @@ and the shipment outlives the address, so the erasure empties it rather than
 deleting the row. A shipment with no address row at that moment, because
 the worker has not read one or retention has deleted it, is not reached by that
 statement, and no window reaches the column, so it keeps its list; the list
-names the buyer only while a request is open. The claim returns one more column on every leased row, and the
-migration is additive, so the consumer ships before the producer as
-[§9.2](../09-messaging.md) requires, or an order placed after an erasure is
-still ended until it does. A shipment already ended before this decision stays
-ended: nothing carries the order back.
+names the buyer only while a request is open. The claim returns one more column
+on every leased row, and the migration is additive, so the consumer ships before
+the producer as [§9.2](../09-messaging.md) requires, or an order placed after an erasure is still
+ended until it does. A shipment already ended before this decision stays ended:
+nothing carries the order back.
 
 **Amended by
 [ADR-146](ADR-146-shippings-erasure-empties-a-shipments-request-ids-before-it-deletes-the-address-in-two-statements-of-one-unit-1320-amending-adr-103.md)**,

@@ -675,11 +675,12 @@ service §4.5's scaffold renders.
 
 > **Decision — Minimal APIs, not MVC controllers.** See
 > [ADR-015](adr/ADR-015-minimal-apis-not-mvc-controllers.md). The endpoint layer in this
-> architecture is a thin translation from HTTP to a command or query. Controllers
-> add a base class, attribute routing, model binding conventions and an action
-> filter pipeline to do that, and their filter pipeline duplicates the dispatcher
-> pipeline that already exists. Minimal APIs express the same thing with less
-> ceremony, and endpoint groups give the same route and policy grouping.
+> architecture is a thin translation from HTTP to a command or query.
+> Controllers add a base class, attribute routing, model binding conventions and
+> an action filter pipeline to do that, and their filter pipeline duplicates the
+> dispatcher pipeline that already exists. Minimal APIs express the same thing
+> with less ceremony, and endpoint groups give the same route and policy
+> grouping.
 
 The cancel endpoint's route group calls `RequireAuthorization()`, so a later
 endpoint inherits authentication rather than arriving open; the files this
@@ -737,12 +738,13 @@ group
 
 Endpoint classes reference Application and Domain contracts only — never
 `DbContext`, a concrete repository, or the bus. That is the composition-root
-rule from [§4.2](04-solution-structure.md), and it is enforced by an architecture test rather than review.
+rule from [§4.2](04-solution-structure.md), and it is enforced by an architecture test rather than
+review.
 
-The request type carries the **wire code**, not the enum, for the reason [§9.4](09-messaging.md)
-gives about `CancelOrder.Reason` — and the parse is the same one, because two
-parses drift and the drift only shows on whichever path is less tested.
-Binding `CancellationReason` straight from JSON would publish the enum's
+The request type carries the **wire code**, not the enum, for the reason
+[§9.4](09-messaging.md) gives about `CancelOrder.Reason` — and the parse is the same one,
+because two parses drift and the drift only shows on whichever path is less
+tested. Binding `CancellationReason` straight from JSON would publish the enum's
 member names as API surface, and an unknown value would surface as a
 model-binding error rather than a 400 naming the field.
 
@@ -810,11 +812,11 @@ unknown code, differently, because their callers differ. The endpoint returns
 400 naming the field, because a person can fix a request. The message mapper
 throws `ContractMappingException`, which §9.4's retry policy ignores so the
 message reaches the error queue on the first attempt — a sibling service
-sending a code this service does not know is a deployment problem, and no amount of
-backoff resolves it. `ToCode` inverts the same map rather than writing a second
-table. `CancellationOrigins`, beside it, maps one way only: nothing parses an
-origin, because no ingress accepts one, and a `TryParse` there would be the
-first door onto a value a caller could claim.
+sending a code this service does not know is a deployment problem, and no amount
+of backoff resolves it. `ToCode` inverts the same map rather than writing a
+second table. `CancellationOrigins`, beside it, maps one way only: nothing
+parses an origin, because no ingress accepts one, and a `TryParse` there would
+be the first door onto a value a caller could claim.
 
 Coarse permission checks live at the endpoint. **Resource-level checks — "is
 this the customer's own order?" — belong in the handler**, where the data is
@@ -1038,16 +1040,16 @@ vocabulary either way.
 > **What decides which fields may stay is instruction versus authority.**
 > `Amount` and `Currency` remain on that command because they are what to do:
 > the sender decides them, and the payment service may refuse a mismatch
-> against its record as a consistency check. The subject is on whose behalf, and that is
-> the deciding service's to derive — a transported authority is a second source
-> for a decision that must have exactly one, and a check that exists is not a
-> check that is performed.
+> against its record as a consistency check. The subject is on whose behalf, and
+> that is the deciding service's to derive — a transported authority is a second
+> source for a decision that must have exactly one, and a check that exists is
+> not a check that is performed.
 >
 > **The distinction is not checkability.** The payment service's record holds
-> the payer as well as the total, so a supplied `CustomerId` would be as checkable as the
-> amount; the record §3.2 requires is what refutes that reading. The argument
-> that stands is the stronger one: the field that is absent cannot be the one a
-> later code path reads instead of the record.
+> the payer as well as the total, so a supplied `CustomerId` would be as
+> checkable as the amount; the record §3.2 requires is what refutes that
+> reading. The argument that stands is the stronger one: the field that is
+> absent cannot be the one a later code path reads instead of the record.
 >
 > **Leaving the subject off narrows what a forged command does.** Because
 > `AuthorisePayment` **alone** does not carry the payer, a forged one naming a
@@ -1551,12 +1553,12 @@ reaches it, and the ids it holds leave it when
 > so the identifiers-only rule below holds for it as for every other event.
 
 The one thing that must be designed for from the start: **integration events
-carry identifiers, not personal data**. An `OrderConfirmed` carrying a customer's
-name and email means erasure must also purge the broker, every abandoned outbox
-row, whatever each consumer persisted from the payload, and any log that
-recorded it — which is not practically possible.
-Carrying `CustomerId` keeps the personal data inside the service that owns it,
-which is the only place it can be reliably erased.
+carry identifiers, not personal data**. An `OrderConfirmed` carrying a
+customer's name and email means erasure must also purge the broker, every
+abandoned outbox row, whatever each consumer persisted from the payload, and any
+log that recorded it — which is not practically possible. Carrying `CustomerId`
+keeps the personal data inside the service that owns it, which is the only place
+it can be reliably erased.
 
 > **The inbox is not on that list, because it holds no payload.**
 > [§9.5](09-messaging.md)'s `InboxMessage` records a message id, an endpoint

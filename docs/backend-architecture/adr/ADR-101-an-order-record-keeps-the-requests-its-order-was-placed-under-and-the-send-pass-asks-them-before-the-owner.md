@@ -22,15 +22,13 @@ worker could claim them, and deletes them, so the only send left is one that
 precedes the erasure.
 **Consequences.** Every pass that reaches the contact read pays the scan of
 the audit table once more, before the read and not only on a fetch, and the
-audit row keeps no customer id, so it is not a seek. The list is personal data for as long
-as a request that names the buyer is open
-([ADR-095](ADR-095-a-closed-erasure-request-is-kept-as-the-evidence-and-has-no-retention-window.md)),
-so it is deleted with the record, by the same statements, and
-`OrderRetention` ages it as it ages the record. A record written before the
-column existed holds an empty list, and its question is ADR-097's, unbounded by
-the order. A notice left by the pass waits for the row's delete and not for a
-backoff, so a delete that never comes leaves a row the lease returns to the
-queue every pass.
+audit row keeps no customer id, so it is not a seek. The list is personal data
+for as long as a request that names the buyer is open ([ADR-095](ADR-095-a-closed-erasure-request-is-kept-as-the-evidence-and-has-no-retention-window.md)), so it is
+deleted with the record, by the same statements, and `OrderRetention` ages it as
+it ages the record. A record written before the column existed holds an empty
+list, and its question is ADR-097's, unbounded by the order. A notice left by
+the pass waits for the row's delete and not for a backoff, so a delete that
+never comes leaves a row the lease returns to the queue every pass.
 
 ---
 

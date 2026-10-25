@@ -25,7 +25,8 @@ outside GitHub is the deployment's to add.
 **Supersedes in part ADR-110**: the Consequences' clause that a red run files no
 issue.
 
-**Also superseded in part by [ADR-114](ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md)**: the clauses on a store addressed only by a virtual-hosted name and on a monitor outside GitHub.
+**Also superseded in part by [ADR-114](ADR-114-the-object-store-check-sends-a-heartbeat-and-is-provisioned-by-a-script-995-996.md)**: the clauses on a store addressed
+only by a virtual-hosted name and on a monitor outside GitHub.
 
 ---
 
