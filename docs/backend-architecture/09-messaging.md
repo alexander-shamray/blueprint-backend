@@ -3403,10 +3403,9 @@ wire, and a reply's currency is the amount's own label rather than an echo of
 the question. All three are stated in `pricing.proto` — in comments.
 
 So this hop is the first relationship in the platform carrying a
-**consumer-driven contract**: `Web.Bff` writes down what it needs, its own suite drives every
-expectation through the screen that needs it, and the producer's suite
-verifies the
-same list against the real service.
+**consumer-driven contract**: `Web.Bff` writes down what it needs, its own
+suite drives every expectation through the screen that needs it, and the
+producer's suite verifies the same list against the real service.
 [§12.6](12-test-strategy.md) has the shape and
 [ADR-023](adr/ADR-023-the-consumer-driven-contract-is-a-linked-file-not-pact.md)
 has the mechanism, which is a linked file rather than Pact.

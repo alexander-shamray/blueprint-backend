@@ -489,8 +489,9 @@ as a **copy of Catalog's, deliberately**, as every suite that needs one does:
 helper is not it.
 `Web.Bff.TestSupport` is the exception that proves the shape — one BFF suite,
 but `StubCatalog`, `StubInventory` and `StubNotifications` must compile the
-*server* half of a `.proto` whose *client* half `Web.Bff` already compiles, and both in one
-assembly makes every message type a CS0436, which ADR-019 turns into an error.
+*server* half of a `.proto` whose *client* half `Web.Bff` already compiles,
+and both in one assembly makes every message type a CS0436, which ADR-019
+turns into an error.
 `Shipping.OrderingStub` is the sibling case and not a `.TestSupport` at all: a
 library holding only the server half of Ordering's `delivery_addresses.proto`
 (ADR-052), referencing nothing of Shipping's, so what it serves is the contract
