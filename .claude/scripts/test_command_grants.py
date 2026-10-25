@@ -135,6 +135,23 @@ class TheSweepsDenyEveryGhCommand(unittest.TestCase):
                     self.assertFalse(any(bash_deny_matches(rule, command) for rule in self.denies(name)))
 
 
+class NoCommandGrantsEveryShellCommand(unittest.TestCase):
+    # The bare tool and a leading wildcard each grant what the per-command checks look for by name.
+    BROAD_BASH = re.compile(r"Bash(?:\(\*.*\))?")
+
+    def test_no_allowed_tools_entry_is_a_bare_bash_or_a_leading_wildcard(self):
+        for path in sorted(COMMANDS.glob("*.md")):
+            for entry in frontmatter_list(path.read_text(encoding="utf-8"), "allowed-tools"):
+                with self.subTest(command=path.name, entry=entry):
+                    self.assertIsNone(self.BROAD_BASH.fullmatch(entry))
+
+    def test_the_pattern_sees_each_broad_grant(self):
+        for entry in ("Bash", "Bash(*)", "Bash(* gh *)", "Bash(*:*)"):
+            with self.subTest(entry=entry):
+                self.assertIsNotNone(self.BROAD_BASH.fullmatch(entry))
+        self.assertIsNone(self.BROAD_BASH.fullmatch("Bash(bash .claude/scripts/gh-issue-list.sh)"))
+
+
 class NothingShipChainsDeniesPush(unittest.TestCase):
     """A frontmatter deny on a command /ship runs before it pushes refuses /ship's own push a step later.
 

@@ -182,8 +182,9 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         self.addCleanup(stub.cleanup)
         return stub
 
-    # A `gh` grant in any spelling, as `granted_bash` returns it: `gh:*`, `gh*`, `gh issue:*` or `gh`.
-    GH_GRANT = re.compile(r"gh(?:[\s*:]|$)")
+    # A `gh` grant in any spelling, as `granted_bash` returns it: `gh:*`, `gh*`, `gh issue:*`, `gh`, `gh.exe`,
+    # any case, or behind an env assignment.
+    GH_GRANT = re.compile(r"(?:\w+=\S*\s+)*gh(?:\.exe)?(?:[\s*:]|$)", re.IGNORECASE)
 
     @staticmethod
     def granted_bash(path):
@@ -288,7 +289,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
                     self.assertIsNone(self.GH_GRANT.match(grant))
 
     def test_the_gh_pattern_sees_every_spelling_of_the_grant(self):
-        for grant in ("gh:*", "gh", "gh*", "gh issue:*", "gh api"):
+        for grant in ("gh:*", "gh", "gh*", "gh issue:*", "gh api", "gh.exe:*", "GH:*", "GH_TOKEN=x gh:*"):
             with self.subTest(grant=grant):
                 self.assertIsNotNone(self.GH_GRANT.match(grant))
         self.assertIsNone(self.GH_GRANT.match("bash .claude/scripts/gh-issue-create.sh:*"))
