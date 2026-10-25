@@ -5,6 +5,14 @@
   <ItemGroup>
     <!-- The OpenAPI document only, no UI (Appendix C). -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- The server half of ADR-154's availability hop; it brings Grpc.Tools and Google.Protobuf with it. -->
+    <PackageReference Include="Grpc.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Inventory owns the contract because Inventory serves it; Web.Bff compiles this file as a Client, by link.
+         Both halves, because this project's suite needs a client (see Catalog.Api.csproj for the CS0436 reason). -->
+    <Protobuf Include="Protos\stock.proto" GrpcServices="Both" />
   </ItemGroup>
 
   <ItemGroup>

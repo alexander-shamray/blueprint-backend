@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+// Inventory owns this file, because Inventory serves the RPC. Web.Bff LINKS it
+// rather than copying it (§4.3), on the terms pricing.proto states.
+package inventory.stock.v1;
+
+option csharp_namespace = "Inventory.Stock.V1";
+
+// The availability hop (ADR-154). It exists for the BFF's assistant, which
+// answers a customer's "is it in stock" off the request, where no customer
+// token travels, so the call is made under the BFF's own client credentials
+// (§11.5). It reads nothing that writes: reservations are Inventory's own.
+service Stock {
+  // Whether each named product can be bought now, in one call rather than one
+  // per product, for the reason pricing.proto gives.
+  rpc GetAvailability (GetAvailabilityRequest) returns (GetAvailabilityReply);
+}
+
+message GetAvailabilityRequest {
+  // GUIDs in their canonical text form, for pricing.proto's reasons.
+  repeated string product_id = 1;
+}
+
+message GetAvailabilityReply {
+  // Absent, never false: a product Inventory holds no stock row for has no
+  // entry, since "unknown" and "sold out" are different facts to tell a
+  // customer.
+  repeated ProductAvailability availability = 1;
+}
+
+message ProductAvailability {
+  string product_id = 1;
+
+  // True when the unreserved count is above zero. A count is never part of
+  // this contract: a customer is told whether, not how many, and a consumer
+  // may not infer a number from a field that carries none.
+  bool in_stock = 2;
+}
