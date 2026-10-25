@@ -9,6 +9,7 @@ using Common.Assistant.Tools;
 using Common.Web;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Http.Metadata;
 
 namespace Web.Bff.Assistant;
 
@@ -24,6 +25,9 @@ public static class AssistantEndpoints
 
     /// <summary>The most catalogue entries a client may send.</summary>
     public const int MaxCatalogue = 200;
+
+    /// <summary>The largest body a route takes, so no field a client sends reaches a prompt unbounded.</summary>
+    public const long MaxBodyBytes = 128 * 1024;
 
     /// <summary>The rate limiter policy on the two routes that start work: opening a conversation and a turn.</summary>
     public const string StartPolicy = "assistant-start";
@@ -45,7 +49,8 @@ public static class AssistantEndpoints
             .MapGroup("/v1/assistant")
             .WithTags("Assistant")
             // Fail closed at the group (§11.4); the caller below is the principal's, never the request's (§10.7).
-            .RequireAuthorization();
+            .RequireAuthorization()
+            .WithMetadata(new BodyLimit(MaxBodyBytes));
 
         group.MapGet(
             "/",
@@ -244,6 +249,9 @@ public static class AssistantEndpoints
                 title: "Not a conversation",
                 detail: why);
     }
+
+    // Routing applies it to the server's body limit, below Kestrel's default, which no prompt needs (ADR-151).
+    private sealed record BodyLimit(long? MaxRequestBodySize) : IRequestSizeLimitMetadata;
 
     // Another customer's id answers as an unknown one does, so an id reveals nothing (§10.7).
     private static ProblemHttpResult Unknown(string id) =>
