@@ -40,7 +40,7 @@ services:
   # (../push-simulator/README.md). The mappings are the ones the adapters' tests load, and the tag is
   # Directory.Packages.props' WireMock.Net pin, which a test holds. Loopback alone, as every simulator's is.
   push-simulator:
-    image: sheyenrath/wiremock.net:2.12.0
+    image: sheyenrath/wiremock.net:2.19.0
     command: [ "--ReadStaticMappings", "true" ]
     volumes:
       - ../push-simulator/mappings:/app/__admin/mappings:ro
