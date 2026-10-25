@@ -167,9 +167,10 @@ known inside the window. GHCR was refused again, this time for want of
 | #1461, `ci.yml`'s long jobs waiting on `format` and `workflow-lint` | Not isolable: it saves only on a run that `format` or `workflow-lint` fails, and the tool reads no job's conclusion | Only as the change in CI's minutes per run, 68.4 in A |
 
 **The first baseline's conclusion stands on these numbers.** CI is 84% of
-the bill; after #1435 and #1436 the remainder is ≈85,600 Linux-equivalent
-minutes per 14 days, about ninety-two times the Free allowance a month, and
-only #1437, #1461 and #1438 reach it.
+the bill; after #1435, the one change here that saves a measurable minute,
+the remainder is ≈85,800 Linux-equivalent minutes per 14 days, about
+ninety-two times the Free allowance a month, and only #1437, #1461 and #1438
+reach it.
 
 ## Window B and the comparison
 
