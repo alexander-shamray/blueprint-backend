@@ -427,9 +427,10 @@ later. What belongs here is why each kind of input matters, which is what the
 bullets above give.
 
 `BuildingBlocks` appears under every service, so a change there rebuilds
-everything but the AI assistant's two blocks, which `shared` excludes while no
-image holds them (ADR-150, above). That is correct, and it is also the reason
-to keep those projects small.
+everything. That is correct, and it is also the reason to keep those projects
+small. The one exception is a change inside the AI assistant's two blocks,
+which `shared` excludes while no image holds them (ADR-150, above), and which
+rebuilds nothing.
 
 **The filter answers a narrower question than the pipeline asks.** "Which
 service's source changed" is not "what must be rebuilt, retested and
