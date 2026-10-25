@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Common.Assistant;
 using Shouldly;
 using Web.Bff.Assistant;
@@ -32,16 +31,18 @@ public sealed class CustomerRedactorTests
         redacted.ShouldNotContain("5555-5555");
     }
 
-    // A client tool's result is redacted at up to the body limit, so a run of many groups must cost its length.
+    // A client tool's result is redacted at up to the body limit, so a run of many groups must cost its length;
+    // the wait is bounded, so a walk that never returns fails here rather than hanging the run.
     [Fact]
-    public void A_long_run_of_groups_is_redacted_in_time_proportional_to_its_length()
+    public async Task A_long_run_of_groups_is_redacted_in_time_proportional_to_its_length()
     {
         string run = string.Join(' ', Enumerable.Repeat("1", 65_000));
-        Stopwatch clock = Stopwatch.StartNew();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Task redacting = Task.Run(() => _redactor.Redact(run, Customer), ct);
 
-        _redactor.Redact(run, Customer);
+        Task first = await Task.WhenAny(redacting, Task.Delay(TimeSpan.FromSeconds(5), ct));
 
-        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
+        first.ShouldBe(redacting, "redaction outran its bound");
     }
 
     [Fact]
