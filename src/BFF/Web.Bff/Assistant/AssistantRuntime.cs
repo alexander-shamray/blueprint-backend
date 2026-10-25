@@ -10,7 +10,7 @@ namespace Web.Bff.Assistant;
 /// Off, <see cref="Core"/> is null and no provider, SDK client or credential exists, so only the status route is
 /// mapped. A wrong provider, a limit that is not positive or a key named like a secret fails the start, naming the key.
 /// </remarks>
-public sealed partial class AssistantRuntime
+public sealed partial class AssistantRuntime : IDisposable
 {
     /// <summary>The host's instructions, after the core's: who the user is and what the tools answer.</summary>
     public const string Instructions = """
@@ -67,6 +67,9 @@ public sealed partial class AssistantRuntime
 
     /// <summary>Null while the assistant is off.</summary>
     public AssistantCore? Core { get; }
+
+    /// <summary>Stops the core's sweep of idle conversations when the host's container is disposed.</summary>
+    public void Dispose() => Core?.Dispose();
 
     private static void RefuseSecretNamedKeys(IConfigurationSection section)
     {

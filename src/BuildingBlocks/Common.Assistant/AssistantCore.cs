@@ -7,13 +7,18 @@ namespace Common.Assistant;
 /// <summary>
 /// The core a host builds once (AI assistant design §4): its provider, its tool sources under its policy, its redactor,
 /// its system text and its limits, and the conversations open against them. The host authenticates and passes the
-/// <see cref="Caller"/>; the core keys everything by it.
+/// <see cref="Caller"/>; the core keys everything by it. It sweeps idle conversations on a timer of
+/// <see cref="TimeProvider"/>, so a conversation outlives <see cref="AssistantLimits.IdleTimeout"/> by at most a
+/// quarter of it (a second where that is longer), and disposing the core stops the timer.
 /// </summary>
-public sealed class AssistantCore
+public sealed class AssistantCore : IDisposable
 {
+    private static readonly TimeSpan MinSweepPeriod = TimeSpan.FromSeconds(1);
+
     private readonly IReadOnlyList<IToolSource> sources;
     private readonly ToolPolicy policy;
     private readonly ConversationStore store;
+    private readonly ITimer sweep;
 
     /// <exception cref="ToolRefusedException">A host source offers a tool the policy refuses.</exception>
     public AssistantCore(
@@ -38,7 +43,13 @@ public sealed class AssistantCore
         Time = time;
         TurnEnded = turnEnded;
         store = new ConversationStore(limits, time);
+
+        TimeSpan period = TimeSpan.FromTicks(Math.Max(MinSweepPeriod.Ticks, limits.IdleTimeout.Ticks / 4));
+        sweep = time.CreateTimer(_ => store.SweepIdle(), null, period, period);
     }
+
+    /// <summary>Stops the sweep. Conversations already open are left to the process.</summary>
+    public void Dispose() => sweep.Dispose();
 
     public IAssistantProvider Provider { get; }
 
