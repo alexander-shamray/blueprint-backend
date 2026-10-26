@@ -96,6 +96,8 @@ public sealed partial class GatewayRateLimitOptionsTests(StubDestination stub) :
         stress.AuthenticatedTokensPerPeriod.ShouldBeGreaterThan(platform.AuthenticatedTokensPerPeriod);
     }
 
+    // Common.TestSupport.StressOverride's path and pattern, copied: this suite takes no reference to that project,
+    // whose fixtures start containers the gateway's tests never need.
     private static string StressOverride()
     {
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
