@@ -7,7 +7,7 @@ namespace Shipping.Infrastructure.Carrier;
 
 /// <summary>How hard the two carrier loops press the carrier, which models its capacity (ADR-157).</summary>
 /// <remarks>
-/// The defaults are the workers' own constants and every deployment runs on them; only ADR-157's stress override
+/// The defaults are the constants they replace, and every deployment runs on them; only ADR-157's stress override
 /// sets the section, so that a stress run measures this host rather than the carrier it paces itself to.
 /// </remarks>
 public sealed class CarrierPacingOptions : IValidatableObject

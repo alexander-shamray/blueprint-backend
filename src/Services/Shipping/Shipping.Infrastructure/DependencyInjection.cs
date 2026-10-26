@@ -130,7 +130,7 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<FulfilmentOptions>, AnnotatedOptionsValidator<FulfilmentOptions>>();
 
-        // Both carrier loops' pace; an unset section keeps the workers' own constants, and only ADR-157's
+        // Both carrier loops' pace; an unset section keeps the constants it replaces, and only ADR-157's
         // stress override sets it. A lease a pass could outlive refuses the host at start.
         services
             .AddOptions<CarrierPacingOptions>()

@@ -2282,8 +2282,8 @@ language set and the time zone, and `Fulfilment` (Shipping) and `Delivery`
 (Notifications) each hold the give-up age of
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md).
 `CarrierPacing` (Shipping) and `SendPacing` (Notifications) hold the pace of
-the four loops that wait on a third party, each default the worker's own
-constant and set by the stress run's override alone
+the four loops that wait on a third party, each default the constant it
+replaces and set by the stress run's override alone
 ([ADR-157](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md)).
 They earn their binding because a run that measures the host must take the
 third party's modelled rate out of it, and each lease is validated against the
