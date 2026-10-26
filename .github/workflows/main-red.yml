@@ -1,0 +1,90 @@
+name: Main red
+
+# A red push run on main files a tracker issue, or comments on the open one
+# (ADR-155). A pull request is not tested against the main it lands on, so two
+# green ones can turn main red together, and this is where that is heard.
+on:
+  workflow_run:
+    # By name, which is what `workflow_run` matches. `pipeline-gate alerts`
+    # holds this list to every workflow a push to main runs, both ways.
+    workflows:
+      - Broker permissions
+      - CI
+      - Compose
+      - Compose images
+      - Deploy
+      - Game day
+      - Helm
+      - Object store
+      - Observability
+      - Realm
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  # One group per watched workflow, never cancelled: two red runs of one
+  # workflow at once would both see no open issue and both file one.
+  group: main-red-${{ github.event.workflow_run.workflow_id }}
+  cancel-in-progress: false
+
+jobs:
+  file:
+    # Push runs alone: realm.yml and object-store.yml file their own issue for
+    # a red scheduled run. Cancelled is not red: most watched workflows cancel a
+    # push run when the next push lands, and that next run is the one heard.
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      contains(fromJSON('["failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      # An issue rather than a notification, on realm.yml's reasoning: an issue
+      # stays open until somebody closes it, and the next red run comments on it
+      # rather than filing again. The body carries docs/change-locality.md's
+      # revert-first rule, because whoever opens the issue is who acts on it.
+      - name: A red main is an issue, not a notification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          TITLE="main is red: $WORKFLOW"
+          # A list as long as its limit may be cut, and a listing that cannot see
+          # the open issue files a second one, so it is refused.
+          LIST=$(gh issue list --state open --label bug --limit 1000 --json number,title)
+          [ "$(jq length <<<"$LIST")" -lt 1000 ] || { echo "::error::the issue list reached its limit and may be cut"; exit 1; }
+          EXISTING=$(jq -r --arg t "$TITLE" 'map(select(.title == $t)) | .[0].number // empty' <<<"$LIST")
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "Still red ($CONCLUSION) at $HEAD_SHA: $RUN_URL"
+          else
+            gh issue create --title "$TITLE" --label bug --label high --label code --body "$(cat <<EOF
+          ## What happened
+
+          The \`$WORKFLOW\` workflow ended \`$CONCLUSION\` on a push to main, at
+          $HEAD_SHA: $RUN_URL
+
+          ## What to do
+
+          Revert first, fix forward second (\`docs/change-locality.md\` section 6,
+          *Working rules*). Find the pull request that turned main red, revert it
+          with \`.claude/scripts/git-revert-pr.sh <n>\`, and land the revert before
+          anything else; then fix forward on a branch of its own.
+
+          ## Severity
+
+          high
+
+          Filed by \`.github/workflows/main-red.yml\` (ADR-155). Each further red
+          push run of the same workflow comments here rather than filing again;
+          close this issue on a green push run of it.
+          EOF
+          )"
+          fi

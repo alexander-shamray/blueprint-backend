@@ -72,6 +72,16 @@ before the first push to `main`. What `actionlint` reads and claims is
 > is cheaper than letting a reader infer from a green pipeline that a deploy
 > happened.
 
+**`main` is tested after a merge as well as before it.** A pull request lands
+by rebase without first being brought up to date with `main`, so two that are
+green on their own can be red together, and the push run on `main` is the first
+run that tests them together. `.github/workflows/main-red.yml` watches every
+workflow a push to `main` runs, files a tracker issue when a push run goes red
+or comments on the open one, and `pipeline-gate alerts` holds its list to those
+workflows. A red `main` is reverted before it is fixed forward
+([ADR-155](adr/ADR-155-a-red-push-run-on-main-files-a-tracker-issue-and-is-reverted-before-it-is-fixed-1450.md),
+which names the pull-request checks a push does not run again).
+
 Only services whose files changed are built and deployed. Path filters are what
 make a monorepo practical at this size. They are the `changes` job's, in
 `.github/workflows/ci.yml`, which holds every service's entry; one service's
