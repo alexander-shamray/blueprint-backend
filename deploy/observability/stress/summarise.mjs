@@ -153,7 +153,7 @@ function machine() {
 
 // The services export their meters once a minute, and a rate needs two
 // exports, so a hold shorter than two minutes is read over two minutes that
-// reach back into its ramp. The default hold is three.
+// reach back into its ramp.
 const MINIMUM_RANGE_SECONDS = 120;
 const range = `${Math.max(raw.plan.holdSeconds, MINIMUM_RANGE_SECONDS)}s`;
 
