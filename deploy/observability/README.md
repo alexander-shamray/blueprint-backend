@@ -17,6 +17,10 @@ dashboards/
   outbox.json             the two lanes of §9.4, kept apart
 slo/
   slo.js                  the k6 SLO run of §13.7 and §15.1
+stress/
+  stress.js               the k6 stress run: users rising in steps to a knee
+  sample.mjs              Docker and SQL Server readings while it runs
+  summarise.mjs           the per-step table and the knee, afterwards
 check.py                  the gate — run it before pushing
 ```
 
@@ -440,3 +444,164 @@ done
 A failed run is a finding, not a reason to loosen anything: thresholds, rate
 budgets and checks stay as they are. A defect in `slo.js` is fixed; a defect in
 the platform is filed, and the output goes in the pull request either way.
+
+## The stress run
+
+`stress/stress.js` answers a different question from the SLO run: not whether
+latency regressed, but which part of the platform gives out first when
+hundreds of people use it at once, and at roughly what load. Distinct
+signed-in users walk the domain's typical journey through the gateway, and
+their number rises in steps. Each step is measured, and the first step at
+which the platform degrades is the knee.
+
+**It reports and never gates.** No threshold is an SLO. It asserts nothing,
+and it stops early only when a whole step's requests failed at more than
+`STRESS_ABORT_ERROR_RATE` (a fifth by default), because the steps after a
+clear break measure nothing new. It runs on a developer's machine against the
+Compose stack. Its numbers describe that machine as much as the platform, so
+a result is relative: which service, queue or table gives out first. It is
+never a capacity figure for production, and
+[§13.7](../../docs/backend-architecture/13-observability.md)'s point that a
+local run is an order of magnitude for that machine at that commit, and not a
+staging baseline, holds here too.
+
+**It runs only with the stress override.**
+`deploy/compose/docker-compose.stress.yml` raises the gateway's budgets and
+stops the workers pacing themselves to the carrier, the relay and the push
+providers ([ADR-157](../../docs/backend-architecture/adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
+Every k6 client shares one address, so against the baseline stack the
+`anonymous` window refuses every request past
+`GatewayRateLimitOptions.AnonymousPermitLimit` a minute, and the run measures
+only the limiter. The simulators answer at once, so the workers'
+pacing models a capacity the run has no reason to measure. With both lifted,
+what gives out first is the software itself or the host's resources, and the
+resource readings tell those two apart. The SLO run never uses the override.
+
+**The users.** `setup()` makes a `stress-run` client and one user per VU at
+the highest step, `stress-0001` upwards, through Keycloak's admin API, as the
+SLO client is made at runtime and never in `realm-export.json`. It gives each
+user a fresh password for the run, held in memory and never written, and
+grants `orders:write`. Each VU signs in once and refreshes its token before it
+lapses. Keycloak's calls are reported as their own operation, `token`, and
+left out of the journey's figures. A Keycloak user's id is a GUID, which is
+the `sub` an order's owner is bound from. The client's service account holds
+`inventory:admin`, and `setup()` uses it to restock a product that cannot
+cover its share of every order the staircase could place.
+
+**The journey.** Each iteration is one visit: the anonymous product listing,
+one to three product pages, the saved address (saved on a first visit), a
+checkout quote, and in a quarter of visits an order followed by *my orders*
+through the BFF. Users pause one to five seconds between steps. The share,
+the pauses and the reason for each are constants at the top of `stress.js`.
+Orders are spread over every product `STRESS_PRODUCTS` names, which loads the
+saga and the queues; one id there is the hot-row variant, which loads
+Inventory's reservation of that one row instead.
+
+**The staircase.** The default is 10, 50, 100, 200 and 400 VUs, each reached
+by a 30-second ramp and held for three minutes, about seventeen minutes in
+all. `STRESS_STEPS`, `STRESS_RAMP_SECONDS` and `STRESS_HOLD_SECONDS` change it.
+A step is measured over its hold alone, since a ramp mixes two loads. A hold
+shorter than two minutes is read over two, reaching into its ramp, because the
+services export their meters once a minute and a rate needs two exports.
+
+**What each step records.** From k6, per operation: p50, p95, p99 and max,
+the request rate, and failures split into 429s, other 4xx, 5xx, timeouts and
+refused connections. From Prometheus, read through Grafana as the SLO run
+reads it and evaluated at the step's end: the slowest request types'
+`request.duration`, the oldest outbox row per service, the deepest queues and
+the `_error` queues, `messaging.delivery.lag` overall and for the BFF's
+consumers (the BFF's read model is their projection, so that lag is its
+staleness), `orders.fulfilment.duration` and the share of orders confirmed,
+and both overdue gauges. From `stress/sample.mjs`, every five seconds: each
+container's CPU and memory from `docker stats`, where a CPU figure is a share
+of one core and passes 100 on several, and SQL Server's deadlocks and lock,
+page-latch and log-flush waits. Nothing is added to the stack to read any of
+them. What could only be read by adding a component is listed in the summary
+under *Not measured*.
+
+**The knee** is the first step at which one of three signals crosses:
+requests failing at more than one in a hundred; the journey's p95 at least
+doubling on the step before, by more than the jitter of a few milliseconds;
+or the oldest outbox row or the queued messages still growing by half again
+over the second half of the hold. The thresholds are `stress/report.js`'s
+constants, held by `stress/report.test.js`. Each signal is read once a step,
+so the order in which two crossed within one step cannot be seen, and the
+summary names every signal that crossed at the knee.
+
+**The output** goes to `artifacts/stress/<run>/`, which git ignores:
+`raw.json` from k6, `samples.jsonl` from the sampler, and `summary.json` and
+`summary.md` from `stress/summarise.mjs`. The summary records the machine's
+processor, memory and operating system, Docker's processors and memory, the
+commit and the k6 version, since a local number means nothing without them.
+
+### Running it
+
+The blocks run in order in one Git Bash shell from the repository root, as
+the SLO run's do. Node is the one the frontend already needs; `node --test`
+runs the run's own suites.
+
+**1. Bring the stack up with the override**, built from this commit, and let it
+idle a minute, as the SLO run's step 1 does:
+
+```bash
+export MSYS_NO_PATHCONV=1
+docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.stress.yml \
+    up -d --build --wait
+```
+
+**2. Choose the products.** Every seeded product Ordering holds as available,
+in the first one's currency, whose price ends in none of the pence the payment
+simulator scripts, as the SLO run's step 4 chooses one:
+
+```bash
+rows=$(docker exec commerce-sql-1 sh -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec "$@"' sh \
+    /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -d Ordering -h -1 -W -s , \
+    -Q "SET NOCOUNT ON; SELECT LOWER(CONVERT(char(36), ProductId)), Currency FROM ordering.ProductPrices
+        WHERE IsAvailable = 1 AND CONVERT(char(36), ProductId) LIKE '5EED0000-%'
+        AND CAST(ROUND(Amount * 100, 0) AS bigint) % 100 NOT IN (1, 2, 5, 9) ORDER BY Currency, ProductId" \
+    | tr -d '\r')
+currency=$(echo "$rows" | head -1 | cut -d, -f2)
+products=$(echo "$rows" | grep ",$currency\$" | cut -d, -f1 | paste -sd, -)
+echo "currency: ${currency:-none}, products: ${products:-none}"
+```
+
+**3. Run it, with the sampler beside it, then summarise.** The admin password
+is §14.1's local default and reaches k6 through the environment, never `-e`.
+The sampler stops itself once k6 has written its results:
+
+```bash
+out=artifacts/stress/$(date +%Y%m%d-%H%M%S)
+mkdir -p "$out"
+node deploy/observability/stress/sample.mjs "$out" &
+export KEYCLOAK_ADMIN_PASSWORD=admin
+k6 run \
+  -e BASE_URL=http://localhost:5000 \
+  -e KEYCLOAK_URL=http://localhost:8080 \
+  -e STRESS_PRODUCTS="$products" \
+  -e STRESS_CURRENCY="$currency" \
+  -e STRESS_OUT="$out" \
+  deploy/observability/stress/stress.js
+echo "k6 exit: $?"
+wait
+node deploy/observability/stress/summarise.mjs "$out"
+```
+
+k6 exits 0 when the staircase ran to its end and 99 when a step's errors
+stopped it early; `summary.md` marks that step `(aborted)`. 107 is a refusal
+from `setup()`, with no load driven. `summarise.mjs` prints the knee and the
+summary's path.
+
+**4. Go back to the normal profile** by bringing the stack up without the
+override. Nothing else needs undoing:
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml up -d --wait
+```
+
+**What a run leaves.** The `stress-run` client and its users stay in the
+running realm until Keycloak's container is recreated, and the next run finds
+them and resets their passwords. The orders stay, owned by the users, and go
+on through the saga, and their bookings and notices are still draining when
+k6 exits. Wait until both overdue gauges are near zero, as the SLO run's last
+block reads them, before the next run; after step 4 the workers drain at their
+paced rate again.
