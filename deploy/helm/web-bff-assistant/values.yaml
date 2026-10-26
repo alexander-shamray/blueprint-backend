@@ -144,15 +144,16 @@ assistant:
 
 extraConfigMaps: []
 
-# ADR-065's fence, as ADR-153 amends it: the gateway in, and out to Catalog's
-# gRPC port for get_product's pricing hop, the stores, the identity provider
-# and the model provider. Not Notifications: the device hop is a route the
-# gateway never sends here.
+# ADR-065's fence, as ADR-153 and ADR-154 amend it: the gateway in, and out to
+# Catalog's and Inventory's gRPC ports for the tools' hops, the stores, the
+# identity provider and the model provider. Not Notifications: the device hop
+# is a route the gateway never sends here.
 networkPolicy:
   ingressFrom:
     - { workload: gateway, port: http }
   egressTo:
     - { workload: catalog-api, port: grpc }
+    - { workload: inventory-api, port: grpc }       # get_stock's availability hop (ADR-154)
   dns:
     to:
       - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
