@@ -514,7 +514,8 @@ reads it and evaluated at the step's end: the slowest request types'
 the `_error` queues, `messaging.delivery.lag` overall and for the BFF's
 consumers (the BFF's read model is their projection, so that lag is its
 staleness), `orders.fulfilment.duration` and the share of orders confirmed,
-and both overdue gauges. From `stress/sample.mjs`, every five seconds: each
+both overdue gauges, and from the runtime meter every service exports the
+work waiting for a thread-pool thread and the time collections paused it. From `stress/sample.mjs`, every five seconds: each
 container's CPU and memory from `docker stats`, where a CPU figure is a share
 of one core and passes 100 on several, and SQL Server's deadlocks and lock,
 page-latch and log-flush waits. Nothing is added to the stack to read any of
