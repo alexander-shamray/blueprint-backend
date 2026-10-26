@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>The carrier loops' pace: production's numbers by default, and only a lease a pass outlives refused.</summary>
+/// <summary>The carrier loops' pace: production's by default, and only a lease a pass outlives refused.</summary>
 public sealed class CarrierPacingOptionsTests
 {
     private static ValidateOptionsResult Validate(CarrierPacingOptions options) =>

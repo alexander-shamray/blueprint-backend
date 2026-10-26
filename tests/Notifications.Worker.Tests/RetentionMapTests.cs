@@ -32,7 +32,10 @@ public class RetentionMapTests
     [
         .. RetentionMapRule.BuildingBlocksNotRetention,
         new(typeof(ContactOptions), nameof(ContactOptions.Freshness), "when a row is asked again, not its lifetime"),
-        new(typeof(NotificationsRetentionService), nameof(NotificationsRetentionService.Interval), "the purge's pacing"),
+        new(
+            typeof(NotificationsRetentionService),
+            nameof(NotificationsRetentionService.Interval),
+            "the purge's pacing"),
         new(typeof(SendPacingOptions), nameof(SendPacingOptions.SendTick), "the send loop's pacing"),
         new(typeof(SendPacingOptions), nameof(SendPacingOptions.PushTick), "the push loop's pacing"),
         new(typeof(SendPacingOptions), nameof(SendPacingOptions.SendRowBudget), "a mail notice's call budget"),

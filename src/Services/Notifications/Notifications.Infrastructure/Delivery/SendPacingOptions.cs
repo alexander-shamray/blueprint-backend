@@ -18,7 +18,7 @@ public sealed class SendPacingOptions : IValidatableObject
     /// <summary>Past this a batch is a configuration error rather than a pace.</summary>
     public const int MaximumClaimBatchSize = 1000;
 
-    /// <summary>A mail row's two calls, made in turn; a pass makes every row's at once, so this bounds a pass.</summary>
+    /// <summary>A mail row's two calls, in turn; a pass makes every row's at once, so this bounds a pass.</summary>
     public static readonly TimeSpan SendRowBudget = MailHop.TotalTimeout + ContactHop.TotalRequestTimeout;
 
     /// <summary>A delivery's one call, the longer provider's; a pass makes every row's at once.</summary>
