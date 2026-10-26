@@ -23,12 +23,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  # One group per watched workflow, never cancelled: two red runs of one
-  # workflow at once would both see no open issue and both file one.
-  group: main-red-${{ github.event.workflow_run.workflow_id }}
-  cancel-in-progress: false
-
 jobs:
   file:
     # Push runs alone: realm.yml and object-store.yml file their own issue for
@@ -39,6 +33,13 @@ jobs:
       contains(fromJSON('["failure", "timed_out", "startup_failure"]'), github.event.workflow_run.conclusion)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # One group per watched workflow, so two red runs never both see no open
+    # issue and both file one. On the job, so only red push runs queue: a newer
+    # run replaces a pending one whatever cancel-in-progress says, and a third
+    # red run replacing the second costs a comment, never the issue.
+    concurrency:
+      group: main-red-${{ github.event.workflow_run.workflow_id }}
+      cancel-in-progress: false
     permissions:
       issues: write
     steps:
