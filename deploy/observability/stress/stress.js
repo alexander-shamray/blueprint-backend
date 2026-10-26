@@ -322,7 +322,8 @@ function restock(token) {
         const put = http.put(
             `${BASE_URL}/api/v1/inventory/stock/${product}`, JSON.stringify({ onHand: STOCK }), auth);
 
-        if (put.status !== 200)
+        // A command with no value answers 204 (§10.5's ToHttpResult); the read below is the real check.
+        if (put.status !== 204)
             fail(`restocking ${product} returned ${put.status}: ${put.body}`);
 
         const after = available(product);
