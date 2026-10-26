@@ -1,7 +1,7 @@
 // Samples every container's CPU and memory, and SQL Server's deadlock and
 // wait counters, every few seconds until the stress run writes raw.json, as
-// JSON lines summarise.mjs reads. Both are read from outside the stack: no
-// exporter is added to measure it, which is ADR-157's rule for the run.
+// JSON lines summarise.mjs reads. Both are read from outside the stack, so no
+// exporter is added to the stack it measures.
 //
 //   node deploy/observability/stress/sample.mjs artifacts/stress/<run>
 //
