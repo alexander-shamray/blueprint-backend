@@ -25,15 +25,17 @@ namespace Shipping.Infrastructure.Fulfilment;
 public sealed class FulfilmentWorker(
     IServiceScopeFactory scopes,
     ILogger<FulfilmentWorker> log,
+    IOptions<CarrierPacingOptions> pacing,
     OperatorSwitches? switches = null) : SwitchedPollingWorker(switches)
 {
     /// <summary>The name an operator lists to switch the booking pass off (ADR-113).</summary>
     public const string Name = "fulfilment-worker";
 
-    /// <summary>One, since a row costs up to three calls and the lease must outlive every row's turn.</summary>
+    /// <summary>One by default: a row costs up to three calls, and the lease must outlive each row's turn.</summary>
+    /// <remarks><see cref="CarrierPacingOptions"/> carries the batch a host runs on (ADR-157).</remarks>
     public const int ClaimBatchSize = 1;
 
-    /// <summary>Longer than a pass's three calls, so a slow pass is not re-claimed underneath itself.</summary>
+    /// <summary>By default longer than a pass's three calls, so a slow pass is not re-claimed under itself.</summary>
     public const int LeaseSeconds = 60;
 
     /// <summary>ADR-052's terminal outcome with a reason of its own, apart from a refusal's.</summary>
@@ -101,7 +103,7 @@ public sealed class FulfilmentWorker(
 
     public override string SwitchName => Name;
 
-    protected override TimeSpan PassInterval => CarrierHop.FulfilmentTick;
+    protected override TimeSpan PassInterval => pacing.Value.FulfilmentTick;
 
     protected override Task RunPassAsync(CancellationToken stoppingToken) => RunOnceAsync(stoppingToken);
 

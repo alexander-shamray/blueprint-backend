@@ -10,6 +10,7 @@ using Shipping.Application.Carrier;
 using Shipping.Application.Privacy;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
+using Shipping.Infrastructure.Carrier;
 using Shipping.Infrastructure.Fulfilment;
 using Shouldly;
 using Xunit;
@@ -322,7 +323,10 @@ public sealed class SupersededBookingTests
         }));
 
         await using ServiceProvider provider = services.BuildServiceProvider();
-        FulfilmentWorker worker = new(provider.GetRequiredService<IServiceScopeFactory>(), log);
+        FulfilmentWorker worker = new(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            log,
+            Options.Create(new CarrierPacingOptions()));
 
         Shipment first = loads[0];
         FulfilmentWork work = new(

@@ -5,6 +5,7 @@ using Common.Infrastructure.Tracing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Shipping.Application.Carrier;
 using Shipping.Application.Tracking;
 using Shipping.Domain.Shipments;
@@ -20,15 +21,17 @@ namespace Shipping.Infrastructure.Tracking;
 public sealed class TrackingWorker(
     IServiceScopeFactory scopes,
     ILogger<TrackingWorker> log,
+    IOptions<CarrierPacingOptions> pacing,
     OperatorSwitches? switches = null) : SwitchedPollingWorker(switches)
 {
     /// <summary>The name an operator lists to switch the carrier poll off (ADR-113).</summary>
     public const string Name = "tracking-worker";
 
-    /// <summary>Carrier calls one pass has in flight; smaller than the outbox's, each row being a round trip.</summary>
+    /// <summary>Carrier calls one pass has in flight by default; fewer than the outbox's, each a round trip.</summary>
+    /// <remarks><see cref="CarrierPacingOptions"/> carries the batch a host runs on (ADR-157).</remarks>
     public const int ClaimBatchSize = 20;
 
-    /// <summary>Above <c>CarrierHop.TotalRequestTimeout</c>, so a row in flight is not claimed again.</summary>
+    /// <summary>By default above <c>CarrierHop.TotalRequestTimeout</c>, so a row in flight is not re-claimed.</summary>
     /// <remarks>Not <see cref="Fulfilment.FulfilmentWorker.LeaseSeconds"/>: each bounds its own hops.</remarks>
     public const int LeaseSeconds = 45;
 
@@ -64,7 +67,7 @@ public sealed class TrackingWorker(
     public override string SwitchName => Name;
 
     // Shorter than the poll interval, since NextPollAt falls part-way into a tick; it bounds how late a row is.
-    protected override TimeSpan PassInterval => CarrierHop.TrackingTick;
+    protected override TimeSpan PassInterval => pacing.Value.TrackingTick;
 
     protected override Task RunPassAsync(CancellationToken stoppingToken) => ProcessBatchAsync(stoppingToken);
 
@@ -143,7 +146,7 @@ public sealed class TrackingWorker(
 
         DateTimeOffset nextPollAt =
             scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow() +
-            CarrierHop.TrackingPollInterval;
+            pacing.Value.TrackingPollInterval;
 
         // The command releases the claim through Shipment.PollApplied, in the commit that applied the page.
         Result result = await dispatcher.SendAsync(
