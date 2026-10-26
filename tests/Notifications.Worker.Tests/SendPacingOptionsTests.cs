@@ -62,7 +62,9 @@ public sealed class SendPacingOptionsTests
     {
         // Read from the override: a pace refused here would stop the stress run's worker at start.
         IConfigurationSection section = StressOverride.Configuration().GetSection(SendPacingOptions.SectionName);
-        SendPacingOptions stress = section.Get<SendPacingOptions>().ShouldNotBeNull();
+        SendPacingOptions stress = section
+            .Get<SendPacingOptions>(binder => binder.ErrorOnUnknownConfiguration = true)
+            .ShouldNotBeNull();
 
         Validate(stress).Succeeded.ShouldBeTrue();
 
