@@ -522,6 +522,14 @@ class TheProseWidth(unittest.TestCase):
         text = f"> ```\n> {self.prose(90)}\n\n{self.prose(90)}\n"
         self.assertEqual(self.wide(text), [("docs/a.md", 4, "a prose line runs 90 columns, over 80")])
 
+    def test_a_quoted_fence_closes_only_at_its_own_depth(self):
+        text = f"> ```md\n> > ```\n> > {self.prose(90)}\n> ```\n> {self.prose(90)}\n"
+        self.assertEqual([n for _, n, _ in self.wide(text)], [5])
+
+    def test_a_fence_in_a_nested_quote_ends_when_that_quote_does(self):
+        text = f"> > ```\n> > {self.prose(90)}\n> {self.prose(90)}\n"
+        self.assertEqual([n for _, n, _ in self.wide(text)], [3])
+
     def test_a_quote_marker_inside_a_plain_fence_is_code(self):
         text = f"```md\n> ```\n{self.prose(90)}\n```\n{self.prose(90)}\n"
         self.assertEqual([n for _, n, _ in self.wide(text)], [5])
