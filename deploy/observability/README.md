@@ -510,8 +510,8 @@ services export their meters once a minute and a rate needs two exports.
 the request rate, and failures split into 429s, other 4xx, 5xx, timeouts and
 refused connections. From Prometheus, read through Grafana as the SLO run
 reads it and evaluated at the step's end: the slowest request types'
-`request.duration`, the oldest outbox row per service, the deepest queues and
-the `_error` queues, `messaging.delivery.lag` overall and for the BFF's
+`request.duration`, the oldest outbox row per service, the deepest queues, the
+consumed queues with the lowest consumer utilisation, the `_error` queues, `messaging.delivery.lag` overall and for the BFF's
 consumers (the BFF's read model is their projection, so that lag is its
 staleness), `orders.fulfilment.duration` and the share of orders confirmed,
 both overdue gauges, and from the runtime meter every service exports the
