@@ -90,7 +90,7 @@ const TOKEN_MARGIN_SECONDS = 30;
 const OPS = ['listing', 'product', 'address_read', 'address_save', 'quote', 'order', 'my_orders', 'token'];
 const FAILURE_KINDS = ['429', '4xx', '5xx', 'timeout', 'connection'];
 
-// The journey's wall-clock with Keycloak's token calls left out, so a slow
+// Each journey request's duration, Keycloak's token calls left out, so a slow
 // identity provider is reported apart from the platform it fronts.
 const journeyDuration = new Trend('stress_journey_duration', true);
 const failures = new Counter('stress_failures');
