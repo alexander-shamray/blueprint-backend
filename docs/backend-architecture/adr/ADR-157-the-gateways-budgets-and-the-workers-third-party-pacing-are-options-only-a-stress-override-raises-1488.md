@@ -34,8 +34,8 @@ production lever, but each replica spends the host's CPU and memory, the very
 resources the run reads. Options leave every production value where it was,
 and each type passes §15.4's test on
 [ADR-128](ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)'s
-terms: the stress run's stack differs from production in every member, and no
-deployed value is set.
+terms: the stress run's stack differs from production in each member the
+override sets, and no deployed value is set.
 **Consequences.** A configured pace is one nobody argued for production, so it
 is a defect anywhere but a stress run, and the override's header says so. A
 large fulfilment batch needs a long lease, so a worker killed mid-run holds
