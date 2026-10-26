@@ -31,7 +31,7 @@ separate test environment, and adding one for this guard would be a second
 lever with no other reader. A client also had no reliable way to tell the
 BFF's 429 from the gateway's: it read a missing `Retry-After` as the BFF's,
 and the gateway's 429 also arrives without one behind an intermediary that
-strips it, with CORS off, and from a gateway older than `27b54a7`, so a
+strips it and from a gateway older than `27b54a7`, so a
 gateway refusal of an assistant request opened no back-off window. `code` is
 where §10.5 already tells a client to switch; a header of the BFF's own would
 be a second mechanism, and a problem `type` a URI the platform mints nowhere
