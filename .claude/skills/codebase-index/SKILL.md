@@ -76,8 +76,12 @@ or routing remain unclear.
 5. Trace one additional hop only when the question requires behaviour,
    ownership, or impact.
 6. Before answering or editing from evidence gathered earlier in the task, run
-   `bash .claude/skills/codebase-index/scripts/cbx verify --session <tag> --json` and reread anything whose
-   state is not `valid` or `relocated`.
+   this, and reread anything whose state is not `valid` or `relocated`:
+
+   ```bash
+   bash .claude/skills/codebase-index/scripts/cbx verify --session <tag> --json
+   ```
+
 7. Answer with `file:line` evidence and state uncertainty explicitly.
 
 Do not open whole files when a line range is available. A snippet may already
