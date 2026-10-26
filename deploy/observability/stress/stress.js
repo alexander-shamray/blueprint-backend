@@ -22,8 +22,9 @@
 //     -e STRESS_OUT=artifacts/stress/<run> \
 //     deploy/observability/stress/stress.js
 //
-// Optional: STRESS_STEPS ("10,50,100,200,400"), STRESS_RAMP_SECONDS (30),
-// STRESS_HOLD_SECONDS (180), STRESS_ABORT_ERROR_RATE (0.2, or 0 for never).
+// Optional: STRESS_STEPS, STRESS_RAMP_SECONDS and STRESS_HOLD_SECONDS, whose
+// defaults are steps.js's, and STRESS_ABORT_ERROR_RATE, whose default is
+// ABORT_ERROR_RATE's below and which 0 switches off.
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { fail, sleep } from 'k6';
