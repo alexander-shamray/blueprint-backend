@@ -2003,8 +2003,8 @@ therefore ships `ErrorRateGateway` and `ErrorRateService`: one condition, two
 selectors, two owners, one runbook between them. A rule *set* is the unit that
 has to match this table, not a rule.
 
-That directory holds the alert rules, the SLO run and the stress run on the
-same argument, and a gate over the first three:
+That directory holds the alert rules, the dashboards, the SLO run and the
+stress run on the same argument, and a gate over the rules and the dashboards:
 
 ```
 deploy/observability/
