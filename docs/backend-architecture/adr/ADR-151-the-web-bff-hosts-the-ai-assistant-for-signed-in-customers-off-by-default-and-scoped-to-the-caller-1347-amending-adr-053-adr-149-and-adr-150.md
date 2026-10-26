@@ -100,6 +100,13 @@ that stock cannot be answered, and the in-stock flag joins a product's name and
 price in what the provider is shown of a product. This record is otherwise
 unchanged.
 
+**Amended by
+[ADR-156](ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-and-its-429s-carry-a-code-of-their-own-1484-1485-amending-adr-151.md)**:
+`Assistant:Provider` also takes `scripted`, a keyless fixed reply the host
+runs in Development alone and Compose's BFF sets, and each of the host's 429s
+carries a `code` of its own, still with no `Retry-After`. This record is
+otherwise unchanged.
+
 > **Discharged in part** by
 > [ADR-153](ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)'s
 > release: its chart gives the provider a value and a Secret reference behind
