@@ -1,5 +1,6 @@
 using System.Reflection;
 using Common.TestSupport;
+using Shipping.Infrastructure.Carrier;
 using Shipping.Infrastructure.Fulfilment;
 using Shipping.Infrastructure.Retention;
 using Shouldly;
@@ -15,6 +16,7 @@ public class RetentionMapTests
         .. RetentionMapRule.BuildingBlocks,
         typeof(ShippingJurisdictionOptions),
         typeof(FulfilmentOptions),
+        typeof(CarrierPacingOptions),
         typeof(ShippingRetentionService)
     ];
 
@@ -25,7 +27,11 @@ public class RetentionMapTests
     private static readonly NotRetention[] Excluded =
     [
         .. RetentionMapRule.BuildingBlocksNotRetention,
-        new(typeof(ShippingRetentionService), nameof(ShippingRetentionService.Interval), "the purge's pacing")
+        new(typeof(ShippingRetentionService), nameof(ShippingRetentionService.Interval), "the purge's pacing"),
+        new(typeof(CarrierPacingOptions), nameof(CarrierPacingOptions.FulfilmentTick), "the booking loop's pacing"),
+        new(typeof(CarrierPacingOptions), nameof(CarrierPacingOptions.TrackingTick), "the tracking loop's pacing"),
+        new(typeof(CarrierPacingOptions), nameof(CarrierPacingOptions.TrackingPollInterval), "a parcel's poll pace"),
+        new(typeof(CarrierPacingOptions), nameof(CarrierPacingOptions.FulfilmentRowBudget), "a booking's call budget")
     ];
 
     [Fact]

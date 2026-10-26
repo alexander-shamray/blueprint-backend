@@ -2,11 +2,13 @@ using System.Data;
 using Common.Application;
 using Common.Infrastructure.Outbox;
 using Dapper;
+using Microsoft.Extensions.Options;
+using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Fulfilment;
 
 /// <summary>ADR-052's lease and backoff over the shipments, in <see cref="OutboxDispatcher"/>'s shape.</summary>
-internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
+internal sealed class FulfilmentClaims(IDbConnectionFactory connections, IOptions<CarrierPacingOptions> pacing)
 {
     /// <summary>A Pending row to book or a Booked one to cancel; the first two lines repeat the index filter.</summary>
     internal const string Claimable =
@@ -18,17 +20,18 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
             AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
         """;
 
-    // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's.
+    // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's. The batch
+    // and the lease are parameters, as CarrierPacingOptions configures them.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
-            SELECT TOP ({FulfilmentWorker.ClaimBatchSize}) *
+            SELECT TOP (@BatchSize) *
             FROM shipping.Shipments WITH (UPDLOCK, READPAST, ROWLOCK)
             WHERE {Claimable}
             ORDER BY NextAttemptAt
         )
         UPDATE claimable
-        SET LockedUntil = DATEADD(second, {FulfilmentWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
+        SET LockedUntil = DATEADD(second, @LeaseSeconds, SYSDATETIMEOFFSET())
         OUTPUT inserted.Id, inserted.OrderId, inserted.Status, inserted.CarrierReference, inserted.CreatedAt,
             inserted.CancellationRequestedAt, inserted.TraceParent, inserted.TraceState, inserted.LockedUntil,
             inserted.ErasedUnder;
@@ -55,8 +58,17 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
     {
         using IDbConnection connection = connections.Create();
 
+        CarrierPacingOptions pace = pacing.Value;
+
         // CommandDefinition, so a shutdown's token can interrupt a blocked claim.
-        return [.. await connection.QueryAsync<FulfilmentWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
+        return
+        [
+            .. await connection.QueryAsync<FulfilmentWork>(
+                new CommandDefinition(
+                    ClaimSql,
+                    new { BatchSize = pace.FulfilmentClaimBatchSize, LeaseSeconds = pace.FulfilmentLeaseSeconds },
+                    cancellationToken: ct))
+        ];
     }
 
     // Only while the lease is still this pass's, exactly: a lapsed pass would clear a reclaimer's and move its try.

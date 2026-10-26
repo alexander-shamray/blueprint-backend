@@ -2,12 +2,13 @@ using System.Data;
 using Common.Application;
 using Common.Infrastructure.Outbox;
 using Dapper;
+using Microsoft.Extensions.Options;
 using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Tracking;
 
 /// <summary>The tracking pass's lease and backoff, in <see cref="Fulfilment.FulfilmentClaims"/>' shape.</summary>
-internal sealed class TrackingClaims(IDbConnectionFactory connections)
+internal sealed class TrackingClaims(IDbConnectionFactory connections, IOptions<CarrierPacingOptions> pacing)
 {
     /// <summary>The lease, not the status, keeps the passes apart: a Booked row to cancel is in both claims.</summary>
     internal const string Claimable =
@@ -18,17 +19,18 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
             AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
         """;
 
-    // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's.
+    // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's. The batch
+    // and the lease are parameters, as CarrierPacingOptions configures them.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
-            SELECT TOP ({TrackingWorker.ClaimBatchSize}) *
+            SELECT TOP (@BatchSize) *
             FROM shipping.Shipments WITH (UPDLOCK, READPAST, ROWLOCK)
             WHERE {Claimable}
             ORDER BY NextPollAt
         )
         UPDATE claimable
-        SET LockedUntil = DATEADD(second, {TrackingWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
+        SET LockedUntil = DATEADD(second, @LeaseSeconds, SYSDATETIMEOFFSET())
         OUTPUT inserted.Id, inserted.OrderId, inserted.CarrierReference, inserted.PollAttempts, inserted.CreatedAt,
             inserted.TraceParent, inserted.TraceState, inserted.LockedUntil;
         """;
@@ -43,9 +45,9 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
             LockedUntil  = NULL,
             NextPollAt   = DATEADD(
                 second,
-                CASE WHEN ladder.Seconds > {(int)CarrierHop.TrackingPollInterval.TotalSeconds}
+                CASE WHEN ladder.Seconds > @PollSeconds
                      THEN ladder.Seconds
-                     ELSE {(int)CarrierHop.TrackingPollInterval.TotalSeconds} END,
+                     ELSE @PollSeconds END,
                 SYSDATETIMEOFFSET())
         FROM shipping.Shipments AS shipment
         CROSS APPLY (VALUES (
@@ -60,8 +62,17 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
     {
         using IDbConnection connection = connections.Create();
 
+        CarrierPacingOptions pace = pacing.Value;
+
         // CommandDefinition, so a shutdown's token can interrupt a blocked claim.
-        return [.. await connection.QueryAsync<TrackingWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
+        return
+        [
+            .. await connection.QueryAsync<TrackingWork>(
+                new CommandDefinition(
+                    ClaimSql,
+                    new { BatchSize = pace.TrackingClaimBatchSize, LeaseSeconds = pace.TrackingLeaseSeconds },
+                    cancellationToken: ct))
+        ];
     }
 
     // No count abandons a row: it leaves the poll when terminal or past TrackingWorker.GiveUpAge (ADR-054). Only
@@ -70,7 +81,12 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
     {
         using IDbConnection connection = connections.Create();
 
+        int pollSeconds = (int)pacing.Value.TrackingPollInterval.TotalSeconds;
+
         await connection.ExecuteAsync(
-            new CommandDefinition(FailSql, new { Id = id, Lease = lease }, cancellationToken: ct));
+            new CommandDefinition(
+                FailSql,
+                new { Id = id, Lease = lease, PollSeconds = pollSeconds },
+                cancellationToken: ct));
     }
 }

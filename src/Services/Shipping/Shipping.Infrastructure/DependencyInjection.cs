@@ -3,6 +3,7 @@ using Shipping.Application.Addresses;
 using Shipping.Application.Privacy;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
+using Shipping.Infrastructure.Carrier;
 using Shipping.Infrastructure.Fulfilment;
 using Shipping.Infrastructure.Messaging;
 using Shipping.Infrastructure.Observability;
@@ -128,6 +129,16 @@ public static class DependencyInjection
             .BindConfiguration(FulfilmentOptions.SectionName)
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<FulfilmentOptions>, AnnotatedOptionsValidator<FulfilmentOptions>>();
+
+        // Both carrier loops' pace; an unset section keeps the workers' own constants, and only ADR-157's
+        // stress override sets it. A lease a pass could outlive refuses the host at start.
+        services
+            .AddOptions<CarrierPacingOptions>()
+            .BindConfiguration(CarrierPacingOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<
+            IValidateOptions<CarrierPacingOptions>,
+            AnnotatedOptionsValidator<CarrierPacingOptions>>();
 
         // The tracking pass, registered by its implementation type for the fulfilment worker's reason (§12.4).
         services.AddScoped<TrackingClaims>();
