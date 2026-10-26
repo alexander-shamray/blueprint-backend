@@ -100,6 +100,13 @@ that stock cannot be answered, and the in-stock flag joins a product's name and
 price in what the provider is shown of a product. This record is otherwise
 unchanged.
 
+> **Discharged in part** by
+> [ADR-153](ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)'s
+> release: its chart gives the provider a value and a Secret reference behind
+> the capability's guards, so ADR-053's rule 3 exception above has ended, and
+> §15.4's key table, `docs/secrets.md` and `docs/personal-data.md` name the
+> key, the release and the processor. §12.7's third-party row is still owed.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

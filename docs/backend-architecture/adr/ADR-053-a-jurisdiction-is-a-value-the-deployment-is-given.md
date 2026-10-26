@@ -180,6 +180,13 @@ provider, which `Assistant:Provider` names and the SDK's own address reaches,
 for as long as no deployment turns the assistant on; #1451 gives the chart the
 value before one does.
 
+**Amended by
+[ADR-153](ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)**,
+which ends ADR-151's exception: the `web-bff-assistant` release, the one
+release that turns the assistant on, names its model provider by the chart
+values `assistant.provider` and `assistant.baseUrl`, as rule 3 asks. This
+record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

@@ -227,12 +227,14 @@ that claims an idempotency key (§8.5).
 ### A provider, carrier or relay credential
 
 `PaymentProvider__ApiKey`, `Carrier__ApiKey`, `Mail__Password`,
-`Fcm__PrivateKey` and `Apns__PrivateKey`, each in a Secret its own chart names:
-`paymentProvider.apiKeySecretRef` in Payments' (`payments-provider` by default),
-`carrier.apiKeySecretRef` in Shipping's (`shipping-carrier`), and
-`mail.passwordSecretRef`, `fcm.privateKeySecretRef` and
+`Fcm__PrivateKey`, `Apns__PrivateKey` and `ANTHROPIC_API_KEY`, each in a
+Secret its own chart names: `paymentProvider.apiKeySecretRef` in Payments'
+(`payments-provider` by default), `carrier.apiKeySecretRef` in Shipping's
+(`shipping-carrier`), `mail.passwordSecretRef`, `fcm.privateKeySecretRef` and
 `apns.privateKeySecretRef` in Notifications' (`notifications-mail`,
-`notifications-fcm` and `notifications-apns`). A third party issues each, so
+`notifications-fcm` and `notifications-apns`), and `assistant.apiKeySecretRef`
+in the BFF's assistant release (`web-bff-assistant-provider`), the one release
+that reads it (ADR-153). A third party issues each, so
 **whether two can be live at once is that party's answer, not this
 repository's**, and it decides the procedure:
 
@@ -258,19 +260,25 @@ repository's**, and it decides the procedure:
   An upgrade made first signs under the new id with the old key, and APNs
   refuses every push until the pods restart again after the Secret has
   reconciled, since a pod reads its key when it starts.
+- **The model provider's key takes the first route too.** A workspace holds
+  more than one API key, so the new one is issued beside the old. The release
+  runs one replica under `Recreate`, so its restart ends every open
+  conversation (ADR-153).
 
 Confirm the same way for both. For Payments, `payments.provider.unavailable`
 stays flat while authorisations succeed; for Shipping,
 `shipping.carrier.unavailable` stays flat while shipments are booked; for
 Notifications, `notifications.mail.unavailable` with `cause=credential` stays
-flat while notifications leave `Pending`; and for a push key,
+flat while notifications leave `Pending`; for a push key,
 `notifications.push.unavailable` with `cause=credential` and the key's
 `provider` stays flat while that platform's push deliveries leave `Pending`,
-since a clean start checks only that the key parses. A flat count is also what
-a host that has called nothing since its restart shows, so the work moving is
-the positive signal. **After a leak, the overlap is the leak's window**: §15.3's
-order keeps the old key live until the restart, so run the two-key route's steps
-without pause, or take the one-key route's outage to close it sooner.
+since a clean start checks only that the key parses; and for the model
+provider, the assistant's status route answers enabled rather than
+`no-credential`. A flat count is also what a host that has called nothing
+since its restart shows, so the work moving is the positive signal. **After a
+leak, the overlap is the leak's window**: §15.3's order keeps the old key live
+until the restart, so run the two-key route's steps without pause, or take the
+one-key route's outage to close it sooner.
 
 ### A realm-check credential
 
