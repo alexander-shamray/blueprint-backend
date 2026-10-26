@@ -2,11 +2,12 @@ using System.Data;
 using Common.Application;
 using Common.Infrastructure.Outbox;
 using Dapper;
+using Microsoft.Extensions.Options;
 
 namespace Notifications.Infrastructure.Delivery;
 
 /// <summary>ADR-052's lease and backoff over <c>PushDeliveries</c>, in <see cref="SendClaims"/>' shape.</summary>
-internal sealed class PushClaims(IDbConnectionFactory connections)
+internal sealed class PushClaims(IDbConnectionFactory connections, IOptions<SendPacingOptions> pacing)
 {
     /// <summary>A pending row due and unleased; the first line repeats the claim index's filter.</summary>
     internal const string Claimable =
@@ -17,18 +18,19 @@ internal sealed class PushClaims(IDbConnectionFactory connections)
         """;
 
     // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's. A platform whose
-    // provider's breaker is open is left out, so its rows keep their backoff and the other platform's are sent.
+    // provider's breaker is open is left out, so its rows keep their backoff and the other platform's are sent. The
+    // batch and the lease are parameters, as SendPacingOptions configures them.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
-            SELECT TOP ({PushSendWorker.ClaimBatchSize}) *
+            SELECT TOP (@BatchSize) *
             FROM notifications.PushDeliveries WITH (UPDLOCK, READPAST, ROWLOCK)
             WHERE {Claimable}
                 AND Platform NOT IN @Parked
             ORDER BY NextAttemptAt
         )
         UPDATE claimable
-        SET LockedUntil = DATEADD(second, {PushSendWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
+        SET LockedUntil = DATEADD(second, @LeaseSeconds, SYSDATETIMEOFFSET())
         OUTPUT inserted.DeliveryId, inserted.NotificationId, inserted.InstallationId, inserted.Platform,
             inserted.CustomerId, inserted.ConsentEntryId, inserted.TemplateVersion, inserted.Languages,
             inserted.SendStartedAt, inserted.CorrelationId, inserted.TraceParent, inserted.TraceState,
@@ -56,12 +58,16 @@ internal sealed class PushClaims(IDbConnectionFactory connections)
     public async Task<IReadOnlyList<PushWork>> ClaimAsync(IReadOnlyList<string> parked, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
+        SendPacingOptions pace = pacing.Value;
 
         // An empty list expands to a predicate matching nothing, so NOT IN leaves every platform in.
         return
         [
             .. await connection.QueryAsync<PushWork>(
-                new CommandDefinition(ClaimSql, new { Parked = parked }, cancellationToken: ct))
+                new CommandDefinition(
+                    ClaimSql,
+                    new { Parked = parked, BatchSize = pace.PushClaimBatchSize, LeaseSeconds = pace.PushLeaseSeconds },
+                    cancellationToken: ct))
         ];
     }
 

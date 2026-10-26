@@ -16,6 +16,7 @@ using Common.Application;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
+using Common.Infrastructure.Validation;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -168,6 +169,14 @@ public static class DependencyInjection
 
         // The send worker's counter and gauges, a singleton so one meter holds one set (§13.6).
         services.AddSingleton<NotificationMetrics>();
+
+        // Both send loops' pace; an unset section keeps the workers' own constants, and only ADR-157's stress
+        // override sets it. A lease a row could outlive refuses the host at start.
+        services
+            .AddOptions<SendPacingOptions>()
+            .BindConfiguration(SendPacingOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<SendPacingOptions>, AnnotatedOptionsValidator<SendPacingOptions>>();
 
         // The send pass; the generic overload, so a suite can remove it by its ImplementationType (§12.4).
         services.AddScoped<SendClaims>();

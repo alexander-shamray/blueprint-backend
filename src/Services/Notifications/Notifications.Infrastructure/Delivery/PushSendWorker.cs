@@ -25,12 +25,14 @@ namespace Notifications.Infrastructure.Delivery;
 public sealed class PushSendWorker(
     IServiceScopeFactory scopes,
     ILogger<PushSendWorker> log,
+    IOptions<SendPacingOptions> pacing,
     OperatorSwitches? switches = null) : SwitchedPollingWorker(switches)
 {
     /// <summary>The name an operator lists to switch the push pass off (ADR-113).</summary>
     public const string Name = "push-send-worker";
 
-    /// <summary>Rows one pass sends at once; a pass lasts as long as its slowest row.</summary>
+    /// <summary>Rows one pass sends at once by default; a pass lasts as long as its slowest row.</summary>
+    /// <remarks><see cref="SendPacingOptions"/> carries the batch a host runs on (ADR-157).</remarks>
     public const int ClaimBatchSize = 10;
 
     /// <summary>Above the larger of <c>FcmHop.TotalTimeout</c> and <c>ApnsHop.TotalTimeout</c>.</summary>
@@ -142,7 +144,7 @@ public sealed class PushSendWorker(
 
     public override string SwitchName => Name;
 
-    protected override TimeSpan PassInterval => Tick;
+    protected override TimeSpan PassInterval => pacing.Value.PushTick;
 
     // A stop starts no claim, and never cuts rows under way: theirs fires DrainBudget after it.
     protected override TimeSpan? StopDrain => DrainBudget;

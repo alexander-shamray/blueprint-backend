@@ -27,12 +27,14 @@ namespace Notifications.Infrastructure.Delivery;
 public sealed class SendWorker(
     IServiceScopeFactory scopes,
     ILogger<SendWorker> log,
+    IOptions<SendPacingOptions> pacing,
     OperatorSwitches? switches = null) : SwitchedPollingWorker(switches)
 {
     /// <summary>The name an operator lists to switch the send pass off (ADR-113).</summary>
     public const string Name = "send-worker";
 
-    /// <summary>Rows one pass sends at once; a pass lasts as long as its slowest row.</summary>
+    /// <summary>Rows one pass sends at once by default; a pass lasts as long as its slowest row.</summary>
+    /// <remarks><see cref="SendPacingOptions"/> carries the batch a host runs on (ADR-157).</remarks>
     public const int ClaimBatchSize = 10;
 
     /// <summary>Above <c>MailHop.TotalTimeout</c> plus <c>ContactHop.TotalRequestTimeout</c>.</summary>
@@ -181,7 +183,7 @@ public sealed class SendWorker(
 
     public override string SwitchName => Name;
 
-    protected override TimeSpan PassInterval => MailHop.SendTick;
+    protected override TimeSpan PassInterval => pacing.Value.SendTick;
 
     // A stop starts no claim, and never cuts a claim or rows under way: theirs fires DrainBudget after it.
     protected override TimeSpan? StopDrain => DrainBudget;
