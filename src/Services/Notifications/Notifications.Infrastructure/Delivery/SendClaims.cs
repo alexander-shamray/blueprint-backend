@@ -2,12 +2,13 @@ using System.Data;
 using Common.Application;
 using Common.Infrastructure.Outbox;
 using Dapper;
+using Microsoft.Extensions.Options;
 using Notifications.Application.Preferences;
 
 namespace Notifications.Infrastructure.Delivery;
 
 /// <summary>ADR-052's lease and backoff over <c>NotificationLog</c>, in <c>FulfilmentClaims</c>' shape.</summary>
-internal sealed class SendClaims(IDbConnectionFactory connections)
+internal sealed class SendClaims(IDbConnectionFactory connections, IOptions<SendPacingOptions> pacing)
 {
     /// <summary>A pending row due and unleased; the first line repeats the claim index's filter.</summary>
     internal const string Claimable =
@@ -20,18 +21,19 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
     // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's. An empty
     // CorrelationId is the column's default, left by a version that predates it while both run (§7.4), so the row's
     // order stands in, as AddNotificationCorrelationId's backfill argues. An open relay leaves the mail notices out,
-    // so push notices still fan out while the relay is down (the push design's section 1).
+    // so push notices still fan out while the relay is down (the push design's section 1). The batch and the lease
+    // are parameters, as SendPacingOptions configures them.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
-            SELECT TOP ({SendWorker.ClaimBatchSize}) *
+            SELECT TOP (@BatchSize) *
             FROM notifications.NotificationLog WITH (UPDLOCK, READPAST, ROWLOCK)
             WHERE {Claimable}
                 AND (@MailParked = 0 OR Channel <> '{ConsentVocabulary.Email}')
             ORDER BY NextAttemptAt
         )
         UPDATE claimable
-        SET LockedUntil = DATEADD(second, {SendWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
+        SET LockedUntil = DATEADD(second, @LeaseSeconds, SYSDATETIMEOFFSET())
         OUTPUT inserted.NotificationId, inserted.EventId,
             COALESCE(NULLIF(inserted.CorrelationId, '{Guid.Empty:D}'), inserted.OrderId) AS CorrelationId,
             inserted.OrderId, inserted.CustomerId, inserted.TemplateKey, inserted.Channel, inserted.Parameters,
@@ -61,12 +63,21 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
     public async Task<IReadOnlyList<SendWork>> ClaimAsync(bool mailParked, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
+        SendPacingOptions pace = pacing.Value;
 
         // CommandDefinition, so a shutdown's token can interrupt a blocked claim.
         return
         [
             .. await connection.QueryAsync<SendWork>(
-                new CommandDefinition(ClaimSql, new { MailParked = mailParked }, cancellationToken: ct))
+                new CommandDefinition(
+                    ClaimSql,
+                    new
+                    {
+                        MailParked = mailParked,
+                        BatchSize = pace.SendClaimBatchSize,
+                        LeaseSeconds = pace.SendLeaseSeconds
+                    },
+                    cancellationToken: ct))
         ];
     }
 
