@@ -455,8 +455,12 @@ file and a reviewer are the only things that do.
   head of a line with an element still after it. Neither sees the plain one, a
   continuation line carrying two ordinary arguments, so the third is
   multiline (`rg -U`): a `(` ending its line, then a comma after a first
-  element whose strings and brackets it steps over —
-  `` \(\r?\n +(?:[^(){}\[\]<>"$\n/,]|\$"(?:[^"\n{]|\{[^}\n]*\})*"|"[^"\n]*"|\([^()\n]*\)|\{[^{}\n]*\}|\[[^\[\]\n]*\]|<[^<>\n]*>)+, +[^ /] ``.
+  element whose strings and brackets it steps over:
+
+  ```text
+  \(\r?\n +(?:[^(){}\[\]<>"$\n/,]|\$"(?:[^"\n{]|\{[^}\n]*\})*"|"[^"\n]*"|\([^()\n]*\)|\{[^{}\n]*\}|\[[^\[\]\n]*\]|<[^<>\n]*>)+, +[^ /]
+  ```
+
   It found 198 of the 205 sites one pass rewrapped, and nothing else; the
   rest open with a nested bracket it does not step over. Treat all three as a
   sieve, not a proof.
