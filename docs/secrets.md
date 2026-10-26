@@ -119,8 +119,9 @@ gives a read of its own
 ([§11.5](backend-architecture/11-identity-authorization.md)),
 `PaymentProvider__ApiKey`, for Payments' provider behind §3.2's
 anti-corruption layer, `Carrier__ApiKey`, for Shipping's carrier behind the
-same, `Mail__Password`, for Notifications' relay, and `Fcm__PrivateKey` and
-`Apns__PrivateKey`, for its push providers
+same, `Mail__Password`, for Notifications' relay, `Fcm__PrivateKey` and
+`Apns__PrivateKey`, for its push providers, and `ANTHROPIC_API_KEY`, for the
+BFF's assistant release's model provider (ADR-153)
 ([§15.4](backend-architecture/15-cicd-deployment.md)). The push keys are the
 worker's alone, and never the BFF's.
 
