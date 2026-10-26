@@ -57,9 +57,18 @@ public sealed partial class GatewayRateLimitOptionsTests(StubDestination stub) :
     [Fact]
     public void A_refused_budget_stops_the_gateway_at_start()
     {
-        using BudgetedFactory factory = new(stub.Address, ("RateLimits:AnonymousPermitLimit", "0"));
+        // A failed start can dispose the provider the factory still reads and say only that, so a host that
+        // reports the disposal is asked again; Common.TestSupport's StartRefusal does the same for the services.
+        Exception? refusal = null;
 
-        Should.Throw<OptionsValidationException>(() => factory.CreateClient());
+        for (int attempt = 0; attempt < 5 && refusal is null or ObjectDisposedException; attempt++)
+        {
+            using BudgetedFactory factory = new(stub.Address, ("RateLimits:AnonymousPermitLimit", "0"));
+            refusal = Should.Throw<Exception>(() => factory.CreateClient());
+        }
+
+        refusal.ShouldBeOfType<OptionsValidationException>()
+            .Message.ShouldContain(nameof(GatewayRateLimitOptions.AnonymousPermitLimit));
     }
 
     [Fact]
@@ -77,7 +86,7 @@ public sealed partial class GatewayRateLimitOptionsTests(StubDestination stub) :
 
         GatewayRateLimitOptions stress = settings
             .GetSection(GatewayRateLimitOptions.SectionName)
-            .Get<GatewayRateLimitOptions>()
+            .Get<GatewayRateLimitOptions>(binder => binder.ErrorOnUnknownConfiguration = true)
             .ShouldNotBeNull();
         GatewayRateLimitOptions platform = new();
 

@@ -68,9 +68,9 @@ public sealed class CarrierPacingOptionsTests
     [Fact]
     public void The_stress_override_unpaces_both_loops_with_a_pace_the_validator_admits()
     {
-        // Read from the override: a pace refused here would stop the stress run's worker at start.
+        // Read from the override, strictly: a misspelt key would otherwise leave its default and still pass.
         IConfigurationSection section = StressOverride.Configuration().GetSection(CarrierPacingOptions.SectionName);
-        CarrierPacingOptions stress = section.Get<CarrierPacingOptions>().ShouldNotBeNull();
+        CarrierPacingOptions stress = section.Get<CarrierPacingOptions>(Strict).ShouldNotBeNull();
 
         Validate(stress).Succeeded.ShouldBeTrue();
 
@@ -80,4 +80,17 @@ public sealed class CarrierPacingOptionsTests
             "the override exists to take the carrier's booking rate out of the run");
         stress.TrackingPollInterval.ShouldBeLessThan(production.TrackingPollInterval);
     }
+
+    [Fact]
+    public void A_key_the_options_do_not_hold_fails_the_strict_read_of_the_override()
+    {
+        IConfigurationSection section = StressOverride
+            .Configuration(["      CarrierPacing__TrackingClaimBatchSise: \"200\""])
+            .GetSection(CarrierPacingOptions.SectionName);
+
+        Should.Throw<InvalidOperationException>(() => section.Get<CarrierPacingOptions>(Strict))
+            .Message.ShouldContain("TrackingClaimBatchSise");
+    }
+
+    private static void Strict(BinderOptions binder) => binder.ErrorOnUnknownConfiguration = true;
 }
