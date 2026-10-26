@@ -62,7 +62,7 @@ public sealed class SendPacingOptions : IValidatableObject
         if (SendTick <= TimeSpan.Zero || PushTick <= TimeSpan.Zero)
             yield return new ValidationResult("A tick must be positive.", [nameof(SendTick), nameof(PushTick)]);
 
-        // MailHopTests' rule at the configured pace: a send no retry repeats must still open the breaker alone.
+        // MailHop's breaker at the configured pace: a send no retry repeats must still open the breaker alone.
         else if (SendTick * MailHop.CircuitBreakerMinimumThroughput >= MailHop.CircuitBreakerSamplingDuration)
         {
             yield return new ValidationResult(

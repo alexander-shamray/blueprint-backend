@@ -5,7 +5,7 @@
 # `up` without this file is the way back to every default.
 
 # Not part of `up`: add it to the full-stack command deploy/compose/README.md
-# gives. A suite reads this file (StressOverride), so a value a service's
+# gives. Each service's suite reads this file, so a value the service's
 # validator would refuse fails a test rather than the run's start.
 services:
   # Every client comes from one address, so §10.3's anonymous window would
