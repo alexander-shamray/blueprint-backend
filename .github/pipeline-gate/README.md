@@ -27,8 +27,9 @@ an order-of-magnitude miss, not a count.
 
 ## How it runs
 
-Its suite and `filters`, `images`, `shards`, `actions` and `alerts` run in the fast job of
-[`ci.yml`](../workflows/ci.yml); `stages` runs after the three test stages.
+Its suite and `filters`, `images`, `shards`, `actions` and `alerts` run in the
+fast job of [`ci.yml`](../workflows/ci.yml); `stages` runs after the three
+test stages.
 The suite is negative cases with their positive controls, because a gate
 only ever observed green is one nobody has established is looking at
 anything.
