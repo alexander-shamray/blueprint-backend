@@ -32,6 +32,12 @@ public static class AssistantEndpoints
     /// <summary>The 409's <c>code</c> for a turn sent while the last one runs (§10.5).</summary>
     public const string TurnRunningCode = "assistant.turn_running";
 
+    /// <summary>The 429's <c>code</c> when this host's limiter refuses; the gateway's carries none (§10.5).</summary>
+    public const string RateLimitedCode = "assistant.rate_limited";
+
+    /// <summary>The 429's <c>code</c> when the store cannot make room for a conversation (§10.5).</summary>
+    public const string ConversationsFullCode = "assistant.conversations_full";
+
     /// <summary>The rate limiter policy on the two routes that start work: opening a conversation and a turn.</summary>
     public const string StartPolicy = "assistant-start";
 
@@ -80,7 +86,9 @@ public static class AssistantEndpoints
                             : TypedResults.Problem(
                                 statusCode: StatusCodes.Status429TooManyRequests,
                                 title: "Too many conversations",
-                                detail: "Every conversation this host can hold is in use; try again later.");
+                                detail: "No conversation can be opened while those held are running a turn; " +
+                                    "try again later.",
+                                extensions: new Dictionary<string, object?> { ["code"] = ConversationsFullCode });
                     }
                     catch (ToolRefusedException refused)
                     {

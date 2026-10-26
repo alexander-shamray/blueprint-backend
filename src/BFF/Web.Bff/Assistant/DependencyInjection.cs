@@ -46,9 +46,27 @@ public static class DependencyInjection
                         QueueLimit = 0
                     }));
 
-            // A 429 with no body, which UseStatusCodePages writes as problem+json (§10.5). No Retry-After: its one
-            // form is the gateway's RetryAfterHeader (§10.3), which this host cannot reference.
+            // §10.3's write, with the code that tells a client this host refused rather than the gateway (§10.5).
+            // No Retry-After: its one form is the gateway's RetryAfterHeader, which this host cannot reference.
             limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            limiter.OnRejected = async (context, _) =>
+            {
+                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+
+                await context.HttpContext.RequestServices
+                    .GetRequiredService<IProblemDetailsService>()
+                    .WriteAsync(new ProblemDetailsContext
+                    {
+                        HttpContext = context.HttpContext,
+                        ProblemDetails =
+                        {
+                            Status = StatusCodes.Status429TooManyRequests,
+                            Title = "Too many requests",
+                            Detail = "This customer has started as much assistant work as a minute allows.",
+                            Extensions = { ["code"] = AssistantEndpoints.RateLimitedCode }
+                        }
+                    });
+            };
         });
 
         return services;
