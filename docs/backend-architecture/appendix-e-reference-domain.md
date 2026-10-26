@@ -2281,9 +2281,15 @@ The options types that earn a binding in the reference domain beyond
 language set and the time zone, and `Fulfilment` (Shipping) and `Delivery`
 (Notifications) each hold the give-up age of
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md).
-The tempting counter-example is a `ServiceOptions`-shaped bag of batch sizes,
-poll intervals and retry caps bound to an `Ordering` section that no
-environment ever sets.
+`CarrierPacing` (Shipping) and `SendPacing` (Notifications) hold the pace of
+the four loops that wait on a third party, each default the worker's own
+constant and set by the stress run's override alone
+([ADR-157](adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
+They earn their binding because a run that measures the host must take the
+third party's modelled rate out of it, and each lease is validated against the
+pass it must outlive. The tempting counter-example is a `ServiceOptions`-shaped
+bag of batch sizes, poll intervals and retry caps bound to an `Ordering`
+section that no environment ever sets and nothing checks.
 
 ### E.9.5 The host-specific keys
 

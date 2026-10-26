@@ -1505,7 +1505,10 @@ and `Fulfilment` and `Delivery` each hold the give-up age
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 makes one — a deadline that decides whether a day's shipments, or a day's
 notifications, survive a long outage, which is an operator's call and not a
-build's. The tempting next one is
+build's. `RateLimits` holds the gateway's budgets ([§10.3](10-api-gateway.md)),
+and `CarrierPacing` and `SendPacing` the pace of the workers that wait on a
+third party, on the developer's terms the callout below states. The tempting
+next one is
 a `ServiceOptions`-shaped bag — batch sizes, poll intervals, retry caps — bound
 to a section named for the service that no environment ever sets. It costs
 nothing to write and it is not free: `ValidateOnStart` then gates boot on a
@@ -1523,6 +1526,11 @@ third outcome, because a key that never varies has nothing to validate.
 > developer's stack differs from production in them, because a wait of minutes
 > cannot be watched by hand, and no deployed value is set
 > ([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)).
+> The gateway's budgets and the workers' pace pass on the same word: the stress
+> run's stack differs from production in them, because a run that measures the
+> host cannot carry the limiter or a third party's modelled rate, and again no
+> deployed value is set
+> ([ADR-157](adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
 > `Identity:Client` earns its options type by holding a secret that must differ
 > per environment, and `Jurisdiction` earns one because a statutory window, the
 > languages a customer is owed and the zone their dates are read in are facts
