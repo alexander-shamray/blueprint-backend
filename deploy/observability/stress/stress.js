@@ -1,9 +1,9 @@
 // The stress run of deploy/observability/README.md: distinct signed-in users
 // walk the domain's typical journey through the gateway, and their number
 // rises in steps until the platform gives out. It is NOT the SLO run and NOT
-// a gate: it asserts nothing, and stops early only once a whole step has
-// clearly broken. summarise.mjs turns what it writes into the per-step table
-// and names the knee.
+// a gate: it asserts nothing, and stops early only once a step's error rate
+// passes STRESS_ABORT_ERROR_RATE. summarise.mjs turns what it writes into the
+// per-step table and names the knee.
 //
 // It runs against the Compose stack started with
 // deploy/compose/docker-compose.stress.yml (ADR-157), whose relaxed limiter
