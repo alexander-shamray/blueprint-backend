@@ -253,6 +253,54 @@ web-bff-assistant:
     apps: *apps
 ```
 
+## The first install is by hand, once per workload
+
+The rollout (`.github/workflows/deploy.yml`) upgrades a workload's release and
+never installs it; the one release it installs is the canary,
+`<workload>-canary`, which takes the installed release's values. Its first
+cluster read is `helm get values` on the release named for the workload
+(§15.1), because the stable track's image, ADR-122's revision
+checks and ADR-125's shared values are all read from what is installed, and
+every later upgrade carries that release's own overrides forward. A workload
+that was never installed has none of it, so its dispatch fails at that read,
+after the signature check and before anything is scaled or upgraded. A
+first-install branch in the workflow would have to skip each of those checks,
+in a job that holds no cluster credential yet and so could not exercise it.
+
+So each workload is installed once by hand, into the cluster the `production`
+Environment's rollout reaches, as its own release named for the workload and
+never through the umbrella (*Mixing the two install modes* below).
+`py -3.12 deploy/canary/canary.py chart --workload <workload>` prints its
+chart, and the image is pinned as the rollout pins it:
+
+```bash
+helm upgrade --install "$WORKLOAD" "deploy/helm/$CHART" \
+    --namespace commerce --timeout 20m \
+    --values environments/production/"$WORKLOAD".yaml \
+    --set-string image.registry="$REGISTRY" \
+    --set-string image.tag="$SHA" \
+    --set-string image.digest="$DIGEST" \
+    --set-string image.migratorDigest="$MIGRATOR_DIGEST"   # with a migrator
+```
+
+The values file is that environment's block for the chart, shaped as the
+staging file above is but lifted to the top level, since a per-service release
+reads no subchart key. Whatever it
+states becomes the release's overrides, which every rollout after it keeps.
+
+The order is the descriptors' `migratedBy` (`deploy/canary/deployables/`):
+
+1. Every workload that migrates its own schema, in any order.
+2. `notifications-api` after `notifications`, at the same tag: the worker's
+   hook migrates its schema, and the rollout refuses it at any other revision
+   (ADR-122).
+3. `web-bff-assistant` after `web-bff`, at the same tag: one image on one
+   schema (ADR-153), which `web-bff`'s hook migrates, so the two roll in
+   lockstep as §15.3's two hosts on one database do (ADR-122). The values its
+   `sharesValues` names equal the main release's (ADR-125).
+
+From then on every change to a workload is a dispatch of the rollout.
+
 ## What is deliberately not here
 
 - **Secrets.** External Secrets Operator owns every `Secret` these charts name
