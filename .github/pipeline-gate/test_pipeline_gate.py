@@ -922,6 +922,14 @@ class AlertTests(unittest.TestCase):
         self.assertIn("compose.yml runs on a push to main", problems[0])
         self.assertIn("'Compose', so a red run of it alerts nobody", problems[0])
 
+    def test_an_on_written_as_a_flow_mapping_is_refused_rather_than_read_as_no_push(self) -> None:
+        self.write("compose.yml", "name: Compose\non: {push: {branches: [main]}}\n")
+
+        problems = pipeline_gate.check_alerts(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("compose.yml writes `on:` as a flow mapping", problems[0])
+
     def test_a_pushed_workflow_with_no_name_is_caught(self) -> None:
         self.write("anonymous.yml", "on:\n  push:\n    branches: [main]\n")
 
