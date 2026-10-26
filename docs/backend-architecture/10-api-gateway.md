@@ -428,7 +428,7 @@ with no queue, for the routes that admit an anonymous caller; `authenticated`
 is a token bucket per subject. Each budget is a `GatewayRateLimitOptions`
 property whose default is the platform's number, and no deployment sets the
 section: only the stress run's override raises them
-([ADR-157](adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
+([ADR-157](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md)).
 `Budgets(context)` reads the bound options per partition, which
 `ValidateOnStart` has already held to the limiter's own bounds, so a budget
 the limiter would refuse stops the host at start rather than failing a

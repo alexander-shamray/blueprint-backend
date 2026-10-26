@@ -2284,7 +2284,7 @@ language set and the time zone, and `Fulfilment` (Shipping) and `Delivery`
 `CarrierPacing` (Shipping) and `SendPacing` (Notifications) hold the pace of
 the four loops that wait on a third party, each default the worker's own
 constant and set by the stress run's override alone
-([ADR-157](adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
+([ADR-157](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md)).
 They earn their binding because a run that measures the host must take the
 third party's modelled rate out of it, and each lease is validated against the
 pass it must outlive. The tempting counter-example is a `ServiceOptions`-shaped

@@ -514,7 +514,7 @@ redelivery ladder are sized to
 than the limiter or a third party's modelled rate. It is added to the
 full-stack `up` for that run alone, and `up` without it restores every
 default. No chart sets any of the three sections
-([ADR-157](adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
+([ADR-157](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md)).
 
 **A host process reads none of the container `environment:` blocks, so every
 key a service throws without has to be supplied to it.** **Five** do that, each
