@@ -1530,7 +1530,7 @@ third outcome, because a key that never varies has nothing to validate.
 > run's stack differs from production in them, because a run that measures the
 > host cannot carry the limiter or a third party's modelled rate, and again no
 > deployed value is set
-> ([ADR-157](adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
+> ([ADR-157](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md)).
 > `Identity:Client` earns its options type by holding a secret that must differ
 > per environment, and `Jurisdiction` earns one because a statutory window, the
 > languages a customer is owed and the zone their dates are read in are facts

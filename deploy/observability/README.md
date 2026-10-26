@@ -468,7 +468,7 @@ staging baseline, holds here too.
 **It runs only with the stress override.**
 `deploy/compose/docker-compose.stress.yml` raises the gateway's budgets and
 stops the workers pacing themselves to the carrier, the relay and the push
-providers ([ADR-157](../../docs/backend-architecture/adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
+providers ([ADR-157](../../docs/backend-architecture/adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md)).
 Every k6 client shares one address, so against the baseline stack the
 `anonymous` window refuses every request past
 `GatewayRateLimitOptions.AnonymousPermitLimit` a minute, and the run measures

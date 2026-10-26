@@ -1,4 +1,4 @@
-# ADR-157 — The gateway's rate limits and the workers' third-party pacing are options defaulting to today's constants, and a Compose stress override alone raises them (#1488)
+# ADR-157 — The gateway's budgets and the workers' third-party pacing are options only a stress override raises (#1488)
 
 **Decision.** [§10.3](../10-api-gateway.md)'s two budgets become
 `GatewayRateLimitOptions`, bound from the gateway's `RateLimits` section, and
