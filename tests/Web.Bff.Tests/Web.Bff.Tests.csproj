@@ -33,6 +33,14 @@
     <PackageReference Include="MassTransit" />
     <!-- The publishers' outbox harness stages rows through this, named directly though Web.Bff carries it. -->
     <PackageReference Include="Dapper" />
+    <!-- §12.7's third-party row: the assistant's provider call over a real HTTP server. -->
+    <PackageReference Include="WireMock.Net" />
+  </ItemGroup>
+
+  <!-- The adapter suite's recorded stream bodies, which the provider stub serves: one copy of each recording. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\Common.Assistant.Anthropic.Tests\Streams\text-with-cache.sse;..\Common.Assistant.Anthropic.Tests\Streams\refusal.sse"
+                      LogicalName="%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

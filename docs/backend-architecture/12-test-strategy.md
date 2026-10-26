@@ -328,11 +328,18 @@ through the SDK's own parser over a `FakeHttp` handler, so `StreamTests`'
 truncated-stream case proves a reply cut off before `message_stop` fails
 without a network. That departs from §12.7's
 row for a third-party API, WireMock.Net with a nightly contract test against
-the sandbox, and `Web.Bff.Tests` departs from it too, driving the host with a
-scripted provider in the adapter's place. The `web-bff-assistant` release turns
-the assistant on
+the sandbox, and so do `Web.Bff.Tests`' route suites, which drive the host
+with a scripted provider in the adapter's place. The row's first half is
+`ProviderCallTests`: the host builds its SDK client as the
+`web-bff-assistant` release does
 ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)),
-and the row it inherits is owed by #1471, ADR-153's follow-up
+reading the key and the provider's address from the environment, and a
+WireMock.Net server answers it with the adapter's recordings of a streamed
+reply and a refusal, and with error bodies the test writes: a rejected key,
+asked once, and an overload that the SDK's own retries ask again. The nightly
+half is not held: the provider has no sandbox, so the test would spend
+against its production API for a release no deployment runs yet, and #1483
+holds it until one does
 ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)).
 
 ## 12.4 Application tests — real infrastructure
