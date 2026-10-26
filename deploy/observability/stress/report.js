@@ -11,7 +11,7 @@
 export const ERROR_RATE_LIMIT = 0.01;
 
 // Latency: the journey's p95 at least doubling on the step before, and by more
-// than the few milliseconds a quiet laptop jitters by.
+// than the floor, so a p95 of a few milliseconds doubling is not a jump.
 export const P95_JUMP_RATIO = 2;
 export const P95_JUMP_FLOOR_MS = 50;
 

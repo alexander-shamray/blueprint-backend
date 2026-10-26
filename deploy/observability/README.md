@@ -523,7 +523,7 @@ under *Not measured*.
 
 **The knee** is the first step at which one of three signals crosses:
 requests failing at more than one in a hundred; the journey's p95 at least
-doubling on the step before, by more than the jitter of a few milliseconds;
+doubling on the step before, and by more than `P95_JUMP_FLOOR_MS`;
 or the oldest outbox row or the queued messages still growing by half again
 over the second half of the hold. The thresholds are `stress/report.js`'s
 constants, held by `stress/report.test.js`. Each signal is read once a step,
