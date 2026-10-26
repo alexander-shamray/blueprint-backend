@@ -276,6 +276,26 @@ Beside those, how a change is made here:
   refuses a range without it. The `commits` job builds each commit but the
   head, which `build` covers, so `git bisect` meets only commits that
   compile. Reverting a pull request is `git-revert-pr.sh <n>`.
+- **A branch is updated for a conflict, never because another pull request
+  merged.** `main` lands by rebase alone and a branch need not be up to date
+  with it to merge
+  ([ADR-155](backend-architecture/adr/ADR-155-a-red-push-run-on-main-files-a-tracker-issue-and-is-reverted-before-it-is-fixed-1450.md)),
+  so rebase an open pull request only when GitHub reports it conflicting or
+  refuses its rebase landing, and only a branch this session owns.
+  `git-rebase-onto-main.sh <branch> start` is the update: it fetches
+  `origin/main`, replays the branch onto it and publishes under a lease, which
+  is this repository's spelling of a rebase and `git push --force-with-lease`.
+  Set `git config rerere.enabled true` once per clone, so a conflict resolved
+  once is replayed rather than resolved again. Auto-merge is not used while
+  the ruleset requires no status check, as ADR-155 says; `/ship` step 6 merges
+  after its own wait on the checks.
+- **A red `main` is reverted first and fixed forward second.**
+  `main-red.yml` files `main is red: <workflow>` for a red push run, or
+  comments on the open one. The next pull request to land reverts the one that
+  turned `main` red, by `git-revert-pr.sh <n>`; the fix forward is a pull
+  request of its own after it. A red run that a rerun turns green is a flake:
+  it is a comment on the flaky tests tracker, and the issue closes on that
+  green run.
 - **A Dependabot pull request is the one exception to the trailer and to
   the class row.** It declares no class and no touch set and carries no
   `PR:` trailer ([`.github/dependabot.yml`](../.github/dependabot.yml)), so
