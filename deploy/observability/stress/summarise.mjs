@@ -230,7 +230,7 @@ function markdown(s) {
         '',
         '| Step | VUs | req/s | p50 ms | p95 ms | p99 ms | errors | 429 | 4xx | 5xx | timeouts | connection |',
         '|---|---|---|---|---|---|---|---|---|---|---|---|',
-        ...s.steps.map((r) => `| ${r.step}${r.aborted ? ' (aborted)' : ''} | ${r.vus} | ${r.rps.toFixed(1)} | ` +
+        ...s.steps.map((r) => `| ${r.step}${r.aborted ? ' (past the abort rate)' : ''} | ${r.vus} | ${r.rps.toFixed(1)} | ` +
             `${ms(r.p50)} | ${ms(r.p95)} | ${ms(r.p99)} | ${percent(r.errorRate)} | ${r.failures['429'] ?? 0} | ` +
             `${r.failures['4xx'] ?? 0} | ${r.failures['5xx'] ?? 0} | ${r.failures.timeout ?? 0} | ` +
             `${r.failures.connection ?? 0} |`),

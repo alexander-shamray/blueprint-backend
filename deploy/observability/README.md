@@ -455,9 +455,11 @@ their number rises in steps. Each step is measured, and the first step at
 which the platform degrades is the knee.
 
 **It reports and never gates.** No threshold is an SLO. It asserts nothing,
-and it stops early only when a whole step's requests failed at more than
-`STRESS_ABORT_ERROR_RATE` (a fifth by default), because the steps after a
-clear break measure nothing new. It runs on a developer's machine against the
+and it stops early only once a step's requests have failed at more than
+`STRESS_ABORT_ERROR_RATE` (a fifth by default) over its hold, because the
+steps after a clear break measure nothing new. k6 times that judgement from
+before `setup()`, so it can begin up to `setup()`'s length before the hold
+ends. It runs on a developer's machine against the
 Compose stack. Its numbers describe that machine as much as the platform, so
 a result is relative: which service, queue or table gives out first. It is
 never a capacity figure for production, and
@@ -586,9 +588,10 @@ wait
 node deploy/observability/stress/summarise.mjs "$out"
 ```
 
-k6 exits 0 when the staircase ran to its end and 99 when a step's errors
-stopped it early; `summary.md` marks that step `(aborted)`. 107 is a refusal
-from `setup()`, with no load driven. `summarise.mjs` prints the knee and the
+k6 exits 0 when no step's errors passed the abort rate and 99 when one did,
+which stops the run there unless it was the last step; `summary.md` marks that
+step `(past the abort rate)`. 107 is a refusal from `setup()`, with no load
+driven. `summarise.mjs` prints the knee and the
 summary's path.
 
 **4. Go back to the normal profile** by bringing the stack up without the
