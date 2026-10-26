@@ -358,6 +358,16 @@ that cuts its waits to seconds (§14.1, ADR-128); never to a deployed release:
 docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.short-timeouts.yml up -d --wait
 ```
 
+For the stress run in
+[`deploy/observability/README.md`](../observability/README.md#the-stress-run),
+add the override that lifts the gateway's limits and the workers' pacing
+(§14.1, ADR-157); never to a deployed release. `up` without it is the way
+back:
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.stress.yml up -d --build --wait
+```
+
 The host process reads none of the `environment:` blocks above, so every key
 Catalog and Ordering refuse to start without, which §14.1 names, has to reach
 them another way. Same values, host names in place of service names, and the

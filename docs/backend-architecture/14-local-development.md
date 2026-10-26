@@ -507,6 +507,15 @@ and a shortened wait outruns what the despatch give-up age and the payment
 redelivery ladder are sized to
 ([ADR-128](adr/ADR-128-the-sagas-five-timeout-delays-are-options-bound-from-configuration-defaulting-to-96s-constants-with-a-compose-override-that-shortens-them-1072.md)).
 
+**A third override is the stress run's**:
+`docker-compose.stress.yml` raises the gateway's `RateLimits` budgets and the
+`CarrierPacing` and `SendPacing` sections of the two workers, so that
+`deploy/observability/README.md`'s stress run measures the services rather
+than the limiter or a third party's modelled rate. It is added to the
+full-stack `up` for that run alone, and `up` without it restores every
+default. No chart sets any of the three sections
+([ADR-157](adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
+
 **A host process reads none of the container `environment:` blocks, so every
 key a service throws without has to be supplied to it.** **Five** do that, each
 named by the registration that reads it — `ConnectionStrings__<Service>`
