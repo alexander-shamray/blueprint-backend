@@ -506,6 +506,11 @@ options.OnRejected = async (context, _) =>
 > of `RetryAfterHeaderTests`' theory. **Call the helper rather than restating
 > the arithmetic**: an inline ceiling here and a clamp there is the same
 > one-form-two-places drift the rule at the top of `CLAUDE.md` exists for.
+>
+> **The BFF's assistant has a limiter of its own**, and its rejection takes
+> the same `IProblemDetailsService` write with no `Retry-After`, since this
+> helper is the gateway's; a `code` marks it instead, which §10.5's table
+> names ([ADR-156](adr/ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-and-its-429s-carry-a-code-of-their-own-1484-1485-amending-adr-151.md)).
 
 The `authenticated` policy is only correct if `UseAuthentication` has already
 run when the limiter middleware executes — see the pipeline in §4.2. The
@@ -847,7 +852,7 @@ no host can take the one without the others.
 | A route an operator has switched off | 503 | The gateway only (§10.2), `code` `service.suspended`, with `Retry-After`; nothing is forwarded. Not the row above: that one is a fault and this is a decision ([ADR-116](adr/ADR-116-a-gateway-route-to-a-service-an-operator-may-stop-is-switched-off-in-its-configuration-and-answers-503-at-the-edge-955.md)) |
 | A lock the request needed was not taken, because it stayed held or the wait ended as a deadlock victim | 503 | An exception thrown by the repository method that takes the lock, with `Retry-After` and a `code`. Contention inside this service, so not the row above, and 503 because the lock is taken before any work, so nothing took effect. A consumer meets the same exception and its retry stands. In the reference domain two services take such a lock, and [Appendix E.6.2](appendix-e-reference-domain.md#e62-error-catalogue-and-refusals) names each one's exception, method and `code` |
 | The request outlived its host's deadline | **504** | From the request-timeout middleware every host registers ([§9.7](09-messaging.md), [ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)), `code` `request.timed_out`. Not 503, which says nothing was done: the deadline can fall after a commit, so whether the request took effect is unknown, and a write is retried under its own command identifier rather than a new one |
-| Rate limited | 429 | With `Retry-After`, but for the BFF's AI assistant, whose 429s carry none ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)) |
+| Rate limited | 429 | With `Retry-After`, but for the BFF's AI assistant, whose 429s carry none ([ADR-151](adr/ADR-151-the-web-bff-hosts-the-ai-assistant-for-signed-in-customers-off-by-default-and-scoped-to-the-caller-1347-amending-adr-053-adr-149-and-adr-150.md)) and a `code` instead, `AssistantEndpoints.RateLimitedCode` from its limiter and `AssistantEndpoints.ConversationsFullCode` from a full conversation store. The gateway's carries no `code`, so a client tells the BFF's refusal from the edge's by the code, never by a missing header ([ADR-156](adr/ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-and-its-429s-carry-a-code-of-their-own-1484-1485-amending-adr-151.md)) |
 | Unhandled | 500 | **Never** include the exception message or stack trace |
 
 ### `Error`, and why its code is a closed vocabulary

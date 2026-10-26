@@ -244,8 +244,30 @@ public sealed class AssistantEndpointTests
 
         third.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
         third.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
+        (await third.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("code").GetString()
+            .ShouldBe(AssistantEndpoints.RateLimitedCode);
+        third.Headers.RetryAfter.ShouldBeNull();
         (await other.PostAsJsonAsync("/v1/assistant/conversations", Opening, Ct)).StatusCode
             .ShouldBe(HttpStatusCode.OK, "the partition is the subject, so one customer's rate is not another's");
+    }
+
+    [Fact]
+    public async Task A_full_conversation_store_is_a_429_with_its_own_code()
+    {
+        await using AssistantFactory factory = new(Setting(nameof(AssistantOptions.MaxConversations), "1"));
+        using HttpClient client = As(factory, _customer);
+        string id = await OpenAsync(client);
+
+        // An idle conversation is evicted to make room, so the one held must be running a turn.
+        factory.Provider.Hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await client.PostAsJsonAsync($"/v1/assistant/conversations/{id}/turns", new { text = "Hello" }, Ct);
+        HttpResponseMessage full = await client.PostAsJsonAsync("/v1/assistant/conversations", Opening, Ct);
+        factory.Provider.Hold.SetResult();
+
+        full.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        (await full.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("code").GetString()
+            .ShouldBe(AssistantEndpoints.ConversationsFullCode);
+        full.Headers.RetryAfter.ShouldBeNull();
     }
 
     [Fact]
