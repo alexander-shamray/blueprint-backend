@@ -169,11 +169,11 @@ export function setup() {
     const ordersWrite = roleOf(realm, admin, api.id, 'orders:write');
 
     // A fresh password a run, kept in memory: nothing written to disk holds it.
-    const password = hex(randomBytes(24));
+    const userPassword = hex(randomBytes(24));
 
     // A fresh admin token a batch: the master realm's lasts a minute, and four hundred users take longer.
     for (let first = 1; first <= USERS; first += 25)
-        ensureUsers(realm, adminHeaders(), api.id, ordersWrite, password, first, Math.min(first + 24, USERS));
+        ensureUsers(realm, adminHeaders(), api.id, ordersWrite, userPassword, first, Math.min(first + 24, USERS));
 
     const secret = http.get(`${realm}/clients/${client.id}/client-secret`, adminHeaders()).json('value');
     const service = tokenRequest({ grant_type: 'client_credentials', client_id: 'stress-run', client_secret: secret });
@@ -183,7 +183,7 @@ export function setup() {
 
     restock(service.json('access_token'));
 
-    return { password, secret, startedAt: Date.now() };
+    return { password: userPassword, secret, startedAt: Date.now() };
 }
 
 function adminHeaders() {
