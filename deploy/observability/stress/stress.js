@@ -84,7 +84,7 @@ const STOCK = 100000;
 const REQUEST_TIMEOUT = '30s';
 
 // Refreshed this far ahead of expiry, so a request never carries a token that
-// lapses in flight; the realm's access token lives five minutes.
+// lapses in flight; the realm's access-token lifespan sets the expiry.
 const TOKEN_MARGIN_SECONDS = 30;
 
 const OPS = ['listing', 'product', 'address_read', 'address_save', 'quote', 'order', 'my_orders', 'token'];
