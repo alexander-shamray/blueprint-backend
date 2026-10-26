@@ -1,0 +1,39 @@
+# ADR-157's stress override, for deploy/observability/README.md's stress run
+# alone, and never for a deployment: it lifts the edge's rate limits and
+# stops the workers pacing themselves to the carrier, the relay and the push
+# providers. The base file and the Helm chart set none of these keys, so
+# `up` without this file is the way back to every default.
+
+# Not part of `up`: add it to the full-stack command deploy/compose/README.md
+# gives. A suite reads this file (StressOverride), so a value a service's
+# validator would refuse fails a test rather than the run's start.
+services:
+  # Every client comes from one address, so §10.3's anonymous window would
+  # measure only itself; each budget is far past what one host can drive.
+  gateway:
+    environment:
+      RateLimits__AnonymousPermitLimit: "1000000"
+      RateLimits__AuthenticatedTokenLimit: "1000000"
+      RateLimits__AuthenticatedTokensPerPeriod: "1000000"
+
+  # The carrier answers at once (WireMock), so a large batch on a short tick
+  # takes its booking rate out of the run. A fulfilment pass books its rows
+  # in turn, so the lease covers fifty of CarrierPacingOptions'
+  # FulfilmentRowBudget, rounded up.
+  shipping-worker:
+    environment:
+      CarrierPacing__FulfilmentClaimBatchSize: "50"
+      CarrierPacing__FulfilmentLeaseSeconds: "2160"
+      CarrierPacing__FulfilmentTick: "00:00:01"
+      CarrierPacing__TrackingClaimBatchSize: "200"
+      CarrierPacing__TrackingTick: "00:00:01"
+      CarrierPacing__TrackingPollInterval: "00:00:05"
+
+  # The relay is MailPit and the push providers are WireMock. Both loops send
+  # a pass's rows at once, so the default leases already cover any batch.
+  notifications-worker:
+    environment:
+      SendPacing__SendClaimBatchSize: "200"
+      SendPacing__SendTick: "00:00:01"
+      SendPacing__PushClaimBatchSize: "200"
+      SendPacing__PushTick: "00:00:01"
