@@ -59,7 +59,8 @@ async function scalar(name, expr, atMs) {
     return series ? series.value : null;
 }
 
-const WORK_QUEUES = 'rabbitmq_queue_messages{queue!~".+_(error|skipped)"}';
+const WORK_FILTER = 'queue!~".+_(error|skipped)"';
+const WORK_QUEUES = `rabbitmq_queue_messages{${WORK_FILTER}}`;
 
 async function serverRow(window, range) {
     const end = window.endMs;
@@ -104,6 +105,12 @@ async function serverRow(window, range) {
             `max(max_over_time(shipping_shipments_overdue_seconds[${range}]))`, end),
         notificationsOverdue: await scalar('notifications.overdue',
             `max(max_over_time(notifications_overdue_seconds[${range}]))`, end),
+        // The share of time each consumed queue could hand a message straight to a consumer: low is a consumer
+        // that cannot keep up. A queue nobody consumes has nothing to say here.
+        leastUtilised: (await query('consumer utilisation', 'bottomk(5, min by (queue) ' +
+            `(min_over_time(rabbitmq_queue_consumer_utilisation{${WORK_FILTER}}[${range}])) and on (queue) ` +
+            `max by (queue) (rabbitmq_queue_consumers{${WORK_FILTER}}) > 0)`, end))
+            .map((s) => ({ queue: s.labels.queue, utilisation: s.value })),
         // Common.Web's runtime meter: work queued for a thread, and the time collections paused the service.
         threadPoolQueue: (await query('thread pool queue', 'topk(3, max by (service_name) ' +
             `(max_over_time(dotnet_thread_pool_queue_length_total[${range}])))`, end))
@@ -189,7 +196,6 @@ const summary = {
     // Named so that a reader does not take the table's silence for a healthy reading.
     notObservable: [
         'SQL Server per-query waits and plans: only the instance-wide counters sample.mjs reads',
-        'RabbitMQ consumer utilisation: the broker publishes depths, not how busy each consumer is',
     ],
 };
 
@@ -258,13 +264,16 @@ function markdown(s) {
             `${seconds(r.bffLagP95)} | ${seconds(r.fulfilmentP95)} | ${percent(r.confirmedShare)} | ` +
             `${seconds(r.shippingOverdue)} | ${seconds(r.notificationsOverdue)} |`),
         '',
-        'Slowest request types (p95 s), deepest queues, and the services with the most work waiting for a',
-        'thread (peak items) and the most time paused for collections (s), per step:',
+        'Slowest request types (p95 s), deepest queues, the consumed queues least able to hand a message',
+        'straight to a consumer, and the services with the most work waiting for a thread (peak items) and the',
+        'most time paused for collections (s), per step:',
         '',
         ...s.steps.flatMap((r) => [
             `- Step ${r.step}: ` + ((r.slowestRequests ?? []).map((q) =>
                 `${q.service} ${q.request} ${seconds(q.p95Seconds)}`).join(', ') || '—') +
                 '; queues ' + ((r.deepestQueues ?? []).map((q) => `${q.queue} ${ms(q.messages)}`).join(', ') || '—') +
+                '; least utilised ' + ((r.leastUtilised ?? []).map((q) =>
+                    `${q.queue} ${percent(q.utilisation)}`).join(', ') || '—') +
                 '; thread pool ' + ((r.threadPoolQueue ?? []).map((t) => `${t.service} ${ms(t.items)}`).join(', ') ||
                     '—') +
                 '; GC ' + ((r.gcPause ?? []).map((g) => `${g.service} ${g.seconds.toFixed(2)}`).join(', ') || '—'),
