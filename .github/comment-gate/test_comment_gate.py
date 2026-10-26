@@ -511,6 +511,21 @@ class TheProseWidth(unittest.TestCase):
         tilde = f"~~~\n```\n{self.prose(90)}\n~~~\n{self.prose(90)}\n"
         self.assertEqual([n for _, n, _ in self.wide(tilde)], [5])
 
+    def test_a_quoted_fence_and_a_quoted_table_row_are_not_prose(self):
+        for quote in ("> ", ">", "> > ", "  > "):
+            with self.subTest(quote=quote):
+                text = (f"{quote}```\n{quote}{self.prose(90)}\n{quote}```\n{quote}| {self.prose(90)}\n"
+                        f"{quote}{self.prose(90)}\n")
+                self.assertEqual([n for _, n, _ in self.wide(text)], [5])
+
+    def test_a_quoted_fence_ends_where_its_quote_does(self):
+        text = f"> ```\n> {self.prose(90)}\n\n{self.prose(90)}\n"
+        self.assertEqual(self.wide(text), [("docs/a.md", 4, "a prose line runs 90 columns, over 80")])
+
+    def test_a_quote_marker_inside_a_plain_fence_is_code(self):
+        text = f"```md\n> ```\n{self.prose(90)}\n```\n{self.prose(90)}\n"
+        self.assertEqual([n for _, n, _ in self.wide(text)], [5])
+
     def test_a_fence_never_closed_is_a_finding_when_it_is_added(self):
         text = f"x\n```\n{self.prose(90)}\n"
         self.assertEqual(self.wide(text), [("docs/a.md", 2, "a code fence opens here and is never closed, "

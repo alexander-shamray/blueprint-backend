@@ -33,6 +33,8 @@ UNWRAPPABLE = re.compile(r"^\s*(?:\||<(?!https?://)|#|\[[^\]]*\]:)")
 LINK_TARGET = re.compile(r"\]\((?:[^()]|\([^()]*\))*\)")
 ADDRESS = re.compile(r"https?://\S+")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
+# A blockquote's markers, so a fence or a table inside a quote is read as one; a fence opened there ends with it.
+QUOTE = re.compile(r"^\s*(?:>\s?)+")
 
 # A section, an Appendix E section, an ADR or a symbol: the owners a
 # `<remarks>` may exist to cite.
@@ -773,15 +775,19 @@ def prose_width(path, text, added):
     for number, line in enumerate(lines, 1):
         if number <= front_end:
             continue
+        quoted = QUOTE.match(line)
+        body = line[quoted.end():] if quoted else line
+        if fence is not None and fence[3] and not quoted:
+            fence = None
         if fence is not None:
-            if re.match(rf"^\s*{re.escape(fence[0])}{{{fence[1]},}}\s*$", line):
+            if re.match(rf"^\s*{re.escape(fence[0])}{{{fence[1]},}}\s*$", body if fence[3] else line):
                 fence = None
             continue
-        opening = FENCE.match(line)
+        opening = FENCE.match(body)
         if opening:
-            fence = (opening.group(1)[0], len(opening.group(1)), number)
+            fence = (opening.group(1)[0], len(opening.group(1)), number, bool(quoted))
             continue
-        if number not in added or UNWRAPPABLE.search(line):
+        if number not in added or UNWRAPPABLE.search(body):
             continue
         width = len(ADDRESS.sub("u", LINK_TARGET.sub("](t)", line)))
         if width > PROSE_LIMIT:
