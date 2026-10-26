@@ -1,7 +1,7 @@
 // The stress run's staircase and its arithmetic: the stages k6 runs, the
 // window each step is measured over, and which step an instant falls in.
-// Plain functions with no k6 import, so stress.js, summarise.mjs and
-// steps.test.js share one copy, as slo/gate.js is shared.
+// Plain functions with no k6 import, so stress.js and steps.test.js share one
+// copy, as slo/gate.js is shared.
 
 // The default staircase. Each step holds long enough for the outbox, the
 // queues and the saga to settle at that load, and the ramps are short, so a
