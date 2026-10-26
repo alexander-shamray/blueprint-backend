@@ -37,6 +37,7 @@ public sealed partial class AssistantRuntime : IDisposable
         IOptions<AssistantOptions> options,
         IConfiguration configuration,
         IServiceProvider services,
+        IHostEnvironment environment,
         TimeProvider time,
         ILogger<AssistantRuntime> logger)
     {
@@ -44,13 +45,13 @@ public sealed partial class AssistantRuntime : IDisposable
         RefuseSecretNamedKeys(configuration.GetSection(AssistantOptions.SectionName));
 
         AssistantOptions configured = options.Value;
-        ProviderId = configured.ProviderInEffect();
+        ProviderId = configured.ProviderInEffect(environment);
         AssistantLimits limits = configured.Limits();
 
         if (ProviderId == AssistantOptions.Off)
             return;
 
-        _model = configured.Model.Trim();
+        _model = ProviderId == AssistantOptions.Scripted ? ScriptedReplyProvider.Model : configured.Model.Trim();
         Core = new AssistantCore(
             services.GetRequiredService<IAssistantProvider>(),
             [services.GetRequiredService<CustomerReadTools>()],

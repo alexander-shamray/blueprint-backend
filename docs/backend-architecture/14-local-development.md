@@ -331,6 +331,9 @@ destination by hostname, so the container name is the routing configuration.
 It answers to `web-bff-assistant` too, as a network alias: Compose runs one
 BFF, so the assistant's own destination is the same container
 ([ADR-153](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)).
+Its provider is `scripted`, which needs no key and answers every turn with
+one fixed reply, so the stack reaches the assistant with no provider account
+([ADR-156](adr/ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-and-its-429s-carry-a-code-of-their-own-1484-1485-amending-adr-151.md)).
 
 Each application unit lands with the change that builds its image: the
 scaffold of [§4.5](04-solution-structure.md) writes the service's own unit file

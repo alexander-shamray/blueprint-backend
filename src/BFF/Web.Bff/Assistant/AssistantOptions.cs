@@ -16,9 +16,14 @@ public sealed class AssistantOptions
 
     public const string Anthropic = "anthropic";
 
+    /// <summary><see cref="ScriptedReplyProvider"/>: no key, and Development only (ADR-156).</summary>
+    public const string Scripted = "scripted";
+
     private static readonly AssistantLimits Defaults = new();
 
-    /// <summary><c>off</c> or <c>anthropic</c>; unset is off, which builds no provider (design §9.1).</summary>
+    /// <summary>
+    /// <c>off</c>, <c>anthropic</c> or <c>scripted</c>; unset is off, which builds no provider (design §9.1).
+    /// </summary>
     public string? Provider { get; set; }
 
     /// <summary>The model the Anthropic provider asks; the adapter's constant, which loads nothing of it.</summary>
@@ -42,8 +47,11 @@ public sealed class AssistantOptions
     /// <summary>How long an untouched conversation stays in this replica's memory (docs/personal-data.md).</summary>
     public TimeSpan IdleTimeout { get; set; } = Defaults.IdleTimeout;
 
-    /// <summary>The provider in effect, or an exception naming the key when the value is not one.</summary>
-    public string ProviderInEffect()
+    /// <summary>
+    /// The provider in effect, or an exception naming the key when the value is not one or is <c>scripted</c> outside
+    /// Development, where a fixed reply would answer a real customer (ADR-156).
+    /// </summary>
+    public string ProviderInEffect(IHostEnvironment environment)
     {
         string? configured = Provider?.Trim();
 
@@ -51,8 +59,12 @@ public sealed class AssistantOptions
         {
             null or "" or Off => Off,
             Anthropic => Anthropic,
+            Scripted when environment.IsDevelopment() => Scripted,
+            Scripted => throw new InvalidOperationException(
+                $"{SectionName}:Provider is '{Scripted}' in {environment.EnvironmentName}; it runs only in " +
+                $"{Environments.Development} (ADR-156)."),
             _ => throw new InvalidOperationException(
-                $"{SectionName}:Provider is '{configured}'; it takes '{Off}' or '{Anthropic}'.")
+                $"{SectionName}:Provider is '{configured}'; it takes '{Off}', '{Anthropic}' or '{Scripted}'.")
         };
     }
 
