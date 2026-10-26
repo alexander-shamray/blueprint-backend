@@ -268,7 +268,7 @@ branch in the workflow would have to skip each of those checks, in a job that
 holds no cluster credential yet and so could not exercise it.
 
 So each workload is installed once by hand, into the cluster the `production`
-Environment's rollout reaches, as its own release named for the workload and
+Environment's rollout is for, as its own release named for the workload and
 never through the umbrella (*Mixing the two install modes* below).
 `py -3.12 deploy/canary/canary.py chart --workload <workload>` prints its
 chart, and the image is pinned as the rollout pins it:
