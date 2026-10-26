@@ -170,7 +170,7 @@ public static class DependencyInjection
         // The send worker's counter and gauges, a singleton so one meter holds one set (§13.6).
         services.AddSingleton<NotificationMetrics>();
 
-        // Both send loops' pace; an unset section keeps the workers' own constants, and only ADR-157's stress
+        // Both send loops' pace; an unset section keeps the constants it replaces, and only ADR-157's stress
         // override sets it. A lease a row could outlive refuses the host at start.
         services
             .AddOptions<SendPacingOptions>()
