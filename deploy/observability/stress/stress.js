@@ -98,7 +98,9 @@ const failed = new Rate('stress_failed');
 // handleSummary reports only the submetrics a threshold names, so every step's
 // figures are named here; each passes on any value, and only the per-step
 // error rate can stop the run. Its evaluation waits for the step's hold to
-// end, so the whole step is judged rather than its first seconds.
+// end, so the step is judged rather than its first seconds. k6 counts that
+// wait from the test's start, setup() included, so the judgement can begin up
+// to setup()'s length before the hold ends, over the hold's requests so far.
 function thresholds() {
     const named = {};
 
@@ -383,8 +385,10 @@ function bearer(data) {
 }
 
 // The step tag is read at each request, because a step changes mid-session.
+// It is timed from the scenario's start, which the stages count from: the
+// test run's own clock also counts setup(), minutes of it at four hundred users.
 function tagged(op, call) {
-    exec.vu.metrics.tags.step = stepAt(exec.instance.currentTestRunDuration / 1000, HOLDS);
+    exec.vu.metrics.tags.step = stepAt((Date.now() - exec.scenario.startTime) / 1000, HOLDS);
     return call();
 }
 
@@ -512,11 +516,13 @@ function uuid() {
 }
 
 // What summarise.mjs reads: the run's own clock and plan, and every per-step
-// figure the thresholds above named. setup()'s data is left out on purpose:
-// it holds this run's password and client secret.
+// figure the thresholds above named. Of setup()'s data only its finishing time
+// is read, which is when the scenario's stages start; the rest holds this
+// run's password and client secret and is never written. A run whose setup()
+// refused has no such time, and measured nothing to place.
 export function handleSummary(data) {
     const endedAt = Date.now();
-    const startedAt = endedAt - data.state.testRunDurationMs;
+    const startedAt = (data.setup_data && data.setup_data.startedAt) || endedAt - data.state.testRunDurationMs;
     const metrics = data.metrics;
 
     const steps = HOLDS.map((hold) => {
