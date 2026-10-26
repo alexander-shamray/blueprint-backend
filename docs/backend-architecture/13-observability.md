@@ -1973,7 +1973,8 @@ goes from 40 ms to 4 s, which no unit test will find.
 run has settled, because
 [ADR-063](adr/ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-hand.md)
 waits on a baseline under load for both and this run is the only load the
-platform has; no rule pages on either yet, so there is no target to hold them
+platform has at its default pace (the stress run's workers are unpaced,
+[ADR-157](adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)); no rule pages on either yet, so there is no target to hold them
 to. The absent-series rule above is for the rows the run asserts, so an absent
 gauge here is printed as missing rather than failing the run. The run places
 orders faster than one worker books or sends them, so the readings are the
@@ -2002,14 +2003,15 @@ therefore ships `ErrorRateGateway` and `ErrorRateService`: one condition, two
 selectors, two owners, one runbook between them. A rule *set* is the unit that
 has to match this table, not a rule.
 
-That directory holds the alert rules and the SLO run on the same argument, and
-a gate over all three:
+That directory holds the alert rules, the SLO run and the stress run on the
+same argument, and a gate over the first three:
 
 ```
 deploy/observability/
   alerts/       platform-alerts.yaml (loaded) and awaiting-signal.yaml (not)
   dashboards/   golden-signals.json, outbox.json
   slo/          slo.js — the k6 run of §13.7 and §15.1
+  stress/       stress.js — the k6 run that finds the knee, local only (ADR-157)
   check.py      the gate; see deploy/observability/README.md
 ```
 

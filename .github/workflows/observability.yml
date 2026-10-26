@@ -72,3 +72,7 @@ jobs:
 
       - name: The SLO run's floor holds
         run: node --test "deploy/observability/slo/*.test.js"
+
+      # The stress run's staircase arithmetic and its knee rules, as deploy/observability/README.md states them.
+      - name: The stress run's knee holds
+        run: node --test "deploy/observability/stress/*.test.js"
