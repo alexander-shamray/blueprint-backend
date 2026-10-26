@@ -425,7 +425,14 @@ evidence.
 `src/Gateway/Gateway.Api/Program.cs` registers two policies, under the names
 `GatewayRateLimiterPolicies` holds. `anonymous` is a fixed window per address
 with no queue, for the routes that admit an anonymous caller; `authenticated`
-is a token bucket per subject:
+is a token bucket per subject. Each budget is a `GatewayRateLimitOptions`
+property whose default is the platform's number, and no deployment sets the
+section: only the stress run's override raises them
+([ADR-157](adr/ADR-157-the-gateways-rate-limits-and-the-workers-third-party-pacing-are-options-defaulting-to-todays-constants-and-a-compose-stress-override-alone-raises-them-1488.md)).
+`Budgets(context)` reads the bound options per partition, which
+`ValidateOnStart` has already held to the limiter's own bounds, so a budget
+the limiter would refuse stops the host at start rather than failing a
+request:
 
 ```csharp
 options.AddPolicy(
@@ -435,10 +442,10 @@ options.AddPolicy(
             RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
         factory: _ => new TokenBucketRateLimiterOptions
         {
-            TokenLimit = 300,
-            TokensPerPeriod = 300,
+            TokenLimit = Budgets(context).AuthenticatedTokenLimit,
+            TokensPerPeriod = Budgets(context).AuthenticatedTokensPerPeriod,
             ReplenishmentPeriod = TimeSpan.FromMinutes(1),
-            QueueLimit = 10,
+            QueueLimit = Budgets(context).AuthenticatedQueueLimit,
             AutoReplenishment = true
         }));
 ```
@@ -527,11 +534,12 @@ its prefix for a fresh window per address. A request with no peer address
 shares one `unknown` bucket; a TCP connection always has a peer, so only an
 in-process host reaches it.
 
-**The v1 decision is per-replica, best-effort, and the numbers above are written
-knowing it.** `System.Threading.RateLimiting` partitions in process, so with N
-gateway replicas the effective limit is N × the configured value: three replicas
-turn the `authenticated` policy's 300/minute into 900/minute for a client
-unlucky enough — or determined enough — to spread requests across all three.
+**The v1 decision is per-replica, best-effort, and the defaults above are
+written knowing it.** `System.Threading.RateLimiting` partitions in process, so
+with N gateway replicas the effective limit is N × the configured value: three
+replicas put back three times `AuthenticatedTokensPerPeriod` a minute for a
+client unlucky enough — or determined enough — to spread requests across all
+three.
 
 That is acceptable here because these limits exist to blunt accidental
 hammering and cheap abuse, and a bound that is loose by a factor of the replica

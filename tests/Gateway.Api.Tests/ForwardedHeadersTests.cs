@@ -11,8 +11,8 @@ namespace Gateway.Api.Tests;
 /// <summary>§4.2's forwarded headers: a trusted <c>X-Forwarded-For</c> is what §10.3 partitions on.</summary>
 public sealed class ForwardedHeadersTests(StubDestination stub) : IClassFixture<StubDestination>
 {
-    /// <summary>§10.3's anonymous fixed window.</summary>
-    private const int PermitLimit = 100;
+    /// <summary>§10.3's anonymous fixed window, at its default.</summary>
+    private static readonly int PermitLimit = new GatewayRateLimitOptions().AnonymousPermitLimit;
 
     private const string PublicRoute = "/api/v1/catalog/products";
 

@@ -11,8 +11,8 @@ namespace Gateway.Api.Tests;
 /// <summary>§10.3's per-address partition: an IPv4 client by its address, an IPv6 one by its /64.</summary>
 public sealed class RateLimitPartitionTests(StubDestination stub) : IClassFixture<StubDestination>
 {
-    /// <summary>The <c>anonymous</c> policy's fixed window (§10.3).</summary>
-    private const int PermitLimit = 100;
+    /// <summary>The <c>anonymous</c> policy's fixed window (§10.3), at its default.</summary>
+    private static readonly int PermitLimit = new GatewayRateLimitOptions().AnonymousPermitLimit;
 
     private const string PublicRoute = "/api/v1/catalog/products";
 

@@ -9,10 +9,10 @@ namespace Gateway.Api.Tests;
 public sealed class RateLimitedRouteTests(StubDestination stub) : IClassFixture<StubDestination>
 {
     /// <summary>The <c>anonymous</c> policy's fixed window (§10.3).</summary>
-    private const int PermitLimit = 100;
+    private static readonly int PermitLimit = new GatewayRateLimitOptions().AnonymousPermitLimit;
 
     /// <summary>The <c>authenticated</c> policy's token bucket (§10.3).</summary>
-    private const int TokenLimit = 300;
+    private static readonly int TokenLimit = new GatewayRateLimitOptions().AuthenticatedTokenLimit;
 
     private const string PublicRoute = "/api/v1/catalog/products";
 

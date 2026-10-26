@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using OpenTelemetry;
 using OpenTelemetry.Context.Propagation;
 
@@ -44,6 +45,13 @@ builder.Services
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
     .AddConfigFilter<SuspendableRouteFilter>();   // ADR-116: only a cluster ADR-104 lets an operator stop
 
+// §10.3's budgets; an unset section keeps the platform's, and a budget the limiter would refuse stops the host.
+builder.Services
+    .AddOptions<GatewayRateLimitOptions>()
+    .BindConfiguration(GatewayRateLimitOptions.SectionName)
+    .ValidateOnStart();
+builder.Services.AddSingleton<IValidateOptions<GatewayRateLimitOptions>, GatewayRateLimitOptionsValidator>();
+
 // §10.3; this registration does nothing without UseRateLimiter below.
 builder.Services.AddRateLimiter(options =>
 {
@@ -55,9 +63,9 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 100,
+                PermitLimit = Budgets(context).AnonymousPermitLimit,
                 Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0
+                QueueLimit = Budgets(context).AnonymousQueueLimit
             }));
 
     // The address fallback is for an anonymous caller on an authenticated route, not cover for pipeline order.
@@ -68,10 +76,10 @@ builder.Services.AddRateLimiter(options =>
                 RateLimitPartitionKey.ForAddress(context.Connection.RemoteIpAddress),
             factory: _ => new TokenBucketRateLimiterOptions
             {
-                TokenLimit = 300,
-                TokensPerPeriod = 300,
+                TokenLimit = Budgets(context).AuthenticatedTokenLimit,
+                TokensPerPeriod = Budgets(context).AuthenticatedTokensPerPeriod,
                 ReplenishmentPeriod = TimeSpan.FromMinutes(1),
-                QueueLimit = 10,
+                QueueLimit = Budgets(context).AuthenticatedQueueLimit,
                 AutoReplenishment = true
             }));
 
@@ -229,6 +237,10 @@ app.MapReverseProxy(proxy =>
 app.MapCommonHealthEndpoints(ownsNoReadinessDependencies: true);   // §13.5 — anonymous; kubelet carries no token
 
 app.Run();
+
+// Read per partition, not captured at registration, so the budgets are the bound and validated ones.
+static GatewayRateLimitOptions Budgets(HttpContext context) =>
+    context.RequestServices.GetRequiredService<IOptions<GatewayRateLimitOptions>>().Value;
 
 // Top-level statements compile to an internal Program, which
 // WebApplicationFactory<Program> cannot see from another assembly (§12.4).
