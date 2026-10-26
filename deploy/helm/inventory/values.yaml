@@ -155,6 +155,7 @@ networkPolicy:
   ingressFrom:
     - { workload: gateway, port: http }
     - { workload: web-bff, port: grpc }
+    - { workload: web-bff-assistant, port: grpc }   # get_stock's availability hop (ADR-154)
   egressTo: []
   dns:
     to:
