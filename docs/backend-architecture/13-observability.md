@@ -1974,8 +1974,9 @@ run has settled, because
 [ADR-063](adr/ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-hand.md)
 waits on a baseline under load for both and this run is the only load the
 platform has at its default pace (the stress run's workers are unpaced,
-[ADR-157](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md)); no rule pages on either yet, so there is no target to hold them
-to. The absent-series rule above is for the rows the run asserts, so an absent
+[ADR-157](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md));
+no rule pages on either yet, so there is no target to hold them to. The
+absent-series rule above is for the rows the run asserts, so an absent
 gauge here is printed as missing rather than failing the run. The run places
 orders faster than one worker books or sends them, so the readings are the
 backlog it leaves, and a second run inside that backlog's lifetime starts on a
