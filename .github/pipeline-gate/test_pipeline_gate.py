@@ -930,6 +930,14 @@ class AlertTests(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("compose.yml writes `on:` as a flow mapping", problems[0])
 
+    def test_a_watched_workflow_written_as_a_flow_mapping_has_the_refusal_as_its_only_problem(self) -> None:
+        self.write("helm.yml", "name: Helm\non: {push: {branches: [main]}}\n")
+
+        problems = pipeline_gate.check_alerts(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("helm.yml writes `on:` as a flow mapping", problems[0])
+
     def test_a_pushed_workflow_with_no_name_is_caught(self) -> None:
         self.write("anonymous.yml", "on:\n  push:\n    branches: [main]\n")
 
