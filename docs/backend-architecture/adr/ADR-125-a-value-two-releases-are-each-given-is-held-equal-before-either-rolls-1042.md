@@ -52,6 +52,14 @@ descriptor, and the workflow needs no change. A key the rollout sets on its
 own command line, as it does the image and the checked authority, is
 installed past the values compared, so check 14 refuses it as a shared key.
 
+**Amended by
+[ADR-153](ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)**,
+which adds a pair whose shared values are the host's own accounts: the
+`web-bff-assistant` release runs the `web-bff` host, and its descriptor's
+`sharesValues` holds it to `web-bff`'s identity client, database, broker and
+object-store settings and to ADR-117's app list. The values shared are no
+longer only the two named above. This record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

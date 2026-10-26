@@ -46,6 +46,14 @@ promotes, and no interleaving puts a host behind a migration that ran. A
 third host on one schema would need the same descriptor field and nothing
 more, because both comparisons read `migratedBy` rather than a name.
 
+**Amended by
+[ADR-153](ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md)**,
+which adds a second pair: the `web-bff-assistant` release runs the `web-bff`
+host on the schema `web-bff`'s hook migrates, and its descriptor's
+`migratedBy` names `web-bff`, so the two roll in lockstep on these terms.
+Notifications' hosts are no longer the one such pair. This record is otherwise
+unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
