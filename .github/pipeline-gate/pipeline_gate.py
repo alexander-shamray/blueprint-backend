@@ -798,6 +798,12 @@ def check_alerts(root: Path = ROOT) -> list[str]:
             continue
         text = path.read_text(encoding="utf-8")
         name = read_workflow_name(text)
+        on = _key(text.splitlines(), "on", 0)
+        if on is not None and on[0].startswith("{"):
+            # A flow mapping would read as no push at all, so it is refused rather than passed.
+            problems.append(
+                f"{path.name} writes `on:` as a flow mapping, which this check cannot read; write it as a block")
+            continue
         pushed = runs_on_main_push(text)
         if name is not None:
             pushed_by_name[name] = pushed
