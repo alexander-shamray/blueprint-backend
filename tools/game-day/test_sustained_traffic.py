@@ -67,10 +67,11 @@ class Rate(unittest.TestCase):
         self.assertEqual(max(windows.values()) * 60, harness.LATENCY_WINDOW_SECONDS)
 
     def test_the_rate_stays_under_the_gateways_two_limiters(self):
-        program = (harness.ROOT / "src/Gateway/Gateway.Api/Program.cs").read_text(encoding="utf-8")
+        # The defaults, which the game day's stack runs on: no overlay it starts sets the RateLimits section.
+        budgets = (harness.ROOT / "src/Gateway/Gateway.Api/GatewayRateLimitOptions.cs").read_text(encoding="utf-8")
         per_minute = 60 / (harness.TRAFFIC_TICK_SECONDS * harness.TRAFFIC_ROUTES)
-        self.assertLess(per_minute, int(re.search(r"PermitLimit = (\d+)", program).group(1)))
-        self.assertLess(per_minute, int(re.search(r"TokenLimit = (\d+)", program).group(1)))
+        self.assertLess(per_minute, int(re.search(r"AnonymousPermitLimit \{ get; init; \} = (\d+);", budgets).group(1)))
+        self.assertLess(per_minute, int(re.search(r"AuthenticatedTokenLimit \{ get; init; \} = (\d+);", budgets).group(1)))
 
     def test_the_two_routes_are_the_gateways_and_the_cancel_reason_is_the_contracts(self):
         routes = (harness.ROOT / "src/Gateway/Gateway.Api/appsettings.json").read_text(encoding="utf-8")
