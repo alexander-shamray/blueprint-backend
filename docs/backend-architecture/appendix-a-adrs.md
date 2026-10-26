@@ -162,6 +162,7 @@ decision looks wrong.
 | **ADR-153** | [The deployed BFF runs the assistant on a single-replica release behind its own gateway route (#1451), amending ADR-151 and ADR-065](adr/ADR-153-the-deployed-bff-runs-the-assistant-on-a-single-replica-release-behind-its-own-gateway-route-1451-amending-adr-151-and-adr-065.md) |
 | **ADR-154** | [The assistant reads whether a product is in stock through an Inventory gRPC hop under the BFF's own credentials (#1452), amending ADR-151](adr/ADR-154-the-assistant-reads-whether-a-product-is-in-stock-through-an-inventory-grpc-hop-under-the-bffs-own-credentials-1452-amending-adr-151.md) |
 | **ADR-155** | [A red push run on main files a tracker issue and is reverted before it is fixed (#1450)](adr/ADR-155-a-red-push-run-on-main-files-a-tracker-issue-and-is-reverted-before-it-is-fixed-1450.md) |
+| **ADR-156** | [The BFF's assistant gains a keyless scripted provider for Development, and its 429s carry a code of their own (#1484, #1485), amending ADR-151](adr/ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-and-its-429s-carry-a-code-of-their-own-1484-1485-amending-adr-151.md) |
 
 ---
 
