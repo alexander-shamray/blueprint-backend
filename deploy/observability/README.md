@@ -456,13 +456,13 @@ which the platform degrades is the knee.
 
 **It reports and never gates.** No threshold is an SLO. It asserts nothing,
 and it stops early only once a step's requests have failed at more than
-`STRESS_ABORT_ERROR_RATE` (a fifth by default) over its hold, because the
-steps after a clear break measure nothing new. k6 times that judgement from
-before `setup()`, so it can begin up to `setup()`'s length before the hold
-ends. It runs on a developer's machine against the
-Compose stack. Its numbers describe that machine as much as the platform, so
-a result is relative: which service, queue or table gives out first. It is
-never a capacity figure for production, and
+`STRESS_ABORT_ERROR_RATE`, whose default `stress.js` sets, over its hold,
+because the steps after a clear break measure nothing new. k6 times that
+judgement from before `setup()`, so it can begin up to `setup()`'s length
+before the hold ends. It runs on a developer's machine against the Compose
+stack. Its numbers describe that machine as much as the platform, so a result
+is relative: which service, queue or table gives out first. It is never a
+capacity figure for production, and
 [§13.7](../../docs/backend-architecture/13-observability.md)'s point that a
 local run is an order of magnitude for that machine at that commit, and not a
 staging baseline, holds here too.
@@ -491,20 +491,22 @@ the `sub` an order's owner is bound from. The client's service account holds
 cover its share of every order the staircase could place.
 
 **The journey.** Each iteration is one visit: the anonymous product listing,
-one to three product pages, the saved address (saved on a first visit), a
-checkout quote, and in a quarter of visits an order followed by *my orders*
-through the BFF. Users pause one to five seconds between steps. The share,
-the pauses and the reason for each are constants at the top of `stress.js`.
+up to `PRODUCT_VIEWS_MAX` product pages, the saved address (saved on a first
+visit), a checkout quote, and in an `ORDER_SHARE` of visits an order followed
+by *my orders* through the BFF. Users pause between `THINK_MIN_SECONDS` and
+`THINK_MAX_SECONDS` between steps. Each is a constant at the top of
+`stress.js`, with the reason for its value.
 Orders are spread over every product `STRESS_PRODUCTS` names, which loads the
 saga and the queues; one id there is the hot-row variant, which loads
 Inventory's reservation of that one row instead.
 
-**The staircase.** The default is 10, 50, 100, 200 and 400 VUs, each reached
-by a 30-second ramp and held for three minutes, about seventeen minutes in
-all. `STRESS_STEPS`, `STRESS_RAMP_SECONDS` and `STRESS_HOLD_SECONDS` change it.
-A step is measured over its hold alone, since a ramp mixes two loads. A hold
-shorter than two minutes is read over two, reaching into its ramp, because the
-services export their meters once a minute and a rate needs two exports.
+**The staircase.** The default is `steps.js`'s `DEFAULT_STEPS`, each reached
+by a `DEFAULT_RAMP_SECONDS` ramp and held for `DEFAULT_HOLD_SECONDS`.
+`STRESS_STEPS`, `STRESS_RAMP_SECONDS` and `STRESS_HOLD_SECONDS` change it. A
+step is measured over its hold alone, since a ramp mixes two loads. A hold
+shorter than `summarise.mjs`'s `MINIMUM_RANGE_SECONDS` is read over that span,
+reaching into its ramp, because the services export their meters once a
+minute and a rate needs two exports.
 
 **What each step records.** From k6: p50, p95, p99 and max per operation,
 and per step the request rate and the failures, split into 429s, other 4xx,
@@ -517,20 +519,20 @@ queues, the consumed queues with the lowest consumer utilisation, the
 `orders.fulfilment.duration` and the share of orders confirmed, both overdue
 gauges, and, from the runtime meter every service exports, the work waiting
 for a thread-pool thread and the time collections paused it. From
-`stress/sample.mjs`, every five seconds: each container's CPU and memory from
+`stress/sample.mjs`, every `INTERVAL_MS`: each container's CPU and memory from
 `docker stats`, where a CPU figure is a share of one core and passes 100 on
 several, and SQL Server's deadlocks and lock, page-latch and log-flush waits.
 Nothing is added to the stack to read any of them. What could only be read by
 adding a component is listed in the summary under *Not measured*.
 
 **The knee** is the first step at which one of three signals crosses:
-requests failing at more than one in a hundred; the journey's p95 at least
-doubling on the step before, and by more than `P95_JUMP_FLOOR_MS`;
-or the oldest outbox row or the queued messages still growing by half again
-over the second half of the hold. The thresholds are `stress/report.js`'s
-constants, held by `stress/report.test.js`. Each signal is read once a step,
-so the order in which two crossed within one step cannot be seen, and the
-summary names every signal that crossed at the knee.
+requests failing at more than `ERROR_RATE_LIMIT`; the journey's p95 growing
+by `P95_JUMP_RATIO` on the step before, and by more than `P95_JUMP_FLOOR_MS`;
+or the oldest outbox row or the queued messages still growing by
+`GROWTH_RATIO` over the second half of the hold. The thresholds are
+`stress/report.js`'s constants, held by `stress/report.test.js`. Each signal
+is read once a step, so the order in which two crossed within one step cannot
+be seen, and the summary names every signal that crossed at the knee.
 
 **The output** goes to `artifacts/stress/<run>/`, which git ignores:
 `raw.json` from k6, `samples.jsonl` from the sampler, and `summary.json` and
