@@ -88,9 +88,11 @@ leading front matter. A link's target and a bare address are measured as one
 character, since the guide lets them run long and not the prose around them.
 A fence ends on the character that opened it, at least as long, and one never
 closed is a finding where it opens whenever a line at or after it is
-added. A line inside a blockquote is judged after its quote markers, so a
-quoted fence and a quoted table row are exempt as unquoted ones are, and a
-fence opened inside a quote ends where the quote does. Front matter is a
+added. A line inside a blockquote is tested for a fence and for the
+exemptions after its quote markers, and its width is still measured whole, so
+a quoted fence and a quoted table row are exempt as unquoted ones are. A fence
+opened inside a quote closes only at its own depth and ends when a line drops
+below it. Front matter is a
 leading block with no blank line before its closing rule. A file under
 `docs/superpowers/` is exempt, since a spec is never edited to match the code
 that followed it.
