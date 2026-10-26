@@ -104,6 +104,13 @@ async function serverRow(window, range) {
             `max(max_over_time(shipping_shipments_overdue_seconds[${range}]))`, end),
         notificationsOverdue: await scalar('notifications.overdue',
             `max(max_over_time(notifications_overdue_seconds[${range}]))`, end),
+        // Common.Web's runtime meter: work queued for a thread, and the time collections paused the service.
+        threadPoolQueue: (await query('thread pool queue', 'topk(3, max by (service_name) ' +
+            `(max_over_time(dotnet_thread_pool_queue_length_total[${range}])))`, end))
+            .map((s) => ({ service: s.labels.service_name, items: s.value })),
+        gcPause: (await query('GC pause', 'topk(3, sum by (service_name) ' +
+            `(increase(dotnet_gc_pause_time_seconds_total[${range}])))`, end))
+            .map((s) => ({ service: s.labels.service_name, seconds: s.value })),
     };
 }
 
@@ -182,7 +189,6 @@ const summary = {
     // Named so that a reader does not take the table's silence for a healthy reading.
     notObservable: [
         'SQL Server per-query waits and plans: only the instance-wide counters sample.mjs reads',
-        'The .NET thread pool and GC per service: no runtime meter is exported',
         'RabbitMQ consumer utilisation: the broker publishes depths, not how busy each consumer is',
     ],
 };
@@ -230,7 +236,8 @@ function markdown(s) {
         '',
         '| Step | VUs | req/s | p50 ms | p95 ms | p99 ms | errors | 429 | 4xx | 5xx | timeouts | connection |',
         '|---|---|---|---|---|---|---|---|---|---|---|---|',
-        ...s.steps.map((r) => `| ${r.step}${r.aborted ? ' (past the abort rate)' : ''} | ${r.vus} | ${r.rps.toFixed(1)} | ` +
+        ...s.steps.map((r) => `| ${r.step}${r.aborted ? ' (past the abort rate)' : ''} | ${r.vus} | ` +
+            `${r.rps.toFixed(1)} | ` +
             `${ms(r.p50)} | ${ms(r.p95)} | ${ms(r.p99)} | ${percent(r.errorRate)} | ${r.failures['429'] ?? 0} | ` +
             `${r.failures['4xx'] ?? 0} | ${r.failures['5xx'] ?? 0} | ${r.failures.timeout ?? 0} | ` +
             `${r.failures.connection ?? 0} |`),
@@ -251,12 +258,16 @@ function markdown(s) {
             `${seconds(r.bffLagP95)} | ${seconds(r.fulfilmentP95)} | ${percent(r.confirmedShare)} | ` +
             `${seconds(r.shippingOverdue)} | ${seconds(r.notificationsOverdue)} |`),
         '',
-        'Slowest request types (p95 s) and deepest queues, per step:',
+        'Slowest request types (p95 s), deepest queues, and the services with the most work waiting for a',
+        'thread (peak items) and the most time paused for collections (s), per step:',
         '',
         ...s.steps.flatMap((r) => [
             `- Step ${r.step}: ` + ((r.slowestRequests ?? []).map((q) =>
                 `${q.service} ${q.request} ${seconds(q.p95Seconds)}`).join(', ') || '—') +
-                '; queues ' + ((r.deepestQueues ?? []).map((q) => `${q.queue} ${ms(q.messages)}`).join(', ') || '—'),
+                '; queues ' + ((r.deepestQueues ?? []).map((q) => `${q.queue} ${ms(q.messages)}`).join(', ') || '—') +
+                '; thread pool ' + ((r.threadPoolQueue ?? []).map((t) => `${t.service} ${ms(t.items)}`).join(', ') ||
+                    '—') +
+                '; GC ' + ((r.gcPause ?? []).map((g) => `${g.service} ${g.seconds.toFixed(2)}`).join(', ') || '—'),
         ]),
         '',
         '## Resources',
