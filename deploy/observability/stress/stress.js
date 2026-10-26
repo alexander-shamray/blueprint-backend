@@ -68,10 +68,11 @@ const THINK_MAX_SECONDS = 5;
 // At most three product pages a session, chosen from the listing just read.
 const PRODUCT_VIEWS_MAX = 3;
 
-// The shortest session: a listing, one product, the address and the quote,
-// each followed by the shortest pause. maxOrders() reads it, to size the
-// stock setup() checks for.
-const SHORTEST_SESSION_SECONDS = 4 * THINK_MIN_SECONDS;
+// The shortest way to an order: the listing, the address and the quote, each
+// followed by the shortest pause; a listing that failed or came back empty
+// leaves no product page. maxOrders() reads it, to size the stock setup()
+// checks for.
+const SHORTEST_SESSION_SECONDS = 3 * THINK_MIN_SECONDS;
 
 // Orders are spread over every product STRESS_PRODUCTS names, so the run
 // loads the saga and the queues rather than one stock row's lock. One id
