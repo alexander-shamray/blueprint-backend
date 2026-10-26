@@ -78,6 +78,9 @@ services:
       Push__Apps__0__Platform: "fcm"
       Push__Apps__1__AppId: "com.example.shop.ios"
       Push__Apps__1__Platform: "apns"
+      # ADR-156's keyless provider, so this stack, and the client e2e jobs that start it, reach the assistant with
+      # no provider key: it answers every turn with one fixed reply, and the host refuses it outside Development.
+      Assistant__Provider: "scripted"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     ports: [ "127.0.0.1:5200:8080" ]
     # Compose runs one replica, so the gateway's assistant destination (ADR-153)

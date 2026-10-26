@@ -20,9 +20,14 @@ public static class DependencyInjection
             .BindConfiguration(AssistantOptions.SectionName);
 
         services.AddSingleton<CustomerReadTools>();
-        services.AddSingleton<IAssistantProvider>(sp => AnthropicProviderFactory.Create(
-            sp.GetRequiredService<IOptions<AssistantOptions>>().Value,
-            sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IAssistantProvider>(sp =>
+        {
+            AssistantOptions options = sp.GetRequiredService<IOptions<AssistantOptions>>().Value;
+
+            return options.ProviderInEffect(sp.GetRequiredService<IHostEnvironment>()) == AssistantOptions.Scripted
+                ? new ScriptedReplyProvider()
+                : AnthropicProviderFactory.Create(options, sp.GetRequiredService<TimeProvider>());
+        });
         services.AddSingleton<AssistantRuntime>();
 
         services.AddRateLimiter(limiter =>

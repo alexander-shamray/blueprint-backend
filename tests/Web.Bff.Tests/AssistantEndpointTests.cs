@@ -6,6 +6,8 @@ using Common.Assistant.Providers;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.Internal;
 using Shouldly;
 using Web.Bff.Assistant;
 using Xunit;
@@ -247,6 +249,48 @@ public sealed class AssistantEndpointTests
     }
 
     [Fact]
+    public async Task The_scripted_provider_streams_its_fixed_reply_with_no_key()
+    {
+        await using ScriptedFactory factory = new();
+        using HttpClient client = As(factory, _customer);
+
+        AssistantStatus? status = await client.GetFromJsonAsync<AssistantStatus>("/v1/assistant", Ct);
+        string id = await OpenAsync(client);
+        await client.PostAsJsonAsync($"/v1/assistant/conversations/{id}/turns", new { text = "Hello" }, Ct);
+        JsonElement view = await SettledAsync(client, id);
+
+        status.ShouldNotBeNull().Enabled.ShouldBeTrue();
+        view.GetProperty("items").EnumerateArray()
+            .Any(item => item.ToString().Contains(ScriptedReplyProvider.Reply, StringComparison.Ordinal))
+            .ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("Staging")]
+    public void The_scripted_provider_is_refused_outside_development_naming_the_key(string environment)
+    {
+        AssistantOptions options = new() { Provider = AssistantOptions.Scripted };
+
+        string refusal = Should.Throw<InvalidOperationException>(() =>
+                options.ProviderInEffect(new HostingEnvironment { EnvironmentName = environment }))
+            .Message;
+
+        refusal.ShouldContain("Assistant:Provider");
+        refusal.ShouldContain(environment);
+        options.ProviderInEffect(new HostingEnvironment { EnvironmentName = Environments.Development })
+            .ShouldBe(AssistantOptions.Scripted);
+    }
+
+    [Fact]
+    public void The_compose_bff_runs_the_scripted_provider()
+    {
+        string compose = File.ReadAllText(RepositoryFile.Locate(RepositoryFile.ComposeFile));
+
+        compose.ShouldContain($"Assistant__Provider: \"{AssistantOptions.Scripted}\"");
+    }
+
+    [Fact]
     public void A_provider_value_that_names_none_fails_the_start_naming_the_key()
     {
         using AssistantFactory factory = new(
@@ -301,5 +345,12 @@ public sealed class AssistantEndpointTests
 
             await Task.Delay(50, Ct);
         }
+    }
+
+    // The host's own provider registration, unreplaced, as the Compose stack runs it.
+    private sealed class ScriptedFactory : BffFactory
+    {
+        protected override IEnumerable<KeyValuePair<string, string?>> Settings =>
+            [.. base.Settings, Setting(nameof(AssistantOptions.Provider), AssistantOptions.Scripted)];
     }
 }
