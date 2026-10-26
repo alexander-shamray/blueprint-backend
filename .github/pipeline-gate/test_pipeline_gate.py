@@ -881,6 +881,111 @@ class ActionTests(unittest.TestCase):
         self.assertGreater(total, 0)
 
 
+ALERT = (
+    "name: Main red\n"
+    "on:\n"
+    "  workflow_run:\n"
+    "    workflows: [CI, 'Helm']\n"
+    "    types: [completed]\n"
+    "    branches: [main]\n"
+)
+
+
+class AlertTests(unittest.TestCase):
+    """Every workflow a push to main runs is one the red-main alert watches, and nothing else is."""
+
+    def setUp(self) -> None:
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        self.workflows = self.root / ".github" / "workflows"
+        self.workflows.mkdir(parents=True)
+        self.write(pipeline_gate.ALERT_WORKFLOW, ALERT)
+        self.write("ci.yml", "name: CI\non:\n  pull_request:\n  push:\n    branches: [main]\n")
+        self.write("helm.yml", (
+            "name: Helm\non:\n  push:\n    # main only\n    branches:\n      - main\n"
+            "    paths: ['deploy/helm/**']\n"))
+        self.write("gate.yml", "name: Commit gate\non:\n  pull_request:\n    types: [opened]\n")
+
+    def write(self, name: str, text: str) -> None:
+        (self.workflows / name).write_text(text, encoding="utf-8")
+
+    def test_every_pushed_workflow_watched_is_clean(self) -> None:
+        self.assertEqual(pipeline_gate.check_alerts(self.root), [])
+
+    def test_a_pushed_workflow_the_alert_does_not_watch_is_caught(self) -> None:
+        self.write("compose.yml", "name: Compose\non:\n  push:\n    branches: [main]\n")
+
+        problems = pipeline_gate.check_alerts(self.root)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("compose.yml runs on a push to main", problems[0])
+        self.assertIn("'Compose', so a red run of it alerts nobody", problems[0])
+
+    def test_a_pushed_workflow_with_no_name_is_caught(self) -> None:
+        self.write("anonymous.yml", "on:\n  push:\n    branches: [main]\n")
+
+        self.assertIn("has no `name:`", pipeline_gate.check_alerts(self.root)[0])
+
+    def test_a_watched_name_no_workflow_carries_is_caught(self) -> None:
+        self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace("'Helm'", "Helm, Hlem"))
+
+        problems = pipeline_gate.check_alerts(self.root)
+
+        self.assertEqual(problems, [f"{pipeline_gate.ALERT_WORKFLOW} watches 'Hlem', which no workflow is named"])
+
+    def test_a_watched_workflow_that_never_runs_on_a_push_to_main_is_caught(self) -> None:
+        self.write(pipeline_gate.ALERT_WORKFLOW, ALERT.replace("'Helm'", "Helm, Commit gate"))
+
+        self.assertIn("'Commit gate', which never runs on a push to main", pipeline_gate.check_alerts(self.root)[0])
+
+    def test_no_alert_and_an_empty_list_fail_rather_than_passing(self) -> None:
+        self.write(pipeline_gate.ALERT_WORKFLOW, "name: Main red\non:\n  workflow_run:\n    types: [completed]\n")
+        self.assertIn("vacuously", pipeline_gate.check_alerts(self.root)[0])
+
+        (self.workflows / pipeline_gate.ALERT_WORKFLOW).unlink()
+        self.assertIn("would file nothing", pipeline_gate.check_alerts(self.root)[0])
+
+    def test_no_pushed_workflow_fails_rather_than_passing(self) -> None:
+        self.write("ci.yml", "name: CI\non:\n  pull_request:\n")
+        self.write("helm.yml", "name: Helm\non:\n  pull_request:\n")
+
+        self.assertTrue(any("vacuously" in problem for problem in pipeline_gate.check_alerts(self.root)))
+
+    def test_the_reader_tells_a_push_to_main_from_one_that_skips_it(self) -> None:
+        cases = {
+            "on: push\n": True,
+            "on: [pull_request, push]\n": True,
+            "on:\n  push:\n": True,
+            "on:\n  push:\n    paths: ['src/**']\n": True,
+            "on:\n  push:\n    branches-ignore: [release]\n": True,
+            "on:\n  push:\n    branches: [release]\n": False,
+            "on:\n  push:\n    branches-ignore:\n      - main\n": False,
+            "on:\n  push:\n    tags: ['v*']\n": False,
+            "on:\n  pull_request:\n    branches: [main]\n": False,
+            "on:\n  workflow_dispatch:\njobs:\n  push:\n    branches: [main]\n": False,
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(pipeline_gate.runs_on_main_push(text), expected)
+
+    def test_the_reader_sees_every_push_trigger_in_this_repositorys_workflows(self) -> None:
+        """The subject is coverage: a pushed workflow the reader misses is one the alert never has to watch."""
+        pushed = 0
+        for path in (pipeline_gate.ROOT / ".github" / "workflows").glob("*.y*ml"):
+            text = path.read_text(encoding="utf-8")
+            on = text.split("\njobs:")[0]
+            with self.subTest(workflow=path.name):
+                self.assertEqual(
+                    pipeline_gate.runs_on_main_push(text),
+                    "\n  push:\n    branches: [main]\n" in on)
+            pushed += "\n  push:" in on
+        # Every push trigger here is filtered to main, so each one found is a name the alert must list.
+        self.assertGreater(pushed, 0)
+        alert = pipeline_gate.ROOT / ".github" / "workflows" / pipeline_gate.ALERT_WORKFLOW
+        self.assertEqual(len(pipeline_gate.read_watched(alert.read_text(encoding="utf-8"))), pushed)
+
+
 # The integration matrix at ci.yml's indentation, one value in the folded form.
 SHARDS = """\
   integration:

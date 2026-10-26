@@ -706,6 +706,126 @@ def check_actions(root: Path = ROOT) -> list[str]:
     return problems
 
 
+# --------------------------------------------------------------------------
+# alerts
+# --------------------------------------------------------------------------
+
+ALERT_WORKFLOW = "main-red.yml"
+
+
+def _key(lines: list[str], key: str, indent: int) -> tuple[str, list[str]] | None:
+    """A key at one indentation: its inline value and the lines nested under it."""
+    pattern = re.compile(rf"^ {{{indent}}}{re.escape(key)}:(.*)$")
+    for index, line in enumerate(lines):
+        match = pattern.match(line)
+        if not match:
+            continue
+        nested: list[str] = []
+        for following in lines[index + 1:]:
+            stripped = following.strip()
+            if stripped and not stripped.startswith("#") and len(following) - len(following.lstrip()) <= indent:
+                break
+            nested.append(following)
+        return match.group(1).split(" #")[0].strip(), nested
+    return None
+
+
+def _list(value: str, nested: list[str]) -> list[str]:
+    """A YAML list in its flow form, `[a, b]`, its block form, `- a`, or a scalar."""
+    if value.startswith("["):
+        items = value.strip("[]").split(",")
+    elif value:
+        items = [value]
+    else:
+        items = [line.strip()[2:].split(" #")[0] for line in nested if line.strip().startswith("- ")]
+    return [item.strip().strip("'\"") for item in items if item.strip()]
+
+
+def read_workflow_name(workflow_text: str) -> str | None:
+    match = re.search(r"^name:\s*['\"]?(.+?)['\"]?\s*$", workflow_text, flags=re.MULTILINE)
+    return match.group(1) if match else None
+
+
+def runs_on_main_push(workflow_text: str) -> bool:
+    """Whether a push to `main` starts this workflow."""
+    on = _key(workflow_text.splitlines(), "on", 0)
+    if on is None:
+        return False
+    value, nested = on
+    if value:
+        return "push" in _list(value, [])
+    push = _key(nested, "push", 2)
+    if push is None:
+        return False
+    filters = push[1]
+    if (branches := _key(filters, "branches", 4)) is not None:
+        return "main" in _list(*branches)
+    if (ignored := _key(filters, "branches-ignore", 4)) is not None:
+        return "main" not in _list(*ignored)
+    # A push filtered to tags alone starts no run for a branch.
+    return _key(filters, "tags", 4) is None
+
+
+def read_watched(alert_text: str) -> list[str]:
+    """The workflow names the alert's `workflow_run` trigger lists."""
+    on = _key(alert_text.splitlines(), "on", 0)
+    run = _key(on[1], "workflow_run", 2) if on else None
+    workflows = _key(run[1], "workflows", 4) if run else None
+    return _list(*workflows) if workflows else []
+
+
+def check_alerts(root: Path = ROOT) -> list[str]:
+    """Every workflow a push to `main` runs is one the red-main alert watches (ADR-155).
+
+    `workflow_run` matches a workflow by its name, and a listed name nothing
+    carries matches nothing without an error, so the list is held both ways.
+    """
+    directory = root / ".github" / "workflows"
+    alert = directory / ALERT_WORKFLOW
+    if not alert.is_file():
+        return [f"found no {ALERT_WORKFLOW}: a red run on main would file nothing"]
+    watched = read_watched(alert.read_text(encoding="utf-8"))
+    if not watched:
+        return [
+            f"{ALERT_WORKFLOW} lists no `workflow_run` workflows: the check would pass "
+            "vacuously, so the parser or the file is what is broken"
+        ]
+
+    pushed_by_name: dict[str, bool] = {}
+    problems: list[str] = []
+    for path in sorted(directory.glob("*")):
+        if path.suffix not in (".yml", ".yaml") or path.name == ALERT_WORKFLOW:
+            continue
+        text = path.read_text(encoding="utf-8")
+        name = read_workflow_name(text)
+        pushed = runs_on_main_push(text)
+        if name is not None:
+            pushed_by_name[name] = pushed
+        if not pushed:
+            continue
+        if name is None:
+            problems.append(
+                f"{path.name} runs on a push to main and has no `name:`, which is what "
+                "`workflow_run` matches"
+            )
+        elif name not in watched:
+            problems.append(
+                f"{path.name} runs on a push to main and {ALERT_WORKFLOW} does not watch "
+                f"{name!r}, so a red run of it alerts nobody"
+            )
+    if not any(pushed_by_name.values()):
+        problems.append(
+            "found no named workflow that runs on a push to main: the check would pass "
+            "vacuously, so the parser or the directory is what is broken"
+        )
+    for name in watched:
+        if name not in pushed_by_name:
+            problems.append(f"{ALERT_WORKFLOW} watches {name!r}, which no workflow is named")
+        elif not pushed_by_name[name]:
+            problems.append(f"{ALERT_WORKFLOW} watches {name!r}, which never runs on a push to main")
+    return problems
+
+
 def read_job_condition(workflow_text: str, job: str) -> str | None:
     """One job's own four-space `if:`, folded lines joined; "" for none, None for no job.
 
@@ -1105,6 +1225,7 @@ def main(argv: list[str]) -> int:
              "and two attestations, and the rollout verifies before Helm")
     sub.add_parser("shards", help="the integration shards partition the stage")
     sub.add_parser("actions", help="every third-party action is pinned to a commit")
+    sub.add_parser("alerts", help="every workflow pushed on main is watched by the red-main alert")
 
     stages = sub.add_parser("stages", help="every stage ran, ran enough, and ran once")
     stages.add_argument("results", nargs="+", type=Path)
@@ -1140,6 +1261,13 @@ def main(argv: list[str]) -> int:
         if code := fail(problems, "the actions .github/workflows runs"):
             return code
         print("pipeline-gate: every third-party action in .github/workflows is pinned to a commit.")
+        return 0
+
+    if args.command == "alerts":
+        problems = check_alerts()
+        if code := fail(problems, f"the workflows {ALERT_WORKFLOW} watches"):
+            return code
+        print(f"pipeline-gate: every workflow a push to main runs is watched by {ALERT_WORKFLOW}.")
         return 0
 
     problems = check_stages(args.results)

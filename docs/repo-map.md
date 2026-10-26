@@ -197,6 +197,11 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              request merges into main; a notification, not
                              a gate, so an unset credential skips it.
                              docs/secrets.md owns the credential
+.github/workflows/main-red.yml  a tracker issue when a push run on main goes
+                             red, or a comment on the open one (ADR-155).
+                             `workflow_run` names what it watches, so
+                             `pipeline-gate alerts` holds that list to every
+                             workflow a push to main runs
 .github/workflows/broker-permissions.yml  ADR-036's broker ACL, reaching
                              outside its own tree, over the paths
                              SOURCE_INPUTS declares in

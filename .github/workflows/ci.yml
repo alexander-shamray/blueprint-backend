@@ -222,6 +222,9 @@ jobs:
       - name: Every third-party action is pinned to a commit
         run: python .github/pipeline-gate/pipeline_gate.py actions
 
+      - name: Every workflow pushed on main is watched by the red-main alert
+        run: python .github/pipeline-gate/pipeline_gate.py alerts
+
       # §3.2's table against the code that publishes and consumes, stdlib
       # Python over text like the inventories above, so it belongs here.
       - name: Test the messaging gate
