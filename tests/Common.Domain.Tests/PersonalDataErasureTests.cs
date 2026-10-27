@@ -21,6 +21,15 @@ public class PersonalDataErasureTests
     }
 
     [Fact]
+    public void A_row_materialised_without_a_recorded_hash_holds_an_empty_one()
+    {
+        // The state EF Core builds a row in before it sets the columns, through the private constructor.
+        var erasure = (PersonalDataErasure)Activator.CreateInstance(typeof(PersonalDataErasure), nonPublic: true)!;
+
+        erasure.SubjectHash.ShouldBe("");
+    }
+
+    [Fact]
     public void Two_requests_for_one_subject_do_not_share_a_hash()
     {
         Guid other = new("cccccccc-cccc-cccc-cccc-cccccccccccc");
