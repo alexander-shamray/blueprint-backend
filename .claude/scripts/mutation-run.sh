@@ -26,6 +26,8 @@ here=$(cd "$(dirname "$0")" && pwd -P)
 python=python3
 command -v py >/dev/null 2>&1 && python="py -3.12"
 plan=$($python -I "$here/mutation_survivors.py" plan "$resolved")
+# Windows' py ends each line in CRLF and bash strips only the last, so a kept \r names a missing directory.
+plan=${plan//$'\r'/}
 
 mkdir "$out"
 # Stryker's own output goes to stderr, so stdout carries the report alone.
