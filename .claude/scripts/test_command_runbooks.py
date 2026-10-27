@@ -17,6 +17,7 @@ CEILINGS = {
     "ship.md": 30800,
     "bug-sweep.md": 19000,
     "security-sweep.md": 14900,
+    "mutation-sweep.md": 7700,
     "branch.md": 9000,
     "validate-blueprint.md": 9000,
     "review-branch.md": 8400,
