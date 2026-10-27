@@ -20,7 +20,7 @@
 set -euo pipefail
 
 [ "$#" -eq 1 ] ||
-  { echo "usage: gh-label-ensure.sh <security|bug|critical|high|medium|low>" >&2; exit 2; }
+  { echo "usage: gh-label-ensure.sh <security|bug|test-gap|critical|high|medium|low>" >&2; exit 2; }
 label="$1"
 
 # The whole vocabulary, with the colour and text each label carries today, so a
@@ -31,6 +31,7 @@ label="$1"
 case "$label" in
   security) colour=d93f0b; description="Security finding" ;;
   bug)      colour=d73a4a; description="Something isn't working" ;;
+  test-gap) colour=1d76db; description="Behaviour the suite does not detect: a mutant it let through" ;;
   critical) colour=b60205; description="Severity: silent wrong data, or a protection that cannot protect" ;;
   high)     colour=e36209; description="Severity: reachable path that crashes, corrupts, leaks or answers wrongly" ;;
   medium)   colour=fbca04; description="Severity: needs unusual configuration, or a dev-tool-only blast radius" ;;
