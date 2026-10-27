@@ -14,7 +14,7 @@ public class MoneyBoundaryTests
     [InlineData("1AB")]
     public void Of_refuses_a_code_with_a_digit_among_its_letters(string currency)
     {
-        // Every character must be a letter, not any one of them: a code with a letter in it is still no currency.
+        // Every character must be a letter, not any one of them: a code with only some letters in it is no currency.
         Should.Throw<DomainException>(() => Money.Of(1m, currency))
             .Message.ShouldBe("Currency must be a 3-letter currency code.");
     }
