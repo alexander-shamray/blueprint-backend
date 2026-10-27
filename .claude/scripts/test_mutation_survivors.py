@@ -230,8 +230,7 @@ class TheHelper(unittest.TestCase):
                          result.stderr)
 
     def test_each_run_names_the_framework_its_project_evaluates_to(self):
-        # Stryker's analysis reads the framework from the project file alone; one set in Directory.Build.props goes
-        # unseen, and on a Windows host with Visual Studio the analysis then fails before it mutates anything.
+        # Why the framework is named: docs/testing.md, Mutation.
         self.commit_two_projects()
         self.dotnet_answers("net10.0")
         result = self.run_helper(self.worktree)
@@ -241,7 +240,7 @@ class TheHelper(unittest.TestCase):
             self.assertIn(" --target-framework net10.0 ", call)
 
     def test_each_project_is_restored_before_its_run(self):
-        # A sweep's worktree is fresh, and Stryker's own fallback restore leaves its build unresolved on Windows.
+        # Why each project is restored first: docs/testing.md, Mutation.
         self.commit_two_projects()
         self.dotnet_answers("net10.0")
         result = self.run_helper(self.worktree)
