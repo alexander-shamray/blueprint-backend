@@ -36,7 +36,7 @@ public class CatalogBoundaryTests
     {
         var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
 
-        // The currency guard below would refuse default(Money) too, with another message, so the wording is the proof.
+        // ChangePrice's currency check, next in Product, refuses default(Money) too with another message: wording proves it.
         Should.Throw<DomainException>(() => product.ChangePrice(default, Now))
             .Message.ShouldBe("A product must have a price.");
     }
