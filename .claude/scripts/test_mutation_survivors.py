@@ -177,6 +177,22 @@ class TheHelper(unittest.TestCase):
         self.assertEqual(3, result.returncode)
         self.assertIn("already run", result.stderr)
 
+    def test_each_planned_test_project_is_entered_by_its_own_directory(self):
+        # On Windows `py` ends each planned line in CRLF and bash strips only the last, so it takes two projects
+        # for a kept \r to name a directory that is not there.
+        made = run_bash('cd "$W" && for p in A B; do mkdir -p "src/$p.Domain" "tests/$p.Domain.Tests"'
+                        ' && echo "<Project />" > "src/$p.Domain/$p.Domain.csproj"'
+                        ' && echo "<Project />" > "tests/$p.Domain.Tests/$p.Domain.Tests.csproj"; done'
+                        f' && git add src tests && git {GIT_ID} commit -q -m projects', W=self.worktree)
+        self.assertEqual(0, made.returncode, made.stderr)
+        Path(self.bin, "dotnet").write_bytes(
+            b'#!/usr/bin/env bash\necho "$(basename "$PWD") $*" >> "$(dirname "$0")/calls"\n')
+        result = self.run_helper(self.worktree)
+        self.assertNotIn("Stryker failed", result.stderr)
+        stryker = [call for call in self.dotnet_calls() if " tool run dotnet-stryker " in call]
+        self.assertEqual(["A.Domain.Tests", "B.Domain.Tests"], [call.split(" ", 1)[0] for call in stryker],
+                         result.stderr)
+
     def test_the_teardown_takes_the_reports_with_the_worktree(self):
         made = run_bash('mkdir "$W.mutation" && echo r > "$W.mutation/report"', W=self.worktree)
         self.assertEqual(0, made.returncode, made.stderr)
