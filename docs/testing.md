@@ -5,9 +5,10 @@ workflows can tell it.**
 [§12](backend-architecture/12-test-strategy.md) is the strategy — the pyramid,
 the TDD cycle, what each level is for and what not to test. The solution file
 is the list of test projects, and the workflows under `.github/workflows/`
-are the list of everything else that runs. This file is the remainder: which
+are the list of everything else CI runs. This file is the remainder: which
 tests need a daemon and why they are never skipped, the Python floor, how to
-run a gate on its own, and what the coverage figure is measured over.
+run a gate on its own, what the coverage figure is measured over, and how a
+mutation run, which no workflow makes, is made by hand.
 
 **Where §12 and this file disagree, §12 wins**, and the disagreement is a bug
 report against one of them. This file is outside the blueprint tree, so
