@@ -371,7 +371,7 @@ dotnet tool restore
 cd tests/Ordering.Domain.Tests
 dotnet restore
 dotnet tool run dotnet-stryker --config-file ../../.claude/scripts/stryker-config.json \
-    --target-framework "$(dotnet msbuild -getProperty:TargetFramework)" \
+    --target-framework "$(dotnet msbuild -getProperty:TargetFramework | tr -d '\r')" \
     --output ../../artifacts/mutation/Ordering.Domain
 ```
 
