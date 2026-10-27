@@ -1,6 +1,7 @@
 {
   "stryker-config": {
     "test-runner": "mtp",
+    "break-on-initial-test-failure": true,
     "reporters": ["json"],
     "ignore-methods": ["*Exception.ctor"]
   }
