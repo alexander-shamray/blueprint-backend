@@ -51,6 +51,34 @@ public sealed class StatusTests
     }
 
     [Fact]
+    public async Task A_model_the_api_does_not_know_tells_the_host_its_type_and_not_its_message()
+    {
+        FakeHttp http = new FakeHttp().Status(
+            HttpStatusCode.NotFound,
+            """{"type":"error","error":{"type":"not_found_error","message":"model: claude-opus-5-5"}}""");
+        List<string> told = [];
+        AnthropicProvider provider = new(http.Client(), AnthropicSettings.Default, TimeProvider.System, told.Add);
+
+        (await provider.StatusAsync(CancellationToken.None)).Reason.ShouldBe(StatusReason.Unreachable);
+
+        told.ShouldBe(["AnthropicNotFoundException"]);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public async Task A_refused_credential_tells_the_host_nothing(HttpStatusCode refusal)
+    {
+        FakeHttp http = new FakeHttp().Status(refusal);
+        List<string> told = [];
+        AnthropicProvider provider = new(http.Client(), AnthropicSettings.Default, TimeProvider.System, told.Add);
+
+        (await provider.StatusAsync(CancellationToken.None)).Reason.ShouldBe(StatusReason.NoCredential);
+
+        told.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task A_good_answer_is_trusted_for_minutes_and_a_bad_one_is_asked_again_sooner()
     {
         FakeTimeProvider time = new();

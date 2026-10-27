@@ -24,13 +24,22 @@ public sealed class AnthropicProvider : IAssistantProvider
     private readonly AnthropicClient client;
     private readonly AnthropicSettings settings;
     private readonly TimeProvider time;
+    private readonly Action<string>? probeFailed;
     private readonly Lock gate = new();
 
     private ProviderStatus? known;
     private DateTimeOffset knownUntil;
     private Task<ProviderStatus>? inFlight;
 
-    public AnthropicProvider(AnthropicClient client, AnthropicSettings settings, TimeProvider time)
+    /// <param name="probeFailed">
+    /// Told the exception's type name when a probe is <c>unreachable</c>, so a host can log why: a wrong model id, a
+    /// rate limit and a network failure share that one status. Never the message, which can echo what the API sent.
+    /// </param>
+    public AnthropicProvider(
+        AnthropicClient client,
+        AnthropicSettings settings,
+        TimeProvider time,
+        Action<string>? probeFailed = null)
     {
         // Where a credential comes from is the host's: a local host can leave it to the SDK's own resolution
         // (ANTHROPIC_API_KEY, or the profile ant auth login stores), and a deployed host can build the client from its
@@ -38,6 +47,7 @@ public sealed class AnthropicProvider : IAssistantProvider
         this.client = client;
         this.settings = settings;
         this.time = time;
+        this.probeFailed = probeFailed;
     }
 
     public string Id => ProviderId;
@@ -123,9 +133,11 @@ public sealed class AnthropicProvider : IAssistantProvider
         {
             return new ProviderStatus(false, settings.Model, StatusReason.NoCredential);
         }
-        catch (Exception)
+        catch (Exception e)
         {
             // A connection that fails, a timeout, a 5xx: whatever kept the read from answering.
+            probeFailed?.Invoke(e.GetType().Name);
+
             return new ProviderStatus(false, settings.Model, StatusReason.Unreachable);
         }
     }
