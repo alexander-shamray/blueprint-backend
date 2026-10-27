@@ -65,7 +65,7 @@ Stryker's own output is on stderr.
 |---|---|
 | 0 | The report: a `project` line per domain project with its counts, then each undetected mutant as `path:line status mutator -> replacement` above the line it changed |
 | 2, 4 | The worktree path was refused, or the temp root could not be read |
-| 3 | A run that cannot be read as a result: a domain project with no test project, a Stryker failure, a missing report, or a report no test ran against |
+| 3 | A run that cannot be read as a result: a domain project with no test project, a test project that will not restore or has no single target framework, a Stryker failure, a missing report, or a report no test ran against |
 
 **Anything but 0 files nothing.** Report the stderr and stop, under *Never
 fail open*. The runner, the mutators left out and the refusals are fixed in
