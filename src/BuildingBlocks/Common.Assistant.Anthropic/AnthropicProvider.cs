@@ -136,9 +136,21 @@ public sealed class AnthropicProvider : IAssistantProvider
         catch (Exception e)
         {
             // A connection that fails, a timeout, a 5xx: whatever kept the read from answering.
-            probeFailed?.Invoke(e.GetType().Name);
+            Tell(e);
 
             return new ProviderStatus(false, settings.Model, StatusReason.Unreachable);
+        }
+    }
+
+    private void Tell(Exception failure)
+    {
+        try
+        {
+            probeFailed?.Invoke(failure.GetType().Name);
+        }
+        catch (Exception)
+        {
+            // A hook that fails, a logger's sink for one, must not turn an unreachable status into a faulted probe.
         }
     }
 }

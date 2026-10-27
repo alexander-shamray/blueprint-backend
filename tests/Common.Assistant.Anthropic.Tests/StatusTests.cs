@@ -64,6 +64,19 @@ public sealed class StatusTests
         told.ShouldBe(["AnthropicNotFoundException"]);
     }
 
+    [Fact]
+    public async Task A_hook_that_throws_leaves_the_probe_unreachable()
+    {
+        FakeHttp http = new FakeHttp().Fails();
+        AnthropicProvider provider = new(
+            http.Client(),
+            AnthropicSettings.Default,
+            TimeProvider.System,
+            _ => throw new InvalidOperationException("The sink is down."));
+
+        (await provider.StatusAsync(CancellationToken.None)).Reason.ShouldBe(StatusReason.Unreachable);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden)]
