@@ -202,21 +202,62 @@ class TheHelper(unittest.TestCase):
         self.assertEqual(3, result.returncode)
         self.assertIn("already run", result.stderr)
 
-    def test_each_planned_test_project_is_entered_by_its_own_directory(self):
-        # On Windows `py` ends each planned line in CRLF and bash strips only the last, so it takes two projects
-        # for a kept \r to name a directory that is not there.
+    def commit_two_projects(self):
         made = run_bash('cd "$W" && for p in A B; do mkdir -p "src/$p.Domain" "tests/$p.Domain.Tests"'
                         ' && echo "<Project />" > "src/$p.Domain/$p.Domain.csproj"'
                         ' && echo "<Project />" > "tests/$p.Domain.Tests/$p.Domain.Tests.csproj"; done'
                         f' && git add src tests && git {GIT_ID} commit -q -m projects', W=self.worktree)
         self.assertEqual(0, made.returncode, made.stderr)
+
+    def dotnet_answers(self, framework):
+        # A Windows dotnet ends the property it prints in CRLF, as py does a plan line.
+        answer = b'[ "$1" != msbuild ] || printf "%s\\r\\n" "$F"\n' if framework else b''
         Path(self.bin, "dotnet").write_bytes(
-            b'#!/usr/bin/env bash\necho "$(basename "$PWD") $*" >> "$(dirname "$0")/calls"\n')
+            b'#!/usr/bin/env bash\necho "$(basename "$PWD") $*" >> "$(dirname "$0")/calls"\n'
+            + b'F=' + framework.encode() + b'\n' + answer)
+
+    def stryker_calls(self):
+        return [call for call in self.dotnet_calls() if " tool run dotnet-stryker " in call]
+
+    def test_each_planned_test_project_is_entered_by_its_own_directory(self):
+        # On Windows `py` ends each planned line in CRLF and bash strips only the last, so it takes two projects
+        # for a kept \r to name a directory that is not there.
+        self.commit_two_projects()
+        self.dotnet_answers("net10.0")
         result = self.run_helper(self.worktree)
         self.assertNotIn("Stryker failed", result.stderr)
-        stryker = [call for call in self.dotnet_calls() if " tool run dotnet-stryker " in call]
-        self.assertEqual(["A.Domain.Tests", "B.Domain.Tests"], [call.split(" ", 1)[0] for call in stryker],
+        self.assertEqual(["A.Domain.Tests", "B.Domain.Tests"], [call.split(" ", 1)[0] for call in self.stryker_calls()],
                          result.stderr)
+
+    def test_each_run_names_the_framework_its_project_evaluates_to(self):
+        # Stryker's analysis reads the framework from the project file alone; one set in Directory.Build.props goes
+        # unseen, and on a Windows host with Visual Studio the analysis then fails before it mutates anything.
+        self.commit_two_projects()
+        self.dotnet_answers("net10.0")
+        result = self.run_helper(self.worktree)
+        stryker = self.stryker_calls()
+        self.assertEqual(2, len(stryker), result.stderr)
+        for call in stryker:
+            self.assertIn(" --target-framework net10.0 ", call)
+
+    def test_each_project_is_restored_before_its_run(self):
+        # A sweep's worktree is fresh, and Stryker's own fallback restore leaves its build unresolved on Windows.
+        self.commit_two_projects()
+        self.dotnet_answers("net10.0")
+        result = self.run_helper(self.worktree)
+        calls = self.dotnet_calls()
+        for project in ("A.Domain.Tests", "B.Domain.Tests"):
+            with self.subTest(project=project):
+                run = calls.index(next(call for call in self.stryker_calls() if call.startswith(project + " ")))
+                self.assertIn(f"{project} restore", calls[:run], result.stderr)
+
+    def test_a_project_with_no_single_framework_is_refused_before_stryker(self):
+        self.commit_two_projects()
+        self.dotnet_answers("")
+        result = self.run_helper(self.worktree)
+        self.assertEqual(3, result.returncode, result.stderr)
+        self.assertIn("no single target framework for A.Domain", result.stderr)
+        self.assertEqual([], self.stryker_calls())
 
     def test_the_teardown_takes_the_reports_with_the_worktree(self):
         made = run_bash('mkdir "$W.mutation" && echo r > "$W.mutation/report"', W=self.worktree)
