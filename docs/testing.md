@@ -369,7 +369,9 @@ configuration, from its test project's directory:
 ```bash
 dotnet tool restore
 cd tests/Ordering.Domain.Tests
+dotnet restore
 dotnet tool run dotnet-stryker --config-file ../../.claude/scripts/stryker-config.json \
+    --target-framework "$(dotnet msbuild -getProperty:TargetFramework)" \
     --output ../../artifacts/mutation/Ordering.Domain
 ```
 
@@ -377,6 +379,16 @@ The report lands under `artifacts/`, which is git-ignored, as
 `reports/mutation-report.json`. Its build and its test runs are the
 project's own, and the configuration sets `break-on-initial-test-failure`,
 so a failing build or a failing test stops it before any mutant runs.
+
+**The project is restored, and its target framework named, before Stryker
+runs.** Its analysis reads the framework from the project file alone, and
+`Directory.Build.props` sets it here; left unnamed, a Windows host with
+Visual Studio installed analyses with that MSBuild, which cannot resolve the
+.NET SDK, and Stryker stops before it mutates anything. Its fallback
+restore does not resolve an unrestored project on Windows either. The flag
+takes what the project evaluates to, so the props file stays the
+framework's one owner, and `mutation-run.sh` restores and names it the same
+way for each project.
 
 ## What an assertion must hold
 

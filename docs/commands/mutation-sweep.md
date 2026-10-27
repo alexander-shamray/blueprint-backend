@@ -42,7 +42,10 @@ reader are read from the caller's checkout, beside the helper, so a commit
 cannot loosen the runner's settings or teach the reader to pass a broken
 run. The tree still chooses what its own tests do, which is what running a
 suite means, and which Stryker build runs them, because the helper restores
-the tools the commit's `.config/dotnet-tools.json` pins. It is the snapshot
+the tools the commit's `.config/dotnet-tools.json` pins. It also restores
+each test project and names the target framework the project evaluates to,
+for the reason [`docs/testing.md`](../testing.md) gives under *Mutation*;
+both come from the tree, as its build already does. It is the snapshot
 `/review-branch`'s `dotnet-test.sh` already runs, and the session holds no
 `Edit` or `Write` here, so nothing this command does can add an MSBuild
 import to it.
