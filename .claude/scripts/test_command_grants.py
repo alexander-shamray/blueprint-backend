@@ -122,14 +122,14 @@ class TheSweepsDenyEveryGhCommand(unittest.TestCase):
         return frontmatter_list((COMMANDS / name).read_text(encoding="utf-8"), "disallowed-tools")
 
     def test_each_sweep_refuses_each_spelling(self):
-        for name in ("bug-sweep.md", "security-sweep.md"):
+        for name in ("bug-sweep.md", "security-sweep.md", "mutation-sweep.md"):
             for command in self.FILINGS:
                 with self.subTest(command=name, filing=command):
                     self.assertTrue(any(bash_deny_matches(rule, command) for rule in self.denies(name)))
 
     def test_the_helpers_stay_reachable(self):
         # The control: a deny that refused these would take the sweeps' only route with it.
-        for name in ("bug-sweep.md", "security-sweep.md"):
+        for name in ("bug-sweep.md", "security-sweep.md", "mutation-sweep.md"):
             for command in self.HELPERS:
                 with self.subTest(command=name, helper=command):
                     self.assertFalse(any(bash_deny_matches(rule, command) for rule in self.denies(name)))

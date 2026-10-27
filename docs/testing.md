@@ -355,6 +355,27 @@ filter are deliberate:
 > it relaxes an architecture rule everywhere, for ever, and in every service
 > the scaffold renders, to accommodate a test tool.
 
+## Mutation
+
+**Reported, not gated, and run by a person rather than by CI.** The figure
+above says what the domain tests execute; a mutation run says what they
+detect. `/mutation-sweep` runs every domain project at the committed `HEAD`
+and files what survives, and
+[its argument](commands/mutation-sweep.md) says why the runner and the
+mutators are fixed as they are. One project by hand, with the same
+configuration, from its test project's directory:
+
+```bash
+dotnet tool restore
+cd tests/Ordering.Domain.Tests
+dotnet tool run dotnet-stryker --config-file ../../.claude/scripts/stryker-config.json \
+    --output ../../artifacts/mutation/Ordering.Domain
+```
+
+The report lands under `artifacts/`, which is git-ignored, as
+`reports/mutation-report.json`. Its build and its test runs are the
+project's own, so a red baseline stops it before any mutant runs.
+
 ## What an assertion must hold
 
 **A test that cannot fail is the costliest defect here**: it reads as

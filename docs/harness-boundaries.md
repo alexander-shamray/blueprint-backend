@@ -24,7 +24,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | Agent-type, push and dotnet entries | Agent-type deny enumeration, the inverted push check, and review-branch's dotnet grants and MSBuild imports. |
 | The edit-target guard | The symbolic-link premise and guard-edit-target.py refusing spelling mismatches. |
 | Edit guard path resolution | Link anchors, case folding, checkout-root anchors, UNC and device prefixes, and short-name aliases. |
-| Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how both sweeps share worktrees, and their slice lists and ref. |
+| Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how the sweeps share worktrees, their slice lists and ref, and the one sweep that executes. |
 
 ## Purpose and provenance of this file
 
@@ -1375,7 +1375,7 @@ borrowing. `git-worktree-detach.sh` and `git-worktree-drop.sh` refuse any path
 that is not `secsweep-` plus six characters under the canonical temp root —
 the shape check that stops a poisoned finding from naming a PR worktree
 and having it deleted. Renaming the prefix would have to move in both helpers
-and both callers at once, so it stands; what is lost is attribution.
+and every caller at once, so it stands; what is lost is attribution.
 
 **Both sweeps now write two things besides their issues and their worktree.**
 `sweep-slices.sh` writes its slice lists to the worktree's path plus
@@ -1387,3 +1387,17 @@ and a missing one means a full sweep, so the write can make a later sweep
 read less only by pointing at a commit that really was swept clean; a
 poisoned tree cannot reach it, because the parent runs it once, on a clean
 end, with `$pinned`.
+
+**`/mutation-sweep` is the third sweep, and the one that executes.** It
+borrows the `secsweep-` worktree and both its helpers, and its reports go to
+the worktree's path plus `.mutation`, which `git-worktree-drop.sh` removes
+beside `.slices`. A mutant's fate is its suite's verdict, so execution is the
+confirmation there, and the class `/bug-sweep` names as its residual is what
+this one measures. The grant that buys it is `mutation-run.sh`, whose only
+argument is the worktree path in the checked shape; the runner configuration
+and the report reader are read beside the helper, never from the tree. The
+commit still decides what its own build and tests do, so the session holds
+no `Edit`, `Write` or agent there, and the raw `dotnet` is denied so that the
+helper is the one route to an execution;
+[`docs/commands/mutation-sweep.md`](commands/mutation-sweep.md) argues the
+rest.
