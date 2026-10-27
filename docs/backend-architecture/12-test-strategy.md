@@ -1248,11 +1248,11 @@ public async Task The_service_receives_the_path_with_the_namespace_prefix_remove
 
 > **A listener, not an address that refuses.** A refused connection looks free
 > and is not: measured, pointing the clusters at `127.0.0.1:1` costs about two
-> seconds a request, so exhausting §10.3's hundred-request window takes three
-> and a half minutes, the window replenishes before the last request arrives,
-> and the rate-limit test fails while the limiter is working perfectly. A stub
-> that answers is faster *and* is the only thing that can observe the forwarded
-> path.
+> seconds a request, so exhausting §10.3's anonymous window at
+> `GatewayRateLimitOptions.AnonymousPermitLimit`'s default takes three and a
+> half minutes, the window replenishes before the last request arrives, and the
+> rate-limit test fails while the limiter is working perfectly. A stub that
+> answers is faster *and* is the only thing that can observe the forwarded path.
 
 > **One property in this suite cannot be asserted over `TestServer` at all**,
 > and it is the case that says where the seam is. §10.1's body ceiling is a
