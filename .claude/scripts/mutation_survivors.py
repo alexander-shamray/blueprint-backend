@@ -106,6 +106,8 @@ def report(reports, root):
 
 
 def main(argv):
+    # Under -I a piped stdout on Windows keeps cp1252, which cannot spell every character a source line holds.
+    sys.stdout.reconfigure(encoding="utf-8")
     try:
         if len(argv) == 2 and argv[0] == "plan":
             out = [tests for _, _, tests in plan_of(argv[1])]
