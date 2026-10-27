@@ -36,13 +36,16 @@ reading reproduces it. So it executes the pinned snapshot, through one helper
 whose only argument is the worktree path, held to the shape
 `git-worktree-detach.sh` makes.
 
-What it does not do is let the audited tree choose how it runs. The
-configuration and the report reader are read from the caller's checkout,
-beside the helper, so a commit cannot loosen the runner or teach the reader
-to pass a broken run. The tree still chooses what its own tests do, which is
-what running a suite means; it is the snapshot `/review-branch`'s
-`dotnet-test.sh` already runs, and the session holds no `Edit` or `Write`
-here, so nothing this command does can add an MSBuild import to it.
+What it does not do is let the audited tree choose how Stryker is
+configured or how its report is read. The configuration and the report
+reader are read from the caller's checkout, beside the helper, so a commit
+cannot loosen the runner's settings or teach the reader to pass a broken
+run. The tree still chooses what its own tests do, which is what running a
+suite means, and which Stryker build runs them, because the helper restores
+the tools the commit's `.config/dotnet-tools.json` pins. It is the snapshot
+`/review-branch`'s `dotnet-test.sh` already runs, and the session holds no
+`Edit` or `Write` here, so nothing this command does can add an MSBuild
+import to it.
 
 The build writes under `artifacts/`, which `.gitignore` covers, and
 `git worktree remove` without `--force` removes a worktree holding ignored

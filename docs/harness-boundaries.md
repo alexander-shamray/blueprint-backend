@@ -1397,7 +1397,8 @@ confirmation there; what it measures is a test a suite lacks, which
 names as its residual. The grant that buys it is `mutation-run.sh`, whose
 only argument is the worktree path in the checked shape; the runner
 configuration and the report reader are read beside the helper, never from
-the tree. The commit still decides what its own build and tests do, so
+the tree. The commit still decides what its own build and tests do, and
+through its own `.config/dotnet-tools.json` which Stryker build runs them, so
 the session holds no `Edit`, `Write` or agent there, and the raw `dotnet` is
 denied so that the helper is the one route to an execution;
 [`docs/commands/mutation-sweep.md`](commands/mutation-sweep.md) argues the
