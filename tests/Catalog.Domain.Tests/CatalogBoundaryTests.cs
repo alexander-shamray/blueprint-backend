@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Catalog.Domain.Tests;
 
-/// <summary>The currency guard's mixed cases, the multiplication guard's zero edge and ChangePrice's price guard.</summary>
+/// <summary>The currency guard's mixed cases, the multiplier's zero edge and ChangePrice's price guard.</summary>
 public class CatalogBoundaryTests
 {
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -36,7 +36,7 @@ public class CatalogBoundaryTests
     {
         var product = Product.Publish("Walnut desk", null, Money.Of(19.99m, "EUR"), Now);
 
-        // ChangePrice's currency check, next in Product, refuses default(Money) too with another message: wording proves it.
+        // ChangePrice's currency check, next in Product, refuses default(Money) too, so only the wording tells.
         Should.Throw<DomainException>(() => product.ChangePrice(default, Now))
             .Message.ShouldBe("A product must have a price.");
     }
