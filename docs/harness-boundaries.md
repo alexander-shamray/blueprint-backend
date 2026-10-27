@@ -1392,12 +1392,13 @@ end, with `$pinned`.
 borrows the `secsweep-` worktree and both its helpers, and its reports go to
 the worktree's path plus `.mutation`, which `git-worktree-drop.sh` removes
 beside `.slices`. A mutant's fate is its suite's verdict, so execution is the
-confirmation there, and the class `/bug-sweep` names as its residual is what
-this one measures. The grant that buys it is `mutation-run.sh`, whose only
-argument is the worktree path in the checked shape; the runner configuration
-and the report reader are read beside the helper, never from the tree. The
-commit still decides what its own build and tests do, so the session holds
-no `Edit`, `Write` or agent there, and the raw `dotnet` is denied so that the
-helper is the one route to an execution;
+confirmation there; what it measures is a test a suite lacks, which
+`/bug-sweep`'s auditor names as not its finding, not the defect that sweep
+names as its residual. The grant that buys it is `mutation-run.sh`, whose
+only argument is the worktree path in the checked shape; the runner
+configuration and the report reader are read beside the helper, never from
+the tree. The commit still decides what its own build and tests do, so
+the session holds no `Edit`, `Write` or agent there, and the raw `dotnet` is
+denied so that the helper is the one route to an execution;
 [`docs/commands/mutation-sweep.md`](commands/mutation-sweep.md) argues the
 rest.
