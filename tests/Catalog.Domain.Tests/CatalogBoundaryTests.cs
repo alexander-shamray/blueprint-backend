@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Catalog.Domain.Tests;
 
-/// <summary>The currency guard's mixed cases, the multiplication guard's zero edge and ChangePrice's own price guard.</summary>
+/// <summary>The currency guard's mixed cases, the multiplication guard's zero edge and ChangePrice's price guard.</summary>
 public class CatalogBoundaryTests
 {
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
