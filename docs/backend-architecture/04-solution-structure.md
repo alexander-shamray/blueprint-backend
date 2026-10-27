@@ -780,9 +780,9 @@ different reasons and each message says which.
 > partition key exists for — and it stays green, as does every other test in
 > that project, with `UseRateLimiter` moved above `UseAuthentication`. The
 > limiter is still live under the reversal, because the anonymous window still
-> rejects at its hundredth request; why the authenticated bucket does not
-> collapse onto the shared fallback there is unexplained, and an unexplained
-> pass is not a guard.
+> refuses the request past `GatewayRateLimitOptions.AnonymousPermitLimit`; why
+> the authenticated bucket does not collapse onto the shared fallback there is
+> unexplained, and an unexplained pass is not a guard.
 >
 > So the row above is two claims of different standing. That the failure is
 > **silent** is measured. That the partition **degrades to per-IP** is
