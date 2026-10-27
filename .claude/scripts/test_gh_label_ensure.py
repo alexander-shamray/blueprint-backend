@@ -169,7 +169,7 @@ class LabelHelperBehaviour(unittest.TestCase):
         # The class below asserts the names appear in the case; this asserts
         # each one reaches `gh` with its own colour, so a mistyped branch cannot
         # hide behind a source match.
-        for label in ("security", "bug", "critical", "high", "medium", "low"):
+        for label in ("security", "bug", "test-gap", "critical", "high", "medium", "low"):
             with self.subTest(label=label):
                 s = self.stub(before=[])
                 r = s.run(label)
@@ -221,9 +221,9 @@ class LabelHelperHasNoFreeParameter(unittest.TestCase):
         self.assertIn("gh repo view --json nameWithOwner", text)
         self.assertIn('--repo "$repo"', text)
 
-    def test_the_vocabulary_is_the_six_labels_the_sweeps_apply(self):
+    def test_the_vocabulary_is_the_labels_the_sweeps_apply(self):
         text = self.HELPER.read_text(encoding="utf-8")
-        for label in ("security", "bug", "critical", "high", "medium", "low"):
+        for label in ("security", "bug", "test-gap", "critical", "high", "medium", "low"):
             with self.subTest(label=label):
                 self.assertRegex(text, rf"(?m)^\s*{label}\)\s+colour=")
 

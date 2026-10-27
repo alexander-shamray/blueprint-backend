@@ -35,18 +35,18 @@
 set -euo pipefail
 
 [ "$#" -eq 3 ] || {
-  echo "usage: gh-issue-create.sh <security|bug> <critical|high|medium|low>" \
-       "<sweep|hand> < title, blank line, body ending in the trailer" >&2
+  echo "usage: gh-issue-create.sh <security|bug|test-gap> <critical|high|medium|low>" \
+       "<sweep|mutation|hand> < title, blank line, body ending in the trailer" >&2
   exit 2
 }
 kind="$1"; severity="$2"; route="$3"
 
 # A word outside the vocabulary is refused rather than passed on.
-# `documentation` is absent because neither sweep files one, and it is a
+# `documentation` is absent because no sweep files one, and it is a
 # GitHub default label `gh-label-ensure.sh` must not create; the contract's §6
 # (docs/change-locality.md) states that the issue vocabulary is wider than the label helper.
 case "$kind" in
-  security|bug) ;;
+  security|bug|test-gap) ;;
   *) echo "not a kind this helper will file under: $kind" >&2; exit 2 ;;
 esac
 case "$severity" in
@@ -55,10 +55,12 @@ case "$severity" in
 esac
 # The route decides the fixed last line, and it is the same closed-set test as
 # the other two: a spelling outside the set is refused rather than defaulted,
-# because a default is an unconditional claim. There is no spelling for a
-# sweep whose auditor did not run, because such a sweep does not file.
+# because a default is an unconditional claim. Each sentence names the evidence
+# behind the filing: a second auditor's reading, or the suite run against each
+# mutant listed, which /mutation-sweep files on and no reading could replace.
 case "$route" in
   sweep) trailer='Filed by an authorised sweep and verified at filing by a second read-only auditor.' ;;
+  mutation) trailer='Filed by an authorised mutation sweep: each mutant listed ran against its suite and was not detected.' ;;
   hand) trailer='Filed by hand rather than by a sweep: no second auditor verified it at filing.' ;;
   *) echo "not a route this helper will file under: $route" >&2; exit 2 ;;
 esac

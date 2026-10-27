@@ -52,7 +52,7 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
                     echo 'acme/widgets'; exit 0
                     ;;
                   *"label list"*)
-                    printf '%s\\n' security bug critical high medium low; exit 0
+                    printf '%s\\n' security bug test-gap critical high medium low; exit 0
                     ;;
                   *"issue create"*)
                     printf '%s\\n' "${{MSYS2_ARG_CONV_EXCL-unset}}" > {(d / 'conv').as_posix()!r}
@@ -91,15 +91,18 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
 
     TRAILER = "Filed by an authorised sweep and verified at filing by a second read-only auditor."
     HAND_TRAILER = "Filed by hand rather than by a sweep: no second auditor verified it at filing."
+    MUTATION_TRAILER = ("Filed by an authorised mutation sweep: each mutant listed ran against its suite"
+                        " and was not detected.")
     STDIN = f"a title\n\nthe body\n\n{TRAILER}\n"
     HAND_STDIN = f"a title\n\nthe body\n\n{HAND_TRAILER}\n"
+    MUTATION_STDIN = f"a title\n\nthe body\n\n{MUTATION_TRAILER}\n"
 
     def test_no_arguments_prints_the_usage_line(self):
         result = self.run_helper()
         self.assert_refused_before_gh(result)
         self.assertIn(
-            "usage: gh-issue-create.sh <security|bug> <critical|high|medium|low>"
-            " <sweep|hand> < title, blank line, body ending in the trailer",
+            "usage: gh-issue-create.sh <security|bug|test-gap> <critical|high|medium|low>"
+            " <sweep|mutation|hand> < title, blank line, body ending in the trailer",
             result.stderr,
         )
 
@@ -175,6 +178,21 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
             self.run_helper("bug", "low", "hand", body=self.STDIN))
         self.assert_refused_before_gh(
             self.run_helper("bug", "low", "sweep", body=self.HAND_STDIN))
+        # The mutation route's sentence claims an execution, and the sweep's a second reading: neither stands in.
+        self.assert_refused_before_gh(
+            self.run_helper("test-gap", "low", "mutation", body=self.STDIN))
+        self.assert_refused_before_gh(
+            self.run_helper("test-gap", "low", "sweep", body=self.MUTATION_STDIN))
+
+    def test_a_mutation_filing_reaches_gh_under_the_test_gap_kind(self):
+        result = self.run_helper("test-gap", "low", "mutation", body=self.MUTATION_STDIN)
+        self.assertEqual(0, result.returncode, result.stderr)
+        create = [c for c in self.calls() if c.startswith("issue create ")]
+        self.assertEqual(1, len(create), self.calls())
+        self.assertIn("--label test-gap", create[0])
+        self.assertIn("--label low", create[0])
+        self.assertEqual(f"the body\n\n{self.MUTATION_TRAILER}\n",
+                         (Path(self.dir) / "body").read_text(encoding="utf-8"))
 
     def test_a_hand_filing_reaches_gh_with_its_own_trailer(self):
         # And the positive control on the other half: the hand route files,
