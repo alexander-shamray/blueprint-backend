@@ -34,9 +34,7 @@ mkdir "$out"
 (cd "$resolved" && dotnet tool restore >&2)
 while IFS= read -r tests; do
   name=$(basename "$tests" .Tests)
-  # Stryker's analysis reads the framework from the project file alone, and here Directory.Build.props sets it;
-  # left unnamed, a Windows host with Visual Studio analyses with that MSBuild, which cannot resolve the SDK. The
-  # worktree is fresh, and Stryker's own fallback restore leaves that analysis unresolved on Windows.
+  # Restored, and its framework named, before Stryker runs; docs/testing.md, Mutation, says why.
   (cd "$resolved/$tests" && dotnet restore >&2) || { echo "cannot restore $name" >&2; exit 3; }
   framework=$(cd "$resolved/$tests" && dotnet msbuild -getProperty:TargetFramework) ||
     { echo "cannot evaluate the target framework of $name" >&2; exit 3; }
