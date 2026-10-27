@@ -56,10 +56,10 @@ sweeps read*)
 bash .claude/scripts/mutation-run.sh "$posix"
 ```
 
-It builds and tests every domain project once per mutant, so it runs for
-minutes: give the call the longest timeout the tool allows, or run it in the
-background and wait for its exit. **Stdout is the report**; Stryker's own
-output is on stderr.
+It builds each domain project and runs its suite once per mutant, so it
+runs for minutes: give the call the longest timeout the tool allows, or run
+it in the background and wait for its exit. **Stdout is the report**;
+Stryker's own output is on stderr.
 
 | Exit | Meaning |
 |---|---|
