@@ -259,7 +259,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         self.assertNotIn("--json body", code)
 
     def test_both_sweeps_grant_the_helper(self):
-        for name in ("security-sweep.md", "bug-sweep.md"):
+        for name in ("security-sweep.md", "bug-sweep.md", "mutation-sweep.md"):
             with self.subTest(command=name):
                 text = (COMMANDS / name).read_text(encoding="utf-8")
                 self.assertIn(
@@ -271,7 +271,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         # line that omits `author` is a rule a reader follows, and cannot see a
         # grant one command over that makes the rule irrelevant. `gh issue
         # list` alone returns `author` and `body` for every issue at once.
-        for name in ("security-sweep.md", "bug-sweep.md"):
+        for name in ("security-sweep.md", "bug-sweep.md", "mutation-sweep.md"):
             for forbidden in ("gh issue list", "gh issue view", "gh repo view",
                               "gh api"):
                 with self.subTest(command=name, grant=forbidden):
@@ -283,7 +283,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
 
     def test_neither_sweep_grants_gh_in_any_spelling(self):
         # The four substrings above miss the bare prefix, `gh issue` and a wildcard, which reach the same fields.
-        for name in ("security-sweep.md", "bug-sweep.md"):
+        for name in ("security-sweep.md", "bug-sweep.md", "mutation-sweep.md"):
             for grant in self.granted_bash(COMMANDS / name):
                 with self.subTest(command=name, grant=grant):
                     self.assertIsNone(self.GH_GRANT.match(grant))
@@ -339,7 +339,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
                     self.assertIn('"number":2', result.stdout)
 
     def test_both_sweeps_reach_the_issue_set_only_through_the_helper(self):
-        for name in ("security-sweep.md", "bug-sweep.md"):
+        for name in ("security-sweep.md", "bug-sweep.md", "mutation-sweep.md"):
             with self.subTest(command=name):
                 grants = " ".join(self.granted_bash(COMMANDS / name))
                 self.assertIn("bash .claude/scripts/gh-issue-list.sh", grants)
@@ -351,7 +351,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         # its field set does not bind a caller who still holds the raw grant.
         # Matching needs the body, which is an argument for a second
         # fixed-field helper rather than for keeping the grant.
-        for name in ("security-sweep.md", "bug-sweep.md"):
+        for name in ("security-sweep.md", "bug-sweep.md", "mutation-sweep.md"):
             with self.subTest(command=name):
                 frontmatter = (COMMANDS / name).read_text(
                     encoding="utf-8"
@@ -384,7 +384,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         # Moving a decision into a script is what lets a grant shrink rather
         # than grow: `gh repo view` was in both frontmatters for owner
         # resolution and nothing else, and the helper resolves it now.
-        for name in ("security-sweep.md", "bug-sweep.md"):
+        for name in ("security-sweep.md", "bug-sweep.md", "mutation-sweep.md"):
             with self.subTest(command=name):
                 frontmatter = (COMMANDS / name).read_text(
                     encoding="utf-8"
@@ -396,7 +396,7 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
         # It fails differently from the grant case above — this one catches a
         # command that goes back to spelling its own listing, that one catches
         # the grant which would let it choose fields.
-        for name in ("security-sweep.md", "bug-sweep.md"):
+        for name in ("security-sweep.md", "bug-sweep.md", "mutation-sweep.md"):
             with self.subTest(command=name):
                 text = (COMMANDS / name).read_text(encoding="utf-8")
                 for line in text.splitlines():
@@ -407,7 +407,8 @@ class WhatSuppressesIsDecidedByCodeNow(unittest.TestCase):
 
     def test_both_sweeps_actually_enumerate_the_issue_set(self):
         # The positive control, which would otherwise pass against a file that
-        # had stopped listing issues at all.
+        # had stopped listing issues at all. /mutation-sweep names the helper
+        # mid-sentence rather than on a line of its own, so it is not read here.
         for name in ("security-sweep.md", "bug-sweep.md"):
             with self.subTest(command=name):
                 text = (COMMANDS / name).read_text(encoding="utf-8")
