@@ -6,6 +6,8 @@ against the shapes a broken run leaves, and the helper's refusals before it reac
 
 import json
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -95,6 +97,27 @@ class AReport(unittest.TestCase):
         self.addCleanup(shutil.rmtree, reports, ignore_errors=True)
         with self.assertRaisesRegex(ms.Refusal, "cannot read"):
             ms.report(reports, REPO)
+
+    def test_a_line_outside_cp1252_reaches_a_pipe(self):
+        # Under -I a piped stdout on Windows keeps the locale's code page, which has no arrow.
+        root = tempfile.mkdtemp(prefix="mutation-root-")
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        made = run_bash('cd "$R" && git init -q . && mkdir -p src/A.Domain tests/A.Domain.Tests'
+                        ' && echo x > src/A.Domain/A.Domain.csproj'
+                        ' && echo x > tests/A.Domain.Tests/A.Domain.Tests.csproj'
+                        f' && git add . && git {GIT_ID} commit -q -m init', R=root)
+        self.assertEqual(0, made.returncode, made.stderr)
+        report = stryker_report(mutant("Killed"), mutant("Survived"))
+        next(iter(report["files"].values()))["source"] = "if (a < b) // a \u2192 b\n"
+        reports = Path(tempfile.mkdtemp(prefix="mutation-reports-"))
+        self.addCleanup(shutil.rmtree, reports, ignore_errors=True)
+        target = reports / "A.Domain" / "reports" / "mutation-report.json"
+        target.parent.mkdir(parents=True)
+        target.write_text(json.dumps(report), encoding="utf-8")
+        result = subprocess.run([sys.executable, "-I", str(SCRIPTS / "mutation_survivors.py"), "report",
+                                 str(reports), root], capture_output=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("a \u2192 b", result.stdout.decode("utf-8"))
 
     def test_render_prints_the_counts_and_each_site(self):
         lines = ms.render("A.Domain", {"Killed": 3, "Survived": 1},
