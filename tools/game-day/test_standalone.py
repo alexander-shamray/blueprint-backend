@@ -513,6 +513,8 @@ class Holding(unittest.TestCase):
             game_day.hold(module, Stack().world, sleep=lambda seconds: None, clock=lambda: next(clock), limit=2500)
         finally:
             release.set()
+            # hold() polls every game-day- thread in the process, so one still alive spins the next test's hold.
+            worker.join(5)
 
 
 class Landing(unittest.TestCase):
