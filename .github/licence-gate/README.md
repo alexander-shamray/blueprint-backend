@@ -77,6 +77,9 @@ it ahead of the build.
 - **A pin printed in prose.** The chapter check reads MSBuild's attribute
   pair, which is what a transcription of the props file looks like. A
   sentence naming a version in words passes, and the reviewer carries it.
+- **A tool the manifest pins.** `.config/dotnet-tools.json` is not read, so
+  a package `dotnet tool restore` resolves passes uncleared; Appendix B
+  carries each such tool in prose, and the reviewer checks the two agree.
 
 ## How it runs
 
