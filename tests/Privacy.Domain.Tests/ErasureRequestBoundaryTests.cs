@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Privacy.Domain.Tests;
 
-// Pins what ErasureRequest's edges and wording say, which the lifecycle tests do not read (#1502).
+// Pins ErasureRequest's edges and wording.
 public class ErasureRequestBoundaryTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 20, 9, 0, 0, TimeSpan.Zero);
@@ -70,8 +70,6 @@ public class ErasureRequestBoundaryTests
     [Fact]
     public void What_a_store_materialises_starts_empty()
     {
-        // EF Core builds these through the private constructor and sets what the row holds; a column it leaves
-        // out must read as empty, not as a placeholder.
         Create<ErasureAmendment>().Added.ShouldBe("");
         Create<ErasureAmendment>().Removed.ShouldBe("");
         Create<ErasureAmendment>().Reason.ShouldBe("");
