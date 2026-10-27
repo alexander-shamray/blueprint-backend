@@ -113,6 +113,8 @@ class TheConfiguration(unittest.TestCase):
         self.assertEqual(["json"], config["reporters"])
         self.assertIn("*Exception.ctor", config["ignore-methods"])
         self.assertNotIn("break-at", config)
+        # Off by default, a partly red baseline would still be mutated and its survivors filed.
+        self.assertIs(True, config["break-on-initial-test-failure"])
 
     def test_the_helper_reads_its_configuration_and_reader_beside_itself(self):
         text = RUN.read_text(encoding="utf-8")
