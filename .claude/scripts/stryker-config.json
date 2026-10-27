@@ -1,0 +1,7 @@
+{
+  "stryker-config": {
+    "test-runner": "mtp",
+    "reporters": ["json"],
+    "ignore-methods": ["*Exception.ctor"]
+  }
+}

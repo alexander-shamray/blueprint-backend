@@ -47,7 +47,10 @@ dir_there=$(git -C "$path" rev-parse --path-format=absolute --git-dir)
 [ "$dir_there" != "$common_there" ] ||
   { echo "refusing to remove the main worktree: $path" >&2; exit 3; }
 git worktree remove "$resolved"
-# The slice lists sweep-slices.sh wrote beside it; named from the checked path,
-# never passed, and only once git has removed the worktree itself.
+# The slice lists sweep-slices.sh and the reports mutation-run.sh wrote beside
+# it; named from the checked path, never passed, and only once git has removed
+# the worktree itself.
 slices="$resolved.slices"
 if [ -d "$slices" ] && [ ! -L "$slices" ]; then rm -rf -- "$slices"; fi
+mutation="$resolved.mutation"
+if [ -d "$mutation" ] && [ ! -L "$mutation" ]; then rm -rf -- "$mutation"; fi
