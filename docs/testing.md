@@ -374,10 +374,9 @@ dotnet tool run dotnet-stryker --config-file ../../.claude/scripts/stryker-confi
 ```
 
 The report lands under `artifacts/`, which is git-ignored, as
-`reports/mutation-report.json`. Its build is the project's own, so one that
-fails stops it before any mutant runs; a failing test does not, because the
-configuration leaves Stryker's `break-on-initial-test-failure` at its
-default, so run the domain suite green first.
+`reports/mutation-report.json`. Its build and its test runs are the
+project's own, and the configuration sets `break-on-initial-test-failure`,
+so a failing build or a failing test stops it before any mutant runs.
 
 ## What an assertion must hold
 
