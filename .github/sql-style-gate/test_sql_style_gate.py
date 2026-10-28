@@ -154,13 +154,22 @@ class TheRealTree(unittest.TestCase):
         cls.paths = gate.tracked(gate.REPO_ROOT)
         cls.result = gate.scan(gate.REPO_ROOT, cls.paths)
 
+    # The README's two exclusions, spelled here rather than read from the gate,
+    # so a widened exclusion there cannot narrow this side too.
+    PLANS = "docs/superpowers/"
+    SUITE = ".github/sql-style-gate/test_sql_style_gate.py"
+
+    def test_the_gate_excludes_exactly_the_plans_and_this_suite(self) -> None:
+        self.assertEqual((gate.EXCLUDED_PREFIXES, gate.EXCLUDED_FILES), ((self.PLANS,), (self.SUITE,)))
+
     def test_every_tracked_file_naming_a_join_is_read(self) -> None:
         # Listed here rather than by gate.tracked, so a narrowed listing there cannot narrow this side too.
         listing = subprocess.run(["git", "ls-files", "-z"], cwd=gate.REPO_ROOT, capture_output=True,
                                  check=True).stdout
         holding = []
         for path in (name.decode("utf-8") for name in listing.split(b"\0") if name):
-            data = b"" if gate.excluded(path) else (gate.REPO_ROOT / path).read_bytes()
+            skipped = path.startswith(self.PLANS) or path == self.SUITE
+            data = b"" if skipped else (gate.REPO_ROOT / path).read_bytes()
             if b"JOIN" in data and b"\0" not in data:
                 holding.append(path)
         self.assertGreater(len(holding), 20)
