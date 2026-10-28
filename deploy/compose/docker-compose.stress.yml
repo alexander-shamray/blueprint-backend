@@ -1,8 +1,8 @@
 # ADR-157's stress override, for deploy/observability/README.md's stress run
 # alone, never a deployment: it lifts the edge's rate limits, stops the
-# workers pacing to the carrier, the relay and the push providers, scales
-# Ordering (ADR-158) and samples traces (ADR-160). No other Compose file sets
-# its environment keys, so `up` without it restores every default.
+# workers pacing to their third parties, scales Ordering (ADR-158), samples
+# traces (ADR-160) and bounds the observer (ADR-162). No other Compose file
+# sets its environment keys or limits, so `up` without it restores them all.
 
 # Not part of `up`: add it to the full-stack command deploy/compose/README.md
 # gives. Each service's suite reads this file, so a value the service's
@@ -86,3 +86,15 @@ services:
     ports: !reset []
     deploy:
       replicas: 3
+
+  # The observer shares the machine it measures, so it is held to a part of
+  # it, and the collector's memory_limiter takes its ceiling from mem_limit.
+  # Adding or dropping the override recreates both containers, and the LGTM
+  # container's stores go with it.
+  grafana:
+    cpus: "2"
+    mem_limit: 8g
+
+  otel-collector:
+    cpus: "1"
+    mem_limit: 512m

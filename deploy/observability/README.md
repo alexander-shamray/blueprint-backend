@@ -497,8 +497,12 @@ what gives out first is the software itself or the host's resources, and the
 resource readings tell those two apart. It also samples every host's traces,
 since nothing the run reads comes from a trace and tracing every request made
 the trace store the observer's largest cost
-([ADR-160](../../docs/backend-architecture/adr/ADR-160-the-stress-override-samples-traces-parent-based-1533.md)).
-The SLO run never uses the override.
+([ADR-160](../../docs/backend-architecture/adr/ADR-160-the-stress-override-samples-traces-parent-based-1533.md)),
+and holds the LGTM container and the collector to a part of the machine, so
+the observer's CPU does not bring the generator's limit nearer
+([ADR-162](../../docs/backend-architecture/adr/ADR-162-the-stress-override-bounds-the-observer-and-the-collector-sheds-within-its-bound-1534.md)).
+At its cap the LGTM container is named among the services that gave up, since
+its CPU is read against its own limit. The SLO run never uses the override.
 
 **The users.** `setup()` makes a `stress-run` client and one user per VU at
 the highest step, `stress-0001` upwards, through Keycloak's admin API, as the
@@ -671,7 +675,8 @@ first and then the step, the level and the stop rule, as in
 `summary.md` carry the first three.
 
 **4. Go back to the normal profile** by bringing the stack up without the
-override. Nothing else needs undoing:
+override. Nothing else needs undoing. It recreates the LGTM container, which
+empties Prometheus, so a summary is made in step 3, before this:
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d --wait

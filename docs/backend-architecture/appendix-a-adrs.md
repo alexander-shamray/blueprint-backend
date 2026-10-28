@@ -168,6 +168,7 @@ decision looks wrong.
 | **ADR-159** | [Framework categories log at Warning unless configured (#1532)](adr/ADR-159-framework-categories-log-at-warning-unless-configured-1532.md) |
 | **ADR-160** | [The stress override samples traces, parent-based (#1533)](adr/ADR-160-the-stress-override-samples-traces-parent-based-1533.md) |
 | **ADR-161** | [The outbox key is optimised for sequential inserts and a pass completes its rows in one statement (#1531)](adr/ADR-161-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md) |
+| **ADR-162** | [The stress override bounds the observer, and the collector sheds within its bound (#1534)](adr/ADR-162-the-stress-override-bounds-the-observer-and-the-collector-sheds-within-its-bound-1534.md) |
 
 ---
 
