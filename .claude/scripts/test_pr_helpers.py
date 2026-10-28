@@ -542,7 +542,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
     def test_the_class_verdict_is_the_gates_own(self):
         # One payload through both readers of classes.yml: a path is
         # `outside-class` here exactly when the gate says it is outside the
-        # class's tree set, whatever the row admits, so the two cannot drift.
+        # class's tree set, whatever the row admits, on these paths over the shipped map.
         paths = [
             "src/Services/Ordering/A.cs", "tests/Ordering.Domain.Tests/A.cs", "docs/x.md",
             ".claude/scripts/x.sh", ".github/workflows/x.yml", "deploy/compose/x.yml",
