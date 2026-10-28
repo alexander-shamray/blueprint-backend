@@ -1067,8 +1067,9 @@ consumer has none of the three, above), §9.5's inbox filter and retention
 purge, §11.3's JWT validation, both images ([§15.2](15-cicd-deployment.md)) and
 §4.2's architecture gates. The migrations it copies are `InitialCreate`,
 `AddOutbox`, `AddInbox`, `AddOutboxRetentionIndex`, `AddIdempotencyMarkers`,
-`IdempotencyMarkerCommittedAtDefault`, `AddIdempotencyMarkerRowVersion` and
-`AddOutboxTraceContext`, bar the three outbox ones for a pure consumer —
+`IdempotencyMarkerCommittedAtDefault`, `AddIdempotencyMarkerRowVersion`,
+`AddOutboxTraceContext` and `OptimizeOutboxKeyForSequentialInserts`, bar the
+four outbox ones for a pure consumer —
 the messaging tables ship with the
 dispatcher that reads them, because a service carrying the dispatcher without
 its table logs a failed claim twice a second from its first boot, and §8.5's
@@ -1092,6 +1093,10 @@ the first pass
 `AddOutboxTraceContext` travels on the same argument one table over: the
 outbox dispatcher's claim reads both trace columns ([§9.4](09-messaging.md)),
 so a publishing service without them fails its first claim.
+`OptimizeOutboxKeyForSequentialInserts` travels on a weaker one: a service
+without it still runs, but its outbox key is the hot last page
+[ADR-159](adr/ADR-159-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md)
+found, and its `OutboxDispatcherTests` would fail on the missing option.
 It then edits the shared files: `Platform.slnx`, the Compose index — one
 `include:` line for the unit it just created — the `infra-only` override, which
 excludes both halves of the pair, `.env.example`
