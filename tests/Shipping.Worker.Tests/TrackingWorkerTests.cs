@@ -86,7 +86,12 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Id = {0} AND CancellationRefusedAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM shipping.Shipments
+            WHERE Id = {0}
+                AND CancellationRefusedAt IS NOT NULL
+            """,
             shipment.Id.Value)).ShouldBe(1, "the carrier refused the cancellation");
 
         // Still Booked with both stamps, so only the refusal predicate keeps the fulfilment claim off it; counted as
@@ -149,7 +154,12 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.NextPollAtAsync(shipment.Id)).ShouldBeNull();
         (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull("the commit that ended the row released it");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Id = {0} AND TerminalAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM shipping.Shipments
+            WHERE Id = {0}
+                AND TerminalAt IS NOT NULL
+            """,
             shipment.Id.Value)).ShouldBe(1, "ADR-053's address window starts at TerminalAt");
         (await fixture.OutboxAsync()).ShouldBeEmpty("nothing on the platform waits on a delivery that never came");
         fixture.CapturedLogs.Everything.ShouldContain(

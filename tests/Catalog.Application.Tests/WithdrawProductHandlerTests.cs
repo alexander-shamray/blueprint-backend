@@ -105,7 +105,12 @@ public sealed class WithdrawProductHandlerTests(ServiceFixture fixture) : IAsync
         // A 404, not a 403, which would confirm the product exists (ADR-074, §11.4).
         result.Error.ShouldBe(ProductErrors.NotFound);
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM catalog.Products WHERE Id = {0} AND WithdrawnAt IS NULL",
+                """
+                SELECT Value = COUNT(*)
+                FROM catalog.Products
+                WHERE Id = {0}
+                    AND WithdrawnAt IS NULL
+                """,
                 productId))
             .ShouldBe(1);
         (await fixture.OutboxAsync()).ShouldBeEmpty();

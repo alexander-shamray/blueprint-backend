@@ -225,7 +225,12 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
         ended.CustomerId.ShouldBe(Subject);
         ended.Parameters.ShouldNotBeEmpty();
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM notifications.PushDeliveries WHERE CustomerId = {0} AND Languages = 'en'",
+            """
+            SELECT Value = COUNT(*)
+            FROM notifications.PushDeliveries
+            WHERE CustomerId = {0}
+                AND Languages = 'en'
+            """,
             Subject)).ShouldBe(2, "the kept order's pending and sent deliveries, and not the erased order's");
     }
 

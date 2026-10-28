@@ -199,8 +199,12 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
         Task<SendPass> pass = PushPassAsync();
         await ServiceFixture.WaitUntilAsync(async () =>
             await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM notifications.PushDeliveries " +
-                "WHERE NotificationId = {0} AND SendStartedAt IS NOT NULL",
+                """
+                SELECT Value = COUNT(*)
+                FROM notifications.PushDeliveries
+                WHERE NotificationId = {0}
+                    AND SendStartedAt IS NOT NULL
+                """,
                 notice.NotificationId) == 1);
         await RegisterAsync(customer, FcmPushProvider.Name, "device-rotated", installation, sequence: 2);
         FcmSends().ShouldBeEmpty("the registration must land while the provider still holds its answer");
@@ -369,8 +373,12 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
 
         await ServiceFixture.WaitUntilAsync(async () =>
             await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM notifications.PushDeliveries " +
-                "WHERE Status = 'Pending' AND NextAttemptAt > SYSDATETIMEOFFSET()") == 0);
+                """
+                SELECT Value = COUNT(*)
+                FROM notifications.PushDeliveries
+                WHERE Status = 'Pending'
+                    AND NextAttemptAt > SYSDATETIMEOFFSET()
+                """) == 0);
 
         return pass;
     }

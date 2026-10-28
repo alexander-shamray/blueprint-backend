@@ -184,8 +184,13 @@ public sealed class ConsentJournalTests(ServiceFixture fixture) : IAsyncLifetime
 
         (await ReadAsync(subject)).Source.ShouldBe(PreferenceSource.Default);
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM notifications.ConsentEntries WHERE EntryId = {0} AND SubjectId IS NULL " +
-            "AND ErasedUnder = '[]'",
+            """
+            SELECT Value = COUNT(*)
+            FROM notifications.ConsentEntries
+            WHERE EntryId = {0}
+                AND SubjectId IS NULL
+                AND ErasedUnder = '[]'
+            """,
             written.State.Version!.Value)).ShouldBe(1, "anonymised, its requests gone with the subject");
     }
 

@@ -635,7 +635,12 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
 
         response.StatusCode.ShouldBe(expected);
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM catalog.Products WHERE Id = {0} AND WithdrawnAt IS NULL",
+                """
+                SELECT Value = COUNT(*)
+                FROM catalog.Products
+                WHERE Id = {0}
+                    AND WithdrawnAt IS NULL
+                """,
                 id))
             .ShouldBe(1, "a refused request must not reach the handler");
     }

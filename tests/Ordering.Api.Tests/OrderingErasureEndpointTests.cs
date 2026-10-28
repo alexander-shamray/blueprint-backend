@@ -48,13 +48,28 @@ public sealed class OrderingErasureEndpointTests(ServiceFixture fixture) : IAsyn
         (await CountOrdersAsync(Guid.Empty)).ShouldBe(1, "the order stays, under the id that names nobody");
         (await CountOrdersAsync(Bystander)).ShouldBe(1);
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM ordering.Orders WHERE CustomerId = {0} AND ShipToLine1 = '' " +
-            "AND ShipToLine2 IS NULL AND ShipToCity = '' AND ShipToPostalCode = '' AND ShipToCountry = 'ZZ'",
+            """
+            SELECT Value = COUNT(*)
+            FROM ordering.Orders
+            WHERE CustomerId = {0}
+                AND ShipToLine1 = ''
+                AND ShipToLine2 IS NULL
+                AND ShipToCity = ''
+                AND ShipToPostalCode = ''
+                AND ShipToCountry = 'ZZ'
+            """,
             Guid.Empty)).ShouldBe(1, "every address field is cleared with the id");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM ordering.Orders WHERE CustomerId = {0} AND ShipToLine1 = '1 Rue Exemple' " +
-            "AND ShipToLine2 = 'Apt 2' AND ShipToCity = 'Paris' AND ShipToPostalCode = '75001' " +
-            "AND ShipToCountry = 'FR'",
+            """
+            SELECT Value = COUNT(*)
+            FROM ordering.Orders
+            WHERE CustomerId = {0}
+                AND ShipToLine1 = '1 Rue Exemple'
+                AND ShipToLine2 = 'Apt 2'
+                AND ShipToCity = 'Paris'
+                AND ShipToPostalCode = '75001'
+                AND ShipToCountry = 'FR'
+            """,
             Bystander)).ShouldBe(1, "a bystander keeps their whole address");
     }
 
@@ -71,8 +86,13 @@ public sealed class OrderingErasureEndpointTests(ServiceFixture fixture) : IAsyn
             "SELECT Value = COUNT(*) FROM ordering.OrderSummaries WHERE CustomerId = {0}",
             Subject)).ShouldBe(0);
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM ordering.OrderSummaries WHERE OrderId = {0} AND CustomerId IS NULL " +
-            "AND PlacedCounted = 1",
+            """
+            SELECT Value = COUNT(*)
+            FROM ordering.OrderSummaries
+            WHERE OrderId = {0}
+                AND CustomerId IS NULL
+                AND PlacedCounted = 1
+            """,
             order)).ShouldBe(1, "a delete would reset the flag a replayed event counts against");
         (await fixture.ScalarAsync<int>(
             "SELECT Value = COUNT(*) FROM ordering.OrderSummaries WHERE CustomerId = {0}",
@@ -148,7 +168,12 @@ public sealed class OrderingErasureEndpointTests(ServiceFixture fixture) : IAsyn
             "SELECT Value = ShipToLine1 FROM ordering.Orders WHERE Id = {0}",
             after)).ShouldBe("1 Rue Exemple");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM ordering.OrderSummaries WHERE OrderId = {0} AND CustomerId = {1}",
+            """
+            SELECT Value = COUNT(*)
+            FROM ordering.OrderSummaries
+            WHERE OrderId = {0}
+                AND CustomerId = {1}
+            """,
             after,
             Subject)).ShouldBe(1);
         (await fixture.ScalarAsync<Guid>(Owner, before)).ShouldBe(Guid.Empty);

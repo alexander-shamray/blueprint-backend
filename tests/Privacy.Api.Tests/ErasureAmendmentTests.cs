@@ -63,7 +63,12 @@ public sealed class ErasureAmendmentTests(ServiceFixture fixture) : IAsyncLifeti
             "SELECT Value = Status FROM privacy.ErasureRequests WHERE RequestId = {0}",
             request)).ShouldBe("Closed");
         (await fixture.ScalarAsync<bool>(
-            "SELECT Value = Counted FROM privacy.ErasureCompletions WHERE RequestId = {0} AND Responder = 'shipping'",
+            """
+            SELECT Value = Counted
+            FROM privacy.ErasureCompletions
+            WHERE RequestId = {0}
+                AND Responder = 'shipping'
+            """,
             request)).ShouldBeTrue("the recount is saved, not only held by the aggregate");
     }
 

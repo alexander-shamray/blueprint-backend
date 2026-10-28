@@ -189,7 +189,12 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
 
         await Eventually(
             () => fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM ordering.OrderReviews WHERE OrderId = {0} AND Reason = {1}",
+                """
+                SELECT Value = COUNT(*)
+                FROM ordering.OrderReviews
+                WHERE OrderId = {0}
+                    AND Reason = {1}
+                """,
                 orderId,
                 ReviewReasons.NotDespatched),
             expected: 1,

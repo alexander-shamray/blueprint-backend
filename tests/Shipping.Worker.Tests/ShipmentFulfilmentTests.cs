@@ -378,7 +378,12 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         (await _steps.StatusAsync(order)).ShouldBe("Booked");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0} AND CancellationRefusedAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM shipping.Shipments
+            WHERE OrderId = {0}
+                AND CancellationRefusedAt IS NOT NULL
+            """,
             order)).ShouldBe(1, "the saga's review row is the record of the disagreement");
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "a refused cancellation is outside the claim");
     }
@@ -397,7 +402,12 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         (await _steps.StatusAsync(order)).ShouldBe("Booked", "the parcel may be moving, so tracking goes on");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0} AND CancellationRefusedAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM shipping.Shipments
+            WHERE OrderId = {0}
+                AND CancellationRefusedAt IS NOT NULL
+            """,
             order)).ShouldBe(1);
         CancelKeys().ShouldBeEmpty("past the age the carrier is not asked again");
         fixture.CapturedLogs.Everything.ShouldContain(

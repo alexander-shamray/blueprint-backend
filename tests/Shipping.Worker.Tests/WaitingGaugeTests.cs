@@ -211,7 +211,12 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
 
         (await fixture.StatusAsync(refused.Id)).ShouldBe("Booked");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Id = {0} AND CancellationRefusedAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM shipping.Shipments
+            WHERE Id = {0}
+                AND CancellationRefusedAt IS NOT NULL
+            """,
             refused.Id.Value)).ShouldBe(1);
         ReadUnscanned().ShouldBe(1, "a refused cancellation leaves a parcel the carrier should have scanned");
     }

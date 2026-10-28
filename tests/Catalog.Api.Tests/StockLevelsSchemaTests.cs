@@ -12,7 +12,12 @@ public sealed class StockLevelsSchemaTests(ServiceFixture fixture)
     public async Task The_migrator_creates_the_stock_level_projection()
     {
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID('catalog') AND name = 'StockLevels'"))
+            """
+            SELECT Value = COUNT(*)
+            FROM sys.tables
+            WHERE schema_id = SCHEMA_ID('catalog')
+                AND name = 'StockLevels'
+            """))
             .ShouldBe(1);
     }
 }

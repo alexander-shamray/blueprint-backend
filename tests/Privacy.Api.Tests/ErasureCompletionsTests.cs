@@ -41,13 +41,23 @@ public sealed class ErasureCompletionsTests(ServiceFixture fixture) : IAsyncLife
             "SELECT Value = Status FROM privacy.ErasureRequests WHERE RequestId = {0}",
             request)).ShouldBe("Closed");
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM privacy.ErasureRequests WHERE RequestId = {0} AND SubjectId IS NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM privacy.ErasureRequests
+            WHERE RequestId = {0}
+                AND SubjectId IS NULL
+            """,
             request)).ShouldBe(1, "the closed row no longer holds the subject's id");
         (await fixture.ScalarAsync<string>(
             "SELECT Value = SubjectHash FROM privacy.ErasureRequests WHERE RequestId = {0}",
             request)).ShouldBe(PersonalDataErasure.HashSubject(request, Subject));
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM privacy.ErasureCompletions WHERE RequestId = {0} AND Counted = 1",
+            """
+            SELECT Value = COUNT(*)
+            FROM privacy.ErasureCompletions
+            WHERE RequestId = {0}
+                AND Counted = 1
+            """,
             request)).ShouldBe(5);
     }
 
@@ -89,8 +99,12 @@ public sealed class ErasureCompletionsTests(ServiceFixture fixture) : IAsyncLife
         await CompleteAsync(request, "catalog", 7);
 
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = CAST(Counted AS int) FROM privacy.ErasureCompletions " +
-            "WHERE RequestId = {0} AND Responder = 'catalog'",
+            """
+            SELECT Value = CAST(Counted AS int)
+            FROM privacy.ErasureCompletions
+            WHERE RequestId = {0}
+                AND Responder = 'catalog'
+            """,
             request)).ShouldBe(0);
         (await fixture.ScalarAsync<string>(
             "SELECT Value = Status FROM privacy.ErasureRequests WHERE RequestId = {0}",

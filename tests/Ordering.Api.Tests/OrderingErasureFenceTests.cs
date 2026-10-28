@@ -57,7 +57,12 @@ public sealed class OrderingErasureFenceTests(ServiceFixture fixture) : IAsyncLi
         Guid order = (await placed.WaitAsync(Deadline, ct)).Value;
 
         (await fixture.ScalarAsync<string>(
-            "SELECT Value = ErasedUnder FROM ordering.Orders WHERE Id = {0} AND CustomerId = {1}",
+            """
+            SELECT Value = ErasedUnder
+            FROM ordering.Orders
+            WHERE Id = {0}
+                AND CustomerId = {1}
+            """,
             order,
             Subject)).ShouldBe($"[\"{request}\"]", "the placement waited, then read the audit row and stamped it");
     }
@@ -130,8 +135,13 @@ public sealed class OrderingErasureFenceTests(ServiceFixture fixture) : IAsyncLi
         (await erasure.WaitAsync(Deadline, ct)).Value.ShouldBe(2, "the erasure waited, then found the summary");
 
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM ordering.OrderSummaries WHERE OrderId = {0} AND CustomerId IS NULL " +
-            "AND PlacedAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM ordering.OrderSummaries
+            WHERE OrderId = {0}
+                AND CustomerId IS NULL
+                AND PlacedAt IS NOT NULL
+            """,
             order)).ShouldBe(1);
     }
 

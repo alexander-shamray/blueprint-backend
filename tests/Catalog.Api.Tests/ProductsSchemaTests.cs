@@ -36,7 +36,12 @@ public sealed class ProductsSchemaTests(ServiceFixture fixture)
 
                 int count = await db.Database
                     .SqlQuery<int>(
-                        $"SELECT Value = COUNT(*) FROM catalog.Products WHERE Id = {id} AND LastEventAt IS NOT NULL")
+                        $"""
+                        SELECT Value = COUNT(*)
+                        FROM catalog.Products
+                        WHERE Id = {id}
+                            AND LastEventAt IS NOT NULL
+                        """)
                     .SingleAsync(token);
 
                 await transaction.RollbackAsync(token);

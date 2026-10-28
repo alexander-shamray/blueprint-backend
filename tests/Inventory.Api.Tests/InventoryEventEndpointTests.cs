@@ -114,8 +114,12 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
 
         await Eventually(
             () => fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM inventory.Reservations " +
-                    "WHERE OrderId = {0} AND DespatchedUnreservedAt IS NOT NULL",
+                """
+                SELECT Value = COUNT(*)
+                FROM inventory.Reservations
+                WHERE OrderId = {0}
+                    AND DespatchedUnreservedAt IS NOT NULL
+                """,
                 order),
             expected: 1,
             because: "the open case is recorded as state, not logged and forgotten");
@@ -160,8 +164,12 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
 
         (await StatusAsync(order)).ShouldBe("Released");
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM inventory.Reservations " +
-                    "WHERE OrderId = {0} AND DespatchedUnreservedAt IS NULL",
+                """
+                SELECT Value = COUNT(*)
+                FROM inventory.Reservations
+                WHERE OrderId = {0}
+                    AND DespatchedUnreservedAt IS NULL
+                """,
                 order))
             .ShouldBe(1, "a tombstone never held stock, so despatch records nothing on it");
         (await fixture.OutboxAsync()).ShouldNotContain(
@@ -226,8 +234,12 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
 
         await Eventually(
             () => fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM inventory.InboxMessages " +
-                    "WHERE Endpoint = {0} AND MessageId IN ({1}, {2})",
+                """
+                SELECT Value = COUNT(*)
+                FROM inventory.InboxMessages
+                WHERE Endpoint = {0}
+                    AND MessageId IN ({1}, {2})
+                """,
                 MessagingRegistration.EventsQueue,
                 cancellation.MessageId,
                 despatch.MessageId),

@@ -50,7 +50,12 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
             index)).ShouldBe(column);
 
         (await fixture.ScalarAsync<string?>(
-            "SELECT Value = filter_definition FROM sys.indexes WHERE object_id = OBJECT_ID({0}) AND name = {1}",
+            """
+            SELECT Value = filter_definition
+            FROM sys.indexes
+            WHERE object_id = OBJECT_ID({0})
+                AND name = {1}
+            """,
             qualified,
             index)).ShouldBe(filter);
     }

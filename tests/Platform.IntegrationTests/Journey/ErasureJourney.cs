@@ -52,7 +52,12 @@ public sealed class ErasureJourney(FirstJurisdictionWorld world)
                 (await world.NoticesAsync(order)).Count(n => n.EndsWith(":Sent", StringComparison.Ordinal)) == 4 &&
                 await world.AnyAsync(
                     JourneyWorld.Bff,
-                    "SELECT 1 FROM bff.Orders WHERE CustomerId = @p0 AND DeliveredAt IS NOT NULL",
+                    """
+                    SELECT 1
+                    FROM bff.Orders
+                    WHERE CustomerId = @p0
+                        AND DeliveredAt IS NOT NULL
+                    """,
                     order.Customer),
             Deadlines.Journey,
             "the order delivered, its four notices sent and the buyer's list showing it delivered");
@@ -114,11 +119,21 @@ public sealed class ErasureJourney(FirstJurisdictionWorld world)
             request)).ShouldBe(hash);
         (await world.ScalarAsync<int>(
             JourneyWorld.Privacy,
-            "SELECT COUNT(*) FROM privacy.ErasureRequests WHERE RequestId = @p0 AND SubjectId IS NULL",
+            """
+            SELECT COUNT(*)
+            FROM privacy.ErasureRequests
+            WHERE RequestId = @p0
+                AND SubjectId IS NULL
+            """,
             request)).ShouldBe(1, "the closed request no longer holds the customer's id");
         (await world.ColumnAsync(
             JourneyWorld.Privacy,
-            "SELECT Responder FROM privacy.ErasureCompletions WHERE RequestId = @p0 AND Counted = 1",
+            """
+            SELECT Responder
+            FROM privacy.ErasureCompletions
+            WHERE RequestId = @p0
+                AND Counted = 1
+            """,
             request)).ShouldBe(["bff", "notifications", "ordering", "payments", "shipping"], ignoreOrder: true);
     }
 
