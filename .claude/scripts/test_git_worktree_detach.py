@@ -140,6 +140,74 @@ class SweepWorktreeShape(unittest.TestCase):
         self.assertRegex(run_bash('basename "$P"', P=path).stdout.strip(), r"^secsweep-.{6}$")
 
 
+class StaleSweepWorktrees(unittest.TestCase):
+    """A sweep's start drops the sweep worktrees interrupted sweeps left.
+
+    A repository and a temp root of their own, so the drop can reach nothing of
+    this checkout's, and no sweep another session is running.
+    """
+
+    def setUp(self):
+        made = run_bash(
+            'top=$(mktemp -d) && mkdir "$top/root" "$top/repo" && cd "$top/repo" && git init -q .'
+            ' && git -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m t'
+            ' && echo "$top"'
+        )
+        self.assertEqual(0, made.returncode, made.stderr)
+        top = made.stdout.strip()
+        self.addCleanup(lambda: run_bash('rm -rf "$TOP"', TOP=top))
+        self.repo, self.root = f"{top}/repo", f"{top}/root"
+
+    def detach(self):
+        return run_bash(
+            'cd "$R" && bash "$DETACH" "$(git rev-parse HEAD)"',
+            R=self.repo, DETACH=str(DETACH), TMPDIR=self.root,
+        )
+
+    def made(self):
+        result = self.detach()
+        self.assertEqual(0, result.returncode, result.stderr)
+        return result.stdout.strip()
+
+    def age(self, path):
+        aged = run_bash('touch -d "2 days ago" "$P"', P=path)
+        self.assertEqual(0, aged.returncode, aged.stderr)
+
+    def names(self):
+        listing = run_bash('cd "$R" && git worktree list --porcelain', R=self.repo)
+        self.assertEqual(0, listing.returncode, listing.stderr)
+        return {line.rsplit("/", 1)[-1] for line in listing.stdout.splitlines() if line.startswith("worktree ")}
+
+    def test_a_day_old_sweep_worktree_goes_and_a_fresh_one_stays(self):
+        old, fresh = self.made(), self.made()
+        self.age(old)
+        result = self.detach()
+        self.assertEqual(0, result.returncode, result.stderr)
+        new = result.stdout.strip()
+        self.assertEqual(1, len(result.stdout.splitlines()), "stdout is still the path alone")
+        names = self.names()
+        self.assertNotIn(old.rsplit("/", 1)[-1], names)
+        self.assertIn(fresh.rsplit("/", 1)[-1], names)
+        self.assertIn(new.rsplit("/", 1)[-1], names)
+        self.assertEqual("gone", run_bash('[ -e "$P" ] || echo gone', P=old).stdout.strip())
+
+    def test_a_stale_worktree_holding_a_file_is_left_standing_and_named(self):
+        # git's refusal to remove a tree holding anything is the guard, and a
+        # sweep that refused its own teardown left it there for inspection.
+        old = self.made()
+        self.assertEqual(0, run_bash('echo x > "$P/kept.txt"', P=old).returncode)
+        self.age(old)
+        result = self.detach()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("left a stale sweep worktree standing", result.stderr)
+        self.assertIn(old.rsplit("/", 1)[-1], self.names())
+
+    def test_a_registration_whose_directory_went_is_pruned(self):
+        old = self.made()
+        self.assertEqual(0, run_bash('rm -rf "$P"', P=old).returncode)
+        self.made()
+        self.assertNotIn(old.rsplit("/", 1)[-1], self.names())
+
 
 if __name__ == "__main__":
     unittest.main()

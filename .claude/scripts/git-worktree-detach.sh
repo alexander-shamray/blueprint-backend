@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Fork the detached, pinned worktree a sweep audits in — /security-sweep or
-# /bug-sweep — and nothing else: `git worktree add --detach <path> <commit>`.
-#
+# /bug-sweep — `git worktree add --detach <path> <commit>`, once the worktrees
+# interrupted sweeps of this repository left are dropped, and nothing else.
+
 # A prefix grant on `git worktree add` also buys `-B`, which resets an existing
 # branch past the `git branch --force` and `-M` denies, and a prefix rule
 # cannot exclude a flag.
-#
+
 # --detach is fixed rather than passed, because a sweep worktree carries no
 # commits and must never hold a branch: the caller's branch stays checked out
 # where it is.
-#
+
 # The path is made here rather than passed, so the only path git is handed is
 # one this script has just created, and no sweep needs a `mktemp` grant, whose
 # arbitrary template creates an empty directory or file anywhere the session
@@ -25,6 +26,21 @@ commit="$1"
   { echo "commit must be a full 40-character sha: $commit" >&2; exit 2; }
 git rev-parse --verify --quiet "$commit^{commit}" >/dev/null ||
   { echo "no such commit: $commit" >&2; exit 3; }
+
+# A sweep stopped before its teardown leaves its worktree registered, and no
+# later run's name meets it again. A day old marks one no sweep still runs in;
+# every candidate goes through git-worktree-drop.sh, whose shape checks and
+# whose refusal of a tree holding anything are the guard, never this list.
+# Registrations whose directory has gone are pruned after.
+registered=$(git worktree list --porcelain)
+while IFS= read -r line; do
+  case "$line" in "worktree "*) old=${line#worktree } ;; *) continue ;; esac
+  case "${old##*/}" in secsweep-??????) : ;; *) continue ;; esac
+  [ -n "$(find "$old" -maxdepth 0 -mmin +1440 2>/dev/null)" ] || continue
+  bash "$(dirname "${BASH_SOURCE[0]}")/git-worktree-drop.sh" "$old" >&2 ||
+    echo "left a stale sweep worktree standing: $old" >&2
+done <<<"$registered"
+git worktree prune >&2
 
 tmproot=$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) ||
   { echo "cannot resolve the temp root" >&2; exit 4; }
