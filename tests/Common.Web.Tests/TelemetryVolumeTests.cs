@@ -13,7 +13,10 @@ using Xunit;
 
 namespace Common.Web.Tests;
 
-/// <summary>What a host sends under load: framework log levels (ADR-159) and trace sampling (ADR-160).</summary>
+/// <summary>
+/// What a host sends under load, framework log levels (ADR-159) and trace sampling (ADR-160), and what the
+/// observer may spend on it under stress (ADR-162).
+/// </summary>
 public partial class TelemetryVolumeTests
 {
     private static readonly Action<ILogger, Exception?> InformationProbe =
@@ -139,6 +142,44 @@ public partial class TelemetryVolumeTests
         ratio.ShouldBeInRange(0.01, 0.5);
     }
 
+    [Fact]
+    public void The_stress_override_bounds_every_hop_of_the_telemetry_and_the_collector_sheds_within_its_bound()
+    {
+        // The hops are read from where the telemetry is sent, so a store the collector starts exporting to is
+        // bounded too, or fails here.
+        string compose = Path.GetDirectoryName(StressOverride.Path)!;
+        string collector = File.ReadAllText(Path.Combine(compose, "otel", "config.yaml"));
+
+        List<string> hops = Directory
+            .EnumerateFiles(Path.Combine(compose, "services"), "*.yml")
+            .SelectMany(file => SentTo().Matches(File.ReadAllText(file)))
+            .Concat(SentTo().Matches(collector))
+            .Select(sent => sent.Groups["host"].Value)
+            .Distinct()
+            .ToList();
+
+        hops.Count.ShouldBeGreaterThanOrEqualTo(2, "the collector and the store it exports to were not both found");
+
+        Dictionary<string, string> overridden = ServiceEntry()
+            .Matches(File.ReadAllText(StressOverride.Path))
+            .ToDictionary(entry => entry.Groups["name"].Value, entry => entry.Value);
+
+        foreach (string hop in hops)
+        {
+            overridden.ShouldContainKey(hop, $"the stress override does not bound {hop}");
+            overridden[hop].ShouldMatch(@"\n    cpus: ""\d", $"{hop} has no CPU limit under stress");
+            overridden[hop].ShouldMatch(@"\n    mem_limit: \d+[mg]\r?\n", $"{hop} has no memory limit under stress");
+        }
+
+        // A share follows the override's limit and, on the default stack, binds only once the collector holds most
+        // of the machine; a fixed size would bind there at that size.
+        List<string> first = FirstProcessor().Matches(collector).Select(p => p.Groups["name"].Value).ToList();
+        first.Count.ShouldBe(PipelineReceivers().Count(collector), "a pipeline names no processors");
+        first.ShouldAllBe(name => name == "memory_limiter");
+        collector.ShouldContain("limit_percentage:");
+        collector.ShouldNotContain("limit_mib:");
+    }
+
     /// <summary>An Information and a Warning line on <paramref name="category"/>, through the host.</summary>
     private static List<LogRecord> Log(HostApplicationBuilder builder, string category)
     {
@@ -173,4 +214,15 @@ public partial class TelemetryVolumeTests
 
     [GeneratedRegex(@"^  (?<name>[a-z][a-z-]*):\r?\n(?:(?:    .*|[ \t]*)\r?\n)*", RegexOptions.Multiline)]
     private static partial Regex ServiceEntry();
+
+    [GeneratedRegex(
+        @"^\s+(?:OTEL_EXPORTER_OTLP_ENDPOINT|endpoint):\s*""?http://(?<host>[a-z][a-z-]*):\d+",
+        RegexOptions.Multiline)]
+    private static partial Regex SentTo();
+
+    [GeneratedRegex(@"^      processors: \[(?<name>[^,\]]+)", RegexOptions.Multiline)]
+    private static partial Regex FirstProcessor();
+
+    [GeneratedRegex(@"^      receivers: \[", RegexOptions.Multiline)]
+    private static partial Regex PipelineReceivers();
 }

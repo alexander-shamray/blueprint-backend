@@ -444,7 +444,10 @@ a test holds the two equal.
 
 The collector's mounted configuration, `deploy/compose/otel/config.yaml`, is
 OTLP in on both protocols, a scrape of the broker's exporter on metrics, a
-batch processor — and on metrics the `transform/canary-track` processor
+memory limiter first in every pipeline, sized as a share of the container's
+limit, which only the stress override sets
+([ADR-162](adr/ADR-162-the-stress-override-bounds-the-observer-and-the-collector-sheds-within-its-bound-1534.md)),
+a batch processor — and on metrics the `transform/canary-track` processor
 [ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)
 asks for — and OTLP out to the LGTM container, which ingests OTLP directly.
 The scrape is what puts `rabbitmq_queue_messages` in front of §13.6's queue
@@ -521,6 +524,11 @@ so that the outbox drains as the chart deploys it
 and samples the traces of every host that exports them, so that the observer
 does not compete with what it measures
 ([ADR-160](adr/ADR-160-the-stress-override-samples-traces-parent-based-1533.md)).
+It holds the LGTM container and the collector to a part of the machine, so
+that what is left over goes to the services; the two are recreated by `up`
+with the override and again without it, which empties the LGTM container's
+stores
+([ADR-162](adr/ADR-162-the-stress-override-bounds-the-observer-and-the-collector-sheds-within-its-bound-1534.md)).
 
 **A host process reads none of the container `environment:` blocks, so every
 key a service throws without has to be supplied to it.** **Five** do that, each

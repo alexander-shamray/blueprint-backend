@@ -23,6 +23,14 @@ receivers:
             - targets: [ "rabbitmq:15692" ]
 
 processors:
+  # First in every pipeline, so a full collector refuses what it is sent and
+  # stays up, rather than being killed with all it holds. Sized as a share of
+  # the container's limit, which only the stress override sets (ADR-162).
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
   batch:
 
   # §15.5's canary compares two tracks, and this is what makes the label it
@@ -67,13 +75,13 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp]
     metrics:
       receivers: [otlp, prometheus/rabbitmq]
-      processors: [transform/canary-track, batch]
+      processors: [memory_limiter, transform/canary-track, batch]
       exporters: [otlphttp]
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp]
