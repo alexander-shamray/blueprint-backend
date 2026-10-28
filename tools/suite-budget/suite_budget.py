@@ -64,10 +64,15 @@ def verdict(seconds: float, returncode: int | None, ceiling: float) -> str:
 
 def stop(child: subprocess.Popen) -> None:
     # Its bash, git and helper processes still in its tree go too, or one left running skews the next module's figure.
-    if WINDOWS:
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(child.pid)], capture_output=True)
-    else:
-        os.killpg(child.pid, signal.SIGKILL)
+    try:
+        if WINDOWS:
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(child.pid)], capture_output=True, timeout=60)
+        else:
+            os.killpg(child.pid, signal.SIGKILL)
+    except (ProcessLookupError, subprocess.TimeoutExpired):
+        pass
+    # A tree kill that failed or found the group empty still leaves the child itself to stop before the wait.
+    child.kill()
     child.wait()
 
 
