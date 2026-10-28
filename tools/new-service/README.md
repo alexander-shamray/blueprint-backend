@@ -139,8 +139,8 @@ and a render read 1, 18 and 75, ninety-four until a render on 2026-10-09
 read 1, 18 and 103 with forty-seven against containers, and 122 until a
 render on 2026-10-28 read 1, 18 and 123 with fifty-seven: twenty more,
 nineteen of them not the sequential-key test it was rendered for, so the pair
-was stale again before it added one. A figure nobody recounts goes stale on the next PR's clock rather
-than on its own.
+was stale again before it added one. A figure nobody recounts goes stale on
+the next PR's clock rather than on its own.
 
 **Adding to the number is not recounting it.** PR-22 put three tests into the
 template and the total moved by four, so the only way to know this pair is to
