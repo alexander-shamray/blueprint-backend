@@ -258,8 +258,10 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
     [InlineData(BuyerStatuses.Declined)]
     public async Task The_schema_admits_every_member_the_map_produces(string member) =>
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.Orders (OrderId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf) " +
-            "VALUES ({0}, SYSDATETIMEOFFSET(), {1}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());",
+            """
+            INSERT INTO bff.Orders (OrderId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf)
+            VALUES ({0}, SYSDATETIMEOFFSET(), {1}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+            """,
             Guid.CreateVersion7(),
             member);
 
@@ -268,8 +270,10 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
     {
         Exception refused = await Should.ThrowAsync<Exception>(() =>
             fixture.ExecuteAsync(
-                "INSERT INTO bff.Orders (OrderId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf) " +
-                "VALUES ({0}, SYSDATETIMEOFFSET(), {1}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());",
+                """
+                INSERT INTO bff.Orders (OrderId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf)
+                VALUES ({0}, SYSDATETIMEOFFSET(), {1}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+                """,
                 Guid.CreateVersion7(),
                 "refunded"));
 

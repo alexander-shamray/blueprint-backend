@@ -148,8 +148,13 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         // Booked two days ago, so NextAttemptAt holds the making; the cancellation thirty seconds ago starts the wait.
         Shipment booked = await fixture.BookedAsync("SIM-TRANSIT");
         await fixture.ExecuteAsync(
-            "UPDATE shipping.Shipments SET NextAttemptAt = DATEADD(day, -2, SYSDATETIMEOFFSET()), " +
-            "CancellationRequestedAt = DATEADD(second, -30, SYSDATETIMEOFFSET()) WHERE Id = {0};",
+            """
+            UPDATE shipping.Shipments
+            SET
+                NextAttemptAt           = DATEADD(day, -2, SYSDATETIMEOFFSET()),
+                CancellationRequestedAt = DATEADD(second, -30, SYSDATETIMEOFFSET())
+            WHERE Id = {0};
+            """,
             booked.Id.Value);
 
         List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.overdue", "pass");

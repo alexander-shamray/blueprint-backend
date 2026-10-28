@@ -31,8 +31,9 @@ public sealed class ErasureRequestLockTests(ServiceFixture fixture) : IAsyncLife
         {
             take.Transaction = held;
             take.CommandText =
-                "EXEC sp_getapplock @Resource = @r, @LockMode = 'Exclusive', " +
-                "@LockOwner = 'Transaction', @LockTimeout = 0";
+                """
+                EXEC sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 0
+                """;
             take.Parameters.AddWithValue("@r", $"privacy.erasure.request.{requestId:N}");
             await take.ExecuteNonQueryAsync(ct);
         }

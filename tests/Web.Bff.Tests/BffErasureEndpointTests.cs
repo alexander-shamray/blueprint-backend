@@ -58,8 +58,10 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
     {
         Guid unattributed = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.Orders (OrderId, FirstSeenAt, AsOf) " +
-            "VALUES ({0}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO bff.Orders (OrderId, FirstSeenAt, AsOf)
+            VALUES ({0}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())
+            """,
             unattributed);
 
         await PublishRequestAsync(Guid.CreateVersion7());
@@ -152,8 +154,10 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
         Guid order = Guid.CreateVersion7();
         await SeedOrderAsync(order, Subject);
         await fixture.ExecuteAsync(
-            "CREATE TRIGGER bff.TR_PersonalDataErasures_Refuse ON bff.PersonalDataErasures AFTER INSERT AS " +
-            "THROW 50001, 'refused for the test', 1;");
+            """
+            CREATE TRIGGER bff.TR_PersonalDataErasures_Refuse ON bff.PersonalDataErasures AFTER INSERT AS
+            THROW 50001, 'refused for the test', 1;
+            """);
 
         try
         {
@@ -307,8 +311,10 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
 
     private Task SeedAddressAsync(Guid customer) =>
         fixture.ExecuteAsync(
-            "INSERT INTO bff.SavedAddresses (CustomerId, Line1, City, PostalCode, Country, SavedAt) " +
-            "VALUES ({0}, N'1 Test Street', N'Testville', N'T1', N'KZ', SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO bff.SavedAddresses (CustomerId, Line1, City, PostalCode, Country, SavedAt)
+            VALUES ({0}, N'1 Test Street', N'Testville', N'T1', N'KZ', SYSDATETIMEOFFSET())
+            """,
             customer);
 
     /// <summary>Through the route, so the save reads the audit rows as a customer's own save does.</summary>
@@ -331,13 +337,17 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
     private async Task SeedOrderAsync(Guid order, Guid customer)
     {
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.Orders (OrderId, CustomerId, FirstSeenAt, AsOf) " +
-            "VALUES ({0}, {1}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO bff.Orders (OrderId, CustomerId, FirstSeenAt, AsOf)
+            VALUES ({0}, {1}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())
+            """,
             order,
             customer);
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.OrderLines (OrderId, LineNumber, ProductId, Quantity, UnitPrice) " +
-            "VALUES ({0}, 1, {1}, 1, 9.99)",
+            """
+            INSERT INTO bff.OrderLines (OrderId, LineNumber, ProductId, Quantity, UnitPrice)
+            VALUES ({0}, 1, {1}, 1, 9.99)
+            """,
             order,
             Guid.CreateVersion7());
     }

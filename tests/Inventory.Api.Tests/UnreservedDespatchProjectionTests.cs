@@ -23,10 +23,18 @@ public sealed class UnreservedDespatchProjectionTests(ServiceFixture fixture) : 
     {
         Guid order = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO inventory.Reservations " +
-                "(OrderId, Status, UnavailableProductIds, CreatedAt, UpdatedAt, " +
-                "DespatchedUnreservedAt, UnreservedCounted) " +
-            "VALUES ({0}, 'Released', '[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), 0)",
+            """
+            INSERT INTO inventory.Reservations (
+                OrderId,
+                Status,
+                UnavailableProductIds,
+                CreatedAt,
+                UpdatedAt,
+                DespatchedUnreservedAt,
+                UnreservedCounted
+            )
+            VALUES ({0}, 'Released', '[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), 0)
+            """,
             order);
         DespatchedUnreservedDomainEvent raised = new(new OrderId(order), DateTimeOffset.UtcNow);
         await fixture.StageOutboxAsync(

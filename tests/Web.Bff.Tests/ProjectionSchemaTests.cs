@@ -104,8 +104,10 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
         // Each row sets one half of one pair and satisfies every other constraint, so only the named one can refuse.
         SqlException refused = await Should.ThrowAsync<SqlException>(() =>
             fixture.ExecuteAsync(
-                $"INSERT INTO bff.Orders (OrderId, {columns}, FirstSeenAt, AsOf) " +
-                $"VALUES ({{0}}, {values}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());",
+                $$"""
+                INSERT INTO bff.Orders (OrderId, {{columns}}, FirstSeenAt, AsOf)
+                VALUES ({0}, {{values}}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+                """,
                 Guid.CreateVersion7()));
 
         refused.Number.ShouldBe(ConstraintViolation);

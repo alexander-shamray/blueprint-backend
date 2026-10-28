@@ -90,9 +90,32 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
         // A worker of the version before names no channel while both run (§7.4); the default makes its row mail.
         Guid notificationId = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT notifications.NotificationLog (NotificationId, EventId, CorrelationId, TemplateKey, OrderId, " +
-            "Parameters, Status, CreatedAt, Attempts, NextAttemptAt) VALUES ({0}, NEWID(), NEWID(), 'order-placed', " +
-            "NEWID(), '', 'Pending', SYSDATETIMEOFFSET(), 0, SYSDATETIMEOFFSET());",
+            """
+            INSERT notifications.NotificationLog (
+                NotificationId,
+                EventId,
+                CorrelationId,
+                TemplateKey,
+                OrderId,
+                Parameters,
+                Status,
+                CreatedAt,
+                Attempts,
+                NextAttemptAt
+            )
+            VALUES (
+                {0},
+                NEWID(),
+                NEWID(),
+                'order-placed',
+                NEWID(),
+                '',
+                'Pending',
+                SYSDATETIMEOFFSET(),
+                0,
+                SYSDATETIMEOFFSET()
+            );
+            """,
             notificationId);
 
         (await fixture.ScalarAsync<string>(

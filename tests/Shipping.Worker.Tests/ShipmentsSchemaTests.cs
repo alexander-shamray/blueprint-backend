@@ -67,8 +67,10 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
         Guid order = Guid.CreateVersion7();
 
         await fixture.ExecuteAsync(
-            "INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt) " +
-            "VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET());",
+            """
+            INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt)
+            VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET());
+            """,
             Guid.CreateVersion7(),
             order);
 
@@ -96,8 +98,10 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
         DateTimeOffset before = await fixture.DatabaseNowAsync();
 
         await fixture.ExecuteAsync(
-            "INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt) " +
-            "VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET());",
+            """
+            INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt)
+            VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET());
+            """,
             Guid.CreateVersion7(),
             order);
 

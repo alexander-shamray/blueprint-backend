@@ -119,8 +119,11 @@ public sealed class ConsentSendTests(ServiceFixture fixture) : IAsyncLifetime
         fixture.ContactAnswers(customer, Mailbox, "en");
         Notification owed = await OwedAsync(order, customer);
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET SendStartedAt = SYSDATETIMEOFFSET(), TemplateVersion = 1, " +
-            "Languages = 'en' WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET SendStartedAt = SYSDATETIMEOFFSET(), TemplateVersion = 1, Languages = 'en'
+            WHERE NotificationId = {0};
+            """,
             owed.NotificationId);
         await SetAsync(customer, optedIn: false);
 

@@ -79,8 +79,16 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
         await fixture.OrderAsync(order, Subject);
         Notification notice = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET Status = 'Sent', CustomerId = {1}, Languages = 'en', " +
-            "TemplateVersion = 3, CompletedAt = SYSDATETIMEOFFSET() WHERE NotificationId = {0}",
+            """
+            UPDATE notifications.NotificationLog
+            SET
+                Status          = 'Sent',
+                CustomerId      = {1},
+                Languages       = 'en',
+                TemplateVersion = 3,
+                CompletedAt     = SYSDATETIMEOFFSET()
+            WHERE NotificationId = {0}
+            """,
             notice.NotificationId,
             Subject);
 
@@ -308,9 +316,22 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
 
     private async Task DeliveryAsync(Notification notice, string status) =>
         await fixture.ExecuteAsync(
-            "INSERT notifications.PushDeliveries (DeliveryId, NotificationId, InstallationId, Platform, Status, " +
-            "CreatedAt, Attempts, NextAttemptAt, CorrelationId, CustomerId, Languages) VALUES (NEWID(), {0}, " +
-            "NEWID(), 'fcm', {1}, SYSDATETIMEOFFSET(), 0, SYSDATETIMEOFFSET(), NEWID(), {2}, 'en');",
+            """
+            INSERT notifications.PushDeliveries (
+                DeliveryId,
+                NotificationId,
+                InstallationId,
+                Platform,
+                Status,
+                CreatedAt,
+                Attempts,
+                NextAttemptAt,
+                CorrelationId,
+                CustomerId,
+                Languages
+            )
+            VALUES (NEWID(), {0}, NEWID(), 'fcm', {1}, SYSDATETIMEOFFSET(), 0, SYSDATETIMEOFFSET(), NEWID(), {2}, 'en');
+            """,
             notice.NotificationId,
             status,
             Subject);
@@ -323,8 +344,11 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
     {
         Notification notice = await fixture.PendingAsync(templateKey, order);
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET Status = {1}, Languages = 'en', " +
-            "CompletedAt = SYSDATETIMEOFFSET() WHERE NotificationId = {0}",
+            """
+            UPDATE notifications.NotificationLog
+            SET Status = {1}, Languages = 'en', CompletedAt = SYSDATETIMEOFFSET()
+            WHERE NotificationId = {0}
+            """,
             notice.NotificationId,
             status);
 

@@ -94,9 +94,21 @@ public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsync
     {
         OrderId order = new(Guid.CreateVersion7());
         await fixture.ExecuteAsync(
-            "INSERT INTO ordering.Orders (Id, CustomerId, Status, PlacedAt, Currency, ShipToLine1, ShipToLine2, " +
-            "ShipToCity, ShipToPostalCode, ShipToCountry) " +
-            "VALUES ({0}, {1}, 'Placed', SYSDATETIMEOFFSET(), 'EUR', '', NULL, '', '', 'ZZ')",
+            """
+            INSERT INTO ordering.Orders (
+                Id,
+                CustomerId,
+                Status,
+                PlacedAt,
+                Currency,
+                ShipToLine1,
+                ShipToLine2,
+                ShipToCity,
+                ShipToPostalCode,
+                ShipToCountry
+            )
+            VALUES ({0}, {1}, 'Placed', SYSDATETIMEOFFSET(), 'EUR', '', NULL, '', '', 'ZZ')
+            """,
             order.Value,
             Guid.Empty);
 

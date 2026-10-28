@@ -261,16 +261,29 @@ public sealed class ShippingErasureEndpointTests(ServiceFixture fixture) : IAsyn
 
     private async Task SeedPendingShipmentAsync(Guid order, Guid? placedUnder = null) =>
         await fixture.ExecuteAsync(
-            "INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt, CreatedAt, ErasedUnder) " +
-            "VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), {2})",
+            """
+            INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt, CreatedAt, ErasedUnder)
+            VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), {2})
+            """,
             Guid.CreateVersion7(),
             order,
             placedUnder is null ? "[]" : $"[\"{placedUnder}\"]");
 
     private async Task SeedAddressAsync(Guid order, Guid customer) =>
         await fixture.ExecuteAsync(
-            "INSERT INTO shipping.DeliveryAddresses (OrderId, CustomerId, Line1, Line2, City, PostalCode, Country, " +
-            "FetchedAt) VALUES ({0}, {1}, '1 Rue Exemple', 'Apt 2', 'Paris', '75001', 'FR', SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO shipping.DeliveryAddresses (
+                OrderId,
+                CustomerId,
+                Line1,
+                Line2,
+                City,
+                PostalCode,
+                Country,
+                FetchedAt
+            )
+            VALUES ({0}, {1}, '1 Rue Exemple', 'Apt 2', 'Paris', '75001', 'FR', SYSDATETIMEOFFSET())
+            """,
             order,
             customer);
 

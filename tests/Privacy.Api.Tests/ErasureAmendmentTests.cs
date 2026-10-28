@@ -53,8 +53,10 @@ public sealed class ErasureAmendmentTests(ServiceFixture fixture) : IAsyncLifeti
     {
         Guid request = await RaiseUnderAsync("ordering,shiping", answered: "ordering");
         await fixture.ExecuteAsync(
-            "INSERT INTO privacy.ErasureCompletions (RequestId, Responder, Count, Counted, ReceivedAt) " +
-            "VALUES ({0}, 'shipping', 1, 0, SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO privacy.ErasureCompletions (RequestId, Responder, Count, Counted, ReceivedAt)
+            VALUES ({0}, 'shipping', 1, 0, SYSDATETIMEOFFSET())
+            """,
             request);
 
         (await AmendAsync(request, ["shipping"], ["shiping"], Reason)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
@@ -162,8 +164,10 @@ public sealed class ErasureAmendmentTests(ServiceFixture fixture) : IAsyncLifeti
         if (answered is not null)
         {
             await fixture.ExecuteAsync(
-                "INSERT INTO privacy.ErasureCompletions (RequestId, Responder, Count, Counted, ReceivedAt) " +
-                "VALUES ({0}, {1}, 1, 1, SYSDATETIMEOFFSET())",
+                """
+                INSERT INTO privacy.ErasureCompletions (RequestId, Responder, Count, Counted, ReceivedAt)
+                VALUES ({0}, {1}, 1, 1, SYSDATETIMEOFFSET())
+                """,
                 request,
                 answered);
         }

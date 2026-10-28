@@ -109,9 +109,11 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
     {
         Guid request = await RaiseAsync();
         await fixture.ExecuteAsync(
-            "UPDATE privacy.ErasureRequests " +
-            "SET Status = 'Closed', SubjectId = NULL, DueAt = DATEADD(day, -1, SYSDATETIMEOFFSET()) " +
-            "WHERE RequestId = {0}",
+            """
+            UPDATE privacy.ErasureRequests
+            SET Status = 'Closed', SubjectId = NULL, DueAt = DATEADD(day, -1, SYSDATETIMEOFFSET())
+            WHERE RequestId = {0}
+            """,
             request);
 
         (await Sweep.RunOnceAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
@@ -186,8 +188,12 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
     {
         Guid request = await RaiseAsync();
         await fixture.ExecuteAsync(
-            "INSERT INTO privacy.ErasureCompletions (RequestId, Responder, Count, Counted, ReceivedAt) " +
-            "VALUES ({0}, 'ordering', 1, 1, SYSDATETIMEOFFSET()), ({0}, 'catalog', 1, 0, SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO privacy.ErasureCompletions (RequestId, Responder, Count, Counted, ReceivedAt)
+            VALUES
+                ({0}, 'ordering', 1, 1, SYSDATETIMEOFFSET()),
+                ({0}, 'catalog', 1, 0, SYSDATETIMEOFFSET())
+            """,
             request);
         await MakeDueAsync(request);
         await Sweep.RunOnceAsync(TestContext.Current.CancellationToken);

@@ -391,15 +391,21 @@ public sealed class ServiceFixture()
     /// <summary>Makes a backed-off notice due now on the engine's clock, which the claim compares against.</summary>
     public Task ClearBackoffAsync(Guid notificationId) =>
         ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET NextAttemptAt = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET NextAttemptAt = DATEADD(second, -1, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             notificationId);
 
     /// <summary>Moves a notice's creation back by <paramref name="age"/>, which its give-up age is read from.</summary>
     public Task AgeAsync(Guid notificationId, TimeSpan age) =>
         ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET CreatedAt = DATEADD(second, -{1}, SYSDATETIMEOFFSET()) " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET CreatedAt = DATEADD(second, -{1}, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             notificationId,
             (int)age.TotalSeconds);
 
@@ -438,8 +444,11 @@ public sealed class ServiceFixture()
                 return;
 
             await ExecuteAsync(
-                "UPDATE notifications.NotificationLog SET NextAttemptAt = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
-                "WHERE Status = 'Pending';");
+                """
+                UPDATE notifications.NotificationLog
+                SET NextAttemptAt = DATEADD(second, -1, SYSDATETIMEOFFSET())
+                WHERE Status = 'Pending';
+                """);
             await RunSendPassAsync();
         }
 

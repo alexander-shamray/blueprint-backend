@@ -97,8 +97,10 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
         Guid after = Guid.CreateVersion7();
         Guid request = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO payments.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt) " +
-            "VALUES ({0}, {1}, 0, {2})",
+            """
+            INSERT INTO payments.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt)
+            VALUES ({0}, {1}, 0, {2})
+            """,
             request,
             PersonalDataErasure.HashSubject(request, _subject),
             At);
@@ -144,8 +146,10 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
     {
         Guid request = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO payments.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt) " +
-            "VALUES ({0}, {1}, 0, {2}, {3})",
+            """
+            INSERT INTO payments.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt)
+            VALUES ({0}, {1}, 0, {2}, {3})
+            """,
             request,
             PersonalDataErasure.HashSubject(request, _subject),
             At,
@@ -170,8 +174,10 @@ public sealed class PaymentsErasureFenceTests(ServiceFixture fixture) : IAsyncLi
 
     private Task SeedAsync(Guid order, string erasedUnder) =>
         fixture.ExecuteAsync(
-            "INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt, ErasedUnder) " +
-            "VALUES ({0}, {1}, 42.10, 'EUR', SYSDATETIMEOFFSET(), {2})",
+            """
+            INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt, ErasedUnder)
+            VALUES ({0}, {1}, 42.10, 'EUR', SYSDATETIMEOFFSET(), {2})
+            """,
             order,
             _subject,
             erasedUnder);

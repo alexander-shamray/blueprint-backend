@@ -65,8 +65,11 @@ public sealed class NotificationGaugeTests(ServiceFixture fixture) : IAsyncLifet
         Notification fannedOut =
             await fixture.PendingAsync(TemplateKeys.OrderPlaced, order, channel: ConsentVocabulary.Push);
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET Status = 'Dispatched', CompletedAt = SYSDATETIMEOFFSET() " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET Status = 'Dispatched', CompletedAt = SYSDATETIMEOFFSET()
+            WHERE NotificationId = {0};
+            """,
             fannedOut.NotificationId);
         await DeliveryAsync(fannedOut, "fcm", attempts: 0, dueSecondsAgo: 120);
 
@@ -83,8 +86,11 @@ public sealed class NotificationGaugeTests(ServiceFixture fixture) : IAsyncLifet
         await fixture.PendingAsync(TemplateKeys.OrderPlaced, order);
         Notification finished = await fixture.PendingAsync(TemplateKeys.OrderConfirmed, order);
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET Status = 'Sent', Attempts = 2, " +
-            "CompletedAt = SYSDATETIMEOFFSET() WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET Status = 'Sent', Attempts = 2, CompletedAt = SYSDATETIMEOFFSET()
+            WHERE NotificationId = {0};
+            """,
             finished.NotificationId);
 
         ReadGauge("notifications.waiting").ShouldBe(
@@ -125,8 +131,11 @@ public sealed class NotificationGaugeTests(ServiceFixture fixture) : IAsyncLifet
         Notification held = await fixture.PendingAsync(TemplateKeys.OrderPlaced, Guid.CreateVersion7());
         await DueAsync(held, TimeSpan.FromMinutes(10));
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET LockedUntil = DATEADD(second, 30, SYSDATETIMEOFFSET()) " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET LockedUntil = DATEADD(second, 30, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             held.NotificationId);
 
         ReadGauge("notifications.overdue").ShouldHaveSingleItem().Value.ShouldBe(0);
@@ -144,9 +153,30 @@ public sealed class NotificationGaugeTests(ServiceFixture fixture) : IAsyncLifet
 
     private Task DeliveryAsync(Notification notice, string platform, int attempts, int dueSecondsAgo = 0) =>
         fixture.ExecuteAsync(
-            "INSERT notifications.PushDeliveries (DeliveryId, NotificationId, InstallationId, Platform, Status, " +
-            "CreatedAt, Attempts, NextAttemptAt, CorrelationId) VALUES (NEWID(), {0}, NEWID(), {1}, 'Pending', " +
-            "SYSDATETIMEOFFSET(), {2}, DATEADD(second, -{3}, SYSDATETIMEOFFSET()), NEWID());",
+            """
+            INSERT notifications.PushDeliveries (
+                DeliveryId,
+                NotificationId,
+                InstallationId,
+                Platform,
+                Status,
+                CreatedAt,
+                Attempts,
+                NextAttemptAt,
+                CorrelationId
+            )
+            VALUES (
+                NEWID(),
+                {0},
+                NEWID(),
+                {1},
+                'Pending',
+                SYSDATETIMEOFFSET(),
+                {2},
+                DATEADD(second, -{3}, SYSDATETIMEOFFSET()),
+                NEWID()
+            );
+            """,
             notice.NotificationId,
             platform,
             attempts,
@@ -154,8 +184,11 @@ public sealed class NotificationGaugeTests(ServiceFixture fixture) : IAsyncLifet
 
     private Task DueAsync(Notification notification, TimeSpan ago) =>
         fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET NextAttemptAt = DATEADD(second, -{1}, SYSDATETIMEOFFSET()) " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET NextAttemptAt = DATEADD(second, -{1}, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             notification.NotificationId,
             (int)ago.TotalSeconds);
 
