@@ -678,8 +678,8 @@ file and a reviewer are the only things that do.
   `private readonly Counter<long>   _placed;` —
   is *not* reported, and is swept anyway — *review-carried*, because one
   dialect beats a rule that stops halfway. **SQL is the other way round and
-  keeps its alignment**: it lives inside raw string literals, which no analyser
-  or formatter reads, and the SQL section argues its columns on their own terms.
+  keeps its alignment**: it lives inside string literals, which no analyser or
+  formatter reads, and the SQL section argues its columns on their own terms.
 - **No `#pragma` suppressions** — there are none in the corpus, and a sample
   that needs one is a sample whose design is wrong. A genuinely warranted
   suppression belongs in `Directory.Build.props` with a comment, never inline.
