@@ -328,7 +328,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     public Task<int> ProcessOutboxBatchAsync() =>
         ProcessStoppableOutboxBatchAsync(TestContext.Current.CancellationToken);
 
-    /// <summary>One pass under the test's own token, to stop part-way; not an overload, which xUnit1051 flags.</summary>
+    /// <summary>One pass under the test's own token, to stop part-way; no overload, which xUnit1051 flags.</summary>
     public Task<int> ProcessStoppableOutboxBatchAsync(CancellationToken ct) =>
         Factory.Services
             .GetRequiredService<OutboxDispatcher>()
