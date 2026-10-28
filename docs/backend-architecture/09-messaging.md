@@ -959,7 +959,12 @@ A publish is a round trip that waits on nothing else, so publishes overlap; two
 projections writing one read table at once is the deadlock `ProjectionInvoker`
 runs its handlers in sequence to avoid, so each replica projects one row at a
 time and the projection writers on a table number its replicas, never its
-replicas times the bound. Both loops deliver a row the same way, and that
+replicas times the bound. The loops share the pass, so the next claim waits for
+its `Local` rows: under a load past the knee the `Broker` rows not yet claimed
+wait in the outbox behind them, measured and kept, because a claim for each
+lane did not shorten the drain
+([ADR-165](adr/ADR-165-the-outbox-lanes-keep-one-claim-splitting-them-freeing-the-broker-lane-but-not-the-drain-1559-adding-to-adr-164.md)).
+Both loops deliver a row the same way, and that
 per-row body is the design:
 
 ```csharp
