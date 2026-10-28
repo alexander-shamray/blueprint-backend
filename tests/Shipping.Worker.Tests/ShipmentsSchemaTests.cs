@@ -117,7 +117,9 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
             """
             SELECT Value = COUNT(*)
             FROM sys.indexes i
-            JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+            INNER JOIN sys.index_columns ic
+                ON ic.object_id = i.object_id
+                AND ic.index_id = i.index_id
             WHERE i.object_id = OBJECT_ID('shipping.TrackingEvents') AND i.is_primary_key = 1
             """))
             .ShouldBe(2, "the key is the pair, so a repeated page is free");

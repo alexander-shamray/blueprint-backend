@@ -102,7 +102,8 @@ public sealed class ShippingRetentionService : SwitchedPollingWorker
                         """
                         SELECT TOP (@BatchSize) address.OrderId
                         FROM shipping.DeliveryAddresses address
-                        INNER JOIN shipping.Shipments shipment ON shipment.OrderId = address.OrderId
+                        INNER JOIN shipping.Shipments shipment
+                            ON shipment.OrderId = address.OrderId
                         WHERE shipment.TerminalAt IS NOT NULL
                             AND shipment.TerminalAt < @Before
                         ORDER BY shipment.TerminalAt;

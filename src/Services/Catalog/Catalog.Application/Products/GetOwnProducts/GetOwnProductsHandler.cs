@@ -26,7 +26,8 @@ public sealed class GetOwnProductsHandler(IDbConnectionFactory connections, ICur
             WithdrawnAt       = p.WithdrawnAt,
             QuantityAvailable = s.QuantityAvailable
         FROM catalog.Products p
-        LEFT JOIN catalog.StockLevels s ON s.ProductId = p.Id
+        LEFT JOIN catalog.StockLevels s
+            ON s.ProductId = p.Id
         WHERE p.SellerId = @SellerId
           AND (@AfterPublishedAt IS NULL
             OR p.PublishedAt < @AfterPublishedAt
