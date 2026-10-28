@@ -14,9 +14,8 @@ on:
 permissions:
   contents: read
 
-# No concurrency group, for locality-gate.yml's reason: a label change and a
-# rerun on one head would cancel each other, and the cancelled run stays on
-# the head as a failed check.
+# No concurrency group: a rerun of an older head's run would cancel the
+# newest head's, which then stays there as a failed check.
 
 jobs:
   comment-gate:
