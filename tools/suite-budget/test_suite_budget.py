@@ -22,6 +22,8 @@ class Passes(unittest.TestCase):
         pass
 """
 FAILING = PASSING.replace("pass\n", "self.fail('red')\n")
+# An arrow is outside cp1252, the encoding a Windows child writes a file in and a session's pipe reads.
+FAILING_ARROW = PASSING.replace("pass\n", "self.fail('red \\u2192 green')\n")
 SLEEPING = """
 import time, unittest
 class Sleeps(unittest.TestCase):
@@ -91,6 +93,16 @@ class Runs(unittest.TestCase):
         self.assertRegex(text, r"test_failing\.py +\d+\.\d +30  failed")
         self.assertIn("--- test_failing.py (failed)", text)
         self.assertIn("AssertionError: red", text)
+
+    def test_a_failure_s_non_ascii_output_survives_to_a_cp1252_report(self):
+        (self.directory / "test_arrow.py").write_text(textwrap.dedent(FAILING_ARROW), encoding="utf-8")
+        self.assertIn("red → green", suite_budget.run(self.directory, "test_arrow.py", 30).output)
+        written = io.BytesIO()
+        stdout = io.TextIOWrapper(written, encoding="cp1252")
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(suite_budget.main(["--dir", str(self.directory), "test_arrow.py"]), 1)
+        stdout.flush()
+        self.assertIn(b"red \\u2192 green", written.getvalue())
 
     def test_the_run_exits_non_zero_when_any_module_is_not_ok(self):
         for module, expected in (("test_passing.py", 0), ("test_failing.py", 1)):

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import signal
 import subprocess
@@ -72,7 +73,9 @@ def run(directory: Path, module: str, ceiling: float, kill_factor: float = KILL_
     # A file rather than a pipe: a pipe a grandchild still holds would block the read and hang the runner itself.
     with tempfile.TemporaryFile() as output:
         started = time.monotonic()
+        # A Windows child writes a file in cp1252 otherwise, which the UTF-8 decode below would garble.
         child = subprocess.Popen(argv, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT,
+                                 env={**os.environ, "PYTHONIOENCODING": "utf-8"},
                                  start_new_session=not WINDOWS,
                                  creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if WINDOWS else 0)
         try:
@@ -108,6 +111,9 @@ def main(argv: list[str] | None = None) -> int:
         result = run(directory, module, CEILINGS.get(module, DEFAULT_CEILING))
         print(f"{result.module}: {result.seconds:.1f}s {result.verdict}", file=sys.stderr, flush=True)
         results.append(result)
+    # A session's pipe is cp1252 on Windows, and a character it cannot hold must not cost the report.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(errors="backslashreplace")
     print(report(results))
     return 0 if all(r.verdict == "ok" for r in results) else 1
 
