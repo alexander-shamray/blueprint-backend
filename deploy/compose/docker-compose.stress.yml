@@ -10,11 +10,13 @@
 services:
   # Every client comes from one address, so §10.3's anonymous window would
   # measure only itself; each budget is far past what one host can drive.
+  # The edge's two request lines would refill the log queue ADR-159 empties.
   gateway:
     environment:
       RateLimits__AnonymousPermitLimit: "1000000"
       RateLimits__AuthenticatedTokenLimit: "1000000"
       RateLimits__AuthenticatedTokensPerPeriod: "1000000"
+      Logging__LogLevel__Microsoft.AspNetCore.Hosting: "Warning"
 
   # The carrier answers at once (WireMock), so a large batch on a short tick
   # takes its booking rate out of the run. A fulfilment pass books its rows
