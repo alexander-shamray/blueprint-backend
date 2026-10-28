@@ -5,6 +5,8 @@ using Common.Contracts;
 using Common.Domain;
 using Common.Infrastructure.Outbox;
 using Common.TestSupport;
+using MassTransit;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
@@ -196,6 +198,49 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         row.Lane.ShouldBe(OutboxLane.Broker);
         row.ProcessedAt.ShouldNotBeNull();
         row.LastError.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Broker_rows_publish_side_by_side_up_to_the_bound()
+    {
+        // Each publish is held until the bound's worth are held at once, which one at a time never reaches; twice
+        // the bound is staged, and the hold kept a moment, so a pass past the bound shows as more held (ADR-163).
+        int bound = OutboxDispatcher.BrokerConcurrency;
+        await fixture.StageOutboxAsync(
+            [.. Enumerable.Range(0, bound * 2).Select(_ => OutboxRows.Broker(fixture, Guid.CreateVersion7()))]);
+
+        PublishHold hold = new(bound);
+        using ConnectHandle observing =
+            fixture.Factory.Services.GetRequiredService<IBus>().ConnectPublishObserver(hold);
+
+        try
+        {
+            Task<int> pass = fixture.ProcessOutboxBatchAsync();
+            await hold.Full.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken);
+
+            hold.Release();
+            (await pass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)).ShouldBe(bound * 2);
+        }
+        finally
+        {
+            // Released whatever happened, so a failure here cannot hold the collection's later publishes.
+            hold.Release();
+        }
+
+        hold.Most.ShouldBe(bound);
+    }
+
+    [Fact]
+    public async Task Local_rows_are_delivered_one_at_a_time()
+    {
+        // Each projection holds its row a moment, so rows delivered side by side overlap, and serial ones never do.
+        Overlap.Reset();
+        await fixture.StageOutboxAsync([.. Enumerable.Range(0, 4).Select(_ => OutboxRows.Overlapping(fixture))]);
+
+        (await fixture.ProcessOutboxBatchAsync()).ShouldBe(4);
+
+        Overlap.Most.ShouldBe(1);
     }
 
     [Fact]

@@ -452,11 +452,11 @@ sequenceDiagram
     H->>DB: COMMIT
     end
 
-    loop every PollInterval
+    loop every PollInterval, or at once after a full claim that delivered (ADR-163)
         Note over D,DB: Claim: CTE + UPDATE ... OUTPUT, sets LockedUntil
         D->>DB: lease up to ClaimBatchSize rows (UPDLOCK, READPAST)
 
-        Note over D,MQ: Then each row independently — one failure affects one row
+        Note over D,MQ: Then each row independently, Broker rows side by side (ADR-163)
         alt Lane = Broker
             D->>MQ: publish
         else Lane = Local
@@ -874,13 +874,13 @@ admits reserved words and a service may legitimately be called `User`, whose
 statements once from the registered table. **No quantity the loop runs on is
 written as a number twice.** `ClaimBatchSize`, `LeaseSeconds`,
 `BackoffBaseSeconds` and `BackoffAttemptCap` are declared on that class beside
-`MaxAttempts` and interpolated into the statements below; `PollInterval` is
-declared there too and feeds the timer rather than any statement; and the one
-quantity that is not the dispatcher's — the width `LastError` is truncated to —
-belongs to `OutboxMessage`, which the fail statement names. So this section can
-cite each by name and stay true when one is tuned. The claim selects and
-leases in one statement, so two replicas cannot take the same row, and
-`READPAST` skips rows another replica holds:
+`MaxAttempts` and interpolated into the statements below; `PollInterval` and
+`BrokerConcurrency` are declared there too and feed the timer and the delivery
+rather than any statement; and the one quantity that is not the dispatcher's —
+the width `LastError` is truncated to — belongs to `OutboxMessage`, which the
+fail statement names. So this section can cite each by name and stay true when
+one is tuned. The claim selects and leases in one statement, so two replicas
+cannot take the same row, and `READPAST` skips rows another replica holds:
 
 ```sql
 WITH claimable AS (
@@ -949,46 +949,75 @@ interpolates it and each service's entity configuration passes it to
 diagnostic an abandoned row carries, and a wider one fails the very update that
 was recording why a delivery failed.
 
-`ProcessBatchAsync` is the one claim-and-deliver pass, public so tests drive
-it directly instead of racing the timer (§12.4). Its per-row loop is the
-design:
+`ProcessBatchAsync` runs the claim-and-deliver pass the timer runs, public so
+tests drive it directly instead of racing the timer (§12.4). The pass hands the
+claimed rows to two loops that run side by side: `Broker` rows to
+`Parallel.ForEachAsync`, at most `BrokerConcurrency` in flight, and `Local` rows
+to a `foreach`, one at a time
+([ADR-163](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md)).
+A publish is a round trip that waits on nothing else, so publishes overlap; two
+projections writing one read table at once is the deadlock `ProjectionInvoker`
+runs its handlers in sequence to avoid, so each replica projects one row at a
+time and the projection writers on a table number its replicas, never its
+replicas times the bound. Both loops deliver a row the same way, and that
+per-row body is the design:
 
 ```csharp
-foreach (OutboxClaim message in claimed)
+try
 {
+    // A scope per row, and this is what makes per-row isolation
+    // true rather than intended: projection handlers are scoped
+    // and so is the DbContext behind them, so one scope for a
+    // whole batch hands the next row a half-mutated tracker.
+    await using AsyncServiceScope delivery = _scopes.CreateAsyncScope();
+
+    await DeliverAsync(delivery.ServiceProvider, message, ct);
+    delivered.Enqueue(message.Id);
+}
+catch (Exception ex) when (!ct.IsCancellationRequested)
+{
+    // One bad message does not affect the rest of the batch.
+    //
+    // The filter asks the token, not the exception type. A handler
+    // enforcing its own deadline throws OperationCanceledException
+    // while ct is still live, and a type test would let that row
+    // escape with no attempt recorded and every row behind it left
+    // leased — a delivery failure disguised as a shutdown.
+    //
+    // The rows share the claim's connection, which runs one command
+    // at a time, so their fail statements queue on a one-slot gate.
+    await writes.WaitAsync(ct);
+
     try
     {
-        // A scope per row, and this is what makes per-row isolation
-        // true rather than intended: projection handlers are scoped
-        // and so is the DbContext behind them, so one scope for a
-        // whole batch hands the next row a half-mutated tracker.
-        await using AsyncServiceScope delivery = _scopes.CreateAsyncScope();
-
-        await DeliverAsync(delivery.ServiceProvider, message, ct);
-        delivered.Add(message.Id);
-    }
-    catch (Exception ex) when (!ct.IsCancellationRequested)
-    {
-        // One bad message does not affect the rest of the batch.
-        //
-        // The filter asks the token, not the exception type. A handler
-        // enforcing its own deadline throws OperationCanceledException
-        // while ct is still live, and a type test would let that row
-        // escape with no attempt recorded and every row behind it left
-        // leased — a delivery failure disguised as a shutdown.
         await connection.ExecuteAsync(
             new CommandDefinition(_failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
-
-        DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
     }
+    finally
+    {
+        writes.Release();
+    }
+
+    DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
 }
 ```
 
-The loop only collects the ids it delivered. `ProcessBatchAsync` runs it
+The loops only collect the ids they delivered. The pass runs them
 inside a `try` whose `finally` issues the completion statement above over
 them, under `CancellationToken.None`: a stop that cancels the pass part-way
 still completes every row the pass delivered, so a graceful shutdown
 redelivers nothing that per-row completion would not have.
+
+**A full claim starts the next pass at once.** A claim that came back holding
+`ClaimBatchSize` rows says more are waiting, so when such a pass delivered at
+least one row the dispatcher answers `SwitchedPollingWorker.PassFilled` with
+true, and the loop runs the next pass without waiting for the `PollInterval`
+tick. It reads the operator switch first, as before every pass, and a stop
+cancels the pass under way, as above, and starts no further pass of the run. A
+short claim waits for the tick, and so does a full one that delivered nothing:
+the lane is failing, and the tick is that failure's backoff
+([ADR-163](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md)).
+A pass that throws waits for the tick too, whatever it delivered first.
 
 `DeliverAsync` resolves the type through the map, not `Type.GetType`,
 deserialises through the same registered `OutboxJson` that `Stage` wrote
@@ -1101,8 +1130,11 @@ Consequences of the per-row design worth stating explicitly:
   already delivered, so a crash redelivers up to a batch rather than one row
   — duplicates the inbox and idempotent projections absorb, as below.
 - **And it can expire while the batch is still being delivered, which is a known
-  residual rather than an oversight.** A claim leases a batch and delivers it
-  one row at a time; a batch slower than the lease lets a second replica reclaim
+  residual rather than an oversight.** A claim leases a batch and delivers
+  its `Local` rows one at a time and its `Broker` rows `BrokerConcurrency` at a
+  time
+  ([ADR-163](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md));
+  a batch slower than the lease lets a second replica reclaim
   the whole batch — the rows this one has not reached yet, and since completion
   waits for the pass's end (ADR-161), the ones it has delivered too — and the
   complete and fail statements match on `Id` alone, so the slow worker can then
@@ -1117,9 +1149,10 @@ Consequences of the per-row design worth stating explicitly:
   a stale worker's update matches no row. That is a change to the claim
   protocol and to every test that drives it, and it belongs with the §13.6
   work that alerts on this table. Until then the mitigation is operational and
-  stated: a lane whose delivery approaches `LeaseSeconds` divided by
-  `ClaimBatchSize` per row wants a smaller `ClaimBatchSize` or a longer
-  `LeaseSeconds`, and §13.6's outbox-age alert is what makes that visible.
+  stated: a `Local` lane whose delivery approaches `LeaseSeconds` divided by
+  `ClaimBatchSize` per row, or a `Broker` lane at `BrokerConcurrency` times
+  that, wants a smaller `ClaimBatchSize` or a longer `LeaseSeconds`, and
+  §13.6's outbox-age alert is what makes that visible.
 
 ### Handler contracts
 
@@ -1683,10 +1716,11 @@ to fail in for a table whose window is a correctness property.
 
 > **That ceiling is a real throughput bound, and it is below the dispatcher's.**
 > `MaxBatchesPerPass × BatchSize` rows per table per `Interval` is well under
-> what §9.4's claim can process at its full rate — a full batch at every poll
-> interval, both `OutboxDispatcher`'s — so a service that sustained its full
-> delivery rate would create
-> processed rows several times faster than this reclaims them. The two
+> what §9.4's claim can process at its full rate — one full claim after
+> another, with no poll between them
+> ([ADR-163](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md))
+> — so a service that sustained its full delivery rate would create processed
+> rows several times faster than this reclaims them. The two
 > numbers are not in competition at any ordinary load, because a row is only
 > purgeable a window after it was processed and a window of backlog is what
 > the window is for. They are in competition at sustained peak, and the
