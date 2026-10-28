@@ -61,8 +61,8 @@ from this list without its section is how one gets "corrected" back.
   one-line members, .NET 10 — not oversights; do not "fix" them.
 - **SQL style**: clause keywords on their own line, one predicate per
   line, `Alias = expression` not `AS`, every join's kind named and its
-  `ON` on its own line; a joinless statement with one predicate may stay
-  on one line in a quoted C# string.
+  `ON` on its own line; a joinless statement with at most one predicate
+  may stay on one line in a quoted C# string.
 
 ## Prose conventions
 
