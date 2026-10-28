@@ -208,10 +208,40 @@
       ]
     },
     {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Rows delivered or failed a second, per lane",
+      "description": "outbox.delivery.duration's count (§9.4, §13.3): the rows the dispatcher delivered or failed a second, by lane and outcome. A failed row stays pending, so pending rows fall at the delivered series less the rows still arriving, and after a load the two differ while consumers stage what they queued.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+      "fieldConfig": { "defaults": { "unit": "cps" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (service_name, lane, outcome) (rate(outbox_delivery_duration_seconds_count{service_name=~\"$service\"}[1m]))",
+          "legendFormat": "{{service_name}} — {{lane}} {{outcome}}"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "One row's delivery p95, per lane",
+      "description": "outbox.delivery.duration (§9.4, §13.3): one publish on the Broker lane, one projection on the Local lane. Local rows go one at a time (ADR-163), so a slower Local delivery under load lowers that lane's rate beside it by the same factor.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (service_name, lane, le) (rate(outbox_delivery_duration_seconds_bucket{service_name=~\"$service\", outcome=\"delivered\"}[5m])))",
+          "legendFormat": "{{service_name}} — {{lane}}"
+        }
+      ]
+    },
+    {
       "id": 11,
       "type": "row",
       "title": "Work a worker keeps in its own tables — what delivery lag cannot see",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 }
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 }
     },
     {
       "id": 12,
@@ -219,7 +249,7 @@
       "title": "Notifications waiting, by step",
       "description": "notifications.waiting — Pending notices and push deliveries past their first backoff, by the step they wait on: order_record, contact, relay or devices for a notice, fcm or apns for a delivery. Delivery lag stops when a consumer starts, and Notifications' consumers only write a row, so this is the send and push workers' wait that the panel above cannot see. Every replica reads the same table, so the series are combined with max, not sum. A rise on relay during an outage is the breaker parking the queue of rows, not a fault; docs/runbooks/queue-backlog.md says how to read each step.",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
       "targets": [
         {
@@ -234,7 +264,7 @@
       "title": "Notifications overdue — the send and push workers' capacity",
       "description": "notifications.overdue — how long Pending notices and push deliveries due for a pass have gone unclaimed past two ticks, in shipping.shipments.overdue's form. The waiting gauge beside it counts only rows a pass has already backed off, so a row no pass has reached is visible here alone. Healthy, it stays near zero; one that climbs with the relay, Keycloak and both push providers answering is too few replicas, and the fix is replicaCount in deploy/helm/notifications/values.yaml (§15.3).",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [
         {
@@ -247,7 +277,7 @@
       "id": 14,
       "type": "row",
       "title": "Projection — an order nobody can see",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 44 }
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 52 }
     },
     {
       "id": 15,
@@ -255,7 +285,7 @@
       "title": "Oldest order with no owner (alert: UnattributedOrders)",
       "description": "bff.orders.unattributed (ADR-051): how long the oldest row in the BFF's order projection has waited for an Ordering event to name its buyer. §10.7 returns such a row to nobody, so above zero for long means a buyer's history is missing an order. Seconds is ordinary — a payment or shipment event beat OrderPlaced. Empty is not zero: a failed read is an absent series. Runbook: docs/runbooks/unattributed-order.md.",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 45 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 53 },
       "fieldConfig": {
         "defaults": {
           "unit": "s",
