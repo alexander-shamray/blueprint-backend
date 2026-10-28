@@ -94,8 +94,8 @@ not collide); then raise the batch size or the Broker bound; and only then
 question the tick, which paces only a lane that is not backlogged. Note that
 §9.4 treats the batch size, the bound and the tick as **constants rather than
 configuration** ([§15.4](../backend-architecture/15-cicd-deployment.md)
-argues why), so changing either is a code change and a pull request, not a
-values file.
+argues why), so changing any of them is a code change and a pull request, not
+a values file.
 
 ## A slow deliverer rather than a large batch
 
