@@ -51,6 +51,31 @@ const SQL = [
     "(SELECT wait_time_ms FROM sys.dm_os_wait_stats WHERE wait_type = 'WRITELOG');",
 ].join(' ');
 
+// Each container's Compose service and the cores it may use, read once, so
+// report.js's serviceCrossings() can name the service a container runs and
+// hold its CPU to its own share. A container with no limit may use them all.
+async function identities() {
+    try {
+        const options = { encoding: 'utf8', windowsHide: true };
+        const ids = (await run('docker', ['ps', '-q'], options)).stdout.split(/\s+/).filter(Boolean);
+        const format = '{{.Name}},{{.HostConfig.NanoCpus}},{{index .Config.Labels "com.docker.compose.service"}}';
+        const { stdout } = await run('docker', ['inspect', '--format', format, ...ids], options);
+
+        return new Map(stdout.split('\n').filter((line) => line.trim()).map((line) => {
+            const [name, nanoCpus, service] = line.trim().split(',');
+            return [name.replace(/^\//, ''), {
+                service: service && service !== '<no value>' ? service : null,
+                cores: Number(nanoCpus) > 0 ? Number(nanoCpus) / 1e9 : null,
+            }];
+        }));
+    } catch (error) {
+        console.error(`sampler: no container identities, ${String(error.message ?? error).split('\n')[0]}`);
+        return new Map();
+    }
+}
+
+const known = await identities();
+
 async function containers() {
     try {
         const { stdout } = await run('docker', ['stats', '--no-stream', '--format', '{{json .}}'], {
@@ -60,7 +85,13 @@ async function containers() {
 
         return stdout.split('\n').filter((line) => line.trim()).map((line) => {
             const stat = JSON.parse(line);
-            return { name: stat.Name, cpu: parseCpu(stat.CPUPerc), memory: parseMemory(stat.MemUsage) };
+            return {
+                name: stat.Name,
+                service: known.get(stat.Name)?.service ?? null,
+                cores: known.get(stat.Name)?.cores ?? null,
+                cpu: parseCpu(stat.CPUPerc),
+                memory: parseMemory(stat.MemUsage),
+            };
         });
     } catch (error) {
         return { error: String(error.message ?? error).split('\n')[0] };

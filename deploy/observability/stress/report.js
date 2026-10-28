@@ -29,6 +29,15 @@ export const WORK_QUEUES = `rabbitmq_queue_messages{${WORK_FILTER}}`;
 export const OUTBOX_OLDEST = 'max(outbox_oldest_age_seconds)';
 export const QUEUED = `sum(${WORK_QUEUES})`;
 
+// THE FIRST TO GIVE UP: at the step that stopped the run, each service's own
+// figures, held to the journey's ratios and floors. A container is saturated
+// at this share of the cores it may use. A doubled load doubles SQL Server's
+// waits, so only four times is contention, and by more than the hold's length,
+// one connection blocked throughout: a run that held passed a lower floor.
+export const CONTAINER_CPU_LIMIT = 0.9;
+export const MEMORY_GROWTH_FLOOR_BYTES = 100 * 1024 ** 2;
+export const WAIT_JUMP_RATIO = 4;
+
 // THE GENERATOR: k6 shares the machine with the stack, so a step at which the
 // machine's CPU stayed this busy, or k6 ran fewer VUs than the step asked for,
 // measured the workstation rather than the platform.
@@ -52,15 +61,23 @@ function within(samples, window) {
     return samples.filter((sample) => sample.at >= window.startMs && sample.at <= window.endMs);
 }
 
-/** Each container's mean and peak CPU and peak memory over a step, busiest first. */
+/**
+ * Each container's mean and peak CPU, peak memory, and memory at the hold's
+ * middle and end, over a step, busiest first, with its Compose service and
+ * the cores it may use, both null where sample.mjs could not read them.
+ */
 export function containerStats(samples, window) {
     const byName = new Map();
+    const middle = (window.startMs + window.endMs) / 2;
 
     for (const sample of within(samples, window)) {
         for (const container of sample.containers ?? []) {
-            const seen = byName.get(container.name) ?? { name: container.name, cpu: [], memory: [] };
+            const seen = byName.get(container.name) ??
+                { name: container.name, service: null, cores: null, cpu: [], memory: [] };
+            seen.service = container.service ?? seen.service;
+            seen.cores = container.cores ?? seen.cores;
             if (container.cpu !== null) seen.cpu.push(container.cpu);
-            if (container.memory !== null) seen.memory.push(container.memory);
+            if (container.memory !== null) seen.memory.push({ at: sample.at, bytes: container.memory });
             byName.set(container.name, seen);
         }
     }
@@ -68,9 +85,13 @@ export function containerStats(samples, window) {
     return [...byName.values()]
         .map((seen) => ({
             name: seen.name,
+            service: seen.service,
+            cores: seen.cores,
             cpuMean: seen.cpu.length ? seen.cpu.reduce((a, b) => a + b, 0) / seen.cpu.length : null,
             cpuPeak: seen.cpu.length ? Math.max(...seen.cpu) : null,
-            memoryPeak: seen.memory.length ? Math.max(...seen.memory) : null,
+            memoryPeak: seen.memory.length ? Math.max(...seen.memory.map((m) => m.bytes)) : null,
+            memoryMiddle: seen.memory.find((m) => m.at >= middle)?.bytes ?? null,
+            memoryEnd: seen.memory.length ? seen.memory[seen.memory.length - 1].bytes : null,
         }))
         .sort((a, b) => (b.cpuMean ?? -1) - (a.cpuMean ?? -1));
 }
@@ -151,8 +172,19 @@ export function liveRow(hold, metrics) {
     };
 }
 
+/**
+ * How far a reading went past growing by `ratio` and by more than `floor`,
+ * as the lesser of the two multiples, or null when it did not.
+ */
+function beyond(before, after, ratio, floor) {
+    if (!Number.isFinite(before) || !Number.isFinite(after) || !(after - before > floor) || !(after >= before * ratio))
+        return null;
+
+    return Math.min(before > 0 ? after / before / ratio : Infinity, floor > 0 ? (after - before) / floor : Infinity);
+}
+
 function growing(middle, end, floor) {
-    return Number.isFinite(middle) && Number.isFinite(end) && end - middle > floor && end >= middle * GROWTH_RATIO;
+    return beyond(middle, end, GROWTH_RATIO, floor) !== null;
 }
 
 /** The signals a step crossed, measured against the step before it. */
@@ -162,8 +194,7 @@ export function crossings(row, previous) {
     if (row.errorRate > ERROR_RATE_LIMIT)
         crossed.push({ signal: 'errors', detail: `${(row.errorRate * 100).toFixed(1)}% of requests failed` });
 
-    if (previous && Number.isFinite(row.p95) && Number.isFinite(previous.p95) &&
-        row.p95 >= previous.p95 * P95_JUMP_RATIO && row.p95 - previous.p95 > P95_JUMP_FLOOR_MS) {
+    if (previous && beyond(previous.p95, row.p95, P95_JUMP_RATIO, P95_JUMP_FLOOR_MS) !== null) {
         crossed.push({
             signal: 'p95',
             detail: `journey p95 ${Math.round(previous.p95)} ms to ${Math.round(row.p95)} ms`,
@@ -207,6 +238,156 @@ export function knee(rows) {
     }
 
     return null;
+}
+
+const SQL_WAITS = { lockWaitMs: 'lock waits', pageLatchWaitMs: 'page latch waits', logWaitMs: 'log flush waits' };
+
+/**
+ * The service a container runs: the one whose name, as Compose spells it, is
+ * the container's Compose service, alone or with `-api` (the gateway's
+ * container is `gateway`); otherwise that Compose service, as for `sql`.
+ */
+export function containerOwner(container, services) {
+    const compose = container.service ?? container.name;
+    const owner = services.find((service) =>
+        [compose, `${compose}-api`].includes(service.toLowerCase().replaceAll('.', '-')));
+    return owner ?? compose;
+}
+
+/**
+ * Each service's own signals at a step, measured against the step before it
+ * as crossings() measures the journey's, with how far past its threshold
+ * each went. A container that names no limit may use `cores`; SQL Server's
+ * waits are judged only with `holdSeconds`, their floor.
+ */
+export function serviceCrossings(row, previous, { cores = null, holdSeconds = null } = {}) {
+    const crossed = [];
+    const add = (service, signal, past, detail) => crossed.push({ service, signal, past, detail });
+
+    for (const now of row.requestTypes ?? []) {
+        const before = (previous?.requestTypes ?? [])
+            .find((r) => r.service === now.service && r.request === now.request);
+        const past = beyond(before?.p95Seconds * 1000, now.p95Seconds * 1000, P95_JUMP_RATIO, P95_JUMP_FLOOR_MS);
+        if (past !== null) {
+            add(now.service, 'p95', past, `${now.request} p95 ${Math.round(before.p95Seconds * 1000)} ms to ` +
+                `${Math.round(now.p95Seconds * 1000)} ms`);
+        }
+    }
+
+    for (const errors of row.serverErrors ?? []) {
+        if (errors.share > ERROR_RATE_LIMIT)
+            add(errors.service, 'errors', errors.share / ERROR_RATE_LIMIT, `5xx ${(errors.share * 100).toFixed(1)}%`);
+    }
+
+    for (const outbox of row.outboxes ?? []) {
+        const past = beyond(outbox.middle, outbox.end, GROWTH_RATIO, OUTBOX_GROWTH_FLOOR_SECONDS);
+        if (past !== null) {
+            add(outbox.service, 'outbox', past,
+                `oldest outbox row ${outbox.middle.toFixed(1)} s to ${outbox.end.toFixed(1)} s over the hold`);
+        }
+    }
+
+    for (const queue of row.queues ?? []) {
+        const past = beyond(queue.middle, queue.end, GROWTH_RATIO, QUEUE_GROWTH_FLOOR_MESSAGES);
+        if (past !== null) {
+            add(queue.service ?? queue.queue, 'queue', past,
+                `${queue.queue} ${Math.round(queue.middle)} to ${Math.round(queue.end)} queued over the hold`);
+        }
+    }
+
+    for (const queue of row.faultedQueues ?? []) {
+        const gained = queue.end - (queue.start ?? 0);
+        if (gained > 0) {
+            add(queue.service ?? queue.queue, 'faulted', gained,
+                `${queue.queue} gained ${Math.round(gained)} over the hold`);
+        }
+    }
+
+    const known = [...new Set(crossed.map((c) => c.service).concat(
+        (row.requestTypes ?? []).map((r) => r.service), (row.serverErrors ?? []).map((e) => e.service),
+        (row.outboxes ?? []).map((o) => o.service)))];
+
+    for (const container of row.containers ?? []) {
+        const owner = containerOwner(container, known);
+        const usable = container.cores ?? cores;
+        const share = usable > 0 && Number.isFinite(container.cpuMean) ? container.cpuMean / (usable * 100) : null;
+
+        if (share !== null && share >= CONTAINER_CPU_LIMIT)
+            add(owner, 'cpu', share / CONTAINER_CPU_LIMIT, `CPU ${Math.round(share * 100)}% of ${usable} cores`);
+
+        const past = beyond(container.memoryMiddle, container.memoryEnd, GROWTH_RATIO, MEMORY_GROWTH_FLOOR_BYTES);
+        if (past !== null) {
+            add(owner, 'memory', past, `memory ${Math.round(container.memoryMiddle / 1024 ** 2)} MiB to ` +
+                `${Math.round(container.memoryEnd / 1024 ** 2)} MiB over the hold`);
+        }
+    }
+
+    if (row.sql?.deadlocks > 0)
+        add('sql', 'deadlocks', row.sql.deadlocks, `${row.sql.deadlocks} deadlocks`);
+
+    for (const [key, name] of Object.entries(SQL_WAITS)) {
+        const past = holdSeconds > 0 ? beyond(previous?.sql?.[key], row.sql?.[key], WAIT_JUMP_RATIO, holdSeconds * 1000)
+            : null;
+        if (past !== null)
+            add('sql', 'waits', past, `${name} ${Math.round(previous.sql[key])} ms to ${Math.round(row.sql[key])} ms`);
+    }
+
+    return crossed;
+}
+
+/**
+ * The step to name a service at: the one whose errors passed the abort rate
+ * when that is what stopped the run, and otherwise the knee, or null.
+ */
+export function givingUpStep(found, ended) {
+    return ended.reason === 'errors' ? ended.step : found?.step ?? null;
+}
+
+/**
+ * The services whose own signals crossed at `step`, furthest past its own
+ * threshold first, each with its signals in the same order; null when there
+ * is no step to name one at. A step the run never reached is skipped, as
+ * knee() skips it, so the step before is the last one measured.
+ */
+export function firstToGiveUp(rows, step, options = {}) {
+    const measured = rows.filter((row) => row.requests > 0);
+    const at = measured.findIndex((row) => row.step === step);
+
+    if (at < 0)
+        return null;
+
+    const byService = new Map();
+
+    for (const crossed of serviceCrossings(measured[at], measured[at - 1] ?? null, options)) {
+        const seen = byService.get(crossed.service) ?? [];
+        seen.push(crossed);
+        byService.set(crossed.service, seen);
+    }
+
+    const services = [...byService.entries()]
+        .map(([service, signals]) => {
+            const ordered = signals.sort((a, b) => b.past - a.past);
+            return {
+                service,
+                past: ordered[0].past,
+                signals: ordered.map(({ signal, past, detail }) => ({ signal, past, detail })),
+            };
+        })
+        .sort((a, b) => b.past - a.past || a.service.localeCompare(b.service));
+
+    return { step, vus: measured[at].vus, services };
+}
+
+/** The run's machine-readable `First to give up:` line. */
+export function firstLine(first) {
+    if (!first)
+        return 'First to give up: not judged; no step was the knee or past the abort rate';
+
+    if (first.services.length === 0)
+        return `First to give up: none named; step ${first.step} crossed only journey-wide signals`;
+
+    return `First to give up: ${first.services.map((s) =>
+        `${s.service}: ${s.signals.map((signal) => signal.detail).join('; ')}`).join(' | ')}`;
 }
 
 /** Why a step measured the workstation rather than the platform, or null when it did not. */

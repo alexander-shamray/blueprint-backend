@@ -549,7 +549,8 @@ for a thread-pool thread and the time collections paused it. From
 `stress/sample.mjs`, every `INTERVAL_MS`: the machine's CPU as a share of
 all its processors, each container's CPU and memory from
 `docker stats`, where a CPU figure is a share of one core and passes 100 on
-several, and SQL Server's deadlocks and lock, page-latch and log-flush waits.
+several, with its Compose service and CPU limit read once at the start, and
+SQL Server's deadlocks and lock, page-latch and log-flush waits.
 From the `judge`, the VUs k6 ran a second before each hold's end.
 Nothing is added to the stack to read any of them. What could only be read by
 adding a component is listed in the summary under *Not measured*.
@@ -562,6 +563,21 @@ or the oldest outbox row or the queued messages still growing by
 `stress/report.js`'s constants, held by `stress/report.test.js`. Each signal
 is read once a step, so the order in which two crossed within one step cannot
 be seen, and the summary names every signal that crossed at the knee.
+
+**The first to give up** is named at the step that stopped the run, the one
+whose errors passed the abort rate under an `errors` stop and otherwise the
+knee, by `stress/report.js`'s `firstToGiveUp()`. Each service's own figures
+are held to the journey's rules: a request type's `request.duration` p95
+against the step before, its 5xx share from ASP.NET Core's
+`http.server.request.duration`, its outbox and the queues it consumes
+growing over the hold, its `_error` queues gaining messages, its container's
+CPU at `CONTAINER_CPU_LIMIT` of the cores it may use or its memory growing,
+and SQL Server's deadlocks and its waits growing by `WAIT_JUMP_RATIO` on the
+step before. A queue's service is its consumer by MassTransit's receive
+meter, and a container's is its Compose service. The services that crossed
+are listed furthest past their own threshold first, since one service's
+failure reaches its callers' figures too and the order is evidence, not a
+cause.
 
 **Why it ended** is read at the last step that carried requests, by
 `stress/report.js`'s `ending()`. k6 runs on the machine the stack runs on, so
@@ -640,10 +656,14 @@ k6 exits 0 when no rule stopped the run; 108 when the knee stop did, which
 rate under `errors`, which `summary.md` marks `(past the abort rate)`. Either
 stop ends the run there unless it was the last step. 107 is a refusal, of a
 variable at start or from `setup()`, with no load driven. `summarise.mjs`
-prints three machine-readable lines: `Knee:`, then `Ended:`, the reason
+prints four machine-readable lines: `Knee:`; then `First to give up:`, each
+service with what crossed and services apart by ` | `, as in
+`First to give up: Ordering.Api: 5xx 3.2% | sql: 4 deadlocks`, or
+`none named` when only the journey's figures moved; then `Ended:`, the reason
 first and then the step, the level and the stop rule, as in
-`Ended: knee at step 4 (800 VUs); level low, stop rule knee`, then
-`Summary:` and the summary's path.
+`Ended: knee at step 4 (800 VUs); level low, stop rule knee`; then
+`Summary:` and the summary's path. `summary.json` and the top of
+`summary.md` carry the first three.
 
 **4. Go back to the normal profile** by bringing the stack up without the
 override. Nothing else needs undoing:
