@@ -103,7 +103,7 @@ identity in words, for the reason the Stryker.NET row gives.
 | SQL Server | Per-core or CAL licensing; Developer Edition is free for non-production only |
 | Duende IdentityServer | Free below a revenue threshold; commercial above it |
 | Redis | Redis 7.4+ is under RSALv2/SSPLv1. Valkey (BSD) is a drop-in fork if the terms are a problem |
-| Grafana OTel-LGTM (`grafana/otel-lgtm` image) | AGPL 3.0 for Grafana, Loki, Tempo and Mimir (the Prometheus-compatible store inside the image). Development and CI only ([§14.1](14-local-development.md)); never deployed, so no distribution or network-service obligation arises |
+| Grafana OTel-LGTM (`grafana/otel-lgtm` image) | AGPL 3.0 for Grafana, Loki, Tempo and Pyroscope; Apache 2.0 for Prometheus, the OpenTelemetry Collector and OBI, the other components the image bundles. Development and CI only ([§14.1](14-local-development.md)); never deployed, so no distribution or network-service obligation arises |
 
 The first table is enforced by
 [`.github/licence-gate/`](../../.github/licence-gate/README.md), whose README
