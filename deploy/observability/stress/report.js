@@ -337,10 +337,12 @@ export function serviceCrossings(row, previous, { cores = null, holdSeconds = nu
 
 /**
  * The step to name a service at: the one whose errors passed the abort rate
- * when that is what stopped the run, and otherwise the knee, or null.
+ * where the error stop fired, and otherwise the knee, or null. It reads the
+ * step's own flag, since ending() calls an abort on a saturated machine the
+ * generator's.
  */
-export function givingUpStep(found, ended) {
-    return ended.reason === 'errors' ? ended.step : found?.step ?? null;
+export function givingUpStep(rows, found) {
+    return rows.find((row) => row.aborted)?.step ?? found?.step ?? null;
 }
 
 /**
