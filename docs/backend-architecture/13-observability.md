@@ -738,9 +738,10 @@ of all records were dropped, the platform's own among them
 A level the configuration names under `Logging:LogLevel` for one of them
 wins, so an operator lowers a category for a session without a build, and the
 gateway names its hosting and forwarder categories to keep
-[§10.1](10-api-gateway.md)'s edge log. Every other category keeps the host's default: `LoggingBehavior`'s, each
-service's own, and ASP.NET Core's authentication and authorization lines,
-which carry the reason for a 401 or a 403 that no span records.
+[§10.1](10-api-gateway.md)'s edge log. Every other category keeps the host's
+default: `LoggingBehavior`'s, each service's own, and ASP.NET Core's
+authentication and authorization lines, which carry the reason for a 401 or a
+403 that no span records.
 
 **Never log:** passwords, secrets, tokens, authorization headers, credentials,
 connection strings, cookies, API keys, account keys, private keys, full card

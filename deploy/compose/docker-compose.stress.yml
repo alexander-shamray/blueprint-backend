@@ -2,8 +2,7 @@
 # alone, never a deployment: it lifts the edge's rate limits, stops the
 # workers pacing to the carrier, the relay and the push providers, scales
 # Ordering (ADR-158) and samples traces (ADR-160). No other Compose file sets
-# these environment keys, so `up` without this file is the way back to every
-# default.
+# its environment keys, so `up` without it restores every default.
 
 # Not part of `up`: add it to the full-stack command deploy/compose/README.md
 # gives. Each service's suite reads this file, so a value the service's
