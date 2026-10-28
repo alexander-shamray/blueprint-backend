@@ -515,6 +515,9 @@ than the limiter or a third party's modelled rate. It is added to the
 full-stack `up` for that run alone, and `up` without it restores every
 default. No chart sets any of the three sections
 ([ADR-157](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md)).
+It also runs `ordering-api` at its chart's replica floor, with no host port,
+so that the outbox drains as the chart deploys it
+([ADR-158](adr/ADR-158-the-stress-override-runs-orderingapi-at-its-charts-replica-floor-1525.md)).
 
 **A host process reads none of the container `environment:` blocks, so every
 key a service throws without has to be supplied to it.** **Five** do that, each

@@ -164,6 +164,7 @@ decision looks wrong.
 | **ADR-155** | [A red push run on main files a tracker issue and is reverted before it is fixed (#1450)](adr/ADR-155-a-red-push-run-on-main-files-a-tracker-issue-and-is-reverted-before-it-is-fixed-1450.md) |
 | **ADR-156** | [The BFF's assistant gains a keyless scripted provider for Development, and its 429s carry a code of their own (#1484, #1485), amending ADR-151](adr/ADR-156-the-bffs-assistant-gains-a-keyless-scripted-provider-for-development-and-its-429s-carry-a-code-of-their-own-1484-1485-amending-adr-151.md) |
 | **ADR-157** | [The gateway's budgets and the workers' third-party pacing are options only a stress override raises (#1488)](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md) |
+| **ADR-158** | [The stress override runs Ordering.Api at its chart's replica floor (#1525)](adr/ADR-158-the-stress-override-runs-orderingapi-at-its-charts-replica-floor-1525.md) |
 
 ---
 
