@@ -170,6 +170,7 @@ decision looks wrong.
 | **ADR-161** | [The outbox key is optimised for sequential inserts and a pass completes its rows in one statement (#1531)](adr/ADR-161-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md) |
 | **ADR-162** | [The stress override bounds the observer, and the collector sheds within its bound (#1534)](adr/ADR-162-the-stress-override-bounds-the-observer-and-the-collector-sheds-within-its-bound-1534.md) |
 | **ADR-163** | [The outbox dispatcher publishes Broker rows side by side and claims again at once after a full claim (#1535), adding to ADR-131](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md) |
+| **ADR-164** | [BrokerConcurrency stays at 8, the stress rerun moving no drain (#1546), adding to ADR-163](adr/ADR-164-brokerconcurrency-stays-at-8-the-stress-rerun-moving-no-drain-1546-adding-to-adr-163.md) |
 
 ---
 
