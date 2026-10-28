@@ -15,7 +15,7 @@ public static class ObservabilityExtensions
     public const string ServiceNameKey = "OTEL_SERVICE_NAME";
 
     /// <summary>Framework categories logging a line per request or command, held at Warning (§13.4, ADR-159).</summary>
-    /// <remarks>By subcategory, so authentication's and authorization's reasons for a 401 or 403 still log.</remarks>
+    /// <remarks>By subcategory, so the reasons for a 401 or a 403 still log (ADR-159).</remarks>
     public static IReadOnlyList<string> FrameworkCategories { get; } =
     [
         "Microsoft.AspNetCore.Hosting",
