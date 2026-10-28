@@ -467,7 +467,7 @@ sequenceDiagram
             D->>DB: Attempts += 1, LastError, back off LockedUntil
         end
 
-        Note over D,DB: Then every delivered row, in one statement (ADR-159)
+        Note over D,DB: Then every delivered row, in one statement (ADR-161)
         D->>DB: ProcessedAt = now, LockedUntil = null
     end
 ```
@@ -476,7 +476,7 @@ sequenceDiagram
 CREATE TABLE ordering.OutboxMessages
 (
     Id             BIGINT IDENTITY(1,1) PRIMARY KEY
-                   WITH (OPTIMIZE_FOR_SEQUENTIAL_KEY = ON),  -- ADR-159; every insert lands on the last page
+                   WITH (OPTIMIZE_FOR_SEQUENTIAL_KEY = ON),  -- ADR-161; every insert lands on the last page
     MessageId      UNIQUEIDENTIFIER NOT NULL UNIQUE,
     CorrelationId  UNIQUEIDENTIFIER NOT NULL,
     MessageType    NVARCHAR(300)    NOT NULL,   -- MessageTypeMap.MaxNameLength; a FullName is not ASCII
@@ -909,7 +909,7 @@ OUTPUT
 A completed row gets `ProcessedAt` set and its lease cleared, and a pass
 completes all of its delivered rows in one statement once its last delivery
 has returned, rather than one row at a time
-([ADR-159](adr/ADR-159-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md)).
+([ADR-161](adr/ADR-161-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md)).
 The rows a pass claims under load are the freshest in the table, on the
 identity key's last page, so a statement per row took that page's latch and a
 log flush per row:
@@ -1097,14 +1097,14 @@ Consequences of the per-row design worth stating explicitly:
 - **The lease bounds crash recovery.** If a dispatcher dies mid-batch, its
   claimed rows become available again when the lease expires rather than
   being stuck behind a lock that no longer has an owner. Since completion is
-  one statement per pass (ADR-159), that includes the rows the dead pass had
+  one statement per pass (ADR-161), that includes the rows the dead pass had
   already delivered, so a crash redelivers up to a batch rather than one row
   — duplicates the inbox and idempotent projections absorb, as below.
 - **And it can expire while the batch is still being delivered, which is a known
   residual rather than an oversight.** A claim leases a batch and delivers it
   one row at a time; a batch slower than the lease lets a second replica reclaim
   the whole batch — the rows this one has not reached yet, and since completion
-  waits for the pass's end (ADR-159), the ones it has delivered too — and the
+  waits for the pass's end (ADR-161), the ones it has delivered too — and the
   complete and fail statements match on `Id` alone, so the slow worker can then
   write over a lease it no longer holds. Every outcome is a **duplicate
   delivery**, which is exactly what at-least-once already promises and what

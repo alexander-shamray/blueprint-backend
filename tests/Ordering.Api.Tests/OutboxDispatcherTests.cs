@@ -153,7 +153,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task A_pass_stopped_part_way_still_completes_the_rows_it_delivered()
     {
-        // ADR-159 completes a pass's rows in one statement at its end, which a stop's token must not cancel.
+        // ADR-161 completes a pass's rows in one statement at its end, which a stop's token must not cancel.
         using CancellationTokenSource stop =
             CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
 

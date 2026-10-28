@@ -374,7 +374,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     public Task ExpireOutboxLeasesAsync() =>
         ExecuteAsync($"UPDATE {_schema}.OutboxMessages SET LockedUntil = NULL WHERE ProcessedAt IS NULL;");
 
-    /// <summary>Whether the migrated outbox key carries ADR-159's option, read from the catalogue.</summary>
+    /// <summary>Whether the migrated outbox key carries ADR-161's option, read from the catalogue.</summary>
     public Task<bool> OutboxKeyOptimizedForSequentialKeyAsync() =>
         ScalarAsync<bool>(
             $"""
