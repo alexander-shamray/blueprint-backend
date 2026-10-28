@@ -28,11 +28,12 @@ redelivered one. That is a duplicate, which at-least-once already promises
 and which §9.5's inbox and §6.6's idempotent projections absorb. A graceful
 stop does not widen it. A pass that outlives `LeaseSeconds` can now have its
 delivered rows reclaimed and delivered again by another replica, not only the
-rows it has not reached: §9.4's lease residual, widened. `ProcessedAt` records when the pass ended, not when
-the row was delivered, so §13.6's outbox gauges count a delivered row as
-pending until its pass ends. The option is not in the EF model, so a database
-created from the model rather than migrated lacks it, and §4.5's scaffold
-carries the migration as a template one, so a new publishing service has it. It needs SQL Server 2019 or
+rows it has not reached: §9.4's lease residual, widened. `ProcessedAt`
+records when the pass ended, not when the row was delivered, so §13.6's
+outbox gauges count a delivered row as pending until its pass ends. The
+option is not in the EF model, so a database created from the model rather
+than migrated lacks it, and §4.5's scaffold carries the migration as a
+template one, so a new publishing service has it. It needs SQL Server 2019 or
 later, and `OPENJSON` a compatibility level of 130 or more. Whether the knee
 moves is measured by a rerun of the same stress plan, not argued here.
 

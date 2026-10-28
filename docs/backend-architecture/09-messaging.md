@@ -1104,8 +1104,8 @@ Consequences of the per-row design worth stating explicitly:
   delivers it one row at a time; a batch slower than the lease lets a second
   replica reclaim the whole batch — the rows this one has not reached yet, and
   since completion waits for the pass's end (ADR-159), the ones it has
-  delivered too — and the complete and fail statements match on `Id` alone, so the slow worker can then write over
-  a lease it no longer holds. Every outcome is a **duplicate delivery**, which
+  delivered too — and the complete and fail statements match on `Id` alone,
+  so the slow worker can then write over a lease it no longer holds. Every outcome is a **duplicate delivery**, which
   is exactly what at-least-once already promises and what §9.5's inbox and
   §6.6's idempotent projections already absorb — so nothing here is unsound,
   and the cost is a redelivery rather than a lost or double-applied message.
