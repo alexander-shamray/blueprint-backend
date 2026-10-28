@@ -36,32 +36,45 @@ if [ "$mode" != full ] && last=$(g rev-parse --verify --quiet "refs/sweeps/$kind
   if g merge-base --is-ancestor "$last" "$pinned"; then since="$last"; fi
 fi
 
+# Sets row rather than printing it: a command substitution per tracked file is
+# a fork per file, and under MSYS a fork is most of the run's time.
 row_of() {
   case "$kind:$1" in
-    bug:src/BuildingBlocks/*) echo building-blocks ;;
-    bug:src/*) echo services ;;
-    bug:tests/*) echo suites ;;
-    security:src/*|security:tests/*) echo source ;;
-    *:tools/*|*:.github/*|*:.claude/*) echo tooling ;;
-    *:deploy/*|*:.config/*) echo deploy ;;
-    *:docs/*) echo samples ;;
+    bug:src/BuildingBlocks/*) row=building-blocks ;;
+    bug:src/*) row=services ;;
+    bug:tests/*) row=suites ;;
+    security:src/*|security:tests/*) row=source ;;
+    *:tools/*|*:.github/*|*:.claude/*) row=tooling ;;
+    *:deploy/*|*:.config/*) row=deploy ;;
+    *:docs/*) row=samples ;;
     */*) return 1 ;;
-    *) echo deploy ;;
+    *) row=deploy ;;
   esac
 }
 
-# The bytes inside fences, the only part of a sample the sweeps audit. A fence
-# closes only on its own character, at least as long, with nothing after it.
+# The bytes inside fences, the only part of a sample the sweeps audit, one line
+# per blob of a `git cat-file --batch` stream. A fence closes only on its own
+# character, at least as long, with nothing after it. LC_ALL=C because a blob
+# ends at a byte count, and gawk's length counts characters in a UTF-8 locale.
 fenced_bytes() {
-  awk '
-    match($0, /^[ \t]*(```+|~~~+)/) {
-      mark = substr($0, RSTART, RLENGTH); sub(/^[ \t]*/, "", mark)
-      ch = substr(mark, 1, 1); n = length(mark); rest = substr($0, RSTART + RLENGTH)
-      if (!open) { open = 1; och = ch; on = n; next }
-      if (ch == och && n >= on && rest ~ /^[ \t]*$/) { open = 0; next }
+  LC_ALL=C awk '
+    state == 2 { if ($0 != "") bad = 1; state = 0; next }
+    state == 0 {
+      if (NF != 3 || $2 != "blob") { bad = 1; exit }
+      left = $3; open = 0; total = 0; state = 1; next
     }
-    open { total += length($0) + 1 }
-    END { print total + 0 }'
+    {
+      left -= length($0) + 1; fence = 0
+      if (match($0, /^[ \t]*(```+|~~~+)/)) {
+        mark = substr($0, RSTART, RLENGTH); sub(/^[ \t]*/, "", mark)
+        ch = substr(mark, 1, 1); n = length(mark); rest = substr($0, RSTART + RLENGTH)
+        if (!open) { open = 1; och = ch; on = n; fence = 1 }
+        else if (ch == och && n >= on && rest ~ /^[ \t]*$/) { open = 0; fence = 1 }
+      }
+      if (open && !fence) total += length($0) + 1
+      if (left <= 0) { print total + 0; state = left == 0 ? 2 : 0 }
+    }
+    END { if (bad || state) { print "unreadable cat-file stream" > "/dev/stderr"; exit 1 } }'
 }
 
 # Each git read lands in a file with its status checked, NUL-separated, so a
@@ -80,6 +93,7 @@ rm -f "$out/.tree" "$out/.text" "$out/.changed"
 [ "${#tree[@]}" -gt 0 ] || { echo "no tracked files at $pinned" >&2; exit 3; }
 
 declare -A text=() changed=() rowfiles=()
+samples=()
 for f in "${texts[@]}"; do text[${f#"$pinned:"}]=1; done
 for f in "${changes[@]}"; do changed[$f]=1; done
 
@@ -91,7 +105,7 @@ for rec in "${tree[@]}"; do
   case "$file" in *$'\n'*|*$'\r'*) echo "a tracked name with a line break" >&2; exit 3 ;; esac
   tracked=$((tracked + 1))
   size=${meta##* }
-  row=$(row_of "$file") || { echo "no row owns: $file" >&2; unowned=$((unowned + 1)); continue; }
+  row_of "$file" || { echo "no row owns: $file" >&2; unowned=$((unowned + 1)); continue; }
   [ -z "$since" ] || [ -n "${changed[$file]:-}" ] || { unchanged=$((unchanged + 1)); continue; }
   [ "$size" != 0 ] || { empty=$((empty + 1)); continue; }
   [ -n "${text[$file]:-}" ] || { binary=$((binary + 1)); continue; }
@@ -100,14 +114,28 @@ for rec in "${tree[@]}"; do
   case "$file" in
     docs/superpowers/*|docs/pr-decision-log.md|docs/lessons.md) record=$((record + 1)); continue ;;
   esac
-  if [ "$row" = samples ]; then
-    size=$(g cat-file blob "$pinned:$file" | fenced_bytes)
-    [ "$size" -gt 0 ] || { fenceless=$((fenceless + 1)); continue; }
-  fi
+  [ "$row" != samples ] || { samples+=("$file"); continue; }
   listed=$((listed + 1))
   rowfiles[$row]+="$size $file"$'\n'
 done
 [ "$unowned" -eq 0 ] || { echo "$unowned tracked path(s) no row owns" >&2; exit 3; }
+
+# Every sample through one cat-file and one awk, in tree order, rather than a
+# pipeline per file; the answer count is checked so a short stream fails.
+if [ "${#samples[@]}" -gt 0 ]; then
+  printf '%s\n' "${samples[@]/#/$pinned:}" > "$out/.samples"
+  g cat-file --batch < "$out/.samples" | fenced_bytes > "$out/.fenced"
+  mapfile -t fenced < "$out/.fenced"
+  rm -f "$out/.samples" "$out/.fenced"
+  [ "${#fenced[@]}" -eq "${#samples[@]}" ] ||
+    { echo "fences read for ${#fenced[@]} of ${#samples[@]} samples" >&2; exit 3; }
+  for i in "${!samples[@]}"; do
+    size=${fenced[i]}
+    [ "$size" -gt 0 ] || { fenceless=$((fenceless + 1)); continue; }
+    listed=$((listed + 1))
+    rowfiles[samples]+="$size ${samples[i]}"$'\n'
+  done
+fi
 if [ -z "$since" ] && [ "$listed" -eq 0 ]; then
   echo "a full run that lists nothing has read nothing" >&2; exit 3
 fi
