@@ -50,6 +50,8 @@ would catch a join already in the tree.
   join's line. An `ON` line opening with a quote is not an `ON` line, so its
   second predicate goes unjudged, and the next `ON` line, even a `MERGE`'s, is
   judged as the join's. The tree holds none of these shapes.
+- A join hint, `INNER HASH JOIN` or `LEFT LOOP JOIN`, is read as the kind,
+  so the gate refuses it as a bare join. The tree holds no join hint.
 - It holds the join rule and nothing else in *SQL style*. One predicate per
   line under `WHERE` or a `MERGE`'s `ON`, column aliases as assignments and
   the + 4 continuation indent stay review rules.
