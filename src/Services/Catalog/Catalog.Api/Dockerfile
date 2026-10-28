@@ -30,7 +30,14 @@ COPY src/Services/Catalog/Catalog.Domain/Catalog.Domain.csproj src/Services/Cata
 COPY src/Services/Catalog/Catalog.Application/Catalog.Application.csproj src/Services/Catalog/Catalog.Application/
 COPY src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj src/Services/Catalog/Catalog.Infrastructure/
 COPY src/Services/Catalog/Catalog.Api/Catalog.Api.csproj src/Services/Catalog/Catalog.Api/
-RUN dotnet restore src/Services/Catalog/Catalog.Api/Catalog.Api.csproj
+
+# The restores of every image take turns at one NuGet HTTP cache (§15.2), so a
+# full-stack build downloads each package once instead of opening every
+# restore against the feed at once. The packages still land in this layer, so
+# the publish below never reads the mount, and a pruned cache costs a download.
+RUN --mount=type=cache,id=nuget-http-cache,target=/root/.nuget/http-cache,sharing=locked \
+    NUGET_HTTP_CACHE_PATH=/root/.nuget/http-cache \
+    dotnet restore src/Services/Catalog/Catalog.Api/Catalog.Api.csproj
 
 # .editorconfig rides with the source, not the restore inputs: it is a build
 # input under ADR-019 (EnforceCodeStyleInBuild reads it), and without it this

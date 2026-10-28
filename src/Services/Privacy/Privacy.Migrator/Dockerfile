@@ -20,7 +20,14 @@ COPY src/Services/Privacy/Privacy.Domain/Privacy.Domain.csproj src/Services/Priv
 COPY src/Services/Privacy/Privacy.Application/Privacy.Application.csproj src/Services/Privacy/Privacy.Application/
 COPY src/Services/Privacy/Privacy.Infrastructure/Privacy.Infrastructure.csproj src/Services/Privacy/Privacy.Infrastructure/
 COPY src/Services/Privacy/Privacy.Migrator/Privacy.Migrator.csproj src/Services/Privacy/Privacy.Migrator/
-RUN dotnet restore src/Services/Privacy/Privacy.Migrator/Privacy.Migrator.csproj
+
+# The restores of every image take turns at one NuGet HTTP cache (§15.2), so a
+# full-stack build downloads each package once instead of opening every
+# restore against the feed at once. The packages still land in this layer, so
+# the publish below never reads the mount, and a pruned cache costs a download.
+RUN --mount=type=cache,id=nuget-http-cache,target=/root/.nuget/http-cache,sharing=locked \
+    NUGET_HTTP_CACHE_PATH=/root/.nuget/http-cache \
+    dotnet restore src/Services/Privacy/Privacy.Migrator/Privacy.Migrator.csproj
 
 # .editorconfig is a build input under ADR-019 — without it this publish
 # enforces a weaker style policy than every other build.

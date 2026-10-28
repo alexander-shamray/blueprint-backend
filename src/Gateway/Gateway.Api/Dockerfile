@@ -37,7 +37,14 @@ COPY src/BuildingBlocks/Common.Domain/Common.Domain.csproj src/BuildingBlocks/Co
 COPY src/BuildingBlocks/Common.Application/Common.Application.csproj src/BuildingBlocks/Common.Application/
 COPY src/BuildingBlocks/Common.Web/Common.Web.csproj src/BuildingBlocks/Common.Web/
 COPY src/Gateway/Gateway.Api/Gateway.Api.csproj src/Gateway/Gateway.Api/
-RUN dotnet restore src/Gateway/Gateway.Api/Gateway.Api.csproj
+
+# The restores of every image take turns at one NuGet HTTP cache (§15.2), so a
+# full-stack build downloads each package once instead of opening every
+# restore against the feed at once. The packages still land in this layer, so
+# the publish below never reads the mount, and a pruned cache costs a download.
+RUN --mount=type=cache,id=nuget-http-cache,target=/root/.nuget/http-cache,sharing=locked \
+    NUGET_HTTP_CACHE_PATH=/root/.nuget/http-cache \
+    dotnet restore src/Gateway/Gateway.Api/Gateway.Api.csproj
 
 # .editorconfig rides with the source, not the restore inputs: it is a build
 # input under ADR-019 (EnforceCodeStyleInBuild reads it), and without it this

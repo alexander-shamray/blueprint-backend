@@ -530,6 +530,25 @@ source rather than the restore inputs: it is a build input under ADR-019
 (`EnforceCodeStyleInBuild` reads it), and without it the publish would enforce
 a weaker style policy than every other build.
 
+**Every image's restore takes turns at one NuGet HTTP cache.** The restore
+runs under a BuildKit cache mount, `id=nuget-http-cache` with
+`sharing=locked`, that every image built on one builder shares, and
+`NUGET_HTTP_CACHE_PATH` points NuGet at it. A change to a restore input every
+image copies, `Directory.Packages.props` among them, re-keys every image's
+restore layer at once, so without the mount a full-stack `up --build` (§14.1)
+opens every restore against `api.nuget.org` at the same moment, a burst that a
+slow network or Docker Desktop's DNS proxy fails as one.
+Under the lock the first restore downloads and the rest read what it left, for
+as long as NuGet keeps a cache entry fresh: minutes, not days, so a rebuild the
+next day downloads again, still one restore at a time. The mount holds the
+HTTP cache and not the global packages folder, so the packages still land in
+the restore layer: the `--no-restore` publish never reads the mount and runs in
+parallel, and a cached restore layer beside a pruned mount loses nothing. A
+mount of the global packages folder would keep packages across days, but the
+publish would then need the mount too, in the restore's `RUN`, and every
+publish would wait its turn behind the lock. §15.1's `images` job keeps no
+BuildKit cache between runs, so it neither gains nor loses by the mount.
+
 The final stage is the runtime image:
 
 ```dockerfile
