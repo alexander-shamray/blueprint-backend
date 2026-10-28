@@ -40,7 +40,7 @@ public class EdgeRequestLogTests
     private static ILogger Logger(GatewayFactory factory, string category) =>
         factory.Services.GetRequiredService<ILoggerFactory>().CreateLogger(category);
 
-    // GatewayRateLimitOptionsTests' route to the override, for the reason it gives.
+    // Found by walking up, as this suite takes no reference to Common.TestSupport, whose fixtures start containers.
     private static string StressOverride()
     {
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
