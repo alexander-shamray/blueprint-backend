@@ -326,9 +326,14 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
 
     /// <summary>Runs exactly one claim-and-deliver pass, with no timers and no waiting.</summary>
     public Task<int> ProcessOutboxBatchAsync() =>
+        ProcessStoppableOutboxBatchAsync(TestContext.Current.CancellationToken);
+
+    /// <summary>One pass under the test's own token, so a test can stop it part-way as a shutdown would.</summary>
+    /// <remarks>Not an overload, which would have xUnit1051 ask every token-less call above for a token.</remarks>
+    public Task<int> ProcessStoppableOutboxBatchAsync(CancellationToken ct) =>
         Factory.Services
             .GetRequiredService<OutboxDispatcher>()
-            .ProcessBatchAsync(TestContext.Current.CancellationToken);
+            .ProcessBatchAsync(ct);
 
     /// <summary>Every outbox row, untracked, for asserting over.</summary>
     public async Task<IReadOnlyList<OutboxMessage>> OutboxAsync()

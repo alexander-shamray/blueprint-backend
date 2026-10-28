@@ -151,6 +151,36 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task A_pass_stopped_part_way_still_completes_the_rows_it_delivered()
+    {
+        // ADR-159 completes a pass's rows in one statement at its end, which a stop's token must not cancel.
+        using CancellationTokenSource stop =
+            CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+        DeliveryGate.Close();
+        try
+        {
+            await fixture.StageOutboxAsync(OutboxRows.Healthy(fixture), OutboxRows.Blocking(fixture));
+
+            Task<int> pass = fixture.ProcessStoppableOutboxBatchAsync(stop.Token);
+            await DeliveryGate.Entered.Task.WaitAsync(
+                TimeSpan.FromSeconds(30),
+                TestContext.Current.CancellationToken);
+
+            await stop.CancelAsync();
+            DeliveryGate.Open();
+
+            (await pass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)).ShouldBe(2);
+        }
+        finally
+        {
+            DeliveryGate.Open();
+        }
+
+        (await fixture.OutboxAsync()).ShouldAllBe(r => r.ProcessedAt != null);
+    }
+
+    [Fact]
     public async Task The_outbox_key_is_optimized_for_sequential_inserts() =>
         (await fixture.OutboxKeyOptimizedForSequentialKeyAsync()).ShouldBeTrue();
 

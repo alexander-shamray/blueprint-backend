@@ -49,7 +49,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
         LoggerMessage.Define(
             LogLevel.Error,
             new EventId(1, nameof(ClaimFailed)),
-            "Outbox claim failed; retrying next tick.");
+            "Outbox pass failed at its claim or its completion; retrying next tick.");
 
     private static readonly Action<ILogger, Guid, string, int, int, Exception?> DeliveryFailed =
         LoggerMessage.Define<Guid, string, int, int>(
@@ -101,11 +101,13 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 inserted.TraceState;
             """;
 
+        // One statement per pass, not per row: a row's own commit took the key's last page and a log flush (ADR-159).
         _completeSql =
             $"""
-            UPDATE {table.QualifiedName}
+            UPDATE outbox
             SET ProcessedAt = SYSDATETIMEOFFSET(), LockedUntil = NULL
-            WHERE Id = @Id;
+            FROM {table.QualifiedName} AS outbox
+            JOIN OPENJSON(@Ids) WITH (Id BIGINT '$') AS delivered ON delivered.Id = outbox.Id;
             """;
 
         // Backs off by pushing the lease forward, which makes the cap reachable.
@@ -149,8 +151,34 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 new CommandDefinition(_claimSql, new { MaxAttempts }, cancellationToken: ct))
         ];
 
-        int completed = 0;
+        List<long> delivered = new(claimed.Count);
 
+        try
+        {
+            await DeliverEachAsync(connection, claimed, delivered, ct);
+        }
+        finally
+        {
+            // Delivered rows complete on a stop too, so shutdown redelivers no more than per-row completion did.
+            if (delivered.Count > 0)
+            {
+                await connection.ExecuteAsync(
+                    new CommandDefinition(
+                        _completeSql,
+                        new { Ids = JsonSerializer.Serialize(delivered) },
+                        cancellationToken: CancellationToken.None));
+            }
+        }
+
+        return delivered.Count;
+    }
+
+    private async Task DeliverEachAsync(
+        IDbConnection connection,
+        List<OutboxClaim> claimed,
+        List<long> delivered,
+        CancellationToken ct)
+    {
         foreach (OutboxClaim message in claimed)
         {
             // A child of the trace that staged the row, so MassTransit's publish, and the consumer it propagates
@@ -165,10 +193,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 await using AsyncServiceScope delivery = _scopes.CreateAsyncScope();
 
                 await DeliverAsync(delivery.ServiceProvider, message, ct);
-
-                await connection.ExecuteAsync(
-                    new CommandDefinition(_completeSql, new { message.Id }, cancellationToken: ct));
-                completed++;
+                delivered.Add(message.Id);
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -181,8 +206,6 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
             }
         }
-
-        return completed;
     }
 
     private static async Task DeliverAsync(IServiceProvider sp, OutboxClaim message, CancellationToken ct)
