@@ -252,7 +252,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
         {
             span?.SetStatus(ActivityStatusCode.Error);
 
-            // One bad message does not affect the rest; the token, not the type, as above.
+            // One bad message does not affect the rest; the token, not the type, decides a stop (§9.4).
             await writes.WaitAsync(ct);
 
             try
