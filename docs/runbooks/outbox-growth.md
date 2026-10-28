@@ -81,8 +81,16 @@ at the next `PollInterval` tick
 ([ADR-163](../backend-architecture/adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md)).
 So under a backlog one replica's ceiling is set by delivery time, not by the
 tick: `Local` rows go one at a time and `Broker` rows up to
-`OutboxDispatcher.BrokerConcurrency` at once. Compare that with what is
-arriving:
+`OutboxDispatcher.BrokerConcurrency` at once. The drain rate is the
+dispatcher's own delivered count
+([§9.4](../backend-architecture/09-messaging.md)):
+
+```promql
+sum by (service_name, lane) (rate(outbox_delivery_duration_seconds_count{outcome="delivered"}[5m]))
+```
+
+The pending count's slope is arrivals less that rate, never either one on its
+own, so a rising slope beside a steady drain rate is arrivals outrunning it:
 
 ```promql
 deriv(sum by (service_name) (max by (service_name, lane) (outbox_pending_count))[10m:])
