@@ -858,7 +858,7 @@ the SELECT list only: `MERGE … AS target`,
 required syntax and keep `AS`.
 
 **Every join names its kind, and its `ON` gets its own line** at + 4:
-`INNER JOIN` or `LEFT JOIN`, never a bare `JOIN`, and `OUTER` left out. The
+`INNER JOIN` or `LEFT JOIN`, never a bare `JOIN` or `LEFT OUTER JOIN`. The
 join condition is a predicate and belongs where predicates go, not trailing
 off the end of a table name; an `AND` extending it aligns with the `ON`, as
 under `MERGE` above. The kind is named because a bare `JOIN` beside a
