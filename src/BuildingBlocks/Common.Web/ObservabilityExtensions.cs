@@ -85,6 +85,7 @@ public static class ObservabilityExtensions
                 // Publishes no meter at the pinned version; §13.6 records what the alert is owed.
                 .AddMeter("Microsoft.Extensions.Caching.Hybrid")
                 .AddMeter("StackExchange.Redis"))
+            // No SetSampler: the SDK's OTEL_TRACES_SAMPLER decides, and only the stress override sets it (ADR-160).
             .WithTracing(t => t
                 .AddAspNetCoreInstrumentation(o =>
                     o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health"))
