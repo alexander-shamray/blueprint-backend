@@ -131,7 +131,11 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
 
     // Asked again, so a row a pass refreshed since the select is kept.
     private const string DeleteContacts =
-        "DELETE FROM notifications.ContactRecords WHERE CustomerId IN @Keys AND FetchedAt < @Before;";
+        """
+        DELETE FROM notifications.ContactRecords
+        WHERE CustomerId IN @Keys
+            AND FetchedAt < @Before;
+        """;
 
     private const string StaleDevices =
         """
@@ -143,7 +147,11 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
 
     // Guarded by the row's last-seen time, so a registration the API made since the select keeps its row (ADR-118).
     private const string DeleteDevices =
-        "DELETE FROM notifications.DeviceInstallations WHERE InstallationId IN @Keys AND LastSeenAt < @Before;";
+        """
+        DELETE FROM notifications.DeviceInstallations
+        WHERE InstallationId IN @Keys
+            AND LastSeenAt < @Before;
+        """;
 
     // When an entry stopped being current: the first entry written after it in its pair, or its erasure when none
     // survives to say (ADR-120). A pair's newest has neither, so it is never aged.
