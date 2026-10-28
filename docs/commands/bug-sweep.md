@@ -295,8 +295,11 @@ it is not the proof.
 check both helpers make, and why the prefix is not renamed — is owned by
 `docs/harness-boundaries.md`, *Normalisation, residuals and the sweeps*.** What
 that section does not say: the check establishes exclusion, not ownership.
-`git-worktree-detach.sh` mints the path itself, so the question does not arise
-there; `git-worktree-drop.sh` accepts any registered worktree of the right
+`git-worktree-detach.sh` mints the path it forks, so the question does not
+arise for that one, but before forking it hands each day-old sweep-shaped
+worktree it never minted to the drop helper, so it meets the question too
+(`docs/harness-boundaries.md`, *Normalisation, residuals and the sweeps*);
+`git-worktree-drop.sh` accepts any registered worktree of the right
 shape, including one an abandoned sweep left, which is why its refusal reads
 `sweep-shaped`, not `sweep-owned`; how the shape is checked is argued in
 `docs/commands/security-sweep.md`, *What this command does not do*. The prefix
