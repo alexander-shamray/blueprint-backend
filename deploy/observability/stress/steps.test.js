@@ -32,6 +32,7 @@ test('a level starts at its own steps and doubles past them while the next stays
     assert.deepEqual(plan({ STRESS_PROFILE: 'medium' }).steps, [800, 1600, 3200, 6400, 12800]);
     assert.deepEqual(plan({ STRESS_PROFILE: 'High' }).steps, [3200, 6400, 12800], 'case does not matter');
     assert.deepEqual(plan({ STRESS_PROFILE: 'xhigh', STRESS_MAX_USERS: '60000' }).steps, [12800, 25600, 51200]);
+    assert.deepEqual(plan({ STRESS_PROFILE: 'xhigh', STRESS_MAX_USERS: '25600' }).steps, [12800, 25600]);
 
     const low = plan({ STRESS_PROFILE: 'low' });
     assert.equal(low.capped, true);
@@ -39,18 +40,21 @@ test('a level starts at its own steps and doubles past them while the next stays
     assert.equal(low.rampSeconds, 30);
 });
 
-test('a cap below a level\'s own steps drops them, and one below its first refuses the level', () => {
+test('a cap below a level\'s own steps drops them, and one that leaves a single step refuses the level', () => {
     assert.deepEqual(plan({ STRESS_PROFILE: 'high', STRESS_MAX_USERS: '7000' }).steps, [3200, 6400]);
-    assert.deepEqual(plan({ STRESS_PROFILE: 'xhigh' }).steps, [12800], 'the default cap is its first step');
-    assert.throws(() => plan({ STRESS_PROFILE: 'xhigh', STRESS_MAX_USERS: '10000' }),
-        /xhigh starts at 12800 users, above STRESS_MAX_USERS 10000: raise it/);
-    assert.throws(() => plan({ STRESS_PROFILE: 'medium', STRESS_MAX_USERS: '500' }), /STRESS_MAX_USERS 500/);
+    assert.throws(() => plan({ STRESS_PROFILE: 'high', STRESS_MAX_USERS: '5000' }),
+        /high needs STRESS_MAX_USERS of at least 6400 for two steps, not 5000: raise it/);
+    assert.throws(() => plan({ STRESS_PROFILE: 'xhigh' }), /xhigh needs STRESS_MAX_USERS of at least 25600/,
+        'the default cap is its first step, which has nothing before it to compare');
+    assert.throws(() => plan({ STRESS_PROFILE: 'medium', STRESS_MAX_USERS: '500' }), /not 500/);
 });
 
-test('STRESS_STEPS is taken as written, never doubled, and refused above the cap', () => {
+test('STRESS_STEPS is taken as written, never doubled, refused above the cap, and its level is custom', () => {
     const run = plan({ STRESS_PROFILE: 'low', STRESS_STEPS: '10,20', STRESS_HOLD_SECONDS: '60' });
 
     assert.deepEqual(run.steps, [10, 20]);
+    assert.equal(run.level, 'custom', 'no level\'s staircase is reported as that level');
+    assert.equal(plan({ STRESS_STEPS: '5' }).level, 'custom');
     assert.equal(run.capped, false);
     assert.equal(run.holdSeconds, 60);
     assert.throws(() => plan({ STRESS_STEPS: '10,600', STRESS_MAX_USERS: '500' }), /reaches 600 users/);

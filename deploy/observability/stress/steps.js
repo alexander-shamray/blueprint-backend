@@ -84,32 +84,36 @@ export function parseStop(text) {
 
 /**
  * The run's staircase from the environment's variables, by name. STRESS_STEPS
- * is taken as written; a level doubles past its last step while the next stays
- * within the cap, so `capped` says its top is the cap's and not the level's.
- * Unset, both are DEFAULT_STEPS. A step above the cap is refused, except a
- * level's own, which is dropped; a level with none left is refused.
+ * is taken as written, and the run's level is then `custom`, since it is no
+ * level's staircase; a level doubles past its last step while the next stays
+ * within the cap, so `capped` says its top is the cap's. Unset, both are
+ * DEFAULT_STEPS. A step above the cap is refused, except a level's own, which
+ * is dropped; a level left with one step has no step before it to compare,
+ * and is refused.
  */
 export function plan(env) {
-    const level = unset(env.STRESS_PROFILE) ? null : String(env.STRESS_PROFILE).trim().toLowerCase();
+    const named = unset(env.STRESS_PROFILE) ? null : String(env.STRESS_PROFILE).trim().toLowerCase();
 
-    if (level !== null && !Object.hasOwn(LEVELS, level))
+    if (named !== null && !Object.hasOwn(LEVELS, named))
         throw new Error(`STRESS_PROFILE must be one of ${Object.keys(LEVELS).join(', ')}, not "${env.STRESS_PROFILE}"`);
 
     const maxUsers = parseWhole(env.STRESS_MAX_USERS, DEFAULT_MAX_USERS, 'STRESS_MAX_USERS', 'users');
+    let level = named;
     let steps;
     let capped = false;
 
     if (!unset(env.STRESS_STEPS)) {
         steps = parseSteps(env.STRESS_STEPS);
-    } else if (level !== null) {
-        steps = LEVELS[level].filter((vus) => vus <= maxUsers);
+        level = 'custom';
+    } else if (named !== null) {
+        steps = LEVELS[named].filter((vus) => vus <= maxUsers);
 
-        if (steps.length === 0)
-            throw new Error(`STRESS_PROFILE ${level} starts at ${LEVELS[level][0]} users, ` +
-                `above STRESS_MAX_USERS ${maxUsers}: raise it, or choose a lower level`);
-
-        while (steps[steps.length - 1] * 2 <= maxUsers)
+        while (steps.length > 0 && steps[steps.length - 1] * 2 <= maxUsers)
             steps.push(steps[steps.length - 1] * 2);
+
+        if (steps.length < 2)
+            throw new Error(`STRESS_PROFILE ${named} needs STRESS_MAX_USERS of at least ${LEVELS[named][0] * 2} ` +
+                `for two steps, not ${maxUsers}: raise it, or choose a lower level`);
 
         capped = true;
     } else {
@@ -125,9 +129,9 @@ export function plan(env) {
         maxUsers,
         capped,
         rampSeconds: parseSeconds(env.STRESS_RAMP_SECONDS,
-            level === null ? DEFAULT_RAMP_SECONDS : LEVEL_RAMP_SECONDS, 'STRESS_RAMP_SECONDS'),
+            named === null ? DEFAULT_RAMP_SECONDS : LEVEL_RAMP_SECONDS, 'STRESS_RAMP_SECONDS'),
         holdSeconds: parseSeconds(env.STRESS_HOLD_SECONDS,
-            level === null ? DEFAULT_HOLD_SECONDS : LEVEL_HOLD_SECONDS, 'STRESS_HOLD_SECONDS'),
+            named === null ? DEFAULT_HOLD_SECONDS : LEVEL_HOLD_SECONDS, 'STRESS_HOLD_SECONDS'),
     };
 }
 
