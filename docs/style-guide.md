@@ -61,7 +61,8 @@ from this list without its section is how one gets "corrected" back.
   one-line members, .NET 10 — not oversights; do not "fix" them.
 - **SQL style**: clause keywords on their own line, one predicate per
   line, `Alias = expression` not `AS`, every join's kind named and its
-  `ON` on its own line.
+  `ON` on its own line; a joinless statement with one predicate may stay
+  on one line in a quoted C# string.
 
 ## Prose conventions
 
@@ -667,10 +668,10 @@ file and a reviewer are the only things that do.
 
   **A grep for a padded `=` across `src/` finds SQL, not C#.** A grep does
   not know what language it is reading, and a raw string literal is where
-  this repository keeps its SQL — so a measurement over `.cs` files is a
-  measurement over two languages unless it is told otherwise. **When a
-  question is decidable by running something, a probe answers it**, and a
-  hedge is an unmeasured claim.
+  this repository keeps any SQL that spans lines — so a measurement over
+  `.cs` files is a measurement over two languages unless it is told
+  otherwise. **When a question is decidable by running something, a probe
+  answers it**, and a hedge is an unmeasured claim.
 
   **Two places the analyser does not reach, and they are opposites.** Padding
   between a type and its identifier —
@@ -763,6 +764,21 @@ follows; continuations indent four.** Continuations are the connectors that
 extend a clause — `AND`, `OR`, and a `MERGE`'s `ON`. Each predicate gets its own
 line: a chain packed onto one line hides the shape of the condition, which in
 this blueprint is usually the point being made.
+
+**A statement with no join and at most one predicate, short enough for one
+line, may stay on that line in a quoted C# string** rather than take a raw
+string literal and the layout above:
+
+```csharp
+"SELECT Value = Status FROM privacy.ErasureRequests WHERE RequestId = {0}"
+```
+
+The clause rule exists to show a condition's shape, and one predicate has none
+to show; most of these are test probes, where five lines of literal around one
+lookup bury the assertion they feed. A second predicate or a join takes the
+raw string literal and every rule in this section, so a quoted string never
+holds a condition with a shape. The one line keeps the same 120-column budget,
+counted from the `.cs` file's first column.
 
 **An `AND` extending an `ON` aligns with the `ON`**, rather than indenting
 another four. `ON` is itself a continuation — of `MERGE … USING` or of a
