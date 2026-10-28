@@ -5,6 +5,7 @@ using System.Text.Json;
 using Common.Application;
 using Common.Contracts;
 using Common.Domain;
+using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Switching;
 using Common.Infrastructure.Tracing;
 using Dapper;
@@ -62,6 +63,8 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
             "Outbox message {MessageId} on lane {Lane} failed, attempt {Attempt} of {Max}.");
 
     private readonly IServiceScopeFactory _scopes;
+    private readonly MessagingMetrics _metrics;
+    private readonly TimeProvider _clock;
     private readonly ILogger<OutboxDispatcher> _log;
 
     // Composed once from the registered table, which is why these are fields, not consts.
@@ -75,11 +78,15 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
     public OutboxDispatcher(
         IServiceScopeFactory scopes,
         OutboxTable table,
+        MessagingMetrics metrics,
+        TimeProvider clock,
         ILogger<OutboxDispatcher> log,
         OperatorSwitches? switches = null)
         : base(switches)
     {
         _scopes = scopes;
+        _metrics = metrics;
+        _clock = clock;
         _log = log;
 
         // Selects and leases in one statement, so two replicas cannot take the same row.
@@ -240,6 +247,10 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
         using Activity? span = Deliveries.StartActivity("outbox deliver", ActivityKind.Internal, staging);
         span?.SetTag("messaging.message.id", message.MessageId);
 
+        // The column is unvalidated, so a lane outside the enum is one bounded tag value, never a new series (§13.3).
+        string lane = IsBroker(message) || message.Lane == nameof(OutboxLane.Local) ? message.Lane : "unknown";
+        long start = _clock.GetTimestamp();
+
         try
         {
             // A scope per row, so a handler that throws cannot hand the next row its half-mutated state.
@@ -247,10 +258,14 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
 
             await DeliverAsync(delivery.ServiceProvider, message, ct);
             delivered.Enqueue(message.Id);
+            _metrics.OutboxDelivered(lane, "delivered", _clock.GetElapsedTime(start));
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             span?.SetStatus(ActivityStatusCode.Error);
+
+            // Timed before the fail statement, whose wait is the claim connection's queue, not this row's delivery.
+            _metrics.OutboxDelivered(lane, "failed", _clock.GetElapsedTime(start));
 
             // One bad message does not affect the rest; the token, not the type, decides a stop (§9.4).
             await writes.WaitAsync(ct);
