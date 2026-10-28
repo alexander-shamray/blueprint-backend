@@ -731,9 +731,9 @@ Levels, applied consistently:
 **The noisiest framework categories start at `Warning`, not `Information`.**
 `AddObservability` holds `ObservabilityExtensions.FrameworkCategories` there,
 because each logs a line per request, result, proxied call or SQL command, and
-the request's span already carries each fact. Under the 2026-10-28 stress run those lines
-filled the LGTM container's log export queue, and more than 95% of all
-records were dropped, the platform's own among them
+the request's span already carries each fact. Under the 2026-10-28 stress run
+those lines filled the LGTM container's log export queue, and more than 95%
+of all records were dropped, the platform's own among them
 ([ADR-159](adr/ADR-159-framework-categories-log-at-warning-unless-configured-1532.md)).
 A level the configuration names under `Logging:LogLevel` for one of them
 wins, so an operator lowers a category for a session without a build, and the
