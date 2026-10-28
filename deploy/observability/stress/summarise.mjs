@@ -261,7 +261,7 @@ const verdict = found
 const host = machine();
 
 // A container Compose gave no CPU limit may use every processor Docker has.
-const first = firstToGiveUp(rows, givingUpStep(found, ended),
+const first = firstToGiveUp(rows, givingUpStep(rows, found),
     { cores: host.docker.cpus, holdSeconds: plan.holdSeconds });
 
 const summary = {

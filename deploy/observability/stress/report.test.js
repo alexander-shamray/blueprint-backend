@@ -305,11 +305,18 @@ test('the line says when no service\'s figures moved, and when there was no step
     assert.equal(firstLine(null), 'First to give up: not judged; no step was the knee or past the abort rate');
 });
 
-test('the step named is the error stop\'s when errors stopped the run, and otherwise the knee\'s', () => {
-    assert.equal(givingUpStep({ step: 3 }, { reason: 'errors', step: 5 }), 5);
-    assert.equal(givingUpStep({ step: 3 }, { reason: 'knee', step: 3 }), 3);
-    assert.equal(givingUpStep({ step: 3 }, { reason: 'held', step: 6 }), 3, 'a knee the run held past');
-    assert.equal(givingUpStep(null, { reason: 'held', step: 6 }), null);
+test('the step named is the error stop\'s where it fired, and otherwise the knee\'s', () => {
+    const step = (n, extra = {}) => ({ step: n, vus: 100 * n, requests: 500, ...extra });
+    const level = { level: 'low', stopRule: 'errors', capped: true };
+    const aborted = [step(1), step(2), step(3), step(4), step(5, { aborted: true })];
+
+    assert.equal(givingUpStep(aborted, { step: 3 }), 5);
+    const saturated = [...aborted.slice(0, 4), step(5, { aborted: true, hostCpu: 97 })];
+    assert.equal(ending(saturated, level).reason, 'generator');
+    assert.equal(givingUpStep(saturated, { step: 3 }), 5, 'an abort the machine ran out at is still the abort');
+    assert.equal(givingUpStep([step(1), step(2), step(3, { kneeStop: true })], { step: 3 }), 3);
+    assert.equal(givingUpStep([step(1), step(2)], { step: 2 }), 2, 'a knee the run held past');
+    assert.equal(givingUpStep([step(1), step(2)], null), null);
 });
 
 test('a step\'s client row reads k6\'s own trend keys, and counts every operation\'s requests', () => {
