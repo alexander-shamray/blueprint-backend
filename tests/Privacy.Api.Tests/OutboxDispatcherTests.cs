@@ -146,4 +146,8 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         // A processed row is never delivered again, since nothing else would ever stop it.
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
     }
+
+    [Fact]
+    public async Task The_outbox_key_is_optimized_for_sequential_inserts() =>
+        (await fixture.OutboxKeyOptimizedForSequentialKeyAsync()).ShouldBeTrue();
 }

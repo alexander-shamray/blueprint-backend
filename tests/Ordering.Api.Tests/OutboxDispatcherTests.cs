@@ -151,6 +151,10 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task The_outbox_key_is_optimized_for_sequential_inserts() =>
+        (await fixture.OutboxKeyOptimizedForSequentialKeyAsync()).ShouldBeTrue();
+
+    [Fact]
     public async Task A_broker_row_is_published_and_completed()
     {
         // The Broker half of DeliverAsync against the real broker; the row completing, not the wire (§12.4).
