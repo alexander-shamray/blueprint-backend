@@ -1099,16 +1099,17 @@ Consequences of the per-row design worth stating explicitly:
   one statement per pass (ADR-159), that includes the rows the dead pass had
   already delivered, so a crash redelivers up to a batch rather than one row
   — duplicates the inbox and idempotent projections absorb, as below.
-- **And it can expire while the batch is still being delivered, which is a
-  known residual rather than an oversight.** A claim leases a batch and
-  delivers it one row at a time; a batch slower than the lease lets a second
-  replica reclaim the whole batch — the rows this one has not reached yet, and
-  since completion waits for the pass's end (ADR-159), the ones it has
-  delivered too — and the complete and fail statements match on `Id` alone,
-  so the slow worker can then write over a lease it no longer holds. Every outcome is a **duplicate delivery**, which
-  is exactly what at-least-once already promises and what §9.5's inbox and
-  §6.6's idempotent projections already absorb — so nothing here is unsound,
-  and the cost is a redelivery rather than a lost or double-applied message.
+- **And it can expire while the batch is still being delivered, which is a known
+  residual rather than an oversight.** A claim leases a batch and delivers it
+  one row at a time; a batch slower than the lease lets a second replica reclaim
+  the whole batch — the rows this one has not reached yet, and since completion
+  waits for the pass's end (ADR-159), the ones it has delivered too — and the
+  complete and fail statements match on `Id` alone, so the slow worker can then
+  write over a lease it no longer holds. Every outcome is a **duplicate
+  delivery**, which is exactly what at-least-once already promises and what
+  §9.5's inbox and §6.6's idempotent projections already absorb — so nothing
+  here is unsound, and the cost is a redelivery rather than a lost or
+  double-applied message.
 
   Closing it properly means a claim token: the claim returns the
   `LockedUntil` it set, and completion carries `AND LockedUntil = @Claimed` so
