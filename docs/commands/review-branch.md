@@ -40,14 +40,17 @@ taste. Prefer:
    `| Touch set |` rows say what this branch may edit, and
    `bash .claude/scripts/pr-locality.sh <n>` — `<n>` from
    `bash .claude/scripts/pr-for-branch.sh` — judges every changed path
-   against them and prints one `class` line and one `inside <path>` or
-   `outside <path>` line per file. **It never prints the rows**: the set is
-   the author's text, and a path grammar cannot keep prose out of a path,
-   so the helper consumes the cell and only its own two words leave. Each
-   `outside` line is a finding, and its resolution is a narrower diff, a
-   row widened with its reason beside it when the path is inside the
-   class's tree set, or a different class when it is not — never a row
-   widened silently (`docs/change-locality.md` §3). Where the helper prints
+   against them and against the class's tree set the CI gate reads, and
+   prints one `class` line and one `inside <path>`, `outside <path>` or
+   `outside-class <path>` line per file. **It never prints the rows**: the
+   set is the author's text, and a path grammar cannot keep prose out of a
+   path, so the helper consumes the cell and only its own words leave. Each
+   `outside` line is a finding, and its resolution is a narrower diff or a
+   row widened with its reason beside it; each `outside-class` line is a
+   finding too, a path the class does not admit whatever the row says, and
+   its resolution is a narrower diff or a different class — never a row
+   widened silently
+   (`docs/change-locality.md` §3). Where the helper prints
    nothing or cannot run — a `--local` review with no PR yet, or a body
    carrying neither row — say so and skip this check rather than inferring
    a class. The plan's locality gate is the enforcement; this is the early

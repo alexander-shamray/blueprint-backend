@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
-# Judge a pull request's changed paths against the `| Class |` and `| Touch set |` rows its body declares: one `class`
-# line, then `inside <path>` or `outside <path>` per changed file, and never the author's cell. Read-only, fixed field
-# set; the grammar, the exit codes and why the verdict grants nothing are `docs/harness-boundaries.md`'s (*Pull
-# request reads and the locality verdict*), and `test_pr_helpers.py` pins them.
+# Judge a pull request's changed paths against its `| Class |` and `| Touch set |` rows and, as the CI gate does,
+# the class's tree set in `.github/locality-gate/classes.yml`: a `class` line, then `outside-class`, `outside` or
+# `inside` and the path per changed file, never the author's cell. Read-only, fixed field set; the grammar, exit
+# codes and verdict are `docs/harness-boundaries.md`'s (*Pull request reads and the locality verdict*), pinned by tests.
 set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/gh-read-bound.sh"
 pr="${1:?usage: pr-locality.sh <pr-number>}"
 [[ "$pr" =~ ^[0-9]+$ ]] || { echo "pr must be a number" >&2; exit 2; }
 refuse() { echo "$1" >&2; exit 3; }
+# The token as an anchored regular expression: `**` crosses directories,
+# `*` and `?` do not, braces are alternation, and a token also covers
+# everything beneath the directory it names — `tests/Ordering.*` is the
+# test projects, not files whose name happens to start that way.
+to_regex() {
+  local re
+  re=$(printf '%s' "$1" |
+    sed -e 's/[.()]/\\&/g' -e 's/\*\*/\x01/g' -e 's/\*/[^\/]*/g' \
+        -e 's/?/[^\/]/g' -e 's/\x01/.*/g' -e 's/{/(/g' -e 's/}/)/g' -e 's/,/|/g')
+  printf '^%s(/.*)?$' "$re"
+}
 # The body is captured before it is filtered, so a `gh` failure — no
 # authentication, no network, no such pull request — is fatal under `set -e`
 # rather than indistinguishable from a body with no rows. Only grep's own
@@ -67,16 +78,34 @@ for item in "${items[@]}"; do
   case "/$n/" in
     *//*|*/./*|*/../*) refuse "the Touch set row names a path outside the repository" ;;
   esac
-  # The token as an anchored regular expression: `**` crosses directories,
-  # `*` and `?` do not, braces are alternation, and a token also covers
-  # everything beneath the directory it names — `tests/Ordering.*` is the
-  # test projects, not files whose name happens to start that way. A
-  # trailing `/` names the directory the same way `docs` would, and was
+  # A trailing `/` names the directory the same way `docs` would, and was
   # dropped above before the boundary was judged.
-  re=$(printf '%s' "$t" |
-    sed -e 's/[.()]/\\&/g' -e 's/\*\*/\x01/g' -e 's/\*/[^\/]*/g' \
-        -e 's/?/[^\/]/g' -e 's/\x01/.*/g' -e 's/{/(/g' -e 's/}/)/g' -e 's/,/|/g')
-  patterns+=("^${re}(/.*)?$")
+  patterns+=("$(to_regex "$t")")
+done
+# The class's tree set, read from the map the CI gate reads, in the one shape
+# that file may take; a map that is absent, short or malformed refuses the
+# run, because a verdict judged against no tree set reads `inside` throughout.
+map="$(dirname "${BASH_SOURCE[0]}")/../../.github/locality-gate/classes.yml"
+[ -r "$map" ] || refuse "the class map .github/locality-gate/classes.yml cannot be read"
+declare -A seen=()
+class_patterns=(); member=""
+while IFS= read -r raw || [ -n "$raw" ]; do
+  raw=${raw%$'\r'}
+  t="${raw#"${raw%%[! ]*}"}"
+  case "$t" in ''|'#'*) continue ;; esac
+  if [[ "$raw" =~ ^([A-E]):[[:space:]]*$ ]]; then
+    member=${BASH_REMATCH[1]}
+    [ -z "${seen[$member]+set}" ] || refuse "classes.yml names class $member twice"
+    seen[$member]=0
+    continue
+  fi
+  [[ "$raw" =~ ^\ \ -\ \'([^\']+)\'[[:space:]]*$ ]] && [ -n "$member" ] ||
+    refuse "classes.yml has a line outside its grammar"
+  seen[$member]=$((seen[$member] + 1))
+  case "+$class+" in *"+$member+"*) class_patterns+=("$(to_regex "${BASH_REMATCH[1]%/}")") ;; esac
+done <"$map"
+for member in A B C D E; do
+  [ "${seen[$member]:-0}" -gt 0 ] || refuse "classes.yml gives class $member no tree set"
 done
 # The changed paths are the diff's own, and each gets the one word this
 # script chooses for it: `filename`, and a rename's `previous_filename`, since a
@@ -105,5 +134,13 @@ for path in "${verdicts[@]}"; do
   for re in "${patterns[@]}"; do
     if grep -Eq "$re" <<<"$path"; then verdict=inside; break; fi
   done
+  # The class is judged first, because no row may declare a path its class
+  # does not admit: `outside-class` is resolved by a different class, and
+  # `outside` by a narrower diff or a wider row.
+  in_class=no
+  for re in "${class_patterns[@]}"; do
+    if grep -Eq "$re" <<<"$path"; then in_class=yes; break; fi
+  done
+  [ "$in_class" = yes ] || verdict=outside-class
   printf '%s %s\n' "$verdict" "$path"
 done

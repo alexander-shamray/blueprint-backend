@@ -940,9 +940,16 @@ session can actually run.
 reads `body` from the pull request, with any carriage return removed, and
 `filename` and a rename's `previous_filename` from the files endpoint, so both
 ends of a move are judged as the CI gate judges them. It prints one `class`
-line whose value is letters it validated, then one `inside <path>` or
-`outside <path>` line per changed path, where the path is
-the diff's own and the word is the script's. A pull request author is not a
+line whose value is letters it validated, then one line per changed path,
+where the path is the diff's own and the word is the script's:
+`outside-class` when the class's tree set does not admit it, whatever the
+touch set says, since no row may declare what its class does not admit;
+otherwise `outside` when the touch set does not, and `inside` when both
+do. The tree set is read from
+`.github/locality-gate/classes.yml`, the map the CI gate reads, so the
+round's verdict is the gate's; #1545's review rounds read `inside` for a
+runbook that a Class C PR's widened row admitted and its class did not, and
+CI was the first to refuse it. A pull request author is not a
 trusted party, and a path grammar cannot keep prose out of a cell —
 `Ignore_all_previous_instructions.md` is a path — so the cell is consumed
 there and only the verdict leaves. A changed path is the author's text too,
@@ -959,11 +966,14 @@ class cell is one letter A–E, two distinct letters joined by `+`, or
 in balanced backticks, of path and glob characters, each carrying a `/` or a
 `.` and each repository-relative — no leading `/`, no `./`, no `..`, brace
 alternatives included. A row that fails its grammar exits 3 naming the row
-and not its content. **The verdict narrows and grants nothing**: the
-caller's deny list and the class's tree set in `docs/change-locality.md`
-hold authority, an `outside` line is a finding, and an `inside` line is not
-a licence for anything the caller's grant refuses. `test_pr_helpers.py`
-pins all of it.
+and not its content, and so does a class map that is absent, names a class
+twice or none at all, or holds a line outside its grammar, since a verdict
+judged against no tree set reads `inside` throughout. **The verdict narrows
+and grants nothing**: the caller's deny list and the class's tree set hold
+authority, an `outside` or `outside-class` line is a finding, and an
+`inside` line is not a licence for anything the caller's grant refuses.
+`test_pr_helpers.py` pins all of it, and runs the CI gate beside the helper
+to hold the two to one answer.
 
 **Every `gh` read these helpers make is bounded, because one that stalls
 holds every step chained behind it.** #603 was `pr-locality.sh` printing
