@@ -491,7 +491,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             "deploy/compose/docker-compose.yml",
             "deployment.md",
         )) + "\n"
-        everything = "".join(f"{c}:\n  - '**'\n" for c in "ABCDE")
+        everything = "".join(f"{c}:\n  - '{{*,**/*}}'\n" for c in "ABCDE")
         r = self._run_locality_with_gh(self._gh_printing(body, files), scripts=self._scripts_with_map(everything))
         self.assertEqual(0, r.returncode, r.stderr)
         self.assertEqual(
@@ -572,19 +572,27 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         # path the row admits, which is the fail-open this map closes. The
         # helper is run from a copy whose map is missing, short or malformed.
         body = "| Class | D |\n| Touch set | docs/x.md |\n"
-        for name, text in (
-            ("absent", None),
-            ("no items", "A:\n  - 'src/**'\nB:\n  - 'src/**'\nC:\n  - 'src/**'\nD:\nE:\n  - 'x.props'\n"),
-            ("a class missing", "A:\n  - 'src/**'\nD:\n  - 'docs/**'\n"),
-            ("a class twice", "A:\n  - 'src/**'\nB:\n  - 'src/**'\nC:\n  - 'src/**'\nD:\n  - 'docs/**'\n"
-                              "D:\n  - '**'\nE:\n  - 'x.props'\n"),
-            ("outside the grammar", "D:\n  - docs/**\n"),
+        # Every class but A, so a bad A line is refused for itself and not for a class missing.
+        rest = "B:\n  - 'src/**'\nC:\n  - 'src/**'\nD:\n  - 'docs/**'\nE:\n  - 'x.props'\n"
+        for name, text, reason in (
+            ("absent", None, "cannot be read"),
+            ("no items", "A:\n  - 'src/**'\nB:\n  - 'src/**'\nC:\n  - 'src/**'\nD:\nE:\n  - 'x.props'\n",
+             "class D no tree set"),
+            ("a class missing", "A:\n  - 'src/**'\nD:\n  - 'docs/**'\n", "class B no tree set"),
+            ("a class twice", "A:\n  - 'src/**'\n" + rest + "D:\n  - 'x/**'\n", "names class D twice"),
+            ("outside the grammar", "A:\n  - src/**\n" + rest, "outside its grammar"),
+            # Tokens the gate refuses, the comma first: it would widen class A to `docs/admin`.
+            ("a comma outside a brace", "A:\n  - 'docs/a,docs/b'\n" + rest, "comma outside a brace"),
+            ("not a path token", "A:\n  - '**'\n" + rest, "not a path token"),
+            ("an unbalanced brace", "A:\n  - 'docs/{a,b'\n" + rest, "unbalanced brace"),
+            ("outside the repository", "A:\n  - '../x'\n" + rest, "outside the repository"),
         ):
             with self.subTest(map=name):
                 r = self._run_locality_with_gh(self._gh_printing(body), scripts=self._scripts_with_map(text))
                 self.assertEqual(3, r.returncode, r.stderr)
                 self.assertEqual("", r.stdout)
                 self.assertIn("classes.yml", r.stderr)
+                self.assertIn(reason, r.stderr)
 
 
 if __name__ == "__main__":
