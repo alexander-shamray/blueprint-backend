@@ -16,8 +16,9 @@ from pathlib import Path
 GATE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = GATE_DIR.parents[1]
 
-# The plans are never edited to match the code that followed (CLAUDE.md), and
-# this suite holds the refused forms as its cases.
+# docs/superpowers/ is a frozen record, never edited to match the code that
+# followed (docs/change-locality.md §1), and this suite holds the refused
+# forms as its cases.
 EXCLUDED_PREFIXES = ("docs/superpowers/",)
 EXCLUDED_FILES = (".github/sql-style-gate/test_sql_style_gate.py",)
 
