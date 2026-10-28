@@ -858,7 +858,8 @@ the SELECT list only: `MERGE … AS target`,
 required syntax and keep `AS`.
 
 **Every join names its kind, and its `ON` gets its own line** at + 4:
-`INNER JOIN` or `LEFT JOIN`, never a bare `JOIN` or `LEFT OUTER JOIN`. The
+`INNER JOIN` or `LEFT JOIN`, and `RIGHT JOIN` or `FULL JOIN` where one is
+meant, never a bare `JOIN` and never a long form such as `LEFT OUTER JOIN`. The
 join condition is a predicate and belongs where predicates go, not trailing
 off the end of a table name; an `AND` extending it aligns with the `ON`, as
 under `MERGE` above. The kind is named because a bare `JOIN` beside a
@@ -883,6 +884,11 @@ INNER JOIN OPENJSON(@Ids) WITH (Id BIGINT '$') AS delivered
 
 `CROSS JOIN`, `CROSS APPLY` and `OUTER APPLY` take no `ON`, and their keywords
 already name the kind, so the rule has nothing to move in them.
+
+This is the one rule in *SQL style* a gate holds: the
+[SQL style gate](../.github/sql-style-gate/README.md) reads the tracked tree
+for it, and its README says what it reads and what it does not. The rest of
+this section stays a review rule.
 
 An alias follows its table after one space. Padding table names into a column
 (`FROM ordering.Orders      o`) is the old keyword river in another costume.

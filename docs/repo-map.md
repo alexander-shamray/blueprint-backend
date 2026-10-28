@@ -254,7 +254,7 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              locality-gate,
                              pipeline-gate, output-gate, comment-gate,
                              messaging-gate, plan-size-gate,
-                             domain-name-gate —
+                             domain-name-gate, sql-style-gate —
                              holding the gate,
                              its suite and a README. The README is the ONE
                              owner of what the gate reads and what it claims,

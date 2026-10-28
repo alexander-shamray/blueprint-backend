@@ -261,6 +261,15 @@ jobs:
       - name: Every plan written after the planning rule is under its size
         run: python .github/plan-size-gate/plan_size_gate.py
 
+      # The style guide's join rule, over the tracked tree: the SQL sits in
+      # string literals no formatter reads.
+      - name: Test the SQL style gate
+        working-directory: .github/sql-style-gate
+        run: python -m unittest
+
+      - name: Every SQL join names its kind and keeps its ON off its line
+        run: python .github/sql-style-gate/sql_style_gate.py
+
   # The other gates read the workflows as text for coverage and order; none
   # checks expression syntax, step-output references, action input names or the
   # shell in a `run:` block, and the signing steps cannot run before the first
