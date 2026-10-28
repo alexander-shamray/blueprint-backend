@@ -104,7 +104,7 @@ async function perService(window, range) {
         read('serverErrors', '5xx share', 'sum by (service_name) (increase(http_server_request_duration_seconds_count' +
             `{http_response_status_code=~"5.."}[${range}])) / sum by (service_name) ` +
             `(increase(http_server_request_duration_seconds_count[${range}]))`, end),
-        // A queue with no consumer read is named by itself, so the verdict loses nothing.
+        // Unread, a queue's crossing is still judged, but named by the queue rather than its consumer.
         query('queue consumers', CONSUMERS, end),
         read('outboxes', 'outbox oldest by service, middle', OUTBOX_BY_SERVICE, middle),
         read('outboxes', 'outbox oldest by service, end', OUTBOX_BY_SERVICE, end),
