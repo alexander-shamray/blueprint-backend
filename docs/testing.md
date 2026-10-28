@@ -258,7 +258,8 @@ The second reads the paginated files endpoint rather than
 `gh pr view --json files`, which is one page; why it needs `changedFiles`,
 `previous_filename` and `status` beside it is
 [its README](../.github/locality-gate/README.md)'s. It judges ignored paths
-against the checkout it runs in, so run it on the pull request's branch.
+against the checkout it runs in, so run it on the pull request's branch. What
+the first compares is [its README](../.github/closure-gate/README.md)'s.
 
 **The commit gate needs a pull request's number and a base**, and reads git
 rather than `gh`, so a branch can run it once its pull request exists:
