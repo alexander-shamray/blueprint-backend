@@ -52,8 +52,8 @@ const HOLD_SECONDS = PLAN.holdSeconds;
 const HOLDS = windows(STEPS, RAMP_SECONDS, HOLD_SECONDS);
 const STOP = parseStop(__ENV.STRESS_STOP);
 
-// Unset is the default; an explicit 0 never aborts. The knee rule crosses on
-// errors far below it, so under `knee` it is off and the judge alone stops.
+// Unset is the default; an explicit 0 never aborts. Only `errors` applies it:
+// the knee rule crosses on errors far below it.
 const ABORT_ERROR_RATE = STOP !== 'errors' ? 0
     : __ENV.STRESS_ABORT_ERROR_RATE === undefined || __ENV.STRESS_ABORT_ERROR_RATE === '' ? 0.2
         : Number(__ENV.STRESS_ABORT_ERROR_RATE);
@@ -100,17 +100,16 @@ const failures = new Counter('stress_failures');
 const failed = new Rate('stress_failed');
 
 // The judge's records, which handleSummary can read where no variable of its
-// VU can: the VUs k6 ran at each hold's end, and the step the knee stopped.
+// VU can: the VUs k6 ran near each hold's end, and the step a rule stopped.
 const vusReached = new Gauge('stress_vus');
 const kneeStop = new Counter('stress_knee_stop');
+const errorStop = new Counter('stress_error_stop');
 
 // handleSummary and k6's REST API report only the submetrics a threshold
-// names, so every step's figures are named here; each passes on any value,
-// and only the per-step error rate under `errors` can stop the run. Its
-// evaluation waits for the step's hold to end, so the step is judged rather
-// than its first seconds. k6 counts that wait from the test's start, setup()
-// included, so the judgement can begin up to setup()'s length before the hold
-// ends, over the hold's requests so far.
+// names, so every step's figures are named here, and each passes on any value
+// but the error stop's. The judge counts that one at a hold's end, so the
+// whole hold is judged however long setup() took, and k6's next threshold
+// check aborts the run with its own exit code, 99.
 function thresholds() {
     const named = {};
 
@@ -119,16 +118,14 @@ function thresholds() {
         named[`http_reqs{step:${hold.step}}`] = ['count>=0'];
         named[`stress_vus{step:${hold.step}}`] = ['value>=0'];
         named[`stress_knee_stop{step:${hold.step}}`] = ['count>=0'];
+        named[`stress_error_stop{step:${hold.step}}`] = [{ threshold: 'count<1', abortOnFail: true }];
+        named[`stress_failed{step:${hold.step}}`] = ['rate>=0'];
 
         for (const op of OPS)
             named[`http_req_duration{step:${hold.step},op:${op}}`] = ['max>=0'];
 
         for (const kind of FAILURE_KINDS)
             named[`stress_failures{step:${hold.step},kind:${kind}}`] = ['count>=0'];
-
-        named[`stress_failed{step:${hold.step}}`] = ABORT_ERROR_RATE > 0
-            ? [{ threshold: `rate<${ABORT_ERROR_RATE}`, abortOnFail: true, delayAbortEval: `${hold.end}s` }]
-            : ['rate>=0'];
     }
 
     return named;
@@ -181,16 +178,14 @@ export function setup() {
     if (missing.length > 0)
         fail(`Stress run is not configured: missing ${missing.join(', ')}`);
 
-    // A knee stop that cannot read its figures would drive the run past the
-    // knee in silence, so it is refused before any load.
-    if (STOP === 'knee') {
-        if (http.get(`${K6_API}/v1/status`).status !== 200)
-            fail(`Stress run is not configured: the knee stop reads k6's REST API at ${K6_API}; ` +
-                'run k6 with --address 127.0.0.1:6565, or set STRESS_STOP=errors');
+    // A judge that cannot read its figures would drive the run past either
+    // stop in silence, so it is refused before any load.
+    if (http.get(`${K6_API}/v1/status`).status !== 200)
+        fail(`Stress run is not configured: the stop rules read k6's REST API at ${K6_API}; ` +
+            'run k6 with --address 127.0.0.1:6565');
 
-        if (http.get(`${PROM_URL}/api/v1/query?query=vector(1)`).status !== 200)
-            fail(`Stress run is not configured: the knee stop reads Prometheus at ${PROM_URL}`);
-    }
+    if (STOP === 'knee' && http.get(`${PROM_URL}/api/v1/query?query=vector(1)`).status !== 200)
+        fail(`Stress run is not configured: the knee stop reads Prometheus at ${PROM_URL}`);
 
     const realm = `${KEYCLOAK_URL}/admin/realms/commerce`;
     const admin = adminHeaders();
@@ -546,30 +541,34 @@ function promScalar(expr, atMs) {
     return Number.isFinite(value) ? value : null;
 }
 
-// THE KNEE STOP. At each hold's end the judge reads the step's client figures
-// from k6's REST API and its backlog from Prometheus, at the hold's middle and
-// end as summarise.mjs reads them, and holds them against the step before
-// with report.js's crossings(), the rule the summary's knee() applies after.
-// A step that crossed is measured whole, and nothing past it runs. Under
-// `errors` it records the VUs alone. Its scenario starts with the journey's.
+function sleepUntil(ms) {
+    if (ms > Date.now())
+        sleep((ms - Date.now()) / 1000);
+}
+
+// THE STOP RULES. At each hold's end the judge reads the step's client
+// figures from k6's REST API. Under `errors` it stops a step whose requests
+// failed past ABORT_ERROR_RATE. Under `knee` it adds the backlog from
+// Prometheus, at the hold's middle and end as summarise.mjs reads them, and
+// holds the step against the one before with report.js's crossings(), the
+// rule the summary's knee() applies after; a step that crossed is measured
+// whole, and nothing past it runs. Its scenario starts with the journey's.
 export function judge() {
     let previous = null;
 
     for (const hold of HOLDS) {
         const startMs = exec.scenario.startTime + (hold.start * 1000);
         const endMs = exec.scenario.startTime + (hold.end * 1000);
+        const step = { step: String(hold.step) };
 
-        if (endMs > Date.now())
-            sleep((endMs - Date.now()) / 1000);
-
-        // The judge is one of the VUs k6 counts.
+        // A second early, since the last hold's VUs start stopping at its end;
+        // and the judge is one of the VUs k6 counts.
+        sleepUntil(Math.max(startMs, endMs - 1000));
         const status = http.get(`${K6_API}/v1/status`);
         if (status.status === 200)
-            vusReached.add(status.json('data.attributes.vus') - 1, { step: String(hold.step) });
+            vusReached.add(status.json('data.attributes.vus') - 1, step);
 
-        if (STOP !== 'knee')
-            continue;
-
+        sleepUntil(endMs);
         const metrics = http.get(`${K6_API}/v1/metrics`);
 
         if (metrics.status !== 200) {
@@ -577,22 +576,30 @@ export function judge() {
             continue;
         }
 
+        const client = liveRow(hold, metrics.json('data'));
+
+        // As knee() does, a step with no requests is neither judged nor the next one's baseline.
+        if (!(client.requests > 0))
+            continue;
+
+        if (STOP === 'errors') {
+            if (ABORT_ERROR_RATE > 0 && client.errorRate > ABORT_ERROR_RATE)
+                errorStop.add(1, step);
+            continue;
+        }
+
         const row = {
-            ...liveRow(hold, metrics.json('data')),
+            ...client,
             outboxMiddle: promScalar(OUTBOX_OLDEST, (startMs + endMs) / 2),
             outboxEnd: promScalar(OUTBOX_OLDEST, endMs),
             queueMiddle: promScalar(QUEUED, (startMs + endMs) / 2),
             queueEnd: promScalar(QUEUED, endMs),
         };
 
-        // As knee() does, a step with no requests is neither judged nor the next one's baseline.
-        if (!(row.requests > 0))
-            continue;
-
         const crossed = crossings(row, previous);
 
         if (crossed.length > 0) {
-            kneeStop.add(1, { step: String(hold.step) });
+            kneeStop.add(1, step);
             exec.test.abort(`Knee stop at step ${hold.step} (${hold.vus} VUs): ` +
                 crossed.map((s) => `${s.signal}, ${s.detail}`).join('; '));
         }
@@ -635,8 +642,7 @@ export function handleSummary(data) {
             failures: Object.fromEntries(FAILURE_KINDS.map((kind) =>
                 [kind, values('stress_failures', `step:${hold.step},kind:${kind}`).count || 0])),
             failed: values('stress_failed', `step:${hold.step}`),
-            aborted: Object.values((sub('stress_failed', `step:${hold.step}`) || {}).thresholds || {})
-                .some((threshold) => threshold.ok === false),
+            aborted: (values('stress_error_stop', `step:${hold.step}`).count || 0) > 0,
             // Zero for a hold the judge never reached, which is no reading.
             vusReached: values('stress_vus', `step:${hold.step}`).value || null,
             kneeStop: (values('stress_knee_stop', `step:${hold.step}`).count || 0) > 0,
