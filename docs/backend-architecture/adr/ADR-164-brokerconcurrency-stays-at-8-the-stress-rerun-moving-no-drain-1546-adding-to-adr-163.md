@@ -38,9 +38,9 @@ queued messages. The dispatcher counts neither lane itself: MassTransit's
 and `projection.lag` is recorded once for each `Local` row delivered, but on
 this stack each series kept three to five points in ten minutes, too few to
 read a rate over a drain of three, so the figures here came from SQL polls and
-10% of traces. #1559 gives the dispatcher a per-lane delivery count that a
-drain can be read from, and measures the `Local` lane and the shared claim,
-each on its own, against these figures.
+10% of traces. #1559 is to give the dispatcher a per-lane delivery count that
+a drain can be read from, and to measure the `Local` lane and the shared
+claim, each on its own, against these figures.
 
 ---
 
