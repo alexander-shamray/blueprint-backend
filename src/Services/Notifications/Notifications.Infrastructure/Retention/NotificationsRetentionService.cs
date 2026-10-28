@@ -44,7 +44,7 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
     private const string LastDelivery =
         """
         OUTER APPLY (
-            SELECT MAX(d.CompletedAt) AS CompletedAt
+            SELECT CompletedAt = MAX(d.CompletedAt)
             FROM notifications.PushDeliveries d
             WHERE d.NotificationId = n.NotificationId) last
         """;
@@ -150,7 +150,7 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
     private const string Later =
         """
         OUTER APPLY (
-            SELECT MIN(n.WrittenAt) AS WrittenAt
+            SELECT WrittenAt = MIN(n.WrittenAt)
             FROM notifications.ConsentEntries n
             WHERE n.SupersedesEntryId = e.EntryId
                 OR (n.SubjectId = e.SubjectId

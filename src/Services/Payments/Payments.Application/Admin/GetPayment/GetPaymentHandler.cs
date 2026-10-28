@@ -14,9 +14,18 @@ public sealed class GetPaymentHandler(IDbConnectionFactory connections)
 {
     private const string Sql =
         """
-        SELECT o.OrderId, o.PlacedAt, o.CancelledAt,
-               i.Status, i.Reference, i.Amount, i.Currency, i.DeclineReason, i.CreatedAt,
-               r.Reference AS RefundReference, r.VoidedAt
+        SELECT
+            OrderId         = o.OrderId,
+            PlacedAt        = o.PlacedAt,
+            CancelledAt     = o.CancelledAt,
+            Status          = i.Status,
+            Reference       = i.Reference,
+            Amount          = i.Amount,
+            Currency        = i.Currency,
+            DeclineReason   = i.DeclineReason,
+            CreatedAt       = i.CreatedAt,
+            RefundReference = r.Reference,
+            VoidedAt        = r.VoidedAt
         FROM payments.PaymentOrders o
         LEFT JOIN payments.PaymentIntents i
             ON i.OrderId = o.OrderId

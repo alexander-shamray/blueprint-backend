@@ -480,7 +480,7 @@ public sealed class ServiceFixture()
         return await db.Database
             .SqlQuery<string>(
                 $"""
-                SELECT COLUMN_NAME AS Value
+                SELECT Value = COLUMN_NAME
                 FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_SCHEMA = {schema}
                     AND TABLE_NAME = {table}
