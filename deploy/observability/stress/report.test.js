@@ -191,7 +191,8 @@ test('a container\'s memory is read at the hold\'s middle and end, with its serv
     assert.equal(stats.cores, 2);
 });
 
-const measuredStep = { step: 1, vus: 100, requests: 1000 };
+// Every reading made, and none crossing.
+const measuredStep = { step: 1, vus: 100, requests: 1000, sql: {}, containers: [{ name: 'idle', service: 'idle' }] };
 const signals = (row, previous = null, options = {}) =>
     serviceCrossings({ ...measuredStep, ...row }, previous && { ...measuredStep, ...previous }, options)
         .map(({ service, signal }) => `${service} ${signal}`);
@@ -323,13 +324,25 @@ test('the line says when no service\'s figures moved, and when there was no step
 });
 
 test('a step whose service figures were not all read never says that nothing moved', () => {
-    const unread = { ...measuredStep, step: 2, serviceReadsFailed: ['5xx share'] };
+    const unread = { ...measuredStep, step: 2, serviceReadsFailed: ['serverErrors'] };
+    const unreadAt = (row) => firstToGiveUp([measuredStep, { ...measuredStep, step: 2, ...row }], 2).unread;
 
     assert.equal(firstLine(firstToGiveUp([measuredStep, unread], 2)),
         'First to give up: not judged; step 2\'s service figures were not all read');
-    assert.equal(firstToGiveUp([unread, { ...measuredStep, step: 3 }], 3).unread, true, 'the step before missed one');
     assert.equal(firstLine(firstToGiveUp([measuredStep, { ...unread, sql: { deadlocks: 1 } }], 2)),
         'First to give up: sql: 1 deadlocks', 'what crossed is still named');
+    assert.equal(unreadAt({}), false);
+    assert.equal(unreadAt({ sql: null }), true, 'the sampler missed SQL Server');
+    assert.equal(unreadAt({ containers: [] }), true, 'the sampler missed the containers');
+});
+
+test('from the step before, only the readings the rules compare leave the verdict short', () => {
+    const before = (row) => firstToGiveUp([{ ...measuredStep, ...row }, { ...measuredStep, step: 2 }], 2).unread;
+
+    assert.equal(before({ serviceReadsFailed: ['requestTypes'] }), true);
+    assert.equal(before({ sql: null }), true);
+    assert.equal(before({ serviceReadsFailed: ['serverErrors', 'outboxes', 'queues', 'faultedQueues'] }), false);
+    assert.equal(before({ containers: [] }), false);
 });
 
 test('the step named is the error stop\'s where it fired, and otherwise the knee\'s', () => {

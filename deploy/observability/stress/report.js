@@ -349,6 +349,15 @@ export function givingUpStep(rows, found) {
     return rows.find((row) => row.aborted)?.step ?? found?.step ?? null;
 }
 
+// Whether serviceCrossings() lacked a reading: at the step, any Prometheus
+// field, SQL Server's counters or the containers, which the sampler reads;
+// at the step before, only the request types and the counters it compares.
+function short(row, previous) {
+    const failed = (r, field) => (r.serviceReadsFailed ?? []).includes(field);
+    const now = (row.serviceReadsFailed ?? []).length > 0 || !row.sql || !(row.containers?.length > 0);
+    return now || (previous !== null && (failed(previous, 'requestTypes') || !previous.sql));
+}
+
 // Infinity less Infinity is NaN, which sort() reads as a tie.
 function furthest(a, b) {
     return b.past - a.past;
@@ -386,8 +395,7 @@ export function firstToGiveUp(rows, step, options = {}) {
     // JSON has no Infinity, so summary.json carries an outright refusal's distance as null.
     const written = (past) => (Number.isFinite(past) ? past : null);
 
-    // The p95 rule reads the step before as well, so a read either step missed leaves the verdict short.
-    const unread = [measured[at], measured[at - 1]].some((row) => row?.serviceReadsFailed?.length > 0);
+    const unread = short(measured[at], measured[at - 1] ?? null);
 
     return {
         step,
@@ -402,8 +410,8 @@ export function firstToGiveUp(rows, step, options = {}) {
 }
 
 /**
- * The run's machine-readable `First to give up:` line. A step whose service
- * figures were not all read names what crossed, but never that nothing did.
+ * The run's machine-readable `First to give up:` line. A step lacking a
+ * reading the rules need names what crossed, but never that nothing did.
  */
 export function firstLine(first) {
     if (!first)
