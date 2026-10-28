@@ -1,8 +1,8 @@
 # ADR-157's stress override, for deploy/observability/README.md's stress run
-# alone, and never for a deployment: it lifts the edge's rate limits and
-# stops the workers pacing themselves to the carrier, the relay and the push
-# providers. The base file and the Helm chart set none of these keys, so
-# `up` without this file is the way back to every default.
+# alone, and never for a deployment: it lifts the edge's rate limits, stops
+# the workers pacing to the carrier, the relay and the push providers, and
+# scales Ordering as ADR-158 says. No other file sets these environment keys,
+# so `up` without this file is the way back to every default.
 
 # Not part of `up`: add it to the full-stack command deploy/compose/README.md
 # gives. Each service's suite reads this file, so a value the service's
@@ -37,3 +37,11 @@ services:
       SendPacing__SendTick: "00:00:01"
       SendPacing__PushClaimBatchSize: "200"
       SendPacing__PushTick: "00:00:01"
+
+  # Ordering's chart floor, autoscaling.minReplicas, since each replica runs an
+  # outbox dispatcher and one would measure a third of the drain the chart
+  # deploys. The gateway reaches it by name, so the host port goes.
+  ordering-api:
+    ports: !reset []
+    deploy:
+      replicas: 3
