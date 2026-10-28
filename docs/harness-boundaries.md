@@ -970,8 +970,9 @@ in balanced backticks, of path and glob characters, each carrying a `/` or a
 `.` and each repository-relative — no leading `/`, no `./`, no `..`, brace
 alternatives included. A row that fails its grammar exits 3 naming the row
 and not its content, and so does a class map that is absent, names a class
-twice or none at all, or holds a line outside its grammar, since a verdict
-judged against no tree set reads `inside` throughout. **The verdict narrows
+twice, leaves one without items, or holds a line or a token outside its
+grammar: the gate refuses that map, so a verdict half-read from it is an
+answer CI never gives. **The verdict narrows
 and grants nothing**: the caller's deny list and the class's tree set hold
 authority, an `outside` or `outside-class` line is a finding, and an
 `inside` line is not a licence for anything the caller's grant refuses.

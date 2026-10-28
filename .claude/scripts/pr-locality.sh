@@ -85,7 +85,7 @@ done
 # The class's tree set, from this checkout's copy of the map CI reads out of the
 # base commit, so a pull request that edits the map is judged here by its own
 # copy; in the one shape it may take, a map absent, short or malformed refuses the
-# run, because a verdict judged against no tree set reads `inside` throughout.
+# run, because the gate refuses that map and a verdict read from it is no one's.
 map="$(dirname "${BASH_SOURCE[0]}")/../../.github/locality-gate/classes.yml"
 [ -r "$map" ] || refuse "the class map .github/locality-gate/classes.yml cannot be read"
 declare -A seen=()
