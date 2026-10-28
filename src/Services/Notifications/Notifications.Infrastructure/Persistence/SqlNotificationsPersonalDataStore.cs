@@ -150,7 +150,11 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         """;
 
     private const string DeleteOrderRecordSql =
-        "DELETE FROM notifications.OrderRecords WHERE OrderId = @OrderId AND CustomerId = @SubjectId;";
+        """
+        DELETE FROM notifications.OrderRecords
+        WHERE OrderId = @OrderId
+            AND CustomerId = @SubjectId;
+        """;
 
     // Guarded by the subject, so a registration that lands after the erasure is a new row of the subject's own act,
     // and the kept sequence refuses a retry of one made before it (ADR-117, ADR-118). One written under the request

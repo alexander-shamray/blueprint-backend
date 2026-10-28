@@ -33,7 +33,11 @@ internal sealed class PushDevices(IDbConnectionFactory connections, Notification
 
     // ADR-117's guard: only while the row still holds the token the send used, so a rotation under the send keeps it.
     private const string DeleteHoldingSql =
-        "DELETE FROM notifications.DeviceInstallations WHERE InstallationId = @InstallationId AND Token = @Token;";
+        """
+        DELETE FROM notifications.DeviceInstallations
+        WHERE InstallationId = @InstallationId
+            AND Token = @Token;
+        """;
 
     /// <summary>The subject's devices that hold a token, the fan-out's one row each.</summary>
     public async Task<IReadOnlyList<PushDevice>> OfSubjectAsync(Guid subjectId, CancellationToken ct)
