@@ -667,9 +667,9 @@ file and a reviewer are the only things that do.
   written and as enforced**, and a reviewer may cite the build for it.
 
   **A grep for a padded `=` across `src/` finds SQL, not C#.** A grep does
-  not know what language it is reading, and a raw string literal is where
-  this repository keeps any SQL that spans lines — so a measurement over
-  `.cs` files is a measurement over two languages unless it is told
+  not know what language it is reading, and `.cs` files hold SQL as well as
+  C#, in raw string literals and in quoted strings alike — so a measurement
+  over `.cs` files is a measurement over two languages unless it is told
   otherwise. **When a question is decidable by running something, a probe
   answers it**, and a hedge is an unmeasured claim.
 
