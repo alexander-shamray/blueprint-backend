@@ -455,11 +455,26 @@ their number rises in steps. Each step is measured, and the first step at
 which the platform degrades is the knee.
 
 **It reports and never gates.** No threshold is an SLO. It asserts nothing,
-and it stops early only once a step's requests have failed at more than
-`STRESS_ABORT_ERROR_RATE`, whose default `stress.js` sets, over its hold,
-because the steps after a clear break measure nothing new. k6 times that
-judgement from before `setup()`, so it can begin up to `setup()`'s length
-before the hold ends. It runs on a developer's machine against the Compose
+and it stops early by one of two rules, which `STRESS_STOP` chooses, because
+the steps past a clear break measure nothing new and, driven far enough,
+take every service down at once, so the first cannot be told:
+
+- `knee`, the default, ends the run at the end of the first hold whose
+  figures cross the knee below, so that step is measured whole and nothing
+  past it runs. `stress.js`'s `judge` scenario wakes at each hold's end,
+  reads the step's client figures from k6's own REST API and the backlog
+  from Prometheus at the hold's middle and end, and holds them against the
+  step before with `stress/report.js`'s `crossings()`, the function
+  `summarise.mjs`'s knee calls afterwards. A request still in flight when
+  the hold ends is in the summary's figures and not the judge's.
+  `setup()` refuses the run when either source does not answer.
+- `errors` drives on until a step's requests have failed at more than
+  `STRESS_ABORT_ERROR_RATE`, whose default `stress.js` sets, over its hold,
+  to see what falls over rather than what slows down. k6 times that
+  judgement from before `setup()`, so it can begin up to `setup()`'s length
+  before the hold ends.
+
+It runs on a developer's machine against the Compose
 stack. Its numbers describe that machine as much as the platform, so a result
 is relative: which service, queue or table gives out first. It is never a
 capacity figure for production, and
@@ -500,9 +515,18 @@ Orders are spread over every product `STRESS_PRODUCTS` names, which loads the
 saga and the queues; one id there is the hot-row variant, which loads
 Inventory's reservation of that one row instead.
 
-**The staircase.** The default is `steps.js`'s `DEFAULT_STEPS`, each reached
-by a `DEFAULT_RAMP_SECONDS` ramp and held for `DEFAULT_HOLD_SECONDS`.
-`STRESS_STEPS`, `STRESS_RAMP_SECONDS` and `STRESS_HOLD_SECONDS` change it. A
+**The staircase.** `STRESS_PROFILE` names a level, one of `steps.js`'s
+`LEVELS` (`low`, `medium`, `high` and `xhigh`), each starting where the one
+below ends, reached by `LEVEL_RAMP_SECONDS` ramps and held for
+`LEVEL_HOLD_SECONDS`. Every level keeps doubling past its last step while the
+next stays within `STRESS_MAX_USERS`, whose default is `DEFAULT_MAX_USERS`,
+so a level that holds throughout ends on the cap and never on its own top.
+A cap below a level's own steps drops them, and one below its first refuses
+the level. Unset, the staircase is `DEFAULT_STEPS`, with
+`DEFAULT_RAMP_SECONDS` ramps and `DEFAULT_HOLD_SECONDS` holds.
+`STRESS_STEPS` replaces either as written and is never doubled, and
+`STRESS_RAMP_SECONDS` and `STRESS_HOLD_SECONDS` override the ramps and holds;
+a staircase above the cap is refused. A
 step is measured over its hold alone, since a ramp mixes two loads. A hold
 shorter than `summarise.mjs`'s `MINIMUM_RANGE_SECONDS` is read over that span,
 reaching into its ramp, because the services export their meters once a
@@ -519,9 +543,11 @@ queues, the consumed queues with the lowest consumer utilisation, the
 `orders.fulfilment.duration` and the share of orders confirmed, both overdue
 gauges, and, from the runtime meter every service exports, the work waiting
 for a thread-pool thread and the time collections paused it. From
-`stress/sample.mjs`, every `INTERVAL_MS`: each container's CPU and memory from
+`stress/sample.mjs`, every `INTERVAL_MS`: the machine's CPU as a share of
+all its processors, each container's CPU and memory from
 `docker stats`, where a CPU figure is a share of one core and passes 100 on
 several, and SQL Server's deadlocks and lock, page-latch and log-flush waits.
+From the `judge`, the VUs k6 ran at each hold's end.
 Nothing is added to the stack to read any of them. What could only be read by
 adding a component is listed in the summary under *Not measured*.
 
@@ -533,6 +559,16 @@ or the oldest outbox row or the queued messages still growing by
 `stress/report.js`'s constants, held by `stress/report.test.js`. Each signal
 is read once a step, so the order in which two crossed within one step cannot
 be seen, and the summary names every signal that crossed at the knee.
+
+**Why it ended** is read at the last step that carried requests, by
+`stress/report.js`'s `ending()`. k6 runs on the machine the stack runs on, so
+at high counts the client can give out first: a step at which k6 ran fewer
+VUs than it asked for, or the machine's CPU stayed at `HOST_CPU_LIMIT` over
+the hold, measured the workstation, and the run ended on the `generator`,
+whatever stopped it. Otherwise it ended on the `knee` stop, the `errors`
+abort, the `cap` at a level's top, or `held` at the top of a fixed staircase
+whose every step held; `interrupted` is a run cut short with no rule firing,
+and `not measured` one that ran no step.
 
 **The output** goes to `artifacts/stress/<run>/`, which git ignores:
 `raw.json` from k6, `samples.jsonl` from the sampler, and `summary.json` and
@@ -573,14 +609,18 @@ echo "currency: ${currency:-none}, products: ${products:-none}"
 
 **3. Run it, with the sampler beside it, then summarise.** The admin password
 is §14.1's local default and reaches k6 through the environment, never `-e`.
-The sampler stops itself once k6 has written its results:
+`--address` turns on k6's REST API, which the knee stop reads; a level, a
+stop rule or a cap is one more `-e` line, such as
+`-e STRESS_PROFILE=medium`, `-e STRESS_STOP=errors` or
+`-e STRESS_MAX_USERS=6400`. The sampler stops itself once k6 has written its
+results:
 
 ```bash
 out=artifacts/stress/$(date +%Y%m%d-%H%M%S)
 mkdir -p "$out"
 node deploy/observability/stress/sample.mjs "$out" &
 export KEYCLOAK_ADMIN_PASSWORD=admin
-k6 run \
+k6 run --address 127.0.0.1:6565 \
   -e BASE_URL=http://localhost:5000 \
   -e KEYCLOAK_URL=http://localhost:8080 \
   -e STRESS_PRODUCTS="$products" \
@@ -592,11 +632,15 @@ wait
 node deploy/observability/stress/summarise.mjs "$out"
 ```
 
-k6 exits 0 when no step's errors passed the abort rate and 99 when one did,
-which stops the run there unless it was the last step; `summary.md` marks that
-step `(past the abort rate)`. 107 is a refusal from `setup()`, with no load
-driven. `summarise.mjs` prints the knee and the
-summary's path.
+k6 exits 0 when no rule stopped the run; 108 when the knee stop did, which
+`summary.md` marks `(knee stop)`; and 99 when a step's errors passed the abort
+rate under `errors`, which `summary.md` marks `(past the abort rate)`. Either
+stop ends the run there unless it was the last step. 107 is a refusal, of a
+variable at start or from `setup()`, with no load driven. `summarise.mjs`
+prints three machine-readable lines: `Knee:`, then `Ended:`, the reason
+first and then the step, the level and the stop rule, as in
+`Ended: knee at step 4 (800 VUs); level low, stop rule knee`, then
+`Summary:` and the summary's path.
 
 **4. Go back to the normal profile** by bringing the stack up without the
 override. Nothing else needs undoing:

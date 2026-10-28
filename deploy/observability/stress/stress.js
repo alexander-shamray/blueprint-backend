@@ -1,9 +1,11 @@
 // The stress run of deploy/observability/README.md: distinct signed-in users
 // walk the domain's typical journey through the gateway, and their number
 // rises in steps until the platform gives out. It is NOT the SLO run and NOT
-// a gate: it asserts nothing, and stops early only once a step's error rate
-// passes STRESS_ABORT_ERROR_RATE. summarise.mjs turns what it writes into the
-// per-step table and names the knee.
+// a gate: it asserts nothing. Its stop rule, STRESS_STOP, ends it at the end
+// of the first hold whose figures cross report.js's knee (`knee`, exit 108),
+// or once a step's error rate passes STRESS_ABORT_ERROR_RATE (`errors`, exit
+// 99). summarise.mjs turns what it writes into the per-step table and names
+// the knee.
 //
 // It runs against the Compose stack started with
 // deploy/compose/docker-compose.stress.yml (ADR-157), whose relaxed limiter
@@ -14,7 +16,8 @@
 //   # From the environment, never `-e`, for slo.js's reason.
 //   export KEYCLOAK_ADMIN_PASSWORD=admin
 //
-//   k6 run \
+//   # --address turns on k6's REST API, which the knee stop reads.
+//   k6 run --address 127.0.0.1:6565 \
 //     -e BASE_URL=http://localhost:5000 \
 //     -e KEYCLOAK_URL=http://localhost:8080 \
 //     -e STRESS_PRODUCTS=<ids with a row in ordering.ProductPrices, comma-separated> \
@@ -22,39 +25,38 @@
 //     -e STRESS_OUT=artifacts/stress/<run> \
 //     deploy/observability/stress/stress.js
 //
-// Optional: STRESS_STEPS, STRESS_RAMP_SECONDS and STRESS_HOLD_SECONDS, whose
-// defaults are steps.js's, and STRESS_ABORT_ERROR_RATE, whose default is
-// ABORT_ERROR_RATE's below and which 0 switches off.
+// Optional: STRESS_PROFILE, STRESS_STEPS, STRESS_RAMP_SECONDS,
+// STRESS_HOLD_SECONDS and STRESS_MAX_USERS, read by steps.js's plan();
+// STRESS_STOP; STRESS_ABORT_ERROR_RATE, whose default is ABORT_ERROR_RATE's
+// below and which 0 switches off; and STRESS_K6_API and PROM_URL, where the
+// knee stop reads k6's figures and Prometheus's.
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { fail, sleep } from 'k6';
-import { Counter, Rate, Trend } from 'k6/metrics';
+import { Counter, Gauge, Rate, Trend } from 'k6/metrics';
 import { randomBytes } from 'k6/crypto';
-import {
-    DEFAULT_HOLD_SECONDS,
-    DEFAULT_RAMP_SECONDS,
-    maxOrders,
-    parseSeconds,
-    parseSteps,
-    stages,
-    stepAt,
-    windows,
-} from './steps.js';
+import { DEFAULT_PROM_URL, OUTBOX_OLDEST, QUEUED, crossings, liveRow } from './report.js';
+import { maxOrders, parseStop, plan, stages, stepAt, windows } from './steps.js';
 
 const BASE_URL = __ENV.BASE_URL;
 const KEYCLOAK_URL = __ENV.KEYCLOAK_URL;
 const OUT = __ENV.STRESS_OUT;
 const PRODUCTS = (__ENV.STRESS_PRODUCTS || '').split(',').map((id) => id.trim()).filter(Boolean);
+const K6_API = __ENV.STRESS_K6_API || 'http://127.0.0.1:6565';
+const PROM_URL = __ENV.PROM_URL || DEFAULT_PROM_URL;
 
-const STEPS = parseSteps(__ENV.STRESS_STEPS);
-const RAMP_SECONDS = parseSeconds(__ENV.STRESS_RAMP_SECONDS, DEFAULT_RAMP_SECONDS, 'STRESS_RAMP_SECONDS');
-const HOLD_SECONDS = parseSeconds(__ENV.STRESS_HOLD_SECONDS, DEFAULT_HOLD_SECONDS, 'STRESS_HOLD_SECONDS');
+const PLAN = plan(__ENV);
+const STEPS = PLAN.steps;
+const RAMP_SECONDS = PLAN.rampSeconds;
+const HOLD_SECONDS = PLAN.holdSeconds;
 const HOLDS = windows(STEPS, RAMP_SECONDS, HOLD_SECONDS);
+const STOP = parseStop(__ENV.STRESS_STOP);
 
-// Unset is the default; an explicit 0 never aborts.
-const ABORT_ERROR_RATE = __ENV.STRESS_ABORT_ERROR_RATE === undefined || __ENV.STRESS_ABORT_ERROR_RATE === ''
-    ? 0.2
-    : Number(__ENV.STRESS_ABORT_ERROR_RATE);
+// Unset is the default; an explicit 0 never aborts. The knee rule crosses on
+// errors far below it, so under `knee` it is off and the judge alone stops.
+const ABORT_ERROR_RATE = STOP !== 'errors' ? 0
+    : __ENV.STRESS_ABORT_ERROR_RATE === undefined || __ENV.STRESS_ABORT_ERROR_RATE === '' ? 0.2
+        : Number(__ENV.STRESS_ABORT_ERROR_RATE);
 
 // THE JOURNEY'S SHAPE. A quarter of sessions order, the rest browse and
 // quote: a shop converts far fewer, but every order is the saga, the outbox,
@@ -97,17 +99,26 @@ const journeyDuration = new Trend('stress_journey_duration', true);
 const failures = new Counter('stress_failures');
 const failed = new Rate('stress_failed');
 
-// handleSummary reports only the submetrics a threshold names, so every step's
-// figures are named here; each passes on any value, and only the per-step
-// error rate can stop the run. Its evaluation waits for the step's hold to
-// end, so the step is judged rather than its first seconds. k6 counts that
-// wait from the test's start, setup() included, so the judgement can begin up
-// to setup()'s length before the hold ends, over the hold's requests so far.
+// The judge's records, which handleSummary can read where no variable of its
+// VU can: the VUs k6 ran at each hold's end, and the step the knee stopped.
+const vusReached = new Gauge('stress_vus');
+const kneeStop = new Counter('stress_knee_stop');
+
+// handleSummary and k6's REST API report only the submetrics a threshold
+// names, so every step's figures are named here; each passes on any value,
+// and only the per-step error rate under `errors` can stop the run. Its
+// evaluation waits for the step's hold to end, so the step is judged rather
+// than its first seconds. k6 counts that wait from the test's start, setup()
+// included, so the judgement can begin up to setup()'s length before the hold
+// ends, over the hold's requests so far.
 function thresholds() {
     const named = {};
 
     for (const hold of HOLDS) {
         named[`stress_journey_duration{step:${hold.step}}`] = ['max>=0'];
+        named[`http_reqs{step:${hold.step}}`] = ['count>=0'];
+        named[`stress_vus{step:${hold.step}}`] = ['value>=0'];
+        named[`stress_knee_stop{step:${hold.step}}`] = ['count>=0'];
 
         for (const op of OPS)
             named[`http_req_duration{step:${hold.step},op:${op}}`] = ['max>=0'];
@@ -134,11 +145,20 @@ export const options = {
             gracefulStop: '10s',
             exec: 'session',
         },
+        // One VU beside the journey, started with it, that wakes at each hold's end.
+        judge: {
+            executor: 'per-vu-iterations',
+            vus: 1,
+            iterations: 1,
+            maxDuration: `${HOLDS[HOLDS.length - 1].end + 60}s`,
+            exec: 'judge',
+        },
     },
     thresholds: thresholds(),
     summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(95)', 'p(99)', 'count'],
-    // Users are made and stock is set before the first VU starts.
-    setupTimeout: '10m',
+    // Users are made and stock is set before the first VU starts: four
+    // hundred users a minute is well under what Keycloak's admin API manages.
+    setupTimeout: `${Math.max(10, Math.ceil(STEPS[STEPS.length - 1] / 400))}m`,
 };
 
 const USERS = STEPS[STEPS.length - 1];
@@ -157,6 +177,17 @@ export function setup() {
 
     if (missing.length > 0)
         fail(`Stress run is not configured: missing ${missing.join(', ')}`);
+
+    // A knee stop that cannot read its figures would drive the run past the
+    // knee in silence, so it is refused before any load.
+    if (STOP === 'knee') {
+        if (http.get(`${K6_API}/v1/status`).status !== 200)
+            fail(`Stress run is not configured: the knee stop reads k6's REST API at ${K6_API}; ` +
+                'run k6 with --address 127.0.0.1:6565, or set STRESS_STOP=errors');
+
+        if (http.get(`${PROM_URL}/api/v1/query?query=vector(1)`).status !== 200)
+            fail(`Stress run is not configured: the knee stop reads Prometheus at ${PROM_URL}`);
+    }
 
     const realm = `${KEYCLOAK_URL}/admin/realms/commerce`;
     const admin = adminHeaders();
@@ -323,8 +354,9 @@ function restock(token) {
         if (available(product) >= needed)
             continue;
 
-        const put = http.put(
-            `${BASE_URL}/api/v1/inventory/stock/${product}`, JSON.stringify({ onHand: STOCK }), auth);
+        // A level's top can need more than STOCK of one product.
+        const put = http.put(`${BASE_URL}/api/v1/inventory/stock/${product}`,
+            JSON.stringify({ onHand: Math.max(STOCK, needed) }), auth);
 
         // A command with no value answers 204 (§10.5's ToHttpResult); the read below is the real check.
         if (put.status !== 204)
@@ -504,6 +536,68 @@ export function session(data) {
     think();
 }
 
+function promScalar(expr, atMs) {
+    const response = http.get(`${PROM_URL}/api/v1/query?query=${encodeURIComponent(expr)}&time=${atMs / 1000}`);
+    const [series] = response.status === 200 ? response.json('data.result') || [] : [];
+    const value = series ? Number(series.value[1]) : NaN;
+    return Number.isFinite(value) ? value : null;
+}
+
+// THE KNEE STOP. At each hold's end the judge reads the step's client figures
+// from k6's REST API and its backlog from Prometheus, at the hold's middle and
+// end as summarise.mjs reads them, and holds them against the step before
+// with report.js's crossings(), the rule the summary's knee() applies after.
+// A step that crossed is measured whole, and nothing past it runs. Under
+// `errors` it records the VUs alone. Its scenario starts with the journey's.
+export function judge() {
+    let previous = null;
+
+    for (const hold of HOLDS) {
+        const startMs = exec.scenario.startTime + (hold.start * 1000);
+        const endMs = exec.scenario.startTime + (hold.end * 1000);
+
+        if (endMs > Date.now())
+            sleep((endMs - Date.now()) / 1000);
+
+        // The judge is one of the VUs k6 counts.
+        const status = http.get(`${K6_API}/v1/status`);
+        if (status.status === 200)
+            vusReached.add(status.json('data.attributes.vus') - 1, { step: String(hold.step) });
+
+        if (STOP !== 'knee')
+            continue;
+
+        const metrics = http.get(`${K6_API}/v1/metrics`);
+
+        if (metrics.status !== 200) {
+            console.error(`judge: k6's figures for step ${hold.step} answered ${metrics.status}; step not judged`);
+            continue;
+        }
+
+        const row = {
+            ...liveRow(hold, metrics.json('data')),
+            outboxMiddle: promScalar(OUTBOX_OLDEST, (startMs + endMs) / 2),
+            outboxEnd: promScalar(OUTBOX_OLDEST, endMs),
+            queueMiddle: promScalar(QUEUED, (startMs + endMs) / 2),
+            queueEnd: promScalar(QUEUED, endMs),
+        };
+
+        // As knee() does, a step with no requests is neither judged nor the next one's baseline.
+        if (!(row.requests > 0))
+            continue;
+
+        const crossed = crossings(row, previous);
+
+        if (crossed.length > 0) {
+            kneeStop.add(1, { step: String(hold.step) });
+            exec.test.abort(`Knee stop at step ${hold.step} (${hold.vus} VUs): ` +
+                crossed.map((s) => `${s.signal}, ${s.detail}`).join('; '));
+        }
+
+        previous = row;
+    }
+}
+
 function hex(bytes) {
     return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -540,6 +634,9 @@ export function handleSummary(data) {
             failed: values('stress_failed', `step:${hold.step}`),
             aborted: Object.values((sub('stress_failed', `step:${hold.step}`) || {}).thresholds || {})
                 .some((threshold) => threshold.ok === false),
+            // Zero for a hold the judge never reached, which is no reading.
+            vusReached: values('stress_vus', `step:${hold.step}`).value || null,
+            kneeStop: (values('stress_knee_stop', `step:${hold.step}`).count || 0) > 0,
         };
     });
 
@@ -547,6 +644,10 @@ export function handleSummary(data) {
         startedAt,
         endedAt,
         plan: {
+            level: PLAN.level,
+            stopRule: STOP,
+            maxUsers: PLAN.maxUsers,
+            capped: PLAN.capped,
             steps: STEPS,
             rampSeconds: RAMP_SECONDS,
             holdSeconds: HOLD_SECONDS,

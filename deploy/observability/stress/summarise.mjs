@@ -12,7 +12,20 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
-import { clientRow, containerStats, knee, sqlDelta } from './report.js';
+import {
+    DEFAULT_PROM_URL,
+    OUTBOX_OLDEST,
+    QUEUED,
+    WORK_FILTER,
+    WORK_QUEUES,
+    clientRow,
+    containerStats,
+    endedLine,
+    ending,
+    hostCpu,
+    knee,
+    sqlDelta,
+} from './report.js';
 
 const out = process.argv[2];
 
@@ -21,7 +34,7 @@ if (!out || !existsSync(join(out, 'raw.json'))) {
     process.exit(2);
 }
 
-const PROM_URL = process.env.PROM_URL || 'http://127.0.0.1:3000/api/datasources/proxy/uid/prometheus';
+const PROM_URL = process.env.PROM_URL || DEFAULT_PROM_URL;
 
 const raw = JSON.parse(readFileSync(join(out, 'raw.json'), 'utf8'));
 const samplesPath = join(out, 'samples.jsonl');
@@ -59,9 +72,6 @@ async function scalar(name, expr, atMs) {
     return series ? series.value : null;
 }
 
-const WORK_FILTER = 'queue!~".+_(error|skipped)"';
-const WORK_QUEUES = `rabbitmq_queue_messages{${WORK_FILTER}}`;
-
 async function serverRow(window, range) {
     const end = window.endMs;
     const middle = (window.startMs + window.endMs) / 2;
@@ -83,10 +93,10 @@ async function serverRow(window, range) {
         })),
         outboxOldest: outboxes.map((s) => ({ service: s.labels.service_name, seconds: s.value })),
         deepestQueues: queues.map((s) => ({ queue: s.labels.queue, messages: s.value })),
-        outboxMiddle: await scalar('outbox oldest, middle', 'max(outbox_oldest_age_seconds)', middle),
-        outboxEnd: await scalar('outbox oldest, end', 'max(outbox_oldest_age_seconds)', end),
-        queueMiddle: await scalar('queued, middle', `sum(${WORK_QUEUES})`, middle),
-        queueEnd: await scalar('queued, end', `sum(${WORK_QUEUES})`, end),
+        outboxMiddle: await scalar('outbox oldest, middle', OUTBOX_OLDEST, middle),
+        outboxEnd: await scalar('outbox oldest, end', OUTBOX_OLDEST, end),
+        queueMiddle: await scalar('queued, middle', QUEUED, middle),
+        queueEnd: await scalar('queued, end', QUEUED, end),
         // An error queue exists only once something faulted, so none is zero rather than no reading.
         errorQueues: await scalar(
             'error queues', 'sum(rabbitmq_queue_messages{queue=~".+_error"}) or vector(0)', end),
@@ -171,11 +181,16 @@ for (const step of raw.steps) {
         window: { start: new Date(window.startMs).toISOString(), end: new Date(window.endMs).toISOString() },
         ...(server ?? {}),
         containers: containerStats(samples, window).slice(0, 8),
+        hostCpu: hostCpu(samples, window),
         sql: sqlDelta(samples, window),
     });
 }
 
 const found = knee(rows);
+
+// A raw.json from before the levels has no level or stop rule, and stopped on errors alone.
+const plan = { level: null, stopRule: 'errors', capped: false, ...raw.plan };
+const ended = ending(rows, plan);
 
 // k6 writes raw.json even when setup() refused, and a run that measured nothing has no knee to be clear of.
 const verdict = found
@@ -187,9 +202,10 @@ const verdict = found
 const summary = {
     run: { started: new Date(raw.startedAt).toISOString(), ended: new Date(raw.endedAt).toISOString() },
     machine: machine(),
-    plan: raw.plan,
+    plan,
     knee: found,
     verdict,
+    ended: { ...ended, line: endedLine(ended, plan) },
     steps: rows,
     samplerErrors: [...new Set(samples.flatMap((s) => [s.containersError, s.sqlError]).filter(Boolean))],
     unavailable,
@@ -203,6 +219,7 @@ writeFileSync(join(out, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`
 writeFileSync(join(out, 'summary.md'), markdown(summary));
 
 console.log(verdict);
+console.log(summary.ended.line);
 console.log(`Summary: ${join(out, 'summary.md')}`);
 
 function ms(value) {
@@ -233,16 +250,21 @@ function markdown(s) {
             `${m.operatingSystem}`,
         `- Docker: ${m.docker.version}, ${m.docker.cpus} CPUs and ${mib(m.docker.memoryBytes)} MiB for containers`,
         `- Commit ${m.commit}; ${m.k6}`,
+        `- Level ${s.plan.level ?? 'none'}, stop rule ${s.plan.stopRule}` +
+            (s.plan.maxUsers ? `, at most ${s.plan.maxUsers} users` : ''),
         `- Staircase ${s.plan.steps.join(', ')} VUs, ${s.plan.rampSeconds} s ramps, ${s.plan.holdSeconds} s holds; ` +
             `${percent(s.plan.orderShare)} of sessions order, over ${s.plan.products} products`,
         '',
         `**${s.verdict}**`,
         '',
+        `**${s.ended.line}**`,
+        '',
         '## Client',
         '',
         '| Step | VUs | req/s | p50 ms | p95 ms | p99 ms | errors | 429 | 4xx | 5xx | timeouts | connection |',
         '|---|---|---|---|---|---|---|---|---|---|---|---|',
-        ...s.steps.map((r) => `| ${r.step}${r.aborted ? ' (past the abort rate)' : ''} | ${r.vus} | ` +
+        ...s.steps.map((r) => `| ${r.step}${r.aborted ? ' (past the abort rate)' : ''}` +
+            `${r.kneeStop ? ' (knee stop)' : ''} | ${r.vus} | ` +
             `${r.rps.toFixed(1)} | ` +
             `${ms(r.p50)} | ${ms(r.p95)} | ${ms(r.p99)} | ${percent(r.errorRate)} | ${r.failures['429'] ?? 0} | ` +
             `${r.failures['4xx'] ?? 0} | ${r.failures['5xx'] ?? 0} | ${r.failures.timeout ?? 0} | ` +
@@ -281,10 +303,10 @@ function markdown(s) {
         '',
         '## Resources',
         '',
-        '| Step | busiest containers, CPU % mean / peak, memory MiB peak | SQL deadlocks | lock wait ms | ' +
-            'page latch wait ms | log wait ms |',
-        '|---|---|---|---|---|---|',
-        ...s.steps.map((r) => `| ${r.step} | ` +
+        '| Step | machine CPU % | busiest containers, CPU % mean / peak, memory MiB peak | SQL deadlocks | ' +
+            'lock wait ms | page latch wait ms | log wait ms |',
+        '|---|---|---|---|---|---|---|',
+        ...s.steps.map((r) => `| ${r.step} | ${ms(r.hostCpu)} | ` +
             (r.containers.slice(0, 4).map((c) =>
                 `${c.name} ${ms(c.cpuMean)} / ${ms(c.cpuPeak)}, ${mib(c.memoryPeak)}`).join('; ') || '—') +
             ` | ${ms(r.sql?.deadlocks)} | ${ms(r.sql?.lockWaitMs)} | ${ms(r.sql?.pageLatchWaitMs)} | ` +
