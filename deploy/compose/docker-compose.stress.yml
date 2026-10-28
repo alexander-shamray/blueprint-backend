@@ -9,8 +9,9 @@
 # validator would refuse fails a test rather than the run's start.
 
 # Every request traced in full made Tempo the observer's largest cost, so a
-# host keeps the share of its traces this names, each whole. Every host that exports
-# telemetry merges this into its environment, and Common.Web's suite holds it.
+# host keeps the share of its traces this names, each whole. Every host that
+# exports telemetry merges this into its environment, and Common.Web's suite
+# holds it.
 x-trace-sampling: &trace-sampling
   OTEL_TRACES_SAMPLER: "parentbased_traceidratio"
   OTEL_TRACES_SAMPLER_ARG: "0.1"
