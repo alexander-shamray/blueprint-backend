@@ -82,8 +82,14 @@ public sealed class FixtureStubsTests(ServiceFixture fixture) : IAsyncLifetime
         Notification staged = await fixture.PendingAsync(TemplateKeys.OrderPlaced, Guid.CreateVersion7());
 
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE NotificationId = {0} " +
-            "AND Status = 'Pending' AND NextAttemptAt <= SYSDATETIMEOFFSET() AND LockedUntil IS NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM notifications.NotificationLog
+            WHERE NotificationId = {0}
+                AND Status = 'Pending'
+                AND NextAttemptAt <= SYSDATETIMEOFFSET()
+                AND LockedUntil IS NULL
+            """,
             staged.NotificationId)).ShouldBe(1);
     }
 

@@ -52,8 +52,13 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     public async Task The_migrator_creates_the_intent_table_with_its_rowversion()
     {
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('payments.PaymentIntents') " +
-            "AND name = 'RowVersion' AND system_type_id = TYPE_ID('timestamp')"))
+            """
+            SELECT Value = COUNT(*)
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID('payments.PaymentIntents')
+                AND name = 'RowVersion'
+                AND system_type_id = TYPE_ID('timestamp')
+            """))
             .ShouldBe(1);
     }
 
@@ -62,13 +67,21 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     {
         // Inserted once and never updated, so the order record's lock serialises it and no token is needed.
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('payments.Refunds') " +
-            "AND name IN ('OrderId', 'Reference', 'Amount', 'Currency', 'VoidedAt')"))
+            """
+            SELECT Value = COUNT(*)
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID('payments.Refunds')
+                AND name IN ('OrderId', 'Reference', 'Amount', 'Currency', 'VoidedAt')
+            """))
             .ShouldBe(5);
 
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('payments.Refunds') " +
-            "AND system_type_id = TYPE_ID('timestamp')"))
+            """
+            SELECT Value = COUNT(*)
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID('payments.Refunds')
+                AND system_type_id = TYPE_ID('timestamp')
+            """))
             .ShouldBe(0, "the record's lock serialises the insert; no rowversion");
     }
 

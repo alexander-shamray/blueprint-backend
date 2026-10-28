@@ -271,9 +271,12 @@ public sealed class ServiceFixture()
     /// <summary>The same, under the fulfilment worker's lease and over its populations.</summary>
     public Task ClaimForFulfilmentAsync() =>
         ExecuteAsync(
-            "UPDATE shipping.Shipments SET LockedUntil = DATEADD(second, {0}, SYSDATETIMEOFFSET()) " +
-            "WHERE Status = 'Pending' " +
-            "   OR (Status = 'Booked' AND CancellationRequestedAt IS NOT NULL AND CancellationRefusedAt IS NULL);",
+            """
+            UPDATE shipping.Shipments
+            SET LockedUntil = DATEADD(second, {0}, SYSDATETIMEOFFSET())
+            WHERE Status = 'Pending'
+                OR (Status = 'Booked' AND CancellationRequestedAt IS NOT NULL AND CancellationRefusedAt IS NULL);
+            """,
             FulfilmentWorker.LeaseSeconds);
 
     /// <summary>Lapses every held lease, as a killed replica leaves it, not the NULL a release writes.</summary>

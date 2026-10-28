@@ -317,8 +317,13 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     public async Task The_migrator_creates_the_stock_table_with_its_rowversion()
     {
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('inventory.StockItems') " +
-            "AND name = 'RowVersion' AND system_type_id = TYPE_ID('timestamp')"))
+            """
+            SELECT Value = COUNT(*)
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID('inventory.StockItems')
+                AND name = 'RowVersion'
+                AND system_type_id = TYPE_ID('timestamp')
+            """))
             .ShouldBe(1, "§7.3's admin path is optimistic, and the column is what makes it so");
     }
 
@@ -326,12 +331,21 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     public async Task The_migrator_creates_reservations_and_their_lines()
     {
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID('inventory') " +
-            "AND name IN ('Reservations', 'ReservationLines')"))
+            """
+            SELECT Value = COUNT(*)
+            FROM sys.tables
+            WHERE schema_id = SCHEMA_ID('inventory')
+                AND name IN ('Reservations', 'ReservationLines')
+            """))
             .ShouldBe(2);
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('inventory.Reservations') " +
-            "AND name = 'RowVersion' AND system_type_id = TYPE_ID('timestamp')"))
+            """
+            SELECT Value = COUNT(*)
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID('inventory.Reservations')
+                AND name = 'RowVersion'
+                AND system_type_id = TYPE_ID('timestamp')
+            """))
             .ShouldBe(1, "a release and a fulfilment for one order can race on two endpoints");
     }
 }

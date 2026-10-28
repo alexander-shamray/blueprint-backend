@@ -42,8 +42,13 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
         // The row is leased and the owner stalls: the erasure lands in the window ADR-097 names, before the save.
         await ServiceFixture.WaitUntilAsync(async () =>
             await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE NotificationId = {0} " +
-                "AND Status = 'Pending' AND LockedUntil > SYSDATETIMEOFFSET()",
+                """
+                SELECT Value = COUNT(*)
+                FROM notifications.NotificationLog
+                WHERE NotificationId = {0}
+                    AND Status = 'Pending'
+                    AND LockedUntil > SYSDATETIMEOFFSET()
+                """,
                 owed.NotificationId) == 1);
         await Task.Delay(TimeSpan.FromMilliseconds(250), Ct);
         await ErasedSubjectIntakeTests.RecordErasureAsync(fixture, customer, At);
@@ -166,8 +171,13 @@ public sealed class ErasedContactTests(ServiceFixture fixture) : IAsyncLifetime
     {
         await ServiceFixture.WaitUntilAsync(async () =>
             await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE NotificationId = {0} " +
-                "AND Status = 'Pending' AND LockedUntil > SYSDATETIMEOFFSET()",
+                """
+                SELECT Value = COUNT(*)
+                FROM notifications.NotificationLog
+                WHERE NotificationId = {0}
+                    AND Status = 'Pending'
+                    AND LockedUntil > SYSDATETIMEOFFSET()
+                """,
                 owed.NotificationId) == 1);
         await Task.Delay(TimeSpan.FromMilliseconds(250), Ct);
     }
