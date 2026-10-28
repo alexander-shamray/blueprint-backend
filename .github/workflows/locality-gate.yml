@@ -20,9 +20,10 @@ permissions:
   # whole of what it needs; it changes nothing and posts nothing.
   pull-requests: read
 
-concurrency:
-  group: locality-gate-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency group. Each run reads the body and file list as they are when
+# it runs, so cancelling an older run saves only seconds, and a cancelled run
+# stays on the head as a failed required check: a rerun joining the group
+# cancels the newest run, and the merge is refused until that one is rerun.
 
 # Proposal and enforcement are two executions, on the closure gate's design:
 # the suite runs the head copy, because testing a proposed gate is the point of
