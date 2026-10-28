@@ -216,7 +216,7 @@ public partial class TelemetryVolumeTests
     private static partial Regex ServiceEntry();
 
     [GeneratedRegex(
-        @"^\s+(?:OTEL_EXPORTER_OTLP_ENDPOINT|endpoint):\s*""?http://(?<host>[a-z][a-z-]*):\d+",
+        @"^\s+(?:OTEL_EXPORTER_OTLP_ENDPOINT|endpoint):\s*""?(?:https?://)?(?<host>[a-z][a-z-]*):\d+",
         RegexOptions.Multiline)]
     private static partial Regex SentTo();
 
