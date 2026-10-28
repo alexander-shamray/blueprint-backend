@@ -640,7 +640,7 @@ machine doing the work.
 > *reached*, and a consumer is constructed when a message arrives, so on a quiet
 > service these instruments still do not exist. A host running §9.4's
 > dispatcher does build the class at start, since the dispatcher injects it,
-> but Notifications and the BFF run no dispatcher. §13.6 states the test that
+> but not every host runs one. §13.6 states the test that
 > actually decides membership — can this service run for an hour without
 > constructing it — and all four types fail it.
 
@@ -1738,8 +1738,8 @@ build the day it is registered.
 for an hour without constructing it"* — and for every metrics type in this
 document the answer is yes, which is why each belongs in that constructor as it
 comes to exist. **All four are there.** For `MessagingMetrics` the yes is a
-host's with no outbox dispatcher, Notifications or the BFF: a dispatcher
-injects it, so a publishing service builds it at start (§13.3).
+host's that runs no outbox dispatcher: a dispatcher injects it, so a host
+that runs one builds it at start (§13.3).
 
 That includes `RequestMetrics`, and the reasoning that would exclude it is the
 worked example. `LoggingBehavior` injects it, a behaviour
