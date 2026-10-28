@@ -29,9 +29,9 @@ public sealed class GetOwnProductsHandler(IDbConnectionFactory connections, ICur
         LEFT JOIN catalog.StockLevels s
             ON s.ProductId = p.Id
         WHERE p.SellerId = @SellerId
-          AND (@AfterPublishedAt IS NULL
-            OR p.PublishedAt < @AfterPublishedAt
-            OR (p.PublishedAt = @AfterPublishedAt AND p.Id < @AfterId))
+            AND (@AfterPublishedAt IS NULL
+                OR p.PublishedAt < @AfterPublishedAt
+                OR (p.PublishedAt = @AfterPublishedAt AND p.Id < @AfterId))
         ORDER BY p.PublishedAt DESC, p.Id DESC;
         """;
 

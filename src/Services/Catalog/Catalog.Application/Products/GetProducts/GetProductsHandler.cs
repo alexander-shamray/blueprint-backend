@@ -29,16 +29,16 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
         LEFT JOIN catalog.StockLevels s
             ON s.ProductId = p.Id
         WHERE p.WithdrawnAt IS NULL
-          AND (@Pattern IS NULL OR p.Name LIKE @Pattern ESCAPE '\')
+            AND (@Pattern IS NULL OR p.Name LIKE @Pattern ESCAPE '\')
         """;
 
     private const string NewestSql =
         Columns +
         """
 
-          AND (@AfterPublishedAt IS NULL
-            OR p.PublishedAt < @AfterPublishedAt
-            OR (p.PublishedAt = @AfterPublishedAt AND p.Id < @AfterId))
+            AND (@AfterPublishedAt IS NULL
+                OR p.PublishedAt < @AfterPublishedAt
+                OR (p.PublishedAt = @AfterPublishedAt AND p.Id < @AfterId))
         ORDER BY p.PublishedAt DESC, p.Id DESC;
         """;
 
@@ -47,9 +47,9 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
         Columns +
         """
 
-          AND (@AfterName IS NULL
-            OR p.Name > @AfterName
-            OR (p.Name = @AfterName AND p.Id > @AfterId))
+            AND (@AfterName IS NULL
+                OR p.Name > @AfterName
+                OR (p.Name = @AfterName AND p.Id > @AfterId))
         ORDER BY p.Name ASC, p.Id ASC;
         """;
 

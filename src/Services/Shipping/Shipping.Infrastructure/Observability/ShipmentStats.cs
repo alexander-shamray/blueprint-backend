@@ -32,10 +32,10 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
         WHERE Status = @Status
             AND TerminalAt IS NULL
             AND (PollAttempts > 0
-                 OR (Attempts > 0
-                     AND Status IN ('Pending', 'Booked')
-                     AND CancellationRefusedAt IS NULL
-                     AND (Status = 'Pending' OR CancellationRequestedAt IS NOT NULL)));
+                OR (Attempts > 0
+                    AND Status IN ('Pending', 'Booked')
+                    AND CancellationRefusedAt IS NULL
+                    AND (Status = 'Pending' OR CancellationRequestedAt IS NOT NULL)));
         """;
 
     // Each claim's own population, aged from when each row became due; NULL is no wait. Shipment.Cancel stamps

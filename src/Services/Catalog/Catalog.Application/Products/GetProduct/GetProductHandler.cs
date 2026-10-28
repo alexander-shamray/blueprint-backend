@@ -27,7 +27,7 @@ public sealed class GetProductHandler(IDbConnectionFactory connections, IProduct
         LEFT JOIN catalog.StockLevels s
             ON s.ProductId = p.Id
         WHERE p.Id = @ProductId
-          AND p.WithdrawnAt IS NULL;
+            AND p.WithdrawnAt IS NULL;
         """;
 
     public async Task<Result<ProductSummaryDto>> HandleAsync(GetProductQuery query, CancellationToken ct)
