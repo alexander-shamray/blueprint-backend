@@ -29,11 +29,12 @@ sent, and the senders lose that batch while the collector stays up.
 **Consequences.** The bound changes both services' configuration, so `up`
 with the override recreates them and `up` without it recreates them again.
 The LGTM container keeps its stores inside itself, so each recreate empties
-Prometheus, Loki and Tempo. A run starts on empty stores, and
-`summarise.mjs`, which reads Prometheus at each step's hold, has to run
-before the stack goes back to the default profile, as the stress run's blocks
-order it. A volume for the container's data was the other way, and was not
-taken: it would change the default stack for a cost only a stress run pays.
+Prometheus, Loki and Tempo. The first run after the override is added starts
+on empty stores, and `summarise.mjs`, which reads Prometheus at each step's
+hold, has to run before the stack goes back to the default profile, as the
+stress run's blocks order it. A volume for the container's data was the other
+way, and was not taken: it would change the default stack for a cost only a
+stress run pays.
 The sampler now reads the LGTM container's CPU against its two cores, so at
 its cap `firstToGiveUp()` names `grafana` beside the services. That is true,
 since a saturated observer delays what the run reads, but it is not a part of
