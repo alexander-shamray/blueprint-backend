@@ -270,7 +270,7 @@ test('SQL Server\'s deadlocks, and a wait that grew four times by more than the 
         'under four times');
     assert.deepEqual(signals({ sql: { logWaitMs: 900 } }, { sql: { logWaitMs: 100 } }, hold), [],
         'within one connection blocked for the hold');
-    // This morning's run held throughout, with these log-flush waits over its 180 s holds at steps 1 and 2.
+    // A run that held throughout: its log-flush waits over 180 s holds at steps 1 and 2.
     assert.deepEqual(signals({ sql: { logWaitMs: 20166 } }, { sql: { logWaitMs: 2446 } }, { holdSeconds: 180 }), []);
     assert.deepEqual(signals({ sql: { lockWaitMs: 5000 } }, { sql: { lockWaitMs: 1000 } }), [], 'no hold, no floor');
 });
