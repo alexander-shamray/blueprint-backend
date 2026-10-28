@@ -6,35 +6,39 @@ using Xunit;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>§10.1's request and response log, the one hosting category a host keeps at Information (ADR-159).</summary>
-public partial class EdgeRequestLogTests
+/// <summary>§10.1's request and response log, the categories a host keeps at Information by name (ADR-159).</summary>
+public class EdgeRequestLogTests
 {
-    private const string Hosting = "Microsoft.AspNetCore.Hosting.Diagnostics";
-
-    [Fact]
-    public void The_gateway_logs_each_request_and_its_response()
+    // The lines' own categories, under the configured prefixes: hosting's for every request, and the forwarder's,
+    // the ones written inside UseCorrelationId's scope (§10.4), for a proxied one.
+    [Theory]
+    [InlineData("Microsoft.AspNetCore.Hosting.Diagnostics", "Microsoft.AspNetCore.Hosting")]
+    [InlineData("Yarp.ReverseProxy.Forwarder.HttpForwarder", "Yarp.ReverseProxy.Forwarder")]
+    public void The_gateway_logs_each_request_and_its_response(string category, string configured)
     {
         using GatewayFactory factory = new();
 
-        HostingLogger(factory).IsEnabled(LogLevel.Information).ShouldBeTrue();
+        Logger(factory, category).IsEnabled(LogLevel.Information).ShouldBeTrue($"{configured} is not logged");
     }
 
-    [Fact]
-    public void The_stress_override_holds_the_gateway_s_request_log_at_warning()
+    [Theory]
+    [InlineData("Microsoft.AspNetCore.Hosting.Diagnostics", "Microsoft.AspNetCore.Hosting")]
+    [InlineData("Yarp.ReverseProxy.Forwarder.HttpForwarder", "Yarp.ReverseProxy.Forwarder")]
+    public void The_stress_override_holds_the_gateway_s_request_log_at_warning(string category, string configured)
     {
         // The override's own value, through the real host, so a level the filter misreads fails here too.
-        Match entry = OverrideLevel().Match(File.ReadAllText(StressOverride()));
-        entry.Success.ShouldBeTrue("the stress override sets no hosting level for the gateway");
+        Match entry = OverrideLevel(configured).Match(File.ReadAllText(StressOverride()));
+        entry.Success.ShouldBeTrue($"the stress override sets no {configured} level for the gateway");
 
-        using StressedGatewayFactory factory = new(entry.Groups["level"].Value);
+        using StressedGatewayFactory factory = new(configured, entry.Groups["level"].Value);
 
-        ILogger logger = HostingLogger(factory);
+        ILogger logger = Logger(factory, category);
         logger.IsEnabled(LogLevel.Information).ShouldBeFalse();
         logger.IsEnabled(LogLevel.Warning).ShouldBeTrue();
     }
 
-    private static ILogger HostingLogger(GatewayFactory factory) =>
-        factory.Services.GetRequiredService<ILoggerFactory>().CreateLogger(Hosting);
+    private static ILogger Logger(GatewayFactory factory, string category) =>
+        factory.Services.GetRequiredService<ILoggerFactory>().CreateLogger(category);
 
     // GatewayRateLimitOptionsTests' route to the override, for the reason it gives.
     private static string StressOverride()
@@ -48,15 +52,15 @@ public partial class EdgeRequestLogTests
         throw new InvalidOperationException($"No Platform.slnx above {AppContext.BaseDirectory}.");
     }
 
-    [GeneratedRegex(
-        @"^  gateway:\r?\n(?:(?:    .*|[ \t]*)\r?\n)*?" +
-        @"\s+Logging__LogLevel__Microsoft\.AspNetCore\.Hosting:\s*""(?<level>\w+)""",
-        RegexOptions.Multiline)]
-    private static partial Regex OverrideLevel();
+    private static Regex OverrideLevel(string configured) =>
+        new(
+            @"^  gateway:\r?\n(?:(?:    .*|[ \t]*)\r?\n)*?" +
+            $@"\s+Logging__LogLevel__{Regex.Escape(configured)}:\s*""(?<level>\w+)""",
+            RegexOptions.Multiline);
 
-    private sealed class StressedGatewayFactory(string level) : GatewayFactory
+    private sealed class StressedGatewayFactory(string configured, string level) : GatewayFactory
     {
         protected override IEnumerable<KeyValuePair<string, string>> AdditionalSettings =>
-            [new("Logging:LogLevel:Microsoft.AspNetCore.Hosting", level)];
+            [new($"Logging:LogLevel:{configured}", level)];
     }
 }
