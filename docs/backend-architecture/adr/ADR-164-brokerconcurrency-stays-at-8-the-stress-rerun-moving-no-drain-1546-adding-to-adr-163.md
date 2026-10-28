@@ -7,16 +7,17 @@ set them: the rerun ADR-163 owed measured neither change, nor both, moving
 Ordering's drain after the load, so there is no figure between 8 and 16 to
 tune toward, and what does set that drain is #1559's to measure.
 **Why.** The 2026-10-28 15:36 stress plan (level `high`, stop rule `knee`)
-was rerun on 2026-10-29 four times on one stack at `c1d629123`, Ordering's
-API rebuilt each time with one dispatcher: both files as before ADR-163,
-`BrokerConcurrency` at 8 with the re-pass never asked for, the re-pass with
-`BrokerConcurrency` at 1, and both as shipped. Each run knee-stopped at step 1,
-3200 VUs at 1042 to 1057 requests a second, and Ordering's outbox, polled from
-the load's end, drained 11 634 rows in 165 s before ADR-163, 11 575 in 159 s
-with the bound alone, 11 516 in 155 s with the re-pass alone and 11 449 in
-170 s with both: 67 to 75 rows a second net. The oldest row at step 1's end
-read 56.2 s, 51.5 s, 56.7 s and 44.7 s. One run each, those spreads are noise,
-and the 55 rows a second ADR-163 cites came from an earlier stack, before
+was rerun four times overnight from 2026-10-28 on one stack at `c1d629123`,
+Ordering's API rebuilt each time with one dispatcher: both files as before
+ADR-163, `BrokerConcurrency` at 8 with the re-pass never asked for, the
+re-pass with `BrokerConcurrency` at 1, and both as shipped. Each run
+knee-stopped at step 1, 3200 VUs at 1042 to 1057 requests a second, and
+Ordering's outbox, polled from the load's end, drained 11 634 rows in 165 s
+before ADR-163, 11 575 in 159 s with the bound alone, 11 516 in 155 s with the
+re-pass alone and 11 449 in 170 s with both: 67 to 75 rows a second net. The
+oldest row at step 1's end read 56.2 s, 51.5 s, 56.7 s and 44.7 s. One run
+each, those spreads are noise, and the 55 rows a second ADR-163 cites came
+from an earlier stack, before
 [ADR-161](ADR-161-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md),
 so the same-stack run before ADR-163 is the comparison. In every run the
 `Local` count rose for about 100 s after the load stopped, and then the backlog
