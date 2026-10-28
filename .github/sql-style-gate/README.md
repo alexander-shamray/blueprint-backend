@@ -44,6 +44,12 @@ would catch a join already in the tree.
   wraps onto the next is judged on the line holding `JOIN`. A `JOIN` ending
   its line, with its source wholly on the next, is not read as a join at all,
   and an `ON` reached by concatenating two C# strings is not seen as one line.
+- SQL in a regular string, rather than a raw literal or a fence, is read as
+  its physical line. A `\n` before a join's kind is read into the kind, which
+  refuses a join that names one. A `\n` before its `ON` puts the `ON` on the
+  join's line. An `ON` line opening with a quote is not an `ON` line, so its
+  second predicate goes unjudged, and the next `ON` line, even a `MERGE`'s, is
+  judged as the join's. The tree holds none of these shapes.
 - It holds the join rule and nothing else in *SQL style*. One predicate per
   line under `WHERE` or a `MERGE`'s `ON`, column aliases as assignments and
   the + 4 continuation indent stay review rules.
