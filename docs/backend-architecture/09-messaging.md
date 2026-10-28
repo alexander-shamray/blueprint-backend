@@ -918,7 +918,8 @@ log flush per row:
 UPDATE outbox
 SET ProcessedAt = SYSDATETIMEOFFSET(), LockedUntil = NULL
 FROM {table.QualifiedName} AS outbox
-JOIN OPENJSON(@Ids) WITH (Id BIGINT '$') AS delivered ON delivered.Id = outbox.Id;
+INNER JOIN OPENJSON(@Ids) WITH (Id BIGINT '$') AS delivered
+    ON delivered.Id = outbox.Id;
 ```
 
 A failed row keeps a statement of its own. Its attempt counter is incremented
