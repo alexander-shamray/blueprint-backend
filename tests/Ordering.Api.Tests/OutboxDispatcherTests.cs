@@ -153,16 +153,17 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
-    public async Task A_pass_stopped_part_way_still_completes_the_rows_it_delivered()
+    public async Task A_pass_stopped_mid_delivery_still_completes_the_row_it_delivered()
     {
         // ADR-161 completes a pass's rows in one statement at its end, which a stop's token must not cancel.
+        // One row: the claim's OUTPUT order is unspecified, so a second row could be skipped by the stop.
         using CancellationTokenSource stop =
             CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
 
         DeliveryGate.Close();
         try
         {
-            await fixture.StageOutboxAsync(OutboxRows.Healthy(fixture), OutboxRows.Blocking(fixture));
+            await fixture.StageOutboxAsync(OutboxRows.Blocking(fixture));
 
             Task<int> pass = fixture.ProcessStoppableOutboxBatchAsync(stop.Token);
             await DeliveryGate.Entered.Task.WaitAsync(
@@ -172,14 +173,14 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
             await stop.CancelAsync();
             DeliveryGate.Open();
 
-            (await pass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)).ShouldBe(2);
+            (await pass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)).ShouldBe(1);
         }
         finally
         {
             DeliveryGate.Open();
         }
 
-        (await fixture.OutboxAsync()).ShouldAllBe(r => r.ProcessedAt != null);
+        (await fixture.OutboxAsync()).ShouldHaveSingleItem().ProcessedAt.ShouldNotBeNull();
     }
 
     [Fact]
