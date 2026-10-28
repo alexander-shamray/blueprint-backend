@@ -120,10 +120,13 @@ def tracked(root: Path) -> list[str]:
 
 
 def read(root: Path, path: str) -> str | None:
-    """A file's text, or None for one that is binary or gone from the working tree."""
+    """A file's text, or None for one that is binary or gone from the working tree.
+
+    Any other read error propagates, so a listed file that cannot be opened fails the run.
+    """
     try:
         data = (root / path).read_bytes()
-    except OSError:
+    except FileNotFoundError:
         return None
     if b"\0" in data:
         return None
