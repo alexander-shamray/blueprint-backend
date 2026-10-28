@@ -75,9 +75,14 @@ registration is silent and the service still reports ready.
 
 ## Batch size against arrival rate
 
-The claim takes `TOP (100)` per pass and the loop ticks twice a second, so one
-replica's ceiling is roughly 200 rows a second **if every delivery succeeds
-immediately**. Compare that with what is arriving:
+The claim takes `OutboxDispatcher.ClaimBatchSize` rows a pass, and while
+claims come back full and delivering, the next pass starts at once rather than
+at the next `PollInterval` tick
+([ADR-163](../backend-architecture/adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md)).
+So under a backlog one replica's ceiling is set by delivery time, not by the
+tick: `Local` rows go one at a time and `Broker` rows up to
+`OutboxDispatcher.BrokerConcurrency` at once. Compare that with what is
+arriving:
 
 ```promql
 deriv(sum by (service_name) (max by (service_name, lane) (outbox_pending_count))[10m:])
@@ -85,8 +90,9 @@ deriv(sum by (service_name) (max by (service_name, lane) (outbox_pending_count))
 
 If arrivals genuinely exceed the drain rate, the fixes in order of preference
 are: add replicas (the claim uses `UPDLOCK, READPAST` precisely so replicas do
-not collide); then raise the batch size; and only then question the tick. Note
-that §9.4 treats the batch size and tick as **constants rather than
+not collide); then raise the batch size or the Broker bound; and only then
+question the tick, which paces only a lane that is not backlogged. Note that
+§9.4 treats the batch size, the bound and the tick as **constants rather than
 configuration** ([§15.4](../backend-architecture/15-cicd-deployment.md)
 argues why), so changing either is a code change and a pull request, not a
 values file.
