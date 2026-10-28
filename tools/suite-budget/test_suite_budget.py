@@ -71,6 +71,7 @@ class Runs(unittest.TestCase):
     def test_a_module_past_its_kill_point_is_stopped_and_named_hung(self):
         result = suite_budget.run(self.directory, "test_sleeping.py", 2, kill_factor=1)
         self.assertEqual(result.verdict, "hung")
+        self.assertGreaterEqual(result.seconds, 2)
         self.assertLess(result.seconds, 30)
 
     def test_a_hung_module_s_own_processes_are_stopped_with_it(self):
@@ -79,6 +80,7 @@ class Runs(unittest.TestCase):
                                                          encoding="utf-8")
         result = suite_budget.run(self.directory, "test_spawning.py", 2, kill_factor=1)
         self.assertEqual(result.verdict, "hung")
+        self.assertGreaterEqual(result.seconds, 2)
         self.assertLess(result.seconds, 6)
         time.sleep(8)
         self.assertFalse(mark.exists(), "the module's grandchild outlived the kill")
