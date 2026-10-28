@@ -176,7 +176,7 @@ public partial class TelemetryVolumeTests
         List<string> first = FirstProcessor().Matches(collector).Select(p => p.Groups["name"].Value).ToList();
         first.Count.ShouldBe(PipelineReceivers().Count(collector), "a pipeline names no processors");
         first.ShouldAllBe(name => name == "memory_limiter");
-        collector.ShouldContain("limit_percentage:");
+        collector.ShouldMatch(@"(?m)^\s+limit_percentage:\s*\d+");
         collector.ShouldNotContain("limit_mib:");
     }
 
