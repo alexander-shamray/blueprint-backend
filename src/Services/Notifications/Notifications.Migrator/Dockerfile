@@ -19,7 +19,14 @@ COPY src/BuildingBlocks/Common.Infrastructure/Common.Infrastructure.csproj src/B
 COPY src/Services/Notifications/Notifications.Application/Notifications.Application.csproj src/Services/Notifications/Notifications.Application/
 COPY src/Services/Notifications/Notifications.Infrastructure/Notifications.Infrastructure.csproj src/Services/Notifications/Notifications.Infrastructure/
 COPY src/Services/Notifications/Notifications.Migrator/Notifications.Migrator.csproj src/Services/Notifications/Notifications.Migrator/
-RUN dotnet restore src/Services/Notifications/Notifications.Migrator/Notifications.Migrator.csproj
+
+# The restores of every image take turns at one NuGet HTTP cache (§15.2), so a
+# full-stack build downloads each package once instead of opening every
+# restore against the feed at once. The packages still land in this layer, so
+# the publish below never reads the mount, and a pruned cache costs a download.
+RUN --mount=type=cache,id=nuget-http-cache,target=/root/.nuget/http-cache,sharing=locked \
+    NUGET_HTTP_CACHE_PATH=/root/.nuget/http-cache \
+    dotnet restore src/Services/Notifications/Notifications.Migrator/Notifications.Migrator.csproj
 
 # .editorconfig is a build input under ADR-019 — without it this publish
 # enforces a weaker style policy than every other build.
