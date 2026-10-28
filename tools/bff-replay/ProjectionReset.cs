@@ -14,8 +14,13 @@ public static class ProjectionReset
 {
     /// <summary>Reads no row, and fails on a missing table or grant: the preflight's question of the BFF.</summary>
     public static readonly string ProbeSql =
-        $"SELECT TOP (0) OrderId FROM [{BffSchema.Name}].Orders; " +
-        $"SELECT TOP (0) MessageId FROM {new InboxTable(BffSchema.Name).QualifiedName};";
+        $"""
+        SELECT TOP (0) OrderId
+        FROM [{BffSchema.Name}].Orders;
+
+        SELECT TOP (0) MessageId
+        FROM {new InboxTable(BffSchema.Name).QualifiedName};
+        """;
 
     /// <summary>Lines first, so the delete is complete without leaning on the foreign key's cascade.</summary>
     public static readonly string Sql =
