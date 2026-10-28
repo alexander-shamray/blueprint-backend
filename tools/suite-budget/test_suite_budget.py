@@ -153,7 +153,9 @@ class TheRealSuite(unittest.TestCase):
 
     def test_each_ceiling_is_twice_its_recorded_figure_rounded_up_to_ten(self):
         text = (suite_budget.ROOT / "docs" / "testing.md").read_text(encoding="utf-8")
-        figures = {m: float(s) for m, s in re.findall(r"`(test_\w+\.py)` \| (\d+\.\d) \|", text)}
+        rows = re.findall(r"`(test\w*\.py)` \| (\d+\.\d) \|", text)
+        figures = {m: float(s) for m, s in rows}
+        self.assertEqual(len(rows), len(figures), "a module has two rows")
         self.assertEqual(set(figures), set(suite_budget.modules(self.directory)))
         for module, seconds in figures.items():
             with self.subTest(module):
