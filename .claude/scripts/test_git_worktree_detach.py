@@ -192,8 +192,8 @@ class StaleSweepWorktrees(unittest.TestCase):
         self.assertEqual("gone", run_bash('[ -e "$P" ] || echo gone', P=old).stdout.strip())
 
     def test_a_stale_worktree_holding_a_file_is_left_standing_and_named(self):
-        # git's refusal to remove a tree holding anything is the guard, and a
-        # sweep that refused its own teardown left it there for inspection.
+        # git's refusal to remove a tree holding anything modified or untracked
+        # is the guard, and a teardown it refused leaves the tree for inspection.
         old = self.made()
         self.assertEqual(0, run_bash('echo x > "$P/kept.txt"', P=old).returncode)
         self.age(old)

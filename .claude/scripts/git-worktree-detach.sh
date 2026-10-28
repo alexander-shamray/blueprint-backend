@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fork the detached, pinned worktree a sweep audits in — /security-sweep or
 # /bug-sweep — `git worktree add --detach <path> <commit>`, once the worktrees
-# interrupted sweeps of this repository left are dropped, and nothing else.
+# interrupted sweeps of this repository left are dropped and the registrations
+# whose directory has gone are pruned, every sweep's or not.
 
 # A prefix grant on `git worktree add` also buys `-B`, which resets an existing
 # branch past the `git branch --force` and `-M` denies, and a prefix rule
@@ -30,8 +31,8 @@ git rev-parse --verify --quiet "$commit^{commit}" >/dev/null ||
 # A sweep stopped before its teardown leaves its worktree registered, and no
 # later run's name meets it again. A day old marks one no sweep still runs in;
 # every candidate goes through git-worktree-drop.sh, whose shape checks and
-# whose refusal of a tree holding anything are the guard, never this list.
-# Registrations whose directory has gone are pruned after.
+# git's refusal of a tree holding anything modified or untracked are the guard,
+# never this list. Registrations whose directory has gone are pruned after.
 registered=$(git worktree list --porcelain)
 while IFS= read -r line; do
   case "$line" in "worktree "*) old=${line#worktree } ;; *) continue ;; esac
