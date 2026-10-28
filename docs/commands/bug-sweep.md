@@ -297,7 +297,7 @@ check both helpers make, and why the prefix is not renamed — is owned by
 that section does not say: the check establishes exclusion, not ownership.
 `git-worktree-detach.sh` mints the path it forks, so the question does not
 arise for that one, but before forking it hands each day-old sweep-shaped
-worktree it never minted to the drop helper, so it meets the question too
+worktree this run did not mint to the drop helper, so it meets the question too
 (`docs/harness-boundaries.md`, *Normalisation, residuals and the sweeps*);
 `git-worktree-drop.sh` accepts any registered worktree of the right
 shape, including one an abandoned sweep left, which is why its refusal reads
