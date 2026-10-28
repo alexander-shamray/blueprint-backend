@@ -10,13 +10,36 @@ export const DEFAULT_STEPS = [10, 50, 100, 200, 400];
 export const DEFAULT_RAMP_SECONDS = 30;
 export const DEFAULT_HOLD_SECONDS = 180;
 
+// The named levels STRESS_PROFILE chooses, each starting where the one below
+// ends, so a level that held says which to run next. Each keeps doubling past
+// its last step up to the cap, so none can end on every step held below it.
+export const LEVELS = {
+    low: [100, 200, 400, 800],
+    medium: [800, 1600, 3200],
+    high: [3200, 6400, 12800],
+    xhigh: [12800],
+};
+export const LEVEL_RAMP_SECONDS = 30;
+export const LEVEL_HOLD_SECONDS = 120;
+
+// k6 starts every VU of the staircase before setup(), about a quarter of a
+// MiB each (710 MiB for 3,000 on 2026-10-28), and setup() makes one Keycloak
+// user per VU. High's top is the most a workstation is asked for by default.
+export const DEFAULT_MAX_USERS = 12800;
+
+export const STOP_RULES = ['knee', 'errors'];
+
+function unset(text) {
+    return text === undefined || text === null || String(text).trim() === '';
+}
+
 /**
  * The step targets from STRESS_STEPS, such as "10,50,100", or the default for
  * an empty value. Refuses anything but rising positive whole numbers, since a
  * falling step would measure the drain of the one before it.
  */
 export function parseSteps(text) {
-    if (text === undefined || text === null || String(text).trim() === '')
+    if (unset(text))
         return [...DEFAULT_STEPS];
 
     const parts = String(text).split(',').map((part) => part.trim());
@@ -31,15 +54,81 @@ export function parseSteps(text) {
     return steps;
 }
 
-/** A whole number of seconds from the environment, or the fallback when unset. */
-export function parseSeconds(text, fallback, name) {
-    if (text === undefined || text === null || String(text).trim() === '')
+function parseWhole(text, fallback, name, unit) {
+    if (unset(text))
         return fallback;
 
     if (!/^\d+$/.test(String(text).trim()) || Number(text) < 1)
-        throw new Error(`${name} must be a positive whole number of seconds, not "${text}"`);
+        throw new Error(`${name} must be a positive whole number of ${unit}, not "${text}"`);
 
     return Number(text);
+}
+
+/** A whole number of seconds from the environment, or the fallback when unset. */
+export function parseSeconds(text, fallback, name) {
+    return parseWhole(text, fallback, name, 'seconds');
+}
+
+/** STRESS_STOP: 'knee' when unset, or one of STOP_RULES. */
+export function parseStop(text) {
+    if (unset(text))
+        return 'knee';
+
+    const rule = String(text).trim().toLowerCase();
+
+    if (!STOP_RULES.includes(rule))
+        throw new Error(`STRESS_STOP must be one of ${STOP_RULES.join(', ')}, not "${text}"`);
+
+    return rule;
+}
+
+/**
+ * The run's staircase from the environment's variables, by name. STRESS_STEPS
+ * is taken as written; a level doubles past its last step while the next stays
+ * within the cap, so `capped` says its top is the cap's and not the level's.
+ * Unset, both are DEFAULT_STEPS. A step above the cap is refused, except a
+ * level's own, which is dropped; a level with none left is refused.
+ */
+export function plan(env) {
+    const level = unset(env.STRESS_PROFILE) ? null : String(env.STRESS_PROFILE).trim().toLowerCase();
+
+    if (level !== null && !Object.hasOwn(LEVELS, level))
+        throw new Error(`STRESS_PROFILE must be one of ${Object.keys(LEVELS).join(', ')}, not "${env.STRESS_PROFILE}"`);
+
+    const maxUsers = parseWhole(env.STRESS_MAX_USERS, DEFAULT_MAX_USERS, 'STRESS_MAX_USERS', 'users');
+    let steps;
+    let capped = false;
+
+    if (!unset(env.STRESS_STEPS)) {
+        steps = parseSteps(env.STRESS_STEPS);
+    } else if (level !== null) {
+        steps = LEVELS[level].filter((vus) => vus <= maxUsers);
+
+        if (steps.length === 0)
+            throw new Error(`STRESS_PROFILE ${level} starts at ${LEVELS[level][0]} users, ` +
+                `above STRESS_MAX_USERS ${maxUsers}: raise it, or choose a lower level`);
+
+        while (steps[steps.length - 1] * 2 <= maxUsers)
+            steps.push(steps[steps.length - 1] * 2);
+
+        capped = true;
+    } else {
+        steps = [...DEFAULT_STEPS];
+    }
+
+    if (steps[steps.length - 1] > maxUsers)
+        throw new Error(`the staircase reaches ${steps[steps.length - 1]} users, above STRESS_MAX_USERS ${maxUsers}`);
+
+    return {
+        level,
+        steps,
+        maxUsers,
+        capped,
+        rampSeconds: parseSeconds(env.STRESS_RAMP_SECONDS,
+            level === null ? DEFAULT_RAMP_SECONDS : LEVEL_RAMP_SECONDS, 'STRESS_RAMP_SECONDS'),
+        holdSeconds: parseSeconds(env.STRESS_HOLD_SECONDS,
+            level === null ? DEFAULT_HOLD_SECONDS : LEVEL_HOLD_SECONDS, 'STRESS_HOLD_SECONDS'),
+    };
 }
 
 /** The staircase as ramping-vus stages: a ramp to each step's VUs, then a hold at them. */

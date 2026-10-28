@@ -1,7 +1,7 @@
-// Samples every container's CPU and memory, and SQL Server's deadlock and
-// wait counters, every few seconds until the stress run writes raw.json, as
-// JSON lines summarise.mjs reads. Both are read from outside the stack, so no
-// exporter is added to the stack it measures.
+// Samples the machine's CPU, every container's CPU and memory, and SQL
+// Server's deadlock and wait counters, every few seconds until the stress run
+// writes raw.json, as JSON lines summarise.mjs reads. All are read from
+// outside the stack, so no exporter is added to the stack it measures.
 //
 //   node deploy/observability/stress/sample.mjs artifacts/stress/<run>
 //
@@ -9,6 +9,7 @@
 // written its results, or after LIMIT_MS should k6 never finish.
 import { execFile } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import os from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { parseCpu, parseMemory } from './report.js';
@@ -82,6 +83,26 @@ async function sql() {
     }
 }
 
+// The machine's own CPU, k6 and Docker's share alike, as the busy share of
+// every processor's time since the last read: report.js's generatorLimit()
+// reads it to tell a saturated workstation from a platform giving out.
+function processorTimes() {
+    return os.cpus().reduce((sum, cpu) => {
+        const { idle, ...busy } = cpu.times;
+        return { idle: sum.idle + idle, total: sum.total + idle + Object.values(busy).reduce((a, b) => a + b, 0) };
+    }, { idle: 0, total: 0 });
+}
+
+let lastTimes = processorTimes();
+
+function hostCpu() {
+    const now = processorTimes();
+    const total = now.total - lastTimes.total;
+    const busy = total - (now.idle - lastTimes.idle);
+    lastTimes = now;
+    return total > 0 ? (busy / total) * 100 : null;
+}
+
 const started = Date.now();
 
 while (!existsSync(DONE) && Date.now() - started < LIMIT_MS) {
@@ -91,6 +112,7 @@ while (!existsSync(DONE) && Date.now() - started < LIMIT_MS) {
     // A failed read is written as one, so a gap in the table says why.
     appendFileSync(SAMPLES, `${JSON.stringify({
         at,
+        host: { cpu: hostCpu() },
         containers: Array.isArray(stats) ? stats : [],
         containersError: Array.isArray(stats) ? undefined : stats.error,
         sql: counters.error ? undefined : counters,

@@ -21,6 +21,19 @@ export const GROWTH_RATIO = 1.5;
 export const OUTBOX_GROWTH_FLOOR_SECONDS = 5;
 export const QUEUE_GROWTH_FLOOR_MESSAGES = 100;
 
+// The backlog readings the knee compares, as Prometheus expressions, so the
+// live stop in stress.js and the summary in summarise.mjs read the same ones.
+export const DEFAULT_PROM_URL = 'http://127.0.0.1:3000/api/datasources/proxy/uid/prometheus';
+export const WORK_FILTER = 'queue!~".+_(error|skipped)"';
+export const WORK_QUEUES = `rabbitmq_queue_messages{${WORK_FILTER}}`;
+export const OUTBOX_OLDEST = 'max(outbox_oldest_age_seconds)';
+export const QUEUED = `sum(${WORK_QUEUES})`;
+
+// THE GENERATOR: k6 shares the machine with the stack, so a step at which the
+// machine's CPU stayed this busy, or k6 ran fewer VUs than the step asked for,
+// measured the workstation rather than the platform.
+export const HOST_CPU_LIMIT = 90;
+
 /** Docker's "12.34%" as a number, or null for a value it could not read ("--"). */
 export function parseCpu(text) {
     const match = /^\s*([\d.]+)\s*%\s*$/.exec(String(text ?? ''));
@@ -60,6 +73,12 @@ export function containerStats(samples, window) {
             memoryPeak: seen.memory.length ? Math.max(...seen.memory) : null,
         }))
         .sort((a, b) => (b.cpuMean ?? -1) - (a.cpuMean ?? -1));
+}
+
+/** The machine's mean CPU, as a percentage of all its processors, over a step, or null. */
+export function hostCpu(samples, window) {
+    const read = within(samples, window).map((sample) => sample.host?.cpu).filter(Number.isFinite);
+    return read.length ? read.reduce((a, b) => a + b, 0) / read.length : null;
 }
 
 /**
@@ -102,12 +121,33 @@ export function clientRow(step, holdSeconds) {
         errorRate: step.failed?.rate ?? 0,
         failures: step.failures ?? {},
         aborted: Boolean(step.aborted),
+        kneeStop: Boolean(step.kneeStop),
+        vusReached: step.vusReached ?? null,
         ops: Object.fromEntries(Object.entries(step.ops ?? {}).map(([op, figures]) =>
             [op, {
                 count: figures.count ?? 0,
                 p95: measured(figures)['p(95)'] ?? null,
                 max: measured(figures).max ?? null,
             }])),
+    };
+}
+
+/**
+ * A step's client half while the run is still going, from k6's REST API
+ * (`GET /v1/metrics`'s `data`), which reports no trend's count, so the
+ * requests are `http_reqs`'. It carries the fields crossings() reads.
+ */
+export function liveRow(hold, metrics) {
+    const sample = (name) =>
+        (metrics ?? []).find((m) => m.id === `${name}{step:${hold.step}}`)?.attributes?.sample ?? {};
+    const requests = sample('http_reqs').count ?? 0;
+
+    return {
+        step: hold.step,
+        vus: hold.vus,
+        requests,
+        p95: requests > 0 ? sample('stress_journey_duration')['p(95)'] ?? null : null,
+        errorRate: sample('stress_failed').rate ?? 0,
     };
 }
 
@@ -167,4 +207,45 @@ export function knee(rows) {
     }
 
     return null;
+}
+
+/** Why a step measured the workstation rather than the platform, or null when it did not. */
+export function generatorLimit(row) {
+    if (row.vusReached > 0 && row.vusReached < row.vus)
+        return `k6 ran ${row.vusReached} of ${row.vus} VUs`;
+
+    if (row.hostCpu >= HOST_CPU_LIMIT)
+        return `the machine's CPU at ${Math.round(row.hostCpu)}% over the hold`;
+
+    return null;
+}
+
+/**
+ * Why the run ended, read at the last step that carried requests: the
+ * generator, when that step measured the workstation, whatever stopped it;
+ * then the knee stop, the error abort, a run cut short with no rule firing,
+ * or the top of a staircase that held, a level's being the cap's.
+ */
+export function ending(rows, plan) {
+    const measured = rows.filter((row) => row.requests > 0);
+    const last = measured[measured.length - 1];
+
+    if (!last)
+        return { reason: 'not measured', step: null, vus: null, detail: null };
+
+    const generator = generatorLimit(last);
+    const reason = generator ? 'generator'
+        : last.kneeStop ? 'knee'
+            : last.aborted ? 'errors'
+                : last.step < rows[rows.length - 1].step ? 'interrupted'
+                    : plan.capped ? 'cap' : 'held';
+
+    return { reason, step: last.step, vus: last.vus, detail: generator };
+}
+
+/** The run's machine-readable `Ended:` line. */
+export function endedLine(ended, plan) {
+    const where = ended.step === null ? '' : ` at step ${ended.step} (${ended.vus} VUs)`;
+    const detail = ended.detail ? `: ${ended.detail}` : '';
+    return `Ended: ${ended.reason}${where}${detail}; level ${plan.level ?? 'none'}, stop rule ${plan.stopRule}`;
 }
