@@ -81,13 +81,17 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         // was, so only the reset can remove these.
         Guid stray = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf) " +
-            "VALUES ({0}, {1}, N'[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf)
+            VALUES ({0}, {1}, N'[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())
+            """,
             stray,
             customer);
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.OrderLines (OrderId, LineNumber, ProductId, Quantity, UnitPrice) " +
-            "VALUES ({0}, 99, {1}, 1, 9.99)",
+            """
+            INSERT INTO bff.OrderLines (OrderId, LineNumber, ProductId, Quantity, UnitPrice)
+            VALUES ({0}, 99, {1}, 1, 9.99)
+            """,
             kept,
             Guid.CreateVersion7());
 

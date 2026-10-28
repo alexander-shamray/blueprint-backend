@@ -264,8 +264,11 @@ public sealed class ServiceFixture()
     /// <summary>Stamps a live tracking lease on every pollable row, so a second pass meets a row in flight.</summary>
     public Task ClaimForTrackingAsync() =>
         ExecuteAsync(
-            "UPDATE shipping.Shipments SET LockedUntil = DATEADD(second, {0}, SYSDATETIMEOFFSET()) " +
-            "WHERE Status IN ('Booked', 'Dispatched');",
+            """
+            UPDATE shipping.Shipments
+            SET LockedUntil = DATEADD(second, {0}, SYSDATETIMEOFFSET())
+            WHERE Status IN ('Booked', 'Dispatched');
+            """,
             TrackingWorker.LeaseSeconds);
 
     /// <summary>The same, under the fulfilment worker's lease and over its populations.</summary>
@@ -282,8 +285,11 @@ public sealed class ServiceFixture()
     /// <summary>Lapses every held lease, as a killed replica leaves it, not the NULL a release writes.</summary>
     public Task ExpireLeasesAsync() =>
         ExecuteAsync(
-            "UPDATE shipping.Shipments SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
-            "WHERE LockedUntil IS NOT NULL;");
+            """
+            UPDATE shipping.Shipments
+            SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET())
+            WHERE LockedUntil IS NOT NULL;
+            """);
 
     /// <summary>Stamps a cancellation request without asking the carrier, so the row is due to both workers.</summary>
     public Task RequestCancellationAsync(ShipmentId id) =>

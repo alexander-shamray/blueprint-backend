@@ -10,12 +10,16 @@ namespace Privacy.Api.Tests;
 public sealed class ErasureRequestIndexTests(ServiceFixture fixture) : IAsyncLifetime
 {
     private const string InsertSql =
-        "INSERT INTO privacy.ErasureRequests (RequestId, SubjectId, Status, RaisedAt, DueAt, RespondersCsv) " +
-        "VALUES ({0}, {1}, 'Open', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), 'ordering')";
+        """
+        INSERT INTO privacy.ErasureRequests (RequestId, SubjectId, Status, RaisedAt, DueAt, RespondersCsv)
+        VALUES ({0}, {1}, 'Open', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), 'ordering')
+        """;
 
     private const string InsertWithoutSubjectSql =
-        "INSERT INTO privacy.ErasureRequests (RequestId, SubjectId, Status, RaisedAt, DueAt, RespondersCsv) " +
-        "VALUES ({0}, NULL, 'Open', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), 'ordering')";
+        """
+        INSERT INTO privacy.ErasureRequests (RequestId, SubjectId, Status, RaisedAt, DueAt, RespondersCsv)
+        VALUES ({0}, NULL, 'Open', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), 'ordering')
+        """;
 
     public ValueTask InitializeAsync() => new(fixture.ResetAsync());
 

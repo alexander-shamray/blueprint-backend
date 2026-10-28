@@ -67,8 +67,10 @@ public sealed class StockContractVerificationTests(ServiceFixture fixture) : IAs
 
             // Reserved above zero on every row, so a flag read off the gross count would fail the contract.
             await fixture.ExecuteAsync(
-                "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
-                "VALUES ({0}, {1}, 3, SYSDATETIMEOFFSET())",
+                """
+                INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt)
+                VALUES ({0}, {1}, 3, SYSDATETIMEOFFSET())
+                """,
                 id,
                 stock.Available);
 

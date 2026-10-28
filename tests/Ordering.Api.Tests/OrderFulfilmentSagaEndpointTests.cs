@@ -139,8 +139,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
         // the ladder's last rung; so the wait runs from the cancellation to the end of the ladder.
         await Eventually(
             () => fixture.ScalarAsync<string>(
-                "SELECT Value = CurrentState FROM ordering.OrderFulfilmentStates " +
-                "WHERE CorrelationId = {0}",
+                "SELECT Value = CurrentState FROM ordering.OrderFulfilmentStates WHERE CorrelationId = {0}",
                 orderId),
             expected: "Compensating",
             because: "a retried delivery has to correlate to the instance the " +
@@ -166,8 +165,11 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
 
         await Eventually(
             () => fixture.ScalarAsync<int>(
-                "SELECT Value = CAST(CancellationObserved AS int) " +
-                "FROM ordering.OrderFulfilmentStates WHERE CorrelationId = {0}",
+                """
+                SELECT Value = CAST(CancellationObserved AS int)
+                FROM ordering.OrderFulfilmentStates
+                WHERE CorrelationId = {0}
+                """,
                 orderId),
             expected: 1,
             because: "the recording branch has to reach the COLUMN, which is the " +
@@ -185,8 +187,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
                 "handled");
 
         (await fixture.ScalarAsync<string>(
-            "SELECT Value = CurrentState FROM ordering.OrderFulfilmentStates " +
-            "WHERE CorrelationId = {0}",
+            "SELECT Value = CurrentState FROM ordering.OrderFulfilmentStates WHERE CorrelationId = {0}",
             orderId))
             .ShouldBe(
                 "AwaitingStock",

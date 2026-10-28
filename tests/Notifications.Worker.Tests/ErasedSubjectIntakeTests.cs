@@ -155,8 +155,10 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         if (closedAt is { } closed)
         {
             await fixture.ExecuteAsync(
-                "INSERT INTO notifications.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt) " +
-                "VALUES ({0}, {1}, 0, {2}, {3})",
+                """
+                INSERT INTO notifications.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt)
+                VALUES ({0}, {1}, 0, {2}, {3})
+                """,
                 request,
                 PersonalDataErasure.HashSubject(request, subject),
                 erasedAt,
@@ -166,8 +168,10 @@ public sealed class ErasedSubjectIntakeTests(ServiceFixture fixture) : IAsyncLif
         }
 
         await fixture.ExecuteAsync(
-            "INSERT INTO notifications.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt) " +
-            "VALUES ({0}, {1}, 0, {2})",
+            """
+            INSERT INTO notifications.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt)
+            VALUES ({0}, {1}, 0, {2})
+            """,
             request,
             PersonalDataErasure.HashSubject(request, subject),
             erasedAt);

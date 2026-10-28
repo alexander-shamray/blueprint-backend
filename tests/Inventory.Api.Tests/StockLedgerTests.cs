@@ -33,8 +33,10 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
 
     private Task Seed(Guid product, int available, int reserved = 0) =>
         fixture.ExecuteAsync(
-            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
-            "VALUES ({0}, {1}, {2}, SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt)
+            VALUES ({0}, {1}, {2}, SYSDATETIMEOFFSET())
+            """,
             product,
             available,
             reserved);
@@ -78,8 +80,7 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         var a = Guid.CreateVersion7();
         DateTimeOffset future = DateTimeOffset.UtcNow.AddHours(1);
         await fixture.ExecuteAsync(
-            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
-            "VALUES ({0}, 5, 0, {1})",
+            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) VALUES ({0}, 5, 0, {1})",
             a,
             future);
 

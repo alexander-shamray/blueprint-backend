@@ -367,8 +367,11 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         fixture.ContactAnswers(customer, Mailbox, "en");
         Notification owed = await OwedAsync(order, customer);
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             owed.NotificationId);
 
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1), "a lease in the past is no lease");
@@ -386,8 +389,11 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
         SendWork lapsed = (await claims.ClaimAsync(mailParked: false, Ct)).ShouldHaveSingleItem();
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             owed.NotificationId);
 
         // A real reclaim comes a lease later; two claims in one engine tick would set equal leases, indistinguishable.
@@ -553,8 +559,11 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         // A later pass first, past any lease the stopped one held, so a row the drain left Pending is sent again here
         // and caught by the claim count and the relay's second message, rather than by the status alone.
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             owed.NotificationId);
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(0, 0), "nothing is left for a later pass to send");
         (await fixture.Relay.SingleAsync(Ct)).ShouldNotBeNull("the relay holds the one message, never a second");

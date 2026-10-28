@@ -73,9 +73,20 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
         await FanOutAsync();
 
         await Should.ThrowAsync<Microsoft.Data.SqlClient.SqlException>(() => fixture.ExecuteAsync(
-            "INSERT notifications.PushDeliveries (DeliveryId, NotificationId, InstallationId, Platform, Status, " +
-            "CreatedAt, Attempts, NextAttemptAt, CorrelationId) VALUES (NEWID(), {0}, {1}, 'fcm', 'Pending', " +
-            "SYSDATETIMEOFFSET(), 0, SYSDATETIMEOFFSET(), NEWID());",
+            """
+            INSERT notifications.PushDeliveries (
+                DeliveryId,
+                NotificationId,
+                InstallationId,
+                Platform,
+                Status,
+                CreatedAt,
+                Attempts,
+                NextAttemptAt,
+                CorrelationId
+            )
+            VALUES (NEWID(), {0}, {1}, 'fcm', 'Pending', SYSDATETIMEOFFSET(), 0, SYSDATETIMEOFFSET(), NEWID());
+            """,
             notice.NotificationId,
             phone));
     }
@@ -285,8 +296,11 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
         await RegisterAsync(customer, ApnsPushProvider.Name, "device-tablet");
         await FanOutAsync();
         await fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET CompletedAt = DATEADD(day, -2000, SYSDATETIMEOFFSET()) " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET CompletedAt = DATEADD(day, -2000, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             notice.NotificationId);
 
         (await fixture.PurgeNotificationsRetentionAsync()).Notifications.ShouldBe(0);
@@ -298,8 +312,11 @@ public sealed class PushDeliveryTests(ServiceFixture fixture, PushSimulator simu
             "ADR-053 rule 4's window runs from the send's own end, not from the fan-out");
 
         await fixture.ExecuteAsync(
-            "UPDATE notifications.PushDeliveries SET CompletedAt = DATEADD(day, -1999, SYSDATETIMEOFFSET()) " +
-            "WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.PushDeliveries
+            SET CompletedAt = DATEADD(day, -1999, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             notice.NotificationId);
         (await fixture.PurgeNotificationsRetentionAsync()).Notifications.ShouldBe(1, "its last delivery is past it");
         (await DeliveriesAsync(notice.NotificationId)).ShouldBeEmpty("the ended delivery ages with its notice");

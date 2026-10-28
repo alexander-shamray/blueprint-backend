@@ -37,8 +37,10 @@ internal static class ReservationTestSupport
 
     public static Task SeedStock(ServiceFixture fixture, Guid product, int available) =>
         fixture.ExecuteAsync(
-            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
-            "VALUES ({0}, {1}, 0, SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt)
+            VALUES ({0}, {1}, 0, SYSDATETIMEOFFSET())
+            """,
             product,
             available);
 

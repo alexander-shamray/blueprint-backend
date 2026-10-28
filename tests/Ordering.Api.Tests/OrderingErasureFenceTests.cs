@@ -155,8 +155,9 @@ public sealed class OrderingErasureFenceTests(ServiceFixture fixture) : IAsyncLi
         await using DbTransaction held = await holder.BeginTransactionAsync(ct);
         await holder.ExecuteAsync(
             new CommandDefinition(
-                "EXEC sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', " +
-                "@LockTimeout = 0",
+                """
+                EXEC sp_getapplock @Resource = @r, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 0
+                """,
                 new { r = $"ordering.erasure.subject.{Subject:N}" },
                 held,
                 cancellationToken: ct));
@@ -240,8 +241,10 @@ public sealed class OrderingErasureFenceTests(ServiceFixture fixture) : IAsyncLi
     {
         Guid product = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO ordering.ProductPrices (ProductId, Currency, Amount, IsAvailable, UpdatedAt) " +
-            "VALUES ({0}, 'EUR', 19.99, 1, SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO ordering.ProductPrices (ProductId, Currency, Amount, IsAvailable, UpdatedAt)
+            VALUES ({0}, 'EUR', 19.99, 1, SYSDATETIMEOFFSET())
+            """,
             product);
 
         return product;

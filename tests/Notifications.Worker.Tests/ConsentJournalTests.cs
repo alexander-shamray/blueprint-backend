@@ -64,8 +64,10 @@ public sealed class ConsentJournalTests(ServiceFixture fixture) : IAsyncLifetime
     // Every entry and stamp moved back by more than the invented window, so only the rule decides what goes.
     private Task AgeJournalAsync() =>
         fixture.ExecuteAsync(
-            "UPDATE notifications.ConsentEntries SET WrittenAt = DATEADD(day, -2000, WrittenAt), " +
-            "AnonymisedAt = DATEADD(day, -2000, AnonymisedAt);");
+            """
+            UPDATE notifications.ConsentEntries
+            SET WrittenAt = DATEADD(day, -2000, WrittenAt), AnonymisedAt = DATEADD(day, -2000, AnonymisedAt);
+            """);
 
     [Fact]
     public async Task A_first_write_appends_and_its_repeat_is_answered_as_it_was()

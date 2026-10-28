@@ -270,16 +270,30 @@ public sealed class OrderingErasureEndpointTests(ServiceFixture fixture) : IAsyn
 
     private async Task SeedOrderAsync(Guid order, Guid customer) =>
         await fixture.ExecuteAsync(
-            "INSERT INTO ordering.Orders (Id, CustomerId, Status, PlacedAt, Currency, ShipToLine1, ShipToLine2, " +
-            "ShipToCity, ShipToPostalCode, ShipToCountry) " +
-            "VALUES ({0}, {1}, 'Placed', SYSDATETIMEOFFSET(), 'EUR', '1 Rue Exemple', 'Apt 2', 'Paris', '75001', 'FR')",
+            """
+            INSERT INTO ordering.Orders (
+                Id,
+                CustomerId,
+                Status,
+                PlacedAt,
+                Currency,
+                ShipToLine1,
+                ShipToLine2,
+                ShipToCity,
+                ShipToPostalCode,
+                ShipToCountry
+            )
+            VALUES ({0}, {1}, 'Placed', SYSDATETIMEOFFSET(), 'EUR', '1 Rue Exemple', 'Apt 2', 'Paris', '75001', 'FR')
+            """,
             order,
             customer);
 
     private async Task SeedSummaryAsync(Guid order, Guid customer, bool counted) =>
         await fixture.ExecuteAsync(
-            "INSERT INTO ordering.OrderSummaries (OrderId, Status, UpdatedAt, CustomerId, PlacedCounted) " +
-            "VALUES ({0}, 'Placed', SYSDATETIMEOFFSET(), {1}, {2})",
+            """
+            INSERT INTO ordering.OrderSummaries (OrderId, Status, UpdatedAt, CustomerId, PlacedCounted)
+            VALUES ({0}, 'Placed', SYSDATETIMEOFFSET(), {1}, {2})
+            """,
             order,
             customer,
             counted ? 1 : 0);

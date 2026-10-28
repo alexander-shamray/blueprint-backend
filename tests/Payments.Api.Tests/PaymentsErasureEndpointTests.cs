@@ -197,8 +197,10 @@ public sealed class PaymentsErasureEndpointTests(ServiceFixture fixture) : IAsyn
 
     private async Task SeedOrderAsync(Guid order, Guid customer) =>
         await fixture.ExecuteAsync(
-            "INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt) " +
-            "VALUES ({0}, {1}, 42.10, 'EUR', SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt)
+            VALUES ({0}, {1}, 42.10, 'EUR', SYSDATETIMEOFFSET())
+            """,
             order,
             customer);
 

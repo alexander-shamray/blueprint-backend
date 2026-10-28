@@ -53,8 +53,10 @@ public sealed class StockServiceTests(ServiceFixture fixture) : IAsyncLifetime
     {
         Guid product = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
-            "VALUES ({0}, 0, 4, SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt)
+            VALUES ({0}, 0, 4, SYSDATETIMEOFFSET())
+            """,
             product);
 
         GetAvailabilityReply reply = await Ask(product);

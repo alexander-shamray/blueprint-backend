@@ -240,8 +240,11 @@ internal static class JourneyReads
         // One statement, so a release between two reads cannot show stock in two places at once.
         string[] stock = [.. (await world.ColumnAsync(
             JourneyWorld.Inventory,
-            "SELECT CAST(Available AS varchar(11)) + ',' + CAST(Reserved AS varchar(11)) " +
-            "FROM inventory.StockItems WHERE ProductId = @p0",
+            """
+            SELECT CAST(Available AS varchar(11)) + ',' + CAST(Reserved AS varchar(11))
+            FROM inventory.StockItems
+            WHERE ProductId = @p0
+            """,
             order.Product)).SelectMany(row => row.Split(','))];
 
         int available = stock.Length == 2 ? int.Parse(stock[0], CultureInfo.InvariantCulture) : 0;

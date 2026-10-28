@@ -45,8 +45,10 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
         using HttpClient client = Admin();
         var product = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
-            "VALUES ({0}, 1, 4, SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt)
+            VALUES ({0}, 1, 4, SYSDATETIMEOFFSET())
+            """,
             product);
 
         HttpResponseMessage put = await client.PutAsJsonAsync(

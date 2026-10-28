@@ -107,14 +107,18 @@ public sealed class BffErasureFenceTests(BffServiceFixture fixture) : IAsyncLife
         Guid erased = Guid.CreateVersion7();
 
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf) " +
-            "VALUES ({0}, {1}, {2}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf)
+            VALUES ({0}, {1}, {2}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())
+            """,
             kept,
             Subject,
             $"[\"{request}\"]");
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf) " +
-            "VALUES ({0}, {1}, N'[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf)
+            VALUES ({0}, {1}, N'[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())
+            """,
             erased,
             Subject);
 
@@ -157,8 +161,10 @@ public sealed class BffErasureFenceTests(BffServiceFixture fixture) : IAsyncLife
     {
         Guid request = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt) " +
-            "VALUES ({0}, {1}, 0, {2}, {3})",
+            """
+            INSERT INTO bff.PersonalDataErasures (RequestId, SubjectHash, Count, ErasedAt, ClosedAt)
+            VALUES ({0}, {1}, 0, {2}, {3})
+            """,
             request,
             PersonalDataErasure.HashSubject(request, Subject),
             DateTimeOffset.UtcNow - closedAgo,
@@ -207,8 +213,10 @@ public sealed class BffErasureFenceTests(BffServiceFixture fixture) : IAsyncLife
         RecordedReports reports = new();
 
         await fixture.ExecuteAsync(
-            "INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf) " +
-            "VALUES ({0}, {1}, N'[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())",
+            """
+            INSERT INTO bff.Orders (OrderId, CustomerId, ErasedUnder, FirstSeenAt, AsOf)
+            VALUES ({0}, {1}, N'[]', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())
+            """,
             Guid.CreateVersion7(),
             Subject);
 

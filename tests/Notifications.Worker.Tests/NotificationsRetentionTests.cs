@@ -146,8 +146,11 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
 
     private Task EndAsync(Notification notification, TimeSpan ago) =>
         fixture.ExecuteAsync(
-            "UPDATE notifications.NotificationLog SET Status = 'Sent', " +
-            "CompletedAt = DATEADD(minute, -{1}, SYSDATETIMEOFFSET()) WHERE NotificationId = {0};",
+            """
+            UPDATE notifications.NotificationLog
+            SET Status = 'Sent', CompletedAt = DATEADD(minute, -{1}, SYSDATETIMEOFFSET())
+            WHERE NotificationId = {0};
+            """,
             notification.NotificationId,
             (int)ago.TotalMinutes);
 
@@ -161,8 +164,11 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
         Guid order = Guid.CreateVersion7();
         await fixture.OrderAsync(order, customer);
         await fixture.ExecuteAsync(
-            "UPDATE notifications.OrderRecords SET RecordedAt = DATEADD(day, -72, SYSDATETIMEOFFSET()) " +
-            "WHERE OrderId = {0};",
+            """
+            UPDATE notifications.OrderRecords
+            SET RecordedAt = DATEADD(day, -72, SYSDATETIMEOFFSET())
+            WHERE OrderId = {0};
+            """,
             order);
 
         await using NotificationsDbContext erasing = new(
@@ -207,8 +213,11 @@ public sealed class NotificationsRetentionTests(ServiceFixture fixture) : IAsync
         Guid order = Guid.CreateVersion7();
         await fixture.OrderAsync(order, Guid.CreateVersion7());
         await fixture.ExecuteAsync(
-            "UPDATE notifications.OrderRecords SET RecordedAt = DATEADD(minute, -{1}, SYSDATETIMEOFFSET()) " +
-            "WHERE OrderId = {0};",
+            """
+            UPDATE notifications.OrderRecords
+            SET RecordedAt = DATEADD(minute, -{1}, SYSDATETIMEOFFSET())
+            WHERE OrderId = {0};
+            """,
             order,
             (int)ago.TotalMinutes);
 

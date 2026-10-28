@@ -145,8 +145,11 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
 
             // Spread, so least recently seen is one row and not a tie: the first is the oldest by i hours.
             await fixture.ExecuteAsync(
-                "UPDATE notifications.DeviceInstallations SET LastSeenAt = DATEADD(hour, {0}, LastSeenAt) " +
-                "WHERE InstallationId = {1}",
+                """
+                UPDATE notifications.DeviceInstallations
+                SET LastSeenAt = DATEADD(hour, {0}, LastSeenAt)
+                WHERE InstallationId = {1}
+                """,
                 i - installations.Length,
                 installations[i]);
         }
@@ -332,12 +335,18 @@ public sealed class DeviceRegistrationTests(ServiceFixture fixture) : IAsyncLife
         await RegisterAsync(Guid.CreateVersion7(), stale, "token-a", 1);
         await RegisterAsync(Guid.CreateVersion7(), fresher, "token-b", 1);
         await fixture.ExecuteAsync(
-            "UPDATE notifications.DeviceInstallations SET LastSeenAt = DATEADD(day, -31, LastSeenAt) " +
-            "WHERE InstallationId = {0}",
+            """
+            UPDATE notifications.DeviceInstallations
+            SET LastSeenAt = DATEADD(day, -31, LastSeenAt)
+            WHERE InstallationId = {0}
+            """,
             stale);
         await fixture.ExecuteAsync(
-            "UPDATE notifications.DeviceInstallations SET LastSeenAt = DATEADD(day, -29, LastSeenAt) " +
-            "WHERE InstallationId = {0}",
+            """
+            UPDATE notifications.DeviceInstallations
+            SET LastSeenAt = DATEADD(day, -29, LastSeenAt)
+            WHERE InstallationId = {0}
+            """,
             fresher);
 
         (_, _, _, int devices, _) = await fixture.PurgeNotificationsRetentionAsync();
