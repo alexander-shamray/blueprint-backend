@@ -23,7 +23,8 @@ internal sealed class PushDevices(IDbConnectionFactory connections, Notification
         $"""
         SELECT {Columns}
         FROM notifications.DeviceInstallations
-        WHERE SubjectId = @SubjectId AND Token IS NOT NULL
+        WHERE SubjectId = @SubjectId
+            AND Token IS NOT NULL
         ORDER BY InstallationId;
         """;
 

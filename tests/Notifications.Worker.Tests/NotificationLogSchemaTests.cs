@@ -108,7 +108,9 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
             """
             SELECT Value = IS_NULLABLE
             FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = 'notifications' AND TABLE_NAME = 'NotificationLog' AND COLUMN_NAME = 'RowVersion'
+            WHERE TABLE_SCHEMA = 'notifications'
+                AND TABLE_NAME = 'NotificationLog'
+                AND COLUMN_NAME = 'RowVersion'
             """))
             .ShouldBe("NO");
     }

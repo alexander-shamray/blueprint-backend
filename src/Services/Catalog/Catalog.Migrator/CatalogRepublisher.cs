@@ -113,7 +113,8 @@ public sealed class CatalogRepublisher(
             FROM (
                 SELECT MessageId = NEWID(), Id, Name, ThumbnailUrl, PriceAmount, PriceCurrency, PublishedAt
                 FROM catalog.Products
-                WHERE {all} = 1 OR Id = {id}
+                WHERE {all} = 1
+                    OR Id = {id}
             ) AS p;
             """,
             ct);
@@ -144,7 +145,9 @@ public sealed class CatalogRepublisher(
             FROM (
                 SELECT MessageId = NEWID(), Id, PriceAmount, PriceCurrency, LastEventAt
                 FROM catalog.Products
-                WHERE ({all} = 1 OR Id = {id}) AND WithdrawnAt IS NULL AND LastEventAt > PublishedAt
+                WHERE ({all} = 1 OR Id = {id})
+                    AND WithdrawnAt IS NULL
+                    AND LastEventAt > PublishedAt
             ) AS p;
             """,
             ct);
@@ -172,7 +175,8 @@ public sealed class CatalogRepublisher(
             FROM (
                 SELECT MessageId = NEWID(), Id, WithdrawnAt
                 FROM catalog.Products
-                WHERE ({all} = 1 OR Id = {id}) AND WithdrawnAt IS NOT NULL
+                WHERE ({all} = 1 OR Id = {id})
+                    AND WithdrawnAt IS NOT NULL
             ) AS p;
             """,
             ct);

@@ -35,8 +35,12 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
         BEGIN
             IF @Sequence = @Current
             BEGIN
-                IF EXISTS (SELECT 1 FROM @Row WHERE SubjectId = @SubjectId AND Platform = @Platform
-                    AND AppId = @AppId AND Token = @Token)
+                IF EXISTS (
+                    SELECT 1 FROM @Row
+                    WHERE SubjectId = @SubjectId
+                        AND Platform = @Platform
+                        AND AppId = @AppId
+                        AND Token = @Token)
                     SELECT 'Repeated' AS Outcome, @Current AS Sequence;
                 ELSE
                     SELECT 'Stale' AS Outcome, @Current AS Sequence;
@@ -51,7 +55,10 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
 
         UPDATE notifications.DeviceInstallations WITH (UPDLOCK, HOLDLOCK)
         SET {Cleared}
-        WHERE Platform = @Platform AND AppId = @AppId AND Token = @Token AND InstallationId <> @InstallationId;
+        WHERE Platform = @Platform
+            AND AppId = @AppId
+            AND Token = @Token
+            AND InstallationId <> @InstallationId;
 
         IF @Current IS NULL
             INSERT notifications.DeviceInstallations
@@ -60,8 +67,12 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
         ELSE
             UPDATE notifications.DeviceInstallations
             SET RegisteredAt = CASE
-                    WHEN RegisteredAt IS NOT NULL AND SubjectId = @SubjectId AND Platform = @Platform
-                        AND AppId = @AppId AND Token = @Token THEN RegisteredAt
+                    WHEN RegisteredAt IS NOT NULL
+                        AND SubjectId = @SubjectId
+                        AND Platform = @Platform
+                        AND AppId = @AppId
+                        AND Token = @Token
+                        THEN RegisteredAt
                     ELSE @Now
                 END,
                 SubjectId = @SubjectId, Platform = @Platform, AppId = @AppId, Token = @Token,

@@ -43,7 +43,8 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
             INNER JOIN sys.columns c
                 ON c.object_id = ic.object_id
                 AND c.column_id = ic.column_id
-            WHERE i.object_id = OBJECT_ID({0}) AND i.name = {1}
+            WHERE i.object_id = OBJECT_ID({0})
+                AND i.name = {1}
             """,
             qualified,
             index)).ShouldBe(column);
@@ -67,7 +68,9 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
             INNER JOIN sys.columns c
                 ON c.object_id = ic.object_id
                 AND c.column_id = ic.column_id
-            WHERE i.name = 'IX_NotificationLog_SendClaim' AND ic.is_included_column = 1 AND c.name = 'LockedUntil'
+            WHERE i.name = 'IX_NotificationLog_SendClaim'
+                AND ic.is_included_column = 1
+                AND c.name = 'LockedUntil'
             """)).ShouldBe(1);
     }
 }

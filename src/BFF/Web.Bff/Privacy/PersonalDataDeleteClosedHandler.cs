@@ -15,7 +15,8 @@ public sealed class PersonalDataDeleteClosedHandler(IDbConnectionFactory connect
         """
         UPDATE bff.PersonalDataErasures
         SET ClosedAt = @ClosedAt
-        WHERE RequestId = @RequestId AND ClosedAt IS NULL;
+        WHERE RequestId = @RequestId
+            AND ClosedAt IS NULL;
         """;
 
     public async Task HandleAsync(PersonalDataDeleteClosed integrationEvent, CancellationToken ct)

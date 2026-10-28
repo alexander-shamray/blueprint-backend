@@ -56,7 +56,9 @@ internal sealed class SendClaims(IDbConnectionFactory connections, IOptions<Send
                               THEN {OutboxDispatcher.BackoffAttemptCap}
                               ELSE Attempts END) * {OutboxDispatcher.BackoffBaseSeconds},
                 SYSDATETIMEOFFSET())
-        WHERE NotificationId = @NotificationId AND Status = 'Pending' AND LockedUntil = @Lease;
+        WHERE NotificationId = @NotificationId
+            AND Status = 'Pending'
+            AND LockedUntil = @Lease;
         """;
 
     /// <summary>Leases due notices; with <paramref name="mailParked"/>, push notices alone.</summary>

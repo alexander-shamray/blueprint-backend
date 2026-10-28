@@ -51,7 +51,8 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections, IOption
                               THEN {OutboxDispatcher.BackoffAttemptCap}
                               ELSE Attempts END) * {OutboxDispatcher.BackoffBaseSeconds},
                 SYSDATETIMEOFFSET())
-        WHERE Id = @Id AND LockedUntil = @Lease;
+        WHERE Id = @Id
+            AND LockedUntil = @Lease;
         """;
 
     public async Task<IReadOnlyList<FulfilmentWork>> ClaimAsync(CancellationToken ct)

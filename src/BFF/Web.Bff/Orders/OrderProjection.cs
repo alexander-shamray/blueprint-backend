@@ -63,11 +63,13 @@ public sealed class OrderProjection(
         INSERT INTO bff.ErasedOrders (OrderId, ErasedAt)
         SELECT o.OrderId, @Now
         FROM bff.Orders AS o
-        WHERE o.OrderId = @OrderId AND o.CustomerId = @CustomerId
+        WHERE o.OrderId = @OrderId
+            AND o.CustomerId = @CustomerId
             AND NOT EXISTS (SELECT 1 FROM bff.ErasedOrders AS e WHERE e.OrderId = o.OrderId);
 
         DELETE FROM bff.Orders
-        WHERE OrderId = @OrderId AND CustomerId = @CustomerId;
+        WHERE OrderId = @OrderId
+            AND CustomerId = @CustomerId;
 
         COMMIT;
         """;
@@ -80,7 +82,8 @@ public sealed class OrderProjection(
         """
         IF EXISTS (SELECT 1 FROM bff.ErasedOrders WHERE OrderId = @OrderId)
             DELETE FROM bff.Orders
-            WHERE OrderId = @OrderId AND CustomerId IS NULL;
+            WHERE OrderId = @OrderId
+                AND CustomerId IS NULL;
         """;
 
     private const string PlacedSql =

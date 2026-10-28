@@ -82,7 +82,8 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
             """
             SELECT Value = filter_definition
             FROM sys.indexes
-            WHERE object_id = OBJECT_ID('shipping.Shipments') AND name = {0}
+            WHERE object_id = OBJECT_ID('shipping.Shipments')
+                AND name = {0}
             """,
             index);
 
@@ -120,7 +121,8 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
             INNER JOIN sys.index_columns ic
                 ON ic.object_id = i.object_id
                 AND ic.index_id = i.index_id
-            WHERE i.object_id = OBJECT_ID('shipping.TrackingEvents') AND i.is_primary_key = 1
+            WHERE i.object_id = OBJECT_ID('shipping.TrackingEvents')
+                AND i.is_primary_key = 1
             """))
             .ShouldBe(2, "the key is the pair, so a repeated page is free");
     }
@@ -135,7 +137,8 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
             """
             SELECT Value = collation_name
             FROM sys.columns
-            WHERE object_id = OBJECT_ID('shipping.TrackingEvents') AND name = 'CarrierEventId'
+            WHERE object_id = OBJECT_ID('shipping.TrackingEvents')
+                AND name = 'CarrierEventId'
             """))
             .ShouldBe("Latin1_General_BIN2");
 

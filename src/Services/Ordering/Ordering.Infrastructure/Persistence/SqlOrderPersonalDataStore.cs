@@ -34,7 +34,8 @@ internal sealed class SqlOrderPersonalDataStore(OrderingDbContext db) : IOrderPe
                 SELECT 1
                 FROM ordering.Orders AS o
                 CROSS APPLY OPENJSON(o.ErasedUnder) AS u
-                WHERE o.Id = s.OrderId AND u.value = @RequestId);
+                WHERE o.Id = s.OrderId
+                    AND u.value = @RequestId);
         """;
 
     public Task<int> AnonymiseOrdersAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>
