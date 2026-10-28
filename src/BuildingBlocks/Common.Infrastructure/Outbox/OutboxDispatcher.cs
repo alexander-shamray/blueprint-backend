@@ -107,7 +107,8 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
             UPDATE outbox
             SET ProcessedAt = SYSDATETIMEOFFSET(), LockedUntil = NULL
             FROM {table.QualifiedName} AS outbox
-            JOIN OPENJSON(@Ids) WITH (Id BIGINT '$') AS delivered ON delivered.Id = outbox.Id;
+            INNER JOIN OPENJSON(@Ids) WITH (Id BIGINT '$') AS delivered
+                ON delivered.Id = outbox.Id;
             """;
 
         // Backs off by pushing the lease forward, which makes the cap reachable.
