@@ -349,9 +349,9 @@ export function givingUpStep(rows, found) {
     return rows.find((row) => row.aborted)?.step ?? found?.step ?? null;
 }
 
-// Infinity less Infinity is NaN, so two outright refusals are compared as a tie.
+// Infinity less Infinity is NaN, which sort() reads as a tie.
 function furthest(a, b) {
-    return a.past === b.past ? 0 : b.past - a.past;
+    return b.past - a.past;
 }
 
 /**
