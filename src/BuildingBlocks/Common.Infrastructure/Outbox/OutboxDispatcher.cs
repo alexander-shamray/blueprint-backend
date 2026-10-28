@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
 using System.Text.Json;
@@ -25,6 +26,9 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
 
     /// <summary>How many rows one claim leases, public so §13.6's runbook sizes this number, not a copy.</summary>
     public const int ClaimBatchSize = 100;
+
+    /// <summary>How many Broker rows a pass publishes at once; Local rows go one at a time (ADR-163).</summary>
+    public const int BrokerConcurrency = 8;
 
     /// <summary>A claim's lease: longer than a slow batch, short enough for a killed replica.</summary>
     public const int LeaseSeconds = 60;
@@ -64,6 +68,9 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
     private readonly string _claimSql;
     private readonly string _completeSql;
     private readonly string _failSql;
+
+    // Written by the timer's pass alone, never by ProcessBatchAsync, which tests run side by side.
+    private bool _passFilled;
 
     public OutboxDispatcher(
         IServiceScopeFactory scopes,
@@ -132,12 +139,24 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
 
     protected override TimeSpan PassInterval => PollInterval;
 
-    protected override Task RunPassAsync(CancellationToken stoppingToken) => ProcessBatchAsync(stoppingToken);
+    protected override bool PassFilled => _passFilled;
+
+    protected override async Task RunPassAsync(CancellationToken stoppingToken)
+    {
+        _passFilled = false;
+
+        (int claimed, int delivered) = await PassAsync(stoppingToken);
+
+        // A full claim says more rows wait; one that delivered nothing waits the poll out as its backoff (ADR-163).
+        _passFilled = claimed == ClaimBatchSize && delivered > 0;
+    }
 
     protected override void OnPassFailed(Exception exception) => ClaimFailed(_log, exception);
 
     /// <summary>One claim-and-deliver pass, public so tests drive it rather than race a timer (§12.4).</summary>
-    public async Task<int> ProcessBatchAsync(CancellationToken ct)
+    public async Task<int> ProcessBatchAsync(CancellationToken ct) => (await PassAsync(ct)).Delivered;
+
+    private async Task<(int Claimed, int Delivered)> PassAsync(CancellationToken ct)
     {
         // The claim's scope holds only the connection, which outlives the per-row delivery scopes.
         await using AsyncServiceScope claimScope = _scopes.CreateAsyncScope();
@@ -152,16 +171,16 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 new CommandDefinition(_claimSql, new { MaxAttempts }, cancellationToken: ct))
         ];
 
-        List<long> delivered = new(claimed.Count);
+        ConcurrentQueue<long> delivered = new();
 
         try
         {
-            await DeliverEachAsync(connection, claimed, delivered, ct);
+            await DeliverAllAsync(connection, claimed, delivered, ct);
         }
         finally
         {
             // Under no token, so a stopped pass still completes the rows it delivered (ADR-161).
-            if (delivered.Count > 0)
+            if (!delivered.IsEmpty)
             {
                 await connection.ExecuteAsync(
                     new CommandDefinition(
@@ -171,41 +190,82 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
             }
         }
 
-        return delivered.Count;
+        return (claimed.Count, delivered.Count);
     }
 
-    private async Task DeliverEachAsync(
+    private async Task DeliverAllAsync(
         IDbConnection connection,
         List<OutboxClaim> claimed,
-        List<long> delivered,
+        ConcurrentQueue<long> delivered,
         CancellationToken ct)
     {
-        foreach (OutboxClaim message in claimed)
+        // The rows share the claim's connection, which runs one command at a time, so their fail statements queue.
+        using SemaphoreSlim writes = new(1, 1);
+
+        ParallelOptions broker = new() { MaxDegreeOfParallelism = BrokerConcurrency, CancellationToken = ct };
+
+        // A publish is a round trip that waits on nothing else, so Broker rows overlap; Local rows stay serial, as
+        // two projections writing one read table at once is the deadlock ProjectionInvoker avoids (ADR-163).
+        await Task.WhenAll(
+            Parallel.ForEachAsync(
+                claimed.Where(IsBroker),
+                broker,
+                async (message, _) => await DeliverOneAsync(connection, writes, message, delivered, ct)),
+            DeliverSeriallyAsync(connection, writes, [.. claimed.Where(m => !IsBroker(m))], delivered, ct));
+    }
+
+    private static bool IsBroker(OutboxClaim message) => message.Lane == nameof(OutboxLane.Broker);
+
+    private async Task DeliverSeriallyAsync(
+        IDbConnection connection,
+        SemaphoreSlim writes,
+        List<OutboxClaim> rows,
+        ConcurrentQueue<long> delivered,
+        CancellationToken ct)
+    {
+        foreach (OutboxClaim message in rows)
+            await DeliverOneAsync(connection, writes, message, delivered, ct);
+    }
+
+    private async Task DeliverOneAsync(
+        IDbConnection connection,
+        SemaphoreSlim writes,
+        OutboxClaim message,
+        ConcurrentQueue<long> delivered,
+        CancellationToken ct)
+    {
+        // A child of the trace that staged the row, so MassTransit's publish, and the consumer it propagates to,
+        // join that trace rather than starting one here (§9.4). A row with no context starts its own.
+        ActivityContext staging = new StagedTrace(message.TraceParent, message.TraceState).ToParent();
+        using Activity? span = Deliveries.StartActivity("outbox deliver", ActivityKind.Internal, staging);
+        span?.SetTag("messaging.message.id", message.MessageId);
+
+        try
         {
-            // A child of the trace that staged the row, so MassTransit's publish, and the consumer it propagates
-            // to, join that trace rather than starting one here (§9.4). A row with no context starts its own.
-            ActivityContext staging = new StagedTrace(message.TraceParent, message.TraceState).ToParent();
-            using Activity? span = Deliveries.StartActivity("outbox deliver", ActivityKind.Internal, staging);
-            span?.SetTag("messaging.message.id", message.MessageId);
+            // A scope per row, so a handler that throws cannot hand the next row its half-mutated state.
+            await using AsyncServiceScope delivery = _scopes.CreateAsyncScope();
+
+            await DeliverAsync(delivery.ServiceProvider, message, ct);
+            delivered.Enqueue(message.Id);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            span?.SetStatus(ActivityStatusCode.Error);
+
+            // One bad message does not affect the rest; the token, not the type, as above.
+            await writes.WaitAsync(ct);
 
             try
             {
-                // A scope per row, so a handler that throws cannot hand the next row its half-mutated state.
-                await using AsyncServiceScope delivery = _scopes.CreateAsyncScope();
-
-                await DeliverAsync(delivery.ServiceProvider, message, ct);
-                delivered.Add(message.Id);
-            }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
-            {
-                span?.SetStatus(ActivityStatusCode.Error);
-
-                // One bad message does not affect the rest; the token, not the type, as above.
                 await connection.ExecuteAsync(
                     new CommandDefinition(_failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
-
-                DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
             }
+            finally
+            {
+                writes.Release();
+            }
+
+            DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
         }
     }
 

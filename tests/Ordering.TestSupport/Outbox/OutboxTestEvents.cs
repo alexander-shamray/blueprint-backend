@@ -77,3 +77,54 @@ public sealed class NoOpProjection : IProjectionHandler<NoOpEvent>
 {
     public Task HandleAsync(NoOpEvent domainEvent, CancellationToken ct) => Task.CompletedTask;
 }
+
+/// <summary>Held a moment by <see cref="OverlapProjection"/>, so rows delivered side by side overlap.</summary>
+public sealed record CountsOverlap : IDomainEvent
+{
+    public DateTimeOffset OccurredAt { get; init; }
+}
+
+/// <summary>The most <see cref="CountsOverlap"/> rows ever in delivery at once; static, as the gate is.</summary>
+public static class Overlap
+{
+    private static readonly Lock Gate = new();
+    private static int _inFlight;
+    private static int _most;
+
+    public static int Most
+    {
+        get
+        {
+            lock (Gate)
+                return _most;
+        }
+    }
+
+    public static void Reset()
+    {
+        lock (Gate)
+            (_inFlight, _most) = (0, 0);
+    }
+
+    internal static async Task HoldAsync(CancellationToken ct)
+    {
+        lock (Gate)
+            _most = Math.Max(_most, ++_inFlight);
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(50), ct);
+        }
+        finally
+        {
+            lock (Gate)
+                _inFlight--;
+        }
+    }
+}
+
+/// <summary>Counts how many of its rows are in delivery at once.</summary>
+public sealed class OverlapProjection : IProjectionHandler<CountsOverlap>
+{
+    public Task HandleAsync(CountsOverlap domainEvent, CancellationToken ct) => Overlap.HoldAsync(ct);
+}

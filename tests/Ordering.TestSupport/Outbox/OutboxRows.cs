@@ -25,6 +25,10 @@ public static class OutboxRows
     public static OutboxMessage Blocking(ServiceFixture fixture) =>
         Local(new BlocksUntilReleased { OccurredAt = Raised }, fixture);
 
+    /// <summary>A row whose handler counts how many of its kind are in delivery at once.</summary>
+    public static OutboxMessage Overlapping(ServiceFixture fixture) =>
+        Local(new CountsOverlap { OccurredAt = Raised }, fixture);
+
     /// <summary>A Broker-lane row carrying a real contract.</summary>
     /// <remarks>Not <c>OrderPlaced</c>, which would start §9.6's saga beside the test.</remarks>
     public static OutboxMessage Broker(ServiceFixture fixture, Guid orderId) =>
