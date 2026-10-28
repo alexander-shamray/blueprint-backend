@@ -153,9 +153,9 @@ for path in "${verdicts[@]}"; do
   for re in "${patterns[@]}"; do
     if grep -Eq "$re" <<<"$path"; then verdict=inside; break; fi
   done
-  # The class is judged first, because no row may declare a path its class
-  # does not admit: `outside-class` is resolved by a different class, and
-  # `outside` by a narrower diff or a wider row.
+  # The class's verdict overrides the row's, because no row may declare a path
+  # its class does not admit: `outside-class` is resolved by a narrower diff or
+  # a different class, and `outside` by a narrower diff or a wider row.
   in_class=no
   for re in "${class_patterns[@]}"; do
     if grep -Eq "$re" <<<"$path"; then in_class=yes; break; fi
