@@ -1377,6 +1377,16 @@ the shape check that stops a poisoned finding from naming a PR worktree
 and having it deleted. Renaming the prefix would have to move in both helpers
 and every caller at once, so it stands; what is lost is attribution.
 
+**A sweep's start also drops what an interrupted sweep left.** Before it
+forks, `git-worktree-detach.sh` hands each sweep-shaped worktree this
+repository has registered, and that is over a day old, to
+`git-worktree-drop.sh`, then runs `git worktree prune`. The candidates come
+from git's own list, never from the tree or an argument, so a poisoned
+finding cannot add one; the drop helper's shape checks and git's refusal of a
+tree holding anything still decide, so a worktree a refused teardown left for
+inspection stays. The day stands in for "no sweep still runs there", which no
+helper can ask; a sweep running that long would lose its worktree mid-round.
+
 **Both sweeps now write two things besides their issues and their worktree.**
 `sweep-slices.sh` writes its slice lists to the worktree's path plus
 `.slices`, a name it derives from the same checked shape rather than takes,
