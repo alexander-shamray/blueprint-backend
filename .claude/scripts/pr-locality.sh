@@ -82,8 +82,9 @@ for item in "${items[@]}"; do
   # dropped above before the boundary was judged.
   patterns+=("$(to_regex "$t")")
 done
-# The class's tree set, read from the map the CI gate reads, in the one shape
-# that file may take; a map that is absent, short or malformed refuses the
+# The class's tree set, from this checkout's copy of the map CI reads out of the
+# base commit, so a pull request that edits the map is judged here by its own
+# copy; in the one shape it may take, a map absent, short or malformed refuses the
 # run, because a verdict judged against no tree set reads `inside` throughout.
 map="$(dirname "${BASH_SOURCE[0]}")/../../.github/locality-gate/classes.yml"
 [ -r "$map" ] || refuse "the class map .github/locality-gate/classes.yml cannot be read"

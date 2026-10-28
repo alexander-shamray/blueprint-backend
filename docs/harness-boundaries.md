@@ -945,9 +945,12 @@ where the path is the diff's own and the word is the script's:
 `outside-class` when the class's tree set does not admit it, whatever the
 touch set says, since no row may declare what its class does not admit;
 otherwise `outside` when the touch set does not, and `inside` when both
-do. The tree set is read from
-`.github/locality-gate/classes.yml`, the map the CI gate reads, so the
-round's verdict is the gate's; #1545's review rounds read `inside` for a
+do. The tree set is read from this checkout's
+`.github/locality-gate/classes.yml`, the map the CI gate reads out of the
+base commit, so the round's verdict is the gate's for every pull request
+that leaves the map alone; one that edits it is judged here by its own copy
+and in CI by the base's, which is how the gate stops a pull request
+widening its own class. #1545's review rounds read `inside` for a
 runbook that a Class C PR's widened row admitted and its class did not, and
 CI was the first to refuse it. A pull request author is not a
 trusted party, and a path grammar cannot keep prose out of a cell —
