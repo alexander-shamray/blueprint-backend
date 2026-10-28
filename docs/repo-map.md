@@ -313,6 +313,10 @@ tools/remove-service/        the scaffold's inverse: deletes a service and
                              reverts the splices tools/new-service made, then
                              lists what still names it; its suite renders a
                              service, removes it and compares the tree
+tools/suite-budget/          the review helpers' suite run a module at a
+                             time against a ceiling each, on Windows, where
+                             CI's Linux job cannot time it; stdlib Python
+                             with a suite, for docs/testing.md
 tools/token-usage/           Claude Code's recorded token usage per command
                              and agent type, from local transcripts; stdlib
                              Python with a suite, for docs/token-plan.md
