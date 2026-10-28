@@ -18,8 +18,10 @@ public sealed class GetPaymentHandler(IDbConnectionFactory connections)
                i.Status, i.Reference, i.Amount, i.Currency, i.DeclineReason, i.CreatedAt,
                r.Reference AS RefundReference, r.VoidedAt
         FROM payments.PaymentOrders o
-        LEFT JOIN payments.PaymentIntents i ON i.OrderId = o.OrderId
-        LEFT JOIN payments.Refunds r ON r.OrderId = o.OrderId
+        LEFT JOIN payments.PaymentIntents i
+            ON i.OrderId = o.OrderId
+        LEFT JOIN payments.Refunds r
+            ON r.OrderId = o.OrderId
         WHERE o.OrderId = @OrderId;
         """;
 

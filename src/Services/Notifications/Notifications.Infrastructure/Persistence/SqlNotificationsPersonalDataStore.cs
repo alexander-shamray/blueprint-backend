@@ -124,7 +124,8 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         """
         DELETE d
         FROM notifications.PushDeliveries AS d
-        JOIN notifications.NotificationLog AS n ON n.NotificationId = d.NotificationId
+        INNER JOIN notifications.NotificationLog AS n
+            ON n.NotificationId = d.NotificationId
         WHERE d.Status = 'Pending' AND n.OrderId = @OrderId;
         """;
 
@@ -133,7 +134,8 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         UPDATE d
         SET CustomerId = NULL, Languages = NULL
         FROM notifications.PushDeliveries AS d
-        JOIN notifications.NotificationLog AS n ON n.NotificationId = d.NotificationId
+        INNER JOIN notifications.NotificationLog AS n
+            ON n.NotificationId = d.NotificationId
         WHERE d.Status <> 'Pending' AND n.OrderId = @OrderId;
         """;
 

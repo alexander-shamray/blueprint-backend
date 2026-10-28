@@ -40,7 +40,8 @@ internal sealed class NotificationStats(IDbConnectionFactory connections) : INot
                 ELSE '{WaitingSteps.Contact}'
             END AS Step
             FROM notifications.NotificationLog n
-            LEFT JOIN notifications.OrderRecords r ON r.OrderId = n.OrderId
+            LEFT JOIN notifications.OrderRecords r
+                ON r.OrderId = n.OrderId
             WHERE n.Status = 'Pending' AND n.Attempts > 0
             UNION ALL
             SELECT CASE d.Platform

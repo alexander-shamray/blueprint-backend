@@ -26,7 +26,8 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
             PublishedAt       = p.PublishedAt,
             QuantityAvailable = s.QuantityAvailable
         FROM catalog.Products p
-        LEFT JOIN catalog.StockLevels s ON s.ProductId = p.Id
+        LEFT JOIN catalog.StockLevels s
+            ON s.ProductId = p.Id
         WHERE p.WithdrawnAt IS NULL
           AND (@Pattern IS NULL OR p.Name LIKE @Pattern ESCAPE '\')
         """;

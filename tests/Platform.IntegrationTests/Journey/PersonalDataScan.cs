@@ -26,8 +26,13 @@ internal static class PersonalDataScan
         {
             IReadOnlyList<string> tables = await world.ColumnAsync(
                 database,
-                "SELECT QUOTENAME(s.name) + '.' + QUOTENAME(t.name) FROM sys.tables t " +
-                "JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE t.is_ms_shipped = 0");
+                """
+                SELECT QUOTENAME(s.name) + '.' + QUOTENAME(t.name)
+                FROM sys.tables t
+                INNER JOIN sys.schemas s
+                    ON s.schema_id = t.schema_id
+                WHERE t.is_ms_shipped = 0
+                """);
 
             foreach (string table in tables)
             {

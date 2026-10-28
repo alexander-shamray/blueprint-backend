@@ -37,8 +37,12 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
             SELECT Value = c.name
             FROM sys.indexes i
             INNER JOIN sys.index_columns ic
-                ON ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.key_ordinal = 1
-            INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+                ON ic.object_id = i.object_id
+                AND ic.index_id = i.index_id
+                AND ic.key_ordinal = 1
+            INNER JOIN sys.columns c
+                ON c.object_id = ic.object_id
+                AND c.column_id = ic.column_id
             WHERE i.object_id = OBJECT_ID({0}) AND i.name = {1}
             """,
             qualified,
@@ -57,8 +61,12 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
             """
             SELECT Value = COUNT(*)
             FROM sys.indexes i
-            INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
-            INNER JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+            INNER JOIN sys.index_columns ic
+                ON ic.object_id = i.object_id
+                AND ic.index_id = i.index_id
+            INNER JOIN sys.columns c
+                ON c.object_id = ic.object_id
+                AND c.column_id = ic.column_id
             WHERE i.name = 'IX_NotificationLog_SendClaim' AND ic.is_included_column = 1 AND c.name = 'LockedUntil'
             """)).ShouldBe(1);
     }

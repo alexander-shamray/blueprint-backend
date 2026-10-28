@@ -37,7 +37,8 @@ public sealed class OrderReader(IDbConnectionFactory connections)
         FROM bff.OrderLines l
         INNER JOIN OPENJSON(@OrderIds) j
             ON l.OrderId = CAST(j.value AS uniqueidentifier)
-        LEFT JOIN bff.Products p ON p.ProductId = l.ProductId;
+        LEFT JOIN bff.Products p
+            ON p.ProductId = l.ProductId;
         """;
 
     /// <summary>The row and its lines, each filtered on id and customer, so another's order reads as none.</summary>
@@ -49,8 +50,11 @@ public sealed class OrderReader(IDbConnectionFactory connections)
 
         SELECT l.OrderId, l.LineNumber, l.ProductId, l.Quantity, l.UnitPrice, ProductName = p.Name
         FROM bff.OrderLines l
-        INNER JOIN bff.Orders o ON o.OrderId = l.OrderId AND o.CustomerId = @CustomerId
-        LEFT JOIN bff.Products p ON p.ProductId = l.ProductId
+        INNER JOIN bff.Orders o
+            ON o.OrderId = l.OrderId
+            AND o.CustomerId = @CustomerId
+        LEFT JOIN bff.Products p
+            ON p.ProductId = l.ProductId
         WHERE l.OrderId = @OrderId;
         """;
 

@@ -42,7 +42,8 @@ internal sealed class SqlShippingPersonalDataStore(ShippingDbContext db, IDbConn
         UPDATE s
         SET ErasedUnder = N'[]'
         FROM shipping.Shipments AS s
-        JOIN shipping.DeliveryAddresses AS a ON a.OrderId = s.OrderId
+        INNER JOIN shipping.DeliveryAddresses AS a
+            ON a.OrderId = s.OrderId
         WHERE a.CustomerId = @SubjectId
             AND NOT {PlacedUnder};
         """;

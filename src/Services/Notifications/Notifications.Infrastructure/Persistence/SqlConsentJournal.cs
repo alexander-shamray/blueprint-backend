@@ -79,7 +79,8 @@ internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnection
                 THEN 'Repeated' ELSE 'PreconditionFailed' END AS Outcome,
             n.EntryId, n.OptedIn, n.WrittenAt, n.Client, n.Supersedes
         FROM (SELECT 1 AS One) AS one
-        LEFT JOIN @Newest AS n ON 1 = 1;
+        LEFT JOIN @Newest AS n
+            ON 1 = 1;
         """;
 
     public async Task<IReadOnlyList<ConsentEntry>> NewestAsync(Guid subjectId, CancellationToken ct)
