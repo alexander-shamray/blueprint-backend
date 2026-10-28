@@ -29,16 +29,16 @@ internal sealed class NotificationStats(IDbConnectionFactory connections) : INot
     // notice's contact. A delivery waits on its platform's provider (the push design's section 4).
     private static readonly string WaitingSql =
         $"""
-        SELECT Step, COUNT(*) AS Waiting
+        SELECT Step, Waiting = COUNT(*)
         FROM (
-            SELECT CASE
+            SELECT Step = CASE
                 WHEN n.SendStartedAt IS NOT NULL THEN '{WaitingSteps.Relay}'
                 WHEN r.OrderId IS NULL
                     OR (n.TemplateKey = '{TemplateKeys.PaymentDeclined}' AND r.CancelledAt IS NULL)
                     THEN '{WaitingSteps.OrderRecord}'
                 WHEN n.Channel = '{ConsentVocabulary.Push}' THEN '{WaitingSteps.Devices}'
                 ELSE '{WaitingSteps.Contact}'
-            END AS Step
+            END
             FROM notifications.NotificationLog n
             LEFT JOIN notifications.OrderRecords r
                 ON r.OrderId = n.OrderId
@@ -61,7 +61,7 @@ internal sealed class NotificationStats(IDbConnectionFactory connections) : INot
         $"""
         SELECT DATEDIFF_BIG(millisecond, MIN(Due), SYSDATETIMEOFFSET()) / 1000.0
         FROM (
-            SELECT NextAttemptAt AS Due FROM notifications.NotificationLog WHERE {SendClaims.Claimable}
+            SELECT Due = NextAttemptAt FROM notifications.NotificationLog WHERE {SendClaims.Claimable}
             UNION ALL
             SELECT NextAttemptAt FROM notifications.PushDeliveries WHERE {PushClaims.Claimable}
         ) due;

@@ -41,14 +41,14 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
                         AND Platform = @Platform
                         AND AppId = @AppId
                         AND Token = @Token)
-                    SELECT 'Repeated' AS Outcome, @Current AS Sequence;
+                    SELECT Outcome = 'Repeated', Sequence = @Current;
                 ELSE
-                    SELECT 'Stale' AS Outcome, @Current AS Sequence;
+                    SELECT Outcome = 'Stale', Sequence = @Current;
                 RETURN;
             END;
             IF @Sequence < @Current OR @Sequence - @Current > @MaxSequenceStep
             BEGIN
-                SELECT 'Stale' AS Outcome, @Current AS Sequence;
+                SELECT Outcome = 'Stale', Sequence = @Current;
                 RETURN;
             END;
         END;
@@ -88,7 +88,7 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
             ORDER BY LastSeenAt DESC, InstallationId
             OFFSET @MaxPerSubject ROWS);
 
-        SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
+        SELECT Outcome = 'Applied', Sequence = @Sequence;
         """;
 
     private const string SignOutSql =
@@ -101,20 +101,20 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
         -- No row, or another subject's live one: a DELETE clears only the caller's (ADR-117), so nothing is written.
         IF @Current IS NULL OR @Owner <> @SubjectId
         BEGIN
-            SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
+            SELECT Outcome = 'Applied', Sequence = @Sequence;
             RETURN;
         END;
 
         -- A cleared row is ordered as any row is, and its equal sequence is the repeat.
         IF @Owner IS NULL AND @Sequence = @Current
         BEGIN
-            SELECT 'Repeated' AS Outcome, @Current AS Sequence;
+            SELECT Outcome = 'Repeated', Sequence = @Current;
             RETURN;
         END;
 
         IF @Sequence <= @Current OR @Sequence - @Current > @MaxSequenceStep
         BEGIN
-            SELECT 'Stale' AS Outcome, @Current AS Sequence;
+            SELECT Outcome = 'Stale', Sequence = @Current;
             RETURN;
         END;
 
@@ -130,7 +130,7 @@ internal sealed class SqlDeviceStore(NotificationsDbContext db, DeviceTokenOptio
             SET {Cleared}, Sequence = @Sequence, LastSeenAt = @Now
             WHERE InstallationId = @InstallationId;
 
-        SELECT 'Applied' AS Outcome, @Sequence AS Sequence;
+        SELECT Outcome = 'Applied', Sequence = @Sequence;
         """;
 
     public Task<DeviceWrite> RegisterAsync(

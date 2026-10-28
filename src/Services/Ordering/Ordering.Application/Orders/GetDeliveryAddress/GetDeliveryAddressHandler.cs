@@ -12,12 +12,13 @@ public sealed class GetDeliveryAddressHandler(IDbConnectionFactory connections)
     // Compared as text, since §7.2 persists the status by name.
     private const string Sql =
         """
-        SELECT o.CustomerId,
-               o.ShipToLine1 AS Line1,
-               o.ShipToLine2 AS Line2,
-               o.ShipToCity AS City,
-               o.ShipToPostalCode AS PostalCode,
-               o.ShipToCountry AS Country
+        SELECT
+            CustomerId = o.CustomerId,
+            Line1      = o.ShipToLine1,
+            Line2      = o.ShipToLine2,
+            City       = o.ShipToCity,
+            PostalCode = o.ShipToPostalCode,
+            Country    = o.ShipToCountry
         FROM ordering.Orders o
         WHERE o.Id = @OrderId
             AND o.Status <> 'Cancelled';

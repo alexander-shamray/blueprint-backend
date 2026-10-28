@@ -30,7 +30,7 @@ internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnection
 
     private const string NewestSql =
         $"""
-        SELECT e.EntryId, e.Topic, e.Channel, e.OptedIn, e.WrittenAt, e.Client, e.SupersedesEntryId AS Supersedes
+        SELECT e.EntryId, e.Topic, e.Channel, e.OptedIn, e.WrittenAt, e.Client, Supersedes = e.SupersedesEntryId
         FROM notifications.ConsentEntries e
         WHERE e.SubjectId = @SubjectId
             AND {Newest};
@@ -38,7 +38,7 @@ internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnection
 
     private const string NewestOfPairSql =
         $"""
-        SELECT e.EntryId, e.Topic, e.Channel, e.OptedIn, e.WrittenAt, e.Client, e.SupersedesEntryId AS Supersedes
+        SELECT e.EntryId, e.Topic, e.Channel, e.OptedIn, e.WrittenAt, e.Client, Supersedes = e.SupersedesEntryId
         FROM notifications.ConsentEntries e
         WHERE e.SubjectId = @SubjectId
             AND e.Topic = @Topic
@@ -76,18 +76,26 @@ internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnection
             VALUES (@EntryId, @SubjectId, @Topic, @Channel, @OptedIn, @Now, @Client, @ReadVersion, @Position,
                 @ErasedUnder);
 
-            SELECT 'Appended' AS Outcome, @EntryId AS EntryId, @OptedIn AS OptedIn, @Now AS WrittenAt,
-                @Client AS Client, @ReadVersion AS Supersedes;
+            SELECT
+                Outcome    = 'Appended',
+                EntryId    = @EntryId,
+                OptedIn    = @OptedIn,
+                WrittenAt  = @Now,
+                Client     = @Client,
+                Supersedes = @ReadVersion;
             RETURN;
         END;
 
         -- A repeat holds the value asked for and supersedes what the request read; anything else lost the race.
         SELECT
-            CASE WHEN n.OptedIn = @OptedIn
+            Outcome = CASE
+                WHEN n.OptedIn = @OptedIn
                     AND (n.Supersedes = @ReadVersion OR (n.Supersedes IS NULL AND @ReadVersion IS NULL))
-                THEN 'Repeated' ELSE 'PreconditionFailed' END AS Outcome,
+                    THEN 'Repeated'
+                ELSE 'PreconditionFailed'
+            END,
             n.EntryId, n.OptedIn, n.WrittenAt, n.Client, n.Supersedes
-        FROM (SELECT 1 AS One) AS one
+        FROM (SELECT One = 1) AS one
         LEFT JOIN @Newest AS n
             ON 1 = 1;
         """;
