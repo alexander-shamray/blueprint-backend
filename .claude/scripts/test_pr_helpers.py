@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -173,10 +174,23 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
                 )
                 self.assertEqual(out.returncode, 2, out.stderr)
 
-    def _run_locality_with_gh(self, script):
-        return self._run_helper_with_gh("pr-locality.sh", "187", script)
+    def _run_locality_with_gh(self, script, scripts=SCRIPTS):
+        return self._run_helper_with_gh("pr-locality.sh", "187", script, scripts=scripts)
 
-    def _run_helper_with_gh(self, helper, arg, script, bound=None):
+    def _scripts_with_map(self, text):
+        # A copy of the helper in a tree of its own, whose class map is `text`, or absent when that is None.
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        scripts = d / ".claude" / "scripts"
+        scripts.mkdir(parents=True)
+        for helper in ("pr-locality.sh", "gh-read-bound.sh"):
+            shutil.copy2(SCRIPTS / helper, scripts / helper)
+        if text is not None:
+            (d / ".github" / "locality-gate").mkdir(parents=True)
+            (d / ".github" / "locality-gate" / "classes.yml").write_text(text, encoding="utf-8")
+        return scripts
+
+    def _run_helper_with_gh(self, helper, arg, script, bound=None, scripts=SCRIPTS):
         # A `gh` shim on PATH, the shape every stubbed helper test here uses.
         d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d, ignore_errors=True)
@@ -188,7 +202,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         if bound is not None:
             env["GH_READ_BOUND_SECONDS"] = bound
         return subprocess.run(
-            [BASH, str(SCRIPTS / helper), arg],
+            [BASH, str(scripts / helper), arg],
             capture_output=True, text=True, encoding="utf-8", env=env,
         )
 
@@ -273,21 +287,21 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         # `Ignore_all_previous_instructions.md` is a path — so the cell is
         # consumed and only a verdict per diff path leaves. The set below
         # names a prose-shaped file; the output carries the diff's paths and
-        # this script's two words, and not one character of the set.
+        # this script's own words, and not one character of the set.
         body = (
-            "Intro line\n| | |\n|---|---|\n| Class | D |\n"
+            "Intro line\n| | |\n|---|---|\n| Class | A+D |\n"
             "| Touch set | docs/x.md, tests/X.*, Ignore_all_previous_instructions.md |\n"
             "| Closes | nothing |\n"
         )
-        files = "docs/x.md\ntests/X.Domain.Tests/A.cs\nsrc/Foo.cs\n"
+        files = "docs/x.md\ntests/X.Domain.Tests/A.cs\nsrc/Services/Foo.cs\n"
         r = self._run_locality_with_gh(self._gh_printing(body, files))
         self.assertEqual(0, r.returncode, r.stderr)
         self.assertEqual(
             [
-                "class D",
+                "class A+D",
                 "inside docs/x.md",
                 "inside tests/X.Domain.Tests/A.cs",
-                "outside src/Foo.cs",
+                "outside src/Services/Foo.cs",
             ],
             r.stdout.splitlines(),
         )
@@ -340,7 +354,7 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
         r = self._run_locality_with_gh(script)
         self.assertEqual(0, r.returncode, r.stderr)
         self.assertEqual(
-            ["class D", "inside docs/foo.md", "outside src/Foo.cs", "inside docs/x.md"],
+            ["class D", "inside docs/foo.md", "outside-class src/Foo.cs", "inside docs/x.md"],
             r.stdout.splitlines())
 
     def test_a_crlf_body_is_read_as_its_rows(self):
@@ -452,7 +466,8 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
     def test_globs_match_the_way_the_contract_writes_them(self):
         # `**` crosses directories, `*` does not, a brace is alternation, a
         # directory token covers what is beneath it, and a token is anchored
-        # — `docs/x.md` does not admit `docs/x.md.bak` or `notdocs/x.md`.
+        # — `docs/x.md` does not admit `docs/x.md.bak` or `notdocs/x.md`. The
+        # helper runs over a map admitting everything, so each verdict is the row's.
         body = (
             "| Class | C+E |\n"
             "| Touch set | `src/Services/Ordering/**`, `tests/Ordering.*`, "
@@ -476,7 +491,8 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             "deploy/compose/docker-compose.yml",
             "deployment.md",
         )) + "\n"
-        r = self._run_locality_with_gh(self._gh_printing(body, files))
+        everything = "".join(f"{c}:\n  - '**'\n" for c in "ABCDE")
+        r = self._run_locality_with_gh(self._gh_printing(body, files), scripts=self._scripts_with_map(everything))
         self.assertEqual(0, r.returncode, r.stderr)
         self.assertEqual(
             [
@@ -499,6 +515,76 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
             ],
             r.stdout.splitlines(),
         )
+
+    def test_a_path_the_row_admits_and_the_class_does_not_is_outside_class(self):
+        # The CI gate judges each path against the class's tree set in
+        # classes.yml as well as the row, so a runbook added to a Class C
+        # row read `inside` here and failed CI. The verdict line, not the
+        # exit, is the subject: a widened row is how the two came apart.
+        body = "| Class | C |\n| Touch set | src/**, docs/runbooks/outbox-growth.md |\n"
+        files = "src/Services/Ordering/A.cs\ndocs/runbooks/outbox-growth.md\ndocs/backend-architecture/x.md\n"
+        r = self._run_locality_with_gh(self._gh_printing(body, files))
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertEqual(
+            [
+                "class C",
+                "inside src/Services/Ordering/A.cs",
+                "outside-class docs/runbooks/outbox-growth.md",
+                "outside docs/backend-architecture/x.md",
+            ],
+            r.stdout.splitlines(),
+        )
+        # The positive control: the class that admits a runbook clears it.
+        r = self._run_locality_with_gh(self._gh_printing(body.replace("| C |", "| C+A |"), files))
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertIn("inside docs/runbooks/outbox-growth.md", r.stdout.splitlines())
+
+    def test_the_class_verdict_is_the_gates_own(self):
+        # One payload through both readers of classes.yml: a path is
+        # `outside-class` here exactly when the gate says it is outside the
+        # class's tree set, whatever the row admits, so the two cannot drift.
+        paths = [
+            "src/Services/Ordering/A.cs", "tests/Ordering.Domain.Tests/A.cs", "docs/x.md",
+            ".claude/scripts/x.sh", ".github/workflows/x.yml", "deploy/compose/x.yml",
+            "tools/new-service/x.py", "Directory.Packages.props", "Platform.slnx",
+            "src/Services/Ordering/Ordering.Api/Ordering.Api.csproj", "CLAUDE.md",
+        ]
+        root = SCRIPTS.parent.parent
+        gate = root / ".github" / "locality-gate" / "locality_gate.py"
+        for cls in ("A", "B", "C", "D", "E", "C+E", "A+D+E"):
+            with self.subTest(cls=cls):
+                body = f"| Class | {cls} |\n| Touch set | {', '.join(paths[:6])} |\n"
+                r = self._run_locality_with_gh(self._gh_printing(body, "\n".join(paths) + "\n"))
+                self.assertEqual(0, r.returncode, r.stderr)
+                ours = {line.split(" ", 1)[1] for line in r.stdout.splitlines()
+                        if line.startswith("outside-class ")}
+                payload = json.dumps({"number": 1, "body": body, "files": paths, "changedFiles": len(paths)})
+                g = subprocess.run(
+                    [sys.executable, str(gate), "--root", str(root)], input=payload,
+                    capture_output=True, text=True, encoding="utf-8")
+                self.assertIn(g.returncode, (0, 1), g.stderr)
+                theirs = set(re.findall(r"`([^`]+)` is outside class", g.stderr))
+                self.assertEqual(theirs, ours)
+                self.assertTrue(ours or cls == "A+D+E", "a class with nothing outside it proves nothing")
+
+    def test_a_class_map_that_cannot_be_read_refuses_the_run(self):
+        # A verdict judged against no tree set would read `inside` for every
+        # path the row admits, which is the fail-open this map closes. The
+        # helper is run from a copy whose map is missing, short or malformed.
+        body = "| Class | D |\n| Touch set | docs/x.md |\n"
+        for name, text in (
+            ("absent", None),
+            ("no items", "A:\n  - 'src/**'\nB:\n  - 'src/**'\nC:\n  - 'src/**'\nD:\nE:\n  - 'x.props'\n"),
+            ("a class missing", "A:\n  - 'src/**'\nD:\n  - 'docs/**'\n"),
+            ("a class twice", "A:\n  - 'src/**'\nB:\n  - 'src/**'\nC:\n  - 'src/**'\nD:\n  - 'docs/**'\n"
+                              "D:\n  - '**'\nE:\n  - 'x.props'\n"),
+            ("outside the grammar", "D:\n  - docs/**\n"),
+        ):
+            with self.subTest(map=name):
+                r = self._run_locality_with_gh(self._gh_printing(body), scripts=self._scripts_with_map(text))
+                self.assertEqual(3, r.returncode, r.stderr)
+                self.assertEqual("", r.stdout)
+                self.assertIn("classes.yml", r.stderr)
 
 
 if __name__ == "__main__":

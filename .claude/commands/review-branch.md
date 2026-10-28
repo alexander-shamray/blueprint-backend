@@ -39,10 +39,12 @@ never style taste. Prefer:
    service names, healthchecks).
 5. **Incomplete reconciliation**: a rule or fix this change states that the
    corpus still violates in the same change set.
-6. **A file outside the declared touch set**: each `outside <path>` line of
+6. **A file outside the declared touch set**: each `outside <path>` or
+   `outside-class <path>` line of
    `bash .claude/scripts/pr-locality.sh <n>` (`<n>` from
    `bash .claude/scripts/pr-for-branch.sh`), resolved per
-   `docs/change-locality.md` §3, never by a row widened silently; if it
+   `docs/change-locality.md` §3 — an `outside-class` one by a narrower diff
+   or a different class — never by a row widened silently; if it
    prints nothing or cannot run, say so and skip, never infer a class; an
    `inside` line grants nothing (why: docs/commands/review-branch.md, *What
    counts as a finding*).
