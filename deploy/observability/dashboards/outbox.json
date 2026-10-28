@@ -217,7 +217,7 @@
       "fieldConfig": { "defaults": { "unit": "cps" }, "overrides": [] },
       "targets": [
         {
-          "expr": "sum by (service_name, lane, outcome) (rate(outbox_delivery_duration_seconds_count{service_name=~\"$service\"}[1m]))",
+          "expr": "sum by (service_name, lane, outcome) (rate(outbox_delivery_duration_seconds_count{service_name=~\"$service\"}[5m]))",
           "legendFormat": "{{service_name}} — {{lane}} {{outcome}}"
         }
       ]
