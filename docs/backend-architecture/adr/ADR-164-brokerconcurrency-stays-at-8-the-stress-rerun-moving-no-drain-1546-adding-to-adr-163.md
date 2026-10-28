@@ -22,7 +22,8 @@ from an earlier stack, before
 so the same-stack run before ADR-163 is the comparison. In every run the
 `Local` count rose for about 100 s after the load stopped, and then the backlog
 emptied in 55 to 76 s; the two runs that also read leases and attempts had
-every replica holding a full claim at every poll but one, with no row retried.
+every replica holding a full claim at all but one poll before the last few
+rows, with no row retried.
 Over those 100 s, Tempo's sampled `outbox deliver` spans put a `Local`
 delivery at 42 ms median and a publish at 8 ms. A pass ends when both lanes
 have, and its `Local` rows go one at a time, so they set its length, and more
