@@ -102,8 +102,26 @@ while IFS= read -r raw || [ -n "$raw" ]; do
   fi
   [[ "$raw" =~ ^\ \ -\ \'([^\']+)\'[[:space:]]*$ ]] && [ -n "$member" ] ||
     refuse "classes.yml has a line outside its grammar"
+  item=${BASH_REMATCH[1]}
+  # An item takes the gate's token checks, since an unchecked one widens a
+  # class here that the gate refuses: `docs/a,docs/b` would admit `docs/admin`.
+  grep -Eq '^[A-Za-z0-9_./*?{},()-]+$' <<<"$item" && [[ "$item" == *[/.]* ]] ||
+    refuse "classes.yml has an item that is not a path token"
+  depth=0
+  for ((i = 0; i < ${#item}; i++)); do
+    case "${item:i:1}" in
+      '{') depth=$((depth + 1)) ;;
+      '}') depth=$((depth - 1)); [ "$depth" -ge 0 ] || refuse "classes.yml has an item with an unbalanced brace" ;;
+      ',') [ "$depth" -gt 0 ] || refuse "classes.yml has an item with a comma outside a brace" ;;
+    esac
+  done
+  [ "$depth" -eq 0 ] || refuse "classes.yml has an item with an unbalanced brace"
+  item=${item%/}
+  n="${item//[\{\}]/}"
+  n="${n//,//}"
+  case "/$n/" in *//*|*/./*|*/../*) refuse "classes.yml has an item outside the repository" ;; esac
   seen[$member]=$((seen[$member] + 1))
-  case "+$class+" in *"+$member+"*) class_patterns+=("$(to_regex "${BASH_REMATCH[1]%/}")") ;; esac
+  case "+$class+" in *"+$member+"*) class_patterns+=("$(to_regex "$item")") ;; esac
 done <"$map"
 for member in A B C D E; do
   [ "${seen[$member]:-0}" -gt 0 ] || refuse "classes.yml gives class $member no tree set"
