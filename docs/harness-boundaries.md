@@ -1388,6 +1388,10 @@ finding cannot add one; the drop helper's shape checks and git's refusal of a
 tree holding anything modified or untracked still decide, so a worktree a
 refused teardown left for inspection stays. The day stands in for "no sweep still runs there", which no
 helper can ask; a sweep running that long would lose its worktree mid-round.
+A harness suite that forks a sweep worktree of this checkout to test the
+helpers is a sweep start too, and drops and prunes the same way. Those tests
+keep the shared temp root on purpose: one a stopped run leaves there is then
+a worktree the next sweep's start can drop.
 
 **Both sweeps now write two things besides their issues and their worktree.**
 `sweep-slices.sh` writes its slice lists to the worktree's path plus
