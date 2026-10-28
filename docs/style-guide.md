@@ -776,9 +776,9 @@ string literal and the layout above:
 The clause rule exists to show a condition's shape, and one predicate has none
 to show; most of these are test probes, where five lines of literal around one
 lookup bury the assertion they feed. A second predicate or a join takes the
-raw string literal and every rule in this section, so a quoted string never
-holds a condition with a shape. The one line keeps the same 120-column budget,
-counted from the `.cs` file's first column.
+raw string literal and every rule in this section, so a condition with a shape
+always gets the layout that shows it. The one line keeps the same 120-column
+budget, counted from the `.cs` file's first column.
 
 **An `AND` extending an `ON` aligns with the `ON`**, rather than indenting
 another four. `ON` is itself a continuation — of `MERGE … USING` or of a
