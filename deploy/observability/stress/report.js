@@ -242,6 +242,10 @@ export function knee(rows) {
 
 const SQL_WAITS = { lockWaitMs: 'lock waits', pageLatchWaitMs: 'page latch waits', logWaitMs: 'log flush waits' };
 
+// A message faulted into an error queue, or a deadlock, is work refused
+// outright, with no threshold to be a multiple of, so it ranks first.
+const OUTRIGHT = Infinity;
+
 /**
  * The service a container runs: the one whose name, as Compose spells it, is
  * the container's Compose service, alone or with `-api` (the gateway's
@@ -298,7 +302,7 @@ export function serviceCrossings(row, previous, { cores = null, holdSeconds = nu
     for (const queue of row.faultedQueues ?? []) {
         const gained = queue.end - (queue.start ?? 0);
         if (gained > 0) {
-            add(queue.service ?? queue.queue, 'faulted', gained,
+            add(queue.service ?? queue.queue, 'faulted', OUTRIGHT,
                 `${queue.queue} gained ${Math.round(gained)} over the hold`);
         }
     }
@@ -323,7 +327,7 @@ export function serviceCrossings(row, previous, { cores = null, holdSeconds = nu
     }
 
     if (row.sql?.deadlocks > 0)
-        add('sql', 'deadlocks', row.sql.deadlocks, `${row.sql.deadlocks} deadlocks`);
+        add('sql', 'deadlocks', OUTRIGHT, `${row.sql.deadlocks} deadlocks`);
 
     for (const [key, name] of Object.entries(SQL_WAITS)) {
         const past = holdSeconds > 0 ? beyond(previous?.sql?.[key], row.sql?.[key], WAIT_JUMP_RATIO, holdSeconds * 1000)
@@ -345,11 +349,17 @@ export function givingUpStep(rows, found) {
     return rows.find((row) => row.aborted)?.step ?? found?.step ?? null;
 }
 
+// Infinity less Infinity is NaN, so two outright refusals are compared as a tie.
+function furthest(a, b) {
+    return a.past === b.past ? 0 : b.past - a.past;
+}
+
 /**
  * The services whose own signals crossed at `step`, furthest past its own
- * threshold first, each with its signals in the same order; null when there
- * is no step to name one at. A step the run never reached is skipped, as
- * knee() skips it, so the step before is the last one measured.
+ * threshold first, each with its signals in the same order, and a `past` of
+ * null for work refused outright, which ranks ahead of them all; null when
+ * there is no step to name one at. A step the run never reached is skipped,
+ * as knee() skips it, so the step before is the last one measured.
  */
 export function firstToGiveUp(rows, step, options = {}) {
     const measured = rows.filter((row) => row.requests > 0);
@@ -368,16 +378,23 @@ export function firstToGiveUp(rows, step, options = {}) {
 
     const services = [...byService.entries()]
         .map(([service, signals]) => {
-            const ordered = signals.sort((a, b) => b.past - a.past);
-            return {
-                service,
-                past: ordered[0].past,
-                signals: ordered.map(({ signal, past, detail }) => ({ signal, past, detail })),
-            };
+            const ordered = signals.sort(furthest);
+            return { service, past: ordered[0].past, signals: ordered };
         })
-        .sort((a, b) => b.past - a.past || a.service.localeCompare(b.service));
+        .sort((a, b) => furthest(a, b) || a.service.localeCompare(b.service));
 
-    return { step, vus: measured[at].vus, services };
+    // JSON has no Infinity, so summary.json carries an outright refusal's distance as null.
+    const written = (past) => (Number.isFinite(past) ? past : null);
+
+    return {
+        step,
+        vus: measured[at].vus,
+        services: services.map((s) => ({
+            service: s.service,
+            past: written(s.past),
+            signals: s.signals.map(({ signal, past, detail }) => ({ signal, past: written(past), detail })),
+        })),
+    };
 }
 
 /** The run's machine-readable `First to give up:` line. */

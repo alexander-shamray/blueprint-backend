@@ -297,6 +297,22 @@ test('the services that crossed are listed furthest past their own threshold fir
         '1.0 s to 9.0 s over the hold; GetProductQuery p95 20 ms to 90 ms');
 });
 
+test('work refused outright ranks ahead of any multiple of a threshold, and is written as null', () => {
+    const row = {
+        ...measuredStep,
+        serverErrors: [{ service: 'Ordering.Api', share: 0.5 }],
+        faultedQueues: [{ queue: 'inventory-commands_error', service: 'Inventory.Api', start: 0, end: 1 }],
+        sql: { deadlocks: 1 },
+    };
+
+    const first = firstToGiveUp([row], 1);
+    assert.deepEqual(first.services.map((s) => s.service), ['Inventory.Api', 'sql', 'Ordering.Api'],
+        'one faulted message and one deadlock before a 5xx share fifty times its threshold');
+    assert.equal(first.services[0].past, null);
+    assert.equal(first.services[2].past, 50);
+    assert.equal(JSON.parse(JSON.stringify(first)).services[0].past, null);
+});
+
 test('the line says when no service\'s figures moved, and when there was no step to judge', () => {
     assert.equal(firstLine(firstToGiveUp([measuredStep], 1)),
         'First to give up: none named; step 1 crossed only journey-wide signals');

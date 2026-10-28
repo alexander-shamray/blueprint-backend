@@ -575,9 +575,10 @@ CPU at `CONTAINER_CPU_LIMIT` of the cores it may use or its memory growing,
 and SQL Server's deadlocks and its waits growing by `WAIT_JUMP_RATIO` on the
 step before. A queue's service is its consumer by MassTransit's receive
 meter, and a container's is its Compose service. The services that crossed
-are listed furthest past their own threshold first, since one service's
-failure reaches its callers' figures too and the order is evidence, not a
-cause.
+are listed furthest past their own threshold first, after any that refused
+work outright, by an `_error` queue gaining messages or a deadlock, which
+has no threshold to be a multiple of. One service's failure reaches its
+callers' figures too, so the order is evidence, not a cause.
 
 **Why it ended** is read at the last step that carried requests, by
 `stress/report.js`'s `ending()`. k6 runs on the machine the stack runs on, so
