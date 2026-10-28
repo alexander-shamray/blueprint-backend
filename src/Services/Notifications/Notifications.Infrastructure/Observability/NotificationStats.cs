@@ -61,9 +61,13 @@ internal sealed class NotificationStats(IDbConnectionFactory connections) : INot
         $"""
         SELECT DATEDIFF_BIG(millisecond, MIN(Due), SYSDATETIMEOFFSET()) / 1000.0
         FROM (
-            SELECT Due = NextAttemptAt FROM notifications.NotificationLog WHERE {SendClaims.Claimable}
+            SELECT Due = NextAttemptAt
+            FROM notifications.NotificationLog
+            WHERE {SendClaims.Claimable}
             UNION ALL
-            SELECT NextAttemptAt FROM notifications.PushDeliveries WHERE {PushClaims.Claimable}
+            SELECT NextAttemptAt
+            FROM notifications.PushDeliveries
+            WHERE {PushClaims.Claimable}
         ) due;
         """;
 
