@@ -246,7 +246,8 @@ test('a container at nine tenths of the cores it may use, or whose memory climbs
 
     const mib = 1024 ** 2;
     assert.deepEqual(signals(container({ memoryMiddle: 200 * mib, memoryEnd: 400 * mib })), ['Gateway.Api memory']);
-    assert.deepEqual(signals(container({ memoryMiddle: 200 * mib, memoryEnd: 290 * mib })), [], 'under half again');
+    assert.deepEqual(signals(container({ memoryMiddle: 400 * mib, memoryEnd: 590 * mib })), [],
+        'past the floor, but under half again');
     assert.deepEqual(signals(container({ memoryMiddle: 100 * mib, memoryEnd: 160 * mib })), [], 'within the floor');
 });
 
