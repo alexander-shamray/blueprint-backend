@@ -103,8 +103,13 @@ public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsync
         await ProjectAsync(order, PlacedEvent(order));
 
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM ordering.OrderSummaries WHERE OrderId = {0} AND CustomerId IS NULL " +
-            "AND PlacedAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM ordering.OrderSummaries
+            WHERE OrderId = {0}
+                AND CustomerId IS NULL
+                AND PlacedAt IS NOT NULL
+            """,
             order.Value)).ShouldBe(1, "the row is projected, and the erased order's buyer stays off it");
     }
 

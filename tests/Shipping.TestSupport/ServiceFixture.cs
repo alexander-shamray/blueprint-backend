@@ -30,10 +30,20 @@ public sealed class ServiceFixture()
     private static readonly TimeSpan StepDeadline = TimeSpan.FromSeconds(20);
 
     private const string AttemptDueSql =
-        "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0} AND NextAttemptAt <= SYSDATETIMEOFFSET()";
+        """
+        SELECT Value = COUNT(*)
+        FROM shipping.Shipments
+        WHERE OrderId = {0}
+            AND NextAttemptAt <= SYSDATETIMEOFFSET()
+        """;
 
     private const string PollDueSql =
-        "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0} AND NextPollAt <= SYSDATETIMEOFFSET()";
+        """
+        SELECT Value = COUNT(*)
+        FROM shipping.Shipments
+        WHERE OrderId = {0}
+            AND NextPollAt <= SYSDATETIMEOFFSET()
+        """;
 
     /// <summary>The carrier, in process over the mappings Compose mounts (§14.1), behind a real HTTP hop.</summary>
     public WireMockServer Carrier { get; private set; } = null!;
@@ -334,8 +344,12 @@ public sealed class ServiceFixture()
         ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
 
         int updated = await db.Database.ExecuteSqlRawAsync(
-            "UPDATE shipping.Shipments SET TerminalAt = DATEADD(second, {0}, SYSDATETIMEOFFSET()) " +
-            "WHERE Id = {1} AND TerminalAt IS NOT NULL;",
+            """
+            UPDATE shipping.Shipments
+            SET TerminalAt = DATEADD(second, {0}, SYSDATETIMEOFFSET())
+            WHERE Id = {1}
+                AND TerminalAt IS NOT NULL;
+            """,
             [-(int)age.TotalSeconds, id.Value],
             TestContext.Current.CancellationToken);
 

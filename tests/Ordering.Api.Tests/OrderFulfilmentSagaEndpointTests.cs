@@ -431,9 +431,17 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     private Task<int> TransactionalInboxRowsAsync(Guid messageId, bool deliveredOnly) =>
         fixture.ScalarAsync<int>(
             deliveredOnly
-                ? "SELECT Value = COUNT(*) FROM ordering.InboxState " +
-                    "WHERE MessageId = {0} AND LastSequenceNumber IS NOT NULL"
-                : "SELECT Value = COUNT(*) FROM ordering.InboxState WHERE MessageId = {0}",
+                ? """
+                    SELECT Value = COUNT(*)
+                    FROM ordering.InboxState
+                    WHERE MessageId = {0}
+                        AND LastSequenceNumber IS NOT NULL
+                    """
+                : """
+                    SELECT Value = COUNT(*)
+                    FROM ordering.InboxState
+                    WHERE MessageId = {0}
+                    """,
             messageId);
 
     /// <summary>One message's inbox rows on one endpoint, since §9.5's inbox key is the pair.</summary>

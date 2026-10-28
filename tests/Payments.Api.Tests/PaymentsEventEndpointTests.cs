@@ -155,12 +155,22 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
 
     private Task<int> PlacedCount(Guid order) =>
         fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0} AND PlacedAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM payments.PaymentOrders
+            WHERE OrderId = {0}
+                AND PlacedAt IS NOT NULL
+            """,
             order);
 
     private Task<int> CancelledCount(Guid order) =>
         fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0} AND CancelledAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM payments.PaymentOrders
+            WHERE OrderId = {0}
+                AND CancelledAt IS NOT NULL
+            """,
             order);
 
     /// <summary>Polls rather than sleeps, and fails with the last value it saw.</summary>

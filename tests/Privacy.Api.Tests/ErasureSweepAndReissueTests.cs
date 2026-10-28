@@ -43,7 +43,12 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
             "SELECT Value = SubjectId FROM privacy.ErasureRequests WHERE RequestId = {0}",
             request)).ShouldBe(Subject);
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM privacy.ErasureRequests WHERE RequestId = {0} AND OverdueAt IS NOT NULL",
+            """
+            SELECT Value = COUNT(*)
+            FROM privacy.ErasureRequests
+            WHERE RequestId = {0}
+                AND OverdueAt IS NOT NULL
+            """,
             request)).ShouldBe(1);
     }
 

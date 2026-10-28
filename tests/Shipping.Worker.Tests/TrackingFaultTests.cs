@@ -112,7 +112,12 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(Batch);
 
         (await _fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Status = 'Dispatched' AND LockedUntil IS NULL"))
+            """
+            SELECT Value = COUNT(*)
+            FROM shipping.Shipments
+            WHERE Status = 'Dispatched'
+                AND LockedUntil IS NULL
+            """))
             .ShouldBe(Batch, "each row's page was applied and its claim released by the commit that used it");
 
         // The concurrency itself, read off the stub: polled one after another, each call would start only once the
