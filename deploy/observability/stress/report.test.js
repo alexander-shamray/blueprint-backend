@@ -7,16 +7,21 @@ import {
     ERROR_RATE_LIMIT,
     HOST_CPU_LIMIT,
     clientRow,
+    containerOwner,
     containerStats,
     crossings,
     endedLine,
     ending,
+    firstLine,
+    firstToGiveUp,
     generatorLimit,
+    givingUpStep,
     hostCpu,
     knee,
     liveRow,
     parseCpu,
     parseMemory,
+    serviceCrossings,
     sqlDelta,
 } from './report.js';
 
@@ -172,6 +177,139 @@ test('a step\'s resources are its own samples, busiest container first', () => {
     assert.equal(stats[1].cpuMean, 20);
     assert.equal(stats[1].cpuPeak, 30, 'the sample before the step is not its');
     assert.equal(stats[1].memoryPeak, 7);
+});
+
+test('a container\'s memory is read at the hold\'s middle and end, with its service and cores', () => {
+    const at = (ms, memory) =>
+        ({ at: ms, containers: [{ name: 'c-1', service: 'ordering-api', cores: 2, cpu: 1, memory }] });
+    const [stats] = containerStats([at(1000, 9), at(1400, 5), at(1600, 6), at(2000, 8)],
+        { startMs: 1000, endMs: 2000 });
+
+    assert.equal(stats.memoryMiddle, 6, 'the first reading at or after the middle');
+    assert.equal(stats.memoryEnd, 8);
+    assert.equal(stats.service, 'ordering-api');
+    assert.equal(stats.cores, 2);
+});
+
+const measuredStep = { step: 1, vus: 100, requests: 1000 };
+const signals = (row, previous = null, options = {}) =>
+    serviceCrossings({ ...measuredStep, ...row }, previous && { ...measuredStep, ...previous }, options)
+        .map(({ service, signal }) => `${service} ${signal}`);
+
+test('a request type whose own p95 doubles past the floor names its service, and a smaller rise does not', () => {
+    const before = { requestTypes: [{ service: 'Ordering.Api', request: 'PlaceOrderCommand', p95Seconds: 0.025 }] };
+    const at = (p95Seconds) => ({ requestTypes: [{ ...before.requestTypes[0], p95Seconds }] });
+
+    assert.deepEqual(signals(at(0.14), before), ['Ordering.Api p95']);
+    assert.match(serviceCrossings(at(0.14), before)[0].detail, /^PlaceOrderCommand p95 25 ms to 140 ms$/);
+    assert.deepEqual(signals(at(0.07), before), [], 'past double but within the floor');
+    assert.deepEqual(signals(at(0.14)), [], 'no step before to measure it against');
+    assert.deepEqual(signals({ requestTypes: [{ ...before.requestTypes[0], request: 'GetOrderQuery', p95Seconds: 1 }] },
+        before), [], 'a request type the step before never saw');
+});
+
+test('a service whose 5xx share passes one in a hundred is named, and one at the limit is not', () => {
+    assert.deepEqual(signals({ serverErrors: [{ service: 'Catalog.Api', share: 0.03 }] }), ['Catalog.Api errors']);
+    assert.deepEqual(signals({ serverErrors: [{ service: 'Catalog.Api', share: ERROR_RATE_LIMIT }] }), []);
+});
+
+test('a service\'s outbox and the queues it consumes still growing over the hold name it', () => {
+    const outbox = (middle, end) => ({ outboxes: [{ service: 'Ordering.Api', middle, end }] });
+    const queue = (middle, end) => ({ queues: [{ queue: 'ordering-commands', service: 'Ordering.Api', middle, end }] });
+
+    assert.deepEqual(signals(outbox(0.4, 12)), ['Ordering.Api outbox']);
+    assert.deepEqual(signals(outbox(20, 21)), [], 'levelled off');
+    assert.deepEqual(signals(queue(0, 900)), ['Ordering.Api queue']);
+    assert.deepEqual(signals(queue(10, 60)), [], 'under the floor');
+    assert.deepEqual(signals({ queues: [{ queue: 'orphan', service: null, middle: 0, end: 900 }] }), ['orphan queue'],
+        'a queue nobody consumes is named itself');
+});
+
+test('an error queue that gained messages over the hold names its consumer, and one that held still does not', () => {
+    const faulted = (start, end) =>
+        ({ faultedQueues: [{ queue: 'inventory-commands_error', service: 'Inventory.Api', start, end }] });
+
+    assert.deepEqual(signals(faulted(0, 3)), ['Inventory.Api faulted']);
+    assert.deepEqual(signals(faulted(3, 3)), []);
+});
+
+test('a container at nine tenths of the cores it may use, or whose memory climbs, names the service it runs', () => {
+    const container = (extra) => ({ containers: [{ name: 'commerce-gateway-1', service: 'gateway', ...extra }],
+        serverErrors: [{ service: 'Gateway.Api', share: 0 }] });
+
+    assert.deepEqual(signals(container({ cores: 2, cpuMean: 180 })), ['Gateway.Api cpu']);
+    assert.deepEqual(signals(container({ cores: 2, cpuMean: 170 })), [], 'under nine tenths');
+    assert.deepEqual(signals(container({ cores: null, cpuMean: 180 }), null, { cores: 8 }), [],
+        'no limit of its own is every processor Docker has');
+    assert.deepEqual(signals(container({ cores: null, cpuMean: 750 }), null, { cores: 8 }), ['Gateway.Api cpu']);
+    assert.deepEqual(signals(container({ cores: null, cpuMean: 750 })), [], 'no cores read is no verdict');
+
+    const mib = 1024 ** 2;
+    assert.deepEqual(signals(container({ memoryMiddle: 200 * mib, memoryEnd: 400 * mib })), ['Gateway.Api memory']);
+    assert.deepEqual(signals(container({ memoryMiddle: 200 * mib, memoryEnd: 290 * mib })), [], 'under half again');
+    assert.deepEqual(signals(container({ memoryMiddle: 100 * mib, memoryEnd: 160 * mib })), [], 'within the floor');
+});
+
+test('a container is named by the service whose name Compose spells, alone or with -api', () => {
+    const services = ['Gateway.Api', 'Web.Bff', 'Ordering.Api'];
+
+    assert.equal(containerOwner({ name: 'commerce-gateway-1', service: 'gateway' }, services), 'Gateway.Api');
+    assert.equal(containerOwner({ name: 'commerce-web-bff-1', service: 'web-bff' }, services), 'Web.Bff');
+    assert.equal(containerOwner({ name: 'commerce-sql-1', service: 'sql' }, services), 'sql');
+    assert.equal(containerOwner({ name: 'loose', service: null }, services), 'loose', 'no Compose label');
+});
+
+test('SQL Server\'s deadlocks, and a wait that grew four times by more than the hold, name it', () => {
+    const hold = { holdSeconds: 1 };
+
+    assert.deepEqual(signals({ sql: { deadlocks: 2 } }), ['sql deadlocks']);
+    assert.deepEqual(signals({ sql: { deadlocks: 0, lockWaitMs: 5000 } }, { sql: { lockWaitMs: 1000 } }, hold),
+        ['sql waits']);
+    assert.deepEqual(signals({ sql: { lockWaitMs: 3000 } }, { sql: { lockWaitMs: 1000 } }, hold), [],
+        'under four times');
+    assert.deepEqual(signals({ sql: { logWaitMs: 900 } }, { sql: { logWaitMs: 100 } }, hold), [],
+        'within one connection blocked for the hold');
+    // This morning's run held throughout, with these log-flush waits over its 180 s holds at steps 1 and 2.
+    assert.deepEqual(signals({ sql: { logWaitMs: 20166 } }, { sql: { logWaitMs: 2446 } }, { holdSeconds: 180 }), []);
+    assert.deepEqual(signals({ sql: { lockWaitMs: 5000 } }, { sql: { lockWaitMs: 1000 } }), [], 'no hold, no floor');
+});
+
+test('the services that crossed are listed furthest past their own threshold first', () => {
+    const rows = [
+        { ...measuredStep, requestTypes: [{ service: 'Catalog.Api', request: 'GetProductQuery', p95Seconds: 0.02 }] },
+        { ...measuredStep, step: 2, requests: 0 },
+        {
+            ...measuredStep,
+            step: 3,
+            vus: 400,
+            requestTypes: [{ service: 'Catalog.Api', request: 'GetProductQuery', p95Seconds: 0.09 }],
+            serverErrors: [{ service: 'Ordering.Api', share: 0.1 }],
+            outboxes: [{ service: 'Catalog.Api', middle: 1, end: 9 }],
+        },
+    ];
+
+    const first = firstToGiveUp(rows, 3);
+    assert.equal(first.vus, 400);
+    assert.deepEqual(first.services.map((s) => s.service), ['Ordering.Api', 'Catalog.Api'],
+        'ten times its threshold before a p95 just past double, measured against the last step measured');
+    assert.deepEqual(first.services[1].signals.map((s) => s.signal), ['outbox', 'p95']);
+    assert.equal(firstLine(first), 'First to give up: Ordering.Api: 5xx 10.0% | Catalog.Api: oldest outbox row ' +
+        '1.0 s to 9.0 s over the hold; GetProductQuery p95 20 ms to 90 ms');
+});
+
+test('the line says when no service\'s figures moved, and when there was no step to judge', () => {
+    assert.equal(firstLine(firstToGiveUp([measuredStep], 1)),
+        'First to give up: none named; step 1 crossed only journey-wide signals');
+    assert.equal(firstToGiveUp([measuredStep], null), null);
+    assert.equal(firstToGiveUp([{ ...measuredStep, requests: 0 }], 1), null, 'a step never reached');
+    assert.equal(firstLine(null), 'First to give up: not judged; no step was the knee or past the abort rate');
+});
+
+test('the step named is the error stop\'s when errors stopped the run, and otherwise the knee\'s', () => {
+    assert.equal(givingUpStep({ step: 3 }, { reason: 'errors', step: 5 }), 5);
+    assert.equal(givingUpStep({ step: 3 }, { reason: 'knee', step: 3 }), 3);
+    assert.equal(givingUpStep({ step: 3 }, { reason: 'held', step: 6 }), 3, 'a knee the run held past');
+    assert.equal(givingUpStep(null, { reason: 'held', step: 6 }), null);
 });
 
 test('a step\'s client row reads k6\'s own trend keys, and counts every operation\'s requests', () => {

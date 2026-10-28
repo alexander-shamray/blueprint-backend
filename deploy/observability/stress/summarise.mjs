@@ -1,8 +1,9 @@
 // Turns one stress run into its per-step table: k6's client figures from
 // raw.json, the server's from Prometheus at each step's hold, the resources
 // from sample.mjs's samples, and the machine they all describe. Writes
-// summary.json and summary.md beside them and prints the knee. It reports
-// and never gates, so a reading it cannot make is recorded as unavailable.
+// summary.json and summary.md beside them and prints the knee and the first
+// service to give up. It reports and never gates, so a reading it cannot make
+// is recorded as unavailable.
 //
 //   node deploy/observability/stress/summarise.mjs artifacts/stress/<run>
 //
@@ -22,6 +23,9 @@ import {
     containerStats,
     endedLine,
     ending,
+    firstLine,
+    firstToGiveUp,
+    givingUpStep,
     hostCpu,
     knee,
     sqlDelta,
@@ -72,13 +76,68 @@ async function scalar(name, expr, atMs) {
     return series ? series.value : null;
 }
 
+// Each queue's consumer, from MassTransit's own receive meter, so a queue is
+// named by the service that reads it rather than by its spelling.
+const CONSUMERS = 'group by (service_name, messaging_masstransit_destination) (messaging_masstransit_receive_ea_total)';
+const OUTBOX_BY_SERVICE = 'max by (service_name) (outbox_oldest_age_seconds)';
+const QUEUE_DEPTHS = `max by (queue) (${WORK_QUEUES})`;
+const ERROR_QUEUE_DEPTHS = 'max by (queue) (rabbitmq_queue_messages{queue=~".+_error"})';
+
+// What serviceCrossings() reads: each service's own request types, 5xx share,
+// outbox and queues, the backlogs at the hold's middle and end as the knee's
+// are, and the error queues at its start and end.
+async function perService(window, range) {
+    const end = window.endMs;
+    const middle = (window.startMs + window.endMs) / 2;
+    const byLabel = (series, label) => new Map(series.map((s) => [s.labels[label], s.value]));
+
+    const [requestTypes, serverErrors, consumers, outboxMiddle, outboxEnd, queueMiddle, queueEnd, faultStart,
+        faultEnd] = await Promise.all([
+        query('request.duration p95', 'histogram_quantile(0.95, sum by (le, service_name, request) ' +
+            `(rate(request_duration_seconds_bucket[${range}])))`, end),
+        query('5xx share', 'sum by (service_name) (increase(http_server_request_duration_seconds_count' +
+            `{http_response_status_code=~"5.."}[${range}])) / sum by (service_name) ` +
+            `(increase(http_server_request_duration_seconds_count[${range}]))`, end),
+        query('queue consumers', CONSUMERS, end),
+        query('outbox oldest by service, middle', OUTBOX_BY_SERVICE, middle),
+        query('outbox oldest by service, end', OUTBOX_BY_SERVICE, end),
+        query('queue depth, middle', QUEUE_DEPTHS, middle),
+        query('queue depth, end', QUEUE_DEPTHS, end),
+        query('error queues, start', ERROR_QUEUE_DEPTHS, window.startMs),
+        query('error queues, end', ERROR_QUEUE_DEPTHS, end),
+    ]);
+
+    const consumer = new Map(consumers.map((s) => [s.labels.messaging_masstransit_destination, s.labels.service_name]));
+    const outboxAtMiddle = byLabel(outboxMiddle, 'service_name');
+    const queueAtMiddle = byLabel(queueMiddle, 'queue');
+    const faultAtStart = byLabel(faultStart, 'queue');
+
+    return {
+        requestTypes: requestTypes.map((s) => ({
+            service: s.labels.service_name, request: s.labels.request, p95Seconds: s.value,
+        })),
+        serverErrors: serverErrors.map((s) => ({ service: s.labels.service_name, share: s.value })),
+        outboxes: outboxEnd.map((s) => ({
+            service: s.labels.service_name, middle: outboxAtMiddle.get(s.labels.service_name) ?? null, end: s.value,
+        })),
+        queues: queueEnd.map((s) => ({
+            queue: s.labels.queue, service: consumer.get(s.labels.queue) ?? null,
+            middle: queueAtMiddle.get(s.labels.queue) ?? null, end: s.value,
+        })),
+        // An error queue exists only once something faulted, so one absent at the start held none.
+        faultedQueues: faultEnd.map((s) => ({
+            queue: s.labels.queue, service: consumer.get(s.labels.queue.replace(/_error$/, '')) ?? null,
+            start: faultAtStart.get(s.labels.queue) ?? 0, end: s.value,
+        })),
+    };
+}
+
 async function serverRow(window, range) {
     const end = window.endMs;
     const middle = (window.startMs + window.endMs) / 2;
 
-    const [requests, outboxes, queues] = await Promise.all([
-        query('request.duration p95', `topk(5, histogram_quantile(0.95, sum by (le, service_name, request) ` +
-            `(rate(request_duration_seconds_bucket[${range}]))))`, end),
+    const [services, outboxes, queues] = await Promise.all([
+        perService(window, range),
         query('outbox oldest', `max by (service_name) (max_over_time(outbox_oldest_age_seconds[${range}]))`, end),
         query('queue depth', `topk(5, max by (queue) (max_over_time(${WORK_QUEUES}[${range}])))`, end),
     ]);
@@ -88,9 +147,8 @@ async function serverRow(window, range) {
         'orders confirmed', `sum(increase(orders_fulfilment_duration_seconds_count[${range}]))`, end);
 
     return {
-        slowestRequests: requests.map((s) => ({
-            service: s.labels.service_name, request: s.labels.request, p95Seconds: s.value,
-        })),
+        ...services,
+        slowestRequests: [...services.requestTypes].sort((a, b) => b.p95Seconds - a.p95Seconds).slice(0, 5),
         outboxOldest: outboxes.map((s) => ({ service: s.labels.service_name, seconds: s.value })),
         deepestQueues: queues.map((s) => ({ queue: s.labels.queue, messages: s.value })),
         outboxMiddle: await scalar('outbox oldest, middle', OUTBOX_OLDEST, middle),
@@ -180,7 +238,8 @@ for (const step of raw.steps) {
         ...row,
         window: { start: new Date(window.startMs).toISOString(), end: new Date(window.endMs).toISOString() },
         ...(server ?? {}),
-        containers: containerStats(samples, window).slice(0, 8),
+        // Every container, since the first to give up may be any of them; summary.md shows the busiest.
+        containers: containerStats(samples, window),
         hostCpu: hostCpu(samples, window),
         sql: sqlDelta(samples, window),
     });
@@ -199,12 +258,19 @@ const verdict = found
         ? 'Knee: none; every measured step held.'
         : 'Knee: not measured; no step ran, so the run says nothing about the platform.';
 
+const host = machine();
+
+// A container Compose gave no CPU limit may use every processor Docker has.
+const first = firstToGiveUp(rows, givingUpStep(found, ended),
+    { cores: host.docker.cpus, holdSeconds: plan.holdSeconds });
+
 const summary = {
     run: { started: new Date(raw.startedAt).toISOString(), ended: new Date(raw.endedAt).toISOString() },
-    machine: machine(),
+    machine: host,
     plan,
     knee: found,
     verdict,
+    firstToGiveUp: { step: null, vus: null, services: [], ...first, line: firstLine(first) },
     ended: { ...ended, line: endedLine(ended, plan) },
     steps: rows,
     samplerErrors: [...new Set(samples.flatMap((s) => [s.containersError, s.sqlError]).filter(Boolean))],
@@ -219,6 +285,7 @@ writeFileSync(join(out, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`
 writeFileSync(join(out, 'summary.md'), markdown(summary));
 
 console.log(verdict);
+console.log(summary.firstToGiveUp.line);
 console.log(summary.ended.line);
 console.log(`Summary: ${join(out, 'summary.md')}`);
 
@@ -256,6 +323,8 @@ function markdown(s) {
             `${percent(s.plan.orderShare)} of sessions order, over ${s.plan.products} products`,
         '',
         `**${s.verdict}**`,
+        '',
+        `**${s.firstToGiveUp.line}**`,
         '',
         `**${s.ended.line}**`,
         '',
