@@ -60,7 +60,7 @@ from this list without its section is how one gets "corrected" back.
   where a class groups one receiver's extensions, expression bodies for
   one-line members, .NET 10 — not oversights; do not "fix" them.
 - **SQL style**: clause keywords on their own line, one predicate per
-  line, `Alias = expression` not `AS`, every join's kind in full and its
+  line, `Alias = expression` not `AS`, every join's kind named and its
   `ON` on its own line.
 
 ## Prose conventions
@@ -857,12 +857,12 @@ the SELECT list only: `MERGE … AS target`,
 `USING (…) AS source`, `WITH claimable AS (` and `CAST(x AS varchar(10))` are
 required syntax and keep `AS`.
 
-**Every join spells its kind in full, and its `ON` gets its own line** at + 4:
-`INNER JOIN` or `LEFT JOIN`, never a bare `JOIN`. The join condition is a
-predicate and belongs where predicates go, not trailing off the end of a table
-name; an `AND` extending it aligns with the `ON`, as under `MERGE` above. The
-kind is named because a bare `JOIN` beside a `LEFT JOIN` makes the reader stop
-to recall which one the default is:
+**Every join names its kind, and its `ON` gets its own line** at + 4:
+`INNER JOIN` or `LEFT JOIN`, never a bare `JOIN`, and `OUTER` left out. The
+join condition is a predicate and belongs where predicates go, not trailing
+off the end of a table name; an `AND` extending it aligns with the `ON`, as
+under `MERGE` above. The kind is named because a bare `JOIN` beside a
+`LEFT JOIN` makes the reader stop to recall which one the default is:
 
 ```sql
 FROM ordering.Orders o
