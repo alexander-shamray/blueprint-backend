@@ -30,7 +30,11 @@ concurrency:
   # On main each commit has a group of its own: a run cancelled, or replaced
   # while pending, between a push and its signature leaves an image that
   # deploy.yml's verifier refuses, and a group holds one pending run (ADR-109).
-  group: ci-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+  # A rerun has one too, so rerunning a stale head cannot cancel the required
+  # checks of a newer head's run on the same ref.
+  group: >-
+    ci-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}${{
+    github.run_attempt != '1' && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
