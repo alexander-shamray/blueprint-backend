@@ -190,9 +190,7 @@ public sealed class ErasureSweepAndReissueTests(ServiceFixture fixture) : IAsync
         await fixture.ExecuteAsync(
             """
             INSERT INTO privacy.ErasureCompletions (RequestId, Responder, Count, Counted, ReceivedAt)
-            VALUES
-                ({0}, 'ordering', 1, 1, SYSDATETIMEOFFSET()),
-                ({0}, 'catalog', 1, 0, SYSDATETIMEOFFSET())
+            VALUES ({0}, 'ordering', 1, 1, SYSDATETIMEOFFSET()), ({0}, 'catalog', 1, 0, SYSDATETIMEOFFSET())
             """,
             request);
         await MakeDueAsync(request);
