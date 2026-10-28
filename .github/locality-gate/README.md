@@ -47,8 +47,9 @@ the same pull request, where a reviewer sees the line move.
 The glob dialect and the row grammar are `.claude/scripts/pr-locality.sh`'s,
 so a row reads the same in the harness and in CI. The two are separate
 implementations, and they must accept and refuse the same tokens. The
-helper reads `classes.yml` too, so a review round's class verdict is this
-gate's, and `test_pr_helpers.py` runs both on one payload to hold them to it.
+helper reads its own checkout's `classes.yml` too, so a review round's class
+verdict is this gate's except on a pull request that edits the map, which CI
+judges by the base copy; `test_pr_helpers.py` runs both on one payload.
 
 The suite is negative cases with their positive controls, plus reads of the
 shipped map, so the gate has been observed looking at the file CI hands it.

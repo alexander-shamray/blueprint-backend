@@ -40,9 +40,10 @@ taste. Prefer:
    `| Touch set |` rows say what this branch may edit, and
    `bash .claude/scripts/pr-locality.sh <n>` — `<n>` from
    `bash .claude/scripts/pr-for-branch.sh` — judges every changed path
-   against them and against the class's tree set the CI gate reads, and
-   prints one `class` line and one `inside <path>`, `outside <path>` or
-   `outside-class <path>` line per file. **It never prints the rows**: the
+   against them and against the class's tree set in this checkout's copy of
+   the map the CI gate reads from the base commit, and prints one `class`
+   line and one `inside <path>`, `outside <path>` or `outside-class <path>`
+   line per file. **It never prints the rows**: the
    set is the author's text, and a path grammar cannot keep prose out of a
    path, so the helper consumes the cell and only its own words leave. Each
    `outside` line is a finding, and its resolution is a narrower diff or a
