@@ -322,6 +322,16 @@ test('the line says when no service\'s figures moved, and when there was no step
     assert.equal(firstLine(null), 'First to give up: not judged; no step was the knee or past the abort rate');
 });
 
+test('a step whose service figures were not all read never says that nothing moved', () => {
+    const unread = { ...measuredStep, step: 2, serviceReadsFailed: ['5xx share'] };
+
+    assert.equal(firstLine(firstToGiveUp([measuredStep, unread], 2)),
+        'First to give up: not judged; step 2\'s service figures were not all read');
+    assert.equal(firstToGiveUp([unread, { ...measuredStep, step: 3 }], 3).unread, true, 'the step before missed one');
+    assert.equal(firstLine(firstToGiveUp([measuredStep, { ...unread, sql: { deadlocks: 1 } }], 2)),
+        'First to give up: sql: 1 deadlocks', 'what crossed is still named');
+});
+
 test('the step named is the error stop\'s where it fired, and otherwise the knee\'s', () => {
     const step = (n, extra = {}) => ({ step: n, vus: 100 * n, requests: 500, ...extra });
     const level = { level: 'low', stopRule: 'errors', capped: true };

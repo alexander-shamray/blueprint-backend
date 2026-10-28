@@ -386,9 +386,13 @@ export function firstToGiveUp(rows, step, options = {}) {
     // JSON has no Infinity, so summary.json carries an outright refusal's distance as null.
     const written = (past) => (Number.isFinite(past) ? past : null);
 
+    // The p95 rule reads the step before as well, so a read either step missed leaves the verdict short.
+    const unread = [measured[at], measured[at - 1]].some((row) => row?.serviceReadsFailed?.length > 0);
+
     return {
         step,
         vus: measured[at].vus,
+        unread,
         services: services.map((s) => ({
             service: s.service,
             past: written(s.past),
@@ -397,10 +401,16 @@ export function firstToGiveUp(rows, step, options = {}) {
     };
 }
 
-/** The run's machine-readable `First to give up:` line. */
+/**
+ * The run's machine-readable `First to give up:` line. A step whose service
+ * figures were not all read names what crossed, but never that nothing did.
+ */
 export function firstLine(first) {
     if (!first)
         return 'First to give up: not judged; no step was the knee or past the abort rate';
+
+    if (first.services.length === 0 && first.unread)
+        return `First to give up: not judged; step ${first.step}'s service figures were not all read`;
 
     if (first.services.length === 0)
         return `First to give up: none named; step ${first.step} crossed only journey-wide signals`;

@@ -49,25 +49,28 @@ const samples = existsSync(samplesPath)
 const unavailable = [];
 
 // One instant query evaluated at `atMs`, so a reading made after the run
-// still describes the step: Prometheus answers for any time it holds.
-async function query(name, expr, atMs) {
+// still describes the step: Prometheus answers for any time it holds. A
+// failure is recorded in `failed` too, where a caller passes one.
+async function query(name, expr, atMs, failed = []) {
     const url = `${PROM_URL}/api/v1/query?query=${encodeURIComponent(expr)}&time=${atMs / 1000}`;
+    const fail = (reason) => {
+        unavailable.push(`${name}: ${reason}`);
+        failed.push(name);
+        return [];
+    };
 
     try {
         const response = await fetch(url);
 
-        if (!response.ok) {
-            unavailable.push(`${name}: Prometheus answered ${response.status}`);
-            return [];
-        }
+        if (!response.ok)
+            return fail(`Prometheus answered ${response.status}`);
 
         return (await response.json()).data.result.map((series) => ({
             labels: series.metric,
             value: Number(series.value[1]),
         })).filter((series) => Number.isFinite(series.value));
     } catch (error) {
-        unavailable.push(`${name}: ${error.message}`);
-        return [];
+        return fail(error.message);
     }
 }
 
@@ -90,21 +93,23 @@ async function perService(window, range) {
     const end = window.endMs;
     const middle = (window.startMs + window.endMs) / 2;
     const byLabel = (series, label) => new Map(series.map((s) => [s.labels[label], s.value]));
+    const failed = [];
+    const read = (name, expr, atMs) => query(name, expr, atMs, failed);
 
     const [requestTypes, serverErrors, consumers, outboxMiddle, outboxEnd, queueMiddle, queueEnd, faultStart,
         faultEnd] = await Promise.all([
-        query('request.duration p95', 'histogram_quantile(0.95, sum by (le, service_name, request) ' +
+        read('request.duration p95', 'histogram_quantile(0.95, sum by (le, service_name, request) ' +
             `(rate(request_duration_seconds_bucket[${range}])))`, end),
-        query('5xx share', 'sum by (service_name) (increase(http_server_request_duration_seconds_count' +
+        read('5xx share', 'sum by (service_name) (increase(http_server_request_duration_seconds_count' +
             `{http_response_status_code=~"5.."}[${range}])) / sum by (service_name) ` +
             `(increase(http_server_request_duration_seconds_count[${range}]))`, end),
-        query('queue consumers', CONSUMERS, end),
-        query('outbox oldest by service, middle', OUTBOX_BY_SERVICE, middle),
-        query('outbox oldest by service, end', OUTBOX_BY_SERVICE, end),
-        query('queue depth, middle', QUEUE_DEPTHS, middle),
-        query('queue depth, end', QUEUE_DEPTHS, end),
-        query('error queues, start', ERROR_QUEUE_DEPTHS, window.startMs),
-        query('error queues, end', ERROR_QUEUE_DEPTHS, end),
+        read('queue consumers', CONSUMERS, end),
+        read('outbox oldest by service, middle', OUTBOX_BY_SERVICE, middle),
+        read('outbox oldest by service, end', OUTBOX_BY_SERVICE, end),
+        read('queue depth, middle', QUEUE_DEPTHS, middle),
+        read('queue depth, end', QUEUE_DEPTHS, end),
+        read('error queues, start', ERROR_QUEUE_DEPTHS, window.startMs),
+        read('error queues, end', ERROR_QUEUE_DEPTHS, end),
     ]);
 
     const consumer = new Map(consumers.map((s) => [s.labels.messaging_masstransit_destination, s.labels.service_name]));
@@ -129,6 +134,8 @@ async function perService(window, range) {
             queue: s.labels.queue, service: consumer.get(s.labels.queue.replace(/_error$/, '')) ?? null,
             start: faultAtStart.get(s.labels.queue) ?? 0, end: s.value,
         })),
+        // The reads that failed, so the line never takes a figure it lacks for one that held.
+        serviceReadsFailed: failed,
     };
 }
 
@@ -270,7 +277,7 @@ const summary = {
     plan,
     knee: found,
     verdict,
-    firstToGiveUp: { step: null, vus: null, services: [], ...first, line: firstLine(first) },
+    firstToGiveUp: { step: null, vus: null, unread: false, services: [], ...first, line: firstLine(first) },
     ended: { ...ended, line: endedLine(ended, plan) },
     steps: rows,
     samplerErrors: [...new Set(samples.flatMap((s) => [s.containersError, s.sqlError]).filter(Boolean))],
