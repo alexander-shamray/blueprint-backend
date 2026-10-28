@@ -8,7 +8,8 @@ is the list of test projects, and the workflows under `.github/workflows/`
 are the list of everything else CI runs. This file is the remainder: which
 tests need a daemon and why they are never skipped, the Python floor, how to
 run a gate on its own, what the coverage figure is measured over, and how a
-mutation run, which no workflow makes, is made by hand.
+mutation run and the review helpers' time budget, which no workflow makes,
+are made by hand.
 
 **Where §12 and this file disagree, §12 wins**, and the disagreement is a bug
 report against one of them. This file is outside the blueprint tree, so
@@ -42,6 +43,39 @@ on `PATH`, and no network. The `gh` its ledger cases call is a stub the
 suite writes itself, so no `gh` is needed. Each module is named for its
 subject — one helper, a family of helpers, or the harness's deny list — and
 its test classes name the properties they check.
+
+**Each of its modules has a time budget, on Windows.** CI runs the whole
+suite only on Linux and times no module anywhere, so nothing there notices a
+module that has become slow on the platform this repository's sessions run
+it on. `py -3.12 tools/suite-budget/suite_budget.py` runs each module in a
+process tree of its own, as `discover -s .claude/scripts -p <module>`, and
+names every one that fails, passes past its ceiling, or is still running at
+`KILL_FACTOR` times it — stopped there with every process still in its tree,
+so a hang reads as a hang. It is a measurement a session runs, not a gate: its
+ceilings are Windows figures, which a shared Linux runner would judge
+against nothing, so `ci.yml` runs its suite alone. Run it after a change
+that adds a module there or slows one. The ceilings are `CEILINGS` and
+`DEFAULT_CEILING` in that script, set from this measurement, each module run
+alone on Windows 11 under Python 3.12 at `e037e499`: 704 tests, 482 seconds
+in all. Its suite holds the table to the directory, a row per module, and
+each ceiling to its row, so a module added there is measured here too.
+
+| Module | Seconds | Module | Seconds |
+|---|---:|---|---:|
+| `test_git_rebase_onto_main.py` | 196.4 | `test_index_query_hint.py` | 4.7 |
+| `test_git_argv_guard.py` | 57.3 | `test_gh_label_ensure.py` | 4.1 |
+| `test_git_pr_trailer_helpers.py` | 37.3 | `test_index_argv_guard.py` | 3.3 |
+| `test_git_worktree_remove.py` | 33.6 | `test_hint_bound.py` | 3.1 |
+| `test_pr_helpers.py` | 25.5 | `test_edit_target_guard.py` | 2.9 |
+| `test_sweep_slices.py` | 24.8 | `test_gh_issue_suppresses.py` | 2.1 |
+| `test_index_search_hint.py` | 16.9 | `test_pr_for_branch.py` | 1.3 |
+| `test_git_worktree_fork.py` | 13.3 | `test_refresh_index.py` | 0.8 |
+| `test_mutation_survivors.py` | 13.0 | `test_harness_denies.py` | 0.7 |
+| `test_cbx.py` | 10.8 | `test_root_ignore_covers_nested.py` | 0.4 |
+| `test_ship_landing_method.py` | 9.9 | `test_system_sleep.py` | 0.3 |
+| `test_git_worktree_detach.py` | 7.4 | `test_command_grants.py` | 0.2 |
+| `test_index_mcp_root.py` | 6.6 | `test_command_runbooks.py` | 0.2 |
+| `test_gh_issue_create.py` | 5.3 | `test_hook_timeouts.py` | 0.2 |
 
 **`py -3.12`, not `python`.** Every CI job that runs Python pins 3.12, and a
 newer interpreter is the hazard — it accepts APIs 3.12 does not, so the local

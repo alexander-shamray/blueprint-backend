@@ -104,6 +104,12 @@ jobs:
       - name: Test the review helpers
         run: python -m unittest discover -s .claude/scripts
 
+      # The budget's ceilings are Windows figures, so only its suite runs here;
+      # a session runs the budget itself (docs/testing.md).
+      - name: Test the review helpers' time budget
+        working-directory: tools/suite-budget
+        run: python -m unittest
+
   # The edit-target guard has branches no Linux runner can reach, and the job
   # above is `ubuntu-latest`, so they could regress with every required check
   # green. Windows has the junction fallback, the only link primitive an
