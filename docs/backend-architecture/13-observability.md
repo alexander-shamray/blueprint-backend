@@ -466,20 +466,22 @@ ones a reader would otherwise go looking for in this section and fail to find:
 | ASP.NET Core instrumentation | the framework, enabled in §13.2 | `http.server.request.duration` — the availability row |
 
 `RequestMetrics` is Application because `LoggingBehavior` injects it and the
-pipeline is Application. `MessagingMetrics` is Infrastructure because all four
-of its call sites are — two consumers, §9.5's inbox filter and the outbox
-dispatcher's invoker. `OutboxMetrics` is separate from both because it reads
-the database, which is also why it is observable rather than pushed (§13.6).
+pipeline is Application. `MessagingMetrics` is Infrastructure because all five
+of its callers are — two consumers, §9.5's inbox filter, the outbox dispatcher
+and its invoker. `OutboxMetrics` is separate from both because it reads the
+database, which is also why it is observable rather than pushed (§13.6).
 
 **The table's last column is what each source contributes to §13.7, not what it
-declares.** `MessagingMetrics` publishes two instruments that appear nowhere in
-it: `command.domain_rejected` feeds no SLO row at all, being a business signal
-that happens to share the meter (§9.8), and `messaging.inbox.suppressed` feeds
-none either — it exists so that §9.5's deliberate drop stops being the one path
-in this platform with no signal at all. So the class below has four instruments
-and its row above lists two, and both are right — a reader counting one against
-the other will find a difference that is not a defect, which is why it is said
-here rather than left to be noticed.
+declares.** `MessagingMetrics` publishes three instruments that appear nowhere
+in it: `command.domain_rejected` feeds no SLO row at all, being a business
+signal that happens to share the meter (§9.8); `messaging.inbox.suppressed`
+feeds none either — it exists so that §9.5's deliberate drop stops being the
+one path in this platform with no signal at all; and `outbox.delivery.duration`
+feeds none, existing so that its delivered count reads a drain as the
+dispatcher's own rate per lane (§9.4). So the class below has five
+instruments and its row above lists two, and both are right — a reader
+counting one against the other will find a difference that is not a defect,
+which is why it is said here rather than left to be noticed.
 
 `RequestMetrics` is registered by `AddOrderingApplication` (§4.2) and forced at
 startup by each service's `MetricsInitialiser` (§13.6), because "a behaviour
@@ -524,8 +526,8 @@ the first two rows read is taken at a bucket edge, and the bounds run on to
 ten seconds so that a slow request is still resolved.
 
 `MessagingMetrics` is registered by `AddOrderingInfrastructure`, because all
-four call sites are Infrastructure types (§9.4, §9.5). Its fields and
-constructor declare the four instruments, from
+five callers are Infrastructure types (§9.4, §9.5). Its fields and
+constructor declare the five instruments, from
 `src/BuildingBlocks/Common.Infrastructure/Messaging/MessagingMetrics.cs`:
 
 ```csharp
@@ -533,6 +535,7 @@ constructor declare the four instruments, from
     private readonly Histogram<double> _projectionLag;
     private readonly Counter<long> _rejected;
     private readonly Counter<long> _suppressed;
+    private readonly Histogram<double> _outboxDelivery;
 
     public MessagingMetrics(IMeterFactory factory)
     {
@@ -556,18 +559,28 @@ constructor declare the four instruments, from
         _suppressed = meter.CreateCounter<long>(
             "messaging.inbox.suppressed",
             description: "Messages the inbox dropped as already handled (§9.5).");
+        _outboxDelivery = meter.CreateHistogram<double>(
+            "outbox.delivery.duration",
+            unit: "s",
+            description: "One outbox row's delivery, by lane and outcome (§9.4).",
+            tags: null,
+            advice: OutboxDeliveryBuckets);
     }
 ```
 
 An instrument lands with the call site that records it, because one nothing
 writes to is an empty series on a dashboard rather than a signal; that is the
-rule for when one may be added, not a claim that four is the number. The
+rule for when one may be added, not a claim that five is the number. The
 recording methods, in the same file, tag both lags by `message`,
-`command.domain_rejected` by `message` and `error`, and
-`messaging.inbox.suppressed` by `message` and `endpoint`. Neither of the last
-two is the `MessageId`, and that is the constraint rather than an omission: a
-message id is unbounded, so it belongs on the log line the inbox filter writes
-beside the counter and never on a series.
+`command.domain_rejected` by `message` and `error`,
+`messaging.inbox.suppressed` by `message` and `endpoint`, and
+`outbox.delivery.duration` by `lane` and `outcome`, `delivered` or `failed`.
+None of the last three is the `MessageId`, and that is the constraint rather
+than an omission: a message id is unbounded, so it belongs on a log line, as
+the inbox filter's drop and the dispatcher's failure carry it, and never on a
+series. The dispatcher's `lane` is `Broker`, `Local` or `unknown`, never a
+value outside those three, since §9.4 delivers a row whose lane nothing
+validated.
 
 The two lags read `OccurredAt` from **different places**, because they measure
 different lanes. `Delivered` reads it **off the message**: it covers the broker
@@ -584,9 +597,10 @@ compile today; it would also make the metric the reason the invoker cannot
 accept a plain record tomorrow. The row already has the timestamp, and reading
 it there costs a column the claim was going to pay for anyway.
 
-`IntegrationEventConsumer<T>`, `CommandConsumer<,>` and `InboxFilter<T>` take
-`MessagingMetrics` as a constructor parameter. `Projected` is recorded by
-`ProjectionInvoker` (§9.4), which is static and cached — it resolves
+`IntegrationEventConsumer<T>`, `CommandConsumer<,>`, `InboxFilter<T>` and
+`OutboxDispatcher` take `MessagingMetrics` as a constructor parameter.
+`Projected` is recorded by `ProjectionInvoker` (§9.4), which is static and
+cached — it resolves
 `MessagingMetrics` from the `IServiceProvider` it is already handed rather than
 through a constructor it does not have.
 
@@ -601,11 +615,17 @@ alerts on is read at a bucket edge. The bounds also run closely up to the
 first target from below, so that a run with half a second to spare does not
 print a p99 near the target: a quantile interpolates linearly inside its
 bucket, and a wide bucket reports its top whatever the true value.
+`outbox.delivery.duration` takes `MessagingMetrics.OutboxDeliveryBuckets`
+instead, starting at a millisecond, because one row's delivery is one publish
+or one projection, and on the lags' bounds a healthy one would land in their
+first bucket.
 
 Both lags compare a timestamp made on another machine, so both carry the same
 caveat: they are useful at second granularity and meaningless below it, which is
-why §13.7's targets for them are in seconds and not milliseconds. The two
-counters carry no such caveat, because neither reads a clock at all:
+why §13.7's targets for them are in seconds and not milliseconds.
+`outbox.delivery.duration` carries none, as it reads one machine's
+monotonic clock across one row's delivery, and nor do the two counters,
+because neither reads a clock at all:
 `command.domain_rejected` is recorded by `CommandConsumer` at the moment the
 dispatcher returns a failure (§9.8), and `messaging.inbox.suppressed` by
 `InboxFilter<T>` at the moment it drops a delivery (§9.5) — both on the
@@ -618,7 +638,9 @@ machine doing the work.
 > is pushed from a live call site, so anything recording it has already resolved
 > the class, and it looks safe to leave out. It is not: the call site has to be
 > *reached*, and a consumer is constructed when a message arrives, so on a quiet
-> service these instruments still do not exist. §13.6 states the test that
+> service these instruments still do not exist. A host running §9.4's
+> dispatcher does build the class at start, since the dispatcher injects it,
+> but Notifications and the BFF run no dispatcher. §13.6 states the test that
 > actually decides membership — can this service run for an hour without
 > constructing it — and all four types fail it.
 
@@ -1621,10 +1643,12 @@ One without the other is a safeguard that is stated and absent:
 > a backlog of ten thousand rows all seconds old leaves the age gauge flat.
 > The alerts in the table read one each, which is why both exist.
 
-Registration is the step that makes any of this exist, and it is the step
-`ValidateOnBuild` cannot check — nothing depends on a metrics class, so the
-container is happy without it (§6.2). Both of Infrastructure's metrics types
-are registered in `Add<Service>Infrastructure`, from
+Registration is the step that makes any of this exist, and `ValidateOnBuild`
+checks it only for a class something injects (§6.2). `MessagingMetrics` is
+injected by its consumers and the outbox dispatcher; `OutboxMetrics` by
+nothing but the initialiser below, which is what makes a container without
+it refuse to start. Both of Infrastructure's metrics types are registered in
+`Add<Service>Infrastructure`, from
 `src/Services/<Service>/<Service>.Infrastructure/DependencyInjection.cs`:
 
 ```csharp
@@ -1713,7 +1737,9 @@ build the day it is registered.
 **The test for membership is not "is it a gauge".** It is *"can this service run
 for an hour without constructing it"* — and for every metrics type in this
 document the answer is yes, which is why each belongs in that constructor as it
-comes to exist. **All four are there.**
+comes to exist. **All four are there.** For `MessagingMetrics` the yes is a
+host's with no outbox dispatcher, Notifications or the BFF: a dispatcher
+injects it, so a publishing service builds it at start (§13.3).
 
 That includes `RequestMetrics`, and the reasoning that would exclude it is the
 worked example. `LoggingBehavior` injects it, a behaviour
@@ -1793,7 +1819,9 @@ guarding.
 > net gain, and the missed case is caught by the same review that named the
 > type.
 
-`lane` is a two-value tag, so this respects the cardinality rule in §13.3.
+The gauges' `lane` is a two-value tag, read from `OutboxLane`, so this
+respects the cardinality rule in §13.3; `outbox.delivery.duration`'s adds
+`unknown` and stays bounded (§13.3).
 
 > **An alert has three parts: a condition, a signal and a procedure.** §13.9
 > pairs conditions with procedures in both directions. This is the third leg —

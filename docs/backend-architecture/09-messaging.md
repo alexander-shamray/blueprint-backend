@@ -963,6 +963,8 @@ replicas times the bound. Both loops deliver a row the same way, and that
 per-row body is the design:
 
 ```csharp
+long start = _clock.GetTimestamp();
+
 try
 {
     // A scope per row, and this is what makes per-row isolation
@@ -973,9 +975,12 @@ try
 
     await DeliverAsync(delivery.ServiceProvider, message, ct);
     delivered.Enqueue(message.Id);
+    _metrics.OutboxDelivered(lane, "delivered", _clock.GetElapsedTime(start));
 }
 catch (Exception ex) when (!ct.IsCancellationRequested)
 {
+    _metrics.OutboxDelivered(lane, "failed", _clock.GetElapsedTime(start));
+
     // One bad message does not affect the rest of the batch.
     //
     // The filter asks the token, not the exception type. A handler
@@ -1007,6 +1012,14 @@ inside a `try` whose `finally` issues the completion statement above over
 them, under `CancellationToken.None`: a stop that cancels the pass part-way
 still completes every row the pass delivered, so a graceful shutdown
 redelivers nothing that per-row completion would not have.
+
+**Each row a pass delivers or fails is timed, by lane and outcome**, on
+§13.3's `outbox.delivery.duration`, through `TimeProvider` as §13.3 times a
+request; `lane` is the row's when it is `Broker` or `Local` and `unknown`
+otherwise. Its delivered count is the dispatcher's drain rate, which the
+pending count's net change cannot give while new rows still arrive, and a
+failure is timed before its fail statement, whose wait is the shared
+connection's queue rather than the row's delivery.
 
 **A full claim starts the next pass at once.** A claim that came back holding
 `ClaimBatchSize` rows says more are waiting, so when such a pass delivered at

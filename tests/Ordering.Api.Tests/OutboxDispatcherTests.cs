@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 using Ordering.TestSupport;
 using Ordering.TestSupport.Outbox;
 using Common.Application;
@@ -242,6 +244,43 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(4);
 
         Overlap.Most.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Each_row_a_pass_delivers_or_fails_is_timed_on_its_lane()
+    {
+        // The host's own factory, since a meter name is process-wide and another host's dispatcher shares it.
+        IMeterFactory factory = fixture.Factory.Services.GetRequiredService<IMeterFactory>();
+        ConcurrentQueue<(string? Lane, string? Outcome, double Seconds)> timed = new();
+
+        using MeterListener listener = new();
+        listener.InstrumentPublished = (instrument, active) =>
+        {
+            if (instrument.Name == "outbox.delivery.duration" && ReferenceEquals(instrument.Meter.Scope, factory))
+                active.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<double>((_, seconds, tags, _) =>
+        {
+            Dictionary<string, object?> named = new(tags.ToArray());
+            timed.Enqueue((named["lane"]?.ToString(), named["outcome"]?.ToString(), seconds));
+        });
+        listener.Start();
+
+        // The last row's lane is no OutboxLane member, which the column allows and a tag must not carry as itself.
+        OutboxMessage stray = OutboxRows.Healthy(fixture);
+        await fixture.StageOutboxAsync(
+            OutboxRows.Poison(fixture),
+            OutboxRows.Healthy(fixture),
+            OutboxRows.Broker(fixture, Guid.CreateVersion7()),
+            stray);
+        await fixture.SetOutboxLaneAsync(stray.MessageId, (OutboxLane)99);
+
+        (await fixture.ProcessOutboxBatchAsync()).ShouldBe(2);
+
+        timed.Select(t => (t.Lane, t.Outcome)).ShouldBe(
+            [("Local", "failed"), ("Local", "delivered"), ("Broker", "delivered"), ("unknown", "failed")],
+            ignoreOrder: true);
+        timed.ShouldAllBe(t => t.Seconds > 0);
     }
 
     [Fact]
