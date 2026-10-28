@@ -51,7 +51,8 @@ public abstract class SwitchedPollingWorker(OperatorSwitches? switches) : Backgr
 
         bool now = PassAtStart;
 
-        while (now || await TickAsync(timer, stoppingToken))
+        // The token again at the head, as a stop can land after a filled pass asked for the next.
+        while ((now && !stoppingToken.IsCancellationRequested) || await TickAsync(timer, stoppingToken))
         {
             now = false;
 
