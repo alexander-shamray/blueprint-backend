@@ -520,13 +520,14 @@ Inventory's reservation of that one row instead.
 below ends, reached by `LEVEL_RAMP_SECONDS` ramps and held for
 `LEVEL_HOLD_SECONDS`. Every level keeps doubling past its last step while the
 next stays within `STRESS_MAX_USERS`, whose default is `DEFAULT_MAX_USERS`,
-so a level that holds throughout ends on the cap and never on its own top.
-A cap below a level's own steps drops them, and one below its first refuses
-the level. Unset, the staircase is `DEFAULT_STEPS`, with
+so a level that holds throughout ends on the cap. A cap below a level's own
+steps drops them, and one that leaves a level a single step refuses it, since
+the knee compares each step with the one before; `xhigh` therefore needs the
+cap raised. Unset, the staircase is `DEFAULT_STEPS`, with
 `DEFAULT_RAMP_SECONDS` ramps and `DEFAULT_HOLD_SECONDS` holds.
-`STRESS_STEPS` replaces either as written and is never doubled, and
-`STRESS_RAMP_SECONDS` and `STRESS_HOLD_SECONDS` override the ramps and holds;
-a staircase above the cap is refused. A
+`STRESS_STEPS` replaces either as written, is never doubled, and makes the
+run's level `custom`, and `STRESS_RAMP_SECONDS` and `STRESS_HOLD_SECONDS`
+override the ramps and holds; a staircase above the cap is refused. A
 step is measured over its hold alone, since a ramp mixes two loads. A hold
 shorter than `summarise.mjs`'s `MINIMUM_RANGE_SECONDS` is read over that span,
 reaching into its ramp, because the services export their meters once a
