@@ -186,4 +186,8 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
         row.Payload.ShouldContain(note, Case.Sensitive);
     }
+
+    [Fact]
+    public async Task The_outbox_key_is_optimized_for_sequential_inserts() =>
+        (await fixture.OutboxKeyOptimizedForSequentialKeyAsync()).ShouldBeTrue();
 }

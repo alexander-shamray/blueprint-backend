@@ -28,9 +28,9 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         schema.ShouldBe(1, "InitialCreate's hand-written EnsureSchema is what creates it");
 
         // Named and ordered, since a count passes on a shorter prefix applied twice. The first seven
-        // and the trace-context one are wiring every service has; the rest are this service's own (§3.2).
+        // and the trace-context and sequential-key ones are wiring every service has; the rest are its own (§3.2).
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(14);
+        applied.Length.ShouldBe(15);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -45,6 +45,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[11].ShouldEndWith("_AddPersonalDataErasures");
         applied[12].ShouldEndWith("_AddPaymentOrderErasedUnder");
         applied[13].ShouldEndWith("_AddPersonalDataErasureClosedAt");
+        applied[14].ShouldEndWith("_OptimizeOutboxKeyForSequentialInserts");
     }
 
     [Fact]

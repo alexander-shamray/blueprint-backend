@@ -93,8 +93,9 @@ everything the delivery plan has built into the template so far:
 readiness checks, the §7.4 migrator host, the `InitialCreate` migration that
 creates the schema and the `AddOutbox`, `AddInbox`,
 `AddOutboxRetentionIndex`, `AddIdempotencyMarkers`,
-`IdempotencyMarkerCommittedAtDefault`, `AddIdempotencyMarkerRowVersion` and
-`AddOutboxTraceContext` ones beside it, §9.4's
+`IdempotencyMarkerCommittedAtDefault`, `AddIdempotencyMarkerRowVersion`,
+`AddOutboxTraceContext` and `OptimizeOutboxKeyForSequentialInserts` ones
+beside it, §9.4's
 outbox with its dispatcher and allow-list mapper, §9.5's inbox filter, §8.5's
 durable idempotency marker and the retention purge over all three of their
 tables, the §9 bus
