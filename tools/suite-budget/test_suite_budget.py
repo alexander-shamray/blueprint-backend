@@ -43,6 +43,18 @@ class Spawns(unittest.TestCase):
 """
 
 
+def discovered(directory):
+    """The module files CI's discover loads from a directory, read from unittest itself."""
+    found, pending = set(), [unittest.TestLoader().discover(str(directory), top_level_dir=str(directory))]
+    while pending:
+        for test in pending.pop():
+            if isinstance(test, unittest.TestSuite):
+                pending.append(test)
+            else:
+                found.add(type(test).__module__ + ".py")
+    return sorted(found)
+
+
 class Verdicts(unittest.TestCase):
     def test_a_pass_inside_the_ceiling_is_ok(self):
         self.assertEqual(suite_budget.verdict(9.0, 0, 10), "ok")
@@ -88,6 +100,13 @@ class Runs(unittest.TestCase):
         time.sleep(8)
         self.assertFalse(mark.exists(), "the module's grandchild outlived the kill")
 
+    def test_the_modules_timed_are_the_ones_discover_loads(self):
+        directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        for name in ("testbudgetnoscore.py", "test_budget_scored.py", "budget_helper.py", "budget_test.py"):
+            (directory / name).write_text(textwrap.dedent(PASSING), encoding="utf-8")
+        self.assertEqual(suite_budget.modules(directory), discovered(directory))
+        self.assertIn("testbudgetnoscore.py", suite_budget.modules(directory))
+
     def test_a_module_name_that_matches_nothing_fails(self):
         self.assertEqual(suite_budget.run(self.directory, "test_absent.py", 30).verdict, "failed")
 
@@ -121,10 +140,10 @@ class TheRealSuite(unittest.TestCase):
 
     directory = suite_budget.ROOT / suite_budget.SUITE
 
-    def test_every_module_in_the_suite_directory_is_run(self):
-        on_disk = sorted(p.name for p in self.directory.iterdir() if p.name.startswith("test_") and p.suffix == ".py")
-        self.assertTrue(on_disk)
-        self.assertEqual(suite_budget.modules(self.directory), on_disk)
+    def test_every_module_ci_runs_from_the_suite_directory_is_timed(self):
+        loaded = discovered(self.directory)
+        self.assertTrue(loaded)
+        self.assertEqual(suite_budget.modules(self.directory), loaded)
 
     def test_every_ceiling_names_a_module_that_exists(self):
         self.assertLessEqual(set(suite_budget.CEILINGS), set(suite_budget.modules(self.directory)))

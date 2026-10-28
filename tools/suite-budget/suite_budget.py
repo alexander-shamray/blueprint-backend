@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import io
 import os
 import signal
@@ -14,12 +15,15 @@ import subprocess
 import sys
 import tempfile
 import time
+import unittest
 from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WINDOWS = os.name == "nt"
 SUITE = ".claude/scripts"
+# The CI step's discover names no pattern, so its default is the set of modules CI runs and this must time.
+PATTERN = inspect.signature(unittest.TestLoader.discover).parameters["pattern"].default
 # Seconds per module on Windows: twice the figure docs/testing.md records for it, rounded up to ten seconds, so a
 # loaded machine stays inside and a module grown well past double does not. One under half the default is not named.
 CEILINGS = {
@@ -47,7 +51,7 @@ class Result:
 
 
 def modules(directory: Path) -> list[str]:
-    return sorted(path.name for path in directory.glob("test_*.py"))
+    return sorted(path.name for path in directory.glob(PATTERN))
 
 
 def verdict(seconds: float, returncode: int | None, ceiling: float) -> str:
