@@ -7,11 +7,13 @@ import contextlib
 import io
 import math
 import re
+import subprocess
 import tempfile
 import textwrap
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import suite_budget
 
@@ -106,6 +108,16 @@ class Runs(unittest.TestCase):
             (directory / name).write_text(textwrap.dedent(PASSING), encoding="utf-8")
         self.assertEqual(suite_budget.modules(directory), discovered(directory))
         self.assertIn("testbudgetnoscore.py", suite_budget.modules(directory))
+
+    def test_a_failed_tree_kill_still_stops_the_child(self):
+        def refused(*args, **kwargs):
+            raise subprocess.TimeoutExpired(args[0], 60)
+        with mock.patch.object(suite_budget.subprocess, "run", refused), \
+                mock.patch.object(suite_budget.os, "killpg", side_effect=ProcessLookupError, create=True):
+            result = suite_budget.run(self.directory, "test_sleeping.py", 2, kill_factor=1)
+        self.assertEqual(result.verdict, "hung")
+        self.assertGreaterEqual(result.seconds, 2)
+        self.assertLess(result.seconds, 30)
 
     def test_a_module_name_that_matches_nothing_fails(self):
         self.assertEqual(suite_budget.run(self.directory, "test_absent.py", 30).verdict, "failed")
