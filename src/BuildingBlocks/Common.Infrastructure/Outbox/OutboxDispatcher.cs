@@ -49,7 +49,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
         LoggerMessage.Define(
             LogLevel.Error,
             new EventId(1, nameof(ClaimFailed)),
-            "Outbox pass failed at its claim or its completion; retrying next tick.");
+            "Outbox claim failed; retrying next tick.");
 
     private static readonly Action<ILogger, Guid, string, int, int, Exception?> DeliveryFailed =
         LoggerMessage.Define<Guid, string, int, int>(
@@ -101,7 +101,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 inserted.TraceState;
             """;
 
-        // One statement per pass, not per row: a row's own commit took the key's last page and a log flush (ADR-159).
+        // One statement per pass, since each commit on the key's last page takes its latch and a log flush (ADR-159).
         _completeSql =
             $"""
             UPDATE outbox
@@ -159,7 +159,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
         }
         finally
         {
-            // Delivered rows complete on a stop too, so shutdown redelivers no more than per-row completion did.
+            // Under no token, so a stopped pass still completes the rows it delivered (ADR-159).
             if (delivered.Count > 0)
             {
                 await connection.ExecuteAsync(
