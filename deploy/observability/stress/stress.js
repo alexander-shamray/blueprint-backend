@@ -156,12 +156,15 @@ export const options = {
     },
     thresholds: thresholds(),
     summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(95)', 'p(99)', 'count'],
-    // Users are made and stock is set before the first VU starts: four
-    // hundred users a minute is well under what Keycloak's admin API manages.
+    // Users are made and stock is set before the first VU starts. setup()
+    // made a thousand users, six hundred of them new, in ten seconds here on
+    // 2026-10-28, so four hundred a minute leaves a wide margin.
     setupTimeout: `${Math.max(10, Math.ceil(STEPS[STEPS.length - 1] / 400))}m`,
 };
 
-const USERS = STEPS[STEPS.length - 1];
+// One user per VU in the test: the judge's VU comes from the same pool, so
+// a journey VU's idInTest can reach one past the top step.
+const USERS = STEPS[STEPS.length - 1] + 1;
 
 function userName(index) {
     return `stress-${String(index).padStart(4, '0')}`;
@@ -202,7 +205,7 @@ export function setup() {
     // A fresh password a run, kept in memory: nothing written to disk holds it.
     const userPassword = hex(randomBytes(24));
 
-    // A fresh admin token a batch: the master realm's lasts a minute, and four hundred users take longer.
+    // A fresh admin token a batch: the master realm's lasts a minute, and a level's users can take longer.
     for (let first = 1; first <= USERS; first += 25)
         ensureUsers(realm, adminHeaders(), api.id, ordersWrite, userPassword, first, Math.min(first + 24, USERS));
 
@@ -420,7 +423,7 @@ function bearer(data) {
 
 // The step tag is read at each request, because a step changes mid-session.
 // It is timed from the scenario's start, which the stages count from: the
-// test run's own clock also counts setup(), minutes of it at four hundred users.
+// test run's own clock also counts setup(), minutes of it at a level's top.
 function tagged(op, call) {
     exec.vu.metrics.tags.step = stepAt((Date.now() - exec.scenario.startTime) / 1000, HOLDS);
     return call();
