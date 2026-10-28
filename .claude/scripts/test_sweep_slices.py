@@ -124,7 +124,7 @@ class ASmallRepository(unittest.TestCase):
 
     def setUp(self):
         # Not rmtree with ignore_errors: git's objects are read-only, which
-        # Windows refuses to delete, and the flag hid every repository left.
+        # Windows refuses to delete, and the flag hides each one that stays.
         holder = tempfile.TemporaryDirectory(prefix="sweepslices-")
         self.addCleanup(holder.cleanup)
         top = holder.name
@@ -198,7 +198,7 @@ class ASmallRepository(unittest.TestCase):
         self.assertEqual(len("é\n".encode("utf-8")) + len("ab\n"), sum(s[2] for s in slices))
 
     def test_every_sample_is_read_through_one_cat_file(self):
-        # A pipeline per sample was a fork per file, most of a run under MSYS;
+        # A pipeline per sample is a fork per file, most of a run under MSYS;
         # the count is the subject, since a timing passes on a fast host.
         self.assertEqual(0, self.mark("bug", git(self.repo, "rev-parse HEAD")).returncode)
         for k in range(5):
@@ -252,7 +252,7 @@ class ThePerFileLoop(unittest.TestCase):
 
     def test_the_loop_holds_no_command_substitution(self):
         # Under MSYS each `$(…)` is an emulated fork, and one per tracked file
-        # was most of TheRealTree's time; the loop is read, since a fork is
+        # is most of a run over a real tree; the loop is read, since a fork is
         # invisible in the output.
         source = SLICES.read_text(encoding="utf-8")
         start = source.index('for rec in "${tree[@]}"; do')
