@@ -8,7 +8,7 @@ Ordering's drain after the load, so there is no figure between 8 and 16 to
 tune toward, and what does set that drain is #1559's to measure.
 **Why.** The 2026-10-28 15:36 stress plan (level `high`, stop rule `knee`)
 was rerun four times overnight from 2026-10-28 on one stack at `c1d629123`,
-Ordering's API rebuilt each time with one dispatcher: both files as before
+Ordering's API rebuilt each time in one variant of its dispatcher: as before
 ADR-163, `BrokerConcurrency` at 8 with the re-pass never asked for, the
 re-pass with `BrokerConcurrency` at 1, and both as shipped. Each run
 knee-stopped at step 1, 3200 VUs at 1042 to 1057 requests a second, and
@@ -37,10 +37,10 @@ queued messages. The dispatcher counts neither lane itself: MassTransit's
 `messaging.masstransit.send` counts its publishes among Ordering's other sends,
 and `projection.lag` is recorded once for each `Local` row delivered, but on
 this stack each series kept three to five points in ten minutes, too few to
-read a rate over a drain of three, so the figures here came from SQL polls and
-10% of traces. #1559 is to give the dispatcher a per-lane delivery count that
-a drain can be read from, and to measure the `Local` lane and the shared
-claim, each on its own, against these figures.
+read a rate over a drain of three minutes, so the figures here came from SQL
+polls and 10% of traces. #1559 is to give the dispatcher a per-lane delivery
+count that a drain can be read from, and to measure the `Local` lane and the
+shared claim, each on its own, against these figures.
 
 ---
 
