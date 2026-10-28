@@ -30,13 +30,15 @@ class Sleeps(unittest.TestCase):
     def test_sleeps(self):
         time.sleep(60)
 """
-# The grandchild inherits the module's output, as a helper's bash does, and leaves a mark if it outlives the kill.
+# The grandchild inherits the module's output, as a helper's bash does; it marks that it started, and again if it
+# outlives the kill.
 SPAWNING = """
 import subprocess, sys, time, unittest
-MARK = {mark!r}
+STARTED, MARK = {started!r}, {mark!r}
+GRANDCHILD = f"import time; open({{STARTED!r}}, 'w').close(); time.sleep(6); open({{MARK!r}}, 'w').close()"
 class Spawns(unittest.TestCase):
     def test_spawns(self):
-        subprocess.Popen([sys.executable, "-c", f"import time; time.sleep(6); open({{MARK!r}}, 'w').close()"])
+        subprocess.Popen([sys.executable, "-c", GRANDCHILD])
         time.sleep(60)
 """
 
@@ -75,13 +77,14 @@ class Runs(unittest.TestCase):
         self.assertLess(result.seconds, 30)
 
     def test_a_hung_module_s_own_processes_are_stopped_with_it(self):
-        mark = self.directory / "outlived"
-        (self.directory / "test_spawning.py").write_text(textwrap.dedent(SPAWNING.format(mark=str(mark))),
-                                                         encoding="utf-8")
+        started, mark = self.directory / "started", self.directory / "outlived"
+        body = SPAWNING.format(started=str(started), mark=str(mark))
+        (self.directory / "test_spawning.py").write_text(textwrap.dedent(body), encoding="utf-8")
         result = suite_budget.run(self.directory, "test_spawning.py", 2, kill_factor=1)
         self.assertEqual(result.verdict, "hung")
         self.assertGreaterEqual(result.seconds, 2)
         self.assertLess(result.seconds, 6)
+        self.assertTrue(started.exists(), "the grandchild never started, so the kill proves nothing")
         time.sleep(8)
         self.assertFalse(mark.exists(), "the module's grandchild outlived the kill")
 
