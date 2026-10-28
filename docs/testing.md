@@ -186,8 +186,10 @@ runs in the fast half and fails there. What it cannot do is report a pass.
 
 A gate with a suite is tested and then run, so a green suite says the gate
 works and not that this checkout passes it; a gate without one is only run.
-Most gate runs are the workflow step verbatim; these are the ones a step
-does not show whole.
+Most gate runs are the workflow step verbatim. The entries below are the ones
+a step does not show whole, and the gates whose invocation
+[`docs/change-locality.md`](change-locality.md) §3's Class D places here,
+each pointing at the README that owns its claim.
 
 **The stage gate needs three `dotnet test` runs first**, which are
 [§15.1](backend-architecture/15-cicd-deployment.md)'s unit and integration
@@ -287,6 +289,15 @@ py -3.12 .github/plan-size-gate/plan_size_gate.py
 ```
 
 What it reads and claims is [its README](../.github/plan-size-gate/README.md)'s.
+
+**The SQL style gate** reads the tracked tree and needs no base:
+
+```bash
+py -3.12 -m unittest discover -s .github/sql-style-gate
+py -3.12 .github/sql-style-gate/sql_style_gate.py
+```
+
+What it reads and claims is [its README](../.github/sql-style-gate/README.md)'s.
 
 **The Compose smoke is the one gate that needs a running daemon and the one
 whose run changes the machine it runs on**, so its teardown is part of what

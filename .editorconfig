@@ -78,9 +78,10 @@ csharp_new_line_before_members_in_anonymous_types = true
 # binary operators' placement and enforces nothing.
 
 # There is deliberately no [*.sql] section: §7.4 ships hand-written DDL inside
-# a migration's `migrationBuilder.Sql("""…""")` and nothing else, so every
-# statement sits in a C# raw string literal no formatter reads. The SQL
-# conventions in docs/style-guide.md are a review rule for that reason.
+# a migration's `migrationBuilder.Sql("""…""")`, no .sql file is tracked, and
+# the SQL sits in string literals, nearly all C# raw ones, no formatter reads.
+# Its conventions in docs/style-guide.md are a review rule for that reason, but
+# for the join rule, which .github/sql-style-gate/ holds.
 
 # --- .NET / C# style ---
 # At warning: docs/style-guide.md states this one without exception, and
