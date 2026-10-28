@@ -1121,8 +1121,8 @@ builds and its **142** tests pass before a line of it is written, **57** of
 them against real SQL Server and RabbitMQ containers — counts measured on
 2026-10-28 against a rendered service, whose `Yankee.Domain.Tests`,
 `Yankee.Application.Tests` and `Yankee.Api.Tests` hold 1, 18 and 123 of them.
-The 47 is the `Category=Integration` count of §12.4, which is a filter rather
-than a tally.
+The container figure is the `Category=Integration` count of §12.4, which is a
+filter rather than a tally.
 
 **Arithmetic is not a remeasurement.** The total need not move by the number of
 tests a change adds to the template, so whoever changes what the scaffold copies

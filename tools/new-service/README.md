@@ -137,9 +137,9 @@ having put its own four into `RetentionPurgeTests` without recounting — and
 eighty-nine until the outbox gauges' registration suite joined the template
 and a render read 1, 18 and 75, ninety-four until a render on 2026-10-09
 read 1, 18 and 103 with forty-seven against containers, and 122 until a
-render on 2026-10-28 read 1, 18 and 123 with fifty-seven: twenty more than
-the sequential-key test it was rendered for, the pair stale again before it
-added one. A figure nobody recounts goes stale on the next PR's clock rather
+render on 2026-10-28 read 1, 18 and 123 with fifty-seven: twenty more,
+nineteen of them not the sequential-key test it was rendered for, so the pair
+was stale again before it added one. A figure nobody recounts goes stale on the next PR's clock rather
 than on its own.
 
 **Adding to the number is not recounting it.** PR-22 put three tests into the
@@ -155,9 +155,9 @@ same reason PR-32 rendered twice, one pull request on. PR-35 read 1, 18 and 70:
 its own two are §8.5's marker `rowversion` — the mapping gate and the
 replacement a stale delete must not remove — and the other four were PR-34's,
 already in the template and never counted. **Two added, six apparent**, which
-is the rule above failing in the direction it warns about. The 47 is the
-`Category=Integration` count, which is a filter anyone can rerun rather than a
-tally somebody kept.
+is the rule above failing in the direction it warns about. The container
+figure is the `Category=Integration` count, which is a filter anyone can rerun
+rather than a tally somebody kept.
 
 **The outbox arrives wired and empty**, which is the state to expect: the
 allow-list mapper has no entries, so every domain event this service raises is
