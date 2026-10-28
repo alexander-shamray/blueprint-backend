@@ -517,7 +517,10 @@ default. No chart sets any of the three sections
 ([ADR-157](adr/ADR-157-the-gateways-budgets-and-the-workers-third-party-pacing-are-options-only-a-stress-override-raises-1488.md)).
 It also runs `ordering-api` at its chart's replica floor, with no host port,
 so that the outbox drains as the chart deploys it
-([ADR-158](adr/ADR-158-the-stress-override-runs-orderingapi-at-its-charts-replica-floor-1525.md)).
+([ADR-158](adr/ADR-158-the-stress-override-runs-orderingapi-at-its-charts-replica-floor-1525.md)),
+and samples the traces of every host that exports them, so that the observer
+does not compete with what it measures
+([ADR-160](adr/ADR-160-the-stress-override-samples-traces-parent-based-1533.md)).
 
 **A host process reads none of the container `environment:` blocks, so every
 key a service throws without has to be supplied to it.** **Five** do that, each

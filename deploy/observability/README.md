@@ -494,7 +494,11 @@ Every k6 client shares one address, so against the baseline stack the
 only the limiter. The simulators answer at once, so the workers'
 pacing models a capacity the run has no reason to measure. With both lifted,
 what gives out first is the software itself or the host's resources, and the
-resource readings tell those two apart. The SLO run never uses the override.
+resource readings tell those two apart. It also samples every host's traces,
+since nothing the run reads comes from a trace and tracing every request made
+the trace store the observer's largest cost
+([ADR-160](../../docs/backend-architecture/adr/ADR-160-the-stress-override-samples-traces-parent-based-1533.md)).
+The SLO run never uses the override.
 
 **The users.** `setup()` makes a `stress-run` client and one user per VU at
 the highest step, `stress-0001` upwards, through Keycloak's admin API, as the

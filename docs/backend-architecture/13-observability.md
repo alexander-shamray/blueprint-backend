@@ -151,6 +151,7 @@ names hosts in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-
                 // Publishes no meter at the pinned version; §13.6 records what the alert is owed.
                 .AddMeter("Microsoft.Extensions.Caching.Hybrid")
                 .AddMeter("StackExchange.Redis"))
+            // No SetSampler: the SDK's OTEL_TRACES_SAMPLER decides, and only the stress override sets it (ADR-160).
             .WithTracing(t => t
                 .AddAspNetCoreInstrumentation(o =>
                     o.Filter = ctx => !ctx.Request.Path.StartsWithSegments("/health"))
@@ -244,6 +245,19 @@ authenticate one, rejects every request that reaches it.
 Filtering health checks out of traces is not cosmetic — at a ten-second probe
 interval across a dozen pods they would otherwise dominate both trace volume and
 storage cost.
+
+**Every trace is kept, except under the stress override.** No line above sets
+a sampler, so the SDK reads its own `OTEL_TRACES_SAMPLER` and
+`OTEL_TRACES_SAMPLER_ARG`, and their absence means parent-based always-on.
+Only `deploy/compose/docker-compose.stress.yml` sets them, from its
+`x-trace-sampling` anchor: every host that exports telemetry keeps the share
+of traces the anchor names, parent-based, so a trace is kept or dropped whole
+across hosts. Under that load, tracing every request
+made the trace store the observer's largest cost, and nothing the stress run
+reads comes from a trace
+([ADR-160](adr/ADR-160-the-stress-override-samples-traces-parent-based-1533.md)).
+A sampler set in code would outrank the variables, so a test drops a root span
+through the override's own sampler name.
 
 Recording SQL text on spans is invaluable for debugging and a data-exposure
 risk if queries embed sensitive literals. Parameterised queries — which
