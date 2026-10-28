@@ -19,6 +19,7 @@ public class SwitchedPollingWorkerTests
         : SwitchedPollingWorker(switches)
     {
         private readonly TaskCompletionSource _firstPass = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _passes;
         private int _failures;
 
@@ -27,6 +28,16 @@ public class SwitchedPollingWorkerTests
         public int Failures => Volatile.Read(ref _failures);
 
         public Task FirstPass => _firstPass.Task;
+
+        /// <summary>Completes once <see cref="ReachAt"/> passes have run.</summary>
+        public Task Reached => _reached.Task;
+
+        public int ReachAt { get; init; } = 1;
+
+        /// <summary>How many passes, from the first, report work still waiting.</summary>
+        public int FilledPasses { get; init; }
+
+        public Action? AfterPass { get; init; }
 
         public bool Throws { get; init; }
 
@@ -48,11 +59,17 @@ public class SwitchedPollingWorkerTests
 
         protected override TimeSpan? StopDrain => drain;
 
+        protected override bool PassFilled => Passes <= FilledPasses;
+
         protected override async Task RunPassAsync(CancellationToken stoppingToken)
         {
-            Interlocked.Increment(ref _passes);
+            int passes = Interlocked.Increment(ref _passes);
             DrainSeen = Drain;
             _firstPass.TrySetResult();
+            AfterPass?.Invoke();
+
+            if (passes >= ReachAt)
+                _reached.TrySetResult();
 
             if (BlockUntilDrained)
             {
@@ -85,10 +102,13 @@ public class SwitchedPollingWorkerTests
         protected override void OnPassFailed(Exception exception) => Interlocked.Increment(ref _failures);
     }
 
-    private static OperatorSwitches SwitchesWith(params string[] off)
+    private static OperatorSwitches SwitchesWith(params string[] off) => SwitchesOver([.. off]);
+
+    // The options hold this list itself, so a test that adds to it switches the worker off mid-run.
+    private static OperatorSwitches SwitchesOver(List<string> off)
     {
         ServiceCollection services = new();
-        services.AddOptions<OperatorSwitchOptions>().Configure(o => o.Off = [.. off]);
+        services.AddOptions<OperatorSwitchOptions>().Configure(o => o.Off = off);
         ServiceProvider provider = services.BuildServiceProvider();
 
         return new OperatorSwitches(provider.GetRequiredService<IOptionsMonitor<OperatorSwitchOptions>>(), provider);
@@ -173,6 +193,70 @@ public class SwitchedPollingWorkerTests
         await RunAsync(worker);
 
         worker.Passes.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_filled_pass_runs_the_next_at_once_rather_than_at_the_tick()
+    {
+        // The tick outlasts the test, so the third pass ran only because the two before it filled (ADR-163).
+        Probe worker = new(null, passAtStart: true, interval: TimeSpan.FromHours(1)) { FilledPasses = 2, ReachAt = 3 };
+
+        await worker.StartAsync(TestContext.Current.CancellationToken);
+
+        try
+        {
+            await worker.Reached.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            await worker.StopAsync(TestContext.Current.CancellationToken);
+        }
+
+        worker.Passes.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task A_filled_pass_still_reads_the_switch_before_the_next()
+    {
+        // The first pass switches its own worker off and fills, so a second pass is one that skipped the switch.
+        List<string> off = [];
+        Probe worker = new(SwitchesOver(off), passAtStart: true, interval: TimeSpan.FromHours(1))
+        {
+            FilledPasses = int.MaxValue,
+            AfterPass = () => off.Add("probe")
+        };
+
+        await worker.StartAsync(TestContext.Current.CancellationToken);
+
+        try
+        {
+            await worker.Reached.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            await Task.Delay(Observation, TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            await worker.StopAsync(TestContext.Current.CancellationToken);
+        }
+
+        worker.Passes.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_stop_ends_a_run_of_filled_passes()
+    {
+        // Every pass fills, so only the stop can end the loop; bounded, so a loop that ignores it fails here.
+        Probe worker = new(null, passAtStart: true, interval: TimeSpan.FromHours(1)) { FilledPasses = int.MaxValue };
+
+        await worker.StartAsync(TestContext.Current.CancellationToken);
+        await worker.FirstPass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        // StopAsync waits on its own token for a loop that never ends, so that token carries the bound.
+        using CancellationTokenSource bound =
+            CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        bound.CancelAfter(TimeSpan.FromSeconds(30));
+        await worker.StopAsync(bound.Token);
+
+        worker.ExecuteTask.ShouldNotBeNull().IsCompleted.ShouldBeTrue();
     }
 
     [Fact]

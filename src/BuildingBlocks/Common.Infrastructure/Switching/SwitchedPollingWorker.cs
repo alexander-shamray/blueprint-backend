@@ -12,11 +12,15 @@ public abstract class SwitchedPollingWorker(OperatorSwitches? switches) : Backgr
     /// <inheritdoc />
     public abstract string SwitchName { get; }
 
-    /// <summary>How often a pass is attempted.</summary>
+    /// <summary>The timer's period: passes start on its ticks, unless the one before filled.</summary>
     protected abstract TimeSpan PassInterval { get; }
 
     /// <summary>Whether a pass runs before the first tick, so a host restarted often still passes.</summary>
     protected virtual bool PassAtStart => false;
+
+    /// <summary>Whether the next pass starts at once rather than at the next tick, as when the pass just run left
+    /// work it can make progress on; the switch is still read before it.</summary>
+    protected virtual bool PassFilled => false;
 
     /// <summary>How long a pass under way at a stop runs before <see cref="Drain"/> fires; null cancels it at
     /// once.</summary>
@@ -45,11 +49,11 @@ public abstract class SwitchedPollingWorker(OperatorSwitches? switches) : Backgr
 
         Drain = StopDrain is null ? stoppingToken : drain.Token;
 
-        bool first = PassAtStart;
+        bool now = PassAtStart;
 
-        while (first || await TickAsync(timer, stoppingToken))
+        while (now || await TickAsync(timer, stoppingToken))
         {
-            first = false;
+            now = false;
 
             if (switches?.IsOff(SwitchName) == true)
                 continue;
@@ -57,6 +61,7 @@ public abstract class SwitchedPollingWorker(OperatorSwitches? switches) : Backgr
             try
             {
                 await RunPassAsync(stoppingToken);
+                now = PassFilled && !stoppingToken.IsCancellationRequested;
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
