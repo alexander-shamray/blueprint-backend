@@ -26,8 +26,8 @@ machine the generator shares, so the generator's own limit arrives sooner.
 The sampler reports each `ordering-api` container as its own row. Every
 replica exports the same outbox gauges and the run reads them with `max`, so
 the backlog stays one figure. Requests to the service spread over the replicas
-by Docker's DNS, across pooled connections, and Shipping's address lookups
-travel over one HTTP/2 connection, so the share each replica serves is uneven.
+by Docker's DNS, across pooled and long-lived connections, so the share each
+replica serves is uneven.
 The dispatchers' drain does not depend on that share. During a stress run,
 `localhost:5101` answers nothing, so a developer reaches Ordering through the
 gateway. When the chart's floor changes, the test fails until the override
