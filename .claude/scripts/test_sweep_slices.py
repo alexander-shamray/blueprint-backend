@@ -6,7 +6,6 @@ directory no row owns fails here before a sweep passes over it.
 
 import os
 import re
-import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,27 +28,30 @@ def git(repo, args):
 
 
 class Sweep:
-    """A detached sweep worktree of `repo`, dropped with its slices afterwards."""
+    """A detached sweep worktree of `repo`, dropped with its slices afterwards;
+    under `root` as its temp root when one is given."""
 
-    def __init__(self, case, repo):
+    def __init__(self, case, repo, root=None):
         self.repo = repo
+        self.env = {"TMPDIR": root} if root else {}
         sha = git(repo, "rev-parse HEAD")
         made = run_bash(
-            'cd "$R" && bash "$DETACH" "$SHA" 2>/dev/null', R=repo, DETACH=str(DETACH), SHA=sha
+            'cd "$R" && bash "$DETACH" "$SHA" 2>/dev/null', R=repo, DETACH=str(DETACH), SHA=sha, **self.env
         )
         case.assertEqual(0, made.returncode, made.stderr)
         self.path = made.stdout.strip()
         case.addCleanup(
             lambda: run_bash(
                 'cd "$R" && bash "$DROP" "$W" >/dev/null 2>&1; rm -rf "$W.slices"',
-                R=repo, DROP=str(DROP), W=self.path,
+                R=repo, DROP=str(DROP), W=self.path, **self.env,
             )
         )
 
     def slices(self, kind, *extra, **env):
         return run_bash(
             'cd "$R" && bash "$SLICES" "$KIND" "$W" $EXTRA',
-            R=self.repo, SLICES=str(SLICES), KIND=kind, W=self.path, EXTRA=" ".join(extra), **env,
+            R=self.repo, SLICES=str(SLICES), KIND=kind, W=self.path, EXTRA=" ".join(extra),
+            **self.env, **env,
         )
 
 
@@ -116,11 +118,19 @@ SMALL_TREE = {"src/BuildingBlocks/a.cs": "x\n", "src/Services/b.cs": "x\n", "tes
 
 
 class ASmallRepository(unittest.TestCase):
-    """A small repository of its own, so a commit and a ref never touch this one."""
+    """A small repository of its own, so a commit and a ref never touch this one;
+    its sweeps under a temp root beside it, so a run stopped before its cleanups
+    leaves one directory behind, not a worktree git can no longer reach."""
 
     def setUp(self):
-        self.repo = tempfile.mkdtemp(prefix="sweepslices-")
-        self.addCleanup(shutil.rmtree, self.repo, ignore_errors=True)
+        # Not rmtree with ignore_errors: git's objects are read-only, which
+        # Windows refuses to delete, and the flag hid every repository left.
+        holder = tempfile.TemporaryDirectory(prefix="sweepslices-")
+        self.addCleanup(holder.cleanup)
+        top = holder.name
+        self.repo, self.root = str(Path(top, "repo")), str(Path(top, "root"))
+        os.mkdir(self.repo)
+        os.mkdir(self.root)
         made = run_bash('cd "$R" && git init -q --initial-branch=main .', R=self.repo)
         self.assertEqual(0, made.returncode, made.stderr)
         for relative, text in SMALL_TREE.items():
@@ -146,7 +156,7 @@ class ASmallRepository(unittest.TestCase):
 
     def test_a_top_level_directory_no_row_owns_refuses_the_run(self):
         self.commit("newtree/x.txt", "x\n")
-        result = Sweep(self, self.repo).slices("bug")
+        result = Sweep(self, self.repo, self.root).slices("bug")
         self.assertEqual(3, result.returncode)
         self.assertIn("no row owns: newtree/x.txt", result.stderr)
 
@@ -154,7 +164,7 @@ class ASmallRepository(unittest.TestCase):
         base = git(self.repo, "rev-parse HEAD")
         self.assertEqual(0, self.mark("bug", base).returncode)
         self.commit("tools/added.py", "print(1)\n")
-        result = Sweep(self, self.repo).slices("bug")
+        result = Sweep(self, self.repo, self.root).slices("bug")
         self.assertEqual(0, result.returncode, result.stderr)
         head, slices = parse(result.stdout)
         self.assertEqual(f"since {base}", head["mode"])
@@ -167,7 +177,7 @@ class ASmallRepository(unittest.TestCase):
         self.commit("docs/fenced.md", "# t\n" + body)
         self.commit("docs/nested.md", nested)
         self.commit("docs/plain.md", "no code here\n")
-        result = Sweep(self, self.repo).slices("bug")
+        result = Sweep(self, self.repo, self.root).slices("bug")
         self.assertEqual(0, result.returncode, result.stderr)
         head, slices = parse(result.stdout)
         self.assertEqual(["docs/fenced.md", "docs/nested.md"], sorted(listed(slices)))
@@ -181,7 +191,7 @@ class ASmallRepository(unittest.TestCase):
         self.assertEqual(0, self.mark("bug", git(self.repo, "rev-parse HEAD")).returncode)
         self.commit("docs/a.md", "```\né\n```")
         self.commit("docs/b.md", "```\nab\n```\n")
-        result = Sweep(self, self.repo).slices("bug")
+        result = Sweep(self, self.repo, self.root).slices("bug")
         self.assertEqual(0, result.returncode, result.stderr)
         head, slices = parse(result.stdout)
         self.assertEqual(["docs/a.md", "docs/b.md"], sorted(listed(slices)))
@@ -196,7 +206,7 @@ class ASmallRepository(unittest.TestCase):
         handle, trace = tempfile.mkstemp(prefix="sweepslices-trace-")
         os.close(handle)
         self.addCleanup(os.remove, trace)
-        result = Sweep(self, self.repo).slices("bug", GIT_TRACE=trace)
+        result = Sweep(self, self.repo, self.root).slices("bug", GIT_TRACE=trace)
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(5, len(listed(parse(result.stdout)[1])))
         calls = re.findall(r"trace: built-in: git cat-file", Path(trace).read_text(encoding="utf-8"))
@@ -205,7 +215,7 @@ class ASmallRepository(unittest.TestCase):
     def test_full_and_a_non_ancestor_ref_both_read_everything(self):
         self.commit("tools/added.py", "print(1)\n")
         tip = git(self.repo, "rev-parse HEAD")
-        sweep = Sweep(self, self.repo)
+        sweep = Sweep(self, self.repo, self.root)
         self.assertEqual(0, self.mark("bug", tip).returncode)
         result = sweep.slices("bug", "full")
         self.assertEqual("full", parse(result.stdout)[0]["mode"])
@@ -228,11 +238,11 @@ class ASmallRepository(unittest.TestCase):
         self.assertEqual(sha, git(self.repo, "rev-parse refs/sweeps/security"))
 
     def test_the_slices_go_with_the_worktree(self):
-        sweep = Sweep(self, self.repo)
+        sweep = Sweep(self, self.repo, self.root)
         self.assertEqual(0, sweep.slices("security").returncode)
         dropped = run_bash(
             'cd "$R" && bash "$DROP" "$W" && [ ! -e "$W.slices" ] && echo gone',
-            R=self.repo, DROP=str(DROP), W=sweep.path,
+            R=self.repo, DROP=str(DROP), W=sweep.path, TMPDIR=self.root,
         )
         self.assertEqual("gone", dropped.stdout.strip(), dropped.stderr)
 
