@@ -101,7 +101,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 inserted.TraceState;
             """;
 
-        // One statement per pass, since each commit on the key's last page takes its latch and a log flush (ADR-159).
+        // One statement per pass, since each commit on the key's last page takes its latch and a log flush (ADR-161).
         _completeSql =
             $"""
             UPDATE outbox
@@ -160,7 +160,7 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
         }
         finally
         {
-            // Under no token, so a stopped pass still completes the rows it delivered (ADR-159).
+            // Under no token, so a stopped pass still completes the rows it delivered (ADR-161).
             if (delivered.Count > 0)
             {
                 await connection.ExecuteAsync(

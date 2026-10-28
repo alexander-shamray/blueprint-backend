@@ -1095,7 +1095,7 @@ outbox dispatcher's claim reads both trace columns ([§9.4](09-messaging.md)),
 so a publishing service without them fails its first claim.
 `OptimizeOutboxKeyForSequentialInserts` travels on a weaker one: a service
 without it still runs, but its outbox key is the hot last page
-[ADR-159](adr/ADR-159-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md)
+[ADR-161](adr/ADR-161-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md)
 found, and its `OutboxDispatcherTests` would fail on the missing option.
 It then edits the shared files: `Platform.slnx`, the Compose index — one
 `include:` line for the unit it just created — the `infra-only` override, which

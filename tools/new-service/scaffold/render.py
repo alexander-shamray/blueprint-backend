@@ -423,7 +423,7 @@ ROW_VERSION_MIGRATION = re.compile(
 # copied configuration maps both columns and the dispatcher's claim reads them,
 # so a service without the migration fails its first claim on a missing column.
 TRACE_CONTEXT_MIGRATION = re.compile(r"^\d{14}_AddOutboxTraceContext(\.Designer)?\.cs$")
-# The outbox key's sequential-key option (ADR-159). It travels because the
+# The outbox key's sequential-key option (ADR-161). It travels because the
 # outbox does: a new service's dispatcher contends for the same last page.
 SEQUENTIAL_KEY_MIGRATION = re.compile(r"^\d{14}_OptimizeOutboxKeyForSequentialInserts(\.Designer)?\.cs$")
 LATER_MIGRATION = re.compile(r"^\d{14}_\w+(\.Designer)?\.cs$")

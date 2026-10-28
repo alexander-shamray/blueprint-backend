@@ -167,7 +167,7 @@ decision looks wrong.
 | **ADR-158** | [The stress override runs Ordering.Api at its chart's replica floor (#1525)](adr/ADR-158-the-stress-override-runs-orderingapi-at-its-charts-replica-floor-1525.md) |
 | **ADR-159** | [Framework categories log at Warning unless configured (#1532)](adr/ADR-159-framework-categories-log-at-warning-unless-configured-1532.md) |
 | **ADR-160** | [The stress override samples traces, parent-based (#1533)](adr/ADR-160-the-stress-override-samples-traces-parent-based-1533.md) |
-| **ADR-159** | [The outbox key is optimised for sequential inserts and a pass completes its rows in one statement (#1531)](adr/ADR-159-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md) |
+| **ADR-161** | [The outbox key is optimised for sequential inserts and a pass completes its rows in one statement (#1531)](adr/ADR-161-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md) |
 
 ---
 

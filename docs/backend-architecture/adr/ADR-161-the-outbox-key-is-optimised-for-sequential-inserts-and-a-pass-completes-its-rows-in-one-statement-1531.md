@@ -1,4 +1,4 @@
-# ADR-159 — The outbox key is optimised for sequential inserts and a pass completes its rows in one statement (#1531)
+# ADR-161 — The outbox key is optimised for sequential inserts and a pass completes its rows in one statement (#1531)
 
 **Decision.** Every service with an outbox migrates its `OutboxMessages`
 primary key to `OPTIMIZE_FOR_SEQUENTIAL_KEY = ON`, in a migration named
