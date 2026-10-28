@@ -14,7 +14,7 @@ re-pass with `BrokerConcurrency` at 1, and both as shipped. Each run
 knee-stopped at step 1, 3200 VUs at 1042 to 1057 requests a second, and
 Ordering's outbox, polled from the load's end, drained 11 634 rows in 165 s
 before ADR-163, 11 575 in 159 s with the bound alone, 11 516 in 155 s with the
-re-pass alone and 11 449 in 170 s with both: 67 to 75 rows a second net. The
+re-pass alone and 11 449 in 170 s with both: 67 to 74 rows a second net. The
 oldest row at step 1's end read 56.2 s, 51.5 s, 56.7 s and 44.7 s. One run
 each, those spreads are noise, and the 55 rows a second ADR-163 cites came
 from an earlier stack, before
