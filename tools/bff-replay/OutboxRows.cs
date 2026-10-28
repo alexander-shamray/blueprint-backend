@@ -32,8 +32,10 @@ public static class OutboxRows
 
     /// <summary>Reads no row, and fails on a missing table, column or grant: the preflight's question.</summary>
     public static string ProbeSql(Publisher publisher) =>
-        $"SELECT TOP (0) {Columns}, {nameof(OutboxMessage.ProcessedAt)}, {nameof(OutboxMessage.Lane)} " +
-        $"FROM {publisher.Outbox};";
+        $"""
+        SELECT TOP (0) {Columns}, {nameof(OutboxMessage.ProcessedAt)}, {nameof(OutboxMessage.Lane)}
+        FROM {publisher.Outbox};
+        """;
 
     /// <summary>The publisher's own clock, which stamps <c>ProcessedAt</c> (§9.4), read when the run begins.</summary>
     public const string CutoffSql = "SELECT SYSDATETIMEOFFSET();";
