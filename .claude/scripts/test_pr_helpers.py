@@ -568,9 +568,9 @@ class NoCommandReadsAPullRequestFeedUnfiltered(unittest.TestCase):
                 self.assertTrue(ours or cls == "A+D+E", "a class with nothing outside it proves nothing")
 
     def test_a_class_map_that_cannot_be_read_refuses_the_run(self):
-        # A verdict judged against no tree set would read `inside` for every
-        # path the row admits, which is the fail-open this map closes. The
-        # helper is run from a copy whose map is missing, short or malformed.
+        # The gate refuses a map it cannot read whole, so a verdict half-read
+        # from one is an answer CI never gives, and the helper refuses it too.
+        # It is run from a copy whose map is missing, short or malformed.
         body = "| Class | D |\n| Touch set | docs/x.md |\n"
         # Every class but A, so a bad A line is refused for itself and not for a class missing.
         rest = "B:\n  - 'src/**'\nC:\n  - 'src/**'\nD:\n  - 'docs/**'\nE:\n  - 'x.props'\n"
