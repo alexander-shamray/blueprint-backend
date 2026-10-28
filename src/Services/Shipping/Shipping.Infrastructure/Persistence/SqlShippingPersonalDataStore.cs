@@ -19,7 +19,8 @@ internal sealed class SqlShippingPersonalDataStore(ShippingDbContext db, IDbConn
             SELECT 1
             FROM shipping.Shipments AS p
             CROSS APPLY OPENJSON(p.ErasedUnder) AS u
-            WHERE p.OrderId = a.OrderId AND u.value = @RequestId)
+            WHERE p.OrderId = a.OrderId
+                AND u.value = @RequestId)
         """;
 
     private const string AddressedOrdersSql =

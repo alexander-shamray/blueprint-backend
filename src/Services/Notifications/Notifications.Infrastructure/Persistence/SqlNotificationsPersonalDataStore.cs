@@ -69,14 +69,17 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         $"""
         EXISTS (
             SELECT 1 FROM notifications.NotificationLog AS n
-            WHERE n.NotificationId = d.NotificationId AND EXISTS ({PlacedUnder} AND r.OrderId = n.OrderId))
+            WHERE n.NotificationId = d.NotificationId
+                AND EXISTS ({PlacedUnder} AND r.OrderId = n.OrderId))
         """;
 
     private const string DeleteWaitingDeliveriesSql =
         $"""
         DELETE d
         FROM notifications.PushDeliveries AS d
-        WHERE d.Status = 'Pending' AND d.CustomerId = @SubjectId AND NOT {OfKeptOrder};
+        WHERE d.Status = 'Pending'
+            AND d.CustomerId = @SubjectId
+            AND NOT {OfKeptOrder};
         """;
 
     // As the ended notices: the row keeps what shows a push was sent, and loses whom to and in which language.
@@ -85,7 +88,9 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         UPDATE d
         SET CustomerId = NULL, Languages = NULL
         FROM notifications.PushDeliveries AS d
-        WHERE d.Status <> 'Pending' AND d.CustomerId = @SubjectId AND NOT {OfKeptOrder};
+        WHERE d.Status <> 'Pending'
+            AND d.CustomerId = @SubjectId
+            AND NOT {OfKeptOrder};
         """;
 
     private const string DeleteOrderRecordsSql =
@@ -110,14 +115,17 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
             WHERE CustomerId = @SubjectId);
         DECLARE @Held int = (SELECT COUNT(*) FROM notifications.OrderRecords WITH (UPDLOCK) WHERE OrderId = @OrderId);
         SET NOCOUNT OFF;
-        DELETE FROM notifications.NotificationLog WHERE Status = 'Pending' AND OrderId = @OrderId;
+        DELETE FROM notifications.NotificationLog
+        WHERE Status = 'Pending'
+            AND OrderId = @OrderId;
         """;
 
     private const string AnonymiseEndedOrderSql =
         """
         UPDATE notifications.NotificationLog
         SET CustomerId = NULL, Languages = NULL, Parameters = ''
-        WHERE Status <> 'Pending' AND OrderId = @OrderId;
+        WHERE Status <> 'Pending'
+            AND OrderId = @OrderId;
         """;
 
     private const string DeleteWaitingOrderDeliveriesSql =
@@ -126,7 +134,8 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         FROM notifications.PushDeliveries AS d
         INNER JOIN notifications.NotificationLog AS n
             ON n.NotificationId = d.NotificationId
-        WHERE d.Status = 'Pending' AND n.OrderId = @OrderId;
+        WHERE d.Status = 'Pending'
+            AND n.OrderId = @OrderId;
         """;
 
     private const string AnonymiseEndedOrderDeliveriesSql =
@@ -136,7 +145,8 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         FROM notifications.PushDeliveries AS d
         INNER JOIN notifications.NotificationLog AS n
             ON n.NotificationId = d.NotificationId
-        WHERE d.Status <> 'Pending' AND n.OrderId = @OrderId;
+        WHERE d.Status <> 'Pending'
+            AND n.OrderId = @OrderId;
         """;
 
     private const string DeleteOrderRecordSql =
@@ -149,7 +159,8 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         $"""
         UPDATE notifications.DeviceInstallations WITH (UPDLOCK, HOLDLOCK)
         SET SubjectId = NULL, Platform = NULL, AppId = NULL, Token = NULL, RegisteredAt = NULL, ErasedUnder = N'[]'
-        WHERE SubjectId = @SubjectId AND NOT {WrittenUnder};
+        WHERE SubjectId = @SubjectId
+            AND NOT {WrittenUnder};
         """;
 
     // Every entry keeps its pair, value, times, client and chain as evidence, and loses whom it was about. Over the
@@ -158,7 +169,8 @@ internal sealed class SqlNotificationsPersonalDataStore(NotificationsDbContext d
         $"""
         UPDATE notifications.ConsentEntries WITH (UPDLOCK, HOLDLOCK)
         SET SubjectId = NULL, AnonymisedAt = @Now, ErasedUnder = N'[]'
-        WHERE SubjectId = @SubjectId AND NOT {WrittenUnder};
+        WHERE SubjectId = @SubjectId
+            AND NOT {WrittenUnder};
         """;
 
     public Task<int> DeleteWaitingNoticesAsync(Guid subjectId, Guid requestId, CancellationToken ct) =>

@@ -141,7 +141,9 @@ public sealed class DeliveryAddressStoreTests(ServiceFixture fixture) : IAsyncLi
             """
             SELECT Value = CONCAT(DATA_TYPE, '(', CHARACTER_MAXIMUM_LENGTH, ')', IIF(IS_NULLABLE = 'YES', ' NULL', ''))
             FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = 'shipping' AND TABLE_NAME = 'DeliveryAddresses' AND COLUMN_NAME = {0}
+            WHERE TABLE_SCHEMA = 'shipping'
+                AND TABLE_NAME = 'DeliveryAddresses'
+                AND COLUMN_NAME = {0}
             """,
             column);
 

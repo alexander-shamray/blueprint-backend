@@ -16,7 +16,8 @@ internal sealed class SqlErasedSubjects(IDbConnectionFactory connections) : IEra
         """
         SELECT RequestId, SubjectHash
         FROM bff.PersonalDataErasures
-        WHERE ClosedAt IS NULL OR ClosedAt > @Since;
+        WHERE ClosedAt IS NULL
+            OR ClosedAt > @Since;
         """;
 
     private sealed record Row(Guid RequestId, string SubjectHash);

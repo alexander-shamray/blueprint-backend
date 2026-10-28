@@ -37,7 +37,8 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
         """
         NOT EXISTS (
             SELECT 1 FROM notifications.PushDeliveries d
-            WHERE d.NotificationId = n.NotificationId AND d.Status = 'Pending')
+            WHERE d.NotificationId = n.NotificationId
+                AND d.Status = 'Pending')
         """;
 
     private const string LastDelivery =
@@ -55,7 +56,9 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
         SELECT TOP (@BatchSize) n.NotificationId
         FROM notifications.NotificationLog n
         {LastDelivery}
-        WHERE n.CompletedAt IS NOT NULL AND {NoticeEndedAt} < @Before AND n.Status <> 'Pending'
+        WHERE n.CompletedAt IS NOT NULL
+            AND {NoticeEndedAt} < @Before
+            AND n.Status <> 'Pending'
             AND {NoPendingDelivery}
         ORDER BY n.CompletedAt;
         """;
@@ -64,8 +67,11 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
         $"""
         DELETE n FROM notifications.NotificationLog n
         {LastDelivery}
-        WHERE n.NotificationId IN @Keys AND n.CompletedAt IS NOT NULL AND {NoticeEndedAt} < @Before
-            AND n.Status <> 'Pending' AND {NoPendingDelivery};
+        WHERE n.NotificationId IN @Keys
+            AND n.CompletedAt IS NOT NULL
+            AND {NoticeEndedAt} < @Before
+            AND n.Status <> 'Pending'
+            AND {NoPendingDelivery};
         """;
 
     private const string ExpiredOrders =
@@ -74,7 +80,9 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
         FROM notifications.OrderRecords r
         WHERE r.RecordedAt < @Before
             AND NOT EXISTS (
-                SELECT 1 FROM notifications.NotificationLog n WHERE n.OrderId = r.OrderId AND n.Status = 'Pending')
+                SELECT 1 FROM notifications.NotificationLog n
+                WHERE n.OrderId = r.OrderId
+                    AND n.Status = 'Pending')
         ORDER BY r.RecordedAt;
         """;
 
@@ -85,11 +93,17 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
         UPDATE n
         SET Languages = NULL, Parameters = ''
         FROM notifications.NotificationLog n
-        WHERE n.OrderId IN @Keys AND n.CustomerId IS NULL AND n.Status <> 'Pending'
+        WHERE n.OrderId IN @Keys
+            AND n.CustomerId IS NULL
+            AND n.Status <> 'Pending'
             AND EXISTS (
-                SELECT 1 FROM notifications.OrderRecords r WHERE r.OrderId = n.OrderId AND r.RecordedAt < @Before)
+                SELECT 1 FROM notifications.OrderRecords r
+                WHERE r.OrderId = n.OrderId
+                    AND r.RecordedAt < @Before)
             AND NOT EXISTS (
-                SELECT 1 FROM notifications.NotificationLog p WHERE p.OrderId = n.OrderId AND p.Status = 'Pending');
+                SELECT 1 FROM notifications.NotificationLog p
+                WHERE p.OrderId = n.OrderId
+                    AND p.Status = 'Pending');
         """;
 
     // Asked again, so a notice a consumer wrote since the select keeps the record it will wait on. A delete locks the
@@ -102,7 +116,9 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
         WHERE r.OrderId IN @Keys
             AND r.RecordedAt < @Before
             AND NOT EXISTS (
-                SELECT 1 FROM notifications.NotificationLog n WHERE n.OrderId = r.OrderId AND n.Status = 'Pending');
+                SELECT 1 FROM notifications.NotificationLog n
+                WHERE n.OrderId = r.OrderId
+                    AND n.Status = 'Pending');
         """;
 
     private const string ExpiredContacts =
@@ -137,7 +153,9 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
             SELECT MIN(n.WrittenAt) AS WrittenAt
             FROM notifications.ConsentEntries n
             WHERE n.SupersedesEntryId = e.EntryId
-                OR (n.SubjectId = e.SubjectId AND n.Topic = e.Topic AND n.Channel = e.Channel
+                OR (n.SubjectId = e.SubjectId
+                    AND n.Topic = e.Topic
+                    AND n.Channel = e.Channel
                     AND n.Position > e.Position)) later
         """;
 
@@ -148,10 +166,12 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
         """
         NOT EXISTS (
             SELECT 1 FROM notifications.NotificationLog n
-            WHERE n.ConsentEntryId = e.EntryId OR n.ConsentEntryId = e.SupersedesEntryId)
+            WHERE n.ConsentEntryId = e.EntryId
+                OR n.ConsentEntryId = e.SupersedesEntryId)
         AND NOT EXISTS (
             SELECT 1 FROM notifications.PushDeliveries d
-            WHERE d.ConsentEntryId = e.EntryId OR d.ConsentEntryId = e.SupersedesEntryId)
+            WHERE d.ConsentEntryId = e.EntryId
+                OR d.ConsentEntryId = e.SupersedesEntryId)
         """;
 
     private const string ExpiredConsent =
@@ -159,7 +179,8 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
         SELECT TOP (@BatchSize) e.EntryId
         FROM notifications.ConsentEntries e
         {Later}
-        WHERE {EndedAt} < @Before AND {Unnamed}
+        WHERE {EndedAt} < @Before
+            AND {Unnamed}
         ORDER BY {EndedAt};
         """;
 
@@ -168,7 +189,9 @@ public sealed class NotificationsRetentionService : SwitchedPollingWorker
         $"""
         DELETE e FROM notifications.ConsentEntries e
         {Later}
-        WHERE e.EntryId IN @Keys AND {EndedAt} < @Before AND {Unnamed};
+        WHERE e.EntryId IN @Keys
+            AND {EndedAt} < @Before
+            AND {Unnamed};
         """;
 
     private static readonly Action<ILogger, int, string, Exception?> Purged =

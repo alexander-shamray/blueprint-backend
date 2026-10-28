@@ -51,7 +51,9 @@ internal sealed class PushClaims(IDbConnectionFactory connections, IOptions<Send
                               THEN {OutboxDispatcher.BackoffAttemptCap}
                               ELSE Attempts END) * {OutboxDispatcher.BackoffBaseSeconds},
                 SYSDATETIMEOFFSET())
-        WHERE DeliveryId = @DeliveryId AND Status = 'Pending' AND LockedUntil = @Lease;
+        WHERE DeliveryId = @DeliveryId
+            AND Status = 'Pending'
+            AND LockedUntil = @Lease;
         """;
 
     /// <summary>Leases due deliveries of every platform but <paramref name="parked"/>'s.</summary>

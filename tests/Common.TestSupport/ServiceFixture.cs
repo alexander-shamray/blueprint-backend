@@ -380,7 +380,8 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
             $"""
             SELECT Value = optimize_for_sequential_key
             FROM sys.indexes
-            WHERE object_id = OBJECT_ID(N'{_schema}.OutboxMessages') AND is_primary_key = 1
+            WHERE object_id = OBJECT_ID(N'{_schema}.OutboxMessages')
+                AND is_primary_key = 1
             """);
 
     /// <summary>Every inbox row, untracked, for asserting over (§9.5).</summary>

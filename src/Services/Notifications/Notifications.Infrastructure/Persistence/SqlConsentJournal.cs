@@ -22,21 +22,28 @@ internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnection
     private const string Newest =
         """
         NOT EXISTS (SELECT 1 FROM notifications.ConsentEntries h
-            WHERE h.SubjectId = e.SubjectId AND h.Topic = e.Topic AND h.Channel = e.Channel AND h.Position > e.Position)
+            WHERE h.SubjectId = e.SubjectId
+                AND h.Topic = e.Topic
+                AND h.Channel = e.Channel
+                AND h.Position > e.Position)
         """;
 
     private const string NewestSql =
         $"""
         SELECT e.EntryId, e.Topic, e.Channel, e.OptedIn, e.WrittenAt, e.Client, e.SupersedesEntryId AS Supersedes
         FROM notifications.ConsentEntries e
-        WHERE e.SubjectId = @SubjectId AND {Newest};
+        WHERE e.SubjectId = @SubjectId
+            AND {Newest};
         """;
 
     private const string NewestOfPairSql =
         $"""
         SELECT e.EntryId, e.Topic, e.Channel, e.OptedIn, e.WrittenAt, e.Client, e.SupersedesEntryId AS Supersedes
         FROM notifications.ConsentEntries e
-        WHERE e.SubjectId = @SubjectId AND e.Topic = @Topic AND e.Channel = @Channel AND {Newest};
+        WHERE e.SubjectId = @SubjectId
+            AND e.Topic = @Topic
+            AND e.Channel = @Channel
+            AND {Newest};
         """;
 
     private const string AppendSql =
@@ -48,7 +55,9 @@ internal sealed class SqlConsentJournal(NotificationsDbContext db, IDbConnection
         INSERT @Pair
         SELECT e.EntryId, e.OptedIn, e.WrittenAt, e.Client, e.SupersedesEntryId, e.Position
         FROM notifications.ConsentEntries e WITH (UPDLOCK, HOLDLOCK)
-        WHERE e.SubjectId = @SubjectId AND e.Topic = @Topic AND e.Channel = @Channel;
+        WHERE e.SubjectId = @SubjectId
+            AND e.Topic = @Topic
+            AND e.Channel = @Channel;
 
         DECLARE @Newest TABLE (EntryId uniqueidentifier NOT NULL, OptedIn bit NOT NULL,
             WrittenAt datetimeoffset(7) NOT NULL, Client varchar(255) NOT NULL, Supersedes uniqueidentifier NULL);

@@ -50,7 +50,8 @@ public sealed class ServiceFixture()
                 $"""
                 SELECT COLUMN_NAME AS Value
                 FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = {schema} AND TABLE_NAME = {table}
+                WHERE TABLE_SCHEMA = {schema}
+                    AND TABLE_NAME = {table}
                 """)
             .ToArrayAsync(TestContext.Current.CancellationToken);
     }

@@ -60,7 +60,8 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
         """
         UPDATE payments.PaymentOrders
         SET CustomerId = '00000000-0000-0000-0000-000000000000', ErasedUnder = N'[]'
-        WHERE OrderId = @OrderId AND CustomerId = @CustomerId;
+        WHERE OrderId = @OrderId
+            AND CustomerId = @CustomerId;
         """;
 
     private sealed record Row(

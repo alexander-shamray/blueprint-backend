@@ -27,7 +27,8 @@ public sealed class OverdueSweepService : SwitchedPollingWorker
         """
         SELECT TOP (@BatchSize) RequestId
         FROM privacy.ErasureRequests
-        WHERE Status = 'Open' AND DueAt <= @Now
+        WHERE Status = 'Open'
+            AND DueAt <= @Now
         ORDER BY DueAt;
         """;
 

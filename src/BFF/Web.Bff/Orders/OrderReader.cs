@@ -46,7 +46,8 @@ public sealed class OrderReader(IDbConnectionFactory connections)
         $"""
         SELECT {Columns}
         FROM bff.Orders o
-        WHERE o.OrderId = @OrderId AND o.CustomerId = @CustomerId;
+        WHERE o.OrderId = @OrderId
+            AND o.CustomerId = @CustomerId;
 
         SELECT l.OrderId, l.LineNumber, l.ProductId, l.Quantity, l.UnitPrice, ProductName = p.Name
         FROM bff.OrderLines l
@@ -64,7 +65,8 @@ public sealed class OrderReader(IDbConnectionFactory connections)
         """
         SELECT o.AsOf
         FROM bff.Orders o
-        WHERE o.OrderId = @OrderId AND o.CustomerId = @CustomerId;
+        WHERE o.OrderId = @OrderId
+            AND o.CustomerId = @CustomerId;
         """;
 
     public async Task<CursorPage<OrderSummary>> ListAsync(

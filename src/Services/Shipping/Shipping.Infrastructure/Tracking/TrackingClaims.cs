@@ -55,7 +55,8 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections, IOptions<
                           THEN {OutboxDispatcher.BackoffAttemptCap}
                           ELSE shipment.PollAttempts END) * {OutboxDispatcher.BackoffBaseSeconds}
         )) AS ladder (Seconds)
-        WHERE shipment.Id = @Id AND shipment.LockedUntil = @Lease;
+        WHERE shipment.Id = @Id
+            AND shipment.LockedUntil = @Lease;
         """;
 
     public async Task<IReadOnlyList<TrackingWork>> ClaimAsync(CancellationToken ct)

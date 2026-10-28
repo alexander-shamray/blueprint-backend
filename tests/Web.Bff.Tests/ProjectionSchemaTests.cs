@@ -154,7 +154,8 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
             """
             SELECT Value = filter_definition
             FROM sys.indexes
-            WHERE name = 'IX_Orders_Owned' AND object_id = OBJECT_ID('bff.Orders')
+            WHERE name = 'IX_Orders_Owned'
+                AND object_id = OBJECT_ID('bff.Orders')
             """);
 
         filter.ShouldBe("([CustomerId] IS NOT NULL)");

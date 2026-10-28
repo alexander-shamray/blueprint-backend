@@ -42,14 +42,16 @@ internal sealed class NotificationStats(IDbConnectionFactory connections) : INot
             FROM notifications.NotificationLog n
             LEFT JOIN notifications.OrderRecords r
                 ON r.OrderId = n.OrderId
-            WHERE n.Status = 'Pending' AND n.Attempts > 0
+            WHERE n.Status = 'Pending'
+                AND n.Attempts > 0
             UNION ALL
             SELECT CASE d.Platform
                 WHEN '{WaitingSteps.Fcm}' THEN '{WaitingSteps.Fcm}'
                 ELSE '{WaitingSteps.Apns}'
             END
             FROM notifications.PushDeliveries d
-            WHERE d.Status = 'Pending' AND d.Attempts > 0
+            WHERE d.Status = 'Pending'
+                AND d.Attempts > 0
         ) waiting
         GROUP BY Step;
         """;
