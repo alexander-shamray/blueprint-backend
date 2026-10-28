@@ -171,6 +171,7 @@ decision looks wrong.
 | **ADR-162** | [The stress override bounds the observer, and the collector sheds within its bound (#1534)](adr/ADR-162-the-stress-override-bounds-the-observer-and-the-collector-sheds-within-its-bound-1534.md) |
 | **ADR-163** | [The outbox dispatcher publishes Broker rows side by side and claims again at once after a full claim (#1535), adding to ADR-131](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md) |
 | **ADR-164** | [BrokerConcurrency stays at 8, the stress rerun moving no drain (#1546), adding to ADR-163](adr/ADR-164-brokerconcurrency-stays-at-8-the-stress-rerun-moving-no-drain-1546-adding-to-adr-163.md) |
+| **ADR-165** | [The outbox lanes keep one claim, splitting them freeing the Broker lane but not the drain (#1559), adding to ADR-164](adr/ADR-165-the-outbox-lanes-keep-one-claim-splitting-them-freeing-the-broker-lane-but-not-the-drain-1559-adding-to-adr-164.md) |
 
 ---
 
