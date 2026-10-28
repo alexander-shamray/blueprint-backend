@@ -43,9 +43,16 @@ public sealed class ShippingErasureEndpointTests(ServiceFixture fixture) : IAsyn
         (await CountAddressesAsync(Subject)).ShouldBe(0);
         (await CountAddressesAsync(Bystander)).ShouldBe(1);
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE CustomerId = {0} " +
-            "AND Line1 = '1 Rue Exemple' AND Line2 = 'Apt 2' AND City = 'Paris' AND PostalCode = '75001' " +
-            "AND Country = 'FR'",
+            """
+            SELECT Value = COUNT(*)
+            FROM shipping.DeliveryAddresses
+            WHERE CustomerId = {0}
+                AND Line1 = '1 Rue Exemple'
+                AND Line2 = 'Apt 2'
+                AND City = 'Paris'
+                AND PostalCode = '75001'
+                AND Country = 'FR'
+            """,
             Bystander)).ShouldBe(1, "a bystander keeps their whole address");
     }
 

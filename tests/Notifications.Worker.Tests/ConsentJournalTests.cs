@@ -151,8 +151,15 @@ public sealed class ConsentJournalTests(ServiceFixture fixture) : IAsyncLifetime
         await EraseAsync(subject);
 
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM notifications.ConsentEntries WHERE SubjectId IS NULL " +
-            "AND AnonymisedAt IS NOT NULL AND Topic = {0} AND Client = {1} AND EntryId IN ({2}, {3})",
+            """
+            SELECT Value = COUNT(*)
+            FROM notifications.ConsentEntries
+            WHERE SubjectId IS NULL
+                AND AnonymisedAt IS NOT NULL
+                AND Topic = {0}
+                AND Client = {1}
+                AND EntryId IN ({2}, {3})
+            """,
             Topic,
             Client,
             first.State.Version!.Value,

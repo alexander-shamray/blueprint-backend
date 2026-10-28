@@ -38,8 +38,12 @@ internal static class PersonalDataScan
             {
                 IReadOnlyList<string> columns = await world.ColumnAsync(
                     database,
-                    "SELECT QUOTENAME(name) FROM sys.columns WHERE object_id = OBJECT_ID(@p0) " +
-                    $"AND TYPE_NAME(user_type_id) NOT IN ({Unreadable})",
+                    $"""
+                    SELECT QUOTENAME(name)
+                    FROM sys.columns
+                    WHERE object_id = OBJECT_ID(@p0)
+                        AND TYPE_NAME(user_type_id) NOT IN ({Unreadable})
+                    """,
                     table);
 
                 if (columns.Count == 0)

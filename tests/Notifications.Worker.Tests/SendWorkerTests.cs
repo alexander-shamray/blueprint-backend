@@ -423,8 +423,13 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         Task<SendPass> first = fixture.RunSendPassAsync();
         await ServiceFixture.WaitUntilAsync(async () =>
             await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE NotificationId = {0} " +
-                "AND Status = 'Pending' AND LockedUntil > SYSDATETIMEOFFSET()",
+                """
+                SELECT Value = COUNT(*)
+                FROM notifications.NotificationLog
+                WHERE NotificationId = {0}
+                    AND Status = 'Pending'
+                    AND LockedUntil > SYSDATETIMEOFFSET()
+                """,
                 owed.NotificationId) == 1);
 
         (await other.RunOnceAsync(Ct)).ShouldBe(new SendPass(0, 0), "the second worker skipped a leased row");
@@ -535,8 +540,13 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         await worker.StartAsync(Ct);
         await ServiceFixture.WaitUntilAsync(async () =>
             await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE NotificationId = {0} " +
-                "AND Status = 'Pending' AND LockedUntil > SYSDATETIMEOFFSET()",
+                """
+                SELECT Value = COUNT(*)
+                FROM notifications.NotificationLog
+                WHERE NotificationId = {0}
+                    AND Status = 'Pending'
+                    AND LockedUntil > SYSDATETIMEOFFSET()
+                """,
                 owed.NotificationId) == 1);
         await worker.StopAsync(Ct);
 
