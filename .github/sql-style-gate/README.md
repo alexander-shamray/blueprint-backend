@@ -46,10 +46,12 @@ would catch a join already in the tree.
   and an `ON` reached by concatenating two C# strings is not seen as one line.
 - SQL in a regular string, rather than a raw literal or a fence, is read as
   its physical line. A `\n` before a join's kind is read into the kind, which
-  refuses a join that names one. A `\n` before its `ON` puts the `ON` on the
-  join's line. An `ON` line opening with a quote is not an `ON` line, so its
-  second predicate goes unjudged, and the next `ON` line, even a `MERGE`'s, is
-  judged as the join's. The tree holds none of these shapes.
+  refuses a join that names one. A `\n` and a space before its `ON` put the
+  `ON` on the join's line; a `\nON` with nothing between is not read as an
+  `ON` at all and leaves the join waiting for the next `ON` line. An `ON`
+  line opening with a quote is not an `ON` line either, so its second
+  predicate goes unjudged, and the next `ON` line, even a `MERGE`'s, is judged
+  as the join's. The tree holds none of these shapes.
 - A join hint, `INNER HASH JOIN` or `LEFT LOOP JOIN`, is read as the kind,
   so the gate refuses it as a bare join. The tree holds no join hint.
 - It holds the join rule and nothing else in *SQL style*. One predicate per
