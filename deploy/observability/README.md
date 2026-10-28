@@ -467,12 +467,14 @@ take every service down at once, so the first cannot be told:
   step before with `stress/report.js`'s `crossings()`, the function
   `summarise.mjs`'s knee calls afterwards. A request still in flight when
   the hold ends is in the summary's figures and not the judge's.
-  `setup()` refuses the run when either source does not answer.
 - `errors` drives on until a step's requests have failed at more than
   `STRESS_ABORT_ERROR_RATE`, whose default `stress.js` sets, over its hold,
-  to see what falls over rather than what slows down. k6 times that
-  judgement from before `setup()`, so it can begin up to `setup()`'s length
-  before the hold ends.
+  to see what falls over rather than what slows down. The judge applies it
+  at the hold's end too, and k6's next threshold check, within a few
+  seconds, ends the run.
+
+`setup()` refuses a run whose judge cannot read k6's REST API, and a knee run
+that cannot read Prometheus.
 
 It runs on a developer's machine against the Compose
 stack. Its numbers describe that machine as much as the platform, so a result
@@ -548,7 +550,7 @@ for a thread-pool thread and the time collections paused it. From
 all its processors, each container's CPU and memory from
 `docker stats`, where a CPU figure is a share of one core and passes 100 on
 several, and SQL Server's deadlocks and lock, page-latch and log-flush waits.
-From the `judge`, the VUs k6 ran at each hold's end.
+From the `judge`, the VUs k6 ran a second before each hold's end.
 Nothing is added to the stack to read any of them. What could only be read by
 adding a component is listed in the summary under *Not measured*.
 
