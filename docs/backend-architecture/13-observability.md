@@ -120,6 +120,14 @@ names hosts in the reference domain ([E.8](appendix-e-reference-domain.md#e8-13-
             logging.AddProcessor(new SensitiveDataRedactor());
         });
 
+        // Each repeats what the request's span carries, at a rate that filled the LGTM container's log queue under
+        // load (ADR-159). A code filter outranks a configured one of the same category, so a configured level skips it.
+        IEnumerable<string> unconfigured =
+            FrameworkCategories.Where(c => builder.Configuration[$"Logging:LogLevel:{c}"] is null);
+
+        foreach (string category in unconfigured)
+            builder.Logging.AddFilter(category, LogLevel.Warning);
+
         KeyValuePair<string, object> environment =
             new("deployment.environment", builder.Environment.EnvironmentName);
 
@@ -705,6 +713,20 @@ Levels, applied consistently:
 | `Warning` | Recovered, but someone should know. | Retry succeeded after failures, circuit half-open |
 | `Error` | An operation failed. | Handler threw, message went to error queue |
 | `Critical` | The service cannot function. | Database unreachable at startup |
+
+**The noisiest framework categories start at `Warning`, not `Information`.**
+`AddObservability` holds `ObservabilityExtensions.FrameworkCategories` there,
+because each logs a line per request, result, proxied call or SQL command, and
+the request's span already carries each fact. Under the 2026-10-28 stress run those lines
+filled the LGTM container's log export queue, and more than 95% of all
+records were dropped, the platform's own among them
+([ADR-159](adr/ADR-159-framework-categories-log-at-warning-unless-configured-1532.md)).
+A level the configuration names under `Logging:LogLevel` for one of them
+wins, so an operator lowers a category for a session without a build, and the
+gateway names its hosting category to keep [§10.1](10-api-gateway.md)'s edge
+log. Every other category keeps the host's default: `LoggingBehavior`'s, each
+service's own, and ASP.NET Core's authentication and authorization lines,
+which carry the reason for a 401 or a 403 that no span records.
 
 **Never log:** passwords, secrets, tokens, authorization headers, credentials,
 connection strings, cookies, API keys, account keys, private keys, full card

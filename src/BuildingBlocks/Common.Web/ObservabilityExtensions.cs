@@ -14,6 +14,18 @@ public static class ObservabilityExtensions
     /// <summary>The SDK's own variable, which AddService would otherwise overwrite (ADR-153).</summary>
     public const string ServiceNameKey = "OTEL_SERVICE_NAME";
 
+    /// <summary>Framework categories logging a line per request or command, held at Warning (§13.4, ADR-159).</summary>
+    /// <remarks>By subcategory, so authentication's and authorization's reasons for a 401 or 403 still log.</remarks>
+    public static IReadOnlyList<string> FrameworkCategories { get; } =
+    [
+        "Microsoft.AspNetCore.Hosting",
+        "Microsoft.AspNetCore.Routing",
+        "Microsoft.AspNetCore.Http.Result",
+        "Microsoft.EntityFrameworkCore.Database.Command",
+        "System.Net.Http.HttpClient",
+        "Yarp.ReverseProxy.Forwarder"
+    ];
+
     public static IHostApplicationBuilder AddObservability(this IHostApplicationBuilder builder)
     {
         string assembly = builder.Environment.ApplicationName;
@@ -41,6 +53,14 @@ public static class ObservabilityExtensions
             // §13.4's "never log a secret" rule, given a mechanism.
             logging.AddProcessor(new SensitiveDataRedactor());
         });
+
+        // Each repeats what the request's span carries, at a rate that filled the LGTM container's log queue under
+        // load (ADR-159). A code filter outranks a configured one of the same category, so a configured level skips it.
+        IEnumerable<string> unconfigured =
+            FrameworkCategories.Where(c => builder.Configuration[$"Logging:LogLevel:{c}"] is null);
+
+        foreach (string category in unconfigured)
+            builder.Logging.AddFilter(category, LogLevel.Warning);
 
         KeyValuePair<string, object> environment =
             new("deployment.environment", builder.Environment.EnvironmentName);
