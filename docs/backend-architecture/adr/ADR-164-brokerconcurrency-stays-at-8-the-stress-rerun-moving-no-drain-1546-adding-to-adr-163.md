@@ -21,7 +21,7 @@ from an earlier stack, before
 [ADR-161](ADR-161-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md),
 so the same-stack run before ADR-163 is the comparison. In every run the
 `Local` count rose for about 100 s after the load stopped, and then the backlog
-emptied in about 50 s; the two runs that also read leases and attempts had
+emptied in 55 to 76 s; the two runs that also read leases and attempts had
 every replica holding a full claim throughout, with no row retried. Over those
 100 s, Tempo's sampled `outbox deliver` spans put a `Local` delivery at 42 ms
 median and a publish at 8 ms. A pass ends when both lanes have, and its `Local`
