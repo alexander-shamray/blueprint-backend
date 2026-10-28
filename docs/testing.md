@@ -268,6 +268,8 @@ git fetch origin main
 py -3.12 .github/commit-gate/commit_gate.py --pr <n> origin/main HEAD
 ```
 
+What it reads and judges is [its README](../.github/commit-gate/README.md)'s.
+
 **The comment gate needs only a base**, because it diffs the checkout's own
 history, so a branch can run it before it has a pull request:
 
