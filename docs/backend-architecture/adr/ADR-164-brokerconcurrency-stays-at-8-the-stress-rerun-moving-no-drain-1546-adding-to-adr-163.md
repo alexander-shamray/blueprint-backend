@@ -22,12 +22,12 @@ from an earlier stack, before
 so the same-stack run before ADR-163 is the comparison. In every run the
 `Local` count rose for about 100 s after the load stopped, and then the backlog
 emptied in 55 to 76 s; the two runs that also read leases and attempts had
-every replica holding a full claim throughout, with no row retried. Over those
-100 s, Tempo's sampled `outbox deliver` spans put a `Local` delivery at 42 ms
-median and a publish at 8 ms. A pass ends when both lanes have, and its `Local`
-rows go one at a time, so they set its length, and more publishes in flight
-shorten nothing. The bound was not run at 16 because 1 and 8 measured the
-same.
+every replica holding a full claim at every poll but one, with no row retried.
+Over those 100 s, Tempo's sampled `outbox deliver` spans put a `Local`
+delivery at 42 ms median and a publish at 8 ms. A pass ends when both lanes
+have, and its `Local` rows go one at a time, so they set its length, and more
+publishes in flight shorten nothing. The bound was not run at 16 because 1 and
+8 measured the same.
 **Consequences.** A pass still holds up to eight publishing scopes a replica
 for no measured gain on this machine's broker, kept because it measured no
 loss either, and a broker further away, where each publish waits longer, is
