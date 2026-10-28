@@ -11,9 +11,9 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: commit-gate-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency group, for locality-gate.yml's reason: a rerun of an older
+# head's run would cancel the newest head's, which then stays there as a
+# failed required check that blocks the merge.
 
 jobs:
   commit-gate:
