@@ -7,10 +7,12 @@ YARP's forwarder. They are named by subcategory, so ASP.NET Core's
 authentication and authorization lines, which carry the reason for a 401 or a
 403 that no span records, keep the host's default. A level the configuration
 names under `Logging:LogLevel` for one of the listed categories wins, so an
-operator can lower one while debugging. The gateway names one: its
-`appsettings.json` keeps `Microsoft.AspNetCore.Hosting` at `Information`,
-because those request and response lines are the edge's log that
-[§10.1](../10-api-gateway.md) promises. The stress override holds it at
+operator can lower one while debugging. The gateway names two: its
+`appsettings.json` keeps `Microsoft.AspNetCore.Hosting` and
+`Yarp.ReverseProxy.Forwarder` at `Information`, because those request and
+response lines are the edge's log that [§10.1](../10-api-gateway.md)
+promises, and the forwarder's are the ones written inside the correlation
+scope ([§10.4](../10-api-gateway.md)). The stress override holds both at
 `Warning` for the run.
 **Why.** The stress run of 2026-10-28 sent 17 000 to 25 000 log records a
 second against 18 idle. The LGTM container's collector held its log export
@@ -28,9 +30,11 @@ or lowers the category through configuration for the session. A configured
 level for a broader category, `Microsoft.AspNetCore` for example, does not
 reach a listed one, since a longer category wins; the operator names the
 listed category itself. During a stress run the gateway writes no request
-line either, so the edge's record of a request under load is its span. A
-framework category not in the list still logs at `Information`, and one found
-to log per request is added to the list rather than filtered per host.
+line either, so the edge's record of a request under load is its span where
+[ADR-160](ADR-160-the-stress-override-samples-traces-parent-based-1533.md)'s
+sampler keeps one, and otherwise there is none. A framework category not in
+the list still logs at `Information`, and one found to log per request is
+added to the list rather than filtered per host.
 
 ---
 

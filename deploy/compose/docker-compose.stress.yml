@@ -1,8 +1,9 @@
 # ADR-157's stress override, for deploy/observability/README.md's stress run
 # alone, never a deployment: it lifts the edge's rate limits, stops the
 # workers pacing to the carrier, the relay and the push providers, scales
-# Ordering (ADR-158) and samples traces (ADR-160). No other file sets these
-# keys, so `up` without this file is the way back to every default.
+# Ordering (ADR-158) and samples traces (ADR-160). No other Compose file sets
+# these environment keys, so `up` without this file is the way back to every
+# default.
 
 # Not part of `up`: add it to the full-stack command deploy/compose/README.md
 # gives. Each service's suite reads this file, so a value the service's
@@ -18,7 +19,7 @@ x-trace-sampling: &trace-sampling
 services:
   # Every client comes from one address, so §10.3's anonymous window would
   # measure only itself; each budget is far past what one host can drive.
-  # The edge's two request lines would refill the log queue ADR-159 empties.
+  # The edge's request lines would refill the log queue ADR-159 empties.
   gateway:
     environment:
       <<: *trace-sampling
@@ -26,6 +27,7 @@ services:
       RateLimits__AuthenticatedTokenLimit: "1000000"
       RateLimits__AuthenticatedTokensPerPeriod: "1000000"
       Logging__LogLevel__Microsoft.AspNetCore.Hosting: "Warning"
+      Logging__LogLevel__Yarp.ReverseProxy.Forwarder: "Warning"
 
   catalog-api:
     environment:
