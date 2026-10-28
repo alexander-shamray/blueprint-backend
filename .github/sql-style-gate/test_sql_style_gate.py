@@ -132,6 +132,12 @@ class Surface(unittest.TestCase):
             Path(root, "a.bin").write_bytes(b"JOIN b\0")
             self.assertEqual(gate.scan(Path(root), ["a.bin", "gone.cs"]).read, [])
 
+    def test_a_listed_file_that_cannot_be_opened_fails_rather_than_being_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as root:
+            Path(root, "a-directory").mkdir()
+            with self.assertRaises(OSError):
+                gate.scan(Path(root), ["a-directory"])
+
     def test_a_tree_with_no_tracked_file_fails(self) -> None:
         with tempfile.TemporaryDirectory() as root:
             subprocess.run(["git", "init", "-q", root], check=True)
