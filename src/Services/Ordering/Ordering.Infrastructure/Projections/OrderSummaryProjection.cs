@@ -113,12 +113,23 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
             AND FulfilmentCounted = 0;
         """;
 
+    // A write and its claims are one round trip and one commit: under load a Local row's time was its round trips
+    // and each autocommit's log flush, not the statements (ADR-166). XACT_ABORT rolls back a batch that fails.
+    private const string Begin = "SET XACT_ABORT ON;\nBEGIN TRANSACTION;\n";
+
+    private const string ClaimsThenCommit =
+        "\n" + ClaimPlacedSql + "\n" + ClaimCancelledSql + "\n" + ClaimFulfilmentSql + "\nCOMMIT TRANSACTION;";
+
+    private const string PlacedBatchSql = Begin + PlacedSql + ClaimsThenCommit;
+
+    private const string StatusBatchSql = Begin + StatusSql + ClaimsThenCommit;
+
     public async Task HandleAsync(OrderPlacedDomainEvent domainEvent, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
-        await connection.ExecuteAsync(
+        using SqlMapper.GridReader claims = await connection.QueryMultipleAsync(
             new CommandDefinition(
-                PlacedSql,
+                PlacedBatchSql,
                 new
                 {
                     OrderId = domainEvent.OrderId.Value,
@@ -134,7 +145,7 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
                 },
                 cancellationToken: ct));
 
-        await RecordPendingFactsAsync(connection, domainEvent.OrderId, ct);
+        await RecordPendingFactsAsync(claims);
     }
 
     public Task HandleAsync(OrderStockConfirmedDomainEvent domainEvent, CancellationToken ct) =>
@@ -169,9 +180,9 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
         string? cancelReason = null)
     {
         using IDbConnection connection = connections.Create();
-        await connection.ExecuteAsync(
+        using SqlMapper.GridReader claims = await connection.QueryMultipleAsync(
             new CommandDefinition(
-                StatusSql,
+                StatusBatchSql,
                 new
                 {
                     OrderId = orderId.Value,
@@ -182,29 +193,24 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
                 },
                 cancellationToken: ct));
 
-        await RecordPendingFactsAsync(connection, orderId, ct);
+        await RecordPendingFactsAsync(claims);
     }
 
     /// <summary>Records every fact the row now supports and has not yet counted (§13.3).</summary>
-    private async Task RecordPendingFactsAsync(IDbConnection connection, OrderId orderId, CancellationToken ct)
+    private async Task RecordPendingFactsAsync(SqlMapper.GridReader claims)
     {
-        var args = new { OrderId = orderId.Value };
+        PlacedFact? placed = await claims.ReadSingleOrDefaultAsync<PlacedFact>();
+        string? cancelled = await claims.ReadSingleOrDefaultAsync<string>();
 
-        PlacedFact? placed = await connection.QuerySingleOrDefaultAsync<PlacedFact>(
-            new CommandDefinition(ClaimPlacedSql, args, cancellationToken: ct));
+        // The last read moves the reader past the commit, so a batch that rolled back records nothing (ADR-166).
+        FulfilmentFact? fulfilment = await claims.ReadSingleOrDefaultAsync<FulfilmentFact>();
 
         // The column only ever holds Money's own three letters, so it returns unpadded to Money.Of (§5.3).
         if (placed is not null)
             metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency));
 
-        string? cancelled = await connection.QuerySingleOrDefaultAsync<string>(
-            new CommandDefinition(ClaimCancelledSql, args, cancellationToken: ct));
-
         if (cancelled is not null)
             metrics.Cancelled(cancelled);
-
-        FulfilmentFact? fulfilment = await connection.QuerySingleOrDefaultAsync<FulfilmentFact>(
-            new CommandDefinition(ClaimFulfilmentSql, args, cancellationToken: ct));
 
         if (fulfilment is not null)
             metrics.Fulfilled(fulfilment.ConfirmedAt - fulfilment.PlacedAt);

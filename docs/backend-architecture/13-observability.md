@@ -355,8 +355,9 @@ coincidence:
 >
 > So each counter is a **claim against the row**: a flag column, flipped and
 > read in one `UPDATE`, with a predicate naming everything that must already be
-> true. `RecordPendingFactsAsync` runs all three after every write, because any
-> write may be the one that completes a pair.
+> true. Every write runs all three after itself, and `RecordPendingFactsAsync`
+> records each one it won, because any write may be the one that completes a
+> pair.
 >
 > The rule generalises: **a business counter is state, not a side effect.** It
 > fires once per fact, the fact is the row satisfying a predicate, and "it
@@ -364,8 +365,11 @@ coincidence:
 > of whichever handler happened to arrive first.
 
 The three claims are `UPDATE` constants beside the handlers in
-`OrderSummaryProjection.cs`, under `<Service>.Infrastructure/Projections/`, and
-`RecordPendingFactsAsync` runs them in turn, recording each one it wins. The
+`OrderSummaryProjection.cs`, under `<Service>.Infrastructure/Projections/`.
+Each write sends them in turn after its own statement, in one batch and one
+transaction, and `RecordPendingFactsAsync` reads the three results and records
+each one it won once the batch has committed
+([ADR-166](adr/ADR-166-the-order-summary-projection-writes-and-claims-in-one-batch-and-one-commit-1562-adding-to-adr-165.md)). The
 cancellation's predicate carries `PlacedCounted = 1`, which is what orders the
 two counters, and `CancelReason` is written by the handler through
 `CancellationReasons.ToCode`, the same table the parse uses, which keeps the
@@ -375,25 +379,20 @@ call may be a cancellation:
 
 ```csharp
     /// <summary>Records every fact the row now supports and has not yet counted (§13.3).</summary>
-    private async Task RecordPendingFactsAsync(IDbConnection connection, OrderId orderId, CancellationToken ct)
+    private async Task RecordPendingFactsAsync(SqlMapper.GridReader claims)
     {
-        var args = new { OrderId = orderId.Value };
+        PlacedFact? placed = await claims.ReadSingleOrDefaultAsync<PlacedFact>();
+        string? cancelled = await claims.ReadSingleOrDefaultAsync<string>();
 
-        PlacedFact? placed = await connection.QuerySingleOrDefaultAsync<PlacedFact>(
-            new CommandDefinition(ClaimPlacedSql, args, cancellationToken: ct));
+        // The last read moves the reader past the commit, so a batch that rolled back records nothing (ADR-166).
+        FulfilmentFact? fulfilment = await claims.ReadSingleOrDefaultAsync<FulfilmentFact>();
 
         // The column only ever holds Money's own three letters, so it returns unpadded to Money.Of (§5.3).
         if (placed is not null)
             metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency));
 
-        string? cancelled = await connection.QuerySingleOrDefaultAsync<string>(
-            new CommandDefinition(ClaimCancelledSql, args, cancellationToken: ct));
-
         if (cancelled is not null)
             metrics.Cancelled(cancelled);
-
-        FulfilmentFact? fulfilment = await connection.QuerySingleOrDefaultAsync<FulfilmentFact>(
-            new CommandDefinition(ClaimFulfilmentSql, args, cancellationToken: ct));
 
         if (fulfilment is not null)
             metrics.Fulfilled(fulfilment.ConfirmedAt - fulfilment.PlacedAt);
