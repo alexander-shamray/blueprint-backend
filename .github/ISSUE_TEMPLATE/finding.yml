@@ -1,0 +1,77 @@
+# Every dropdown option is a label name, so a triager copies each answer onto
+# the issue as it stands; .github/issue-form-gate/ owns the claim and the
+# shape this file must keep for its reader.
+name: Finding
+description: A defect, a gap or a wrong statement, with what was found, where and how.
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        A form leaves the labels to whoever triages it: each answer below is
+        the name of the label it stands for.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      description: What sort of finding this is.
+      options:
+        - bug
+        - security
+        - test-gap
+        - documentation
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Each label's description on the Labels page is the bar for it.
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: >-
+        One of harness, code or documentation, by the tree the finding is
+        in; add test for a test suite under tests/.
+      multiple: true
+      options:
+        - harness
+        - code
+        - documentation
+        - test
+    validations:
+      required: true
+  - type: textarea
+    id: found
+    attributes:
+      label: What was found
+      description: The behaviour or statement, and why it is wrong.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: The file and line, or the symbol, it is in.
+      placeholder: src/Services/Catalog/Catalog.Domain/Product.cs:42
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How it was found
+      description: The command, review, run or reading that turned it up.
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Fix
+      description: The change that would close it, if known.

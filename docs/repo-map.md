@@ -249,12 +249,16 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              images and Actions; the two gates it
                              cannot satisfy skip its pull requests, and
                              change-locality.md section 6 says why
+.github/ISSUE_TEMPLATE/      the finding form the web UI's New issue page
+                             offers, and config.yml switching blank issues
+                             off; issue-form-gate holds its choices
 .github/<gate>/              one directory per gate — licence-gate,
                              secret-scan, closure-gate, commit-gate,
                              locality-gate,
                              pipeline-gate, output-gate, comment-gate,
                              messaging-gate, plan-size-gate,
-                             domain-name-gate, sql-style-gate —
+                             domain-name-gate, sql-style-gate,
+                             issue-form-gate —
                              holding the gate,
                              its suite and a README. The README is the ONE
                              owner of what the gate reads and what it claims,
