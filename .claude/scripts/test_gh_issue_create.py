@@ -348,9 +348,9 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         self.assertIn('--label "$severity"', text)
         self.assertIn("--body-file -", text)
 
-    def test_both_labels_go_through_the_sibling_helper(self):
+    def test_each_label_but_enhancement_goes_through_the_sibling_helper(self):
         text = self.HELPER.read_text(encoding="utf-8")
-        self.assertIn('"$here/gh-label-ensure.sh" "$kind"', text)
+        self.assertIn('[ "$kind" = enhancement ] || bash "$here/gh-label-ensure.sh" "$kind"', text)
         self.assertIn('"$here/gh-label-ensure.sh" "$severity"', text)
 
 
