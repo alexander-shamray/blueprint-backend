@@ -103,10 +103,11 @@ last=$(printf '%s' "$body" | sed -e 's/\r$//' -e '/^[[:space:]]*$/d' | tail -n 1
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
   { echo "cannot resolve this checkout's repository" >&2; exit 3; }
 
-# Each label is ensured through the sibling helper, so a fresh clone gets the
-# colour and description this repository already uses rather than a bare name.
-# `enhancement` is one of GitHub's default labels, which the sibling must not
-# create, so it is filed under as the repository already has it.
+# Each label but `enhancement` is ensured through the sibling helper, so a
+# fresh clone gets the colour and description this repository already uses
+# rather than a bare name. `enhancement` is one of GitHub's default labels,
+# which the sibling must not create, so it is filed under as the repository
+# already has it.
 here=$(dirname "$0")
 [ "$kind" = enhancement ] || bash "$here/gh-label-ensure.sh" "$kind" >/dev/null
 bash "$here/gh-label-ensure.sh" "$severity" >/dev/null
