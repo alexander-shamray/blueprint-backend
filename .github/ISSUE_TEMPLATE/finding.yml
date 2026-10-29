@@ -40,7 +40,7 @@ body:
       label: Area
       description: >-
         One of harness, code or documentation, by the tree the finding is
-        in; add test for a test suite under tests/.
+        in; add test beside harness or code for a test suite.
       multiple: true
       options:
         - harness

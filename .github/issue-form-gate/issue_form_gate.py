@@ -90,7 +90,7 @@ def dropdowns(form: Path) -> dict[str, list[str]]:
 def case_arm(helper: Path, variable: str) -> list[str]:
     """The words of the one arm that admits a value in the helper's `case "$<variable>" in`."""
     text = helper.read_text(encoding="utf-8")
-    match = re.search(rf'case "\${variable}" in\s*\n\s*([a-z0-9|-]+)\) ;;', text)
+    match = re.search(rf'case "\${variable}" in\s*\n\s*([a-z0-9|,-]+)\) ;;', text)
     if match is None:
         raise InputRefused(f"{helper.name} has no `case \"${variable}\"` arm of the shape this gate reads")
     return match.group(1).split("|")
@@ -153,6 +153,8 @@ def check(templates: Path, helper: Path, contract: Path, labels: set[str]) -> li
     kinds = contract_kinds(contract)
     helper_kinds = case_arm(helper, "kind")
     severities = case_arm(helper, "severity")
+    # An area alternative such as `code,test` is one `--label` per word, and the form offers the words.
+    areas = sorted({word for alternative in case_arm(helper, "area") for word in alternative.split(",")})
     outside = sorted(set(helper_kinds) - set(kinds))
     if outside:
         problems.append(f"{helper.name} files under kinds the contract's vocabulary lacks: {outside}")
@@ -171,6 +173,8 @@ def check(templates: Path, helper: Path, contract: Path, labels: set[str]) -> li
             problems += same(f"{form.name}'s kind", found["kind"], kinds, f"{contract.name} section 6")
         if "severity" in found:
             problems += same(f"{form.name}'s severity", found["severity"], severities, helper.name)
+        if "area" in found:
+            problems += same(f"{form.name}'s area", found["area"], areas, helper.name)
         for name, options in found.items():
             for option in options:
                 if option not in labels:
