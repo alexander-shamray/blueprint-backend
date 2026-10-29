@@ -1920,8 +1920,11 @@ Every simpler version of this code fails one of the two:
 
 The claim pattern survives all three, because it asks the row rather than the
 message. Its cost is honest and worth stating: **three extra statements per
-projection write**, on the same connection, none of them indexed lookups beyond
-the primary key. That is real, and it buys a number a finance team can reconcile
+projection write**, none of them indexed lookups beyond the primary key. They
+ride in the write's own batch and commit with it, so they add no round trip and
+no log flush
+([ADR-166](adr/ADR-166-the-order-summary-projection-writes-and-claims-in-one-batch-and-one-commit-1562-adding-to-adr-165.md)).
+That is real, and it buys a number a finance team can reconcile
 against the write model. If the write volume ever makes it not worth paying,
 the thing to change is the frequency — a periodic sweep claiming in batches —
 not the correctness.

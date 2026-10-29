@@ -172,6 +172,7 @@ decision looks wrong.
 | **ADR-163** | [The outbox dispatcher publishes Broker rows side by side and claims again at once after a full claim (#1535), adding to ADR-131](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md) |
 | **ADR-164** | [BrokerConcurrency stays at 8, the stress rerun moving no drain (#1546), adding to ADR-163](adr/ADR-164-brokerconcurrency-stays-at-8-the-stress-rerun-moving-no-drain-1546-adding-to-adr-163.md) |
 | **ADR-165** | [The outbox lanes keep one claim, splitting them freeing the Broker lane but not the drain (#1559), adding to ADR-164](adr/ADR-165-the-outbox-lanes-keep-one-claim-splitting-them-freeing-the-broker-lane-but-not-the-drain-1559-adding-to-adr-164.md) |
+| **ADR-166** | [The order summary projection writes and claims in one batch and one commit (#1562), adding to ADR-165](adr/ADR-166-the-order-summary-projection-writes-and-claims-in-one-batch-and-one-commit-1562-adding-to-adr-165.md) |
 
 ---
 
