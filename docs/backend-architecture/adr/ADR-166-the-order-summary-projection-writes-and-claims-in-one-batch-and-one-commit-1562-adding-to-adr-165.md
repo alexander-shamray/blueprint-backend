@@ -31,10 +31,10 @@ ADR-165's 7 078 to 8 704; the oldest row reached 25.3 and 28.1 s against
 65 and 75 s after the load against 225 s and ADR-165's 150 to 188 s. A
 delivery is now in SQL Server for about 42 % of its time, 82 % of that in its
 one commit's flush.
-**Consequences.** A write's key lock and its `REPEATABLEREAD` read of the
-order are held to the batch's commit rather than the write's own, three
-primary-key updates longer: the order row is still held until the insert
-commits, as
+**Consequences.** A write's key lock, and the placement's `REPEATABLEREAD`
+read of the order, are held to the batch's commit rather than the write's
+own, three primary-key updates longer: the order row is still held until the
+insert commits, as
 [ADR-137](ADR-137-a-placement-and-an-erasure-for-one-customer-take-one-application-lock-and-run-one-after-the-other-1191-amending-adr-099.md)
 has it, only for longer. A batch that fails rolls its write and its claims back
 together, where before a write could commit and its claims not run; the next
