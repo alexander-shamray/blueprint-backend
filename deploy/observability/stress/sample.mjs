@@ -51,7 +51,8 @@ const SQL = [
     "(SELECT wait_time_ms FROM sys.dm_os_wait_stats WHERE wait_type = 'WRITELOG');",
 ].join(' ');
 
-// Each container's Compose service and the cores it may use, read once, so
+// Each container's Compose service and the cores it may use, read at the
+// start and again for a container started since, as the k6 run's is, so
 // report.js's serviceCrossings() can name the service a container runs and
 // hold its CPU to its own share. A container with no limit may use them all.
 async function identities() {
@@ -74,7 +75,7 @@ async function identities() {
     }
 }
 
-const known = await identities();
+let known = await identities();
 
 async function containers() {
     try {
@@ -82,9 +83,12 @@ async function containers() {
             encoding: 'utf8',
             windowsHide: true,
         });
+        const stats = stdout.split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line));
 
-        return stdout.split('\n').filter((line) => line.trim()).map((line) => {
-            const stat = JSON.parse(line);
+        if (stats.some((stat) => !known.has(stat.Name)))
+            known = await identities();
+
+        return stats.map((stat) => {
             return {
                 name: stat.Name,
                 service: known.get(stat.Name)?.service ?? null,
