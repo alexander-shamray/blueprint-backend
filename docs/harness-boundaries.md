@@ -831,7 +831,7 @@ it, and both sweeps dropped the grant. `Bash(gh label create:*)` was
 create-*or-overwrite* — `--force` updates an existing label's colour and
 description, and `-R` put that write in any repository — and it was held as two
 prose rules; `gh-label-ensure.sh` leaves no free parameter, taking one name out
-of a fixed six-entry case and resolving the repository from the checkout. **The
+of a fixed case and resolving the repository from the checkout. **The
 root cause both shared is the one that generalises**: each was documented by the
 operation it was added for rather than by what its prefix admits, and reading
 the tool's own `--help` found something every time it was done. That they were
