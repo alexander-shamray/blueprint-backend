@@ -142,7 +142,11 @@ def check(templates: Path, helper: Path, contract: Path, labels: set[str]) -> li
     if not config.is_file() or not BLANK_OFF.search(config.read_text(encoding="utf-8")):
         problems.append(f"{config.name} does not set blank_issues_enabled: false")
 
-    forms = sorted(p for p in templates.iterdir() if p.suffix in (".yml", ".yaml") and p.name != config.name)
+    entries = sorted(p for p in templates.iterdir() if p.name != config.name)
+    forms = [p for p in entries if p.is_file() and p.suffix in (".yml", ".yaml")]
+    # GitHub offers a Markdown template beside the form, with none of the fields the form asks for.
+    for other in sorted(set(entries) - set(forms)):
+        problems.append(f"{other.name} is neither config.yml nor a form, so it is offered unread")
     if not forms:
         return problems + [f"{templates} holds no issue form, so no form was read"]
 

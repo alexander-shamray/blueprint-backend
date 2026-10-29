@@ -133,6 +133,14 @@ class IssueFormGateTests(unittest.TestCase):
         self.assertEqual(1, len(problems), problems)
         self.assertIn("second.yaml's kind", problems[0])
 
+    def test_a_markdown_template_beside_the_form_fails(self) -> None:
+        self.write("bug_report.md", "---\nname: Bug\nabout: anything\n---\n")
+        self.assert_one("bug_report.md is neither config.yml nor a form")
+
+    def test_a_directory_beside_the_form_fails(self) -> None:
+        (self.templates / "drafts").mkdir()
+        self.assert_one("drafts is neither config.yml nor a form")
+
     def test_blank_issues_left_on_fails(self) -> None:
         self.write("config.yml", "blank_issues_enabled: true\n")
         self.assert_one("blank_issues_enabled: false")
