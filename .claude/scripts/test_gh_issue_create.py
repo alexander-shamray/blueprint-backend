@@ -112,8 +112,8 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
 
     def test_the_argument_count_is_exactly_four(self):
         # A title on the command line is a free parameter: it crosses the
-        # parent's shell before the helper runs. The three-argument form a
-        # caller wrote before the area existed is refused rather than read.
+        # parent's shell before the helper runs. A call missing the area is
+        # refused rather than read with the route in the area's place.
         self.assert_refused_before_gh(self.run_helper("bug", body=self.STDIN))
         self.assert_refused_before_gh(self.run_helper("bug", "low", body=self.STDIN))
         self.assert_refused_before_gh(self.run_helper("bug", "low", "sweep", body=self.STDIN))
