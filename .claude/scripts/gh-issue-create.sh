@@ -1,45 +1,17 @@
 #!/usr/bin/env bash
-# File one issue on this repository, from a sweep or by hand: kind, severity
-# and route from closed vocabularies on the command line, title and body on
-# stdin, and the repository from the checkout this script stands in.
-#
-# A prefix grant on `gh issue create` leaves `--repo` and `--label` free to a
-# caller reading an audited tree, which is prompt-injection input. Here the
-# repository is resolved, the labels are two words out of a closed set, and
-# title and body are bytes on stdin, because an inline `--body` mangles the
-# wrapping and a temp file would need the `Write` grant the sweeps withhold.
-#
-# The title is on stdin because a sweep composes it from a verdict record a
-# crafted tree can steer: as an argument, `"$(…)"` expands in the parent's
-# shell before any check here runs, while a quoted heredoc expands nothing.
-# The first line of stdin is the title, the second is blank, and the rest is
-# the body.
-#
-# The body's last line is a detector, not a guard. A repository line equal to
-# the heredoc's delimiter closes it early and hands the rest of the payload to
-# the parent's shell, which nothing here can prevent — the sweeps check the
-# delimiter against the payload for that. What this script refuses is the
-# truncated body such a close leaves, because it has lost its trailer.
-#
-# MSYS argument conversion rewrites an argument that looks like an absolute
-# POSIX path before a native `gh.exe` sees it, so a title beginning with `/`
-# files as a Windows path. An env-prefixed command no longer matches a
-# `gh issue create` prefix grant; a script sets MSYS2_ARG_CONV_EXCL for its
-# own child.
-#
-# The trailer is chosen by route rather than constant, because a provenance
-# sentence every issue carries distinguishes nothing, and a sweep's sentence
-# on a hand filing is false. The sweeps deny raw `gh issue create`, so this is
-# their only route; nothing denies it to a session, so `hand` is what a filer
-# gets by choosing this helper, not a rule that hand filings come here.
+# File one issue here with no free parameter for a sweep reading an injectable
+# tree: closed-set kind, severity, area and route, title and body as bytes on
+# stdin with a fixed last line, and the repository resolved from the checkout.
+# Why each: the filing step of the sweep runbooks under docs/commands/.
 set -euo pipefail
 
-[ "$#" -eq 3 ] || {
+[ "$#" -eq 4 ] || {
   echo "usage: gh-issue-create.sh <security|bug|test-gap|enhancement> <critical|high|medium|low>" \
-       "<sweep|mutation|hand|request> < title, blank line, body ending in the trailer" >&2
+       "<harness|code|documentation|harness,test|code,test> <sweep|mutation|hand|request>" \
+       "< title, blank line, body ending in the trailer" >&2
   exit 2
 }
-kind="$1"; severity="$2"; route="$3"
+kind="$1"; severity="$2"; area="$3"; route="$4"
 
 # A word outside the vocabulary is refused rather than passed on.
 # `documentation` is absent because no sweep files one and a wrong statement
@@ -52,6 +24,12 @@ esac
 case "$severity" in
   critical|high|medium|low) ;;
   *) echo "not a severity this helper will file under: $severity" >&2; exit 2 ;;
+esac
+# The area is the tree the finding is in, as the contract's §6 maps it; `test`
+# goes beside `harness` or `code` alone, because a suite is one of the two.
+case "$area" in
+  harness|code|documentation|harness,test|code,test) ;;
+  *) echo "not an area this helper will file under: $area" >&2; exit 2 ;;
 esac
 # The route decides the fixed last line, and it is the same closed-set test as
 # the other two: a spelling outside the set is refused rather than defaulted,
@@ -111,6 +89,12 @@ repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
 here=$(dirname "$0")
 [ "$kind" = enhancement ] || bash "$here/gh-label-ensure.sh" "$kind" >/dev/null
 bash "$here/gh-label-ensure.sh" "$severity" >/dev/null
+area_labels=()
+IFS=, read -r -a areas <<<"$area"
+for label in "${areas[@]}"; do
+  bash "$here/gh-label-ensure.sh" "$label" >/dev/null
+  area_labels+=(--label "$label")
+done
 
 # `--body-file -` reads bytes, so the body goes back out on stdin unchanged.
 # The title is the one argument the conversion below could ever have touched,
@@ -120,4 +104,5 @@ printf '%s' "$body" | MSYS2_ARG_CONV_EXCL='*' gh issue create \
   --title "$title" \
   --label "$kind" \
   --label "$severity" \
+  "${area_labels[@]}" \
   --body-file -

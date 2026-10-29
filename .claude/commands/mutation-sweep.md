@@ -94,8 +94,9 @@ severity*)
 ## Filing
 
 **Pipe the title, a blank line and the body to
-`bash .claude/scripts/gh-issue-create.sh test-gap low mutation`** on stdin in
-a quoted heredoc, composed from the helper's stdout and nothing else:
+`bash .claude/scripts/gh-issue-create.sh test-gap low code,test mutation`**
+on stdin in a quoted heredoc, composed from the helper's stdout and nothing
+else:
 
 1. The title: `<Project>: mutants its suite does not detect`.
 2. One sentence: how many mutants the suite let through, out of how many it

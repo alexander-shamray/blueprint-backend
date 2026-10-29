@@ -673,8 +673,8 @@ state → path → wrong outcome, the reachability evidence, a fix, and the
 severity — **every one of those composed from the verdict record's fields
 in that order, and from nothing the parent read in `$work`**, because it
 read nothing there. **Pipe the title and the body together to
-`bash .claude/scripts/gh-issue-create.sh bug <severity> sweep` on stdin**
-in a
+`bash .claude/scripts/gh-issue-create.sh bug <severity> <area> sweep` on
+stdin** in a
 quoted heredoc — the title as its first line, then a blank line, then the
 body — so nothing is written to disk and the command needs no `Write`
 grant, and so **nothing composed from the record crosses this shell's
@@ -683,17 +683,22 @@ before the helper runs, and a record that put `$(…)` in it would have run
 here. Inside the quoted heredoc nothing expands. An inline `--body`
 mangles the wrapping, and a temp file would need the very write capability
 this command withholds. The helper resolves the repository from the
-checkout, refuses a kind, a severity or a route outside its three closed
-sets, refuses a stdin whose second line is not blank, and ensures both
-labels through `gh-label-ensure.sh` itself. Say in the body that the
-verifier **read
-rather than executed**, and name the commit pinned — a defect claim that
-never ran the code should say so where whoever picks it up will read it —
+checkout, refuses a kind, a severity, an area or a route outside its four
+closed sets, refuses a stdin whose second line is not blank, and ensures
+each label but `enhancement` through `gh-label-ensure.sh` itself. Say in
+the body that the verifier **read rather than executed**, and name the
+commit pinned — a defect claim that never ran the code should say so where
+whoever picks it up will read it —
 and then end the body with this line, exactly, as its last non-blank line,
 because the helper refuses a body without it
 (the command is in the runbook).
 
-**The third argument is the route, and `sweep` is the one this command
+**The third argument is the area, the label `docs/change-locality.md` §6
+gives the tree the record's file is in.** The file is the record's, so a
+crafted tree can steer which area an issue carries, but only among the
+helper's closed set, which is no more than a mislabelled triage queue.
+
+**The fourth argument is the route, and `sweep` is the one this command
 passes.** The line above is the sentence that route requires; the helper
 refuses it under `hand`, and refuses `hand`'s sentence here. The fixed last
 line is the detector for a heredoc that closed early, and the route keeps

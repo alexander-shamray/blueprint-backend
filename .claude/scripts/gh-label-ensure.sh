@@ -1,26 +1,15 @@
 #!/usr/bin/env bash
-# Ensure one of the sweeps' labels exists on this repository, and nothing
-# else: /security-sweep and /bug-sweep each need a kind label and a severity
-# label, created once if absent and never touched again.
-#
-# A prefix grant on `gh label create` reaches two things this refuses:
-#
-#   --force   updates an existing label's colour and description, so `create`
-#             is create-or-overwrite
-#   -R/--repo unpinned, so the write lands wherever an argument from an
-#             audited, prompt-injectable tree names
-#
-# Here the name comes out of a fixed case with its colour and description,
-# `--force` is never spelled, and the repository is the one `gh repo view`
-# resolves from the checkout.
-#
-# Idempotent by asking first: `gh label create` on an existing label exits
-# non-zero without `--force`, which would stop a sweep on a label that is
-# already correct.
+# Ensure one of the sweeps' labels exists here, and nothing else: a prefix grant
+# on `gh label create` reaches `--force`, which overwrites, and `-R`; here the
+# name comes from a fixed case, `--force` is never spelled, the repository is
+# resolved, and it asks first, since a plain create fails on an existing label.
 set -euo pipefail
 
-[ "$#" -eq 1 ] ||
-  { echo "usage: gh-label-ensure.sh <security|bug|test-gap|critical|high|medium|low>" >&2; exit 2; }
+[ "$#" -eq 1 ] || {
+  echo "usage: gh-label-ensure.sh" \
+       "<security|bug|test-gap|critical|high|medium|low|harness|code|documentation|test>" >&2
+  exit 2
+}
 label="$1"
 
 # The whole vocabulary, with the colour and text each label carries today, so a
@@ -36,6 +25,11 @@ case "$label" in
   high)     colour=e36209; description="Severity: reachable path that crashes, corrupts, leaks or answers wrongly" ;;
   medium)   colour=fbca04; description="Severity: needs unusual configuration, or a dev-tool-only blast radius" ;;
   low)      colour=0e8a16; description="Severity: latent (no current caller), hardening, or deferred follow-up" ;;
+  harness)  colour=1d76db
+            description="The Claude Code harness under .claude/: commands, hooks, scripts, agents, settings" ;;
+  code)     colour=006b75; description="Code and configuration: src/, tests/, tools/, deploy/ and the CI workflows" ;;
+  documentation) colour=0075ca; description="Improvements or additions to documentation" ;;
+  test)     colour=c5def5; description="Test suites under tests/: a test that cannot fail, a flake, a coverage gap" ;;
   *) echo "not a label this helper will create: $label" >&2; exit 2 ;;
 esac
 
