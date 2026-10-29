@@ -8,7 +8,7 @@ touch, before you touch it.**
 
 | | |
 |---|---|
-| `../.todo/blueprint-backend.md` (local, outside the checkout) | Open PRs and issues, for the user; the contract's §6 says where it lives and when it changes |
+| `.todo/blueprint-backend.md` in the main checkout's parent directory (local) | Open PRs and issues, for the user; the contract's §6 says where it lives and when it changes |
 | [`docs/change-locality.md`](docs/change-locality.md) | The operating contract: the trust order, the one rule, the change classes, and §6's working rules |
 | [`docs/change-locality-plan.md`](docs/change-locality-plan.md) | The PRs that make the contract fully true |
 | [`docs/churn-plan.md`](docs/churn-plan.md), [`docs/churn-plan-2.md`](docs/churn-plan-2.md) | Where the corpus churns, measured on a named commit, and the sequences that reduce it |
