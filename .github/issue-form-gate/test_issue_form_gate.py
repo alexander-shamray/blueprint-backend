@@ -185,8 +185,14 @@ class IssueFormGateTests(unittest.TestCase):
         with self.assertRaisesRegex(gate.InputRefused, "no bullet opening"):
             self.check()
 
-    def test_the_contract_list_is_read_across_wrapped_lines_and_stops_at_the_bullet(self) -> None:
+    def test_the_contract_list_is_read_across_wrapped_lines(self) -> None:
         self.assertEqual(["security", "bug", "test-gap", "documentation"], gate.contract_kinds(self.contract))
+
+    def test_a_kind_list_in_a_later_bullet_is_not_read(self) -> None:
+        self.contract.write_text("- **The issue vocabulary is wider than the label helper**: see below.\n"
+                                 "- **Another rule**: kind is `chore`.\n", encoding="utf-8")
+        with self.assertRaisesRegex(gate.InputRefused, "has no `kind is ...` list"):
+            gate.contract_kinds(self.contract)
 
     def test_a_helper_without_the_arm_is_refused(self) -> None:
         self.helper.write_text("echo nothing\n", encoding="utf-8")
