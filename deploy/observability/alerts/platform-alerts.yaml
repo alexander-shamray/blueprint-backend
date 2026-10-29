@@ -186,7 +186,7 @@ groups:
         annotations:
           summary: "Event delivery p95 above 2s on {{ $labels.service_name }}"
           description: >-
-            Events are reaching this service's consumers late: publish to
+            Events are reaching this service's consumers late: OccurredAt to
             consumer start, at the 95th percentile, is past §13.7's target.
             Usually a consumer not keeping up with what it is sent; a handler
             failing and being retried raises it too, because each attempt
