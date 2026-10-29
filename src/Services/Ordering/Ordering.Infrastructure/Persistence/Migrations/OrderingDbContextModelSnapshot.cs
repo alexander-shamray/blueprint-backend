@@ -307,6 +307,8 @@ namespace Ordering.Infrastructure.Persistence.Migrations
 
                     b.HasKey("SequenceNumber");
 
+                    SqlServerKeyBuilderExtensions.IsClustered(b.HasKey("SequenceNumber"), false);
+
                     b.HasIndex("EnqueueTime");
 
                     b.HasIndex("ExpirationTime");
@@ -316,8 +318,9 @@ namespace Ordering.Infrastructure.Persistence.Migrations
                         .HasFilter("[OutboxId] IS NOT NULL");
 
                     b.HasIndex("InboxMessageId", "InboxConsumerId", "SequenceNumber")
-                        .IsUnique()
-                        .HasFilter("[InboxMessageId] IS NOT NULL AND [InboxConsumerId] IS NOT NULL");
+                        .IsUnique();
+
+                    SqlServerIndexBuilderExtensions.IsClustered(b.HasIndex("InboxMessageId", "InboxConsumerId", "SequenceNumber"));
 
                     b.ToTable("OutboxMessage", "ordering");
                 });
