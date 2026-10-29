@@ -65,8 +65,9 @@ case "$route" in
   request) trailer='Filed by hand as a requested change, not a finding: nothing was verified at filing.' ;;
   *) echo "not a route this helper will file under: $route" >&2; exit 2 ;;
 esac
-# A request asks for behaviour and verifies nothing, so its sentence is true of
-# an enhancement and of nothing else, and no finding's sentence is true of one.
+# The request route's sentence is the one that says the issue is not a finding,
+# so an enhancement files under it alone and nothing else does: under any other
+# route a request would read as a finding, and under it a finding as a request.
 case "$kind:$route" in
   enhancement:request) ;;
   enhancement:*|*:request)
