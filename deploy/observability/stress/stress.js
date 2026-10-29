@@ -456,11 +456,15 @@ function pick(list) {
     return list[Math.floor(Math.random() * list.length)];
 }
 
-function call(op, method, path, body, token, expected) {
+// A body is kept only where the session reads it, the listing's: k6 still
+// reads every byte off the wire, so the timings are unchanged, but no VU holds
+// or copies a response it never looks at.
+function call(op, method, path, body, token, expected, responseType = 'none') {
     const params = {
         headers: { 'Content-Type': 'application/json' },
         tags: { op },
         timeout: REQUEST_TIMEOUT,
+        responseType,
     };
 
     if (token)
@@ -484,7 +488,7 @@ const ADDRESS = JSON.stringify({
 // through the gateway, as the web client's do.
 export function session(data) {
     // The listing is anonymous, as a visitor's first page is.
-    const listing = call('listing', 'GET', '/api/v1/catalog/products?limit=20', null, null, [200]);
+    const listing = call('listing', 'GET', '/api/v1/catalog/products?limit=20', null, null, [200], 'text');
     think();
 
     const listed = listing.status === 200 ? (listing.json('items') || []).map((item) => item.productId) : [];
