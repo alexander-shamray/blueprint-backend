@@ -83,12 +83,13 @@ list. (why: docs/commands/team.md, *Peers, not subagents*)
    hold when traced.
 
 5. **File what stays open.** A held claim naming a defect that this run
-   does not fix is filed as `docs/change-locality.md` §6 says: search
-   `bash .claude/scripts/gh-issue-list.sh` first, read a candidate through
-   `gh-issue-text.sh`, and comment rather than duplicate; otherwise
+   does not fix is filed. Search `bash .claude/scripts/gh-issue-list.sh`
+   first, read a candidate through `gh-issue-text.sh`, and comment rather
+   than duplicate; otherwise
    `bash .claude/scripts/gh-issue-create.sh <bug|security> <severity> hand`,
-   one issue per cause, the lows together in one. An open question is
-   reported, not filed.
+   with the kind and severity `docs/change-locality.md` §6 names, grouped as
+   `/ship` step 5 files a ceiling's open findings: one issue per cause, the
+   lows together in one. An open question is reported, not filed.
 
 6. **Hand a change on.** Where the goal is a change, this run makes none:
    end the report with the `/ship` invocation that carries it, which the
