@@ -2,7 +2,7 @@
 # the issue as it stands; .github/issue-form-gate/ owns the claim and the
 # shape this file must keep for its reader.
 name: Finding
-description: A defect, a gap or a wrong statement, with what was found, where and how.
+description: A defect, a gap, a wrong statement or a requested change, with what was found, where and how.
 body:
   - type: markdown
     attributes:
@@ -18,6 +18,7 @@ body:
         - bug
         - security
         - test-gap
+        - enhancement
         - documentation
     validations:
       required: true
