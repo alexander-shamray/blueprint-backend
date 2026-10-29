@@ -98,8 +98,9 @@ with the most spawns it can make.
 ## Output
 
 The report names what was decided and by which evidence, the claims
-refused and why, and what is left open, filed as `docs/change-locality.md`
-§6 says. `/team` makes no change: where the goal is one, the report ends
+refused and why, and what is left open, filed with `docs/change-locality.md`
+§6's kind and severity and grouped as `/ship` step 5 files a ceiling's open
+findings. `/team` makes no change: where the goal is one, the report ends
 with the `/ship` invocation that carries it. The user runs that as a turn
 of its own, because `/team`'s frontmatter denies every other agent type
 until its turn ends, `branch-reviewer` among them.
