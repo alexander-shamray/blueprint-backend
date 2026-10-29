@@ -37,8 +37,9 @@ knee, 3.4 to 4.0 million ms a load, and #1583 tracks the lever this
 measurement points at, clustering `InboxState` on the library's alternate key
 over `MessageId` and `ConsumerId` as ADR-167 did for `OutboxMessage`, which
 would be a second override of a table the library maps and is not taken
-unmeasured. Every run stopped at step 1, 3 200 VUs, on the generator's CPU
-rule rather than on the saga or the outbox, which #1582 tracks, so the figures
+unmeasured. Every run knee-stopped at step 1, 3 200 VUs, on the outbox's
+oldest row and the saga's queue, with the machine's CPU at 94 to 97% over the
+hold, so the report names the generator, which #1582 tracks, and the figures
 compare these four runs with one another and not with ADR-167's.
 
 ---
