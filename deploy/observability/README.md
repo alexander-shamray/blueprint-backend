@@ -704,7 +704,8 @@ docker compose -f deploy/compose/docker-compose.yml up -d --wait
 running realm until Keycloak's container is recreated, and the next run finds
 them and resets their passwords. A run whose `setup()` failed after lowering
 the hash leaves it lowered, since k6 runs no `teardown()` then; the next run
-puts the realm's own policy back at its end, as `hashPolicy()` reads it. A
+puts back, at its end, the realm's policy without the cheap hash, which for
+`realm-export.json`'s realm, setting none, is its own. A
 user other than the stress users who signs in during a run has their password
 re-hashed at the cheap hash, and at the realm's own at their next sign-in
 after it. The orders stay, owned by the users, and go on through the saga,
