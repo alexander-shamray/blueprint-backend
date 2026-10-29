@@ -174,6 +174,7 @@ decision looks wrong.
 | **ADR-165** | [The outbox lanes keep one claim, splitting them freeing the Broker lane but not the drain (#1559), adding to ADR-164](adr/ADR-165-the-outbox-lanes-keep-one-claim-splitting-them-freeing-the-broker-lane-but-not-the-drain-1559-adding-to-adr-164.md) |
 | **ADR-166** | [The order summary projection writes and claims in one batch and one commit (#1562), adding to ADR-165](adr/ADR-166-the-order-summary-projection-writes-and-claims-in-one-batch-and-one-commit-1562-adding-to-adr-165.md) |
 | **ADR-167** | [The saga outbox is clustered on its inbox-message index (#1570), adding to ADR-032 and ADR-112](adr/ADR-167-the-saga-outbox-is-clustered-on-its-inbox-message-index-1570-adding-to-adr-032-and-adr-112.md) |
+| **ADR-168** | [The outbox lanes keep one claim after ADR-166 as well (#1570), adding to ADR-165 and ADR-166](adr/ADR-168-the-outbox-lanes-keep-one-claim-after-adr-166-as-well-1570-adding-to-adr-165-and-adr-166.md) |
 
 ---
 
