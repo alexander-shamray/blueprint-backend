@@ -157,7 +157,7 @@ def merge(root, name, number):
             added += 1
         for status in statuses:
             ident = status.get("id") if isinstance(status, dict) else None
-            target = by_id.get(ident)
+            target = by_id.get(ident) if isinstance(ident, str) else None
             value = status.get("status") if isinstance(status, dict) else None
             cited = status.get("evidence", []) if isinstance(status, dict) else []
             reason = status.get("reason", "") if isinstance(status, dict) else ""

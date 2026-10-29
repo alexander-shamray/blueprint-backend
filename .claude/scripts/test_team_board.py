@@ -269,6 +269,14 @@ class TheLastLineIsTheLastOneCited(Checkout):
         self.assertIn("- after: src/a.cs:4 is past the file's 3 lines", self.refused_lines(1, "p1"))
 
 
+class AnIdThatIsNotAStringIsRefused(Checkout):
+
+    def test_a_list_as_an_id_is_refused_not_a_crash(self):
+        self.reply(1, "p1", statuses=[{"id": ["C1"], "status": "refuted", "evidence": ["src/a.cs:1"]}])
+        self.assertEqual(1, self.merge(1)["refused"])
+        self.assertIn("no claim ['C1']", self.refused_lines(1, "p1"))
+
+
 class TheCommandLine(Checkout):
 
     def run_main(self, *argv):
