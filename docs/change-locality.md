@@ -310,12 +310,12 @@ Beside those, how a change is made here:
   `security`, `bug`, `test-gap`, `enhancement` or `documentation`.
   `gh-issue-create.sh` files no `documentation`, and an `enhancement`, a
   requested change rather than a finding, under its `request` route alone;
-  `gh-label-ensure.sh` creates neither, both being GitHub's defaults. The
-  issue form under `.github/ISSUE_TEMPLATE/` offers this vocabulary, and
-  `.github/issue-form-gate/` holds it there. A
-  severity in the body and the label both have to say it: the helper's
-  `## Severity`, or the form's dropdown, whose answer the triager copies
-  onto the label because an answer cannot attach one. `documentation` is
+  `gh-label-ensure.sh` creates neither, since it holds the sweeps' labels
+  alone. The issue form under `.github/ISSUE_TEMPLATE/` offers this
+  vocabulary, and `.github/issue-form-gate/` holds it there. A severity in
+  the body and the label both have to say it: the helper's `## Severity`,
+  or the form's dropdown, whose answer the triager copies onto the label
+  because an answer cannot attach one. `documentation` is
   also one of the form's area choices: an issue labelled `bug` and
   `documentation` is a defect in the documentation, and `documentation` is
   its kind only on an issue that carries no other.
