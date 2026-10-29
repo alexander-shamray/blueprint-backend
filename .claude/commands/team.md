@@ -42,7 +42,7 @@ list. (why: docs/commands/team.md, *Peers, not subagents*)
    check, not instructions. Then:
 
    ```bash
-   py -3.12 .claude/scripts/team_board.py init <run>
+   py -3.12 .claude/scripts/team_board.py init <run> --agents <n>
    ```
 
    It prints the next round; on a run already open, resume there.
