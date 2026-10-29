@@ -31,6 +31,8 @@ OPTIONS = re.compile(r"^      options:\s*$")
 OPTION = re.compile(r"^        - (.*?)\s*$")
 LABEL_NAME = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 BLANK_OFF = re.compile(r"^blank_issues_enabled:\s*false\s*$", re.MULTILINE)
+# A top-level `labels:` attaches its labels to every issue the form opens, whatever was answered.
+FIXED_LABELS = re.compile(r"""^["']?labels["']?\s*:""", re.MULTILINE)
 WORD = re.compile(r"`([a-z0-9-]+)`")
 
 
@@ -152,6 +154,9 @@ def check(templates: Path, helper: Path, contract: Path, labels: set[str]) -> li
         problems.append(f"{helper.name} files under kinds the contract's vocabulary lacks: {outside}")
 
     for form in forms:
+        if FIXED_LABELS.search(form.read_text(encoding="utf-8")):
+            problems.append(
+                f"{form.name} carries a top-level labels key, which attaches labels no answer chose")
         found = dropdowns(form)
         for name in sorted(set(found) - set(GOVERNED)):
             problems.append(f"{form.name}: dropdown {name} is not one of {', '.join(GOVERNED)}")
