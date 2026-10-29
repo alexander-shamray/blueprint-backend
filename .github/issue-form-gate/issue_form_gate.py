@@ -96,18 +96,30 @@ def case_arm(helper: Path, variable: str) -> list[str]:
     return match.group(1).split("|")
 
 
-def contract_kinds(contract: Path) -> list[str]:
-    """The kinds the contract's vocabulary bullet names, in its `kind is ...` sentence."""
+def vocabulary_bullet(contract: Path) -> str:
+    """The contract's vocabulary bullet, on one line, ending at the next bullet."""
     text = contract.read_text(encoding="utf-8")
     start = text.find(VOCABULARY_BULLET)
     if start < 0:
         raise InputRefused(f"{contract.name} has no bullet opening {VOCABULARY_BULLET}")
     end = text.find("\n- ", start)
-    bullet = " ".join(text[start:end if end >= 0 else len(text)].split())
-    match = re.search(r"kind is ((?:`[a-z0-9-]+`(?:, | or )?)+)", bullet)
+    return " ".join(text[start:end if end >= 0 else len(text)].split())
+
+
+def contract_kinds(contract: Path) -> list[str]:
+    """The kinds the contract's vocabulary bullet names, in its `kind is ...` sentence."""
+    match = re.search(r"kind is ((?:`[a-z0-9-]+`(?:, | or )?)+)", vocabulary_bullet(contract))
     if match is None:
         raise InputRefused(f"{contract.name}'s vocabulary bullet has no `kind is ...` list")
     return WORD.findall(match.group(1))
+
+
+def contract_areas(contract: Path) -> list[str]:
+    """The labels the bullet's `Area is ...` sentence names; its trees are paths, which WORD never matches."""
+    match = re.search(r"Area is (.*?\.) ", vocabulary_bullet(contract))
+    if match is None or not WORD.findall(match.group(1)):
+        raise InputRefused(f"{contract.name}'s vocabulary bullet has no `Area is ...` sentence naming a label")
+    return list(dict.fromkeys(WORD.findall(match.group(1))))
 
 
 def label_names(stdin: str) -> set[str]:
@@ -153,11 +165,13 @@ def check(templates: Path, helper: Path, contract: Path, labels: set[str]) -> li
     kinds = contract_kinds(contract)
     helper_kinds = case_arm(helper, "kind")
     severities = case_arm(helper, "severity")
-    # An area alternative such as `code,test` is one `--label` per word, and the form offers the words.
-    areas = sorted({word for alternative in case_arm(helper, "area") for word in alternative.split(",")})
+    areas = contract_areas(contract)
+    # An area alternative such as `code,test` is one `--label` per word, so its words are what must match.
+    helper_areas = sorted({word for alternative in case_arm(helper, "area") for word in alternative.split(",")})
     outside = sorted(set(helper_kinds) - set(kinds))
     if outside:
         problems.append(f"{helper.name} files under kinds the contract's vocabulary lacks: {outside}")
+    problems += same(f"{helper.name}'s area", helper_areas, areas, f"{contract.name} section 6")
 
     for form in forms:
         if FIXED_LABELS.search(form.read_text(encoding="utf-8")):
@@ -174,7 +188,7 @@ def check(templates: Path, helper: Path, contract: Path, labels: set[str]) -> li
         if "severity" in found:
             problems += same(f"{form.name}'s severity", found["severity"], severities, helper.name)
         if "area" in found:
-            problems += same(f"{form.name}'s area", found["area"], areas, helper.name)
+            problems += same(f"{form.name}'s area", found["area"], areas, f"{contract.name} section 6")
         for name, options in found.items():
             for option in options:
                 if option not in labels:

@@ -5,9 +5,9 @@ the vocabularies its owners hold, every choice it offers is a label in this
 repository, and a blank issue is switched off for a filer below write
 access.** Its owners are
 [`docs/change-locality.md`](../../docs/change-locality.md) §6's *issue
-vocabulary* bullet for the kind, and
+vocabulary* bullet for the kind and the area, and
 [`gh-issue-create.sh`](../../.claude/scripts/gh-issue-create.sh)'s closed
-`case` arms for the severity and the area.
+`case` for the severity.
 
 ## What it reads
 
@@ -21,13 +21,15 @@ vocabulary* bullet for the kind, and
   does a form with a top-level `labels:` key, which would attach its labels
   to every issue the form opens whatever the answers said.
 - The form's kind against the kinds §6's bullet lists after `kind is`, its
-  severity against the helper's `case "$severity"` arm, and its area against
-  the words of the helper's `case "$area"` arm, where `code,test` is two
-  words because the helper files it as two labels; as sets, with a repeated
-  option refused.
+  area against the labels the bullet's `Area is` sentence names, and its
+  severity against the helper's `case "$severity"` arm; as sets, with a
+  repeated option refused. The sentence's trees are paths, which are not
+  read as labels.
 - The helper's `case "$kind"` arm, every word of which must be one of §6's
-  kinds: the helper filing under a kind the form does not offer is the drift
-  this gate exists for, seen from the other side.
+  kinds, and the words of its `case "$area"` arm, which must be §6's areas
+  exactly, `code,test` being two words because the helper files it as two
+  labels: the helper filing under a word the form does not offer is the
+  drift this gate exists for, seen from the other side.
 - Every dropdown option against the names `gh label list --json name`
   prints, on stdin. An empty or malformed list fails, so a gate that read no
   label never passes.
