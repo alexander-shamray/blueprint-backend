@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Ordering.Infrastructure.Persistence;
@@ -63,6 +64,7 @@ public sealed class SagaInboxStateKeyTests(ServiceFixture fixture) : IAsyncLifet
 
         IMigrationsAssembly migrations = db.GetService<IMigrationsAssembly>();
         IMigrationsSqlGenerator generator = db.GetService<IMigrationsSqlGenerator>();
+        IModelRuntimeInitializer initializer = db.GetService<IModelRuntimeInitializer>();
         string provider = db.Database.ProviderName!;
 
         // Named, so a run that read no migration fails rather than passing on an empty list.
@@ -73,10 +75,19 @@ public sealed class SagaInboxStateKeyTests(ServiceFixture fixture) : IAsyncLifet
         {
             Migration migration = migrations.CreateMigration(type, provider);
 
+            // Against the finalised target model, as Database.Migrate generates it, so a suppression the
+            // generator derives from the model is seen as well as one an operation carries.
+            IModel? target = migration.TargetModel switch
+            {
+                null => null,
+                IMutableModel building => initializer.Initialize(building.FinalizeModel(), designTime: true),
+                IModel built => initializer.Initialize(built, designTime: true),
+            };
+
             foreach ((string direction, IReadOnlyList<MigrationOperation> operations) in
                      new[] { ("Up", migration.UpOperations), ("Down", migration.DownOperations) })
             {
-                generator.Generate(operations)
+                generator.Generate(operations, target)
                     .Where(command => command.TransactionSuppressed)
                     .Select(command => command.CommandText)
                     .ShouldBeEmpty($"{id} {direction}");
