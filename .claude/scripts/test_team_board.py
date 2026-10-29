@@ -68,7 +68,7 @@ class Checkout(unittest.TestCase):
         (self.run_path / "measure").mkdir(parents=True)
         (self.run_path / "measure" / "plan.txt").write_text("Seq Scan\n", encoding="utf-8")
         (self.run_path / "goal.md").write_text("goal\n", encoding="utf-8")
-        self.assertEqual(1, tb.init(self.root, "r1"))
+        self.assertEqual(1, tb.init(self.root, "r1", 2))
 
     def reply(self, number, peer, claims=(), statuses=(), requests=(), raw=None):
         directory = self.run_path / f"round-{number:02d}"
@@ -77,7 +77,14 @@ class Checkout(unittest.TestCase):
             {"agent": peer, "claims": list(claims), "statuses": list(statuses), "requests": list(requests)})
         (directory / f"{peer}.json").write_text(body, encoding="utf-8")
 
+    def fill(self, number):
+        # A peer with nothing to say still replies, so a case names only the peers it is about.
+        for peer in ("p1", "p2"):
+            if not (self.run_path / f"round-{number:02d}" / f"{peer}.json").exists():
+                self.reply(number, peer)
+
     def merge(self, number):
+        self.fill(number)
         return tb.merge(self.root, "r1", number)
 
     def board(self):
@@ -211,7 +218,9 @@ class ARoundThatCannotBeReadDidNotHappen(Checkout):
         self.assert_refused(1, "p1's claims is not a list")
 
     def test_a_round_with_no_replies_is_refused(self):
-        self.assert_refused(1, "holds no peer replies")
+        with self.assertRaises(tb.Refusal) as caught:
+            tb.merge(self.root, "r1", 1)
+        self.assertIn("holds no peer replies", str(caught.exception))
 
     def test_a_round_out_of_order_is_refused(self):
         self.reply(2, "p1")
@@ -277,6 +286,20 @@ class AnIdThatIsNotAStringIsRefused(Checkout):
         self.assertIn("no claim ['C1']", self.refused_lines(1, "p1"))
 
 
+class ARoundNeedsEveryPlannedPeer(Checkout):
+
+    def test_a_round_missing_a_planned_peer_is_refused(self):
+        self.reply(1, "p1")
+        with self.assertRaises(tb.Refusal) as caught:
+            tb.merge(self.root, "r1", 1)
+        self.assertIn("round 1 has replies from p1, the plan names p1, p2", str(caught.exception))
+
+    def test_a_run_reopened_for_another_team_is_refused(self):
+        with self.assertRaises(tb.Refusal) as caught:
+            tb.init(self.root, "r1", 3)
+        self.assertIn("r1 was opened for p1, p2, not p1, p2, p3", str(caught.exception))
+
+
 class TheCommandLine(Checkout):
 
     def run_main(self, *argv):
@@ -291,24 +314,25 @@ class TheCommandLine(Checkout):
         self.assertIn("refused: --agents 5 is outside", err)
 
     def test_a_run_name_that_is_a_path_is_refused(self):
-        code, _, err = self.run_main("init", "../x", "--root", str(self.root))
+        code, _, err = self.run_main("init", "../x", "--agents", "2", "--root", str(self.root))
         self.assertEqual(2, code)
         self.assertIn("is not lower-case letters", err)
 
     def test_init_needs_the_goal_first(self):
-        code, _, err = self.run_main("init", "r2", "--root", str(self.root))
+        code, _, err = self.run_main("init", "r2", "--agents", "2", "--root", str(self.root))
         self.assertEqual(2, code)
         self.assertIn("goal.md is missing", err)
 
     def test_merge_prints_its_counts_and_verdict(self):
         self.reply(1, "p1", claims=[{"text": "two", "evidence": ["src/a.cs:2"]}])
+        self.fill(1)
         code, out, _ = self.run_main("merge", "r1", "1", "--root", str(self.root))
         self.assertEqual((0, "round 01: 1 new, 0 changed, 0 refused; not converged"), (code, out.strip()))
 
     def test_init_on_an_open_run_names_the_next_round(self):
         self.reply(1, "p1")
         self.merge(1)
-        code, out, _ = self.run_main("init", "r1", "--root", str(self.root))
+        code, out, _ = self.run_main("init", "r1", "--agents", "2", "--root", str(self.root))
         self.assertEqual((0, "next round 2"), (code, out.strip()))
 
 

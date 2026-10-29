@@ -58,13 +58,18 @@ def run_dir(root, name):
     return Path(root) / "artifacts" / "team" / name
 
 
-def init(root, name):
+def init(root, name, agents):
     directory = run_dir(root, name)
+    if not 1 <= agents <= AGENT_CEILING:
+        raise Refusal(f"--agents {agents} is outside 1 to {AGENT_CEILING}")
+    peers = [f"p{n}" for n in range(1, agents + 1)]
     if not (directory / "goal.md").is_file():
         raise Refusal(f"{directory / 'goal.md'} is missing; the goal is written before the run opens")
     board_path = directory / "board.json"
     if not board_path.exists():
-        save(directory, {"claims": [], "rounds": [], "requests": []})
+        save(directory, {"peers": peers, "claims": [], "rounds": [], "requests": []})
+    elif load(directory)["peers"] != peers:
+        raise Refusal(f"{name} was opened for {', '.join(load(directory)['peers'])}, not {', '.join(peers)}")
     return len(load(directory)["rounds"]) + 1
 
 
@@ -128,6 +133,11 @@ def merge(root, name, number):
     replies = sorted(round_dir.glob("p*.json")) if round_dir.is_dir() else []
     if not replies:
         raise Refusal(f"{round_dir} holds no peer replies")
+    named = sorted(path.stem for path in replies)
+    if named != board["peers"]:
+        # A round missing a planned peer could read as converged only because that peer had not answered.
+        raise Refusal(f"round {number} has replies from {', '.join(named)}, "
+                      f"the plan names {', '.join(board['peers'])}")
     by_id = {c["id"]: c for c in board["claims"]}
     added = changed = refused = 0
     for path in replies:
@@ -226,6 +236,8 @@ def main(argv=None):
         s.add_argument("run")
         if command == "merge":
             s.add_argument("round", type=int)
+        else:
+            s.add_argument("--agents", type=int, required=True)
         s.add_argument("--root", default=".")
     args = parser.parse_args(argv)
     try:
@@ -233,7 +245,7 @@ def main(argv=None):
             models = [m.strip() for m in args.models.split(",")] if args.models else None
             print(json.dumps(plan(args.agents, models, args.rounds), indent=2))
         elif args.command == "init":
-            print(f"next round {init(args.root, args.run)}")
+            print(f"next round {init(args.root, args.run, args.agents)}")
         else:
             r = merge(args.root, args.run, args.round)
             print(f"round {r['round']:02d}: {r['added']} new, {r['changed']} changed, {r['refused']} refused; "
