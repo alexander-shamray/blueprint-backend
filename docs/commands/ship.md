@@ -851,9 +851,9 @@ and stops the chain on a helper failure with nothing behind it.
 
 **The task-list row `/branch` added is deleted once the merge is verified**,
 after the pull, by the file's own path, which the contract's §6 puts outside
-every checkout so that no workspace is refused it. Nothing else removes it:
-a row left behind reads as work still in progress after the PR has landed,
-which is what *In progress* exists not to say.
+every checkout so that the isolation refuses it to no workspace. Nothing
+else removes it: a row left behind reads as work still in progress after the
+PR has landed, which is what *In progress* exists not to say.
 
 Line 5 runs on both paths, the pull on `main` or the fetch elsewhere,
 because skipping it leaves local `main` a merge behind — precisely the state
