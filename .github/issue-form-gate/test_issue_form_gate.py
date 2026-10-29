@@ -32,7 +32,7 @@ CONTRACT = """\
   `security`, `bug`, `test-gap` or `documentation`, and the helper does
   not create the last. Area is the tree: `harness` for `.claude/`,
   `documentation` for prose and `code` for `src/`, with `test` beside one.
-  Nothing after it is read.
+  Nothing after it, `design`, is read.
 - **A reply is not a resolution.** Kind is `nothing` here.
 """
 
