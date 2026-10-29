@@ -137,6 +137,14 @@ its prompt, not its tools — the sweeps' residual for the same tool set. The re
 is the parent's: it holds the shell the reviewer was denied, so a finding
 written to steer an edit is caught by that verification or not at all.
 
+**`team-peer` rests on it too, over a wider input.** `/team`'s peers hold
+the same three tools and read a board other peers wrote, so a line planted
+in the code can reach a second peer as a claim. The residual is that
+`team_board.py` checks only that a claim's evidence exists, never that it
+supports the claim; the owner's decision at the end, made with the shell
+the peers were denied, is the only check of that
+([`docs/commands/team.md`](commands/team.md)).
+
 **`.claude/skills/**` is the same argument one directory over.** A skill's
 `allowed-tools` is auto-approval, so a session that can rewrite `SKILL.md`
 widens the next invocation's Bash surface. The deny list in
@@ -1113,15 +1121,15 @@ alternative fails open on a wrapper nobody listed.
 
 **A seventh thing is a gap in the mechanism rather than in a grant.** Pinning a
 command to one subagent type is a **deny list of every other type**, because the
-harness has no "only this type" allow — so `security-sweep.md` and
-`bug-sweep.md` each deny every registered type but its own auditor, and **a
-newly added agent under `.claude/agents/` is admitted by default** until someone
-adds it to both lists; `test_command_grants.py` fails a granting command that
-does not. That is the shape this repository already knows rots; it is taken here
-because the alternative on offer is prose. **It rotted once already on the day a
-third agent arrived**: `review-adjudicator` was added for #149 and every command
-then holding a list had to name it, which is the enumeration's cost paid in the
-change that proves it.
+harness has no "only this type" allow — so `security-sweep.md`,
+`bug-sweep.md` and `team.md` each deny every registered type but the one
+they grant, and **a newly added agent under `.claude/agents/` is admitted by
+default** until someone adds it to every list; `test_command_grants.py` fails
+a granting command that does not. That is the shape this repository already
+knows rots; it is taken here because the alternative on offer is prose. **It
+rotted once already on the day a third agent arrived**: `review-adjudicator`
+was added for #149 and every command then holding a list had to name it,
+which is the enumeration's cost paid in the change that proves it.
 
 **The eighth was the push deny-list (#23), and it closed the way the sixth
 did.** Two broad allows — `Bash(git push origin:*)` and the `-u` form — paired

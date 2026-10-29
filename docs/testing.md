@@ -69,13 +69,17 @@ each ceiling to its row, so a module added there is measured here too.
 | `test_pr_helpers.py` | 25.5 | `test_edit_target_guard.py` | 2.9 |
 | `test_sweep_slices.py` | 24.8 | `test_gh_issue_suppresses.py` | 2.1 |
 | `test_index_search_hint.py` | 16.9 | `test_pr_for_branch.py` | 1.3 |
-| `test_git_worktree_fork.py` | 13.3 | `test_refresh_index.py` | 0.8 |
-| `test_mutation_survivors.py` | 13.0 | `test_harness_denies.py` | 0.7 |
-| `test_cbx.py` | 10.8 | `test_root_ignore_covers_nested.py` | 0.4 |
-| `test_ship_landing_method.py` | 9.9 | `test_system_sleep.py` | 0.3 |
-| `test_git_worktree_detach.py` | 7.4 | `test_command_grants.py` | 0.2 |
-| `test_index_mcp_root.py` | 6.6 | `test_command_runbooks.py` | 0.2 |
-| `test_gh_issue_create.py` | 5.3 | `test_hook_timeouts.py` | 0.2 |
+| `test_git_worktree_fork.py` | 13.3 | `test_team_board.py` | 0.9 |
+| `test_mutation_survivors.py` | 13.0 | `test_refresh_index.py` | 0.8 |
+| `test_cbx.py` | 10.8 | `test_harness_denies.py` | 0.7 |
+| `test_ship_landing_method.py` | 9.9 | `test_root_ignore_covers_nested.py` | 0.4 |
+| `test_git_worktree_detach.py` | 7.4 | `test_system_sleep.py` | 0.3 |
+| `test_index_mcp_root.py` | 6.6 | `test_command_grants.py` | 0.2 |
+| `test_gh_issue_create.py` | 5.3 | `test_command_runbooks.py` | 0.2 |
+| | | `test_hook_timeouts.py` | 0.2 |
+
+`test_team_board.py` arrived after that measurement and was timed the same
+way on its own branch, #1574's.
 
 **`py -3.12`, not `python`.** Every CI job that runs Python pins 3.12, and a
 newer interpreter is the hazard — it accepts APIs 3.12 does not, so the local

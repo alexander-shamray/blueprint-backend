@@ -62,11 +62,22 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
         self.assertNotRegex(profile, r"(?m)^skills:")
 
     def test_the_reviewer_and_the_auditors_run_on_opus(self):
-        # An error from any of the three is a silent miss, so none takes the session's model (token-plan step 7d).
-        for name in ("branch-reviewer", "bug-auditor", "security-auditor"):
+        # An error from any of them is a silent miss, so none takes the session's model (token-plan step 7d).
+        for name in ("branch-reviewer", "bug-auditor", "security-auditor", "team-peer"):
             with self.subTest(profile=name):
                 profile = (AGENTS / f"{name}.md").read_text(encoding="utf-8")
                 self.assertEqual(["opus"], frontmatter_list(profile, "model"))
+
+    def test_the_team_peer_holds_no_shell_no_edit_and_no_agent(self):
+        # The board it reads holds other peers' text, and this list is what keeps it read-only.
+        profile = (AGENTS / "team-peer.md").read_text(encoding="utf-8")
+        self.assertRegex(profile, r"(?m)^name:\s*team-peer\s*$")
+        self.assertEqual({"Read", "Grep", "Glob"}, set(frontmatter_list(profile, "tools")))
+        self.assertNotRegex(profile, r"(?m)^skills:")
+
+    def test_team_grants_its_peer_by_exact_type_and_nothing_broader(self):
+        allowed = frontmatter_list((COMMANDS / "team.md").read_text(encoding="utf-8"), "allowed-tools")
+        self.assertEqual(["Agent(team-peer)"], [t for t in allowed if t == "Agent" or t.startswith("Agent(")])
 
     def test_ship_grants_the_reviewer_by_exact_type_and_nothing_broader(self):
         ship = (COMMANDS / "ship.md").read_text(encoding="utf-8")
@@ -96,8 +107,9 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
             granting += 1
             with self.subTest(command=path.name):
                 self.assertEqual([], missing, "granted an agent type, and these others are neither granted nor denied")
-        # The two sweeps: fewer means the grant pattern stopped matching and the loop passed over nothing.
-        self.assertGreaterEqual(granting, 2)
+        # The two sweeps and /team: fewer means the grant pattern stopped matching and the loop passed over
+        # nothing.
+        self.assertGreaterEqual(granting, 3)
 
 
 class ABuiltInDenyIsHeldToo(unittest.TestCase):

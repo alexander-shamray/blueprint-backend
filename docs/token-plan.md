@@ -410,12 +410,13 @@ task takes which model.
 | A review recheck of a fix diff only | Sonnet | after #845 |
 | A plan task's implementer | Sonnet | after #845 |
 | `branch-reviewer`'s rounds, a sweep's fan-out | Opus | now: the profile pins it, whatever the session runs on |
+| A `/team` peer | Opus, or the model `--models` names for it | now: the profile pins it, the user overrides per peer |
 | Writing a plan | the parent's | until #845 shows otherwise |
 
 - For `general-purpose` and `Explore` the brief names the model at spawn.
   `model:` goes in the frontmatter of a repository agent the table moves:
-  `branch-reviewer`, `bug-auditor` and `security-auditor` carry
-  `model: opus`, which `test_command_grants.py` pins. A spawn's `model`
+  `branch-reviewer`, `bug-auditor`, `security-auditor` and `team-peer`
+  carry `model: opus`, which `test_command_grants.py` pins. A spawn's `model`
   overrides it, which is how a sweep's re-verification runs on Sonnet and
   how a recheck would, once its row moves.
 - The report's `--models` view splits each row by the model that answered,
