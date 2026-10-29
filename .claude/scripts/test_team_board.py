@@ -7,6 +7,7 @@ the refusal's words as well as its exit, since an exit alone stays green when th
 import contextlib
 import io
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -309,6 +310,19 @@ class ARestatedClaimIsNotNew(Checkout):
         result = self.merge(2)
         self.assertEqual((0, 1, True), (result["added"], result["refused"], result["converged"]))
         self.assertIn("- Two is read: already on the board as C1", self.refused_lines(2, "p1"))
+
+
+class TheResolvedPathDecides(Checkout):
+
+    def test_a_spelling_windows_reads_as_artifacts_is_refused(self):
+        self.reply(1, "p1")
+        self.merge(1)
+        cited = "artifacts./team/r1/board.md:1"
+        self.reply(2, "p1", claims=[{"text": "dotted", "evidence": [cited]}])
+        self.assertEqual(0, self.merge(2)["added"])
+        # Linux has no artifacts./ directory; Windows strips the dot and finds board.md.
+        reason = "is not a measurement under" if os.name == "nt" else "names no file"
+        self.assertIn(f"- dotted: {cited} {reason}", self.refused_lines(2, "p1"))
 
 
 class TheCommandLine(Checkout):

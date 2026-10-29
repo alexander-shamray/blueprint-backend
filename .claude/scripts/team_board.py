@@ -98,11 +98,16 @@ def evidence_problem(root, cited, run):
     if not target.is_file():
         return f"{cited} names no file"
     # A run's board and replies are peers' text and its goal the owner's brief: only a measurement is evidence.
+    # The resolved file decides, since Windows opens artifacts./ or ARTIFA~1/ as artifacts/.
+    resolved, checkout = target.resolve(), Path(root).resolve()
     measure = PurePosixPath("artifacts", "team", run, "measure")
-    if path.parts[0].lower() == "artifacts" and measure not in path.parents:
+    inside = resolved.is_relative_to((checkout / measure).resolve())
+    if not resolved.is_relative_to(checkout):
+        return f"{cited} is outside the checkout"
+    if resolved.is_relative_to((checkout / "artifacts").resolve()) and not inside:
         return f"{cited} is not a measurement under {measure}"
     if match is None:
-        return None if measure in path.parents else f"{cited} names no line"
+        return None if inside else f"{cited} names no line"
     lines = len(target.read_text(encoding="utf-8", errors="replace").splitlines())
     if int(match.group("line")) > lines:
         return f"{cited} is past the file's {lines} lines"
