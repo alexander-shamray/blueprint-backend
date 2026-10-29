@@ -472,9 +472,10 @@ branch is.
    - Run lines 4 to 6 and the prune on both paths; report containment,
      never equality: the oid `main` landed on, and that the merge is in
      its history.
-   - Back in the main checkout, delete this change's row from *In progress*
-     in `TODO.md`, never from the worktree (why: docs/commands/ship.md,
-     *Step 6: the teardown*).
+   - Once the merge is verified, delete this change's row from *In
+     progress* in the task list, `.todo/blueprint-backend.md` in the main
+     checkout's parent directory, by that path (why:
+     docs/commands/ship.md, *Step 6: the teardown*).
    - Never delete the merged branch: `git branch -d` is denied; name it in
      the report.
 

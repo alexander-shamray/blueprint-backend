@@ -849,11 +849,11 @@ main checkout — so line 3 is the only thing that makes the pull mean `main`.
 Running line 7 anyway exits non-zero against a worktree that never existed
 and stops the chain on a helper failure with nothing behind it.
 
-**The `TODO.md` row `/branch` added is deleted once the session is back in
-the main checkout**, after the pull, never from the worktree, where the copy
-is refused (the contract's §6). Nothing else removes it: a row left behind
-reads as work still in progress after the PR has landed, which is what
-*In progress* exists not to say.
+**The task-list row `/branch` added is deleted once the merge is verified**,
+after the pull, by the file's own path, which the contract's §6 puts outside
+every checkout so that no workspace is refused it. Nothing else removes it:
+a row left behind reads as work still in progress after the PR has landed,
+which is what *In progress* exists not to say.
 
 Line 5 runs on both paths, the pull on `main` or the fetch elsewhere,
 because skipping it leaves local `main` a merge behind — precisely the state

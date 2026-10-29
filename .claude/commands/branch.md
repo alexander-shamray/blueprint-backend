@@ -123,10 +123,11 @@ sweeps' `mktemp -d` ones.
    bash .claude/scripts/git-worktree-fork.sh .claude/worktrees/<slug> <name>
    ```
 
-   Whichever row ran, before any `EnterWorktree`, add the change to *In
-   progress* in the main checkout's `TODO.md` (`#n`, what, branch and
-   worktree, `started`); from a linked worktree, carry it in the report
-   as owed (why: docs/commands/branch.md, *Step 5*).
+   Whichever row ran, add the change to *In progress* in the task list,
+   `.todo/blueprint-backend.md` in the main checkout's parent directory
+   (`#n`, what, branch and worktree, `started`), by that path and never
+   through a `TODO.md` link; a linked worktree writes it too (why:
+   docs/commands/branch.md, *Step 5*).
 
    Then **`EnterWorktree`** with the new directory as `path`. Git writes go
    through the helpers only (why: `docs/harness-boundaries.md`, *Prefix
