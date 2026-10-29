@@ -42,6 +42,13 @@ oldest row and the saga's queue, with the machine's CPU at 94 to 97% over the
 hold, so the report names the generator, which #1582 tracks, and the figures
 compare these four runs with one another and not with ADR-167's.
 
+**Superseded in part by
+[ADR-171](ADR-171-inboxstate-is-clustered-on-its-message-key-1583-supersedes-adr-169s-identity-clustered-key.md)**:
+the Decision's keeping the primary key as the library maps it and the
+table's staying outside the settings ADR-167 made ours, and the consequence
+that the latch stays the saga endpoint's largest wait. The option's
+measurement and its refusal stand.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
