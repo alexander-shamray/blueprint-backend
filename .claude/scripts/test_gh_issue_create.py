@@ -162,7 +162,7 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         self.assert_refused_before_gh(self.run_helper("bug", "low", "sweep", body="a title\n"))
         self.assert_refused_before_gh(self.run_helper("bug", "low", "sweep", body="a title"))
 
-    def test_a_route_outside_the_two_is_refused(self):
+    def test_a_route_outside_the_set_is_refused(self):
         # The route decides which fixed line the body must end with, and it is
         # a closed set like the other two. A spelling outside it is refused
         # rather than defaulted, because a default is an unconditional
