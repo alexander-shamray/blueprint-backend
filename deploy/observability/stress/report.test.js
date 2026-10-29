@@ -258,7 +258,7 @@ test('the generator\'s container is never a service giving up, and is the stress
     const k6 = { containers: [{ name: 'commerce-k6-run-1', service: GENERATOR_SERVICE, cores: 1, cpuMean: 100,
         memoryMiddle: 100 * 1024 ** 2, memoryEnd: 900 * 1024 ** 2 }] };
 
-    assert.deepEqual(signals(k6), [], 'its CPU and memory are the machine\'s reading');
+    assert.deepEqual(signals(k6), [], 'its CPU and memory are the generator\'s, never a service\'s');
     assert.deepEqual(signals({ containers: [{ ...k6.containers[0], service: 'gateway' }] }),
         ['gateway cpu', 'gateway memory'], 'the same figures on a service name it');
 
