@@ -122,7 +122,8 @@ filter, since SQL Server clusters no filtered index
 ([ADR-167](adr/ADR-167-the-saga-outbox-is-clustered-on-its-inbox-message-index-1570-adding-to-adr-032-and-adr-112.md)).
 It changes the key and the index the library mapped and declares neither, and
 it refuses to build the model when either has moved, so a bump that moves
-them stops the build rather than being put back by ours.
+them stops every host, test and migrator building the model rather than
+being put back by ours.
 The rule holds for every type this repository defines; §7.4 lists the tables.
 
 `OrderConfiguration` holds the whole mapping; this excerpt is part of it. Where
