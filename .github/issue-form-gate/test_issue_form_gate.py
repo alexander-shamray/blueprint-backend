@@ -117,7 +117,8 @@ class IssueFormGateTests(unittest.TestCase):
                 self.assert_one("top-level labels key")
 
     def test_a_field_named_labels_inside_the_body_passes(self) -> None:
-        field = "  - type: input\n    id: labels\n    attributes:\n      label: labels\n"
+        field = ("  - type: input\n    id: labels\n    attributes:\n      label: labels\n"
+                 "      description: >-\n        labels: which apply\n")
         self.write("finding.yml", form() + field)
         self.assertEqual([], self.check())
 
