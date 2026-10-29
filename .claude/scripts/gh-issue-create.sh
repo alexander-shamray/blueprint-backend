@@ -31,8 +31,8 @@ case "$area" in
   harness|code|documentation|harness,test|code,test) ;;
   *) echo "not an area this helper will file under: $area" >&2; exit 2 ;;
 esac
-# The route decides the fixed last line, and it is the same closed-set test as
-# the other two: a spelling outside the set is refused rather than defaulted,
+# The route decides the fixed last line, and it is the closed-set test of the
+# other three: a spelling outside the set is refused rather than defaulted,
 # because a default is an unconditional claim. Each sentence names the evidence
 # behind the filing: a second auditor's reading, each mutant run against its
 # suite, no second reading for a finding filed by hand, or none owed by a request.
