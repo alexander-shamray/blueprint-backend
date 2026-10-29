@@ -17,8 +17,8 @@ them k6 at 1.0 and Docker Desktop's port forward at 0.4, which every one of
 about a thousand requests a second crossed. Four alternating runs at 3200
 VUs, two each way, measured the move: outside the VM Windows fell from 4.1
 and 5.1 cores to 3.4 and 3.7, the forward from 0.44 to under 0.1, and the
-VM rose by k6's 0.9 to 1.0. The machine went from 22.3 and 23.0 cores to
-22.3 and 22.4, so the net gain is about 0.3 of a core, inside the 0.6 by
+VM rose by k6's 0.9 to 1.0. The machine went from 22.34 and 22.97 cores
+to 22.30 and 22.38, so the net gain is about 0.3 of a core, inside the 0.6 by
 which the two runs on Windows differed, and every run still ended on the
 generator. The move is kept
 for what it fixes rather than for that core: the run's k6 is the image's,
