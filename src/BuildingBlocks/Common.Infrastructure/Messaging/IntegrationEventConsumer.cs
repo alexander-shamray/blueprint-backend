@@ -14,7 +14,7 @@ public sealed class IntegrationEventConsumer<TEvent>(
 {
     public async Task Consume(ConsumeContext<TEvent> context)
     {
-        // Publish-to-consumer-start lag (§13.3), so recorded before the handlers run.
+        // OccurredAt-to-consumer-start lag (§13.3), so recorded before the handlers run.
         metrics.Delivered(typeof(TEvent).Name, clock.GetUtcNow() - context.Message.OccurredAt);
 
         // Zero handlers throws, since an ack would let the inbox drop the message for good (§9.4, §9.5).

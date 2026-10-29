@@ -12,7 +12,7 @@ internal static partial class Slo
     /// <summary>The broker lane's oldest unprocessed row at p99: how long an event may wait to be published.</summary>
     public static TimeSpan BrokerLaneOutbox { get; } = Target("| Outbox oldest unprocessed, **broker lane**");
 
-    /// <summary>Publish to consumer start at p95: how long a published event may take to arrive.</summary>
+    /// <summary>OccurredAt to consumer start at p95 (§13.3): how late an event may reach its consumer.</summary>
     public static TimeSpan EventEndToEnd { get; } = Target("| Event end-to-end p95");
 
     // The first row of the table to start with the label, so a reworded label fails loudly rather than reading 0.

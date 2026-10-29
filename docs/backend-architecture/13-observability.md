@@ -1923,7 +1923,7 @@ satisfied. A row that cannot name one does not belong in the table.
 |---|---|---|
 | Command p95 (single aggregate, excl. external calls) | < 100 ms | `request.duration`, `request` tag on a command type (§13.3) |
 | Query p95 | < 80 ms | `request.duration`, `request` tag on a query type |
-| Event end-to-end p95 (publish → consumer start) | < 2 s | `messaging.delivery.lag` |
+| Event end-to-end p95 (`OccurredAt` → consumer start, §13.3) | < 2 s | `messaging.delivery.lag` |
 | Outbox oldest unprocessed, **broker lane**, p99 | < 5 s | `outbox.oldest.age`, `lane` tag (§13.6) |
 | Outbox oldest unprocessed, **local lane**, p99 | < 1 s | same gauge, other lane |
 | Read-model staleness, **own events**, p99 | < 1 s | `projection.lag` |

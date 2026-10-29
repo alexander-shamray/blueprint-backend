@@ -1258,7 +1258,7 @@ ADR-014 depends on:
 > code that names one service's schema, or one service's namespace, is common
 > code that has quietly stopped being common.
 
-Its `Consume` records publish-to-consume lag off the message (§13.3) — the
+Its `Consume` records `messaging.delivery.lag` off the message (§13.3) — the
 `IIntegrationEvent` constraint is what makes `OccurredAt` reachable — and
 then makes the one decision the table above assigns it:
 
