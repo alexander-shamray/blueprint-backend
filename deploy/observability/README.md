@@ -691,8 +691,10 @@ first and then the step, the level and the stop rule, as in
 `summary.md` carry the first three.
 
 **4. Go back to the normal profile** by bringing the stack up without the
-override. Nothing else needs undoing. It recreates the LGTM container, which
-empties Prometheus, so a summary is made in step 3, before this:
+override. Nothing else needs undoing, bar a password hash a failed `setup()`
+left lowered, which *What a run leaves* below covers. It recreates the LGTM
+container, which empties Prometheus, so a summary is made in step 3, before
+this:
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d --wait
