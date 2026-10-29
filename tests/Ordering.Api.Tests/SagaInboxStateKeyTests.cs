@@ -1,3 +1,9 @@
+using System.Reflection;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
+using Ordering.Infrastructure.Persistence;
 using Ordering.TestSupport;
 using Shouldly;
 using Xunit;
@@ -46,5 +52,37 @@ public sealed class SagaInboxStateKeyTests(ServiceFixture fixture) : IAsyncLifet
             FROM sys.foreign_keys
             WHERE referenced_object_id = OBJECT_ID('ordering.InboxState')
             """)).ShouldBe("FK_OutboxMessage_InboxState_InboxMessageId_InboxConsumerId");
+    }
+
+    // ADR-171's rebuild drops PK_InboxState before it adds it back. Committed on its own, that leaves the
+    // library's UPDATE ... WHERE Id = @p scanning the table under update locks, and the saga endpoint consumes
+    // nothing until the key returns; one transaction per migration keeps that state unseen by the hosts.
+    [Fact]
+    public void Every_migration_runs_each_statement_inside_its_own_transaction()
+    {
+        using OrderingDbContext db = new(
+            new DbContextOptionsBuilder<OrderingDbContext>().UseSqlServer(fixture.ConnectionString).Options);
+
+        IMigrationsAssembly migrations = db.GetService<IMigrationsAssembly>();
+        IMigrationsSqlGenerator generator = db.GetService<IMigrationsSqlGenerator>();
+        string provider = db.Database.ProviderName!;
+
+        // Named, so a run that read no migration fails rather than passing on an empty list.
+        migrations.Migrations.Keys.ShouldContain(
+            id => id.EndsWith("_ClusterInboxStateOnMessageKey", StringComparison.Ordinal));
+
+        foreach ((string id, TypeInfo type) in migrations.Migrations)
+        {
+            Migration migration = migrations.CreateMigration(type, provider);
+
+            foreach ((string direction, IReadOnlyList<MigrationOperation> operations) in
+                     new[] { ("Up", migration.UpOperations), ("Down", migration.DownOperations) })
+            {
+                generator.Generate(operations)
+                    .Where(command => command.TransactionSuppressed)
+                    .Select(command => command.CommandText)
+                    .ShouldBeEmpty($"{id} {direction}");
+            }
+        }
     }
 }
