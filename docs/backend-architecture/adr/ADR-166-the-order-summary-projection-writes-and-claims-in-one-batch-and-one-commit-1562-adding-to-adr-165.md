@@ -14,14 +14,17 @@ rule `knee`) were made on 2026-10-29 on one stack, each knee-stopping at step
 exporting metrics every 5 s as ADR-165's runs did, and SQL Server sampled
 throughout: its Ordering requests every 200 ms, its waits every second and its
 statements' totals every 5 s. As shipped, at `988e0f31c`, a `Local` delivery
-took 103 ms under the load at 26.6 rows a second over three replicas, each
-lane busy throughout. The statements themselves ran in 0.1 to 1.7 ms each. A
+took 103 ms over the step's ramp and hold, at 26.6 rows a second over three
+replicas, each lane busy throughout, and 69.9 ms over the 100 s after it, the
+window in which ADR-165 read 38 to 57 ms while Ordering's consumers still
+staged rows. The statements themselves ran in 0.1 to 1.7 ms each. A
 projection request was in flight in SQL Server for about 36 % of a delivery,
 85 % of that in a commit's log flush, 16.8 ms a flush on the one instance
 every service shares, and under 1 % in a lock wait; the rest of the delivery
 was spent outside SQL Server, in and between its four round trips, with
 Ordering using 3.3 of the machine's 24 cores. With one batch and one commit,
-two runs: 38.0 and 36.9 ms a delivery at 66.8 and 68.3 rows a second; the
+two runs: 38.0 and 36.9 ms a delivery over the ramp and hold, at 66.8 and 68.3
+rows a second, and 26.5 and 29.1 ms over the 100 s after it; the
 `Local` backlog peaked at 2 130 and 2 360 rows against 8 199 as shipped and
 ADR-165's 7 078 to 8 704; the oldest row reached 25.3 and 28.1 s against
 150.3 s and ADR-165's 103.6 to 132.5 s; and the backlog fell under 100 rows
