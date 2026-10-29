@@ -15,7 +15,9 @@ vocabulary* bullet for the kind, and
   issue on offer, a filer can skip the form and every field it asks for.
 - Every other `.yml` or `.yaml` in the directory as a form. Each must carry
   a `kind`, a `severity` and an `area` dropdown and no other dropdown, so
-  every dropdown option is a label name. An empty directory fails.
+  every dropdown option is a label name. An empty directory fails, and so
+  does a form with a top-level `labels:` key, which would attach its labels
+  to every issue the form opens whatever the answers said.
 - The form's kind against the kinds §6's bullet lists after `kind is`, and
   its severity against the helper's `case "$severity"` arm; as sets, with a
   repeated option refused.
@@ -34,9 +36,10 @@ dropdown with no id or no options, or the same dropdown twice.
 
 ## What it does not claim
 
-- A form attaches no label. The answers sit in the issue body under the
-  dropdowns' headings, and whoever triages copies them onto the issue; the
-  gate holds that each answer has a label to copy onto.
+- An answer attaches no label: a form can attach only fixed ones, which the
+  gate refuses. The answers sit in the issue body under the dropdowns'
+  headings, and whoever triages copies them onto the issue; the gate holds
+  that each answer has a label to copy onto.
 - It does not read the text fields, the label colours or descriptions,
   or whether GitHub accepts the form: GitHub validates the schema when it
   renders the form, and a broken one shows on the *New issue* page.

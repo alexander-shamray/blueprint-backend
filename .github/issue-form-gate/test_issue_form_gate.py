@@ -110,6 +110,17 @@ class IssueFormGateTests(unittest.TestCase):
         self.assertEqual(1, len(problems), problems)
         self.assertIn(f"option {label} is not a label", problems[0])
 
+    def test_a_form_attaching_fixed_labels_fails(self) -> None:
+        for key in ("labels: [enhancement]\n", "labels:\n  - bug\n", '"labels": [bug]\n'):
+            with self.subTest(key=key):
+                self.write("finding.yml", form().replace("body:\n", key + "body:\n"))
+                self.assert_one("top-level labels key")
+
+    def test_a_field_named_labels_inside_the_body_passes(self) -> None:
+        field = "  - type: input\n    id: labels\n    attributes:\n      label: labels\n"
+        self.write("finding.yml", form() + field)
+        self.assertEqual([], self.check())
+
     def test_a_missing_dropdown_fails(self) -> None:
         self.write("finding.yml", form().replace("id: area", "id: areas"))
         problems = self.check()
