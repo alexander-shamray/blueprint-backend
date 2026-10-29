@@ -312,8 +312,8 @@ Beside those, how a change is made here:
   offers this vocabulary, and `.github/issue-form-gate/` holds it there. A
   severity in the body and the label both have to say it: the helper's
   `## Severity`, or the form's dropdown, whose answer the triager copies
-  onto the label because a form attaches none. `documentation` is also an
-  area, beside `harness` and `code`: an issue labelled `bug` and
+  onto the label because a form attaches none. `documentation` is also one
+  of the form's area choices: an issue labelled `bug` and
   `documentation` is a defect in the documentation, and `documentation` is
   its kind only on an issue that carries no other.
 - **A reply is not a resolution.** Resolve a review thread in the same act
