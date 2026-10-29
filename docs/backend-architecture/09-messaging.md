@@ -963,7 +963,9 @@ replicas times the bound. The loops share the pass, so the next claim waits for
 its `Local` rows: under a load past the knee the `Broker` rows not yet claimed
 wait in the outbox behind them, measured and kept, because a claim for each
 lane did not shorten the drain
-([ADR-165](adr/ADR-165-the-outbox-lanes-keep-one-claim-splitting-them-freeing-the-broker-lane-but-not-the-drain-1559-adding-to-adr-164.md)).
+([ADR-165](adr/ADR-165-the-outbox-lanes-keep-one-claim-splitting-them-freeing-the-broker-lane-but-not-the-drain-1559-adding-to-adr-164.md)),
+and did not once a `Local` delivery was shorter
+([ADR-168](adr/ADR-168-the-outbox-lanes-keep-one-claim-after-adr-166-as-well-1570-adding-to-adr-165-and-adr-166.md)).
 Both loops deliver a row the same way, and that
 per-row body is the design:
 
