@@ -177,6 +177,7 @@ decision looks wrong.
 | **ADR-168** | [The outbox lanes keep one claim after ADR-166 as well (#1570), adding to ADR-165 and ADR-166](adr/ADR-168-the-outbox-lanes-keep-one-claim-after-adr-166-as-well-1570-adding-to-adr-165-and-adr-166.md) |
 | **ADR-169** | [InboxState's key keeps its page latching: the sequential-key option measured to move nothing (#1581), adding to ADR-167](adr/ADR-169-inboxstates-key-keeps-its-page-latching-the-sequential-key-option-measured-to-move-nothing-1581-adding-to-adr-167.md) |
 | **ADR-170** | [The stress run's generator runs on the Compose network (#1582)](adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md) |
+| **ADR-171** | [InboxState is clustered on its message key (#1583); supersedes ADR-169's identity-clustered key](adr/ADR-171-inboxstate-is-clustered-on-its-message-key-1583-supersedes-adr-169s-identity-clustered-key.md) |
 
 ---
 

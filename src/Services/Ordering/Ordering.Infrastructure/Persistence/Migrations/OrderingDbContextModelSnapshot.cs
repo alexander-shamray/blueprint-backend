@@ -224,6 +224,12 @@ namespace Ordering.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    SqlServerKeyBuilderExtensions.IsClustered(b.HasKey("Id"), false);
+
+                    b.HasAlternateKey("MessageId", "ConsumerId");
+
+                    SqlServerKeyBuilderExtensions.IsClustered(b.HasAlternateKey("MessageId", "ConsumerId"));
+
                     b.HasIndex("Delivered");
 
                     b.ToTable("InboxState", "ordering");
