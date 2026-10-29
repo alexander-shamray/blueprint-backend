@@ -316,9 +316,9 @@ Beside those, how a change is made here:
   the body and the label both have to say it: the `## Severity` section of
   a body `gh-issue-create.sh` files, or the form's dropdown, whose answer
   the triager copies onto the label because an answer cannot attach one.
-  `documentation` is also one of the form's area choices: an issue labelled `bug` and
-  `documentation` is a defect in the documentation, and `documentation` is
-  its kind only on an issue that carries no other.
+  `documentation` is also one of the form's area choices: an issue
+  labelled `bug` and `documentation` is a defect in the documentation, and
+  `documentation` is its kind only on an issue that carries no other.
 - **A reply is not a resolution.** Resolve a review thread in the same act
   as the reply, and leave an `Ask` open on purpose.
 - **A round's touch set is the finding's own sites.** A `fix` commit
