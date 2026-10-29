@@ -113,8 +113,8 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
             AND FulfilmentCounted = 0;
         """;
 
-    // A write and its claims are one round trip and one commit: under load a Local row's time was its round trips
-    // and each autocommit's log flush, not the statements (ADR-166). XACT_ABORT rolls back a batch that fails.
+    // One round trip and one commit per write, not one per statement (ADR-166).
+    // XACT_ABORT rolls back a batch that fails.
     private const string Begin = "SET XACT_ABORT ON;\nBEGIN TRANSACTION;\n";
 
     private const string ClaimsThenCommit =
