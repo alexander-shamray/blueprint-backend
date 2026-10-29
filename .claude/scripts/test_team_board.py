@@ -324,6 +324,22 @@ class TheResolvedPathDecides(Checkout):
         reason = "is not a measurement under" if os.name == "nt" else "names no file"
         self.assertIn(f"- dotted: {cited} {reason}", self.refused_lines(2, "p1"))
 
+    def test_a_link_into_the_run_is_refused_whatever_it_is_named(self):
+        # A directory link outside artifacts/ reaches board.md on every system, so Linux CI takes this path.
+        self.reply(1, "p1")
+        self.merge(1)
+        link = self.root / "notes"
+        try:
+            os.symlink(self.run_path, link, target_is_directory=True)
+        except OSError:
+            if os.name != "nt":
+                raise
+            import _winapi
+            _winapi.CreateJunction(str(self.run_path), str(link))
+        self.reply(2, "p1", claims=[{"text": "linked", "evidence": ["notes/board.md:1"]}])
+        self.assertEqual(0, self.merge(2)["added"])
+        self.assertIn("- linked: notes/board.md:1 is not a measurement under", self.refused_lines(2, "p1"))
+
 
 class TheCommandLine(Checkout):
 
