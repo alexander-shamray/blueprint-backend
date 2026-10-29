@@ -98,7 +98,7 @@ def evidence_problem(root, cited, run):
         return f"{cited} is not a measurement under {measure}"
     if match is None:
         return None if measure in path.parents else f"{cited} names no line"
-    lines = target.read_text(encoding="utf-8", errors="replace").count("\n") + 1
+    lines = len(target.read_text(encoding="utf-8", errors="replace").splitlines())
     if int(match.group("line")) > lines:
         return f"{cited} is past the file's {lines} lines"
     return None

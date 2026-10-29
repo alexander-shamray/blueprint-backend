@@ -259,6 +259,16 @@ class EvidenceIsNotAnotherPeersText(Checkout):
                 self.assertIn(f"- cites {c}: {c} is not a measurement under artifacts/team/r1/measure", record)
 
 
+class TheLastLineIsTheLastOneCited(Checkout):
+
+    def test_the_line_after_a_trailing_newline_is_past_the_end(self):
+        self.reply(1, "p1", claims=[{"text": "last", "evidence": ["src/a.cs:3"]},
+                                    {"text": "after", "evidence": ["src/a.cs:4"]}])
+        result = self.merge(1)
+        self.assertEqual((1, 1), (result["added"], result["refused"]))
+        self.assertIn("- after: src/a.cs:4 is past the file's 3 lines", self.refused_lines(1, "p1"))
+
+
 class TheCommandLine(Checkout):
 
     def run_main(self, *argv):
