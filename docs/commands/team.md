@@ -15,14 +15,14 @@ owner's conclusions or another peer's reply: the board is the only place
 their readings meet, and each claim on it carries its own evidence.
 
 **The owner is the session that ran the command.** It is the only one
-holding a workspace, a shell and a write, as `docs/change-locality.md` §6
-already requires of a workspace: one owner. The peers are `team-peer`
-agents whose tool list is `Read`, `Grep` and `Glob`, for the reason
-`docs/harness-boundaries.md` gives for `branch-reviewer`: the board holds
-other peers' text, so a claim written to steer a peer can only be refuted,
-and a peer cannot grant another anything it lacks. With two or more peers
-the last is a reviewer, so every claim meets one peer whose job is to break
-it; a lone peer investigates.
+holding a workspace, a shell and a write, as `docs/change-locality.md` §4's
+*Partitions* already asks: one worktree and one branch per agent. The peers
+are `team-peer` agents whose tool list is `Read`, `Grep` and `Glob`, for
+the reason `docs/harness-boundaries.md` gives for `branch-reviewer`: the
+board holds other peers' text, so a claim written to steer a peer can only
+be refuted, and a peer cannot grant another anything it lacks. With two or
+more peers the last is a reviewer, so every claim meets one peer whose job
+is to break it; a lone peer investigates.
 
 **Why not a workflow.** A workflow script keeps each round's replies out of
 the owner's context, which is the cost `docs/token-plan.md` step 2
