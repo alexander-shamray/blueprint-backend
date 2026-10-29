@@ -43,8 +43,9 @@ export const WAIT_JUMP_RATIO = 4;
 // measured the workstation rather than the platform.
 export const HOST_CPU_LIMIT = 90;
 
-// The stress override's own k6 container: the generator, so its CPU and
-// memory are the machine's reading above and never a service giving up.
+// The stress override's own k6 container: the generator, whose CPU counts
+// toward the machine's reading above and whose CPU and memory are never a
+// service giving up.
 export const GENERATOR_SERVICE = 'k6';
 
 /** Docker's "12.34%" as a number, or null for a value it could not read ("--"). */
