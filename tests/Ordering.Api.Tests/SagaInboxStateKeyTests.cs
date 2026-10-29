@@ -54,9 +54,7 @@ public sealed class SagaInboxStateKeyTests(ServiceFixture fixture) : IAsyncLifet
             """)).ShouldBe("FK_OutboxMessage_InboxState_InboxMessageId_InboxConsumerId");
     }
 
-    // ADR-171's rebuild drops PK_InboxState before it adds it back. Committed on its own, that leaves the
-    // library's UPDATE ... WHERE Id = @p scanning the table under update locks, and the saga endpoint consumes
-    // nothing until the key returns; one transaction per migration keeps that state unseen by the hosts.
+    // ADR-171's rebuild drops PK_InboxState before it adds it back, a table the running hosts must never see.
     [Fact]
     public void Every_migration_runs_each_statement_inside_its_own_transaction()
     {
