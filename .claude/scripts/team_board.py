@@ -156,6 +156,11 @@ def merge(root, name, number):
             problem = "a claim with no text" if not isinstance(text, str) or not text.strip() else (
                 "a claim with no evidence" if not isinstance(cited, list) or not cited else
                 next(filter(None, (evidence_problem(root, e, name) for e in cited)), None))
+            if not problem:
+                # A restated claim is not new, or a peer repeating itself would hold every round open.
+                known = next((c["id"] for c in board["claims"]
+                              if c["text"].casefold() == one_line(text).casefold()), None)
+                problem = known and f"already on the board as {known}"
             if problem:
                 rejected.append({"what": text or "(no text)", "why": problem})
                 continue

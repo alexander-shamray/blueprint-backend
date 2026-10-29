@@ -300,6 +300,17 @@ class ARoundNeedsEveryPlannedPeer(Checkout):
         self.assertIn("r1 was opened for p1, p2, not p1, p2, p3", str(caught.exception))
 
 
+class ARestatedClaimIsNotNew(Checkout):
+
+    def test_a_claim_restated_in_a_later_round_is_refused_and_the_round_converges(self):
+        self.reply(1, "p1", claims=[{"text": "two is read", "evidence": ["src/a.cs:2"]}])
+        self.merge(1)
+        self.reply(2, "p1", claims=[{"text": "Two is  read", "evidence": ["src/a.cs:2"]}])
+        result = self.merge(2)
+        self.assertEqual((0, 1, True), (result["added"], result["refused"], result["converged"]))
+        self.assertIn("- Two is read: already on the board as C1", self.refused_lines(2, "p1"))
+
+
 class TheCommandLine(Checkout):
 
     def run_main(self, *argv):
