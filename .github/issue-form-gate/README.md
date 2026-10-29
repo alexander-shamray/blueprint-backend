@@ -13,9 +13,11 @@ vocabulary* bullet for the kind, and
 
 - `config.yml`, which must set `blank_issues_enabled: false`: with a blank
   issue on offer, a filer can skip the form and every field it asks for.
-- Every other `.yml` or `.yaml` in the directory as a form. Each must carry
-  a `kind`, a `severity` and an `area` dropdown and no other dropdown, so
-  every dropdown option is a label name. An empty directory fails, and so
+- Every other entry in the directory, which must be a `.yml` or `.yaml`
+  form: GitHub offers a Markdown template beside the form, with none of its
+  fields, so one fails the gate. Each form must carry a `kind`, a
+  `severity` and an `area` dropdown and no other dropdown, so every
+  dropdown option is a label name. An empty directory fails, and so
   does a form with a top-level `labels:` key, which would attach its labels
   to every issue the form opens whatever the answers said.
 - The form's kind against the kinds §6's bullet lists after `kind is`, and
