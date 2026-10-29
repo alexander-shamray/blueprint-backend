@@ -311,10 +311,12 @@ Beside those, how a change is made here:
   `gh-issue-create.sh` files no `documentation`, and an `enhancement`, a
   requested change rather than a finding, under its `request` route alone;
   `gh-label-ensure.sh` creates no `enhancement`, since it holds the sweeps'
-  labels alone. Area is the tree a finding is in: `harness` for `.claude/`,
-  `code` for `src/`, `tests/`, `tools/`, `deploy/` and the CI workflows, and
-  `documentation` for prose, with `test` beside `harness` or `code` for a
-  test suite. `gh-issue-create.sh` takes it as its third argument and
+  labels alone. Area is the tree a finding is in, one tree to a finding:
+  `harness` for anything under `.claude/`, its prose included,
+  `documentation` for prose and samples anywhere else, and `code` for the
+  rest, `src/`, `tests/`, `tools/`, `deploy/`, `.github/` and the root's
+  build files among it, with `test` beside `harness` or `code` for a test
+  suite. `gh-issue-create.sh` takes it as its third argument and
   `gh-label-ensure.sh` holds each one. The issue form under
   `.github/ISSUE_TEMPLATE/` offers this vocabulary, and
   `.github/issue-form-gate/` holds it there. A severity in
