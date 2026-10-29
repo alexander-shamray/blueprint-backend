@@ -301,9 +301,9 @@ session moved into `.claude/worktrees/` is refused it by Claude Code's
 isolation; left to "when a PR opens", the update fell to a session that
 could not make it, and a branch holding commits with no PR was missing from
 *In progress*. The contract's §6 now puts the file outside every checkout,
-where no session is refused it, so the row goes in at step 5 whichever row
-ran, a linked worktree found at step 0 included, and nothing is carried as
-owed.
+where the isolation refuses no session, so the row goes in at step 5
+whichever row ran, a linked worktree found at step 0 included, and nothing
+is carried as owed.
 
 **If the session cannot enter a worktree that was created, stop and report
 the path** — this is the other half and it fails the other way. Do

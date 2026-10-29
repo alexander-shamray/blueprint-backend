@@ -354,7 +354,12 @@ Beside those, how a change is made here:
   session moved into `.claude/worktrees/` with `EnterWorktree` every path
   in the main checkout outside that worktree, and admits one that no
   checkout contains, so every session writes it from wherever it stands.
-  The main checkout's root may
+  The permission check still sees a path outside the project: under
+  `acceptEdits` the write prompts, as `docs/harness-boundaries.md`,
+  *Settings self-lock and permission root*, measured, unless the user's own
+  settings list the directory under `additionalDirectories`; auto mode
+  wrote it unprompted when this rule was measured. The main checkout's root
+  may
   hold `TODO.md`, gitignored, as a link to it for the user's editor; a
   session writes the file by its own path, never through the link, which
   the edit-target guard refuses (`docs/harness-boundaries.md`, *The
