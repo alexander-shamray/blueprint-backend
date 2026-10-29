@@ -2,7 +2,8 @@
 
 **The claim: every issue form under `.github/ISSUE_TEMPLATE/` offers exactly
 the vocabularies its owners hold, every choice it offers is a label in this
-repository, and a blank issue is switched off.** Its owners are
+repository, and a blank issue is switched off for a filer below write
+access.** Its owners are
 [`docs/change-locality.md`](../../docs/change-locality.md) §6's *issue
 vocabulary* bullet for the kind, and
 [`gh-issue-create.sh`](../../.claude/scripts/gh-issue-create.sh)'s closed
@@ -41,6 +42,9 @@ dropdown with no id or no options, or the same dropdown twice.
   renders the form, and a broken one shows on the *New issue* page.
 - The area choices have no owner outside the form, so the gate holds them
   to the labels only.
+- A filer with write access still sees GitHub's *Blank issue*, marked
+  *Maintainers only*: the setting binds the read and triage roles, and
+  nothing in a repository's files can switch it off for the rest.
 
 ## How it runs
 
