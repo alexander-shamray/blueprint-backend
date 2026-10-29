@@ -63,7 +63,9 @@ returning one reply, merged in one step. The run ends on the first round
 that adds no claim and moves no status, which the merge reports as
 converged, or at the round ceiling, reported as unconverged the way
 `/ship` step 5 reports its review. A refused claim does not hold a round
-open: it never reached the board, so repeating it changes nothing.
+open: it never reached the board, so repeating it changes nothing. Nor
+does restating an accepted one: a claim already on the board, whitespace
+and case aside, is refused as a restatement.
 
 A reply out of shape is spawned once more with the same brief; a second is
 the round not having run. The owner never writes a peer's reply, because a
