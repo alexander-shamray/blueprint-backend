@@ -20,16 +20,17 @@ a receive, its queue peaked at 2 307 and 3 318 and fell under 100 at 89 and
 106 s after the load; on, 52.6 and 61.6 a second at 1 284 and 1 142 ms,
 peaks of 4 062 and 3 421, and 128 and 94 s. `PK_InboxState` waited 3.59 and
 3.96 million ms on page latches over the load off, 3.45 and 3.77 million on,
-or 301 and 217 ms per inserted row off against 227 and 221 on. The two runs
-with the option off are further apart than any pair across it. SQL Server's
-requests, sampled every 200 ms, say why: in the second run off, about 15 000
-samples waited on a page latch in an `InboxState` statement, 8 163 of them
-the `UPDATE` under `PAGELATCH_EX`, 3 284 the `SELECT` under `UPDLOCK`, 1 736
-the `UPDATE` under `PAGELATCH_SH` and 1 724 the `INSERT`. The library inserts
-a message's row, then reads it under an update lock and updates it, all on the
-newest page, and the option paces the insert alone; on, it added
-`BTREE_INSERT_FLOW_CONTROL`, 311 s across the instance, in front of the
-inserts, and left the reads and updates where they were.
+or 301 and 217 ms per inserted row off against 227 and 221 on. In messages a
+second, receive time and latch per inserted row, the two runs with the option
+off are further apart than any pair across it. SQL Server's requests, sampled
+every 200 ms, say why: in the second run off, about 15 000 samples waited on
+a page latch in an `InboxState` statement, 8 163 of them the `UPDATE` under
+`PAGELATCH_EX`, 3 284 the `SELECT` under `UPDLOCK`, 1 736 the `UPDATE` under
+`PAGELATCH_SH` and 1 724 the `INSERT`. The library inserts a message's row,
+then reads it under an update lock and updates it, all on the newest page, and
+the option paces the insert alone; on, it added `BTREE_INSERT_FLOW_CONTROL`,
+311 s across the instance, in front of the inserts, and left the reads and
+updates where they were.
 **Consequences.** The latch stays the saga endpoint's largest wait past the
 knee, 3.4 to 4.0 million ms a load, and #1583 tracks the lever this
 measurement points at, clustering `InboxState` on the library's alternate key
