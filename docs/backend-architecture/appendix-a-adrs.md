@@ -176,6 +176,7 @@ decision looks wrong.
 | **ADR-167** | [The saga outbox is clustered on its inbox-message index (#1570), adding to ADR-032 and ADR-112](adr/ADR-167-the-saga-outbox-is-clustered-on-its-inbox-message-index-1570-adding-to-adr-032-and-adr-112.md) |
 | **ADR-168** | [The outbox lanes keep one claim after ADR-166 as well (#1570), adding to ADR-165 and ADR-166](adr/ADR-168-the-outbox-lanes-keep-one-claim-after-adr-166-as-well-1570-adding-to-adr-165-and-adr-166.md) |
 | **ADR-169** | [InboxState's key keeps its page latching: the sequential-key option measured to move nothing (#1581), adding to ADR-167](adr/ADR-169-inboxstates-key-keeps-its-page-latching-the-sequential-key-option-measured-to-move-nothing-1581-adding-to-adr-167.md) |
+| **ADR-170** | [The stress run's generator runs on the Compose network (#1582)](adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md) |
 
 ---
 

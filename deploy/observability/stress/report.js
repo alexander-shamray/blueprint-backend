@@ -43,6 +43,10 @@ export const WAIT_JUMP_RATIO = 4;
 // measured the workstation rather than the platform.
 export const HOST_CPU_LIMIT = 90;
 
+// The stress override's own k6 container: the generator, so its CPU and
+// memory are the machine's reading above and never a service giving up.
+export const GENERATOR_SERVICE = 'k6';
+
 /** Docker's "12.34%" as a number, or null for a value it could not read ("--"). */
 export function parseCpu(text) {
     const match = /^\s*([\d.]+)\s*%\s*$/.exec(String(text ?? ''));
@@ -311,7 +315,7 @@ export function serviceCrossings(row, previous, { cores = null, holdSeconds = nu
         (row.requestTypes ?? []).map((r) => r.service), (row.serverErrors ?? []).map((e) => e.service),
         (row.outboxes ?? []).map((o) => o.service)))];
 
-    for (const container of row.containers ?? []) {
+    for (const container of (row.containers ?? []).filter((c) => c.service !== GENERATOR_SERVICE)) {
         const owner = containerOwner(container, known);
         const usable = container.cores ?? cores;
         const share = usable > 0 && Number.isFinite(container.cpuMean) ? container.cpuMean / (usable * 100) : null;

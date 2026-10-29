@@ -502,7 +502,15 @@ and holds the LGTM container and the collector to a part of the machine, so
 the observer's CPU does not bring the generator's limit nearer
 ([ADR-162](../../docs/backend-architecture/adr/ADR-162-the-stress-override-bounds-the-observer-and-the-collector-sheds-within-its-bound-1534.md)).
 At its cap the LGTM container is named among the services that gave up, since
-its CPU is read against its own limit. The SLO run never uses the override.
+its CPU is read against its own limit. The override also carries the run's
+k6, as its `k6` service under the `stress-run` profile, which `up` never
+starts: on the Compose network its requests reach the gateway by name rather
+than through Docker Desktop's port forward, whose crossing cost the machine
+cores the platform now gets
+([ADR-170](../../docs/backend-architecture/adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md)).
+Its container is read like any other and never named among the services
+that gave up, by `stress/report.js`'s `GENERATOR_SERVICE`. The SLO run never
+uses the override.
 
 **The users.** `setup()` makes a `stress-run` client and one user per VU at
 the highest step, `stress-0001` upwards, through Keycloak's admin API, as the
@@ -602,7 +610,8 @@ and `not measured` one that ran no step.
 `raw.json` from k6, `samples.jsonl` from the sampler, and `summary.json` and
 `summary.md` from `stress/summarise.mjs`. The summary records the machine's
 processor, memory and operating system, Docker's processors and memory, the
-commit and the k6 version, since a local number means nothing without them.
+commit and the override's k6 image, since a local number means nothing
+without them.
 
 ### Running it
 
@@ -635,22 +644,23 @@ products=$(echo "$rows" | grep ",$currency\$" | cut -d, -f1 | paste -sd, -)
 echo "currency: ${currency:-none}, products: ${products:-none}"
 ```
 
-**3. Run it, with the sampler beside it, then summarise.** The admin password
-is §14.1's local default and reaches k6 through the environment, never `-e`.
-`--address` turns on k6's REST API, which the knee stop reads; a level, a
-stop rule or a cap is one more `-e` line, such as
-`-e STRESS_PROFILE=medium`, `-e STRESS_STOP=errors` or
-`-e STRESS_MAX_USERS=6400`. The sampler stops itself once k6 has written its
-results:
+**3. Run it, with the sampler beside it, then summarise.** k6 is the
+override's `k6` service, which sets the gateway's, Keycloak's and
+Prometheus's addresses on the Compose network. The admin password is §14.1's
+local default and reaches k6 through the environment, which the service
+passes on, never `-e`. `--address` turns on k6's REST API inside its
+container, which the knee stop reads; a level, a stop rule or a cap is one
+more `-e` line, such as `-e STRESS_PROFILE=medium`, `-e STRESS_STOP=errors`
+or `-e STRESS_MAX_USERS=6400`. The sampler stops itself once k6 has written
+its results:
 
 ```bash
 out=artifacts/stress/$(date +%Y%m%d-%H%M%S)
 mkdir -p "$out"
 node deploy/observability/stress/sample.mjs "$out" &
 export KEYCLOAK_ADMIN_PASSWORD=admin
-k6 run --address 127.0.0.1:6565 \
-  -e BASE_URL=http://localhost:5000 \
-  -e KEYCLOAK_URL=http://localhost:8080 \
+docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.stress.yml \
+  run --rm k6 run --address 127.0.0.1:6565 \
   -e STRESS_PRODUCTS="$products" \
   -e STRESS_CURRENCY="$currency" \
   -e STRESS_OUT="$out" \

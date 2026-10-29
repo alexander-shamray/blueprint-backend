@@ -1,7 +1,7 @@
 # ADR-157's stress override, for deploy/observability/README.md's stress run
-# alone, never a deployment: it lifts the edge's rate limits, stops the
-# workers pacing to their third parties, scales Ordering (ADR-158), samples
-# traces (ADR-160) and bounds the observer (ADR-162). No other Compose file
+# alone, never a deployment: it lifts the edge's rate limits, unpaces the
+# workers, scales Ordering (ADR-158), samples traces (ADR-160), bounds the
+# observer (ADR-162) and carries the run's k6 (ADR-170). No other Compose file
 # sets its environment keys or limits, so `up` without it restores them all.
 
 # Not part of `up`: add it to the full-stack command deploy/compose/README.md
@@ -98,3 +98,20 @@ services:
   otel-collector:
     cpus: "1"
     mem_limit: 512m
+
+  # The generator, on the stack's network rather than on Windows, where its
+  # requests crossed Docker Desktop's port forward. Started by `run` alone,
+  # never by `up`. The repository's paths are mounted where the run's own
+  # relative paths find them, and STRESS_OUT is written through to the host.
+  k6:
+    image: grafana/k6:2.2.0
+    profiles: [ "stress-run" ]
+    working_dir: /repo
+    volumes:
+      - ../observability/stress:/repo/deploy/observability/stress:ro
+      - ../../artifacts/stress:/repo/artifacts/stress
+    environment:
+      - KEYCLOAK_ADMIN_PASSWORD
+      - BASE_URL=http://gateway:8080
+      - KEYCLOAK_URL=http://keycloak:8080
+      - PROM_URL=http://grafana:3000/api/datasources/proxy/uid/prometheus
