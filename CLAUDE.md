@@ -8,7 +8,7 @@ touch, before you touch it.**
 
 | | |
 |---|---|
-| `TODO.md` (gitignored, local) | Open PRs and issues, for the user; the contract's §6 says when it changes |
+| `../.todo/blueprint-backend.md` (local, outside the checkout) | Open PRs and issues, for the user; the contract's §6 says where it lives and when it changes |
 | [`docs/change-locality.md`](docs/change-locality.md) | The operating contract: the trust order, the one rule, the change classes, and §6's working rules |
 | [`docs/change-locality-plan.md`](docs/change-locality-plan.md) | The PRs that make the contract fully true |
 | [`docs/churn-plan.md`](docs/churn-plan.md), [`docs/churn-plan-2.md`](docs/churn-plan-2.md) | Where the corpus churns, measured on a named commit, and the sequences that reduce it |
@@ -84,8 +84,9 @@ source, §14.1's local-development defaults the one stated exception.
 commits, issues, review threads and the round touch set. Two of them fire
 without an edit to prompt a look: **uncommitted work in the tree belongs
 in the PR being worked on — never revert it to clean the tree**; and
-**`TODO.md` is updated the moment a session starts a branch, opens, merges
-or closes a PR, or files, closes or reopens an issue**.
+**the task list is updated the moment a session starts a branch, opens,
+merges or closes a PR, or files, closes or reopens an issue**, from a
+worktree as well, since it lives outside every checkout.
 
 ## Subagents, review rounds and plans
 

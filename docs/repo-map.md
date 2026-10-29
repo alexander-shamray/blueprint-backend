@@ -109,17 +109,20 @@ docs/runbooks/               NOT one per alert: a procedure two alerts share
                              directory disagree
 docs/superpowers/            one frozen spec + plan per PR, written before it
 
-TODO.md                      the user's one local planning file — the open
-                             pull requests, the issues each closes, the
-                             order to take work in, and the open issues with
-                             no pull request yet; the intent behind each
-                             lives in its issue. Gitignored and never
-                             committed: a tracked list is main's view of
-                             itself and needs a pull request and a review
-                             to move, which is slower than the thing
-                             it describes. The contract's §6 carries the one
-                             rule that keeps it current, and no command,
-                             helper or gate reads it
+TODO.md                      optional and gitignored: a link to the user's
+                             one local planning file — the open pull
+                             requests, the issues each closes, the order to
+                             take work in, and the open issues with no pull
+                             request yet; the intent behind each lives in
+                             its issue. The file itself sits outside every
+                             checkout, where a session in a worktree can
+                             write it, and is never committed: a tracked
+                             list is main's view of itself and needs a pull
+                             request and a review to move, which is slower
+                             than the thing it describes. The contract's §6
+                             says where it lives and carries the one rule
+                             that keeps it current, and no command, helper
+                             or gate reads it
 global.json                  SDK pin (§4.4)
 .config/dotnet-tools.json    dotnet-ef, pinned to the EF Core version —
                              `dotnet tool restore` is the whole setup
