@@ -35,10 +35,11 @@ hottest page 141 and 433, over 15 517 and 18 741 inserted rows against
 15 041 and 17 676 off. The saga received 83.7 and 102.9 messages a second at
 1 212 and 1 060 ms a receive off, 97.5 and 102.6 at 1 055 and 1 001 ms on;
 its queue peaked at 2 123 and 3 921 off and fell under 100 at 84 and 94 s
-after the load, and at 208 and 508 on, under 100 at 31 and 61 s; the knee
-named it over the hold at 983 to 1 873 and 1 423 to 2 823 off, and on not at
-all and at 252 to 508. Requests in flight fell from 54 and 56 to 21 and 22, and
-the instance's largest waits became the log's flush.
+after the load, and at 208 and 508 on, under 100 at 31 and 61 s; each run's
+report named it among the first to give up over the hold at 983 to 1 873 and
+1 423 to 2 823 off, and on not at all and at 252 to 508. Requests in flight
+fell from 54 and 56 to 21 and 22, and the instance's largest waits became the
+log's flush.
 **Consequences.** A second table the library maps now has a setting of ours,
 kept from drifting by refusal as ADR-167's is, and `SagaInboxStateKeyTests`
 reads the clustered key and the saga outbox's foreign key. That key
