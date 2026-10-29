@@ -97,7 +97,7 @@ def evidence_problem(root, cited, run):
     target = Path(root) / path
     if not target.is_file():
         return f"{cited} names no file"
-    # A run's board, goal and replies are other peers' text, so only what the owner measured is evidence there.
+    # A run's board and replies are peers' text and its goal the owner's brief: only a measurement is evidence.
     measure = PurePosixPath("artifacts", "team", run, "measure")
     if path.parts[0].lower() == "artifacts" and measure not in path.parents:
         return f"{cited} is not a measurement under {measure}"

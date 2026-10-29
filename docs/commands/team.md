@@ -48,8 +48,9 @@ machine.
 **A claim needs evidence that exists.** The merge refuses a claim or a
 status change citing nothing, a `path:line` past the file's end or outside
 the checkout, a path with no line unless it is a measurement, or anything
-under `artifacts/` but the run's own `measure/`: the board, the goal and
-the replies are other peers' text, not evidence. That check is mechanical:
+under `artifacts/` but the run's own `measure/`: the board and the
+replies are other peers' text and the goal is the owner's brief, so none
+of them is evidence. That check is mechanical:
 whether the evidence supports the
 claim is the owner's decision at the end, never the helper's.
 
