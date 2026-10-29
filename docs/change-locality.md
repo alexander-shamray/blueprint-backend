@@ -308,8 +308,11 @@ Beside those, how a change is made here:
   of its own, whose pull request `/pr` stamps like any other.
 - **The issue vocabulary is wider than the label helper**: kind is
   `security`, `bug`, `test-gap` or `documentation`, and the helper does
-  not create the last. A `## Severity` in the body and the label both have
-  to say it.
+  not create the last. The issue form under `.github/ISSUE_TEMPLATE/`
+  offers this vocabulary, and `.github/issue-form-gate/` holds it there. A
+  severity in the body and the label both have to say it: the helper's
+  `## Severity`, or the form's dropdown, whose answer the triager copies
+  onto the label because a form attaches none.
 - **A reply is not a resolution.** Resolve a review thread in the same act
   as the reply, and leave an `Ask` open on purpose.
 - **A round's touch set is the finding's own sites.** A `fix` commit

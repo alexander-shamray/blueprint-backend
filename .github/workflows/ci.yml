@@ -180,6 +180,10 @@ jobs:
   # complete list it never read.
   pipeline-gate:
     runs-on: ubuntu-latest
+    # Read only still: the issue-form gate below lists the repository's labels.
+    permissions:
+      contents: read
+      issues: read
     steps:
       - uses: actions/checkout@v7
 
@@ -260,6 +264,20 @@ jobs:
 
       - name: Every plan written after the planning rule is under its size
         run: python .github/plan-size-gate/plan_size_gate.py
+
+      # The issue form against the vocabularies it mirrors and the labels its
+      # answers name; the labels are the one input read over the network.
+      - name: Test the issue-form gate
+        working-directory: .github/issue-form-gate
+        run: python -m unittest
+
+      - name: Every issue-form choice is its owner's word and a label here
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          gh label list --repo "$GITHUB_REPOSITORY" --limit 1000 --json name |
+            python .github/issue-form-gate/issue_form_gate.py
 
       # The style guide's join rule, over the tracked tree: the SQL sits in
       # string literals no formatter reads.

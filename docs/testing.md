@@ -302,6 +302,16 @@ py -3.12 .github/sql-style-gate/sql_style_gate.py
 
 What it reads and claims is [its README](../.github/sql-style-gate/README.md)'s.
 
+**The issue-form gate needs the repository's labels**, which a `gh` session
+reads and pipes in:
+
+```bash
+py -3.12 -m unittest discover -s .github/issue-form-gate
+gh label list --limit 1000 --json name | py -3.12 .github/issue-form-gate/issue_form_gate.py
+```
+
+What it reads and claims is [its README](../.github/issue-form-gate/README.md)'s.
+
 **The Compose smoke is the one gate that needs a running daemon and the one
 whose run changes the machine it runs on**, so its teardown is part of what
 it asserts rather than tidying: RabbitMQ seeds its default user only on an
