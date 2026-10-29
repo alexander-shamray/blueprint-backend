@@ -505,8 +505,9 @@ At its cap the LGTM container is named among the services that gave up, since
 its CPU is read against its own limit. The override also carries the run's
 k6, as its `k6` service under the `stress-run` profile, which `up` never
 starts: on the Compose network its requests reach the gateway by name rather
-than through Docker Desktop's port forward, whose crossing cost the machine
-cores the platform now gets
+than through Docker Desktop's port forward, its version is the image's, and
+its CPU is read beside the services'. It frees little of the machine, so a
+run on one machine still ends on the generator at its first step
 ([ADR-170](../../docs/backend-architecture/adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md)).
 Its container is read like any other and never named among the services
 that gave up, by `stress/report.js`'s `GENERATOR_SERVICE`. The SLO run never
