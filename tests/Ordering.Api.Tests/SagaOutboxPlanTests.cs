@@ -60,7 +60,7 @@ public sealed class SagaOutboxPlanTests(ServiceFixture fixture) : IAsyncLifetime
             """,
             connection);
 
-        // Each statement's plan comes back as a result set of its own.
+        // The batch's plan is one document today; reading every result set holds whichever shape comes back.
         List<string> plans = [];
         await using (SqlDataReader reader = await delete.ExecuteReaderAsync(TestContext.Current.CancellationToken))
         {
