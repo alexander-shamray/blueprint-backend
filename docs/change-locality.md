@@ -313,10 +313,10 @@ Beside those, how a change is made here:
   `gh-label-ensure.sh` creates neither, since it holds the sweeps' labels
   alone. The issue form under `.github/ISSUE_TEMPLATE/` offers this
   vocabulary, and `.github/issue-form-gate/` holds it there. A severity in
-  the body and the label both have to say it: the helper's `## Severity`,
-  or the form's dropdown, whose answer the triager copies onto the label
-  because an answer cannot attach one. `documentation` is
-  also one of the form's area choices: an issue labelled `bug` and
+  the body and the label both have to say it: the `## Severity` section of
+  a body `gh-issue-create.sh` files, or the form's dropdown, whose answer
+  the triager copies onto the label because an answer cannot attach one.
+  `documentation` is also one of the form's area choices: an issue labelled `bug` and
   `documentation` is a defect in the documentation, and `documentation` is
   its kind only on an issue that carries no other.
 - **A reply is not a resolution.** Resolve a review thread in the same act
