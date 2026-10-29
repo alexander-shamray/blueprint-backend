@@ -54,12 +54,13 @@ JSON and nothing around it, at most about 2k tokens:
 
 ```json
 {"agent": "p1",
- "claims": [{"text": "<one sentence>", "evidence": ["<path>:<line>", "artifacts/team/<run>/<file>"]}],
+ "claims": [{"text": "<one sentence>", "evidence": ["<path>:<line>", "artifacts/team/<run>/measure/<file>"]}],
  "statuses": [{"id": "C3", "status": "supported|refuted|open",
    "evidence": ["<path>:<line>"], "reason": "<one sentence>"}],
  "requests": ["<the measurement, and what it would settle>"]}
 ```
 
-Evidence is a `path:line` that exists in the checkout, or a file under
-the run's `measure/` the owner wrote; a claim or status change without any is
-refused when the round is merged. Lists you have nothing for are empty.
+Evidence is a `path:line` that exists in the checkout outside `artifacts/`,
+or a file under the run's `measure/`, with or without a line, that the
+owner wrote; a claim or status change without any is refused when the
+round is merged. Lists you have nothing for are empty.
