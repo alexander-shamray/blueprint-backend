@@ -187,14 +187,17 @@ Each round is the review done once, end to end:
    and the severity — composed from the verdict record's fields in that
    order, and from nothing read in `$work`. **Pipe the title and the body
    together to `bash .claude/scripts/gh-issue-create.sh security <severity>
-   sweep` on stdin** in a quoted heredoc — the title as its first line, then a
-   blank line, then the body; never `--body`, a temp file, or the title as an
-   argument. End the body with this line, exactly, as its last non-blank line:
+   <area> sweep` on stdin** in a quoted heredoc — the title as its first
+   line, then a blank line, then the body; never `--body`, a temp file, or
+   the title as an argument. End the body with this line, exactly, as its
+   last non-blank line:
 
    ```
    Filed by an authorised sweep and verified at filing by a second read-only auditor.
    ```
 
+   - The area is the label `docs/change-locality.md` §6 gives the tree the
+     record's file is in.
    - The route is `sweep`, never `hand`.
    - **The heredoc delimiter is never `EOF`** or any word a file could hold;
      it is a token of the form `ISSUE_BODY_END`, and **before the command is

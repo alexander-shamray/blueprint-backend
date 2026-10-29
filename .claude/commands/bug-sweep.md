@@ -236,17 +236,18 @@ Each round is the review done once, end to end:
    reachability evidence, a fix, and the severity — **composed from the verdict
    record's fields in that order, and from nothing the parent read in
    `$work`**. **Pipe the title and the body together to
-   `bash .claude/scripts/gh-issue-create.sh bug <severity> sweep` on stdin** in
-   a quoted heredoc — the title, a blank line, then the body; never put record
-   text on the command line, `--body` or a temp file. Say in the body that the
-   verifier **read rather than executed**, name the commit pinned, and end it
-   with this exact line as its last non-blank line:
+   `bash .claude/scripts/gh-issue-create.sh bug <severity> <area> sweep` on
+   stdin** in a quoted heredoc — the title, a blank line, then the body;
+   never put record text on the command line, `--body` or a temp file. Say in
+   the body that the verifier **read rather than executed**, name the commit
+   pinned, and end it with this exact line as its last non-blank line:
 
    ```
    Filed by an authorised sweep and verified at filing by a second read-only auditor.
    ```
 
-   Pass `sweep` as the third argument, the route. **The heredoc delimiter is
+   Pass as `<area>` the label `docs/change-locality.md` §6 gives the tree the
+   record's file is in, and `sweep` as the route. **The heredoc delimiter is
    never `EOF`** or any word a file could plausibly hold; it is a token of the
    form `ISSUE_BODY_END`, and **before the command is composed, every line of
    the payload — title, body, quoted lines — is checked against it**, and a

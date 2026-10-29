@@ -357,10 +357,11 @@ branch is.
      a `nit` not at all:
 
      ```bash
-     bash .claude/scripts/gh-issue-create.sh <bug|security> <high|medium|low> hand
+     bash .claude/scripts/gh-issue-create.sh <bug|security> <high|medium|low> <area> hand
      ```
 
-     File a prose finding as `bug` (`docs/change-locality.md` §6). The
+     File a prose finding as `bug`, and each under the area its file's tree
+     takes (`docs/change-locality.md` §6). The
      report says the review ended on its ceiling rather than clean, and
      names the issues.
 
