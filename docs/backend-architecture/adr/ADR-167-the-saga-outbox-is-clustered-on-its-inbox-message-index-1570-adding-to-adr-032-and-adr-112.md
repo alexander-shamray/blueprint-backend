@@ -63,7 +63,7 @@ id, clustered at the table's start; Ordering does not call `UseBusOutbox()`, and
 a service that does takes this choice up again. The migration rebuilds the
 table, which MassTransit's delivery keeps near empty. The next wait the seek
 exposes is page latches on `InboxState`'s identity key, millions of ms over a
-load, which this ADR leaves where it is.
+load, which this ADR leaves where it is and #1581 tracks.
 
 ---
 
