@@ -35,6 +35,7 @@ import exec from 'k6/execution';
 import { fail, sleep } from 'k6';
 import { Counter, Gauge, Rate, Trend } from 'k6/metrics';
 import { randomBytes } from 'k6/crypto';
+import { hashPolicy } from './keycloak.js';
 import { DEFAULT_PROM_URL, OUTBOX_OLDEST, QUEUED, crossings, liveRow } from './report.js';
 import { maxOrders, parseStop, plan, stages, stepAt, windows } from './steps.js';
 
@@ -197,6 +198,10 @@ export function setup() {
     const api = one(http.get(`${realm}/clients?clientId=commerce-api`, admin), 'commerce-api client');
     const ordersWrite = roleOf(realm, admin, api.id, 'orders:write');
 
+    // Before the passwords are reset, so each is stored at the cheap hash.
+    const policy = hashPolicy(http.get(realm, admin).json('passwordPolicy'));
+    setPolicy(realm, admin, policy.run);
+
     // A fresh password a run, kept in memory: nothing written to disk holds it.
     const userPassword = hex(randomBytes(24));
 
@@ -212,7 +217,20 @@ export function setup() {
 
     restock(service.json('access_token'));
 
-    return { password: userPassword, secret, startedAt: Date.now() };
+    return { password: userPassword, secret, policy: policy.restore, startedAt: Date.now() };
+}
+
+// k6 runs it after the knee stop's exec.test.abort() as after a finished run,
+// but not after a setup() that failed, which keycloak.js's hashPolicy() allows for.
+export function teardown(data) {
+    setPolicy(`${KEYCLOAK_URL}/admin/realms/commerce`, adminHeaders(), data.policy);
+}
+
+function setPolicy(realm, admin, policy) {
+    const response = http.put(realm, JSON.stringify({ passwordPolicy: policy }), admin);
+
+    if (response.status !== 204)
+        fail(`setting the realm's password policy returned ${response.status}: ${response.body}`);
 }
 
 function adminHeaders() {

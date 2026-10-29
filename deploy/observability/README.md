@@ -517,12 +517,16 @@ uses the override.
 the highest step, `stress-0001` upwards, through Keycloak's admin API, as the
 SLO client is made at runtime and never in `realm-export.json`. It gives each
 user a fresh password for the run, held in memory and never written, and
-grants `orders:write`. Each VU signs in once and refreshes its token before it
-lapses. Keycloak's calls are reported as their own operation, `token`, and
-left out of the journey's figures. A Keycloak user's id is a GUID, which is
-the `sub` an order's owner is bound from. The client's service account holds
-`inventory:admin`, and `setup()` uses it to restock a product that cannot
-cover its share of every order the staircase could place.
+grants `orders:write`. Before it sets the passwords it lowers the realm's
+password hash to `stress/keycloak.js`'s `CHEAP_HASH`, and `teardown()` puts
+the realm's own policy back: at Keycloak's default argon2 hash, the ramp's
+thousands of first sign-ins held it at four cores and more. Each VU signs in
+once and refreshes its token before it lapses. Keycloak's calls are reported
+as their own operation, `token`, and left out of the journey's figures. A
+Keycloak user's id is a GUID, which is the `sub` an order's owner is bound
+from. The client's service account holds `inventory:admin`, and `setup()`
+uses it to restock a product that cannot cover its share of every order the
+staircase could place.
 
 **The journey.** Each iteration is one visit: the anonymous product listing,
 up to `PRODUCT_VIEWS_MAX` product pages, the saved address (saved on a first
@@ -696,8 +700,12 @@ docker compose -f deploy/compose/docker-compose.yml up -d --wait
 
 **What a run leaves.** The `stress-run` client and its users stay in the
 running realm until Keycloak's container is recreated, and the next run finds
-them and resets their passwords. The orders stay, owned by the users, and go
-on through the saga, and their bookings and notices are still draining when
-k6 exits. Wait until both overdue gauges are near zero, as the SLO run's last
-block reads them, before the next run; after step 4 the workers drain at their
-paced rate again.
+them and resets their passwords. A run whose `setup()` failed after lowering
+the hash leaves it lowered, since k6 runs no `teardown()` then; the next run
+puts the realm's own policy back at its end, as `hashPolicy()` reads it. A
+user other than the stress users who signs in during a run has their password
+re-hashed at the cheap hash, and at the realm's own at their next sign-in
+after it. The orders stay, owned by the users, and go on through the saga,
+and their bookings and notices are still draining when k6 exits. Wait until
+both overdue gauges are near zero, as the SLO run's last block reads them,
+before the next run; after step 4 the workers drain at their paced rate again.
