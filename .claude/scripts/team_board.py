@@ -80,9 +80,9 @@ def save(directory, board):
     (directory / "board.md").write_text(render(board, measured), encoding="utf-8")
 
 
-def evidence_problem(root, cited):
+def evidence_problem(root, cited, run):
     """Why one piece of evidence cannot be checked, or None: it must name a line that exists, or a file under
-    artifacts/ a measurement wrote. Whether it supports the claim is the owner's judgement, not this check's."""
+    the run's measure/. Whether it supports the claim is the owner's judgement, not this check's."""
     if not isinstance(cited, str) or not cited.strip():
         return "evidence is not a path"
     match = LOCATION.fullmatch(cited.strip())
@@ -92,8 +92,12 @@ def evidence_problem(root, cited):
     target = Path(root) / path
     if not target.is_file():
         return f"{cited} names no file"
+    # A run's board, goal and replies are other peers' text, so only what the owner measured is evidence there.
+    measure = PurePosixPath("artifacts", "team", run, "measure")
+    if path.parts[0].lower() == "artifacts" and measure not in path.parents:
+        return f"{cited} is not a measurement under {measure}"
     if match is None:
-        return None if path.parts[0] == "artifacts" else f"{cited} names no line"
+        return None if measure in path.parents else f"{cited} names no line"
     lines = target.read_text(encoding="utf-8", errors="replace").count("\n") + 1
     if int(match.group("line")) > lines:
         return f"{cited} is past the file's {lines} lines"
@@ -141,7 +145,7 @@ def merge(root, name, number):
             cited = claim.get("evidence", []) if isinstance(claim, dict) else []
             problem = "a claim with no text" if not isinstance(text, str) or not text.strip() else (
                 "a claim with no evidence" if not isinstance(cited, list) or not cited else
-                next(filter(None, (evidence_problem(root, e) for e in cited)), None))
+                next(filter(None, (evidence_problem(root, e, name) for e in cited)), None))
             if problem:
                 rejected.append({"what": text or "(no text)", "why": problem})
                 continue
@@ -162,7 +166,7 @@ def merge(root, name, number):
                        # Agreeing with yourself is not a second reading; withdrawing your own claim is allowed.
                        f"{peer} cannot support its own {ident}" if value == "supported" and target["owner"] == peer else
                        "a status change with no evidence" if not isinstance(cited, list) or not cited else
-                       next(filter(None, (evidence_problem(root, e) for e in cited)), None))
+                       next(filter(None, (evidence_problem(root, e, name) for e in cited)), None))
             if problem:
                 rejected.append({"what": f"{ident} -> {value}", "why": problem})
                 continue
