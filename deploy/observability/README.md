@@ -566,7 +566,8 @@ for a thread-pool thread and the time collections paused it. From
 `stress/sample.mjs`, every `INTERVAL_MS`: the machine's CPU as a share of
 all its processors, each container's CPU and memory from
 `docker stats`, where a CPU figure is a share of one core and passes 100 on
-several, with its Compose service and CPU limit read once at the start, and
+several, with its Compose service and CPU limit read at the start and again
+for a container started since, as the k6 run's is, and
 SQL Server's deadlocks and lock, page-latch and log-flush waits.
 From the `judge`, the VUs k6 ran a second before each hold's end.
 Nothing is added to the stack to read any of them. What could only be read by
