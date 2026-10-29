@@ -35,8 +35,9 @@ hottest page 141 and 433, over 15 517 and 18 741 inserted rows against
 15 041 and 17 676 off. The saga received 83.7 and 102.9 messages a second at
 1 212 and 1 060 ms a receive off, 97.5 and 102.6 at 1 055 and 1 001 ms on;
 its queue peaked at 2 123 and 3 921 off and fell under 100 at 84 and 94 s
-after the load, and at 208 and 508 on, under 100 at 31 and 61 s, and the knee
-stopped naming it. Requests in flight fell from 54 and 56 to 21 and 22, and
+after the load, and at 208 and 508 on, under 100 at 31 and 61 s; the knee
+named it over the hold at 983 to 1 873 and 1 423 to 2 823 off, and on not at
+all and at 252 to 508. Requests in flight fell from 54 and 56 to 21 and 22, and
 the instance's largest waits became the log's flush.
 **Consequences.** A second table the library maps now has a setting of ours,
 kept from drifting by refusal as ADR-167's is, and `SagaInboxStateKeyTests`
@@ -51,10 +52,11 @@ nothing for about seven minutes until the key was rebuilt again in one
 transaction, a stall whose cause was not established and whose backlog of
 5 214 messages cleared in the first seconds of the first run on. The wait
 moves rather than goes: on, the oldest row of [§9.4](../09-messaging.md)'s
-outbox peaked at 52.2 and 50.4 s against 29.3 and 28.5 s off, and the knee
-named it alone. Every run knee-stopped at step 1, 3 200 VUs, with the
-machine's CPU at 91 to 93% over the hold, so the figures compare these four
-runs with one another and not with ADR-167's or ADR-169's.
+outbox peaked at 52.2 and 50.4 s against 29.3 and 28.5 s off, and it is
+what gave up first in all four runs. Every run knee-stopped at step 1, 3 200
+VUs, with the machine's CPU at 90 to 93% over the hold, three of them ending
+on the generator, so the figures compare these four runs with one another
+and not with ADR-167's or ADR-169's.
 
 ---
 
