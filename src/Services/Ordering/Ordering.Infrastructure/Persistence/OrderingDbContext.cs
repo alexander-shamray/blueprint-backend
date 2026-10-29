@@ -37,7 +37,8 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OrderingDbContext).Assembly);
 
         // ADR-032's three tables, which MassTransit maps itself; a configuration of ours would be a second
-        // definition of a schema the library owns (§7.2), so the call below amends its mapping, never restates it.
+        // definition of a schema the library owns (§7.2), so ClusterSagaOutboxOnInboxKey amends its mapping and
+        // never restates it.
         modelBuilder.AddTransactionalOutboxEntities();
         ClusterSagaOutboxOnInboxKey(modelBuilder.Entity<SagaOutboxMessage>().Metadata);
     }
