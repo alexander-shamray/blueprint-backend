@@ -25,12 +25,12 @@ second, receive time and latch per inserted row, the two runs with the option
 off are further apart than any pair across it. SQL Server's requests, sampled
 every 200 ms, say why: in the second run off, about 15 000 samples waited on
 a page latch in an `InboxState` statement, 8 163 of them the `UPDATE` under
-`PAGELATCH_EX`, 3 284 the `SELECT` under `UPDLOCK`, 1 736 the `UPDATE` under
-`PAGELATCH_SH` and 1 724 the `INSERT`. The library inserts a message's row,
-then reads it under an update lock and updates it, all on the newest page, and
-the option paces the insert alone; on, it added `BTREE_INSERT_FLOW_CONTROL`,
-311 s across the instance, in front of the inserts, and left the reads and
-updates where they were.
+`PAGELATCH_EX`, 3 284 the `UPDLOCK` `SELECT` under `PAGELATCH_SH`, 1 736 the
+`UPDATE` under `PAGELATCH_SH` and 1 724 the `INSERT`. The library inserts a
+message's row, then reads it under an update lock and updates it, all on the
+newest page, and the option paces the insert alone; on, it added
+`BTREE_INSERT_FLOW_CONTROL`, 311 s across the instance, in front of the
+inserts, and left the reads and updates where they were.
 **Consequences.** The latch stays the saga endpoint's largest wait past the
 knee, 3.4 to 4.0 million ms a load, and #1583 tracks the lever this
 measurement points at, clustering `InboxState` on the library's alternate key
