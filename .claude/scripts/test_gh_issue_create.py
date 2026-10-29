@@ -199,8 +199,8 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         self.assert_refused_before_gh(self.run_helper("enhancement", "low", "request", body=self.HAND_STDIN))
 
     def test_a_request_reaches_gh_under_the_enhancement_kind_without_ensuring_it(self):
-        # `enhancement` is a GitHub default label the sibling refuses to create, so the severity is the one
-        # label ensured, and the issue still carries both.
+        # `enhancement` is no sweep's label, so the sibling refuses it, and the severity is the one label
+        # ensured; the issue still carries both.
         result = self.run_helper("enhancement", "low", "request", body=self.REQUEST_STDIN)
         self.assertEqual(0, result.returncode, result.stderr)
         create = [c for c in self.calls() if c.startswith("issue create ")]

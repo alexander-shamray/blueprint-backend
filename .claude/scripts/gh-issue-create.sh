@@ -105,9 +105,9 @@ repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
 
 # Each label but `enhancement` is ensured through the sibling helper, so a
 # fresh clone gets the colour and description this repository already uses
-# rather than a bare name. `enhancement` is one of GitHub's default labels,
-# which the sibling must not create, so it is filed under as the repository
-# already has it.
+# rather than a bare name. `enhancement` is no sweep's label, so the sibling
+# refuses it, and GitHub creates it with every repository, so it is filed
+# under as the repository already has it.
 here=$(dirname "$0")
 [ "$kind" = enhancement ] || bash "$here/gh-label-ensure.sh" "$kind" >/dev/null
 bash "$here/gh-label-ensure.sh" "$severity" >/dev/null
