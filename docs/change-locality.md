@@ -307,9 +307,12 @@ Beside those, how a change is made here:
   cannot find its commit, so one is reverted with `git revert` on a branch
   of its own, whose pull request `/pr` stamps like any other.
 - **The issue vocabulary is wider than the label helper**: kind is
-  `security`, `bug`, `test-gap` or `documentation`, and the helper does
-  not create the last. The issue form under `.github/ISSUE_TEMPLATE/`
-  offers this vocabulary, and `.github/issue-form-gate/` holds it there. A
+  `security`, `bug`, `test-gap`, `enhancement` or `documentation`, and the
+  helper does not create the last. An `enhancement` is a requested change
+  rather than a finding, so the helper files one under its `request` route
+  alone, and the label helper never creates it. The issue form under
+  `.github/ISSUE_TEMPLATE/` offers this vocabulary, and
+  `.github/issue-form-gate/` holds it there. A
   severity in the body and the label both have to say it: the helper's
   `## Severity`, or the form's dropdown, whose answer the triager copies
   onto the label because an answer cannot attach one. `documentation` is

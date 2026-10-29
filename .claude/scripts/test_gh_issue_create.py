@@ -96,13 +96,15 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
     STDIN = f"a title\n\nthe body\n\n{TRAILER}\n"
     HAND_STDIN = f"a title\n\nthe body\n\n{HAND_TRAILER}\n"
     MUTATION_STDIN = f"a title\n\nthe body\n\n{MUTATION_TRAILER}\n"
+    REQUEST_TRAILER = "Filed by hand as a requested change, not a finding: nothing was verified at filing."
+    REQUEST_STDIN = f"a title\n\nthe body\n\n{REQUEST_TRAILER}\n"
 
     def test_no_arguments_prints_the_usage_line(self):
         result = self.run_helper()
         self.assert_refused_before_gh(result)
         self.assertIn(
-            "usage: gh-issue-create.sh <security|bug|test-gap> <critical|high|medium|low>"
-            " <sweep|mutation|hand> < title, blank line, body ending in the trailer",
+            "usage: gh-issue-create.sh <security|bug|test-gap|enhancement> <critical|high|medium|low>"
+            " <sweep|mutation|hand|request> < title, blank line, body ending in the trailer",
             result.stderr,
         )
 
@@ -116,11 +118,11 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
 
     def test_a_kind_outside_the_vocabulary_is_refused(self):
         # `documentation` is a real label on this tracker and is refused on
-        # purpose: neither sweep files one, so the helper's vocabulary is the
-        # sweeps' and not the tracker's. The `hand` route does not widen it:
-        # `documentation` is one of GitHub's defaults that `gh-label-ensure.sh`
-        # must not re-create, and the contract's §6 says the issue vocabulary is wider than the helper.
-        for kind in ("documentation", "Security", "security --force", "-R other/repo", ""):
+        # purpose: no sweep files one and a wrong statement filed by hand is a
+        # `bug`, so the contract's §6 says the issue vocabulary is wider than the
+        # helper. A near spelling of `enhancement` is refused like any other word.
+        for kind in ("documentation", "feature", "Enhancement", "enhancements", "Security", "security --force",
+                     "-R other/repo", ""):
             with self.subTest(kind=kind):
                 self.assert_refused_before_gh(self.run_helper(kind, "high", "sweep", body=self.STDIN))
 
@@ -165,7 +167,7 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
         # a closed set like the other two. A spelling outside it is refused
         # rather than defaulted, because a default is an unconditional
         # provenance claim.
-        for route in ("sweeps", "Sweep", "auto", "sweep --force", "-R other/repo", ""):
+        for route in ("sweeps", "Sweep", "auto", "requests", "Request", "sweep --force", "-R other/repo", ""):
             with self.subTest(route=route):
                 self.assert_refused_before_gh(
                     self.run_helper("bug", "low", route, body=self.STDIN))
@@ -183,6 +185,33 @@ class IssueHelperHasNoFreeParameter(unittest.TestCase):
             self.run_helper("test-gap", "low", "mutation", body=self.STDIN))
         self.assert_refused_before_gh(
             self.run_helper("test-gap", "low", "sweep", body=self.MUTATION_STDIN))
+
+    def test_an_enhancement_and_the_request_route_go_only_together(self):
+        # Each body ends in the sentence its route requires, so the refusal is the pairing and not the trailer.
+        for kind, route, body in (("enhancement", "hand", self.HAND_STDIN),
+                                  ("enhancement", "sweep", self.STDIN),
+                                  ("bug", "request", self.REQUEST_STDIN)):
+            with self.subTest(kind=kind, route=route):
+                result = self.run_helper(kind, "low", route, body=body)
+                self.assert_refused_before_gh(result)
+                self.assertIn("an enhancement files under the request route", result.stderr)
+        # And the trailer still decides on the pair that is admitted.
+        self.assert_refused_before_gh(self.run_helper("enhancement", "low", "request", body=self.HAND_STDIN))
+
+    def test_a_request_reaches_gh_under_the_enhancement_kind_without_ensuring_it(self):
+        # `enhancement` is a GitHub default label the sibling refuses to create, so the severity is the one
+        # label ensured, and the issue still carries both.
+        result = self.run_helper("enhancement", "low", "request", body=self.REQUEST_STDIN)
+        self.assertEqual(0, result.returncode, result.stderr)
+        create = [c for c in self.calls() if c.startswith("issue create ")]
+        self.assertEqual(1, len(create), self.calls())
+        self.assertIn("--label enhancement", create[0])
+        self.assertIn("--label low", create[0])
+        listed = [c for c in self.calls() if c.startswith("label list ")]
+        self.assertEqual(1, len(listed), self.calls())
+        self.assertIn("--search low", listed[0])
+        self.assertEqual(f"the body\n\n{self.REQUEST_TRAILER}\n",
+                         (Path(self.dir) / "body").read_text(encoding="utf-8"))
 
     def test_a_mutation_filing_reaches_gh_under_the_test_gap_kind(self):
         result = self.run_helper("test-gap", "low", "mutation", body=self.MUTATION_STDIN)

@@ -35,18 +35,18 @@
 set -euo pipefail
 
 [ "$#" -eq 3 ] || {
-  echo "usage: gh-issue-create.sh <security|bug|test-gap> <critical|high|medium|low>" \
-       "<sweep|mutation|hand> < title, blank line, body ending in the trailer" >&2
+  echo "usage: gh-issue-create.sh <security|bug|test-gap|enhancement> <critical|high|medium|low>" \
+       "<sweep|mutation|hand|request> < title, blank line, body ending in the trailer" >&2
   exit 2
 }
 kind="$1"; severity="$2"; route="$3"
 
 # A word outside the vocabulary is refused rather than passed on.
-# `documentation` is absent because no sweep files one, and it is a
-# GitHub default label `gh-label-ensure.sh` must not create; the contract's §6
-# (docs/change-locality.md) states that the issue vocabulary is wider than the label helper.
+# `documentation` is absent because no sweep files one and a wrong statement
+# filed by hand is a `bug`; the contract's §6 (docs/change-locality.md) states
+# that the issue vocabulary is wider than the label helper.
 case "$kind" in
-  security|bug|test-gap) ;;
+  security|bug|test-gap|enhancement) ;;
   *) echo "not a kind this helper will file under: $kind" >&2; exit 2 ;;
 esac
 case "$severity" in
@@ -56,13 +56,21 @@ esac
 # The route decides the fixed last line, and it is the same closed-set test as
 # the other two: a spelling outside the set is refused rather than defaulted,
 # because a default is an unconditional claim. Each sentence names the evidence
-# behind the filing: a second auditor's reading, or the suite run against each
-# mutant listed, which /mutation-sweep files on and no reading could replace.
+# behind the filing: a second auditor's reading, each mutant run against its
+# suite, no second reading for a finding filed by hand, or none owed by a request.
 case "$route" in
   sweep) trailer='Filed by an authorised sweep and verified at filing by a second read-only auditor.' ;;
   mutation) trailer='Filed by an authorised mutation sweep: each mutant listed ran against its suite and was not detected.' ;;
   hand) trailer='Filed by hand rather than by a sweep: no second auditor verified it at filing.' ;;
+  request) trailer='Filed by hand as a requested change, not a finding: nothing was verified at filing.' ;;
   *) echo "not a route this helper will file under: $route" >&2; exit 2 ;;
+esac
+# A request asks for behaviour and verifies nothing, so its sentence is true of
+# an enhancement and of nothing else, and no finding's sentence is true of one.
+case "$kind:$route" in
+  enhancement:request) ;;
+  enhancement:*|*:request)
+    echo "an enhancement files under the request route, and nothing else does: $kind $route" >&2; exit 2 ;;
 esac
 
 # The title is the first line of stdin and the second must be blank, so a body
@@ -94,10 +102,12 @@ last=$(printf '%s' "$body" | sed -e 's/\r$//' -e '/^[[:space:]]*$/d' | tail -n 1
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
   { echo "cannot resolve this checkout's repository" >&2; exit 3; }
 
-# Both labels are ensured through the sibling helper, so a fresh clone gets the
+# Each label is ensured through the sibling helper, so a fresh clone gets the
 # colour and description this repository already uses rather than a bare name.
+# `enhancement` is one of GitHub's default labels, which the sibling must not
+# create, so it is filed under as the repository already has it.
 here=$(dirname "$0")
-bash "$here/gh-label-ensure.sh" "$kind" >/dev/null
+[ "$kind" = enhancement ] || bash "$here/gh-label-ensure.sh" "$kind" >/dev/null
 bash "$here/gh-label-ensure.sh" "$severity" >/dev/null
 
 # `--body-file -` reads bytes, so the body goes back out on stdin unchanged.
