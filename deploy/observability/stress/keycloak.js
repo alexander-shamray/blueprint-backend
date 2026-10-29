@@ -1,8 +1,8 @@
-// The realm's password policy over a stress run. Keycloak hashes a password
-// at sign-in at the realm's policy, argon2 by default, so a ramp's thousands of
-// first sign-ins cost the machine cores the hold never spends. The run lowers
-// it, and the users' passwords are set under it, so a sign-in checks a cheap
-// hash and has nothing to re-hash; teardown() puts the realm's own back.
+// The realm's password policy over a stress run. A sign-in checks a password
+// at the hash it was stored at, the realm's policy when it was set and argon2
+// by default, and re-hashes it when the policy has moved. The run lowers the
+// policy before it sets the users' passwords, so the ramp's thousands of
+// sign-ins check a cheap hash; teardown() puts the realm's own back.
 export const CHEAP_HASH = ['hashAlgorithm(pbkdf2-sha256)', 'hashIterations(1)'];
 
 const HASH_TERM = /^hash(Algorithm|Iterations)\(/;
