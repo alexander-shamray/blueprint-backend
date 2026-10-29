@@ -29,8 +29,9 @@ a page latch in an `InboxState` statement, 8 163 of them the `UPDATE` under
 `UPDATE` under `PAGELATCH_SH` and 1 724 the `INSERT`. The library inserts a
 message's row, then reads it under an update lock and updates it, all on the
 newest page, and the option paces the insert alone; on, it added
-`BTREE_INSERT_FLOW_CONTROL`, 311 s across the instance, in front of the
-inserts, and left the reads and updates where they were.
+`BTREE_INSERT_FLOW_CONTROL`, 422 and 311 s across the instance, most of its
+samples in front of `InboxState`'s inserts, and left the reads and updates
+where they were.
 **Consequences.** The latch stays the saga endpoint's largest wait past the
 knee, 3.4 to 4.0 million ms a load, and #1583 tracks the lever this
 measurement points at, clustering `InboxState` on the library's alternate key
