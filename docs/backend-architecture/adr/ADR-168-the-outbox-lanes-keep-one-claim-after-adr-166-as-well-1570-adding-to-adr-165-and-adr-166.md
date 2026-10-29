@@ -6,7 +6,8 @@ and one pass for both lanes, as
 kept it: measured again on
 [ADR-166](ADR-166-the-order-summary-projection-writes-and-claims-in-one-batch-and-one-commit-1562-adding-to-adr-165.md)'s
 shorter `Local` delivery, a claim of its own for each lane still empties the
-`Broker` backlog and still lengthens the `Local` drain.
+`Broker` backlog, and now lengthens the `Local` drain it only failed to shorten
+under ADR-165.
 **Why.** ADR-165 said the split was worth measuring again once a `Local`
 delivery was shorter, and #1570 asked for it. Four runs of the stress plan
 (level `high`, stop rule `knee`) were made on 2026-10-29 on one stack at
@@ -23,7 +24,7 @@ but a `Local` delivery took 46.3 and 64.8 ms, its backlog peaked at 6 624 and
 and it fell under 100 at 141 and 140 s. The fulfilment saga, which writes to
 the same database and log as the `Local` lane, received 60.1 and 36.6
 messages a second split against 50.5 and 62.8 with one claim. So the drain
-after a load is still set by the `Local` lane, and the split still slows it.
+after a load is still set by the `Local` lane, and the split now slows it.
 **Consequences.** Integration events still wait behind a pass's projections
 under a load past the knee, for the oldest-row figures above, as ADR-165
 recorded, and still count against §13.7's event end-to-end target. Two runs
