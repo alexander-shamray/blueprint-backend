@@ -74,7 +74,7 @@ __pycache__/
 deploy/helm/*/charts/
 deploy/helm/*/Chart.lock
 
-# The user's one local planning file, kept current by Claude
-# (docs/change-locality.md §6, Working rules). Local by design: it changes too
-# often to go through a PR.
+# An optional link to the user's one local planning file, which lives outside
+# every checkout where docs/change-locality.md §6, Working rules, puts it. Local
+# by design: it changes too often to go through a PR.
 /TODO.md
