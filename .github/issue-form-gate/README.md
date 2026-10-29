@@ -7,7 +7,7 @@ access.** Its owners are
 [`docs/change-locality.md`](../../docs/change-locality.md) §6's *issue
 vocabulary* bullet for the kind, and
 [`gh-issue-create.sh`](../../.claude/scripts/gh-issue-create.sh)'s closed
-`case` for the severity; the area choices are the form's own.
+`case` arms for the severity and the area.
 
 ## What it reads
 
@@ -20,9 +20,11 @@ vocabulary* bullet for the kind, and
   dropdown option is a label name. An empty directory fails, and so
   does a form with a top-level `labels:` key, which would attach its labels
   to every issue the form opens whatever the answers said.
-- The form's kind against the kinds §6's bullet lists after `kind is`, and
-  its severity against the helper's `case "$severity"` arm; as sets, with a
-  repeated option refused.
+- The form's kind against the kinds §6's bullet lists after `kind is`, its
+  severity against the helper's `case "$severity"` arm, and its area against
+  the words of the helper's `case "$area"` arm, where `code,test` is two
+  words because the helper files it as two labels; as sets, with a repeated
+  option refused.
 - The helper's `case "$kind"` arm, every word of which must be one of §6's
   kinds: the helper filing under a kind the form does not offer is the drift
   this gate exists for, seen from the other side.
@@ -45,8 +47,8 @@ dropdown with no id or no options, or the same dropdown twice.
 - It does not read the text fields, the label colours or descriptions,
   or whether GitHub accepts the form: GitHub validates the schema when it
   renders the form, and a broken one shows on the *New issue* page.
-- The area choices have no owner outside the form, so the gate holds them
-  to the labels only.
+- It does not hold which areas the form lets a filer combine: the form's
+  dropdown is a multiple choice, and the helper's pairs are its own.
 - A filer with write access still sees GitHub's *Blank issue*, marked
   *Maintainers only*: the setting binds the read and triage roles, and
   nothing in a repository's files can switch it off for the rest.

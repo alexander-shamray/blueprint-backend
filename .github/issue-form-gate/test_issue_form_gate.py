@@ -21,6 +21,10 @@ case "$severity" in
   critical|high|medium|low) ;;
   *) exit 2 ;;
 esac
+case "$area" in
+  harness|code|documentation|harness,test|code,test) ;;
+  *) exit 2 ;;
+esac
 """
 
 CONTRACT = """\
@@ -92,6 +96,22 @@ class IssueFormGateTests(unittest.TestCase):
     def test_a_severity_the_helper_gains_fails(self) -> None:
         self.helper.write_text(HELPER.replace("critical|high", "blocker|critical|high"), encoding="utf-8")
         self.assert_one("missing ['blocker']")
+
+    def test_an_area_the_helper_lacks_fails(self) -> None:
+        self.write("finding.yml", form(area="harness code documentation test design"))
+        problems = self.check(LABELS | {"design"})
+        self.assertEqual(1, len(problems), problems)
+        self.assertIn("area differs from gh-issue-create.sh", problems[0])
+        self.assertIn("extra ['design']", problems[0])
+
+    def test_an_area_word_only_the_helper_s_comma_form_names_is_still_required(self) -> None:
+        # `test` sits in the helper's arm only beside another area, and the form must still offer it.
+        self.write("finding.yml", form(area="harness code documentation"))
+        self.assert_one("missing ['test']")
+
+    def test_an_area_the_helper_gains_fails(self) -> None:
+        self.helper.write_text(HELPER.replace("code,test) ;;", "code,test|design) ;;"), encoding="utf-8")
+        self.assert_one("missing ['design']")
 
     def test_a_repeated_option_fails(self) -> None:
         self.write("finding.yml", form(severity="critical high medium low low"))
@@ -228,6 +248,7 @@ class ThisRepositoryTests(unittest.TestCase):
         self.assertIn("documentation", gate.contract_kinds(gate.DEFAULT_CONTRACT))
         self.assertIn("bug", gate.case_arm(gate.DEFAULT_HELPER, "kind"))
         self.assertIn("low", gate.case_arm(gate.DEFAULT_HELPER, "severity"))
+        self.assertIn("code,test", gate.case_arm(gate.DEFAULT_HELPER, "area"))
 
     def test_this_repository_s_forms_pass_against_their_own_options_as_labels(self) -> None:
         labels = {option for options in gate.dropdowns(gate.DEFAULT_TEMPLATES / "finding.yml").values()
