@@ -6,7 +6,7 @@ FROM redis:7.4.11-alpine AS redis
 FROM quay.io/keycloak/keycloak:26.8.1-1 AS keycloak
 FROM chrislusf/seaweedfs:4.47 AS seaweedfs
 FROM nginx:1.27.5-alpine AS nginx
-FROM otel/opentelemetry-collector-contrib:0.163.2 AS collector
+FROM otel/opentelemetry-collector-contrib:0.163.2-386 AS collector
 FROM grafana/otel-lgtm:0.37.0 AS lgtm
 FROM grafana/k6:2.2.0 AS k6
 FROM sheyenrath/wiremock.net:2.19.0 AS wiremock
