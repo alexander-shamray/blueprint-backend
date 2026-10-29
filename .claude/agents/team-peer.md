@@ -61,5 +61,5 @@ JSON and nothing around it, at most about 2k tokens:
 ```
 
 Evidence is a `path:line` that exists in the checkout, or a file under
-`artifacts/` a measurement wrote; a claim or status change without any is
+the run's `measure/` the owner wrote; a claim or status change without any is
 refused when the round is merged. Lists you have nothing for are empty.

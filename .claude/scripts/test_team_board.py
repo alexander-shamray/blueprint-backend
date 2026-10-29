@@ -244,6 +244,21 @@ class PeerTextCannotForgeALine(Checkout):
         self.assertEqual(1, self.refused_lines(2, "p2").count("\n## Refused\n"))
 
 
+class EvidenceIsNotAnotherPeersText(Checkout):
+
+    def test_the_runs_own_files_are_refused_as_evidence(self):
+        self.reply(1, "p1")
+        self.merge(1)
+        cited = ["artifacts/team/r1/board.md:1", "artifacts/team/r1/goal.md:1",
+                 "artifacts/team/r1/round-01/p1.json"]
+        self.reply(2, "p1", claims=[{"text": f"cites {c}", "evidence": [c]} for c in cited])
+        self.assertEqual(0, self.merge(2)["added"])
+        record = self.refused_lines(2, "p1")
+        for c in cited:
+            with self.subTest(cited=c):
+                self.assertIn(f"- cites {c}: {c} is not a measurement under artifacts/team/r1/measure", record)
+
+
 class TheCommandLine(Checkout):
 
     def run_main(self, *argv):
