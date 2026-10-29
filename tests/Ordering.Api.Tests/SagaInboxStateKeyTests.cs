@@ -56,7 +56,7 @@ public sealed class SagaInboxStateKeyTests(ServiceFixture fixture) : IAsyncLifet
 
     // ADR-171's rebuild drops PK_InboxState before it adds it back, a table the running hosts must never see.
     [Fact]
-    public void Every_migration_runs_each_statement_inside_its_own_transaction()
+    public void No_migration_runs_a_statement_outside_the_migrations_transaction()
     {
         using OrderingDbContext db = new(
             new DbContextOptionsBuilder<OrderingDbContext>().UseSqlServer(fixture.ConnectionString).Options);
