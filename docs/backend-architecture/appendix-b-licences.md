@@ -104,6 +104,7 @@ identity in words, for the reason the Stryker.NET row gives.
 | Duende IdentityServer | Free below a revenue threshold; commercial above it |
 | Redis | Redis 7.4+ is under RSALv2/SSPLv1. Valkey (BSD) is a drop-in fork if the terms are a problem |
 | Grafana OTel-LGTM (`grafana/otel-lgtm` image) | AGPL 3.0 for Grafana, Loki, Tempo and Pyroscope; Apache 2.0 for Prometheus, the OpenTelemetry Collector and OBI, the other components the image bundles. Development and CI only ([§14.1](14-local-development.md)); never deployed, so no distribution or network-service obligation arises |
+| Grafana k6 (`grafana/k6` image) | AGPL 3.0. The stress run's generator under the stress override alone ([ADR-170](adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md)); run on a developer's machine and never deployed, so no distribution or network-service obligation arises |
 
 The first table is enforced by
 [`.github/licence-gate/`](../../.github/licence-gate/README.md), whose README
@@ -115,7 +116,7 @@ Discovering a licence obligation at renewal time is considerably more expensive
 than discovering it at build time.
 
 **The table above is beyond its reach, and deliberately so.** SQL Server,
-Duende, Redis and the Grafana OTel-LGTM image are products rather than
+Duende, Redis and the Grafana OTel-LGTM and k6 images are products rather than
 packages — nothing restores them, so nothing reading `Directory.Packages.props`
 can see them, and the client libraries that talk to them sit in the first table
 under their own licences. That boundary is a review obligation and there is no

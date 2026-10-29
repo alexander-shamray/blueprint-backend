@@ -224,8 +224,19 @@ function machine() {
             memoryBytes: info.MemTotal ?? null,
         },
         commit: read('git', ['rev-parse', 'HEAD']),
-        k6: read('k6', ['version']),
+        k6: k6Image(),
     };
+}
+
+// k6 runs from the stress override's image, so its tag is the version.
+function k6Image() {
+    const override = readFileSync(new URL('../../compose/docker-compose.stress.yml', import.meta.url), 'utf8');
+    const image = /^ {2}k6:\r?\n(?: {4}.*\r?\n)*? {4}image: (\S+)/m.exec(override);
+
+    if (!image)
+        unavailable.push('k6 image: the stress override names none');
+
+    return image ? `k6 ${image[1]}` : null;
 }
 
 // The services export their meters once a minute, and a rate needs two

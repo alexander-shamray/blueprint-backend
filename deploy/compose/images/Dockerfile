@@ -8,5 +8,6 @@ FROM chrislusf/seaweedfs:4.47 AS seaweedfs
 FROM nginx:1.27.5-alpine AS nginx
 FROM otel/opentelemetry-collector-contrib:0.163.2 AS collector
 FROM grafana/otel-lgtm:0.37.0 AS lgtm
+FROM grafana/k6:2.2.0 AS k6
 FROM sheyenrath/wiremock.net:2.19.0 AS wiremock
 FROM axllent/mailpit:v1.31.6 AS mailpit

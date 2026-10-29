@@ -3,8 +3,10 @@
 // not, and the parsing of what Docker prints.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
     ERROR_RATE_LIMIT,
+    GENERATOR_SERVICE,
     HOST_CPU_LIMIT,
     clientRow,
     containerOwner,
@@ -250,6 +252,18 @@ test('a container at nine tenths of the cores it may use, or whose memory climbs
     assert.deepEqual(signals(container({ memoryMiddle: 400 * mib, memoryEnd: 590 * mib })), [],
         'past the floor, but under half again');
     assert.deepEqual(signals(container({ memoryMiddle: 100 * mib, memoryEnd: 160 * mib })), [], 'within the floor');
+});
+
+test('the generator\'s container is never a service giving up, and is the stress override\'s own service', () => {
+    const k6 = { containers: [{ name: 'commerce-k6-run-1', service: GENERATOR_SERVICE, cores: 1, cpuMean: 100,
+        memoryMiddle: 100 * 1024 ** 2, memoryEnd: 900 * 1024 ** 2 }] };
+
+    assert.deepEqual(signals(k6), [], 'its CPU and memory are the machine\'s reading');
+    assert.deepEqual(signals({ containers: [{ ...k6.containers[0], service: 'gateway' }] }),
+        ['gateway cpu', 'gateway memory'], 'the same figures on a service name it');
+
+    const override = readFileSync(new URL('../../compose/docker-compose.stress.yml', import.meta.url), 'utf8');
+    assert.match(override, new RegExp(`^  ${GENERATOR_SERVICE}:\\r?\\n(?:    .*\\r?\\n)*?    image: grafana/k6:`, 'm'));
 });
 
 test('a container is named by the service whose name Compose spells, alone or with -api', () => {

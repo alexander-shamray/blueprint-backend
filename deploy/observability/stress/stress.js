@@ -16,10 +16,10 @@
 //   # From the environment, never `-e`, for slo.js's reason.
 //   export KEYCLOAK_ADMIN_PASSWORD=admin
 //
-//   # --address turns on k6's REST API, which the knee stop reads.
-//   k6 run --address 127.0.0.1:6565 \
-//     -e BASE_URL=http://localhost:5000 \
-//     -e KEYCLOAK_URL=http://localhost:8080 \
+//   # k6 is the override's own service, which sets BASE_URL, KEYCLOAK_URL
+//   # and PROM_URL; --address turns on k6's REST API, which the knee stop reads.
+//   docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.stress.yml \
+//     run --rm k6 run --address 127.0.0.1:6565 \
 //     -e STRESS_PRODUCTS=<ids with a row in ordering.ProductPrices, comma-separated> \
 //     -e STRESS_CURRENCY=<their currency> \
 //     -e STRESS_OUT=artifacts/stress/<run> \

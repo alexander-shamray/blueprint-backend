@@ -529,6 +529,10 @@ that what is left over goes to the services; the two are recreated by `up`
 with the override and again without it, which empties the LGTM container's
 stores
 ([ADR-162](adr/ADR-162-the-stress-override-bounds-the-observer-and-the-collector-sheds-within-its-bound-1534.md)).
+It carries the run's k6 as a service of its own, which only `run` starts, so
+that the generator's requests stay on the Compose network rather than
+crossing Docker Desktop's port forward
+([ADR-170](adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md)).
 
 **A host process reads none of the container `environment:` blocks, so every
 key a service throws without has to be supplied to it.** **Five** do that, each
