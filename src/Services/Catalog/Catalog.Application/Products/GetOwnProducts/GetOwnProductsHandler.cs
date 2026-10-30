@@ -14,7 +14,7 @@ public sealed class GetOwnProductsHandler(IDbConnectionFactory connections, ICur
     /// <summary>This read's own ceiling (§6.5): a larger <c>limit</c> is clamped to it, never refused.</summary>
     public const int MaxLimit = 100;
 
-    private const string Sql =
+    private const string Columns =
         """
         SELECT TOP (@Take)
             ProductId         = p.Id,
@@ -29,11 +29,26 @@ public sealed class GetOwnProductsHandler(IDbConnectionFactory connections, ICur
         LEFT JOIN catalog.StockLevels s
             ON s.ProductId = p.Id
         WHERE p.SellerId = @SellerId
-            AND (@AfterPublishedAt IS NULL
-                OR p.PublishedAt < @AfterPublishedAt
-                OR (p.PublishedAt = @AfterPublishedAt AND p.Id < @AfterId))
+        """;
+
+    private const string Order =
+        """
+
         ORDER BY p.PublishedAt DESC, p.Id DESC;
         """;
+
+    // A cursor's page has a statement of its own, so the seek reaches the cursor rather than the seller's newest row
+    // (ADR-178).
+    internal const string FirstSql = Columns + Order;
+
+    internal const string AfterSql =
+        Columns +
+        """
+
+            AND (p.PublishedAt < @AfterPublishedAt
+                OR (p.PublishedAt = @AfterPublishedAt AND p.Id < @AfterId))
+        """ +
+        Order;
 
     public async Task<CursorPage<OwnProductDto>> HandleAsync(GetOwnProductsQuery query, CancellationToken ct)
     {
@@ -46,7 +61,7 @@ public sealed class GetOwnProductsHandler(IDbConnectionFactory connections, ICur
         // The endpoint's policy guarantees a subject, so Id throws only on a dispatch that bypassed it (§11.4).
         List<OwnProductDto> rows = (await connection.QueryAsync<OwnProductDto>(
             new CommandDefinition(
-                Sql,
+                after is null ? FirstSql : AfterSql,
                 new
                 {
                     Take = limit + 1,
