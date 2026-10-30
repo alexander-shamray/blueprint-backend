@@ -10,7 +10,7 @@ namespace Notifications.TestSupport;
 /// <remarks>The tag is the Compose unit's, held equal by a test, so a person watches this sink (§14.1).</remarks>
 public sealed class Mailpit : IAsyncDisposable
 {
-    public const string Image = "axllent/mailpit:v1.31.6";
+    public const string Image = "axllent/mailpit:v1.32.0";
 
     public const int SmtpPort = 1025;
 
