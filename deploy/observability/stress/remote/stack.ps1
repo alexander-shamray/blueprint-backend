@@ -14,8 +14,8 @@ param(
     [switch]$NoBuild,
 
     # Says this network is trusted: a Public profile is made Private and
-    # Docker Desktop's own inbound rules are disabled for the run, each put
-    # back by -Restore once every port is on loopback again.
+    # Docker Desktop's own inbound rules are disabled, both until -Restore puts
+    # them back once every port is on loopback again.
     [switch]$TrustNetwork,
 
     # Closes the ports and puts every one back on loopback.
@@ -156,7 +156,7 @@ if ($TrustNetwork) {
             Save-RemoteState $state
         }
         Set-NetConnectionProfile -InterfaceAlias $lan.Interface -NetworkCategory Private
-        Write-Host "$($lan.Interface) is a Private network for the run; -Restore makes it $($state.Category) again."
+        Write-Host "$($lan.Interface) is a Private network until -Restore makes it $($state.Category) again."
         $lan = Get-LanAddress
     }
 
@@ -166,13 +166,13 @@ if ($TrustNetwork) {
             Save-RemoteState $state
         }
         Disable-NetFirewallRule -Name $rule.Name
-        Write-Host "Disabled '$($rule.DisplayName)' for the run; -Restore enables it again."
+        Write-Host "Disabled '$($rule.DisplayName)' until -Restore enables it again."
     }
 }
 
 if ($lan.Category -ne 'Private') {
     $advice = if ($lan.Category -eq 'Public') {
-        'On a network you trust, run with -TrustNetwork, which makes it Private for the run and -Restore puts it back.'
+        'On a network you trust, run with -TrustNetwork, which makes it Private until -Restore puts it back.'
     } else {
         'This script runs on a Private network alone and changes no other kind.'
     }
@@ -185,7 +185,7 @@ if ($dockerRules.Count -gt 0) {
     $names = ($dockerRules | ForEach-Object { "'$($_.DisplayName)' ($($_.Action))" }) -join ', '
     throw ("Inbound firewall rules already name Docker's programs on the Private profile: $names. " +
         'An allow lets the whole network past the run, a block stops the generator. Run with -TrustNetwork, ' +
-        'which disables them for the run and -Restore enables them again.')
+        'which disables them until -Restore enables them again.')
 }
 if ($GeneratorAddress -and -not (Test-SameSubnet $lan.Address $GeneratorAddress $lan.PrefixLength)) {
     throw "$GeneratorAddress is not on this machine's subnet, $($lan.Address)/$($lan.PrefixLength)."
