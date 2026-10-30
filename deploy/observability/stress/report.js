@@ -485,9 +485,10 @@ export function endedLine(ended, plan) {
 }
 
 // THE STATEMENTS: what each database's statements spent over a hold, from
-// Query Store, which sample.mjs sets to a one-minute interval for the run. A
-// statement's waits are its own; a COMMIT is its own batch, so the log flush
-// every commit waits for stays in the instance-wide log wait above.
+// Query Store, whose interval sample.mjs sets to QUERY_STORE_INTERVAL_MINUTES
+// for the run. An autocommit statement's log flush is its own Tran Log IO; an
+// explicit transaction's COMMIT is its own batch, so its flush stays in the
+// instance-wide log wait above.
 export const QUERY_STORE_INTERVAL_MINUTES = 1;
 export const QUERY_STORE_TOP = 5;
 const QUERY_STORE_READ = 20;
