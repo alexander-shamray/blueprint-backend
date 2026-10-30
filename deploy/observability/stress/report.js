@@ -632,8 +632,11 @@ export function queryStoreRow(databases) {
     };
 }
 
-/** A step's line of summary.md's statements section. */
+/** A step's line of summary.md's statements section; `{ unread: true }` is a read that failed, null an empty one. */
 export function queryStoreLine(step, row) {
+    if (row?.unread)
+        return `- Step ${step}: Query Store not read; Not measured says why`;
+
     if (!row)
         return `- Step ${step}: no whole Query Store interval inside the hold`;
 

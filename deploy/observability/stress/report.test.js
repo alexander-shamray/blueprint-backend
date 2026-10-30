@@ -503,4 +503,6 @@ test('the statements line reads each statement\'s time, runs, CPU and waits, and
     assert.match(line, /285\.2 s in 543718 runs, CPU 73\.6 s, Buffer Latch 149\.5 s, Latch 54\.5 s, CPU 6\.6 s;/);
     assert.match(line, /; waits Buffer Latch 149\.5 s, Lock 139\.2 s/);
     assert.equal(queryStoreLine(4, null), '- Step 4: no whole Query Store interval inside the hold');
+    assert.equal(queryStoreLine(5, { unread: true }), '- Step 5: Query Store not read; Not measured says why',
+        'a failed read is not an empty window');
 });
