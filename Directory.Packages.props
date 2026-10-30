@@ -202,9 +202,9 @@
     <PackageVersion Include="Respawn" Version="6.2.1" />
     <!-- 2.12.0 is the first release whose Scriban.Signed carries no advisory.
          The 1.x releases resolve Scriban.Signed 5.5.0, whose critical and high
-         advisories fail the restore through NU1904 and NU1903. Not the newest:
-         2.16.0 needs a Microsoft.OpenApi above the pin in this file, which
-         NU1109 refuses as a downgrade. -->
+         advisories fail the restore through NU1904 and NU1903. The version is
+         the simulator image's tag, which the SimulatorImageTests hold equal,
+         so it moves when the Compose mirror's wiremock.net pin does. -->
     <PackageVersion Include="WireMock.Net" Version="2.20.0" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.10.0" />
     <!-- ServiceCollection itself. §6.2's registration test and §6.3's ordering
