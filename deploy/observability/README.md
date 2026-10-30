@@ -535,9 +535,10 @@ visit), a checkout quote, and in an `ORDER_SHARE` of visits an order followed
 by *my orders* through the BFF. Users pause between `THINK_MIN_SECONDS` and
 `THINK_MAX_SECONDS` between steps. Each is a constant at the top of
 `stress.js`, with the reason for its value.
-Orders are spread over every product `STRESS_PRODUCTS` names, which loads the
-saga and the queues; one id there is the hot-row variant, which loads
-Inventory's reservation of that one row instead.
+Orders are spread evenly over every product `STRESS_PRODUCTS` names, which
+loads the saga and the queues; naming a single id there is the hot-row
+variant, which loads Inventory's reservation of that one row instead. No
+product in the default run is hotter than the rest.
 
 **The staircase.** `STRESS_PROFILE` names a level, one of `steps.js`'s
 `LEVELS` (`low`, `medium`, `high` and `xhigh`), each starting where the one
