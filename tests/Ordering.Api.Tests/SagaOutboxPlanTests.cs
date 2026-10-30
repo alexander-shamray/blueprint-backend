@@ -13,31 +13,43 @@ public sealed class SagaOutboxPlanTests(ServiceFixture fixture) : IAsyncLifetime
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
+    // Every index, so one ordering a row by when it was staged, the identity's or a time's, fails here (ADR-177).
     [Fact]
-    public async Task The_table_is_clustered_on_the_inbox_message_index_and_the_identity_key_is_not()
+    public async Task The_table_is_keyed_and_clustered_on_the_inbox_message_index_and_no_index_is_in_staging_order()
     {
         (await fixture.ScalarAsync<string>(
             """
-            SELECT Value = STRING_AGG(c.name, ',') WITHIN GROUP (ORDER BY ic.key_ordinal)
-            FROM sys.indexes i
-            INNER JOIN sys.index_columns ic
-                ON ic.object_id = i.object_id
-                AND ic.index_id = i.index_id
-                AND ic.key_ordinal > 0
-            INNER JOIN sys.columns c
-                ON c.object_id = ic.object_id
-                AND c.column_id = ic.column_id
-            WHERE i.object_id = OBJECT_ID('ordering.OutboxMessage')
-                AND i.type = 1
-            """)).ShouldBe("InboxMessageId,InboxConsumerId,SequenceNumber");
+            SELECT Value = STRING_AGG(
+                CONCAT(k.name, ':', k.type_desc, ':', k.is_primary_key, ':', k.columns) COLLATE DATABASE_DEFAULT, ' | ')
+                WITHIN GROUP (ORDER BY k.name)
+            FROM (
+                SELECT
+                    i.name,
+                    i.type_desc,
+                    i.is_primary_key,
+                    columns = STRING_AGG(c.name, ',') WITHIN GROUP (ORDER BY ic.key_ordinal)
+                FROM sys.indexes i
+                INNER JOIN sys.index_columns ic
+                    ON ic.object_id = i.object_id
+                    AND ic.index_id = i.index_id
+                    AND ic.key_ordinal > 0
+                INNER JOIN sys.columns c
+                    ON c.object_id = ic.object_id
+                    AND c.column_id = ic.column_id
+                WHERE i.object_id = OBJECT_ID('ordering.OutboxMessage')
+                GROUP BY i.name, i.type_desc, i.is_primary_key) k
+            """)).ShouldBe(
+            "IX_OutboxMessage_OutboxId_SequenceNumber:NONCLUSTERED:0:OutboxId,SequenceNumber | "
+            + "PK_OutboxMessage:CLUSTERED:1:InboxMessageId,InboxConsumerId,SequenceNumber");
 
-        (await fixture.ScalarAsync<string>(
+        // The delivery reads a message's rows in staging order, so the sequence keeps its identity.
+        (await fixture.ScalarAsync<bool>(
             """
-            SELECT Value = type_desc
-            FROM sys.indexes
+            SELECT Value = is_identity
+            FROM sys.columns
             WHERE object_id = OBJECT_ID('ordering.OutboxMessage')
-                AND is_primary_key = 1
-            """)).ShouldBe("NONCLUSTERED");
+                AND name = 'SequenceNumber'
+            """)).ShouldBeTrue();
     }
 
     [Fact]

@@ -55,6 +55,21 @@ public sealed class SagaInboxStateKeyTests(ServiceFixture fixture) : IAsyncLifet
             """)).ShouldBe("FK_OutboxMessage_InboxState_InboxMessageId_InboxConsumerId");
     }
 
+    // The library's UPDATE seeks the identity key's index, which an identity grows at one end (ADR-177).
+    [Fact]
+    public async Task The_id_is_drawn_at_random_rather_than_counted()
+    {
+        (await fixture.ScalarAsync<string>(
+            """
+            SELECT Value = CONCAT(c.is_identity, ':', d.definition)
+            FROM sys.columns c
+            LEFT JOIN sys.default_constraints d
+                ON d.object_id = c.default_object_id
+            WHERE c.object_id = OBJECT_ID('ordering.InboxState')
+                AND c.name = 'Id'
+            """)).ShouldBe("0:(CONVERT([bigint],Crypt_Gen_Random((8))))");
+    }
+
     // ADR-171's rebuild drops PK_InboxState before it adds it back, a table the running hosts must never see.
     [Fact]
     public void No_migration_runs_a_statement_outside_the_migrations_transaction()
