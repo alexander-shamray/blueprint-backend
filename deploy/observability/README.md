@@ -587,10 +587,12 @@ files first, and puts it back as it stops, whether k6 wrote its results, a
 `stop` file appeared, or it was signalled. `stress/summarise.mjs` then reads
 the whole intervals inside each hold: the `QUERY_STORE_TOP` statements across
 every database that took longest, their CPU and largest waits, and every
-statement's waits by category. A COMMIT is its own batch, which Query Store
-gives to no statement, so the log flush each commit waits for stays in the
-instance-wide log wait above. A sampler killed outright leaves the interval
-at a minute, and `query-store.json` names the value to put back.
+statement's waits by category. An autocommit statement's log flush is its own
+Tran Log IO; an explicit transaction's COMMIT is its own batch, which Query
+Store gives to no statement, so its flush stays in the instance-wide log wait
+above. A sampler killed outright leaves the interval at
+`QUERY_STORE_INTERVAL_MINUTES`, and `query-store.json` names the value to put
+back.
 
 **The knee** is the first step at which one of three signals crosses:
 requests failing at more than `ERROR_RATE_LIMIT`; the journey's p95 growing

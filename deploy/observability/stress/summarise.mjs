@@ -18,6 +18,7 @@ import {
     DEFAULT_PROM_URL,
     OUTBOX_OLDEST,
     QUERY_STORE_DATABASES,
+    QUERY_STORE_INTERVAL_MINUTES,
     QUEUED,
     WORK_FILTER,
     WORK_QUEUES,
@@ -323,8 +324,8 @@ const summary = {
     unavailable,
     // Named so that a reader does not take the table's silence for a healthy reading.
     notObservable: [
-        'SQL Server plans, and each statement\'s part of the log flush: a COMMIT is its own batch, which ' +
-            'Query Store gives to no statement',
+        'SQL Server plans, and each statement\'s part of an explicit transaction\'s log flush: its COMMIT is ' +
+            'its own batch, which Query Store gives to no statement',
     ],
 };
 
@@ -431,9 +432,11 @@ function markdown(s) {
         '',
         '## Statements',
         '',
-        'Query Store, over the whole one-minute intervals inside each hold: the statements across every database',
-        'that took longest, with their CPU and largest waits, then every statement\'s waits by category. A',
-        'COMMIT is its own batch, so the log flush it waits for is in the log wait column above, not here.',
+        'Query Store, over the whole intervals inside each hold, which the sampler sets to ' +
+            `${QUERY_STORE_INTERVAL_MINUTES} min for the run:`,
+        'the statements across every database that took longest, with their CPU and largest waits, then every',
+        'statement\'s waits by category. An autocommit statement\'s log flush is its own Tran Log IO; an explicit',
+        'transaction\'s COMMIT is its own batch, so its flush is in the log wait column above, not here.',
         '',
         ...s.steps.filter((r) => r.requests > 0).map((r) => queryStoreLine(r.step, r.queryStore)),
         '',
