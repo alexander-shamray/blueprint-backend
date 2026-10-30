@@ -110,7 +110,7 @@ services:
   # credential pairs, neither able to list or delete; object-store/s3.json holds them and object-store/policies/
   # what each may do. A deployment supplies its own store.
   object-store:
-    image: chrislusf/seaweedfs:4.47
+    image: chrislusf/seaweedfs:4.50
     command: [ "server", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-dir=/data" ]
     # The S3 endpoint a client PUTs to (§10.8), so a phone on this machine reaches what the BFF signed.
     ports: [ "127.0.0.1:8333:8333" ]
@@ -125,7 +125,7 @@ services:
   # The bucket, the two policies and the one-day expiry on uploads/ (§10.8), as a one-shot like the migrators.
   # Idempotent, so a second `up` leaves the first one's bucket, policies and rule as they were.
   object-store-init:
-    image: chrislusf/seaweedfs:4.47
+    image: chrislusf/seaweedfs:4.50
     entrypoint: [ "/bin/sh", "-c", "weed shell -master=object-store:9333 < /etc/seaweedfs/init.txt" ]
     volumes:
       - ./object-store/init.txt:/etc/seaweedfs/init.txt:ro
