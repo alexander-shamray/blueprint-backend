@@ -178,13 +178,14 @@ public class MessagingRegistrationTests
     public void The_saga_has_a_transactional_outbox_rather_than_an_in_memory_one()
     {
         // ADR-032's container half: the factory the endpoint filter resolves, closed over this service's context.
+        // The factory is replaced whether or not the outbox was added, so the outbox's own options are read too.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());
 
         services.ShouldContain(
-            d => d.ServiceType == typeof(IOutboxContextFactory<OrderingDbContext>),
-            "AddEntityFrameworkOutbox<OrderingDbContext> is what registers it, and nothing else here " +
+            d => d.ServiceType == typeof(IConfigureOptions<EntityFrameworkOutboxOptions<OrderingDbContext>>),
+            "AddEntityFrameworkOutbox<OrderingDbContext> is what configures these, and nothing else here " +
             "does — its absence puts §9.6's saga back on the in-memory outbox (ADR-032)");
 
         services.Where(d => d.ServiceType == typeof(IOutboxContextFactory<OrderingDbContext>))
