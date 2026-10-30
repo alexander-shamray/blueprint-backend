@@ -186,7 +186,8 @@ public class MessagingRegistrationTests
         services.ShouldContain(
             d => d.ServiceType == typeof(IConfigureOptions<EntityFrameworkOutboxOptions<OrderingDbContext>>),
             "AddEntityFrameworkOutbox<OrderingDbContext> is what configures these, and nothing else here " +
-            "does — its absence puts §9.6's saga back on the in-memory outbox (ADR-032)");
+            "does — its absence leaves the outbox at MassTransit's RepeatableRead (ADR-112) and drops its " +
+            "inbox cleanup service (ADR-032)");
 
         services.Where(d => d.ServiceType == typeof(IOutboxContextFactory<OrderingDbContext>))
             .Select(d => d.ImplementationType)
