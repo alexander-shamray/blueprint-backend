@@ -256,10 +256,17 @@ const range = `${Math.max(raw.plan.holdSeconds, MINIMUM_RANGE_SECONDS)}s`;
 const queryStoreDatabases = (read('docker', sqlcmdArgs(QUERY_STORE_DATABASES)) ?? '')
     .split(/\r?\n/).map((line) => line.trim()).filter((name) => /^\w+$/.test(name));
 
+// A listing or every database's read failing is no reading, which the line tells from an empty window.
 function statements(window) {
     const sql = queryStoreSql(new Date(window.startMs).toISOString(), new Date(window.endMs).toISOString());
-    return queryStoreRow(queryStoreDatabases.map((database) =>
-        parseQueryStore(database, read('docker', sqlcmdArgs(sql, database)))));
+    const reads = queryStoreDatabases
+        .map((database) => ({ database, output: read('docker', sqlcmdArgs(sql, database)) }))
+        .filter((r) => r.output !== null);
+
+    if (reads.length === 0)
+        return { unread: true };
+
+    return queryStoreRow(reads.map((r) => parseQueryStore(r.database, r.output)));
 }
 
 const rows = [];
