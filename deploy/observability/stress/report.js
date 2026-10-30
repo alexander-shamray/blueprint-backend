@@ -483,3 +483,157 @@ export function endedLine(ended, plan) {
     const detail = ended.detail ? `: ${ended.detail}` : '';
     return `Ended: ${ended.reason}${where}${detail}; level ${plan.level ?? 'none'}, stop rule ${plan.stopRule}`;
 }
+
+// THE STATEMENTS: what each database's statements spent over a hold, from
+// Query Store, which sample.mjs sets to a one-minute interval for the run. A
+// statement's waits are its own; a COMMIT is its own batch, so the log flush
+// every commit waits for stays in the instance-wide log wait above.
+export const QUERY_STORE_INTERVAL_MINUTES = 1;
+export const QUERY_STORE_TOP = 5;
+const QUERY_STORE_READ = 20;
+const STATEMENT_CHARS = 90;
+
+// The Compose project's SQL container, named as the README's blocks name it.
+export const SQL_CONTAINER = 'commerce-sql-1';
+
+// The platform's databases Query Store records; model carries it too, as the template of the next one.
+export const QUERY_STORE_DATABASES =
+    'SET NOCOUNT ON; SELECT name FROM sys.databases WHERE is_query_store_on = 1 AND database_id > 4;';
+
+const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+const DATABASE = /^\w+$/;
+
+/** sqlcmd's arguments for `docker exec`, the password read inside the container as its healthcheck reads it. */
+export function sqlcmdArgs(query, database = null) {
+    if (database !== null && !DATABASE.test(database))
+        throw new Error(`not a database name sqlcmd is handed: "${database}"`);
+
+    return [
+        'exec', SQL_CONTAINER, 'sh', '-c', 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec "$@"', 'sh',
+        '/opt/mssql-tools18/bin/sqlcmd', '-S', 'localhost', '-U', 'sa', '-C', '-h', '-1', '-W', '-s', '|',
+        ...(database === null ? [] : ['-d', database]),
+        '-Q', query,
+    ];
+}
+
+/**
+ * Query Store's reading of one database over the whole intervals inside a
+ * window: the statements that took longest, one `S` line each, then every
+ * statement's waits by category, one `W` line each.
+ */
+export function queryStoreSql(startIso, endIso) {
+    if (!ISO.test(startIso) || !ISO.test(endIso))
+        throw new Error(`Query Store windows are ISO instants in UTC, not "${startIso}" and "${endIso}"`);
+
+    const text = "LEFT(REPLACE(REPLACE(REPLACE(x.query_sql_text, CHAR(13), ' '), CHAR(10), ' '), '|', '/'), 1500)";
+
+    return [
+        'SET NOCOUNT ON;',
+        `DECLARE @from datetimeoffset = '${startIso}', @to datetimeoffset = '${endIso}';`,
+        'DECLARE @top TABLE (query_id bigint PRIMARY KEY, execs bigint, cpu_ms bigint, duration_ms bigint);',
+        'INSERT INTO @top',
+        `SELECT TOP (${QUERY_STORE_READ}) p.query_id, SUM(rs.count_executions),`,
+        '    CAST(SUM(rs.avg_cpu_time * rs.count_executions) / 1000 AS bigint),',
+        '    CAST(SUM(rs.avg_duration * rs.count_executions) / 1000 AS bigint)',
+        'FROM sys.query_store_runtime_stats AS rs',
+        'INNER JOIN sys.query_store_runtime_stats_interval AS i',
+        '    ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id',
+        'INNER JOIN sys.query_store_plan AS p',
+        '    ON p.plan_id = rs.plan_id',
+        'WHERE i.start_time >= @from AND i.end_time <= @to',
+        'GROUP BY p.query_id',
+        'ORDER BY SUM(rs.avg_duration * rs.count_executions) DESC;',
+        `SELECT 'S', t.query_id, t.execs, t.cpu_ms, t.duration_ms, ${text}`,
+        'FROM @top AS t',
+        'INNER JOIN sys.query_store_query AS q',
+        '    ON q.query_id = t.query_id',
+        'INNER JOIN sys.query_store_query_text AS x',
+        '    ON x.query_text_id = q.query_text_id;',
+        "SELECT 'W', p.query_id, ws.wait_category_desc, CAST(SUM(ws.total_query_wait_time_ms) AS bigint)",
+        'FROM sys.query_store_wait_stats AS ws',
+        'INNER JOIN sys.query_store_runtime_stats_interval AS i',
+        '    ON i.runtime_stats_interval_id = ws.runtime_stats_interval_id',
+        'INNER JOIN sys.query_store_plan AS p',
+        '    ON p.plan_id = ws.plan_id',
+        'WHERE i.start_time >= @from AND i.end_time <= @to',
+        'GROUP BY p.query_id, ws.wait_category_desc;',
+    ].join('\n');
+}
+
+// A parameterised statement's text opens with its declarations, "(@p0 int,@p1 nvarchar(4000))UPDATE ...".
+const DECLARATIONS = /^\(@.*?\)(?=\s*(?:SELECT|INSERT|UPDATE|DELETE|WITH|MERGE|SET|DECLARE)\b)/is;
+
+/** A statement's text without its declarations, cut to what one summary line holds and safe in a code span. */
+export function statementText(text) {
+    const body = String(text ?? '').replace(DECLARATIONS, '').replace(/`/g, "'").replace(/\s+/g, ' ').trim();
+    return body.length > STATEMENT_CHARS ? `${body.slice(0, STATEMENT_CHARS - 1)}…` : body;
+}
+
+/** One database's `S` and `W` lines as its statements, each with its waits, and its waits by category. */
+export function parseQueryStore(database, output) {
+    const statements = new Map();
+    const waits = [];
+
+    for (const line of String(output ?? '').split(/\r?\n/)) {
+        const fields = line.split('|');
+
+        if (fields[0] === 'S' && fields.length >= 6) {
+            statements.set(fields[1], {
+                database,
+                id: Number(fields[1]),
+                executions: Number(fields[2]),
+                cpuMs: Number(fields[3]),
+                durationMs: Number(fields[4]),
+                text: statementText(fields.slice(5).join('|')),
+                waits: [],
+            });
+        } else if (fields[0] === 'W' && fields.length === 4) {
+            waits.push({ id: fields[1], category: fields[2], ms: Number(fields[3]) });
+        }
+    }
+
+    for (const wait of waits)
+        statements.get(wait.id)?.waits.push({ category: wait.category, ms: wait.ms });
+
+    return { statements: [...statements.values()], waits: waits.map(({ category, ms }) => ({ category, ms })) };
+}
+
+/**
+ * A step's statements across every database: the QUERY_STORE_TOP that took
+ * longest, each with its largest waits, and every statement's waits by
+ * category; null when no whole interval lay inside the hold.
+ */
+export function queryStoreRow(databases) {
+    const statements = databases.flatMap((d) => d.statements);
+    const totals = new Map();
+
+    for (const wait of databases.flatMap((d) => d.waits))
+        totals.set(wait.category, (totals.get(wait.category) ?? 0) + wait.ms);
+
+    if (statements.length === 0 && totals.size === 0)
+        return null;
+
+    const byMs = (a, b) => b.ms - a.ms;
+
+    return {
+        statements: statements
+            .sort((a, b) => b.durationMs - a.durationMs)
+            .slice(0, QUERY_STORE_TOP)
+            .map((s) => ({ ...s, waits: [...s.waits].sort(byMs).slice(0, 3) })),
+        waits: [...totals.entries()].map(([category, ms]) => ({ category, ms })).sort(byMs),
+    };
+}
+
+/** A step's line of summary.md's statements section. */
+export function queryStoreLine(step, row) {
+    if (!row)
+        return `- Step ${step}: no whole Query Store interval inside the hold`;
+
+    const s = (ms) => (ms / 1000).toFixed(1);
+    const statements = row.statements.map((st) =>
+        `${st.database} \`${st.text}\` ${s(st.durationMs)} s in ${st.executions} runs, CPU ${s(st.cpuMs)} s` +
+        st.waits.map((w) => `, ${w.category} ${s(w.ms)} s`).join(''));
+
+    return `- Step ${step}: ${statements.join('; ') || 'no statement'}; ` +
+        `waits ${row.waits.map((w) => `${w.category} ${s(w.ms)} s`).join(', ') || 'none'}`;
+}

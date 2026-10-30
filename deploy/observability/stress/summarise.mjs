@@ -1,6 +1,7 @@
 // Turns one stress run into its per-step table: k6's client figures from
 // raw.json, the server's from Prometheus at each step's hold, the resources
-// from sample.mjs's samples, and the machine they all describe. Writes
+// from sample.mjs's samples, the statements from Query Store, and the machine
+// they all describe. Writes
 // summary.json and summary.md beside them and prints the knee and the first
 // service to give up. It reports and never gates, so a reading it cannot make
 // is recorded as unavailable.
@@ -16,6 +17,7 @@ import { join } from 'node:path';
 import {
     DEFAULT_PROM_URL,
     OUTBOX_OLDEST,
+    QUERY_STORE_DATABASES,
     QUEUED,
     WORK_FILTER,
     WORK_QUEUES,
@@ -28,7 +30,12 @@ import {
     givingUpStep,
     hostCpu,
     knee,
+    parseQueryStore,
+    queryStoreLine,
+    queryStoreRow,
+    queryStoreSql,
     sqlDelta,
+    sqlcmdArgs,
 } from './report.js';
 
 const out = process.argv[2];
@@ -245,6 +252,16 @@ function k6Image() {
 const MINIMUM_RANGE_SECONDS = 120;
 const range = `${Math.max(raw.plan.holdSeconds, MINIMUM_RANGE_SECONDS)}s`;
 
+// Every database Query Store records, whose statements each hold is read for.
+const queryStoreDatabases = (read('docker', sqlcmdArgs(QUERY_STORE_DATABASES)) ?? '')
+    .split(/\r?\n/).map((line) => line.trim()).filter((name) => /^\w+$/.test(name));
+
+function statements(window) {
+    const sql = queryStoreSql(new Date(window.startMs).toISOString(), new Date(window.endMs).toISOString());
+    return queryStoreRow(queryStoreDatabases.map((database) =>
+        parseQueryStore(database, read('docker', sqlcmdArgs(sql, database)))));
+}
+
 const rows = [];
 
 for (const step of raw.steps) {
@@ -262,6 +279,7 @@ for (const step of raw.steps) {
         containers: containerStats(samples, window),
         hostCpu: hostCpu(samples, window),
         sql: sqlDelta(samples, window),
+        queryStore: row.requests > 0 ? statements(window) : null,
     });
 }
 
@@ -298,7 +316,8 @@ const summary = {
     unavailable,
     // Named so that a reader does not take the table's silence for a healthy reading.
     notObservable: [
-        'SQL Server per-query waits and plans: only the instance-wide counters sample.mjs reads',
+        'SQL Server plans, and each statement\'s part of the log flush: a COMMIT is its own batch, which ' +
+            'Query Store gives to no statement',
     ],
 };
 
@@ -402,6 +421,14 @@ function markdown(s) {
                 `${c.name} ${ms(c.cpuMean)} / ${ms(c.cpuPeak)}, ${mib(c.memoryPeak)}`).join('; ') || '—') +
             ` | ${ms(r.sql?.deadlocks)} | ${ms(r.sql?.lockWaitMs)} | ${ms(r.sql?.pageLatchWaitMs)} | ` +
             `${ms(r.sql?.logWaitMs)} |`),
+        '',
+        '## Statements',
+        '',
+        'Query Store, over the whole one-minute intervals inside each hold: the statements across every database',
+        'that took longest, with their CPU and largest waits, then every statement\'s waits by category. A',
+        'COMMIT is its own batch, so the log flush it waits for is in the log wait column above, not here.',
+        '',
+        ...s.steps.filter((r) => r.requests > 0).map((r) => queryStoreLine(r.step, r.queryStore)),
         '',
         '## Not measured',
         '',

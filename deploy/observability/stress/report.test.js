@@ -27,6 +27,13 @@ import {
     parseMemory,
     serviceCrossings,
     sqlDelta,
+    QUERY_STORE_TOP,
+    parseQueryStore,
+    queryStoreLine,
+    queryStoreRow,
+    queryStoreSql,
+    sqlcmdArgs,
+    statementText,
 } from './report.js';
 
 // k6's REST API as `GET /v1/metrics` answers it during a run: no trend carries a count.
@@ -430,4 +437,67 @@ test('SQL Server\'s counters are read as the step\'s change, and one sample is n
 
     assert.deepEqual(sqlDelta(samples, { startMs: 1000, endMs: 2000 }), { deadlocks: 2, lockWaitMs: 300 });
     assert.equal(sqlDelta(samples, { startMs: 1500, endMs: 2500 }), null);
+});
+
+// What sqlcmd prints for one database: two statements, then waits by category, one of them for a third
+// statement outside the read's top, which still counts toward the totals.
+const ORDERING_STORE = [
+    'S|129|543718|73600|285200|(@p7 bigint,@p8 varbinary(8),@p0 datetime2(7))UPDATE [ordering].[InboxState] ' +
+        'SET [Consumed] = @p0 WHERE [Id] = @p7 AND [RowVersion] = @p8',
+    'S|393|78014|4400|143900|(@p0 uniqueidentifier)SELECT TOP(2) [o].[CorrelationId] FROM [ordering].[Saga] AS [o]',
+    'W|129|Buffer Latch|149500',
+    'W|129|Latch|54500',
+    'W|129|CPU|6600',
+    'W|129|Lock|100',
+    'W|393|Lock|139100',
+    'W|7|Tran Log IO|1800',
+].join('\r\n');
+
+test('Query Store is read over a window of UTC instants, its joins in the house form, and nothing else', () => {
+    const sql = queryStoreSql('2026-10-30T05:03:17.000Z', '2026-10-30T05:05:17.000Z');
+
+    assert.match(sql, /@from datetimeoffset = '2026-10-30T05:03:17\.000Z', /);
+    assert.match(sql, /@to datetimeoffset = '2026-10-30T05:05:17\.000Z'/);
+    assert.match(sql, /WHERE i\.start_time >= @from AND i\.end_time <= @to/, 'whole intervals inside the hold');
+    const joins = sql.split('\n').filter((line) => /JOIN/.test(line));
+    assert.ok(joins.length > 0 && joins.every((line) => /^INNER JOIN \S+ AS \w+$/.test(line)));
+    assert.throws(() => queryStoreSql("2026-10-30'; DROP TABLE x; --", '2026-10-30T05:05:17Z'), /ISO instants/);
+    assert.throws(() => sqlcmdArgs('SELECT 1', 'Ordering; DROP'), /not a database name/);
+    assert.deepEqual(sqlcmdArgs('SELECT 1', 'Ordering').slice(-4), ['-d', 'Ordering', '-Q', 'SELECT 1']);
+});
+
+test('a statement loses its declarations, and is cut and made safe for a code span', () => {
+    assert.equal(statementText('(@p0 int,@p1 nvarchar(4000))UPDATE [x] SET [a] = @p0'), 'UPDATE [x] SET [a] = @p0');
+    assert.equal(statementText('(@MaxAttempts int)WITH claimable AS (SELECT 1)'), 'WITH claimable AS (SELECT 1)');
+    assert.equal(statementText('(@p6 nvarchar(4000),@p7 int)SET NOCOUNT ON; INSERT INTO [x]'),
+        'SET NOCOUNT ON; INSERT INTO [x]', "EF's batch opens with SET NOCOUNT");
+    assert.equal(statementText('SELECT `a`'), "SELECT 'a'");
+    assert.ok(statementText(`SELECT ${'x'.repeat(200)}`).endsWith('…'));
+});
+
+test('a step names the statements that took longest across databases, and every statement\'s waits', () => {
+    const ordering = parseQueryStore('Ordering', ORDERING_STORE);
+    const bff = parseQueryStore('Bff', 'S|5|10|20|30000|SELECT 1\nW|5|Buffer Latch|500');
+    const row = queryStoreRow([ordering, bff]);
+
+    assert.deepEqual(row.statements.map((s) => `${s.database} ${s.id}`), ['Ordering 129', 'Ordering 393', 'Bff 5']);
+    assert.deepEqual(row.statements[0].waits.map((w) => w.category), ['Buffer Latch', 'Latch', 'CPU'],
+        'the three largest waits, the fourth dropped');
+    assert.deepEqual(row.waits.slice(0, 2),
+        [{ category: 'Buffer Latch', ms: 150000 }, { category: 'Lock', ms: 139200 }]);
+    assert.ok(row.waits.some((w) => w.category === 'Tran Log IO'), 'a statement outside the top still counts');
+
+    const many = { statements: Array.from({ length: 9 }, (_, i) => ({ id: i, durationMs: i, waits: [] })), waits: [] };
+    assert.equal(queryStoreRow([many]).statements.length, QUERY_STORE_TOP);
+    assert.equal(queryStoreRow([parseQueryStore('Ordering', ''), parseQueryStore('Bff', null)]), null);
+});
+
+test('the statements line reads each statement\'s time, runs, CPU and waits, and says when none was read', () => {
+    const row = queryStoreRow([parseQueryStore('Ordering', ORDERING_STORE)]);
+    const line = queryStoreLine(3, row);
+
+    assert.match(line, /^- Step 3: Ordering `UPDATE \[ordering\]\.\[InboxState\] SET/);
+    assert.match(line, /285\.2 s in 543718 runs, CPU 73\.6 s, Buffer Latch 149\.5 s, Latch 54\.5 s, CPU 6\.6 s;/);
+    assert.match(line, /; waits Buffer Latch 149\.5 s, Lock 139\.2 s/);
+    assert.equal(queryStoreLine(4, null), '- Step 4: no whole Query Store interval inside the hold');
 });
