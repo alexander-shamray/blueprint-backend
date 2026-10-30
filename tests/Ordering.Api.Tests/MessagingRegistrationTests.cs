@@ -186,6 +186,12 @@ public class MessagingRegistrationTests
             d => d.ServiceType == typeof(IOutboxContextFactory<OrderingDbContext>),
             "AddEntityFrameworkOutbox<OrderingDbContext> is what registers it, and nothing else here " +
             "does — its absence puts §9.6's saga back on the in-memory outbox (ADR-032)");
+
+        services.Where(d => d.ServiceType == typeof(IOutboxContextFactory<OrderingDbContext>))
+            .Select(d => d.ImplementationType)
+            .ShouldBe(
+                [typeof(SagaOutboxContextFactory)],
+                "one factory, ours: MassTransit's own takes four transactions a message (ADR-174)");
     }
 
     [Fact]

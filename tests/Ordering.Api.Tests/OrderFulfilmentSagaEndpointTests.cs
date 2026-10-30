@@ -357,6 +357,44 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     }
 
     [Fact]
+    public async Task A_message_takes_two_outbox_transactions_rather_than_four()
+    {
+        // Each pass but the first adds one to ReceiveCount, so a finished row reads the passes less one: one here,
+        // three under MassTransit's own factory, which commits the insert, consume, delivery and removal apart.
+        var orderId = Guid.CreateVersion7();
+        var placedId = Guid.CreateVersion7();
+
+        await PublishPlacedAsync(orderId, placedId);
+
+        // Delivered and removed commit together here, so a row read between them would be MassTransit's.
+        await Eventually(
+            () => fixture.ScalarAsync<int>(
+                """
+                SELECT Value = COUNT(*)
+                FROM ordering.InboxState i
+                WHERE i.MessageId = {0}
+                    AND i.Delivered IS NOT NULL
+                    AND i.LastSequenceNumber IS NOT NULL
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM ordering.OutboxMessage o
+                        WHERE o.InboxMessageId = i.MessageId
+                            AND o.InboxConsumerId = i.ConsumerId)
+                """,
+                placedId),
+            expected: 1,
+            because: "the arrange half: the transition staged its sends, delivered them and removed them");
+
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = ReceiveCount FROM ordering.InboxState WHERE MessageId = {0}",
+            placedId))
+            .ShouldBe(
+                1,
+                "two transactions, the insert with the consume and the delivery with the removal (ADR-174); " +
+                    "three is MassTransit's factory back on the endpoint");
+    }
+
+    [Fact]
     public async Task Only_the_sagas_row_lock_is_serializable_and_the_outbox_reads_are_read_committed()
     {
         // ADR-112 as the host sends it: the registration test pins each half, and only this one shows the
