@@ -17,10 +17,12 @@ inbound rule on the Private profile naming Docker's programs; one the switch
 disabled earlier no longer refuses a run.
 **Why.** The first runs of
 [ADR-172](ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md)'s
-scripts stopped twice on settings every such machine has: Windows calls home
-Wi-Fi Public, and Docker Desktop's installer adds inbound allow rules for its
-backend, either of which would let the whole network past the run's
-one-address rule. Each refusal handed the user an administrator command, and
+scripts stopped twice on settings every such machine has. Windows calls home
+Wi-Fi Public, which lies outside [§14.1](../14-local-development.md)'s
+exception for a Private network alone. Docker Desktop's installer adds
+inbound allow rules for its backend, which would let the whole network past
+the run's one-address rule. Each refusal handed the user an administrator
+command, and
 a reminder to undo it later in the one safe order: a Docker rule enabled while
 a port is still bound to the LAN address admits every peer, so the rules come
 back only after the ports leave it.
