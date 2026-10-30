@@ -181,6 +181,7 @@ decision looks wrong.
 | **ADR-172** | [The stress run's generator may run on a second machine (#1589), adding to ADR-170](adr/ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md) |
 | **ADR-173** | [The stress run's -TrustNetwork lifts two blocks until -Restore (#1589), adding to ADR-172](adr/ADR-173-the-stress-runs-trustnetwork-lifts-two-blocks-until-restore-1589-adding-to-adr-172.md) |
 | **ADR-174** | [The saga outbox runs two transactions a message (#1603); supersedes ADR-032's default delivery limit](adr/ADR-174-the-saga-outbox-runs-two-transactions-a-message-1603-supersedes-adr-032s-default-delivery-limit.md) |
+| **ADR-175** | [The send claim's index is keyed on the notice's id (#1607)](adr/ADR-175-the-send-claims-index-is-keyed-on-the-notices-id-1607.md) |
 
 ---
 
