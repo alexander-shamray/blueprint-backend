@@ -65,10 +65,8 @@ public static class DependencyInjection
                         // No exclusion: no mapper runs on this queue, so no ContractMappingException arises.
                         e.UseMessageRetry(RetryPolicy.Standard);
 
-                        // Inbox outside the in-memory outbox (§9.8): the other nesting commits
-                        // the inbox row before the buffered sends have flushed.
-                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                        e.UseInMemoryOutbox(context);
+                        // The inbox around the in-memory outbox, so its row commits after the flush (§9.8).
+                        e.UseInboxAndInMemoryOutbox(context);
 
                         e.ConfigureConsumer<IntegrationEventConsumer<OrderCancelled>>(context);
                         e.ConfigureConsumer<IntegrationEventConsumer<ShipmentDispatched>>(context);
@@ -86,8 +84,7 @@ public static class DependencyInjection
                             RetryPolicy.Standard(r);
                         });
 
-                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                        e.UseInMemoryOutbox(context);
+                        e.UseInboxAndInMemoryOutbox(context);
 
                         e.ConfigureConsumer<CommandConsumer<ReserveStock, ReserveStockCommand>>(context);
                         e.ConfigureConsumer<CommandConsumer<ReleaseStock, ReleaseStockCommand>>(context);

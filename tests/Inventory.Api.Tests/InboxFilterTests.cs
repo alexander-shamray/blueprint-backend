@@ -3,6 +3,7 @@ using Inventory.TestSupport;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using MassTransit;
+using MassTransit.Configuration;
 using MassTransit.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,6 +54,38 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
     {
         public Task Consume(ConsumeContext<ProbeMessage> context) =>
             throw new InvalidOperationException("this consumer always throws");
+    }
+
+    public sealed record ProbeEcho(Guid Id);
+
+    /// <summary>Publishes through its context, which the in-memory outbox buffers until the pipe returns.</summary>
+    public sealed class EchoingConsumer : IConsumer<ProbeMessage>
+    {
+        private static int _runs;
+
+        public static int Runs => Volatile.Read(ref _runs);
+
+        public static void Reset() => Volatile.Write(ref _runs, 0);
+
+        public Task Consume(ConsumeContext<ProbeMessage> context)
+        {
+            Interlocked.Increment(ref _runs);
+
+            return context.Publish(new ProbeEcho(context.Message.Id), context.CancellationToken);
+        }
+    }
+
+    /// <summary>Refuses the first echo the bus publishes, so the outbox's flush fails once and then succeeds.</summary>
+    public sealed class FailFirstEcho : IFilter<PublishContext<ProbeEcho>>
+    {
+        private int _refused;
+
+        public Task Send(PublishContext<ProbeEcho> context, IPipe<PublishContext<ProbeEcho>> next) =>
+            Interlocked.Exchange(ref _refused, 1) == 0
+                ? throw new InvalidOperationException("the broker refused the first echo")
+                : next.Send(context);
+
+        public void Probe(ProbeContext context) => context.CreateFilterScope("fail-first-echo");
     }
 
     /// <summary>Clears the change tracker, as <c>EfUnitOfWork.ExecuteAsync</c> does on every attempt (§7.5).</summary>
@@ -155,6 +188,102 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         });
 
         return services.BuildServiceProvider(validateScopes: true);
+    }
+
+    /// <summary>An endpoint as every service declares one: retry, then the inbox around the in-memory outbox.</summary>
+    /// <remarks>Or with the two calls the helper replaced, so the loss §9.8's trap describes is held too.</remarks>
+    private ServiceProvider BuildRetryingHost(bool twoCalls = false)
+    {
+        ServiceCollection services = new();
+
+        services.AddDbContext<InventoryDbContext>(o => o.UseSqlServer(fixture.ConnectionString));
+        services.AddScoped<DbContext>(sp => sp.GetRequiredService<InventoryDbContext>());
+        services.AddSingleton(TimeProvider.System);
+        services.AddMetrics();
+        services.AddLogging();
+        services.AddSingleton<MessagingMetrics>();
+
+        services.AddMassTransitTestHarness(x =>
+        {
+            x.SetTestTimeouts(TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(10));
+            x.AddConsumer<EchoingConsumer>();
+
+            x.UsingInMemory((context, cfg) =>
+            {
+                cfg.ConfigurePublish(p => p.AddPipeSpecification(
+                    new FilterPipeSpecification<PublishContext<ProbeEcho>>(new FailFirstEcho())));
+
+                cfg.ReceiveEndpoint(
+                    FirstEndpoint,
+                    e =>
+                    {
+                        e.UseMessageRetry(r => r.Immediate(2));
+
+                        if (twoCalls)
+                        {
+                            e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                            e.UseInMemoryOutbox(context);
+                        }
+                        else
+                        {
+                            e.UseInboxAndInMemoryOutbox(context);
+                        }
+
+                        e.ConfigureConsumer<EchoingConsumer>(context);
+                    });
+            });
+        });
+
+        return services.BuildServiceProvider(validateScopes: true);
+    }
+
+    [Fact]
+    public async Task A_send_whose_flush_fails_is_made_again_by_the_retry_rather_than_lost()
+    {
+        // §9.8's trap: an inbox row committed before the flush lets the retry drop the message and its sends.
+        EchoingConsumer.Reset();
+        await using ServiceProvider provider = BuildRetryingHost();
+        ITestHarness harness = provider.GetRequiredService<ITestHarness>();
+        await harness.Start();
+
+        var id = Guid.CreateVersion7();
+        var messageId = Guid.CreateVersion7();
+
+        await harness.Bus.Publish(
+            new ProbeMessage(id),
+            c => c.MessageId = messageId,
+            TestContext.Current.CancellationToken);
+
+        (await harness.Published.Any<ProbeEcho>(m => m.Context.Message.Id == id, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("the retry must rerun the consumer, so the echo the failed flush lost is published");
+        EchoingConsumer.Runs.ShouldBe(2);
+        (await Eventually(() => fixture.InboxAsync(messageId), expected: 1)).ShouldHaveSingleItem();
+    }
+
+    [Fact]
+    public async Task With_the_two_calls_typed_in_order_the_retry_drops_the_message_and_its_send()
+    {
+        // The other half of the trap: the outbox lands on the endpoint's pipe, around the inbox, whatever the order.
+        EchoingConsumer.Reset();
+        await using ServiceProvider provider = BuildRetryingHost(twoCalls: true);
+        ITestHarness harness = provider.GetRequiredService<ITestHarness>();
+        await harness.Start();
+
+        var id = Guid.CreateVersion7();
+        var messageId = Guid.CreateVersion7();
+
+        await harness.Bus.Publish(
+            new ProbeMessage(id),
+            c => c.MessageId = messageId,
+            TestContext.Current.CancellationToken);
+
+        // The row first, then quiet: Any returns false only once the harness has seen no activity for its timeout.
+        (await Eventually(() => fixture.InboxAsync(messageId), expected: 1)).ShouldHaveSingleItem();
+        (await harness.Published.Any<ProbeEcho>(
+                m => m.Context.Message.Id == id,
+                TestContext.Current.CancellationToken))
+            .ShouldBeFalse("the row committed before the flush, so the retry found it and dropped the message");
+        EchoingConsumer.Runs.ShouldBe(1);
     }
 
     [Fact]
