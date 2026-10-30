@@ -735,15 +735,15 @@ say why each step is what it is.
 | When | Machine | Run | What it does |
 |---|---|---|---|
 | Once, before the first run | 1 and 2 | `git switch main`, `git pull`; `w32tm /resync` as administrator | Both checkouts on one commit, both clocks agreeing |
-| Each run, first | 1, as administrator | The first run on a commit: `pwsh -File deploy\observability\stress\remote\stack.ps1 -TrustNetwork`. Every later one, on images already built: `pwsh -File deploy\observability\stress\remote\stack.ps1 -TrustNetwork -NoBuild` | Brings the stack up on the LAN address, idles a minute, prints machine 2's address and a fresh token, then waits |
-| Each run, second | 2 | `pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress <address> -Token <token> -Level <level> -MaxUsers <cap>`, the address and token as machine 1 printed them | Opens the stack's ports to machine 2 alone, runs k6, hands `raw.json` back |
+| Each run, first | 1, as administrator | The first run on a commit: `pwsh -File deploy\observability\stress\remote\stack.ps1 -TrustNetwork`. Every later one, on images already built: `pwsh -File deploy\observability\stress\remote\stack.ps1 -TrustNetwork -NoBuild` | Brings the stack up on the LAN address, idles a minute, prints machine 2's command with machine 1's address and a fresh token, then waits |
+| Each run, second | 2 | `pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress <address> -Token <token> -Level <level> -MaxUsers <top>`, the address and token as machine 1 printed them, and `<top>` the level's own top step: 800 for `low`, 3200 for `medium`, 12800 for `high` | Opens the stack's ports to machine 2 alone, runs k6, hands `raw.json` back |
 | Each run, last | 1 | Nothing: wait, then read Grafana and `artifacts/stress/<run>/summary.md` | Removes the firewall rules and writes the summary, whose `Ended:` line chooses the next run |
-| Between runs | — | `Ended:` reads `cap` or `held`: run the next level, `low`, then `medium`, then `high`. `knee` or `errors`: that run found the limit and the series ends. `generator`: machine 2 gave out first | *The staircase* above says why each level starts where the one below ends |
+| Between runs | — | `Ended:` reads `cap`: the level held to its top, so run the next one, `low`, then `medium`, then `high`; after `high`, the series ends there. `knee` or `errors`: that run found the limit and the series ends. `generator`: machine 2 gave out first | *The staircase* above says why each level starts where the one below ends, and why a cap set to its top keeps a level from doubling into the next |
 | Once, after the last run | 1, as administrator | `pwsh -File deploy\observability\stress\remote\stack.ps1 -Restore` | Every port back on loopback, then Docker's rules and the network's profile as they were |
 
-`setup()` makes one user for each VU of a level's highest step before its
-first, and the cap bounds that step, so `-MaxUsers` keeps a level's setup
-short when its top steps are not wanted.
+A level without `-MaxUsers` keeps doubling to `DEFAULT_MAX_USERS` and so
+covers the levels above it in one run; `setup()` makes one user for each VU
+of the highest step before the first, which the cap also keeps short.
 
 **What each machine needs.** The stack's machine is the one the blocks above
 run on. The second needs Docker Desktop, Git with a checkout of the commit the
