@@ -104,7 +104,7 @@ services:
   # never by `up`. The repository's paths are mounted where the run's own
   # relative paths find them, and STRESS_OUT is written through to the host.
   k6:
-    image: grafana/k6:2.2.0
+    image: grafana/k6:2.3.0
     profiles: [ "stress-run" ]
     working_dir: /repo
     volumes:
