@@ -29,7 +29,7 @@ services:
   # docker-compose.infra-only.yml keeps it for a host run. The tag is Directory.Packages.props'
   # WireMock.Net pin, one engine and one set of mappings for this container and the tests.
   psp-simulator:
-    image: sheyenrath/wiremock.net:2.19.0
+    image: sheyenrath/wiremock.net:2.20.0
     # The image does not read static mappings by default; without this flag
     # every request answers 404 and spec section 9's mappings never load.
     command: [ "--ReadStaticMappings", "true" ]
