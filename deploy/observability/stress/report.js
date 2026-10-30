@@ -503,14 +503,17 @@ export const QUERY_STORE_DATABASES =
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 const DATABASE = /^\w+$/;
 
-/** sqlcmd's arguments for `docker exec`, the password read inside the container as its healthcheck reads it. */
+/**
+ * sqlcmd's arguments for `docker exec`, the password read inside the container as its healthcheck reads it,
+ * and -b so that a T-SQL error is a failed exit rather than a Msg line on a successful one.
+ */
 export function sqlcmdArgs(query, database = null) {
     if (database !== null && !DATABASE.test(database))
         throw new Error(`not a database name sqlcmd is handed: "${database}"`);
 
     return [
         'exec', SQL_CONTAINER, 'sh', '-c', 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec "$@"', 'sh',
-        '/opt/mssql-tools18/bin/sqlcmd', '-S', 'localhost', '-U', 'sa', '-C', '-h', '-1', '-W', '-s', '|',
+        '/opt/mssql-tools18/bin/sqlcmd', '-S', 'localhost', '-U', 'sa', '-C', '-b', '-h', '-1', '-W', '-s', '|',
         ...(database === null ? [] : ['-d', database]),
         '-Q', query,
     ];

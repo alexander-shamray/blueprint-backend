@@ -466,6 +466,7 @@ test('Query Store is read over a window of UTC instants, its joins in the house 
     assert.throws(() => queryStoreSql("2026-10-30'; DROP TABLE x; --", '2026-10-30T05:05:17Z'), /ISO instants/);
     assert.throws(() => sqlcmdArgs('SELECT 1', 'Ordering; DROP'), /not a database name/);
     assert.deepEqual(sqlcmdArgs('SELECT 1', 'Ordering').slice(-4), ['-d', 'Ordering', '-Q', 'SELECT 1']);
+    assert.ok(sqlcmdArgs('SELECT 1').includes('-b'), 'a T-SQL error fails the exit');
 });
 
 test('a statement loses its declarations, and is cut and made safe for a code span', () => {
