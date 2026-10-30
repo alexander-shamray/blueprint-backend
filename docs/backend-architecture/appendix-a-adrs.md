@@ -178,6 +178,7 @@ decision looks wrong.
 | **ADR-169** | [InboxState's key keeps its page latching: the sequential-key option measured to move nothing (#1581), adding to ADR-167](adr/ADR-169-inboxstates-key-keeps-its-page-latching-the-sequential-key-option-measured-to-move-nothing-1581-adding-to-adr-167.md) |
 | **ADR-170** | [The stress run's generator runs on the Compose network (#1582)](adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md) |
 | **ADR-171** | [InboxState is clustered on its message key (#1583); supersedes ADR-169's identity-clustered key](adr/ADR-171-inboxstate-is-clustered-on-its-message-key-1583-supersedes-adr-169s-identity-clustered-key.md) |
+| **ADR-172** | [The stress run's generator may run on a second machine (#1589), adding to ADR-170](adr/ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md) |
 
 ---
 
