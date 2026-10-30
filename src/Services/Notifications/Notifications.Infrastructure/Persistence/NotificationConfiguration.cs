@@ -34,11 +34,13 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
             .HasDatabaseName("IX_NotificationLog_PendingOrder")
             .HasFilter("[Status] = 'Pending'");
 
-        // LogRetention's purge, over terminal rows by the instant each ended (ADR-053).
+        // LogRetention's purge, over terminal rows by the instant each ended (ADR-053). Keyed on the id, as the claim's
+        // is and by name since the claim's has that key, so an outcome does not append to the newest page; the purge
+        // sorts the ended rows instead (ADR-176).
         builder
-            .HasIndex(n => n.CompletedAt)
-            .HasDatabaseName("IX_NotificationLog_CompletedAt")
-            .HasFilter("[CompletedAt] IS NOT NULL");
+            .HasIndex(n => n.NotificationId, "IX_NotificationLog_CompletedAt")
+            .HasFilter("[CompletedAt] IS NOT NULL")
+            .IncludeProperties(n => new { n.CompletedAt, n.Status });
 
         // ConsentRetention's floor: a journal entry a kept row names, or the one that ended it, stays (ADR-120).
         builder

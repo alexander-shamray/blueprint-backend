@@ -17,7 +17,7 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
     {
         { "NotificationLog", "IX_NotificationLog_SendClaim", "NotificationId", "([Status]='Pending')" },
         { "NotificationLog", "IX_NotificationLog_PendingOrder", "OrderId", "([Status]='Pending')" },
-        { "NotificationLog", "IX_NotificationLog_CompletedAt", "CompletedAt", "([CompletedAt] IS NOT NULL)" },
+        { "NotificationLog", "IX_NotificationLog_CompletedAt", "NotificationId", "([CompletedAt] IS NOT NULL)" },
         { "ContactRecords", "IX_ContactRecords_FetchedAt", "FetchedAt", null },
         { "OrderRecords", "IX_OrderRecords_RecordedAt", "RecordedAt", null },
     };
@@ -77,6 +77,26 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
             WHERE i.name = 'IX_NotificationLog_SendClaim'
                 AND ic.is_included_column = 1
                 AND c.name IN ('NextAttemptAt', 'LockedUntil')
+            """)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task The_purge_s_index_carries_the_end_and_the_status_so_the_purge_reads_no_row_it_keeps()
+    {
+        // Keyed on the id, the index must carry the instant too, or the purge's sort reads every ended row's.
+        (await fixture.ScalarAsync<int>(
+            """
+            SELECT Value = COUNT(*)
+            FROM sys.indexes i
+            INNER JOIN sys.index_columns ic
+                ON ic.object_id = i.object_id
+                AND ic.index_id = i.index_id
+            INNER JOIN sys.columns c
+                ON c.object_id = ic.object_id
+                AND c.column_id = ic.column_id
+            WHERE i.name = 'IX_NotificationLog_CompletedAt'
+                AND ic.is_included_column = 1
+                AND c.name IN ('CompletedAt', 'Status')
             """)).ShouldBe(2);
     }
 }
