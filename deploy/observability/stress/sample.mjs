@@ -6,13 +6,14 @@
 //   node deploy/observability/stress/sample.mjs artifacts/stress/<run>
 //
 // Start it before k6 and leave it running; it stops itself once k6 has
-// written its results, or after LIMIT_MS should k6 never finish.
+// written its results, once a `stop` file appears beside them, or after
+// LIMIT_MS should k6 never finish.
 import { execFile } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { parseCpu, parseMemory } from './report.js';
+import { QUERY_STORE_DATABASES, QUERY_STORE_INTERVAL_MINUTES, parseCpu, parseMemory, sqlcmdArgs } from './report.js';
 
 const run = promisify(execFile);
 
@@ -27,6 +28,8 @@ mkdirSync(out, { recursive: true });
 
 const SAMPLES = join(out, 'samples.jsonl');
 const DONE = join(out, 'raw.json');
+const STOP = join(out, 'stop');
+const QUERY_STORE = join(out, 'query-store.json');
 
 // One `docker stats --no-stream` takes about two seconds, so five is the
 // tightest pace that is not one read queued behind the last.
@@ -34,9 +37,6 @@ const INTERVAL_MS = 5000;
 
 // Longer than the default staircase several times over.
 const LIMIT_MS = 4 * 60 * 60 * 1000;
-
-// The Compose project's SQL container, named as the README's blocks name it.
-const SQL_CONTAINER = 'commerce-sql-1';
 
 // Cumulative since the engine started, so a step's figure is its change.
 // Deadlocks, then time spent waiting on locks, on page latches (a hot page),
@@ -102,19 +102,56 @@ async function containers() {
     }
 }
 
+async function sqlcmd(query, database = null) {
+    return (await run('docker', sqlcmdArgs(query, database), { encoding: 'utf8', windowsHide: true })).stdout;
+}
+
 async function sql() {
     try {
-        // The password is read inside the container, as its healthcheck reads it, so no command line carries one.
-        const { stdout } = await run('docker', [
-            'exec', SQL_CONTAINER, 'sh', '-c', 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec "$@"', 'sh',
-            '/opt/mssql-tools18/bin/sqlcmd', '-S', 'localhost', '-U', 'sa', '-C', '-h', '-1', '-W', '-s', ',',
-            '-Q', SQL,
-        ], { encoding: 'utf8', windowsHide: true });
-
-        const [deadlocks, lockWaitMs, pageLatchWaitMs, logWaitMs] = stdout.trim().split(',').map(Number);
+        const [deadlocks, lockWaitMs, pageLatchWaitMs, logWaitMs] = (await sqlcmd(SQL)).trim().split('|').map(Number);
         return { deadlocks, lockWaitMs, pageLatchWaitMs, logWaitMs };
     } catch (error) {
         return { error: String(error.message ?? error).split('\n')[0] };
+    }
+}
+
+// Query Store keeps a statement's figures per interval, an hour unless set,
+// which no step is as short as; so each database's is set to
+// QUERY_STORE_INTERVAL_MINUTES for the run, recorded in query-store.json
+// before it changes and put back as the sampler stops.
+async function narrowQueryStore() {
+    const changed = [];
+
+    try {
+        const listing = await sqlcmd(QUERY_STORE_DATABASES);
+
+        for (const database of listing.split(/\r?\n/).map((line) => line.trim()).filter((n) => /^\w+$/.test(n))) {
+            const options = 'SET NOCOUNT ON; SELECT interval_length_minutes FROM sys.database_query_store_options;';
+            const interval = Number((await sqlcmd(options, database)).trim());
+
+            if (!Number.isInteger(interval) || interval === QUERY_STORE_INTERVAL_MINUTES)
+                continue;
+
+            changed.push({ database, interval });
+            writeFileSync(QUERY_STORE, `${JSON.stringify(changed, null, 2)}\n`);
+            await sqlcmd(`ALTER DATABASE [${database}] SET QUERY_STORE ` +
+                `(INTERVAL_LENGTH_MINUTES = ${QUERY_STORE_INTERVAL_MINUTES});`);
+        }
+    } catch (error) {
+        console.error(`sampler: Query Store not narrowed, ${String(error.message ?? error).split('\n')[0]}`);
+    }
+
+    return changed;
+}
+
+async function restoreQueryStore(changed) {
+    for (const { database, interval } of changed) {
+        try {
+            await sqlcmd(`ALTER DATABASE [${database}] SET QUERY_STORE (INTERVAL_LENGTH_MINUTES = ${interval});`);
+        } catch (error) {
+            console.error(`sampler: ${database}'s Query Store interval left at ${QUERY_STORE_INTERVAL_MINUTES} ` +
+                `minutes, not put back to ${interval}: ${String(error.message ?? error).split('\n')[0]}`);
+        }
     }
 }
 
@@ -140,8 +177,15 @@ function hostCpu() {
 }
 
 const started = Date.now();
+const narrowed = await narrowQueryStore();
 
-while (!existsSync(DONE) && Date.now() - started < LIMIT_MS) {
+// A signal ends the loop rather than the process, so the interval is still put back.
+let signalled = false;
+
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK'])
+    process.on(signal, () => { signalled = true; });
+
+while (!existsSync(DONE) && !existsSync(STOP) && !signalled && Date.now() - started < LIMIT_MS) {
     const at = Date.now();
     const [stats, counters] = await Promise.all([containers(), sql()]);
 
@@ -158,4 +202,8 @@ while (!existsSync(DONE) && Date.now() - started < LIMIT_MS) {
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, INTERVAL_MS - (Date.now() - at))));
 }
 
-console.log(`sampler: stopped, ${existsSync(DONE) ? 'k6 wrote its results' : 'the time limit passed'}`);
+await restoreQueryStore(narrowed);
+
+const why = existsSync(DONE) ? 'k6 wrote its results'
+    : existsSync(STOP) || signalled ? 'it was asked to' : 'the time limit passed';
+console.log(`sampler: stopped, ${why}`);
