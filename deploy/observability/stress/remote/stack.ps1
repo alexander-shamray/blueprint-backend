@@ -332,8 +332,14 @@ try {
     $listener.Stop()
     Remove-StressFirewall
     Write-Host 'The firewall rules are gone.'
+    # Asked rather than killed, so it puts back the Query Store interval it set for the run.
     if ($sampler -and -not $sampler.HasExited) {
-        $sampler.Kill()
+        Set-Content -Path (Join-Path $out 'stop') -Value ''
+        if (-not $sampler.WaitForExit(60000)) {
+            $sampler.Kill()
+            Write-Warning ("The sampler did not stop; $(Join-Path $out 'query-store.json') holds each database's " +
+                'Query Store interval to put back.')
+        }
     }
 }
 

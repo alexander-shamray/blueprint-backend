@@ -578,6 +578,20 @@ From the `judge`, the VUs k6 ran a second before each hold's end.
 Nothing is added to the stack to read any of them. What could only be read by
 adding a component is listed in the summary under *Not measured*.
 
+**The statements** come from Query Store, which every platform database keeps
+and which records each statement's CPU, duration and waits by category per
+interval. Its interval is an hour unless set, longer than any hold, so
+`stress/sample.mjs` sets each database's to `QUERY_STORE_INTERVAL_MINUTES`
+as it starts, records the old one in `query-store.json` beside the run's
+files first, and puts it back as it stops, whether k6 wrote its results, a
+`stop` file appeared, or it was signalled. `stress/summarise.mjs` then reads
+the whole intervals inside each hold: the `QUERY_STORE_TOP` statements across
+every database that took longest, their CPU and largest waits, and every
+statement's waits by category. A COMMIT is its own batch, which Query Store
+gives to no statement, so the log flush each commit waits for stays in the
+instance-wide log wait above. A sampler killed outright leaves the interval
+at a minute, and `query-store.json` names the value to put back.
+
 **The knee** is the first step at which one of three signals crosses:
 requests failing at more than `ERROR_RATE_LIMIT`; the journey's p95 growing
 by `P95_JUMP_RATIO` on the step before, and by more than `P95_JUMP_FLOOR_MS`;
@@ -617,11 +631,11 @@ whose every step held; `interrupted` is a run cut short with no rule firing,
 and `not measured` one that ran no step.
 
 **The output** goes to `artifacts/stress/<run>/`, which git ignores:
-`raw.json` from k6, `samples.jsonl` from the sampler, and `summary.json` and
-`summary.md` from `stress/summarise.mjs`. The summary records the machine's
-processor, memory and operating system, Docker's processors and memory, the
-commit and the override's k6 image, since a local number means nothing
-without them.
+`raw.json` from k6, `samples.jsonl` and `query-store.json` from the sampler,
+and `summary.json` and `summary.md` from `stress/summarise.mjs`. The summary
+records the machine's processor, memory and operating system, Docker's
+processors and memory, the commit and the override's k6 image, since a local
+number means nothing without them.
 
 ### Running it
 
@@ -661,7 +675,8 @@ passes on, never `-e`. `--address` turns on k6's REST API inside its
 container, which the knee stop reads; a level, a stop rule or a cap is one
 more `-e` line, such as `-e STRESS_PROFILE=medium`, `-e STRESS_STOP=errors`
 or `-e STRESS_MAX_USERS=6400`. The sampler stops itself once k6 has written
-its results:
+its results; to stop it sooner, create `stop` in `$out` rather than kill it,
+so it puts the Query Store interval back:
 
 ```bash
 out=artifacts/stress/$(date +%Y%m%d-%H%M%S)
