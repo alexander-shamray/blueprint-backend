@@ -20,7 +20,7 @@ public sealed class InboxEndpointExtensionsTests
     [Fact]
     public void Every_service_and_the_bff_take_the_helper()
     {
-        // Its subject is the scan: one that read no service would pass the test above on an empty list.
+        // Its subject is the scan: one that read no service would still pass the test above.
         string root = RepositoryRoot();
         string[] callers = Callers(root, ".UseInboxAndInMemoryOutbox(");
 
