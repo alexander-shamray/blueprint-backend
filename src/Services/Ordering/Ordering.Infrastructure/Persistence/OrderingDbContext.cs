@@ -86,7 +86,8 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
     }
 
     private static InvalidOperationException MappingMoved(string found) =>
-        new($"MassTransit's OutboxMessage mapping has moved ({found}); revisit ADR-177 before it is re-keyed.");
+        new($"MassTransit's OutboxMessage mapping has moved ({found}); "
+            + "revisit ADR-167 and ADR-177 before it is re-keyed.");
 
     private const string StagedAtEnqueue = nameof(SagaOutboxMessage.EnqueueTime);
 
@@ -127,7 +128,8 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
     }
 
     private static InvalidOperationException InboxMappingMoved(string found) =>
-        new($"MassTransit's InboxState mapping has moved ({found}); revisit ADR-177 before it is re-keyed.");
+        new($"MassTransit's InboxState mapping has moved ({found}); "
+            + "revisit ADR-171 and ADR-177 before it is re-keyed.");
 
     /// <summary>Sixty-four random bits: a collision fails one insert into the endpoint's retry (ADR-177).</summary>
     internal const string InboxStateRandomId = "CONVERT(bigint, CRYPT_GEN_RANDOM(8))";
