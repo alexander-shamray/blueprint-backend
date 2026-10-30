@@ -131,8 +131,23 @@ if ($Restore) {
 }
 
 $lan = Get-LanAddress
+
+# Before any setting changes, so a refusal leaves the machine as it found it:
+# a Public network made Private under a Private profile that is off would have
+# no firewall at all.
+$firewall = Get-NetFirewallProfile -Name 'Private'
+if (-not $firewall.Enabled -or "$($firewall.DefaultInboundAction)" -eq 'Allow') {
+    throw ("Windows Firewall's Private profile is off or admits inbound connections by default, so nothing would " +
+        "hold the stack's ports to the generator.")
+}
+
 if ($TrustNetwork) {
     $state = Read-RemoteState
+
+    if ($state.Interface -and $state.Interface -ne $lan.Interface) {
+        throw ("artifacts\stress\remote-state.json records $($state.Interface), but the default route is now on " +
+            "$($lan.Interface); run -Restore on the network the earlier run changed first.")
+    }
 
     if ($lan.Category -eq 'Public') {
         if (-not $state.Category) {
@@ -156,14 +171,13 @@ if ($TrustNetwork) {
 }
 
 if ($lan.Category -ne 'Private') {
+    $advice = if ($lan.Category -eq 'Public') {
+        'On a network you trust, run with -TrustNetwork, which makes it Private for the run and -Restore puts it back.'
+    } else {
+        'This script runs on a Private network alone and changes no other kind.'
+    }
     throw ("$($lan.Interface) is on a $($lan.Category) network, and the stack's development credentials are offered " +
-        'on a Private one alone (§14.1). On a network you trust, run with -TrustNetwork, which makes it Private ' +
-        'for the run and -Restore puts it back.')
-}
-$firewall = Get-NetFirewallProfile -Name 'Private'
-if (-not $firewall.Enabled -or "$($firewall.DefaultInboundAction)" -eq 'Allow') {
-    throw ("Windows Firewall's Private profile is off or admits inbound connections by default, so nothing would " +
-        "hold the stack's ports to the generator.")
+        "on a Private one alone (§14.1). $advice")
 }
 
 $dockerRules = @(Get-DockerRules)
