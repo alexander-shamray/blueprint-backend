@@ -48,6 +48,12 @@ statements in place of EF Core's `MERGE`; whether the knee moves is for
 [ADR-172](ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md)'s
 two-machine stress run to say.
 
+**Superseded in part by
+[ADR-176](ADR-176-the-log-retention-index-is-keyed-on-the-notices-id-1607-supersedes-adr-175s-unchanged-retention-index.md)**:
+the Decision's leaving `IX_NotificationLog_CompletedAt` unchanged, and the
+consequence that it stays as it is. The claim index, its figures and the
+refused shapes stand.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
