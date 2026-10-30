@@ -28,16 +28,25 @@
 // Optional: STRESS_PROFILE, STRESS_STEPS, STRESS_RAMP_SECONDS,
 // STRESS_HOLD_SECONDS and STRESS_MAX_USERS, read by steps.js's plan();
 // STRESS_STOP; STRESS_ABORT_ERROR_RATE, whose default is ABORT_ERROR_RATE's
-// below and which 0 switches off; and STRESS_K6_API and PROM_URL, where the
-// knee stop reads k6's figures and Prometheus's.
+// below and which 0 switches off; STRESS_K6_API and PROM_URL, where the
+// knee stop reads k6's figures and Prometheus's; and STRESS_GENERATOR,
+// `remote` when k6 runs on a second machine (ADR-172).
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { fail, sleep } from 'k6';
 import { Counter, Gauge, Rate, Trend } from 'k6/metrics';
 import { randomBytes } from 'k6/crypto';
 import { hashPolicy } from './keycloak.js';
-import { DEFAULT_PROM_URL, OUTBOX_OLDEST, QUEUED, crossings, liveRow } from './report.js';
-import { maxOrders, parseStop, plan, stages, stepAt, windows } from './steps.js';
+import {
+    CLOCK_SKEW_LIMIT_MS,
+    DEFAULT_PROM_URL,
+    OUTBOX_OLDEST,
+    QUEUED,
+    clockSkewMs,
+    crossings,
+    liveRow,
+} from './report.js';
+import { maxOrders, parseGenerator, parseStop, plan, stages, stepAt, windows } from './steps.js';
 
 const BASE_URL = __ENV.BASE_URL;
 const KEYCLOAK_URL = __ENV.KEYCLOAK_URL;
@@ -52,6 +61,7 @@ const RAMP_SECONDS = PLAN.rampSeconds;
 const HOLD_SECONDS = PLAN.holdSeconds;
 const HOLDS = windows(STEPS, RAMP_SECONDS, HOLD_SECONDS);
 const STOP = parseStop(__ENV.STRESS_STOP);
+const GENERATOR = parseGenerator(__ENV.STRESS_GENERATOR);
 
 // Unset is the default; an explicit 0 never aborts. Only `errors` applies it:
 // the knee rule crosses on errors far below it.
@@ -187,6 +197,20 @@ export function setup() {
 
     if (STOP === 'knee' && http.get(`${PROM_URL}/api/v1/query?query=vector(1)`).status !== 200)
         fail(`Stress run is not configured: the knee stop reads Prometheus at ${PROM_URL}`);
+
+    if (STOP === 'knee') {
+        const sent = Date.now();
+        const response = http.get(`${PROM_URL}/api/v1/query?query=time()`);
+        const server = response.status === 200 ? Number(response.json('data.result.1')) : NaN;
+        const skew = clockSkewMs(server, sent, Date.now());
+
+        if (skew === null)
+            fail(`Stress run is not configured: Prometheus at ${PROM_URL} did not answer time()`);
+
+        if (Math.abs(skew) > CLOCK_SKEW_LIMIT_MS)
+            fail(`Stress run is not configured: k6's clock and Prometheus's differ by ` +
+                `${Math.round(Math.abs(skew))} ms, past ${CLOCK_SKEW_LIMIT_MS}; resynchronise the generator's clock`);
+    }
 
     const realm = `${KEYCLOAK_URL}/admin/realms/commerce`;
     const admin = adminHeaders();
@@ -686,6 +710,7 @@ export function handleSummary(data) {
             thinkSeconds: [THINK_MIN_SECONDS, THINK_MAX_SECONDS],
             products: PRODUCTS.length,
             abortErrorRate: ABORT_ERROR_RATE,
+            generator: GENERATOR,
         },
         steps,
     };

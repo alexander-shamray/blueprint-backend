@@ -29,6 +29,10 @@ export const DEFAULT_MAX_USERS = 12800;
 
 export const STOP_RULES = ['knee', 'errors'];
 
+// Where k6 runs: on the stack's machine, or on a second one, where that
+// machine's CPU is the platform's alone (ADR-172).
+export const GENERATORS = ['local', 'remote'];
+
 function unset(text) {
     return text === undefined || text === null || String(text).trim() === '';
 }
@@ -80,6 +84,19 @@ export function parseStop(text) {
         throw new Error(`STRESS_STOP must be one of ${STOP_RULES.join(', ')}, not "${text}"`);
 
     return rule;
+}
+
+/** STRESS_GENERATOR: 'local' when unset, or one of GENERATORS. */
+export function parseGenerator(text) {
+    if (unset(text))
+        return 'local';
+
+    const generator = String(text).trim().toLowerCase();
+
+    if (!GENERATORS.includes(generator))
+        throw new Error(`STRESS_GENERATOR must be one of ${GENERATORS.join(', ')}, not "${text}"`);
+
+    return generator;
 }
 
 /**

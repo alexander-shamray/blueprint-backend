@@ -267,8 +267,9 @@ for (const step of raw.steps) {
 
 const found = knee(rows);
 
-// A raw.json from before the levels has no level or stop rule, and stopped on errors alone.
-const plan = { level: null, stopRule: 'errors', capped: false, ...raw.plan };
+// A raw.json from before the levels has no level or stop rule, and stopped on errors alone; one from before
+// ADR-172 ran its k6 on the stack's machine.
+const plan = { level: null, stopRule: 'errors', capped: false, generator: 'local', ...raw.plan };
 const ended = ending(rows, plan);
 
 // k6 writes raw.json even when setup() refused, and a run that measured nothing has no knee to be clear of.
@@ -338,7 +339,8 @@ function markdown(s) {
         `- Docker: ${m.docker.version}, ${m.docker.cpus} CPUs and ${mib(m.docker.memoryBytes)} MiB for containers`,
         `- Commit ${m.commit}; ${m.k6}`,
         `- Level ${s.plan.level ?? 'none'}, stop rule ${s.plan.stopRule}` +
-            (s.plan.maxUsers ? `, at most ${s.plan.maxUsers} users` : ''),
+            (s.plan.maxUsers ? `, at most ${s.plan.maxUsers} users` : '') +
+            `; k6 on ${s.plan.generator === 'remote' ? 'a second machine' : 'this machine'}`,
         `- Staircase ${s.plan.steps.join(', ')} VUs, ${s.plan.rampSeconds} s ramps, ${s.plan.holdSeconds} s holds; ` +
             `${percent(s.plan.orderShare)} of sessions order, over ${s.plan.products} products`,
         '',
