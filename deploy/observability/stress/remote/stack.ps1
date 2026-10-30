@@ -1,17 +1,8 @@
 #Requires -Version 7.3
 #Requires -RunAsAdministrator
-# The stress run's first machine, the one the stack runs on (ADR-172). It
-# brings the stack up with the stress override and the remote one, waits for
-# generator.ps1 to ask for the run, opens the stack's three ports to that
-# machine alone, takes its raw.json back, closes the ports and summarises.
-#
-#   pwsh -File deploy\observability\stress\remote\stack.ps1
-#   pwsh -File deploy\observability\stress\remote\stack.ps1 -Restore
-#
-# The firewall rules go when the run ends, however it ends; the ports stay
-# bound to the LAN address, so Grafana still shows the run, until -Restore
-# brings the stack up without the overrides, every port on loopback again,
-# as the README's step 4 does.
+# The stress run's stack machine (ADR-172), whose flow and usage
+# deploy/observability/README.md's *Running it from a second machine* owns;
+# -Restore puts every published port back on loopback.
 
 [CmdletBinding()]
 param(
