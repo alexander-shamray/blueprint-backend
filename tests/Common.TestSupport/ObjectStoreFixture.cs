@@ -69,6 +69,7 @@ public sealed class ObjectStoreFixture : IAsyncLifetime
             .WithNetworkAliases("object-store")
             .WithCommand("server", "-s3", "-s3.config=/etc/seaweedfs/s3.json", "-dir=/data")
             .WithBindMount(Path.Combine(Directory, "s3.json"), "/etc/seaweedfs/s3.json", AccessMode.ReadOnly)
+            .WithBindMount(Path.Combine(Directory, "init.sh"), "/etc/seaweedfs/init.sh", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(Directory, "init.txt"), "/etc/seaweedfs/init.txt", AccessMode.ReadOnly)
             .WithBindMount(Path.Combine(Directory, "policies"), "/etc/seaweedfs/policies", AccessMode.ReadOnly)
             .WithPortBinding(S3Port, true)
@@ -89,14 +90,18 @@ public sealed class ObjectStoreFixture : IAsyncLifetime
         await DaemonRetry.StartAsync(_store, TestContext.Current.CancellationToken);
         await DaemonRetry.StartAsync(_edge, TestContext.Current.CancellationToken);
 
-        // The one-shot's own commands (the bucket, the policies and uploads/'s one-day rule), here in the store's own
-        // container.
-        ExecResult init = await _store.ExecAsync(
-            ["/bin/sh", "-c", "weed shell -master=127.0.0.1:9333 < /etc/seaweedfs/init.txt"],
-            TestContext.Current.CancellationToken);
+        // The one-shot's own script (the bucket, the policies and uploads/'s one-day rule), here in the store's own
+        // container, and then again, as a second `up` runs it against the bucket the first made.
+        foreach (string pass in (string[])["first", "second"])
+        {
+            ExecResult init = await _store.ExecAsync(
+                ["/bin/sh", "/etc/seaweedfs/init.sh", "127.0.0.1:9333"],
+                TestContext.Current.CancellationToken);
 
-        if (init.ExitCode != 0)
-            throw new InvalidOperationException($"The store's init commands failed ({init.ExitCode}): {init.Stderr}");
+            if (init.ExitCode != 0)
+                throw new InvalidOperationException(
+                    $"The store's init script failed on its {pass} run ({init.ExitCode}): {init.Stdout}{init.Stderr}");
+        }
     }
 
     public async ValueTask DisposeAsync()

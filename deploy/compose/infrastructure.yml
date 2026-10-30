@@ -126,8 +126,9 @@ services:
   # Idempotent, so a second `up` leaves the first one's bucket, policies and rule as they were.
   object-store-init:
     image: chrislusf/seaweedfs:4.50
-    entrypoint: [ "/bin/sh", "-c", "weed shell -master=object-store:9333 < /etc/seaweedfs/init.txt" ]
+    entrypoint: [ "/bin/sh", "/etc/seaweedfs/init.sh", "object-store:9333" ]
     volumes:
+      - ./object-store/init.sh:/etc/seaweedfs/init.sh:ro
       - ./object-store/init.txt:/etc/seaweedfs/init.txt:ro
       - ./object-store/policies:/etc/seaweedfs/policies:ro
     depends_on:
