@@ -87,6 +87,11 @@ if (-not $env:KEYCLOAK_ADMIN_PASSWORD) {
     $env:KEYCLOAK_ADMIN_PASSWORD = 'admin'
 }
 
+# k6 runs this checkout's scripts, which the summary names by the stack's commit alone.
+if (Invoke-Native { git -C $RepoRoot status --porcelain -- deploy/observability/stress } 'Reading the tree') {
+    throw "deploy/observability/stress has uncommitted changes here, which k6 would run under the stack's commit."
+}
+
 # Asking for the run opens the stack's ports to this machine, so from here on
 # every way out but a delivered raw.json tells the stack to close them.
 $plan = Send-Request $PlanRequest | ConvertFrom-Json
