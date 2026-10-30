@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Catalog.Infrastructure.Persistence.Migrations;
 using Catalog.Pricing.V1;
 using Catalog.TestSupport;
 using Grpc.Core;
@@ -154,11 +155,14 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
             """);
 
     /// <summary>
-    /// Re-declares <c>PriceCurrency</c> whole, <c>NOT NULL</c> included.
+    /// Re-declares <c>PriceCurrency</c> whole, <c>NOT NULL</c> included, between the listing indexes' two shapes,
+    /// since an index including the column refuses the alter.
     /// </summary>
     private async Task SetCurrencyCollationAsync(string collation) =>
         await fixture.ExecuteAsync(
-            $"ALTER TABLE catalog.Products ALTER COLUMN PriceCurrency nvarchar(3) COLLATE {collation} NOT NULL;");
+            CoverProductListingIndexes.Uncovered
+            + $"ALTER TABLE catalog.Products ALTER COLUMN PriceCurrency nvarchar(3) COLLATE {collation} NOT NULL;"
+            + CoverProductListingIndexes.Covered);
 
     [Fact]
     public async Task A_product_priced_in_another_currency_is_absent_rather_than_zero()

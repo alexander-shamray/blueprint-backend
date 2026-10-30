@@ -32,26 +32,42 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
             AND (@Pattern IS NULL OR p.Name LIKE @Pattern ESCAPE '\')
         """;
 
-    private const string NewestSql =
-        Columns +
+    private const string NewestOrder =
         """
 
-            AND (@AfterPublishedAt IS NULL
-                OR p.PublishedAt < @AfterPublishedAt
-                OR (p.PublishedAt = @AfterPublishedAt AND p.Id < @AfterId))
         ORDER BY p.PublishedAt DESC, p.Id DESC;
         """;
 
-    // The comparison and the ORDER BY both run in the column's collation, so the seek agrees with the order.
-    private const string NameSql =
+    private const string NameOrder =
+        """
+
+        ORDER BY p.Name ASC, p.Id ASC;
+        """;
+
+    // Each page has a statement of its own: an "@After IS NULL OR" predicate cannot seek, so a cursor's page
+    // would walk the index from its end rather than from the cursor (ADR-178).
+    internal const string NewestSql = Columns + NewestOrder;
+
+    internal const string NewestAfterSql =
         Columns +
         """
 
-            AND (@AfterName IS NULL
-                OR p.Name > @AfterName
+            AND (p.PublishedAt < @AfterPublishedAt
+                OR (p.PublishedAt = @AfterPublishedAt AND p.Id < @AfterId))
+        """ +
+        NewestOrder;
+
+    internal const string NameSql = Columns + NameOrder;
+
+    // The comparison and the ORDER BY both run in the column's collation, so the seek agrees with the order.
+    internal const string NameAfterSql =
+        Columns +
+        """
+
+            AND (p.Name > @AfterName
                 OR (p.Name = @AfterName AND p.Id > @AfterId))
-        ORDER BY p.Name ASC, p.Id ASC;
-        """;
+        """ +
+        NameOrder;
 
     public async Task<CursorPage<ProductSummaryDto>> HandleAsync(GetProductsQuery query, CancellationToken ct)
     {
@@ -66,7 +82,7 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
         // One extra row says whether a next page exists, without a COUNT(*).
         List<ProductSummaryDto> rows = (await connection.QueryAsync<ProductSummaryDto>(
             new CommandDefinition(
-                sort == ProductSort.Name ? NameSql : NewestSql,
+                Sql(sort, after is not null),
                 new
                 {
                     Take = limit + 1,
@@ -83,6 +99,11 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
 
         return new CursorPage<ProductSummaryDto>(items, next);
     }
+
+    internal static string Sql(string sort, bool afterCursor) =>
+        sort == ProductSort.Name
+            ? afterCursor ? NameAfterSql : NameSql
+            : afterCursor ? NewestAfterSql : NewestSql;
 
     private static ProductCursor Next(string sort, string? search, ProductSummaryDto last) =>
         sort == ProductSort.Name

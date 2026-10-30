@@ -29,4 +29,9 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- CoverProductListingIndexes' two shapes, which a test re-declaring an included column runs around it. -->
+    <InternalsVisibleTo Include="Catalog.Api.Tests" />
+  </ItemGroup>
+
 </Project>

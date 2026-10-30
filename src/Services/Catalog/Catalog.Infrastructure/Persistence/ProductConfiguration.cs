@@ -49,7 +49,8 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Version).IsRowVersion();
 
         // The exact seek §6.5's keyset predicate performs, once per ordering ADR-073 admits, and once for a seller's
-        // own list (ADR-074).
+        // own list (ADR-074). An ordering's index also includes every column here its listing reads, which
+        // CoverProductListingIndexes writes by hand: IncludeProperties cannot name the price's columns (ADR-178).
         builder.HasIndex(p => new { p.PublishedAt, p.Id });
         builder.HasIndex(p => new { p.Name, p.Id });
         builder.HasIndex(p => new { p.Seller, p.PublishedAt, p.Id });
