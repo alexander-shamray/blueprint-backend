@@ -20,4 +20,9 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The listing's statements, compiled by the plan test against the real schema (ADR-073). -->
+    <InternalsVisibleTo Include="Catalog.Api.Tests" />
+  </ItemGroup>
+
 </Project>

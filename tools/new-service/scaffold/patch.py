@@ -156,6 +156,15 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "  <ItemGroup>\n"
             "    <!-- Dapper joins with the first query handler (§6.5). -->\n",
         ),
+        # The plan test the grant serves is the listing's, and both leave with the slice.
+        (
+            "  <ItemGroup>\n"
+            "    <!-- The listing's statements, compiled by the plan test against the real schema (ADR-073). -->\n"
+            "    <InternalsVisibleTo Include=\"Catalog.Api.Tests\" />\n"
+            "  </ItemGroup>\n"
+            "\n",
+            "",
+        ),
     ),
     "src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj": (
         # The S3 client is the product images' (ADR-106), and its adapter is omitted with them.
@@ -169,6 +178,15 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "         MessageTypeSource. Transitive through Catalog.Application, named\n"
             "         directly because this file names the type. -->\n",
             "    <!-- MessageTypeSource's Broker half, through IIntegrationEvent until this service has a contract (§9.4). -->\n",
+        ),
+        # The migration the grant serves is a later one, which no render copies.
+        (
+            "  <ItemGroup>\n"
+            "    <!-- CoverProductListingIndexes' two shapes, which a test re-declaring an included column runs around it. -->\n"
+            "    <InternalsVisibleTo Include=\"Catalog.Api.Tests\" />\n"
+            "  </ItemGroup>\n"
+            "\n",
+            "",
         ),
     ),
     "src/Services/Catalog/Catalog.Infrastructure/DependencyInjection.cs": (
@@ -735,7 +753,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "\n"
             "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
-            "        applied.Length.ShouldBe(14);\n"
+            "        applied.Length.ShouldBe(15);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddProducts\");\n"
             "        applied[2].ShouldEndWith(\"_AddOutbox\");\n"
@@ -749,7 +767,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[10].ShouldEndWith(\"_AddProductNameIndex\");\n"
             "        applied[11].ShouldEndWith(\"_AddProductSellerAndWithdrawal\");\n"
             "        applied[12].ShouldEndWith(\"_AddProductLastEventAt\");\n"
-            "        applied[13].ShouldEndWith(\"_OptimizeOutboxKeyForSequentialInserts\");\n",
+            "        applied[13].ShouldEndWith(\"_OptimizeOutboxKeyForSequentialInserts\");\n"
+            "        applied[14].ShouldEndWith(\"_CoverProductListingIndexes\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
             "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"
