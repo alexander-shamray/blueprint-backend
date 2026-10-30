@@ -508,7 +508,8 @@ starts: on the Compose network its requests reach the gateway by name rather
 than through Docker Desktop's port forward, its version is the image's, and
 its CPU is read beside the services'. It frees little of the machine, so a
 run on one machine still ends on the generator at its first step
-([ADR-170](../../docs/backend-architecture/adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md)).
+([ADR-170](../../docs/backend-architecture/adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md)),
+and *Running it from a second machine* below moves k6 off it.
 Its container is read like any other and never named among the services
 that gave up, by `stress/report.js`'s `GENERATOR_SERVICE`. The SLO run never
 uses the override.
@@ -603,11 +604,14 @@ has no threshold to be a multiple of. One service's failure reaches its
 callers' figures too, so the order is evidence, not a cause.
 
 **Why it ended** is read at the last step that carried requests, by
-`stress/report.js`'s `ending()`. k6 runs on the machine the stack runs on, so
-at high counts the client can give out first: a step at which k6 ran fewer
-VUs than it asked for, or the machine's CPU stayed at `HOST_CPU_LIMIT` over
+`stress/report.js`'s `ending()`. At high counts the client can give out
+first: a step at which k6 ran fewer VUs than it asked for, or, with k6 on the
+machine the stack runs on, the machine's CPU stayed at `HOST_CPU_LIMIT` over
 the hold, measured the workstation, and the run ended on the `generator`,
-whatever stopped it. Otherwise it ended on the `knee` stop, the `errors`
+whatever stopped it. With k6 on a second machine, as `STRESS_GENERATOR`
+records, that CPU is the platform's alone and only the VUs are read
+([ADR-172](../../docs/backend-architecture/adr/ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md)).
+Otherwise it ended on the `knee` stop, the `errors`
 abort, the `cap` at a level's top, or `held` at the top of a fixed staircase
 whose every step held; `interrupted` is a run cut short with no rule firing,
 and `not measured` one that ran no step.
@@ -636,14 +640,13 @@ docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-com
 
 **2. Choose the products.** Every seeded product Ordering holds as available,
 in the first one's currency, whose price ends in none of the pence the payment
-simulator scripts, as the SLO run's step 4 chooses one:
+simulator scripts, as the SLO run's step 4 chooses one. The query is
+`stress/products.sql`, which the second machine's scripts read too:
 
 ```bash
 rows=$(docker exec commerce-sql-1 sh -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec "$@"' sh \
     /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -d Ordering -h -1 -W -s , \
-    -Q "SET NOCOUNT ON; SELECT LOWER(CONVERT(char(36), ProductId)), Currency FROM ordering.ProductPrices
-        WHERE IsAvailable = 1 AND CONVERT(char(36), ProductId) LIKE '5EED0000-%'
-        AND CAST(ROUND(Amount * 100, 0) AS bigint) % 100 NOT IN (1, 2, 5, 9) ORDER BY Currency, ProductId" \
+    -Q "$(cat deploy/observability/stress/products.sql)" \
     | tr -d '\r')
 currency=$(echo "$rows" | head -1 | cut -d, -f2)
 products=$(echo "$rows" | grep ",$currency\$" | cut -d, -f1 | paste -sd, -)
@@ -712,3 +715,77 @@ stay, owned by the users, and go on through the saga, and their bookings and
 notices are still draining when k6 exits. Wait until
 both overdue gauges are near zero, as the SLO run's last block reads them,
 before the next run; after step 4 the workers drain at their paced rate again.
+
+### Running it from a second machine
+
+On one machine the run ends on the generator at its first step, since the
+platform's own containers take most of the machine
+([ADR-170](../../docs/backend-architecture/adr/ADR-170-the-stress-runs-generator-runs-on-the-compose-network-1582.md)).
+With k6 on a second Windows machine on the same network, the stack's machine
+is read as the platform's alone
+([ADR-172](../../docs/backend-architecture/adr/ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md)).
+**A run from a second machine is a new baseline**, never compared with one
+from a single machine: its requests cross the network and Docker Desktop's
+port forward again.
+
+**What each machine needs.** The stack's machine is the one the blocks above
+run on. The second needs Docker Desktop, Git with a checkout of the commit the
+stack is built from, and PowerShell 7.3 or later. It runs k6 alone, from the
+image the stress override pins, so its network matters more than its cores: a
+wired one, since the knee reads the journey's p95. Both clocks must agree,
+since the knee stop reads Prometheus at k6's own instants and `setup()`
+refuses a clock off by more than `stress/report.js`'s `CLOCK_SKEW_LIMIT_MS`;
+`w32tm /resync`, from an administrator prompt, resynchronises one.
+
+**Two scripts drive it**: `stress/remote/stack.ps1` on the stack's machine,
+from an administrator PowerShell 7, and `stress/remote/generator.ps1` on the
+second. Each finds its own LAN address, the IPv4 address of the interface
+holding the default route.
+
+1. On the stack's machine:
+
+   ```powershell
+   pwsh -File deploy\observability\stress\remote\stack.ps1
+   ```
+
+   It refuses any network but a Private one, a firewall that is off or
+   admits inbound by default, and an inbound rule already naming Docker's
+   programs, which would let the whole network in. It brings the stack
+   up with the stress override and
+   `deploy/compose/docker-compose.stress-remote.yml`, which publishes the
+   gateway, Keycloak and Grafana on the machine's LAN address beside
+   loopback, idles a minute, and chooses the products by
+   `stress/products.sql`. It opens only its results port, `ResultsPort` in
+   `stress/remote/common.ps1`, to the subnet, and prints the second machine's
+   command.
+
+2. On the second machine, in its checkout:
+
+   ```powershell
+   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress <the address stack.ps1 printed>
+   ```
+
+   `-Level`, `-Stop`, `-MaxUsers` and `-Steps` set the variables block 3
+   names. It asks the stack's machine for the run, which opens the stack's
+   three ports to that one address and starts the sampler. It refuses a
+   checkout at another commit, runs k6 with `STRESS_GENERATOR=remote`, and
+   hands `raw.json` back over the results port.
+
+3. The stack's machine then removes its firewall rules, waits for the
+   sampler, and runs `summarise.mjs`, as block 3 does. A run stopped with
+   Ctrl+C on either machine removes the rules too: the second machine tells
+   the stack's when it ends without `raw.json`.
+
+`stack.ps1 -GeneratorAddress <address>` opens the ports to that address from
+the start and refuses any other; `-NoBuild` reruns on the images already
+built.
+
+**Putting the ports back.** After a run the three ports are still bound to the
+LAN address, with no firewall rule letting the network in, so Grafana still
+shows the run. This is block 4 with the rules removed, and it checks that
+every published port is on loopback again; it empties Prometheus as block 4
+does:
+
+```powershell
+pwsh -File deploy\observability\stress\remote\stack.ps1 -Restore
+```

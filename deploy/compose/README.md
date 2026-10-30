@@ -368,6 +368,11 @@ back:
 docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.stress.yml up -d --build --wait
 ```
 
+A stress run whose k6 is on a second machine adds
+`docker-compose.stress-remote.yml` after it, which publishes the gateway,
+Keycloak and Grafana on a LAN address as well; that README's *Running it from
+a second machine* brings it up and takes it down (ADR-172).
+
 The host process reads none of the `environment:` blocks above, so every key
 Catalog and Ordering refuse to start without, which §14.1 names, has to reach
 them another way. Same values, host names in place of service names, and the
