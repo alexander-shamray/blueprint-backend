@@ -740,18 +740,24 @@ with a remote generator `setup()` refuses a clock off by more than
 
 **Two scripts drive it**: `stress/remote/stack.ps1` on the stack's machine,
 from an administrator PowerShell 7, and `stress/remote/generator.ps1` on the
-second. Each finds its own LAN address, the IPv4 address of the interface
-holding the default route.
+second, each run from the root of its machine's checkout, since the paths
+are the repository's. Each finds its own LAN address, the IPv4 address of
+the interface holding the default route.
 
 1. On the stack's machine:
 
    ```powershell
-   pwsh -File deploy\observability\stress\remote\stack.ps1
+   pwsh -File deploy\observability\stress\remote\stack.ps1 -TrustNetwork
    ```
 
    It refuses any network but a Private one, a firewall that is off or
    admits inbound by default, and an inbound rule already naming Docker's
-   programs, which would let the whole network in. It brings the stack
+   programs, which would let the whole network in. Docker Desktop's
+   installer adds such rules, and Windows calls most home networks Public,
+   so `-TrustNetwork` says the network is trusted: it makes a Public profile
+   Private and disables Docker's inbound rules for the run, recording both
+   in `artifacts/stress/remote-state.json`. Without it, either refuses the
+   run. It brings the stack
    up with the stress override and
    `deploy/compose/docker-compose.stress-remote.yml`, which publishes the
    gateway, Keycloak and Grafana on the machine's LAN address beside
@@ -761,7 +767,7 @@ holding the default route.
    command with the address and a one-time token. Every request on that port
    carries the token, so another machine on the subnet cannot claim the run.
 
-2. On the second machine, in its checkout:
+2. On the second machine, from the root of its checkout:
 
    ```powershell
    pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress <address> -Token <token>
@@ -792,3 +798,9 @@ does:
 ```powershell
 pwsh -File deploy\observability\stress\remote\stack.ps1 -Restore
 ```
+
+Only once that check passes does it enable again the Docker rules
+`-TrustNetwork` disabled, since one enabled while a port is still on the LAN
+address would let the whole network in, and then give the network the
+profile it had. A run that `-TrustNetwork` never touched has nothing recorded
+to put back.

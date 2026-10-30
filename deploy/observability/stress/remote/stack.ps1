@@ -13,6 +13,11 @@ param(
     # Skips the build, for a rerun on images already built from this commit.
     [switch]$NoBuild,
 
+    # Says this network is trusted: a Public profile is made Private and
+    # Docker Desktop's own inbound rules are disabled for the run, each put
+    # back by -Restore once every port is on loopback again.
+    [switch]$TrustNetwork,
+
     # Closes the ports and puts every one back on loopback.
     [switch]$Restore
 )
@@ -23,6 +28,35 @@ $FirewallGroup = 'Commerce stress run'
 $SqlContainer = 'commerce-sql-1'
 $BaseFile = Join-Path $ComposeDir 'docker-compose.yml'
 $StressFile = Join-Path $ComposeDir 'docker-compose.stress.yml'
+
+# What -TrustNetwork changed, so -Restore puts back the machine's own settings.
+# A rerun keeps the first values it recorded, which are the ones from before
+# any run, and only adds rules it disabled since.
+$StatePath = Join-Path $RepoRoot 'artifacts\stress\remote-state.json'
+
+function Read-RemoteState {
+    if (Test-Path $StatePath) {
+        return Get-Content -Raw $StatePath | ConvertFrom-Json -AsHashtable
+    }
+    return @{ Interface = $null; Category = $null; DockerRules = @() }
+}
+
+function Save-RemoteState {
+    param([hashtable]$State)
+
+    New-Item -ItemType Directory -Force (Split-Path $StatePath) | Out-Null
+    $State | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 $StatePath
+}
+
+# Docker Desktop's own programs accept the published ports, so an enabled
+# inbound rule naming one would let every peer past the run's rule, or block it.
+function Get-DockerRules {
+    @(Get-NetFirewallApplicationFilter -PolicyStore ActiveStore |
+        Where-Object { $_.Program -match '(?i)docker|wslrelay|vpnkit' } |
+        Get-NetFirewallRule |
+        Where-Object { $_.Direction -eq 'Inbound' -and $_.Enabled -eq 'True' -and
+            ($_.Profile -eq 'Any' -or "$($_.Profile)" -match 'Private') })
+}
 
 function Remove-StressFirewall {
     Get-NetFirewallRule -Group $FirewallGroup -ErrorAction SilentlyContinue | Remove-NetFirewallRule
@@ -79,14 +113,52 @@ if ($Restore) {
         throw "Still published beyond loopback: $($open -join ', ')."
     }
     Write-Host 'The firewall rules are gone and every published port is on loopback again.'
+
+    # Only now, with nothing bound to the LAN, may Docker's rules admit it again.
+    if (Test-Path $StatePath) {
+        $state = Read-RemoteState
+        foreach ($rule in @($state.DockerRules)) {
+            Enable-NetFirewallRule -Name $rule.Name
+            Write-Host "Enabled '$($rule.DisplayName)' again."
+        }
+        if ($state.Category) {
+            Set-NetConnectionProfile -InterfaceAlias $state.Interface -NetworkCategory $state.Category
+            Write-Host "$($state.Interface) is a $($state.Category) network again."
+        }
+        Remove-Item $StatePath
+    }
     return
 }
 
 $lan = Get-LanAddress
+if ($TrustNetwork) {
+    $state = Read-RemoteState
+
+    if ($lan.Category -eq 'Public') {
+        if (-not $state.Category) {
+            $state.Interface = $lan.Interface
+            $state.Category = $lan.Category
+            Save-RemoteState $state
+        }
+        Set-NetConnectionProfile -InterfaceAlias $lan.Interface -NetworkCategory Private
+        Write-Host "$($lan.Interface) is a Private network for the run; -Restore makes it $($state.Category) again."
+        $lan = Get-LanAddress
+    }
+
+    foreach ($rule in Get-DockerRules) {
+        if (@($state.DockerRules | Where-Object { $_.Name -eq $rule.Name }).Count -eq 0) {
+            $state.DockerRules = @($state.DockerRules) + @{ Name = $rule.Name; DisplayName = $rule.DisplayName }
+            Save-RemoteState $state
+        }
+        Disable-NetFirewallRule -Name $rule.Name
+        Write-Host "Disabled '$($rule.DisplayName)' for the run; -Restore enables it again."
+    }
+}
+
 if ($lan.Category -ne 'Private') {
     throw ("$($lan.Interface) is on a $($lan.Category) network, and the stack's development credentials are offered " +
-        'on a Private one alone (§14.1). On a network you trust, make it Private first: ' +
-        "Set-NetConnectionProfile -InterfaceAlias '$($lan.Interface)' -NetworkCategory Private")
+        'on a Private one alone (§14.1). On a network you trust, run with -TrustNetwork, which makes it Private ' +
+        'for the run and -Restore puts it back.')
 }
 $firewall = Get-NetFirewallProfile -Name 'Private'
 if (-not $firewall.Enabled -or "$($firewall.DefaultInboundAction)" -eq 'Allow') {
@@ -94,18 +166,12 @@ if (-not $firewall.Enabled -or "$($firewall.DefaultInboundAction)" -eq 'Allow') 
         "hold the stack's ports to the generator.")
 }
 
-# Docker Desktop's own programs accept the published ports, so a rule already
-# naming one would let every peer in past the run's rule, or block it.
-$dockerRules = @(Get-NetFirewallApplicationFilter -PolicyStore ActiveStore |
-    Where-Object { $_.Program -match '(?i)docker|wslrelay|vpnkit' } |
-    Get-NetFirewallRule |
-    Where-Object { $_.Direction -eq 'Inbound' -and $_.Enabled -eq 'True' -and
-        ($_.Profile -eq 'Any' -or "$($_.Profile)" -match 'Private') })
+$dockerRules = @(Get-DockerRules)
 if ($dockerRules.Count -gt 0) {
     $names = ($dockerRules | ForEach-Object { "'$($_.DisplayName)' ($($_.Action))" }) -join ', '
     throw ("Inbound firewall rules already name Docker's programs on the Private profile: $names. " +
-        'An allow lets the whole network past the run, a block stops the generator. Disable each for the run, ' +
-        "Disable-NetFirewallRule -DisplayName '<name>', and enable it again afterwards if you want it.")
+        'An allow lets the whole network past the run, a block stops the generator. Run with -TrustNetwork, ' +
+        'which disables them for the run and -Restore enables them again.')
 }
 if ($GeneratorAddress -and -not (Test-SameSubnet $lan.Address $GeneratorAddress $lan.PrefixLength)) {
     throw "$GeneratorAddress is not on this machine's subnet, $($lan.Address)/$($lan.PrefixLength)."
@@ -119,7 +185,8 @@ if (Invoke-Native { git -C $RepoRoot status --porcelain } 'Reading the tree') {
 }
 
 $env:STRESS_BIND_ADDRESS = $lan.Address
-$build = if ($NoBuild) { @() } else { @('--build') }
+# In @(), since an if statement's one value is a string, which splatting spreads one character an argument.
+$build = @(if (-not $NoBuild) { '--build' })
 Invoke-Native { docker compose -f $BaseFile -f $StressFile -f $RemoteOverride up -d @build --wait } `
     'Bringing the stack up with the stress overrides' -Stream
 Write-Host "Letting the stack idle a minute, as the run's step 1 does."
@@ -222,7 +289,7 @@ try {
     $listener.Start()
 
     Write-Host ''
-    Write-Host "Ready. On the second machine, in its checkout of $commit, run:"
+    Write-Host "Ready. On the second machine, from the root of its checkout of $commit, run:"
     Write-Host ("  pwsh -File deploy\observability\stress\remote\generator.ps1 " +
         "-StackAddress $($lan.Address) -Token $token")
     Write-Host ''
