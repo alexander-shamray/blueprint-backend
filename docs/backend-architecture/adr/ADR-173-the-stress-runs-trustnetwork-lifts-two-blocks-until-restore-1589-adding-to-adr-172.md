@@ -18,14 +18,13 @@ disabled earlier no longer refuses a run.
 **Why.** The first runs of
 [ADR-172](ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md)'s
 scripts stopped twice on settings every such machine has. Windows calls home
-Wi-Fi Public, which lies outside [§14.1](../14-local-development.md)'s
-exception for a Private network alone. Docker Desktop's installer adds
-inbound allow rules for its backend, which would let the whole network past
-the run's one-address rule. Each refusal handed the user an administrator
-command, and
-a reminder to undo it later in the one safe order: a Docker rule enabled while
-a port is still bound to the LAN address admits every peer, so the rules come
-back only after the ports leave it.
+Wi-Fi Public, which lies outside the Private network ADR-172 scopes
+[§14.1](../14-local-development.md)'s exception to. Docker Desktop's
+installer adds inbound allow rules for its backend, which would let the whole
+network past the run's one-address rule. Each refusal handed the user an
+administrator command, and a reminder to undo it later in the one safe
+order: a Docker rule enabled while a port is still bound to the LAN address
+admits every peer, so the rules come back only after the ports leave it.
 **Consequences.** The script now changes machine security settings, and it
 cannot tell a café from a home, so the switch is the user's statement that
 the network is trusted.
