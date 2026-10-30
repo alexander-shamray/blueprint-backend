@@ -198,10 +198,6 @@ namespace Notifications.Infrastructure.Persistence.Migrations
 
                     b.HasKey("NotificationId");
 
-                    b.HasIndex("CompletedAt")
-                        .HasDatabaseName("IX_NotificationLog_CompletedAt")
-                        .HasFilter("[CompletedAt] IS NOT NULL");
-
                     b.HasIndex("ConsentEntryId")
                         .HasDatabaseName("IX_NotificationLog_ConsentEntry")
                         .HasFilter("[ConsentEntryId] IS NOT NULL");
@@ -218,6 +214,11 @@ namespace Notifications.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("EventId", "TemplateKey", "Channel")
                         .IsUnique();
+
+                    b.HasIndex(new[] { "NotificationId" }, "IX_NotificationLog_CompletedAt")
+                        .HasFilter("[CompletedAt] IS NOT NULL");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "NotificationId" }, "IX_NotificationLog_CompletedAt"), new[] { "CompletedAt", "Status" });
 
                     b.ToTable("NotificationLog", "notifications");
                 });
