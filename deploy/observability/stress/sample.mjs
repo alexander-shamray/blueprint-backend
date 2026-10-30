@@ -118,9 +118,10 @@ async function sql() {
     }
 }
 
-// The machine's own CPU, k6 and Docker's share alike, as the busy share of
-// every processor's time since the last read: report.js's generatorLimit()
-// reads it to tell a saturated workstation from a platform giving out.
+// The machine's own CPU, Docker's share and k6's when it runs here, as the
+// busy share of every processor's time since the last read: report.js's
+// generatorLimit() reads it to tell a saturated workstation from a platform
+// giving out.
 function processorTimes() {
     return os.cpus().reduce((sum, cpu) => {
         const { idle, ...busy } = cpu.times;

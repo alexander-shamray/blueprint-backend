@@ -5,10 +5,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+    CLOCK_SKEW_LIMIT_MS,
     ERROR_RATE_LIMIT,
     GENERATOR_SERVICE,
     HOST_CPU_LIMIT,
     clientRow,
+    clockSkewMs,
     containerOwner,
     containerStats,
     crossings,
@@ -107,6 +109,30 @@ test('the run ended on the rule that fired at its last measured step, the genera
     const saturated = ending([step(1), step(2, { kneeStop: true, hostCpu: 97 })], level);
     assert.equal(saturated.reason, 'generator', 'a knee the machine ran out at is the machine\'s');
     assert.equal(saturated.step, 2);
+});
+
+test('the clock skew is Prometheus\'s time less the midpoint of the round trip, and unread without an answer', () => {
+    assert.equal(clockSkewMs(1000.5, 1_000_000, 1_000_200), 400, 'Prometheus answered 400 ms ahead of the midpoint');
+    assert.equal(clockSkewMs(999.9, 1_000_000, 1_000_000), -100);
+    assert.equal(clockSkewMs(NaN, 1_000_000, 1_000_200), null);
+    assert.ok(Math.abs(clockSkewMs(1000.9, 1_000_000, 1_000_000)) < CLOCK_SKEW_LIMIT_MS);
+    assert.ok(Math.abs(clockSkewMs(1001.5, 1_000_000, 1_000_000)) > CLOCK_SKEW_LIMIT_MS);
+});
+
+test('with k6 on a second machine the stack\'s busy CPU is the platform\'s, and only a VU shortfall is k6\'s', () => {
+    const step = (n, extra = {}) => ({ step: n, vus: 100 * n, requests: 500, ...extra });
+    const remote = { level: 'low', stopRule: 'knee', capped: true, generator: 'remote' };
+
+    const busy = ending([step(1), step(2, { kneeStop: true, hostCpu: 97 })], remote);
+    assert.equal(busy.reason, 'knee');
+    assert.equal(busy.detail, null);
+    assert.equal(generatorLimit({ vus: 200, hostCpu: 97 }, 'remote'), null);
+
+    const short = ending([step(1), step(2, { kneeStop: true, hostCpu: 97, vusReached: 150 })], remote);
+    assert.equal(short.reason, 'generator');
+    assert.equal(short.detail, 'k6 ran 150 of 200 VUs');
+    assert.equal(generatorLimit({ vus: 200, hostCpu: 97 }), `the machine's CPU at 97% over the hold`,
+        'a row read with no generator named is the local run\'s');
 });
 
 test('the Ended line names the reason first, then the step, then the level and the stop rule', () => {

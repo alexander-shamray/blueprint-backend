@@ -38,10 +38,21 @@ export const CONTAINER_CPU_LIMIT = 0.9;
 export const MEMORY_GROWTH_FLOOR_BYTES = 100 * 1024 ** 2;
 export const WAIT_JUMP_RATIO = 4;
 
-// THE GENERATOR: k6 shares the machine with the stack, so a step at which the
-// machine's CPU stayed this busy, or k6 ran fewer VUs than the step asked for,
-// measured the workstation rather than the platform.
+// THE GENERATOR: a step at which k6 ran fewer VUs than it asked for, or, with
+// k6 on the stack's machine, the machine's CPU stayed this busy, measured the
+// workstation rather than the platform. With k6 on a second machine that CPU
+// is the platform's alone, so only the VUs are read (ADR-172).
 export const HOST_CPU_LIMIT = 90;
+
+// THE CLOCK: the knee stop reads Prometheus at k6's own instants, so a k6
+// whose clock is off reads the wrong part of each hold. On a second machine
+// it can be (ADR-172); a second is a small share of the shortest hold.
+export const CLOCK_SKEW_LIMIT_MS = 1000;
+
+/** How far Prometheus's clock runs ahead of k6's, in ms, from a time() answered between two instants, or null. */
+export function clockSkewMs(serverSeconds, sentMs, receivedMs) {
+    return Number.isFinite(serverSeconds) ? serverSeconds * 1000 - (sentMs + receivedMs) / 2 : null;
+}
 
 // The stress override's own k6 container: the generator, whose CPU counts
 // toward the machine's reading above and whose CPU and memory are never a
@@ -433,11 +444,11 @@ export function firstLine(first) {
 }
 
 /** Why a step measured the workstation rather than the platform, or null when it did not. */
-export function generatorLimit(row) {
+export function generatorLimit(row, generator = 'local') {
     if (row.vusReached > 0 && row.vusReached < row.vus)
         return `k6 ran ${row.vusReached} of ${row.vus} VUs`;
 
-    if (row.hostCpu >= HOST_CPU_LIMIT)
+    if (generator === 'local' && row.hostCpu >= HOST_CPU_LIMIT)
         return `the machine's CPU at ${Math.round(row.hostCpu)}% over the hold`;
 
     return null;
@@ -456,7 +467,7 @@ export function ending(rows, plan) {
     if (!last)
         return { reason: 'not measured', step: null, vus: null, detail: null };
 
-    const generator = generatorLimit(last);
+    const generator = generatorLimit(last, plan.generator);
     const reason = generator ? 'generator'
         : last.kneeStop ? 'knee'
             : last.aborted ? 'errors'

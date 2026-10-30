@@ -8,6 +8,7 @@ import {
     DEFAULT_STEPS,
     LEVEL_HOLD_SECONDS,
     maxOrders,
+    parseGenerator,
     parseSeconds,
     parseSteps,
     parseStop,
@@ -67,6 +68,13 @@ test('an unknown level, a bad cap and an unknown stop rule are refused by name',
     assert.equal(parseStop(undefined), 'knee');
     assert.equal(parseStop(' Errors '), 'errors');
     assert.throws(() => parseStop('never'), /STRESS_STOP must be one of knee, errors/);
+});
+
+test('the generator is local unless the run names a second machine, and nothing else is taken', () => {
+    assert.equal(parseGenerator(undefined), 'local');
+    assert.equal(parseGenerator(''), 'local');
+    assert.equal(parseGenerator(' Remote '), 'remote');
+    assert.throws(() => parseGenerator('lan'), /STRESS_GENERATOR must be one of local, remote/);
 });
 
 test('an unset or empty STRESS_STEPS is the default staircase', () => {
