@@ -137,7 +137,7 @@ services:
   # §10.8: the public image is served by the layer in front of the store, which sets nosniff. products/ alone, GET
   # and HEAD alone, and nothing from uploads/.
   image-edge:
-    image: nginx:1.27.5-alpine
+    image: nginx:1.31.0-alpine
     ports: [ "127.0.0.1:9000:8080" ]
     volumes: [ "./object-store/edge.conf:/etc/nginx/conf.d/default.conf:ro" ]
     healthcheck:
