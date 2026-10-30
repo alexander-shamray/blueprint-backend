@@ -757,12 +757,13 @@ holding the default route.
    loopback, idles a minute, and chooses the products by
    `stress/products.sql`. It opens only its results port, `ResultsPort` in
    `stress/remote/common.ps1`, to the subnet, and prints the second machine's
-   command.
+   command with the address and a one-time token. Every request on that port
+   carries the token, so another machine on the subnet cannot claim the run.
 
 2. On the second machine, in its checkout:
 
    ```powershell
-   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress <the address stack.ps1 printed>
+   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress <address> -Token <token>
    ```
 
    `-Level`, `-Stop`, `-MaxUsers` and `-Steps` set the variables block 3

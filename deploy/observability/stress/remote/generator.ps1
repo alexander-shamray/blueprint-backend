@@ -4,15 +4,16 @@
 # the stack's LAN address, and hands raw.json back for the summary. Start
 # stack.ps1 first; it prints this command once the stack is ready.
 #
-#   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress 192.168.1.20
-#   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress 192.168.1.20 -Level medium
+#   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress 192.168.1.20 -Token <printed>
+#   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress 192.168.1.20 -Token <printed> -Level medium
 #
 # Nothing is opened here: this machine only connects out.
 
 [CmdletBinding()]
 param(
-    # The stack's machine, as stack.ps1 prints it.
+    # The stack's machine and the run's token, as stack.ps1 prints them.
     [Parameter(Mandatory)][string]$StackAddress,
+    [Parameter(Mandatory)][string]$Token,
 
     # STRESS_PROFILE, STRESS_STOP, STRESS_MAX_USERS and STRESS_STEPS, as the
     # README's stress run names them; unset, stress.js's own defaults hold.
@@ -43,7 +44,7 @@ function Send-Request {
         $stream = $client.GetStream()
         $writer = [System.IO.StreamWriter]::new($stream, $Utf8, 65536, $true)
         $writer.NewLine = "`n"
-        $writer.WriteLine($Request)
+        $writer.WriteLine("$Request $Token")
         if ($Body) {
             $writer.Write($Body)
         }
@@ -52,7 +53,7 @@ function Send-Request {
         $client.Client.Shutdown([System.Net.Sockets.SocketShutdown]::Send)
 
         $reader = [System.IO.StreamReader]::new($stream, $Utf8)
-        $reply = (Read-Bounded $reader 1MB).Trim()
+        $reply = (Read-Bounded $reader 1MB ([System.Diagnostics.Stopwatch]::StartNew())).Trim()
         if (-not $reply) {
             throw "stack.ps1 refused $Request from this machine; its window says why."
         }

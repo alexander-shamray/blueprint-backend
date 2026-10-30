@@ -158,11 +158,16 @@ $generator = $GeneratorAddress
 $sampler = $null
 $aborted = $false
 
+# Printed with the second machine's command and carried by each request, so a
+# peer on the subnet that did not read it cannot become the generator.
+$token = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(16))
+
 # One request a connection: PLAN learns the generator and starts the sampler,
 # as k6 is about to start; RESULT is raw.json, written whole or not at all.
 function Receive-Request {
     param([System.Net.Sockets.TcpClient]$Client)
 
+    $clock = [System.Diagnostics.Stopwatch]::StartNew()
     $peer = ([System.Net.IPEndPoint]$Client.Client.RemoteEndPoint).Address.MapToIPv4().ToString()
     if (($script:generator -and $peer -ne $script:generator) -or
         -not (Test-SameSubnet $lan.Address $peer $lan.PrefixLength)) {
@@ -176,7 +181,12 @@ function Receive-Request {
     $reader = [System.IO.StreamReader]::new($stream, $Utf8, $false, 65536, $true)
     $writer = [System.IO.StreamWriter]::new($stream, $Utf8, 65536, $true)
     $writer.NewLine = "`n"
-    $request = $reader.ReadLine()
+    $request, $offered = (Read-RequestLine $reader $clock) -split ' ', 2
+
+    if (-not $offered -or -not (Test-Token $token $offered)) {
+        Write-Warning "Refused $peer's request '$request', which carries no or the wrong token."
+        return
+    }
 
     if ($request -eq $PlanRequest) {
         if (-not $script:generator) {
@@ -197,7 +207,7 @@ function Receive-Request {
         $writer.WriteLine('OK')
         Write-Warning "$peer ended the run without raw.json."
     } elseif ($request -eq $ResultRequest -and $script:sampler) {
-        $body = Read-Bounded $reader $ResultLimitChars
+        $body = Read-Bounded $reader $ResultLimitChars $clock
         $null = $body | ConvertFrom-Json
         [System.IO.File]::WriteAllText("$raw.partial", $body, $Utf8)
         Move-Item -Force "$raw.partial" $raw
@@ -221,7 +231,7 @@ try {
 
     Write-Host ''
     Write-Host "Ready. On the second machine, in its checkout of $commit, run:"
-    Write-Host "  pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress $($lan.Address)"
+    Write-Host "  pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress $($lan.Address) -Token $token"
     Write-Host ''
 
     while (-not (Test-Path $raw) -and -not $aborted) {

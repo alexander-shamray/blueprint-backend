@@ -15,14 +15,19 @@ $script:RemoteOverride = Join-Path $script:ComposeDir 'docker-compose.stress-rem
 # from every port Compose publishes.
 $script:ResultsPort = 5299
 
-# The requests, each a first line: RESULT is followed by raw.json, and ABORT
-# ends a run that will send none, so the stack's ports close with it.
+# The requests, each a first line followed by the run's token: RESULT is
+# followed by raw.json, and ABORT ends a run that will send none, so the
+# stack's ports close with it.
 $script:PlanRequest = 'PLAN'
 $script:ResultRequest = 'RESULT'
 $script:AbortRequest = 'ABORT'
 
-# raw.json is a few hundred KiB; anything past this is not one.
+# A request line is a word and a token; raw.json is a few hundred KiB, so
+# anything past these is not one. A connection gets the deadline whole, so a
+# peer that trickles bytes cannot hold the stack's one listener.
+$script:RequestLineLimit = 256
 $script:ResultLimitChars = 64MB
+$script:RequestDeadline = [TimeSpan]::FromMinutes(2)
 
 $script:Utf8 = [System.Text.UTF8Encoding]::new($false)
 
@@ -98,17 +103,49 @@ function Get-RemotePort {
     return [int]$match.Groups[1].Value
 }
 
+function Assert-Deadline {
+    param([System.Diagnostics.Stopwatch]$Clock)
+
+    if ($Clock.Elapsed -gt $script:RequestDeadline) {
+        throw "The peer took longer than $($script:RequestDeadline.TotalSeconds) s."
+    }
+}
+
+# The request's first line, refused past RequestLineLimit rather than read whole.
+function Read-RequestLine {
+    param([System.IO.StreamReader]$Reader, [System.Diagnostics.Stopwatch]$Clock)
+
+    $line = [System.Text.StringBuilder]::new()
+    while (($c = $Reader.Read()) -ge 0 -and $c -ne 10) {
+        Assert-Deadline $Clock
+        if ($line.Length -ge $script:RequestLineLimit) {
+            throw "The peer's request line runs past $($script:RequestLineLimit) characters."
+        }
+        [void]$line.Append([char]$c)
+    }
+    return $line.ToString().TrimEnd("`r")
+}
+
 # Reads what is left of a stream as text, refusing more than the limit.
 function Read-Bounded {
-    param([System.IO.StreamReader]$Reader, [int]$Limit)
+    param([System.IO.StreamReader]$Reader, [int]$Limit, [System.Diagnostics.Stopwatch]$Clock)
 
     $text = [System.Text.StringBuilder]::new()
     $buffer = [char[]]::new(65536)
     while (($read = $Reader.Read($buffer, 0, $buffer.Length)) -gt 0) {
+        Assert-Deadline $Clock
         if ($text.Length + $read -gt $Limit) {
             throw "The peer sent more than $Limit characters."
         }
         [void]$text.Append($buffer, 0, $read)
     }
     return $text.ToString()
+}
+
+# The run's token against the one a request carries, in constant time.
+function Test-Token {
+    param([string]$Expected, [string]$Offered)
+
+    return [System.Security.Cryptography.CryptographicOperations]::FixedTimeEquals(
+        $script:Utf8.GetBytes($Expected), $script:Utf8.GetBytes($Offered))
 }
