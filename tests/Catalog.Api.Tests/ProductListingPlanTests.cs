@@ -128,9 +128,12 @@ public sealed class ProductListingPlanTests(ServiceFixture fixture)
         {
             do
             {
+                // STATISTICS XML follows the listing's rows with one column named for the showplan schema.
+                bool plan = reader.FieldCount == 1
+                    && reader.GetName(0).StartsWith("Microsoft SQL Server", StringComparison.Ordinal);
                 while (await reader.ReadAsync(ct))
                 {
-                    if (reader.FieldCount == 1 && reader.GetName(0).StartsWith("Microsoft SQL Server", StringComparison.Ordinal))
+                    if (plan)
                         showplan = reader.GetString(0);
                 }
             }
