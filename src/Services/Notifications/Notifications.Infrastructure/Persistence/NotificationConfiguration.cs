@@ -19,12 +19,14 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
         builder.HasIndex(n => new { n.EventId, n.TemplateKey, n.Channel }).IsUnique();
 
         // The send claim's population, its filter repeated by SendClaims.Claimable so the optimiser matches it; the
-        // channel included, as an open relay narrows the claim to push notices (the push design's section 1).
+        // channel included, as an open relay narrows the claim to push notices (the push design's section 1). Keyed
+        // on the row's id, whose order SQL Server reads as random, so the insert, the lease and the outcome do not
+        // all latch the newest page; the claim sorts the few pending rows instead (ADR-175).
         builder
-            .HasIndex(n => n.NextAttemptAt)
+            .HasIndex(n => n.NotificationId)
             .HasDatabaseName("IX_NotificationLog_SendClaim")
             .HasFilter("[Status] = 'Pending'")
-            .IncludeProperties(n => new { n.LockedUntil, n.Channel });
+            .IncludeProperties(n => new { n.NextAttemptAt, n.LockedUntil, n.Channel });
 
         // OrderRetention's floor: an order record goes only once no pending notice names its order.
         builder

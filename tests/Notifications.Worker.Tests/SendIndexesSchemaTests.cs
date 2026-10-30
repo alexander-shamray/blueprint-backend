@@ -15,7 +15,7 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
     /// <summary>Each index's table, name, first key column and filter, as SQL Server normalises a filter.</summary>
     public static TheoryData<string, string, string, string?> Indexes() => new()
     {
-        { "NotificationLog", "IX_NotificationLog_SendClaim", "NextAttemptAt", "([Status]='Pending')" },
+        { "NotificationLog", "IX_NotificationLog_SendClaim", "NotificationId", "([Status]='Pending')" },
         { "NotificationLog", "IX_NotificationLog_PendingOrder", "OrderId", "([Status]='Pending')" },
         { "NotificationLog", "IX_NotificationLog_CompletedAt", "CompletedAt", "([CompletedAt] IS NOT NULL)" },
         { "ContactRecords", "IX_ContactRecords_FetchedAt", "FetchedAt", null },
@@ -61,8 +61,9 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
     }
 
     [Fact]
-    public async Task The_claim_s_index_carries_the_lease_so_the_claim_reads_no_row_it_skips()
+    public async Task The_claim_s_index_carries_the_due_time_and_the_lease_so_the_claim_reads_no_row_it_skips()
     {
+        // Keyed on the id, the index must carry the due time too, or the claim's sort reads every pending row's.
         (await fixture.ScalarAsync<int>(
             """
             SELECT Value = COUNT(*)
@@ -75,7 +76,7 @@ public sealed class SendIndexesSchemaTests(ServiceFixture fixture) : IAsyncLifet
                 AND c.column_id = ic.column_id
             WHERE i.name = 'IX_NotificationLog_SendClaim'
                 AND ic.is_included_column = 1
-                AND c.name = 'LockedUntil'
-            """)).ShouldBe(1);
+                AND c.name IN ('NextAttemptAt', 'LockedUntil')
+            """)).ShouldBe(2);
     }
 }
