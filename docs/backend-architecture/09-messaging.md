@@ -3697,8 +3697,11 @@ cfg.ReceiveEndpoint(
         // And the one line that differs from the other endpoints:
         // MassTransit's transactional outbox rather than the in-memory one, on
         // the DbContext the saga repository already holds, so the sends commit
-        // with the instance (ADR-032).
-        e.UseEntityFrameworkOutbox<OrderingDbContext>(context);
+        // with the instance (ADR-032). A pass delivers everything a
+        // transition staged, so a message takes two transactions (ADR-174).
+        e.UseEntityFrameworkOutbox<OrderingDbContext>(
+            context,
+            o => o.MessageDeliveryLimit = SagaOutboxDeliveryLimit);
 
         e.ConfigureSaga<OrderFulfilmentState>(context);
     });
@@ -3728,7 +3731,10 @@ cfg.ReceiveEndpoint(
 > what puts the filter on this endpoint's pipeline. It brings three tables into
 > the `ordering` schema — `InboxState`, `OutboxState` and `OutboxMessage`,
 > singular where §9.4's and §9.5's are plural, so the two sets do not collide
-> ([§7.4](07-persistence.md)).
+> ([§7.4](07-persistence.md)). The factory that opens the filter's
+> transactions is this service's `SagaOutboxContextFactory`, registered in
+> place of the library's, which took four or more a message
+> ([ADR-174](adr/ADR-174-the-saga-outbox-runs-two-transactions-a-message-1603-supersedes-adr-032s-default-delivery-limit.md)).
 >
 > **`UseBusOutbox()` is a third thing and is deliberately not called.** It
 > intercepts `IPublishEndpoint` and `ISendEndpointProvider` *outside* a consume

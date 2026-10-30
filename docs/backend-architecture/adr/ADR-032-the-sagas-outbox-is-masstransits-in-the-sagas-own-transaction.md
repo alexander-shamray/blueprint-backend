@@ -209,6 +209,19 @@ on the outbox and still part of the mechanism, because the outbox still opens
 the transaction, but it is `ReadCommitted`; the transaction is serializable
 only in the saga's own load, which takes its key-range lock from its hint.
 
+**Superseded in part by
+[ADR-174](ADR-174-the-saga-outbox-runs-two-transactions-a-message-1603-supersedes-adr-032s-default-delivery-limit.md)**:
+the consequence leaving `MessageDeliveryLimit` at MassTransit's default of
+one, and with it the begin/commit cycle each staged message took. The
+endpoint delivers up to ten in one pass, and a message takes two
+transactions; `DuplicateDetectionWindow` is still the library's default.
+Also the consequence calling the *consume* transaction open across a broker
+publish, its begin, lock, save, publish, save, commit, and the clause that
+the consume transaction holds through one: the consume commits before the
+broker sees a message, and the transaction open across the publish is the
+second, which delivers every staged message, each bounded by
+`MessageDeliveryTimeout`, marks the row and removes the staged rows.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
