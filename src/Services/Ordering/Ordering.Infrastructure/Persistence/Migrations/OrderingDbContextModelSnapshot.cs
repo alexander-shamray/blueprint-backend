@@ -19,7 +19,7 @@ namespace Ordering.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("ordering")
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -186,9 +186,9 @@ namespace Ordering.Infrastructure.Persistence.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                        .HasColumnType("bigint")
+                        .HasDefaultValueSql("CONVERT(bigint, CRYPT_GEN_RANDOM(8))")
+                        .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
                     b.Property<DateTime?>("Consumed")
                         .HasColumnType("datetime2");
@@ -237,6 +237,12 @@ namespace Ordering.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
                 {
+                    b.Property<Guid>("InboxMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("InboxConsumerId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<long>("SequenceNumber")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint");
@@ -275,12 +281,6 @@ namespace Ordering.Infrastructure.Persistence.Migrations
                     b.Property<string>("Headers")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid?>("InboxConsumerId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("InboxMessageId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<Guid?>("InitiatorId")
                         .HasColumnType("uniqueidentifier");
 
@@ -311,22 +311,13 @@ namespace Ordering.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.HasKey("SequenceNumber");
+                    b.HasKey("InboxMessageId", "InboxConsumerId", "SequenceNumber");
 
-                    SqlServerKeyBuilderExtensions.IsClustered(b.HasKey("SequenceNumber"), false);
-
-                    b.HasIndex("EnqueueTime");
-
-                    b.HasIndex("ExpirationTime");
+                    SqlServerKeyBuilderExtensions.IsClustered(b.HasKey("InboxMessageId", "InboxConsumerId", "SequenceNumber"));
 
                     b.HasIndex("OutboxId", "SequenceNumber")
                         .IsUnique()
                         .HasFilter("[OutboxId] IS NOT NULL");
-
-                    b.HasIndex("InboxMessageId", "InboxConsumerId", "SequenceNumber")
-                        .IsUnique();
-
-                    SqlServerIndexBuilderExtensions.IsClustered(b.HasIndex("InboxMessageId", "InboxConsumerId", "SequenceNumber"));
 
                     b.ToTable("OutboxMessage", "ordering");
                 });

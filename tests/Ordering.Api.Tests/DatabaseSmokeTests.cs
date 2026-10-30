@@ -55,7 +55,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "_AddPersonalDataErasureClosedAt",
             "_OptimizeOutboxKeyForSequentialInserts",
             "_ClusterSagaOutboxOnInboxKey",
-            "_ClusterInboxStateOnMessageKey"
+            "_ClusterInboxStateOnMessageKey",
+            "_KeySagaOutboxOnInboxKey"
         ];
 
         string[] applied = await fixture.AppliedMigrationsAsync();

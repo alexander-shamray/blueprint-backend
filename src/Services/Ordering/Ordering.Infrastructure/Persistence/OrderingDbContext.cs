@@ -38,22 +38,25 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OrderingDbContext).Assembly);
 
         // ADR-032's three tables, which MassTransit maps itself; a configuration of ours would be a second
-        // definition of a schema the library owns (§7.2), so ClusterSagaOutboxOnInboxKey amends its mapping and
+        // definition of a schema the library owns (§7.2), so KeySagaOutboxOnInboxKey amends its mapping and
         // never restates it, and ClusterInboxStateOnMessageKey likewise.
         modelBuilder.AddTransactionalOutboxEntities();
-        ClusterSagaOutboxOnInboxKey(modelBuilder.Entity<SagaOutboxMessage>().Metadata);
+        KeySagaOutboxOnInboxKey(modelBuilder.Entity<SagaOutboxMessage>().Metadata);
         ClusterInboxStateOnMessageKey(modelBuilder.Entity<SagaInboxState>().Metadata);
     }
 
     /// <summary>
-    /// Clusters the library's own inbox-message index rather than its identity key, so a delivery's plan seeks however
-    /// small the table was when it compiled (ADR-167); refuses a mapping that has moved, rather than restore it.
+    /// Keys the library's saga outbox on its own inbox-message index, clustered, so a delivery's plan seeks however
+    /// small the table was when it compiled (ADR-167) and no index orders a row by when it was staged (ADR-177);
+    /// refuses a mapping that has moved, rather than restore it.
     /// </summary>
-    private static void ClusterSagaOutboxOnInboxKey(IMutableEntityType outbox)
+    private static void KeySagaOutboxOnInboxKey(IMutableEntityType outbox)
     {
         IMutableKey key = outbox.FindPrimaryKey() ?? throw MappingMoved("no primary key");
-        if (key.Properties is not [{ Name: nameof(SagaOutboxMessage.SequenceNumber) }])
+        if (key.Properties is not [{ Name: nameof(SagaOutboxMessage.SequenceNumber) } sequence])
             throw MappingMoved("a primary key other than SequenceNumber");
+        if (sequence.GetValueGenerationStrategy() != SqlServerValueGenerationStrategy.IdentityColumn)
+            throw MappingMoved("a SequenceNumber that is not an identity column");
 
         IMutableIndex index = outbox.GetIndexes()
                 .SingleOrDefault(i => i.Properties.Select(p => p.Name).SequenceEqual(SagaOutboxInboxKey))
@@ -61,16 +64,35 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
         if (!index.IsUnique || index.GetFilter() != SagaOutboxInboxKeyFilter)
             throw MappingMoved("an inbox-message index that is not unique or not filtered on its two nullable columns");
 
-        // SQL Server clusters no filtered index; the filter only ever excluded bus-outbox rows, which ADR-167 notes.
-        key.SetIsClustered(false);
-        index.SetIsClustered(true);
-        index.SetFilter(null);
+        IMutableIndex[] stagedAt = outbox.GetIndexes()
+            .Where(i => i.Properties is [{ Name: StagedAtEnqueue or StagedAtExpiry }])
+            .ToArray();
+        if (stagedAt.Length != 2)
+            throw MappingMoved("no single-column index on EnqueueTime or on ExpirationTime");
+
+        // Only bus-outbox rows leave the two columns null, and Ordering keeps none, as ADR-167 notes; the identity's
+        // own index put every staging and every removal on its last page, and the two times' on theirs (ADR-177).
+        foreach (IMutableProperty property in index.Properties)
+            property.IsNullable = false;
+        outbox.RemoveIndex(index);
+        foreach (IMutableIndex dropped in stagedAt)
+            outbox.RemoveIndex(dropped);
+        outbox.SetPrimaryKey(index.Properties)!.SetIsClustered(true);
+        outbox.RemoveKey(key);
+
+        // EF Core's conventions make only a single-column key an identity; the delivery still reads in its order.
+        sequence.ValueGenerated = ValueGenerated.OnAdd;
+        sequence.SetValueGenerationStrategy(SqlServerValueGenerationStrategy.IdentityColumn);
     }
 
     private static InvalidOperationException MappingMoved(string found) =>
-        new($"MassTransit's OutboxMessage mapping has moved ({found}); revisit ADR-167 before it is re-clustered.");
+        new($"MassTransit's OutboxMessage mapping has moved ({found}); revisit ADR-177 before it is re-keyed.");
 
-    private const string SagaOutboxInboxKeyFilter = "[InboxMessageId] IS NOT NULL AND [InboxConsumerId] IS NOT NULL";
+    private const string StagedAtEnqueue = nameof(SagaOutboxMessage.EnqueueTime);
+
+    private const string StagedAtExpiry = nameof(SagaOutboxMessage.ExpirationTime);
+
+    private const string SagaOutboxInboxKeyFilter ="[InboxMessageId] IS NOT NULL AND [InboxConsumerId] IS NOT NULL";
 
     private static readonly string[] SagaOutboxInboxKey =
     [
@@ -81,13 +103,16 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
     /// <summary>
     /// Clusters the library's inbox on its message key rather than its identity key, so a message's insert, locked
-    /// read and update land where its id sorts rather than on one last page (ADR-171); refuses a moved mapping.
+    /// read and update land where its id sorts rather than on one last page (ADR-171), and draws Id at random rather
+    /// than from an identity, so its own index does not put them there either (ADR-177); refuses a moved mapping.
     /// </summary>
     private static void ClusterInboxStateOnMessageKey(IMutableEntityType inbox)
     {
         IMutableKey key = inbox.FindPrimaryKey() ?? throw InboxMappingMoved("no primary key");
-        if (key.Properties is not [{ Name: nameof(SagaInboxState.Id) }])
+        if (key.Properties is not [{ Name: nameof(SagaInboxState.Id) } id])
             throw InboxMappingMoved("a primary key other than Id");
+        if (id.GetValueGenerationStrategy() != SqlServerValueGenerationStrategy.IdentityColumn)
+            throw InboxMappingMoved("an Id that is not an identity column");
 
         IMutableKey messageKey = inbox.GetKeys()
                 .SingleOrDefault(k => k.Properties.Select(p => p.Name).SequenceEqual(InboxStateMessageKey))
@@ -95,10 +120,17 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         key.SetIsClustered(false);
         messageKey.SetIsClustered(true);
+
+        // The library's UPDATE finds its row by Id, and its cleanup deletes by Id: the key stays, its order goes.
+        id.SetValueGenerationStrategy(SqlServerValueGenerationStrategy.None);
+        id.SetDefaultValueSql(InboxStateRandomId);
     }
 
     private static InvalidOperationException InboxMappingMoved(string found) =>
-        new($"MassTransit's InboxState mapping has moved ({found}); revisit ADR-171 before it is re-clustered.");
+        new($"MassTransit's InboxState mapping has moved ({found}); revisit ADR-177 before it is re-keyed.");
+
+    /// <summary>Sixty-four random bits: a collision fails one insert into the endpoint's retry (ADR-177).</summary>
+    internal const string InboxStateRandomId = "CONVERT(bigint, CRYPT_GEN_RANDOM(8))";
 
     private static readonly string[] InboxStateMessageKey =
         [nameof(SagaInboxState.MessageId), nameof(SagaInboxState.ConsumerId)];
