@@ -32,7 +32,8 @@ function Send-Request {
             $connected = $false
         }
         if (-not $connected) {
-            throw "stack.ps1 does not answer on ${StackAddress}:$ResultsPort. Start it first, and wait for it to print Ready."
+            throw ("stack.ps1 does not answer on ${StackAddress}:$ResultsPort. " +
+                'Start it first, and wait for it to print Ready.')
         }
 
         $client.ReceiveTimeout = 60000
