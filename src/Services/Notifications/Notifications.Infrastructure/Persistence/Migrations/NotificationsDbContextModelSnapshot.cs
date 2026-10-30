@@ -18,7 +18,7 @@ namespace Notifications.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("notifications")
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -206,11 +206,11 @@ namespace Notifications.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("IX_NotificationLog_ConsentEntry")
                         .HasFilter("[ConsentEntryId] IS NOT NULL");
 
-                    b.HasIndex("NextAttemptAt")
+                    b.HasIndex("NotificationId")
                         .HasDatabaseName("IX_NotificationLog_SendClaim")
                         .HasFilter("[Status] = 'Pending'");
 
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("NextAttemptAt"), new[] { "LockedUntil", "Channel" });
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("NotificationId"), new[] { "NextAttemptAt", "LockedUntil", "Channel" });
 
                     b.HasIndex("OrderId")
                         .HasDatabaseName("IX_NotificationLog_PendingOrder")

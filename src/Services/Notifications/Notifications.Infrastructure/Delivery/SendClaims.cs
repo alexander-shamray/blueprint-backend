@@ -20,14 +20,14 @@ internal sealed class SendClaims(IDbConnectionFactory connections, IOptions<Send
 
     // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's. An empty
     // CorrelationId is the column's default, left by a version that predates it while both run (§7.4), so the row's
-    // order stands in, as AddNotificationCorrelationId's backfill argues. An open relay leaves the mail notices out,
-    // so push notices still fan out while the relay is down (the push design's section 1). The batch and the lease
-    // are parameters, as SendPacingOptions configures them.
+    // order stands in, as AddNotificationCorrelationId's backfill argues. An open relay leaves the mail notices out
+    // (the push design's section 1). The claim index is named: the pending-order index shares its filter, and reading
+    // that one locks every pending row it looks up (ADR-175). SendPacingOptions sets the batch and the lease.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
             SELECT TOP (@BatchSize) *
-            FROM notifications.NotificationLog WITH (UPDLOCK, READPAST, ROWLOCK)
+            FROM notifications.NotificationLog WITH (UPDLOCK, READPAST, ROWLOCK, INDEX(IX_NotificationLog_SendClaim))
             WHERE {Claimable}
                 AND (@MailParked = 0 OR Channel <> '{ConsentVocabulary.Email}')
             ORDER BY NextAttemptAt

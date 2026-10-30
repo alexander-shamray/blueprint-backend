@@ -35,4 +35,32 @@ public sealed class SendPacingClaimTests(ServiceFixture fixture) : IAsyncLifetim
         claimed.Count.ShouldBe(2);
         claimed.ShouldAllBe(work => work.LockedUntil >= before.AddSeconds(pace.SendLeaseSeconds));
     }
+
+    [Fact]
+    public async Task The_send_claim_takes_the_longest_due_first_whatever_order_the_index_keeps()
+    {
+        for (int i = 0; i < 3; i++)
+            await fixture.PendingAsync(TemplateKeys.OrderConfirmed, Guid.CreateVersion7());
+
+        // Due times opposite to the claim index's key order, so a claim reading it unsorted takes the wrong row.
+        await fixture.ExecuteAsync(
+            """
+            UPDATE n
+            SET NextAttemptAt = DATEADD(minute, -k.Position, SYSDATETIMEOFFSET())
+            FROM notifications.NotificationLog n
+            INNER JOIN (
+                SELECT NotificationId, Position = ROW_NUMBER() OVER (ORDER BY NotificationId)
+                FROM notifications.NotificationLog) k
+                ON k.NotificationId = n.NotificationId;
+            """);
+        Guid longestDue = await fixture.ScalarAsync<Guid>(
+            "SELECT TOP (1) Value = NotificationId FROM notifications.NotificationLog ORDER BY NotificationId DESC");
+
+        SendClaims claims = new(
+            fixture.Factory.Services.GetRequiredService<IDbConnectionFactory>(),
+            Options.Create(new SendPacingOptions { SendClaimBatchSize = 1 }));
+        IReadOnlyList<SendWork> claimed = await claims.ClaimAsync(false, TestContext.Current.CancellationToken);
+
+        claimed.ShouldHaveSingleItem().NotificationId.ShouldBe(longestDue);
+    }
 }
