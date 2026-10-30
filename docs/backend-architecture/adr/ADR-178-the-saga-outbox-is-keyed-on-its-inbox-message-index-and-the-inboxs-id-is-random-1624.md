@@ -1,4 +1,4 @@
-# ADR-177 — The saga outbox is keyed on its inbox-message index, and the inbox's id is random (#1624)
+# ADR-178 — The saga outbox is keyed on its inbox-message index, and the inbox's id is random (#1624)
 
 **Decision.** MassTransit's `ordering.OutboxMessage` takes the library's own
 inbox-message index over `InboxMessageId`, `InboxConsumerId` and

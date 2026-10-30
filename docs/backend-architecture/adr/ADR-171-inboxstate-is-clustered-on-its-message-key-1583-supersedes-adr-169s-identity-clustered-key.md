@@ -60,7 +60,7 @@ on the generator, so the figures compare these four runs with one another
 and not with ADR-167's or ADR-169's.
 
 **Superseded in part by
-[ADR-177](ADR-177-the-saga-outbox-is-keyed-on-its-inbox-message-index-and-the-inboxs-id-is-random-1624.md)**:
+[ADR-178](ADR-178-the-saga-outbox-is-keyed-on-its-inbox-message-index-and-the-inboxs-id-is-random-1624.md)**:
 the Decision's identity `Id`, which is now drawn at random. The clustered
 message key, the nonclustered primary key on `Id` and the measurement stand.
 

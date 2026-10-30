@@ -55,7 +55,7 @@ public sealed class SagaInboxStateKeyTests(ServiceFixture fixture) : IAsyncLifet
             """)).ShouldBe("FK_OutboxMessage_InboxState_InboxMessageId_InboxConsumerId");
     }
 
-    // The library's UPDATE seeks the identity key's index, which an identity grows at one end (ADR-177).
+    // The library's UPDATE seeks the identity key's index, which an identity grows at one end (ADR-178).
     [Fact]
     public async Task The_id_is_drawn_at_random_rather_than_counted()
     {
