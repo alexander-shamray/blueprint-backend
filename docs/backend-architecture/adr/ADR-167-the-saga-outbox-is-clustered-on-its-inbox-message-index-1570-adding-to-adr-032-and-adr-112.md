@@ -66,7 +66,7 @@ exposes is page latches on `InboxState`'s identity key, millions of ms over a
 load, which this ADR leaves where it is and #1581 tracks.
 
 **Superseded in part by
-[ADR-177](ADR-177-the-saga-outbox-is-keyed-on-its-inbox-message-index-and-the-inboxs-id-is-random-1624.md)**:
+[ADR-178](ADR-178-the-saga-outbox-is-keyed-on-its-inbox-message-index-and-the-inboxs-id-is-random-1624.md)**:
 the Decision's nonclustered primary key on `SequenceNumber`, now the
 clustered inbox-message index itself, and the consequence that the index
 holds a bus-outbox row, which the inbox columns' `NOT NULL` now refuses. The

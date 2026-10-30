@@ -4,7 +4,7 @@ namespace Ordering.Infrastructure.Persistence.Migrations;
 
 /// <summary>MassTransit's saga outbox is keyed on its inbox-message index, with no index in staging order, and
 /// its inbox draws its Id at random rather than from an identity, so no index of either puts every message on one last page
-/// (ADR-177).</summary>
+/// (ADR-178).</summary>
 public partial class KeySagaOutboxOnInboxKey : Migration
 {
     private const string Schema = "ordering";

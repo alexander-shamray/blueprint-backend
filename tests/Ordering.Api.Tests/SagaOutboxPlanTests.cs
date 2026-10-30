@@ -13,7 +13,7 @@ public sealed class SagaOutboxPlanTests(ServiceFixture fixture) : IAsyncLifetime
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-    // Every index, so one ordering a row by when it was staged, the identity's or a time's, fails here (ADR-177).
+    // Every index, so one ordering a row by when it was staged, the identity's or a time's, fails here (ADR-178).
     [Fact]
     public async Task The_table_is_keyed_and_clustered_on_the_inbox_message_index_and_no_index_is_in_staging_order()
     {
