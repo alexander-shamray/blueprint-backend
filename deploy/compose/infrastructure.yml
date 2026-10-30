@@ -25,7 +25,7 @@ services:
 
   # Two Redis instances, because eviction policy cannot be shared — §8.1.
   redis-cache:
-    image: redis:7.4.11-alpine
+    image: redis:8.10.0-alpine
     # §8.1's per-service ACL users, as the configuration file both instances read.
     command: redis-server /usr/local/etc/redis/users.conf --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports: [ "127.0.0.1:6379:6379" ]
@@ -34,7 +34,7 @@ services:
       test: ["CMD", "redis-cli", "ping"]
 
   redis-coordination:
-    image: redis:7.4.11-alpine
+    image: redis:8.10.0-alpine
     # noeviction: locks and idempotency keys must never be evicted. The
     # {service}:denylist: namespace §8.1 reserves beside them has no writer
     # (ADR-033). Appendonly so a restart does not silently release held locks.
