@@ -191,7 +191,7 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     /// <summary>An endpoint as every service declares one: retry, then the inbox around the in-memory outbox.</summary>
-    /// <remarks>Or with the two calls the helper replaced, so the loss §9.8's trap describes is held too.</remarks>
+    /// <remarks>Or with the inbox and the outbox as two calls, so the loss §9.8's trap describes is held too.</remarks>
     private ServiceProvider BuildRetryingHost(bool twoCalls = false)
     {
         ServiceCollection services = new();
