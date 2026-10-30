@@ -113,8 +113,8 @@ public sealed class ProviderCallTests
         Data(events[^1]).GetProperty("reason").GetString().ShouldBe(TurnEndReason.Done);
         ILogEntry sent = _server.LogEntries.ShouldHaveSingleItem();
         sent.RequestMessage!.Headers!
-            .Single(h => h.Key.Equals("x-api-key", StringComparison.OrdinalIgnoreCase)).Value
-            .ShouldHaveSingleItem().ShouldBe(ProviderStub.Key);
+            .Single(h => h.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)).Value
+            .ShouldHaveSingleItem().ShouldBe($"Bearer {ProviderStub.Key}");
         JsonElement body = JsonDocument.Parse(sent.RequestMessage.Body!).RootElement;
         body.GetProperty("model").GetString().ShouldBe(AnthropicSettings.DefaultModel);
         body.GetProperty("stream").GetBoolean().ShouldBeTrue();
