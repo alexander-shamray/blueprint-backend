@@ -16,7 +16,8 @@ from Prometheus's than `CLOCK_SKEW_LIMIT_MS`. `stress/remote/stack.ps1` and
 address. The stack's refuses any network but a Private one, a firewall that
 is off or admits inbound by default, and an inbound rule already naming
 Docker's programs. It opens its three ports to the generator's address alone
-once that machine asks for the run, takes `raw.json` back over its results
+once that machine asks for the run with the one-time token the stack prints,
+which every request carries, takes `raw.json` back over its results
 port, or the generator's abort when there is none, and removes its firewall
 rules when the run ends; `-Restore` puts every published port back on
 loopback.
