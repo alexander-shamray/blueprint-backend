@@ -81,7 +81,7 @@
     <PackageVersion Include="MimeKit" Version="4.18.2" />
     <!-- The S3 client behind the product image store (ADR-106), Catalog.Infrastructure's alone; AWSSDK.Core
          arrives with it. -->
-    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.6" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.104.8" />
     <!-- Exact major. v9 is commercially licensed — see ADR-003. The core
          package is a transitive of the transport one, pinned separately
          because projects reference it directly for the IPublishEndpoint the
