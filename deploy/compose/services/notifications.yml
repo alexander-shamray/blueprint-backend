@@ -30,7 +30,7 @@ services:
   # loopback alone: the UI shows every message to whoever reaches it, and SMTP is what a worker run on the host
   # under docker-compose.infra-only.yml submits to. The tag is the one the suite starts (§14.1).
   mailpit:
-    image: axllent/mailpit:v1.31.6
+    image: axllent/mailpit:v1.32.0
     environment:
       # The API that stages a refusing or failing relay, at PUT /api/v1/chaos.
       MP_ENABLE_CHAOS: "true"
