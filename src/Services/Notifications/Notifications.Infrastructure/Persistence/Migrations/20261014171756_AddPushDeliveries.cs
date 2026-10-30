@@ -4,8 +4,8 @@ namespace Notifications.Infrastructure.Persistence.Migrations;
 
 /// <summary>The push design's record: a notice's channel, and a delivery per push notice and installation.</summary>
 /// <remarks>
-/// Additive for the version before (§7.4): the channel defaults to email, as that worker's inserts are, and the key
-/// widens. A push row is not: that worker claims one as mail, so no app is named until it has gone (E.9.5).
+/// Backward compatible with the version before (§7.4): the channel defaults to email, as that worker's inserts are, and
+/// the key widens. A push row is not: that worker claims one as mail, so no app is named until it has gone (E.9.5).
 /// </remarks>
 public partial class AddPushDeliveries : Migration
 {
