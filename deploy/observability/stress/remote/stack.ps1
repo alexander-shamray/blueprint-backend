@@ -140,6 +140,10 @@ if (-not $firewall.Enabled -or "$($firewall.DefaultInboundAction)" -eq 'Allow') 
     throw ("Windows Firewall's Private profile is off or admits inbound connections by default, so nothing would " +
         "hold the stack's ports to the generator.")
 }
+if ($lan.Category -notin 'Private', 'Public') {
+    throw ("$($lan.Interface) is on a $($lan.Category) network, and the stack's development credentials are offered " +
+        'on a Private one alone (§14.1). This script runs on a Private network alone and changes no other kind.')
+}
 
 if ($TrustNetwork) {
     $state = Read-RemoteState
@@ -171,13 +175,9 @@ if ($TrustNetwork) {
 }
 
 if ($lan.Category -ne 'Private') {
-    $advice = if ($lan.Category -eq 'Public') {
-        'On a network you trust, run with -TrustNetwork, which makes it Private until -Restore puts it back.'
-    } else {
-        'This script runs on a Private network alone and changes no other kind.'
-    }
-    throw ("$($lan.Interface) is on a $($lan.Category) network, and the stack's development credentials are offered " +
-        "on a Private one alone (§14.1). $advice")
+    throw ("$($lan.Interface) is on a Public network, and the stack's development credentials are offered on a " +
+        'Private one alone (§14.1). On a network you trust, run with -TrustNetwork, which makes it Private until ' +
+        '-Restore puts it back.')
 }
 
 $dockerRules = @(Get-DockerRules)
