@@ -67,6 +67,8 @@ updates:
       # The delayed-exchange plugin is built for one broker line (ADR-021); the Dockerfile says why.
       - dependency-name: 'rabbitmq'
         update-types: [version-update:semver-minor, version-update:semver-major]
+      # Nothing here holds back the collector's -386 tag, read as a build number newer than its release: an
+      # ignore's versions take Ruby requirement syntax, which has no wildcard. The mirror's test refuses the bump.
 
   - package-ecosystem: github-actions
     directory: /
