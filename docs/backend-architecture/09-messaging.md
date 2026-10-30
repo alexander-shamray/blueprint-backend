@@ -1434,8 +1434,8 @@ cfg.ReceiveEndpoint(
             // consumer acks them (§9.8).
             r.Ignore<ContractMappingException>();
 
-            // The ladder itself is RetryPolicy's, shared with the three
-            // endpoints that add no exclusion. §9.8 says what it holds.
+            // The ladder itself is RetryPolicy's, shared with the endpoints
+            // that add no exclusion. §9.8 says what it holds.
             RetryPolicy.Standard(r);
         });
         // The inbox goes OUTSIDE the in-memory outbox — a correctness rule
