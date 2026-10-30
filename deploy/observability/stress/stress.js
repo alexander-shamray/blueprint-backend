@@ -88,9 +88,9 @@ const PRODUCT_VIEWS_MAX = 3;
 // checks for.
 const SHORTEST_SESSION_SECONDS = 3 * THINK_MIN_SECONDS;
 
-// Orders are spread over every product STRESS_PRODUCTS names, so the run
-// loads the saga and the queues rather than one stock row's lock. One id
-// there is the hot-row variant, which stresses Inventory's reservation path.
+// Orders are spread evenly over every product STRESS_PRODUCTS names, so the
+// run loads the saga and the queues rather than one stock row's lock. Naming
+// a single id is the hot-row variant, which stresses Inventory's reservation.
 const STOCK = 100000;
 
 // Below the gateway's own deadline would cut a request the edge was about to
