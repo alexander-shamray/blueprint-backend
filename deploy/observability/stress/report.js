@@ -525,7 +525,12 @@ export function queryStoreSql(startIso, endIso) {
     if (!ISO.test(startIso) || !ISO.test(endIso))
         throw new Error(`Query Store windows are ISO instants in UTC, not "${startIso}" and "${endIso}"`);
 
-    const text = "LEFT(REPLACE(REPLACE(REPLACE(x.query_sql_text, CHAR(13), ' '), CHAR(10), ' '), '|', '/'), 1500)";
+    // Without its declarations, which end at the first ')' a letter follows ("datetime2(7))UPDATE"), and as a
+    // bounded type: sqlcmd cuts an nvarchar(max) at 256 characters, inside a long EF declaration list.
+    const body = "CASE WHEN x.query_sql_text LIKE '(@%' AND PATINDEX('%)[A-Za-z]%', x.query_sql_text) > 0 " +
+        "THEN SUBSTRING(x.query_sql_text, PATINDEX('%)[A-Za-z]%', x.query_sql_text) + 1, 400) " +
+        'ELSE x.query_sql_text END';
+    const text = `CAST(REPLACE(REPLACE(REPLACE(${body}, CHAR(13), ' '), CHAR(10), ' '), '|', '/') AS nvarchar(200))`;
 
     return [
         'SET NOCOUNT ON;',

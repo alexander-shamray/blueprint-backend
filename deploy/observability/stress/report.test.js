@@ -459,6 +459,8 @@ test('Query Store is read over a window of UTC instants, its joins in the house 
     assert.match(sql, /@from datetimeoffset = '2026-10-30T05:03:17\.000Z', /);
     assert.match(sql, /@to datetimeoffset = '2026-10-30T05:05:17\.000Z'/);
     assert.match(sql, /WHERE i\.start_time >= @from AND i\.end_time <= @to/, 'whole intervals inside the hold');
+    assert.match(sql, /PATINDEX\('%\)\[A-Za-z\]%', x\.query_sql_text\)/, 'declarations dropped before sqlcmd cuts');
+    assert.match(sql, /AS nvarchar\(200\)\)$/m, 'a bounded type, which sqlcmd prints whole');
     const joins = sql.split('\n').filter((line) => /JOIN/.test(line));
     assert.ok(joins.length > 0 && joins.every((line) => /^INNER JOIN \S+ AS \w+$/.test(line)));
     assert.throws(() => queryStoreSql("2026-10-30'; DROP TABLE x; --", '2026-10-30T05:05:17Z'), /ISO instants/);
