@@ -768,13 +768,15 @@ the interface holding the default route.
    ```
 
    It refuses any network but a Private one, a firewall that is off or
-   admits inbound by default, and an inbound rule already naming Docker's
-   programs, which would let the whole network in. Docker Desktop's
-   installer adds such rules, and Windows calls most home networks Public,
-   so `-TrustNetwork` says the network is trusted: it makes a Public profile
-   Private and disables Docker's inbound rules for the run, recording both
-   in `artifacts/stress/remote-state.json`. Without it, either refuses the
-   run. It brings the stack
+   admits inbound by default, and an enabled inbound rule on the Private
+   profile naming Docker's programs: an allow would let the whole network
+   in, a block would stop the generator. Docker Desktop's installer adds
+   such rules, and Windows calls most home networks Public, so
+   `-TrustNetwork` says the network is trusted: it makes a Public profile
+   Private and disables Docker's inbound rules on the Private profile until
+   `-Restore`, recording both in `artifacts/stress/remote-state.json`
+   ([ADR-173](../../docs/backend-architecture/adr/ADR-173-the-stress-runs-trustnetwork-lifts-two-blocks-until-restore-1589-adding-to-adr-172.md)).
+   Without it, either refuses the run. It brings the stack
    up with the stress override and
    `deploy/compose/docker-compose.stress-remote.yml`, which publishes the
    gateway, Keycloak and Grafana on the machine's LAN address beside
