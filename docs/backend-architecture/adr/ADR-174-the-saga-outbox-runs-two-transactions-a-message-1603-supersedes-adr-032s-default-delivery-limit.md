@@ -18,9 +18,10 @@ the database's largest cost at the knee and mostly page-latch waits, and the
 log flush of the endpoint's many small commits outside those figures.
 MassTransit 8.5.12's factory commits a new row before consuming it, saves
 the two lock columns in an `UPDATE` at the top of every pass, and ends a
-pass after one
-stage of its pipe: consume, deliver up to the limit, mark delivered, remove.
-At a limit of one, a transition staging *k* messages took *k* + 4
+pass after one stage of its pipe: consume; deliver up to the limit, marking
+the row delivered once the rest fit under it; remove. At a limit of one the
+mark always falls to a pass of its own, so a transition staging *k* messages
+took *k* + 4
 transactions and 2*k* + 5 `UPDATE`s, seven for one message, which is the
 ratio Query Store read. Here it takes two transactions, an insert and two
 `UPDATE`s, for any *k* below the limit. The consume still commits before
