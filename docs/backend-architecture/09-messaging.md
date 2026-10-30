@@ -3618,9 +3618,9 @@ cfg.ReceiveEndpoint(
 > `UseInboxAndInMemoryOutbox`, in `Common.Infrastructure.Inbox`, adds both to
 > each consumer's pipe, the inbox first, and is the only caller of
 > `UseInMemoryOutbox` in `src/`, which `InboxEndpointExtensionsTests` holds.
-> Inventory's `InboxFilterTests` makes one flush fail: with the two calls the
-> retry drops the message and its send, and with the one the consumer runs
-> again and the send is made.
+> An `InboxFilterTests` over a service's real inbox table makes one flush
+> fail: with the two calls the retry drops the message and its send, and with
+> the one the consumer runs again and the send is made.
 >
 > With the inbox outside, a failed flush throws *through* the filter, which
 > has not saved yet, so no row is written and the next delivery does the work
