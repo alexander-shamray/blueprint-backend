@@ -17,6 +17,8 @@ IMAGE = re.compile(r"^\s*image:\s*(\S+)\s*(?:#.*)?$")
 FROM = re.compile(r"^FROM\s+(\S+)(?:\s+AS\s+\S+)?\s*$")
 # A repository's own image, built from this tree and tagged by the pipeline rather than pinned.
 OWN = "${BLUEPRINT_REGISTRY"
+# The platform suffixes a multi-arch release also publishes one image under, as the collector does beside each tag.
+PLATFORM = re.compile(r"-(?:386|amd64|arm64(?:v8)?|armv[5-7]|arm|ppc64le|s390x|riscv64|windows-.*)$")
 
 
 def pinned(lines: list[str]) -> set[str]:
@@ -43,6 +45,11 @@ def drift(names: set[str], mirror: set[str]) -> tuple[set[str], set[str]]:
     return names - mirror, mirror - names
 
 
+def single_platform(images: set[str]) -> set[str]:
+    """The images pinned to one platform's tag rather than the release's multi-arch one."""
+    return {image for image in images if PLATFORM.search(image.rsplit("/", 1)[-1].partition(":")[2])}
+
+
 def docker_directories(config: str) -> str:
     """The text of the `package-ecosystem: docker` entry, up to the next entry."""
     entries = re.split(r"(?m)^  - package-ecosystem:", config)
@@ -63,6 +70,20 @@ class MirrorTests(unittest.TestCase):
 
         self.assertEqual(unseen, set(), "a pinned image Dependabot cannot see")
         self.assertEqual(stale, set(), "a mirrored image the stack no longer runs")
+
+    def test_no_mirrored_image_is_pinned_to_one_platform(self):
+        # Dependabot reads a numeric suffix such as -386 as a build number newer than the release, and no ignore
+        # entry can name every such tag, so a bump to one is refused here: close it with `@dependabot ignore this
+        # version` and the next run offers the release itself.
+        self.assertEqual(single_platform(mirrored(read(HERE / "Dockerfile"))), set(),
+                         "a mirrored image pinned to one platform's tag; close the bump as ignored")
+
+    def test_a_platform_suffix_is_told_apart_from_a_variant_or_a_build_number(self):
+        flagged = {"otel/opentelemetry-collector-contrib:0.163.2-386", "otel/c:0.163.2-arm64",
+                   "otel/c:0.163.2-windows-2019-amd64", "registry:5000/otel/c:0.163.2-s390x"}
+        kept = {"otel/opentelemetry-collector-contrib:0.163.2", "quay.io/keycloak/keycloak:26.8.1-1",
+                "redis:7.4.11-alpine", "mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04", "registry:5000/x"}
+        self.assertEqual(single_platform(flagged | kept), flagged)
 
     def test_the_docker_ecosystem_is_given_the_mirror(self):
         config = (ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
