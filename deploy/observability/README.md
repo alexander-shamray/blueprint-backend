@@ -732,17 +732,18 @@ port forward again.
 command runs from the root of that machine's checkout; the paragraphs below
 say why each step is what it is.
 
-| Step | Machine | Run | What it does |
+| When | Machine | Run | What it does |
 |---|---|---|---|
-| 0 | 1 and 2 | `git switch main`, `git pull`; `w32tm /resync` as administrator | Both checkouts on one commit, both clocks agreeing |
-| 1 | 1, as administrator | `pwsh -File deploy\observability\stress\remote\stack.ps1 -TrustNetwork` | Brings the stack up on the LAN address, idles a minute, prints step 2's command with the address and a token, then waits |
-| 2 | 2 | The printed `generator.ps1 -StackAddress <address> -Token <token>`, with `-Level medium -MaxUsers 6400` or the like | Opens the stack's ports to machine 2 alone, runs k6, hands `raw.json` back |
-| 3 | 1 | Nothing: wait | Removes the firewall rules and writes `artifacts/stress/<run>/summary.md` |
-| 4 | 1 | Grafana and `summary.md` | Read the run while Prometheus still holds it |
-| 5 | 1, as administrator | `pwsh -File deploy\observability\stress\remote\stack.ps1 -Restore` | Every port back on loopback, then Docker's rules and the network's profile as they were |
+| Once, before the first run | 1 and 2 | `git switch main`, `git pull`; `w32tm /resync` as administrator | Both checkouts on one commit, both clocks agreeing |
+| Each run, first | 1, as administrator | `pwsh -File deploy\observability\stress\remote\stack.ps1 -TrustNetwork`, adding `-NoBuild` once the images are built from that commit | Brings the stack up on the LAN address, idles a minute, prints machine 2's command with the address and a token, then waits |
+| Each run, second | 2 | The printed `generator.ps1 -StackAddress <address> -Token <token>`, adding `-Level <level>` | Opens the stack's ports to machine 2 alone, runs k6, hands `raw.json` back |
+| Each run, last | 1 | Nothing: wait, then read Grafana and `artifacts/stress/<run>/summary.md` | Removes the firewall rules and writes the summary, whose `Ended:` line chooses the next run |
+| Between runs | — | `Ended:` reads `cap` or `held`: run the next level, `low`, then `medium`, then `high`. `knee` or `errors`: that run found the limit and the series ends. `generator`: machine 2 gave out first | *The staircase* above says why each level starts where the one below ends |
+| Once, after the last run | 1, as administrator | `pwsh -File deploy\observability\stress\remote\stack.ps1 -Restore` | Every port back on loopback, then Docker's rules and the network's profile as they were |
 
-A further run repeats steps 1 and 2, with `-NoBuild` on step 1 once the
-images are built from that commit; step 5 comes after the last.
+`setup()` makes one user for each VU of a level's highest step before its
+first, and the cap bounds that step, so `-MaxUsers` keeps a level's setup
+short when its top steps are not wanted.
 
 **What each machine needs.** The stack's machine is the one the blocks above
 run on. The second needs Docker Desktop, Git with a checkout of the commit the
