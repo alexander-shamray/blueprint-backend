@@ -1,4 +1,5 @@
 using System.Net.Security;
+using Common.Contracts;
 using Common.Contracts.Catalog.V1;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
@@ -22,6 +23,9 @@ public static class DependencyInjection
 
     /// <summary>§11.7's erasure request, on its own endpoint so no projection failure holds it.</summary>
     public const string PrivacyQueue = "bff-privacy";
+
+    /// <summary>ADR-177's partitions, well past the endpoint's concurrency, so two orders seldom share one.</summary>
+    public const int OrderPartitions = 256;
 
     public static IServiceCollection AddMassTransitMessaging(
         this IServiceCollection services,
@@ -81,13 +85,16 @@ public static class DependencyInjection
                         e.UseConsumeFilter(typeof(InboxFilter<>), context);
                         e.UseInMemoryOutbox(context);
 
-                        e.ConfigureConsumer<IntegrationEventConsumer<OrderPlaced>>(context);
-                        e.ConfigureConsumer<IntegrationEventConsumer<OrderConfirmed>>(context);
-                        e.ConfigureConsumer<IntegrationEventConsumer<OrderCancelled>>(context);
-                        e.ConfigureConsumer<IntegrationEventConsumer<PaymentAuthorised>>(context);
-                        e.ConfigureConsumer<IntegrationEventConsumer<PaymentRefunded>>(context);
-                        e.ConfigureConsumer<IntegrationEventConsumer<ShipmentDispatched>>(context);
-                        e.ConfigureConsumer<IntegrationEventConsumer<ShipmentDelivered>>(context);
+                        // One order's events one at a time in this host, so a pair published together waits here and
+                        // not on its row's lock (ADR-177). On the consumer's pipe, which the endpoint's retry wraps.
+                        IPartitioner byOrder = e.CreatePartitioner(OrderPartitions);
+                        ConfigureByOrder<OrderPlaced>(e, context, byOrder, m => m.OrderId);
+                        ConfigureByOrder<OrderConfirmed>(e, context, byOrder, m => m.OrderId);
+                        ConfigureByOrder<OrderCancelled>(e, context, byOrder, m => m.OrderId);
+                        ConfigureByOrder<PaymentAuthorised>(e, context, byOrder, m => m.OrderId);
+                        ConfigureByOrder<PaymentRefunded>(e, context, byOrder, m => m.OrderId);
+                        ConfigureByOrder<ShipmentDispatched>(e, context, byOrder, m => m.OrderId);
+                        ConfigureByOrder<ShipmentDelivered>(e, context, byOrder, m => m.OrderId);
                         e.ConfigureConsumer<IntegrationEventConsumer<ProductPublished>>(context);
                     });
 
@@ -111,4 +118,15 @@ public static class DependencyInjection
         // No readiness line: AddMassTransit registers "masstransit-bus", tagged ready (§13.5).
         return services;
     }
+
+    /// <summary>An order event's consumer, each delivery waiting for its order's partition (ADR-177).</summary>
+    private static void ConfigureByOrder<T>(
+        IReceiveEndpointConfigurator endpoint,
+        IRegistrationContext context,
+        IPartitioner byOrder,
+        Func<T, Guid> orderId)
+        where T : class, IIntegrationEvent =>
+        endpoint.ConfigureConsumer<IntegrationEventConsumer<T>>(
+            context,
+            c => c.Message<T>(m => m.UsePartitioner(byOrder, x => orderId(x.Message))));
 }

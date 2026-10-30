@@ -37,6 +37,16 @@ public sealed class BffServiceFixture()
     public async Task DeliverAsync<T>(T message, string queue = MessagingRegistration.EventsQueue)
         where T : class, IIntegrationEvent
     {
+        await SendAsync(message, queue);
+
+        // The inbox row is written after the handler's statement commits (§9.5), so its rows are there to read.
+        await WaitUntilAsync(async () => (await InboxAsync(message.MessageId)).Count == 1);
+    }
+
+    /// <summary>Sends as <see cref="DeliverAsync{T}"/> does and returns at once, for a test holding the row.</summary>
+    public async Task SendAsync<T>(T message, string queue = MessagingRegistration.EventsQueue)
+        where T : class, IIntegrationEvent
+    {
         // Bounded, because a send the broker refuses is retried rather than failed.
         using CancellationTokenSource bounded =
             CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -54,9 +64,6 @@ public sealed class BffServiceFixture()
                 c.CorrelationId = message.CorrelationId;
             },
             bounded.Token);
-
-        // The inbox row is written after the handler's statement commits (§9.5), so its rows are there to read.
-        await WaitUntilAsync(async () => (await InboxAsync(message.MessageId)).Count == 1);
     }
 
     /// <summary>The container's broker, under the fixture's derived account, for a client outside the host.</summary>

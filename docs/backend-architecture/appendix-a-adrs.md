@@ -183,6 +183,7 @@ decision looks wrong.
 | **ADR-174** | [The saga outbox runs two transactions a message (#1603); supersedes ADR-032's default delivery limit](adr/ADR-174-the-saga-outbox-runs-two-transactions-a-message-1603-supersedes-adr-032s-default-delivery-limit.md) |
 | **ADR-175** | [The send claim's index is keyed on the notice's id (#1607)](adr/ADR-175-the-send-claims-index-is-keyed-on-the-notices-id-1607.md) |
 | **ADR-176** | [The log retention index is keyed on the notice's id (#1607); supersedes ADR-175's unchanged retention index](adr/ADR-176-the-log-retention-index-is-keyed-on-the-notices-id-1607-supersedes-adr-175s-unchanged-retention-index.md) |
+| **ADR-177** | [The BFF's order events run one order at a time in the host (#1625)](adr/ADR-177-the-bffs-order-events-run-one-order-at-a-time-in-the-host-1625.md) |
 
 ---
 
