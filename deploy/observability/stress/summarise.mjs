@@ -254,10 +254,15 @@ const MINIMUM_RANGE_SECONDS = 120;
 const range = `${Math.max(raw.plan.holdSeconds, MINIMUM_RANGE_SECONDS)}s`;
 
 // Every database Query Store records, whose statements each hold is read for.
-const queryStoreDatabases = (read('docker', sqlcmdArgs(QUERY_STORE_DATABASES)) ?? '')
+const queryStoreListing = read('docker', sqlcmdArgs(QUERY_STORE_DATABASES));
+const queryStoreDatabases = (queryStoreListing ?? '')
     .split(/\r?\n/).map((line) => line.trim()).filter((name) => /^\w+$/.test(name));
 
-// A listing or every database's read failing is no reading, which the line tells from an empty window.
+if (queryStoreListing !== null && queryStoreDatabases.length === 0)
+    unavailable.push('Query Store: no platform database records it');
+
+// A failed listing, an empty one or every database's read failing is no reading, each recorded under Not
+// measured, which the line tells from an empty window.
 function statements(window) {
     const sql = queryStoreSql(new Date(window.startMs).toISOString(), new Date(window.endMs).toISOString());
     const reads = queryStoreDatabases
