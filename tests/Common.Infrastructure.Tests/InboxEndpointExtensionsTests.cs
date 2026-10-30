@@ -4,10 +4,7 @@ using Xunit;
 namespace Common.Infrastructure.Tests;
 
 /// <summary>§9.8's nesting at every endpoint: the in-memory outbox reaches a pipe only inside the inbox.</summary>
-/// <remarks>
-/// Typed beside the inbox on an endpoint, the outbox wraps it and a failed flush loses its sends; Inventory's
-/// <c>InboxFilterTests</c> is the behaviour, and this is every endpoint taking it (§9.8).
-/// </remarks>
+/// <remarks>Typed beside the inbox on an endpoint, the outbox wraps it and a failed flush loses its sends (§9.8).</remarks>
 public sealed class InboxEndpointExtensionsTests
 {
     private const string Helper = "src/BuildingBlocks/Common.Infrastructure/Inbox/InboxEndpointExtensions.cs";
