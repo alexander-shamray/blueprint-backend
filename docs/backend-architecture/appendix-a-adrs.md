@@ -185,6 +185,7 @@ decision looks wrong.
 | **ADR-176** | [The log retention index is keyed on the notice's id (#1607); supersedes ADR-175's unchanged retention index](adr/ADR-176-the-log-retention-index-is-keyed-on-the-notices-id-1607-supersedes-adr-175s-unchanged-retention-index.md) |
 | **ADR-177** | [The BFF's order events run one order at a time in the host (#1625)](adr/ADR-177-the-bffs-order-events-run-one-order-at-a-time-in-the-host-1625.md) |
 | **ADR-178** | [The saga outbox is keyed on its inbox-message index, and the inbox's id is random (#1624)](adr/ADR-178-the-saga-outbox-is-keyed-on-its-inbox-message-index-and-the-inboxs-id-is-random-1624.md) |
+| **ADR-178** | [A listing order's index covers its page, and a cursor's page has its own statement (#1626)](adr/ADR-178-a-listing-orders-index-covers-its-page-and-a-cursors-page-has-its-own-statement-1626.md) |
 
 ---
 
