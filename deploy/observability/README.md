@@ -733,8 +733,9 @@ run on. The second needs Docker Desktop, Git with a checkout of the commit the
 stack is built from, and PowerShell 7.3 or later. It runs k6 alone, from the
 image the stress override pins, so its network matters more than its cores: a
 wired one, since the knee reads the journey's p95. Both clocks must agree,
-since the knee stop reads Prometheus at k6's own instants and `setup()`
-refuses a clock off by more than `stress/report.js`'s `CLOCK_SKEW_LIMIT_MS`;
+since the knee stop and the summary read Prometheus at k6's own instants;
+with a remote generator `setup()` refuses a clock off by more than
+`stress/report.js`'s `CLOCK_SKEW_LIMIT_MS`, whatever the stop rule.
 `w32tm /resync`, from an administrator prompt, resynchronises one.
 
 **Two scripts drive it**: `stress/remote/stack.ps1` on the stack's machine,
