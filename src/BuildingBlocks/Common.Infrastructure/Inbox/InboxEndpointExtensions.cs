@@ -4,8 +4,8 @@ namespace Common.Infrastructure.Inbox;
 
 /// <summary>§9.8's nesting on a receive endpoint: §9.5's inbox outermost, the in-memory outbox inside it.</summary>
 /// <remarks>
-/// Not the two calls typed in order: the inbox is a scoped filter on each consumer's message pipe and the endpoint's
-/// outbox wraps that pipe, so the flush ran after the inbox row had committed (§9.8).
+/// Not the two calls typed in order: the inbox is a scoped filter on each consumer's message pipe, and the endpoint's
+/// outbox would wrap that pipe and flush after the inbox row commits (§9.8).
 /// </remarks>
 public static class InboxEndpointExtensions
 {
