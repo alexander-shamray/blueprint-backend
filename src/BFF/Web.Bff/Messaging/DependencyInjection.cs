@@ -88,13 +88,27 @@ public static class DependencyInjection
                         // One order's events one at a time in this host, so a pair published together waits here and
                         // not on its row's lock (ADR-177). On the consumer's pipe, which the endpoint's retry wraps.
                         IPartitioner byOrder = e.CreatePartitioner(OrderPartitions);
-                        ConfigureByOrder<OrderPlaced>(e, context, byOrder, m => m.OrderId);
-                        ConfigureByOrder<OrderConfirmed>(e, context, byOrder, m => m.OrderId);
-                        ConfigureByOrder<OrderCancelled>(e, context, byOrder, m => m.OrderId);
-                        ConfigureByOrder<PaymentAuthorised>(e, context, byOrder, m => m.OrderId);
-                        ConfigureByOrder<PaymentRefunded>(e, context, byOrder, m => m.OrderId);
-                        ConfigureByOrder<ShipmentDispatched>(e, context, byOrder, m => m.OrderId);
-                        ConfigureByOrder<ShipmentDelivered>(e, context, byOrder, m => m.OrderId);
+                        e.ConfigureConsumer<IntegrationEventConsumer<OrderPlaced>>(
+                            context,
+                            ByOrder<OrderPlaced>(byOrder, m => m.OrderId));
+                        e.ConfigureConsumer<IntegrationEventConsumer<OrderConfirmed>>(
+                            context,
+                            ByOrder<OrderConfirmed>(byOrder, m => m.OrderId));
+                        e.ConfigureConsumer<IntegrationEventConsumer<OrderCancelled>>(
+                            context,
+                            ByOrder<OrderCancelled>(byOrder, m => m.OrderId));
+                        e.ConfigureConsumer<IntegrationEventConsumer<PaymentAuthorised>>(
+                            context,
+                            ByOrder<PaymentAuthorised>(byOrder, m => m.OrderId));
+                        e.ConfigureConsumer<IntegrationEventConsumer<PaymentRefunded>>(
+                            context,
+                            ByOrder<PaymentRefunded>(byOrder, m => m.OrderId));
+                        e.ConfigureConsumer<IntegrationEventConsumer<ShipmentDispatched>>(
+                            context,
+                            ByOrder<ShipmentDispatched>(byOrder, m => m.OrderId));
+                        e.ConfigureConsumer<IntegrationEventConsumer<ShipmentDelivered>>(
+                            context,
+                            ByOrder<ShipmentDelivered>(byOrder, m => m.OrderId));
                         e.ConfigureConsumer<IntegrationEventConsumer<ProductPublished>>(context);
                     });
 
@@ -120,13 +134,10 @@ public static class DependencyInjection
     }
 
     /// <summary>An order event's consumer, each delivery waiting for its order's partition (ADR-177).</summary>
-    private static void ConfigureByOrder<T>(
-        IReceiveEndpointConfigurator endpoint,
-        IRegistrationContext context,
+    /// <remarks>Only the configuration, so each binding stays a line the messaging gate reads (§3.2).</remarks>
+    private static Action<IConsumerConfigurator<IntegrationEventConsumer<T>>> ByOrder<T>(
         IPartitioner byOrder,
         Func<T, Guid> orderId)
         where T : class, IIntegrationEvent =>
-        endpoint.ConfigureConsumer<IntegrationEventConsumer<T>>(
-            context,
-            c => c.Message<T>(m => m.UsePartitioner(byOrder, x => orderId(x.Message))));
+        c => c.Message<T>(m => m.UsePartitioner(byOrder, x => orderId(x.Message)));
 }
