@@ -1,0 +1,28 @@
+# The stress run's override for a generator on a second machine (ADR-172),
+# added after docker-compose.stress.yml and never alone: it publishes the
+# three ports that machine's k6 reads on the LAN address STRESS_BIND_ADDRESS
+# names, beside loopback, the one exception §14.1's callout states. Bringing
+# the stack up without it puts every port back on loopback alone.
+
+# deploy/observability/stress/remote/stack.ps1 sets the address from the
+# machine's own and opens these ports to the generator's address alone; a
+# hand-run `up` must set it, and Compose refuses the file when it is unset.
+services:
+  # The journey's requests.
+  gateway:
+    ports: !override
+      - "127.0.0.1:5000:8080"
+      - "${STRESS_BIND_ADDRESS:?STRESS_BIND_ADDRESS names this machine's LAN address}:5000:8080"
+
+  # setup()'s admin API and every user's token. The issuer stays
+  # KC_HOSTNAME's, so a token minted on the LAN address passes the gateway.
+  keycloak:
+    ports: !override
+      - "127.0.0.1:8080:8080"
+      - "${STRESS_BIND_ADDRESS:?STRESS_BIND_ADDRESS names this machine's LAN address}:8080:8080"
+
+  # Prometheus, through Grafana's proxy, which the knee stop reads.
+  grafana:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+      - "${STRESS_BIND_ADDRESS:?STRESS_BIND_ADDRESS names this machine's LAN address}:3000:3000"
