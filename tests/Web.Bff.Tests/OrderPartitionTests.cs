@@ -93,23 +93,35 @@ public sealed class OrderPartitionTests(BffServiceFixture fixture) : IAsyncLifet
         public static async Task<RowHold> TakeAsync(string connectionString, Guid[] orders)
         {
             SqlConnection connection = new(connectionString);
-            await connection.OpenAsync(TestContext.Current.CancellationToken);
-            SqlTransaction transaction = connection.BeginTransaction();
+            SqlTransaction? transaction = null;
+            try
+            {
+                await connection.OpenAsync(TestContext.Current.CancellationToken);
+                transaction = connection.BeginTransaction();
 
-            // UPDLOCK, which every MERGE's own read of the key waits on.
-            int held = await connection.ExecuteScalarAsync<int>(
-                """
-                SELECT COUNT(*)
-                FROM bff.Orders WITH (UPDLOCK, ROWLOCK)
-                WHERE OrderId IN @Orders;
-                """,
-                new { Orders = orders },
-                transaction);
-            held.ShouldBe(orders.Length);
+                // UPDLOCK, which every MERGE's own read of the key waits on.
+                int held = await connection.ExecuteScalarAsync<int>(
+                    """
+                    SELECT COUNT(*)
+                    FROM bff.Orders WITH (UPDLOCK, ROWLOCK)
+                    WHERE OrderId IN @Orders;
+                    """,
+                    new { Orders = orders },
+                    transaction);
+                held.ShouldBe(orders.Length);
 
-            short session = await connection.ExecuteScalarAsync<short>("SELECT @@SPID;", transaction: transaction);
+                short session = await connection.ExecuteScalarAsync<short>("SELECT @@SPID;", transaction: transaction);
 
-            return new RowHold(connectionString, connection, transaction, session);
+                return new RowHold(connectionString, connection, transaction, session);
+            }
+            catch
+            {
+                // Released here, or the locks outlive the test and the collection's next reset waits behind them.
+                if (transaction is not null)
+                    await transaction.DisposeAsync();
+                await connection.DisposeAsync();
+                throw;
+            }
         }
 
         /// <summary>The requests waiting on a lock in this database, every one of them behind this hold.</summary>
