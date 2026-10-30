@@ -198,7 +198,9 @@ export function setup() {
     if (STOP === 'knee' && http.get(`${PROM_URL}/api/v1/query?query=vector(1)`).status !== 200)
         fail(`Stress run is not configured: the knee stop reads Prometheus at ${PROM_URL}`);
 
-    if (STOP === 'knee') {
+    // The knee stop reads Prometheus at k6's instants, and summarise.mjs places every step by them; on one
+    // machine the clocks are one, so only the knee stop pays for the check there.
+    if (STOP === 'knee' || GENERATOR === 'remote') {
         const sent = Date.now();
         const response = http.get(`${PROM_URL}/api/v1/query?query=time()`);
         const server = response.status === 200 ? Number(response.json('data.result.1')) : NaN;
