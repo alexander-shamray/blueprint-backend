@@ -154,7 +154,7 @@ services:
     ports: [ "127.0.0.1:4317:4317", "127.0.0.1:4318:4318" ]
 
   grafana:
-    image: grafana/otel-lgtm:0.37.0
+    image: grafana/otel-lgtm:0.38.1
     # The bundled Prometheus takes no rule-file flag or variable, so its own
     # config gains the rule_files key at start instead of being copied here;
     # the guard keeps a restart from appending it twice. Only the loaded file
