@@ -45,7 +45,7 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
         """;
 
     // Each page has a statement of its own: an "@After IS NULL OR" predicate cannot seek, so a cursor's page
-    // would walk the index from its end rather than from the cursor (ADR-178).
+    // would walk the index from its end rather than from the cursor (ADR-179).
     internal const string NewestSql = Columns + NewestOrder;
 
     internal const string NewestAfterSql =

@@ -1,4 +1,4 @@
-# ADR-178 — A listing order's index covers its page, and a cursor's page has its own statement (#1626)
+# ADR-179 — A listing order's index covers its page, and a cursor's page has its own statement (#1626)
 
 **Decision.** Catalog's three listing indexes include every column of
 `Products` their reads take: `IX_Products_PublishedAt_Id` includes `Name`,

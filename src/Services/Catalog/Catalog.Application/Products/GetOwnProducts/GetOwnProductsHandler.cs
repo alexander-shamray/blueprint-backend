@@ -38,7 +38,7 @@ public sealed class GetOwnProductsHandler(IDbConnectionFactory connections, ICur
         """;
 
     // A cursor's page has a statement of its own, so the seek reaches the cursor rather than the seller's newest row
-    // (ADR-178).
+    // (ADR-179).
     internal const string FirstSql = Columns + Order;
 
     internal const string AfterSql =

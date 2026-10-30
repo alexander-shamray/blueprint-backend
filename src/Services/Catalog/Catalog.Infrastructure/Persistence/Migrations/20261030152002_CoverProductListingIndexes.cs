@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Catalog.Infrastructure.Persistence.Migrations;
 
-/// <summary>Lets each listing order walk its index without a lookup a row (ADR-178).</summary>
+/// <summary>Lets each listing order walk its index without a lookup a row (ADR-179).</summary>
 /// <remarks>
 /// SQL because IncludeProperties cannot name a complex type's columns, so the snapshot does not record it;
 /// DROP_EXISTING rebuilds each index in place, so no read runs without it (§7.4).
