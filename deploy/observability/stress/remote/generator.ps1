@@ -1,13 +1,8 @@
 #Requires -Version 7.3
-# The stress run's second machine, the one k6 runs on (ADR-172). It asks
-# stack.ps1 for the run, runs k6 from the stress override's own image against
-# the stack's LAN address, and hands raw.json back for the summary. Start
-# stack.ps1 first; it prints this command once the stack is ready.
-#
-#   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress 192.168.1.20 -Token <printed>
-#   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress 192.168.1.20 -Token <printed> -Level medium
-#
-# Nothing is opened here: this machine only connects out.
+# The stress run's generator machine (ADR-172), whose flow
+# deploy/observability/README.md's *Running it from a second machine* owns;
+# it only connects out, with the command stack.ps1 prints.
+#   pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress <a> -Token <t>
 
 [CmdletBinding()]
 param(
