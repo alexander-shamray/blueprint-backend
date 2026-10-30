@@ -641,7 +641,7 @@ docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-com
 **2. Choose the products.** Every seeded product Ordering holds as available,
 in the first one's currency, whose price ends in none of the pence the payment
 simulator scripts, as the SLO run's step 4 chooses one. The query is
-`stress/products.sql`, which the second machine's scripts read too:
+`stress/products.sql`, which `stress/remote/stack.ps1` reads too:
 
 ```bash
 rows=$(docker exec commerce-sql-1 sh -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" exec "$@"' sh \
@@ -767,8 +767,8 @@ holding the default route.
    pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress <address> -Token <token>
    ```
 
-   `-Level`, `-Stop`, `-MaxUsers` and `-Steps` set the variables block 3
-   names. It asks the stack's machine for the run, which opens the stack's
+   `-Level`, `-Stop`, `-MaxUsers` and `-Steps` set `STRESS_PROFILE`,
+   `STRESS_STOP`, `STRESS_MAX_USERS` and `STRESS_STEPS`. It asks the stack's machine for the run, which opens the stack's
    three ports to that one address and starts the sampler. It refuses a
    checkout at another commit, runs k6 with `STRESS_GENERATOR=remote`, and
    hands `raw.json` back over the results port.
