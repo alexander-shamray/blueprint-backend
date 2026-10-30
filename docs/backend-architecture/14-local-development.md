@@ -374,7 +374,11 @@ that waits on a peer with `service_healthy` waits on that same answer.
 > on a café or office network offers `sa`, every service's Redis user,
 > the realm's service accounts and Keycloak's admin console to every peer on
 > it. Every URL in the table is already a `localhost` one, so the prefix takes
-> nothing away from the workflow this chapter documents.
+> nothing away from the workflow this chapter documents. The one exception is
+> the stress run's `docker-compose.stress-remote.yml`, which also publishes
+> the gateway, Keycloak and Grafana on a LAN address for a generator on a
+> second machine, behind a firewall rule for that machine alone
+> ([ADR-172](adr/ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md)).
 
 The realm's own logins are `demo/demo`, which holds the permissions a shipped
 endpoint requires for everyday use — `deploy/compose/README.md` carries the
