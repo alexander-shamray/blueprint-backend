@@ -81,9 +81,8 @@ public static class DependencyInjection
                         // Bare, with no redelivery: no handler meets a wait, and none maps a command (§9.8).
                         e.UseMessageRetry(RetryPolicy.Standard);
 
-                        // Inbox outside the in-memory outbox (§9.8).
-                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                        e.UseInMemoryOutbox(context);
+                        // The inbox around the in-memory outbox, so its row commits after the flush (§9.8).
+                        e.UseInboxAndInMemoryOutbox(context);
 
                         // One order's events one at a time in this host, so a pair published together waits here and
                         // not on its row's lock (ADR-177). On the consumer's pipe, which the endpoint's retry wraps.
@@ -118,8 +117,7 @@ public static class DependencyInjection
                     {
                         e.UseMessageRetry(RetryPolicy.Standard);
 
-                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                        e.UseInMemoryOutbox(context);
+                        e.UseInboxAndInMemoryOutbox(context);
 
                         e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>(context);
                         e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteClosed>>(context);

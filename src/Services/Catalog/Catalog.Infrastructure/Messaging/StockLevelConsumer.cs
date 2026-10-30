@@ -24,10 +24,8 @@ public static class StockLevelConsumer
                 // Nothing excluded: no backoff repairs a missing handler, and §9.4 wants that loud, not quick.
                 e.UseMessageRetry(r => RetryPolicy.Standard(r));
 
-                // Inbox before the in-memory outbox (§9.8): the first filter is outermost, and the outbox flushes
-                // after the inner pipeline returns, so the inbox row is the last write.
-                e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                e.UseInMemoryOutbox(context);
+                // The inbox around the in-memory outbox, so its row commits after the flush (§9.8).
+                e.UseInboxAndInMemoryOutbox(context);
 
                 e.ConfigureConsumer<IntegrationEventConsumer<StockLevelChanged>>(context);
             });

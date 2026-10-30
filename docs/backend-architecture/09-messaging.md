@@ -404,9 +404,10 @@ it an exception.**
 [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
 admits MassTransit's Entity Framework outbox on §9.6's saga receive endpoint,
 which brings a second table set into the `ordering` schema. It is that endpoint
-and no other: the platform's three ordinary receive endpoints keep
-`UseInMemoryOutbox`, and every application-level integration event still goes
-through §9.4's `OutboxMessages` and its dispatcher. The bullet's cost is paid
+and no other: every other receive endpoint keeps the in-memory outbox,
+through §9.8's `UseInboxAndInMemoryOutbox`, and every application-level
+integration event still goes through §9.4's `OutboxMessages` and its
+dispatcher. The bullet's cost is paid
 rather than dodged — there really are two retention policies now, and the ADR
 says which job prunes which table and why folding them together would be worse.
 
@@ -1438,9 +1439,9 @@ cfg.ReceiveEndpoint(
             RetryPolicy.Standard(r);
         });
         // The inbox goes OUTSIDE the in-memory outbox — a correctness rule
-        // rather than a preference; §9.8's trap says what the other order costs.
-        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-        e.UseInMemoryOutbox(context);
+        // rather than a preference; §9.8's trap says what the other order
+        // costs, and why one call places both.
+        e.UseInboxAndInMemoryOutbox(context);
 
         // One per command in E.1.1's Accepts column. A type missing here is
         // sent into a queue that ignores it.
@@ -3001,7 +3002,8 @@ the messages a transition sends commit in the same transaction as the instance
 that sent them, which is
 [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
 and the reason this endpoint takes `UseEntityFrameworkOutbox<OrderingDbContext>`
-where the other endpoints take `UseInMemoryOutbox` (§9.8). Without it the
+where the other endpoints take the in-memory outbox through
+`UseInboxAndInMemoryOutbox` (§9.8). Without it the
 instance commits and its `Send`s and `Schedule`s are still in a buffer — a
 dual write.
 
@@ -3549,7 +3551,7 @@ back is a different filter, which none of these endpoints uses.
 **Idempotency is the same everywhere**: every endpoint applies
 `InboxFilter<>`, and the callout under the saga's endpoint is the argument
 for there being no exception. **Retry differs, and so does the outbox** —
-every other endpoint defers its sends with `UseInMemoryOutbox`, and the
+every other endpoint defers its sends with the in-memory outbox, and the
 saga persists them instead, because its sends must survive its own commit,
 which is
 [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
@@ -3570,17 +3572,13 @@ cfg.ReceiveEndpoint(
         // at-least-once delivery is a property of the broker, not of the
         // message type or of what the consumer does with it.
         //
-        // BEFORE the in-memory outbox, so the inbox row is committed after the
-        // buffered sends have flushed rather than before. The callout under
-        // this block is the argument.
-        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-
-        // Defers any Publish/Send until the consumer completes, so a retry does
-        // not re-emit messages the failed attempt already sent. The context
-        // argument is required rather than optional: the parameterless
-        // overload carries CS0618 at the pinned MassTransit version, which
-        // ADR-019 turns into a failed build.
-        e.UseInMemoryOutbox(context);
+        // AROUND the in-memory outbox, so the inbox row is committed after the
+        // buffered sends have flushed rather than before. The outbox defers
+        // any Publish/Send until the consumer completes, so a retry does not
+        // re-emit messages the failed attempt already sent. One call places
+        // both on each consumer's pipe, in that order; the callout under this
+        // block is the argument, and why two calls cannot.
+        e.UseInboxAndInMemoryOutbox(context);
 
         e.ConfigureConsumer<IntegrationEventConsumer<ProductPublished>>(context);
         e.ConfigureConsumer<IntegrationEventConsumer<PriceChanged>>(context);
@@ -3602,24 +3600,34 @@ cfg.ReceiveEndpoint(
 > other — a gap that fails visibly, traded against a convenience that fails
 > quietly.
 
-> **Trap — the inbox filter inside the in-memory outbox.** Filters added first
-> are outermost, so `UseInMemoryOutbox(context)` before
-> `UseConsumeFilter(…)` puts the outbox *outside* the inbox — and the
-> in-memory outbox flushes its buffered
-> `Publish`/`Send` calls **after** the inner pipeline returns. The inbox row is
-> then committed first and the messages go out second, which is the wrong way
-> round in the one case that matters: if the flush fails, the broker redelivers,
-> the filter finds its own row and drops the message without rerunning the
-> consumer, and the buffered messages are never sent by anybody. A message
-> acknowledged, its effects lost, and nothing in either mechanism able to
-> notice.
+> **Trap — the inbox filter inside the in-memory outbox.** The in-memory
+> outbox flushes its buffered `Publish`/`Send` calls **after** the pipeline
+> inside it returns. With the outbox outside the inbox, the inbox row is
+> committed first and the messages go out second, which is the wrong way round
+> in the one case that matters: if the flush fails, the retry or the broker
+> delivers the message again, the filter finds its own row and drops it
+> without rerunning the consumer, and the buffered messages are never sent by
+> anybody. A message acknowledged, its effects lost, and nothing in either
+> mechanism able to notice.
 >
-> Putting the inbox first fixes it by construction. A failed flush then throws
-> *through* the filter, which has not saved yet, so no row is written and the
-> redelivery does the work again — at-least-once, as designed. Both mechanisms
-> are correct on their own and only their nesting decides which of the two
-> stories you get, which is why the order is written out with a reason at every
-> endpoint rather than left to the order somebody typed the lines in.
+> **The order the two calls are typed in does not decide it.**
+> `UseConsumeFilter(typeof(InboxFilter<>), context)` adds the inbox to each
+> consumer's message pipe, and `UseInMemoryOutbox(context)` adds the outbox
+> to the endpoint's, which wraps every consumer's pipe — so on an endpoint the
+> outbox is outside the inbox whichever line comes first.
+> `UseInboxAndInMemoryOutbox`, in `Common.Infrastructure.Inbox`, adds both to
+> each consumer's pipe, the inbox first, and is the only caller of
+> `UseInMemoryOutbox` in `src/`, which `InboxEndpointExtensionsTests` holds.
+> Inventory's `InboxFilterTests` makes one flush fail: with the two calls the
+> retry drops the message and its send, and with the one the consumer runs
+> again and the send is made.
+>
+> With the inbox outside, a failed flush throws *through* the filter, which
+> has not saved yet, so no row is written and the next delivery does the work
+> again — at-least-once, as designed. Both mechanisms are correct on their own
+> and only their nesting decides which of the two stories you get, which is
+> why the nesting is one call with a reason rather than two lines whose order
+> looks as if it says something.
 >
 > **This governs every endpoint that has an in-memory outbox**, and the
 > reason the saga's has none is the same nesting one step on: a
@@ -3647,8 +3655,7 @@ cfg.ReceiveEndpoint(
     {
         e.UseMessageRetry(RetryPolicy.Standard);
 
-        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-        e.UseInMemoryOutbox(context);
+        e.UseInboxAndInMemoryOutbox(context);
 
         // Ordering's own reaction to Inventory's reservation (§9.6): the order
         // records that its stock is held. The saga reads the same event on the
@@ -3690,15 +3697,18 @@ cfg.ReceiveEndpoint(
     {
         e.UseMessageRetry(RetryPolicy.Standard);
 
-        // The inbox is here too. The callout below is why there is no
-        // exception for a state machine.
+        // The inbox is here too, on its own, since the helper's outbox is the
+        // in-memory one. The callout below is why there is no exception for a
+        // state machine.
         e.UseConsumeFilter(typeof(InboxFilter<>), context);
 
-        // And the one line that differs from the other endpoints:
-        // MassTransit's transactional outbox rather than the in-memory one, on
-        // the DbContext the saga repository already holds, so the sends commit
-        // with the instance (ADR-032). A pass delivers everything a
-        // transition staged, so a message takes two transactions (ADR-174).
+        // And what differs from the other endpoints: MassTransit's
+        // transactional outbox rather than the in-memory one, on the DbContext
+        // the saga repository already holds, so the sends commit with the
+        // instance (ADR-032). It goes on each saga message's pipe, as the
+        // inbox does, so added second it sits inside it. A pass delivers
+        // everything a transition staged, so a message takes two transactions
+        // (ADR-174).
         e.UseEntityFrameworkOutbox<OrderingDbContext>(
             context,
             o => o.MessageDeliveryLimit = SagaOutboxDeliveryLimit);

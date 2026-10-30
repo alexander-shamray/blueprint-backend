@@ -71,8 +71,7 @@ public static class DependencyInjection
                             RetryPolicy.Standard(r);
                         });
 
-                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                        e.UseInMemoryOutbox(context);
+                        e.UseInboxAndInMemoryOutbox(context);
 
                         e.ConfigureConsumer<
                             CommandConsumer<PersonalDataDeleteCompleted, RecordErasureCompletionCommand>>(context);

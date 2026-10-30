@@ -79,10 +79,8 @@ public static class DependencyInjection
                         // Bare, with no redelivery: no consumer meets a wait, and none maps a command (§9.8).
                         e.UseMessageRetry(RetryPolicy.Standard);
 
-                        // Inbox outside the in-memory outbox (§9.8): the other nesting commits
-                        // the inbox row before the buffered sends have flushed.
-                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                        e.UseInMemoryOutbox(context);
+                        // The inbox around the in-memory outbox, so its row commits after the flush (§9.8).
+                        e.UseInboxAndInMemoryOutbox(context);
 
                         e.ConfigureConsumer<IntegrationEventConsumer<OrderPlaced>>(context);
                         e.ConfigureConsumer<IntegrationEventConsumer<OrderConfirmed>>(context);
@@ -100,8 +98,7 @@ public static class DependencyInjection
                     {
                         e.UseMessageRetry(RetryPolicy.Standard);
 
-                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                        e.UseInMemoryOutbox(context);
+                        e.UseInboxAndInMemoryOutbox(context);
 
                         e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteRequested>>(context);
                         e.ConfigureConsumer<IntegrationEventConsumer<PersonalDataDeleteClosed>>(context);
