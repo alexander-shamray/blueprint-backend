@@ -212,11 +212,11 @@ internal static class RequestBuilder
 
         for (int i = 0; i < history.Count; i++)
         {
-            (Role role, List<Block> blocks)? message = history[i] switch
+            (BetaMessageParamRole role, List<Block> blocks)? message = history[i] switch
             {
-                UserMessage user => (Role.User, [mark => TextBlock(user.Content, mark)]),
-                AssistantMessage assistant => (Role.Assistant, Blocks(assistant)),
-                ToolResultsMessage results => (Role.User, Results(results)),
+                UserMessage user => (BetaMessageParamRole.User, [mark => TextBlock(user.Content, mark)]),
+                AssistantMessage assistant => (BetaMessageParamRole.Assistant, Blocks(assistant)),
+                ToolResultsMessage results => (BetaMessageParamRole.User, Results(results)),
                 _ => null,
             };
 
@@ -234,7 +234,9 @@ internal static class RequestBuilder
                     built.blocks[b](last && b == built.blocks.Count - 1 ? new BetaCacheControlEphemeral() : null));
             }
 
-            messages.Add(new BetaMessageParam { Role = built.role, Content = content });
+            messages.Add(built.role == BetaMessageParamRole.User
+                ? new BetaUserMessageParam { Content = content }
+                : new BetaAssistantMessageParam { Content = content });
         }
 
         return messages;

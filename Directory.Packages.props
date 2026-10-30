@@ -143,8 +143,9 @@
          GHSA-v5pm-xwqc-g5wc and failed the restore on NU1903. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
     <!-- The vendor SDK behind Common.Assistant.Anthropic; Appendix B's row says which projects reference it and
-         why the core carries none of it. The version blueprint-admin's adapter was built and tested on. -->
-    <PackageVersion Include="Anthropic" Version="12.54.1" />
+         why the core carries none of it. The adapter package depends on this version, so a host that pins the SDK
+         itself, as blueprint-admin does, moves with it. -->
+    <PackageVersion Include="Anthropic" Version="13.3.0" />
   </ItemGroup>
   <ItemGroup Label="Telemetry">
     <PackageVersion Include="OpenTelemetry" Version="1.17.0" />

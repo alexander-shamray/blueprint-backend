@@ -31,7 +31,7 @@ public sealed class RequestTests
         sent.Method.ShouldBe(HttpMethod.Post);
         sent.Uri.AbsolutePath.ShouldBe("/v1/messages");
         sent.Headers["anthropic-beta"].ShouldContain("server-side-fallback-2026-07-01");
-        sent.Headers["x-api-key"].ShouldBe("sk-ant-test");
+        sent.Headers["authorization"].ShouldBe("Bearer sk-ant-test");
         body["stream"]!.GetValue<bool>().ShouldBeTrue();
         body["model"]!.GetValue<string>().ShouldBe("claude-haiku-5-5");
         body["max_tokens"]!.GetValue<int>().ShouldBe(2048);
