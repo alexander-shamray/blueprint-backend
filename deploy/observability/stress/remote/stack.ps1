@@ -114,7 +114,8 @@ Write-Host "This machine: $($lan.Address)/$($lan.PrefixLength) on $($lan.Interfa
 
 $commit = (Invoke-Native { git -C $RepoRoot rev-parse HEAD } 'Reading the commit').Trim()
 if (Invoke-Native { git -C $RepoRoot status --porcelain } 'Reading the tree') {
-    Write-Warning "The tree has uncommitted changes, which the stack is built from but the summary's commit, $commit, does not hold."
+    Write-Warning ("The tree has uncommitted changes, which the stack is built from " +
+        "but the summary's commit, $commit, does not hold.")
 }
 
 $env:STRESS_BIND_ADDRESS = $lan.Address
@@ -222,7 +223,8 @@ try {
 
     Write-Host ''
     Write-Host "Ready. On the second machine, in its checkout of $commit, run:"
-    Write-Host "  pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress $($lan.Address) -Token $token"
+    Write-Host ("  pwsh -File deploy\observability\stress\remote\generator.ps1 " +
+        "-StackAddress $($lan.Address) -Token $token")
     Write-Host ''
 
     while (-not (Test-Path $raw) -and -not $aborted) {

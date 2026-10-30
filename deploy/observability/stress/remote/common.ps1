@@ -52,7 +52,9 @@ function Invoke-Native {
 # is a missing DHCP lease, not a LAN.
 function Get-LanAddress {
     $route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
-        Sort-Object { $_.RouteMetric + (Get-NetIPInterface -InterfaceIndex $_.InterfaceIndex -AddressFamily IPv4).InterfaceMetric } |
+        Sort-Object {
+            $_.RouteMetric + (Get-NetIPInterface -InterfaceIndex $_.InterfaceIndex -AddressFamily IPv4).InterfaceMetric
+        } |
         Select-Object -First 1
     if (-not $route) {
         throw 'No interface holds a default route, so this machine has no LAN address to use.'
