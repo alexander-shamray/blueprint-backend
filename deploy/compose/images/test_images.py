@@ -73,10 +73,10 @@ class MirrorTests(unittest.TestCase):
 
     def test_no_mirrored_image_is_pinned_to_one_platform(self):
         # Dependabot reads a numeric suffix such as -386 as a build number newer than the release, and no ignore
-        # entry can name every such tag, so a bump to one is refused here: close it with `@dependabot ignore this
-        # version` and the next run offers the release itself.
+        # entry can name every such tag, so a bump to one is refused here: close it, which Dependabot does not
+        # reopen for that version, and move the pin to the release's own tag by hand.
         self.assertEqual(single_platform(mirrored(read(HERE / "Dockerfile"))), set(),
-                         "a mirrored image pinned to one platform's tag; close the bump as ignored")
+                         "a mirrored image pinned to one platform's tag; close the bump and pin the release by hand")
 
     def test_a_platform_suffix_is_told_apart_from_a_variant_or_a_build_number(self):
         flagged = {"otel/opentelemetry-collector-contrib:0.163.2-386", "otel/c:0.163.2-arm64",
