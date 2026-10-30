@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>MassTransit's inbox, clustered where a message's id sorts, not on its identity key (ADR-171).</summary>
+/// <summary>MassTransit's inbox, clustered where a message's id sorts, not on its key on Id (ADR-171).</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class SagaInboxStateKeyTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -20,7 +20,7 @@ public sealed class SagaInboxStateKeyTests(ServiceFixture fixture) : IAsyncLifet
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     [Fact]
-    public async Task The_table_is_clustered_on_the_message_key_and_the_identity_key_is_not()
+    public async Task The_table_is_clustered_on_the_message_key_and_the_primary_key_on_id_is_not()
     {
         (await fixture.ScalarAsync<string>(
             """
