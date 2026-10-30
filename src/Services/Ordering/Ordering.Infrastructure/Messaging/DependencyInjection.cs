@@ -11,6 +11,7 @@ using Common.Infrastructure.Transport;
 using Common.Infrastructure.Validation;
 using MassTransit;
 using MassTransit.EntityFrameworkCoreIntegration;
+using MassTransit.Middleware;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -40,6 +41,12 @@ public static class DependencyInjection
 
     /// <summary>§11.7's erasure request, on its own endpoint so no other consumer's failure holds it.</summary>
     public const string PrivacyQueue = "ordering-privacy";
+
+    /// <summary>
+    /// Above the most a transition stages, three, so one pass delivers them all and marks the row delivered; at
+    /// MassTransit's default of one, each message and the mark took a transaction of their own (ADR-174).
+    /// </summary>
+    public const int SagaOutboxDeliveryLimit = 10;
 
     /// <summary>The saga's row lock, <c>UPDLOCK, ROWLOCK, SERIALIZABLE</c> on its own statement (ADR-112).</summary>
     public static ILockStatementProvider SagaLockStatement { get; } =
@@ -210,7 +217,9 @@ public static class DependencyInjection
 
                         // The saga's sends commit in the instance's own transaction (ADR-032); both inboxes stay,
                         // as each makes a guarantee the other does not.
-                        e.UseEntityFrameworkOutbox<OrderingDbContext>(context);
+                        e.UseEntityFrameworkOutbox<OrderingDbContext>(
+                            context,
+                            o => o.MessageDeliveryLimit = SagaOutboxDeliveryLimit);
 
                         e.ConfigureSaga<OrderFulfilmentState>(context);
                     });
@@ -219,6 +228,10 @@ public static class DependencyInjection
                 // which §9.8 admits on no endpoint, so a new consumer needs a binding here as well.
             });
         });
+
+        // In place of the factory AddEntityFrameworkOutbox registers, which takes four or more a message (ADR-174).
+        services.Replace(
+            ServiceDescriptor.Scoped<IOutboxContextFactory<OrderingDbContext>, SagaOutboxContextFactory>());
 
         // AddMassTransit registers the "masstransit-bus" ready check §13.5 picks up. WaitUntilStarted stays
         // false, so a broker outage leaves a pod unready rather than unable to boot (§13.5).
