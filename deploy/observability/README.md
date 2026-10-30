@@ -712,7 +712,9 @@ first and then the step, the level and the stop rule, as in
 
 **4. Go back to the normal profile** by bringing the stack up without the
 override. Nothing else needs undoing, bar a password hash a failed `setup()`
-left lowered, which *What a run leaves* below covers. It recreates the LGTM
+left lowered, which *What a run leaves* below covers, and the Query Store
+interval a sampler killed outright left at `QUERY_STORE_INTERVAL_MINUTES`,
+whose old value its run's `query-store.json` names. It recreates the LGTM
 container, which empties Prometheus, so a summary is made in step 3, before
 this:
 
