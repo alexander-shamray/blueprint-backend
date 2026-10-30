@@ -768,8 +768,9 @@ holding the default route.
    ```
 
    `-Level`, `-Stop`, `-MaxUsers` and `-Steps` set `STRESS_PROFILE`,
-   `STRESS_STOP`, `STRESS_MAX_USERS` and `STRESS_STEPS`. It asks the stack's machine for the run, which opens the stack's
-   three ports to that one address and starts the sampler. It refuses a
+   `STRESS_STOP`, `STRESS_MAX_USERS` and `STRESS_STEPS`. It asks the stack's
+   machine for the run, which opens the stack's three ports to that one
+   address and starts the sampler. It refuses a
    checkout at another commit, runs k6 with `STRESS_GENERATOR=remote`, and
    hands `raw.json` back over the results port.
 
