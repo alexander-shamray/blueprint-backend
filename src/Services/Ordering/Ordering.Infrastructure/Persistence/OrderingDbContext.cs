@@ -93,7 +93,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
     private const string StagedAtExpiry = nameof(SagaOutboxMessage.ExpirationTime);
 
-    private const string SagaOutboxInboxKeyFilter ="[InboxMessageId] IS NOT NULL AND [InboxConsumerId] IS NOT NULL";
+    private const string SagaOutboxInboxKeyFilter = "[InboxMessageId] IS NOT NULL AND [InboxConsumerId] IS NOT NULL";
 
     private static readonly string[] SagaOutboxInboxKey =
     [
