@@ -13,14 +13,14 @@ set to `remote` is written to `raw.json`'s plan, and `stress/report.js`'s
 stack machine's CPU. With the knee stop or a remote generator, `setup()`
 refuses a k6 clock further from Prometheus's than `CLOCK_SKEW_LIMIT_MS`.
 `stress/remote/stack.ps1` and `stress/remote/generator.ps1` drive the two
-machines. Each finds its own LAN address. The stack's refuses any network but a Private one, a firewall that
-is off or admits inbound by default, and an inbound rule already naming
-Docker's programs. It opens its three ports to the generator's address alone
-once that machine asks for the run with the one-time token the stack prints,
-which every request carries, takes `raw.json` back over its results
-port, or the generator's abort when there is none, and removes its firewall
-rules when the run ends; `-Restore` puts every published port back on
-loopback.
+machines. Each finds its own LAN address. The stack's refuses any network
+but a Private one, a firewall that is off or admits inbound by default, and
+an inbound rule already naming Docker's programs. It opens its three ports
+to the generator's address alone once that machine asks for the run with
+the one-time token the stack prints, which every request carries, takes
+`raw.json` back over its results port, or the generator's abort when there
+is none, and removes its firewall rules when the run ends; `-Restore` puts
+every published port back on loopback.
 **Why.** ADR-170 left the run's first step measuring the workstation as much
 as the platform, and named a second machine for k6 as what would bring that
 step under `HOST_CPU_LIMIT`. #1589's outbox item needs exactly that reading:
