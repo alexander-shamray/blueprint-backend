@@ -119,10 +119,12 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   run with `executing-plans`; under `subagent-driven-development`, each
   reviewer is handed its task's diff, not the tree.
 - **Before a wait, shed the context.** A session about to wait on CI, a
-  background agent or a scheduled check-in compacts first, or hands the wait
-  to a fresh agent that holds only the pull request and returns the verdict;
-  a wake re-sends the whole context, and after the cache has expired writes
-  all of it again (`docs/token-plan.md` step 7).
+  background agent or a scheduled check-in compacts first, hands the wait
+  to a fresh agent that holds only the pull request and returns the verdict,
+  or runs it as one background task whose exit is the only wake; a wake
+  re-sends the whole context, and after the cache has expired writes all of
+  it again (`docs/token-plan.md` step 7). A subagent cannot hold a wait past
+  180 seconds.
 - **A comment sweep** hands each agent what `.github/comment-gate/` finds in
   its files with `--tree`, not whole suites to read.
 - **One task per session**: `/clear` between tasks.

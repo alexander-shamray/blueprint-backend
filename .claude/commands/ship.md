@@ -394,9 +394,9 @@ branch is.
    git fetch origin <branch>
    ```
 
-   - **Hand the CI wait to a fresh agent.** One `general-purpose` agent,
-     given the PR number only, runs the `gh pr checks` line and returns its
-     exit and the failing checks; this session never holds the wait itself.
+   - **Wait in the background, here.** Run the `gh pr checks` line with
+     `run_in_background` and read nothing until it exits, the one wake;
+     no agent holds it, since a subagent's Bash is cut at 180 s.
      The wait passes only when the list names `changes`, `build`,
      `closure-gate`, `locality-gate`, `commits` and `commit-gate` and
      `mergeable` reads `MERGEABLE`; a list missing one fails it, whatever

@@ -101,5 +101,17 @@ class EachSplitCommandHasBothHalves(unittest.TestCase):
         self.assertIsNone(POSITIONAL.search("`$ARGUMENTS` and $HOME"))
 
 
+class ShipWaitsForCiInTheBackground(unittest.TestCase):
+    """Step 6's CI wait is this session's background task: a subagent's Bash is cut at 180 s."""
+
+    def test_step_6_runs_the_watch_in_the_background_and_hands_it_to_no_agent(self):
+        text = collapsed(COMMANDS / "ship.md")
+        step = text[text.index("6. **Merge, then tear"):text.index("7. **Sleep, only when asked.**")]
+        self.assertIn("`run_in_background`", step)
+        for retired in ("fresh agent", "general-purpose"):
+            with self.subTest(retired=retired):
+                self.assertNotIn(retired, step)
+
+
 if __name__ == "__main__":
     unittest.main()
