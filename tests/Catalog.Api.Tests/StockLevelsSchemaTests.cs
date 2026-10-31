@@ -24,23 +24,21 @@ public sealed class StockLevelsSchemaTests(ServiceFixture fixture)
     [Fact]
     public async Task No_two_stock_levels_share_a_page()
     {
-        // Two rows at least, since one row fills one page whatever its width (ADR-183); a deleted row's page may
-        // outlive it, so pages may outnumber rows.
+        // The narrowest row against half a page's 8096 bytes, since two rows wider than that cannot share one
+        // (ADR-183); a page count would also count the empty pages other tests' deletes leave behind.
         await fixture.ExecuteAsync(
             """
             INSERT INTO catalog.StockLevels (ProductId, QuantityAvailable, AsOf)
-            VALUES (NEWID(), 1, SYSDATETIMEOFFSET()), (NEWID(), 2, SYSDATETIMEOFFSET())
+            VALUES (NEWID(), 1, SYSDATETIMEOFFSET())
             """);
 
-        int rows = await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.StockLevels");
-        long pages = await fixture.ScalarAsync<long>(
+        int narrowest = await fixture.ScalarAsync<int>(
             """
-            SELECT Value = in_row_data_page_count
-            FROM sys.dm_db_partition_stats
-            WHERE object_id = OBJECT_ID('catalog.StockLevels')
-                AND index_id = 1
+            SELECT Value = MIN(min_record_size_in_bytes)
+            FROM sys.dm_db_index_physical_stats(DB_ID(), OBJECT_ID('catalog.StockLevels'), 1, NULL, 'DETAILED')
+            WHERE index_level = 0
             """);
 
-        pages.ShouldBeGreaterThanOrEqualTo(rows);
+        narrowest.ShouldBeGreaterThan(8096 / 2);
     }
 }
