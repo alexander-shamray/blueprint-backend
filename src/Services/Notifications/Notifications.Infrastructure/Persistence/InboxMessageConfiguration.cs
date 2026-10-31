@@ -22,9 +22,7 @@ internal sealed class InboxMessageConfiguration : IEntityTypeConfiguration<Inbox
             // BIN2, because queue names are case-sensitive and matched exactly, and this column is half a key.
             .UseCollation("Latin1_General_BIN2");
 
-        // The purge's predicate (§9.5), unfiltered because every row is handled by construction.
-        builder
-            .HasIndex(m => m.HandledAt)
-            .HasDatabaseName("IX_Inbox_HandledAt");
+        // No index on HandledAt: one keyed on it put every insert on its last page, and would copy the whole
+        // clustered key besides, so the purge scans that key for the column instead (ADR-186).
     }
 }

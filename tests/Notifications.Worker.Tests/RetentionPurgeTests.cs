@@ -75,6 +75,11 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
         survivor.HandledAt.ShouldBeGreaterThan(LongAgo);
     }
 
+    // An index keyed on HandledAt took every insert on its last page; the purge scans the key instead (ADR-186).
+    [Fact]
+    public async Task The_inbox_carries_no_index_but_its_key() =>
+        (await fixture.InboxIndexesAsync()).ShouldBe("PK_InboxMessages");
+
     [Fact]
     public async Task An_unclaimed_marker_past_its_window_is_purged_and_a_recent_one_is_not()
     {

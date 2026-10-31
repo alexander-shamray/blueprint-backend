@@ -434,6 +434,10 @@ SEQUENTIAL_KEY_MIGRATION = re.compile(r"^\d{14}_OptimizeOutboxKeyForSequentialIn
 # (ADR-180). It travels because the dispatcher's claim names the bucket
 # column, so a service without it fails its first claim.
 RANDOM_KEY_MIGRATION = re.compile(r"^\d{14}_KeyOutboxOnRandomId(\.Designer)?\.cs$")
+# The inbox without its index on HandledAt (ADR-186). It travels because the
+# inbox does: the copied configuration maps no such index, so a service
+# without it starts with a model its migrations do not match.
+INBOX_INDEX_DROP_MIGRATION = re.compile(r"^\d{14}_DropInboxHandledAtIndex(\.Designer)?\.cs$")
 LATER_MIGRATION = re.compile(r"^\d{14}_\w+(\.Designer)?\.cs$")
 
 # The template migrations that build §9.4's outbox, which a pure consumer does
@@ -462,6 +466,7 @@ TEMPLATE_MIGRATIONS = (
     TRACE_CONTEXT_MIGRATION,
     SEQUENTIAL_KEY_MIGRATION,
     RANDOM_KEY_MIGRATION,
+    INBOX_INDEX_DROP_MIGRATION,
 )
 
 # The name each shape above is known by in a diagnostic, in the same order.
@@ -480,6 +485,7 @@ MIGRATION_LABELS = (
     "AddOutboxTraceContext",
     "OptimizeOutboxKeyForSequentialInserts",
     "KeyOutboxOnRandomId",
+    "DropInboxHandledAtIndex",
 )
 
 # A service key in a Compose file, at the model's own indent, and the marker
@@ -856,6 +862,7 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
                 "_AddOutboxTraceContext.Designer.cs",
                 "_OptimizeOutboxKeyForSequentialInserts.Designer.cs",
                 "_KeyOutboxOnRandomId.Designer.cs",
+                "_DropInboxHandledAtIndex.Designer.cs",
             )):
             text = without_slice_entity(text)
             if names.pure_consumer:

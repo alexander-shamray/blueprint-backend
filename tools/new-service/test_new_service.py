@@ -719,6 +719,8 @@ class TheMigrationAndItsSnapshot(unittest.TestCase):
         self.assertNotIn("partial class AddOutboxRetentionIndex", snapshot)
         self.assertIn('modelBuilder.Entity("Common.Infrastructure.Inbox.InboxMessage"', snapshot)
         self.assertIn('.HasDatabaseName("IX_Outbox_Processed")', snapshot)
+        # DropInboxHandledAtIndex is the last, so an earlier designer still holds the index (ADR-186).
+        self.assertNotIn("IX_Inbox_HandledAt", snapshot)
 
     def test_the_inbox_migration_keeps_no_claim_about_the_templates_own_row(self):
         # The template carries this table while binding no receive endpoint,
@@ -1690,7 +1692,7 @@ class RendersAPureConsumer(unittest.TestCase):
 
     def test_the_migrations_build_the_inbox_and_the_markers_and_no_outbox(self):
         migrations = sorted(p for p in self.rendered.created if p.startswith(self.prefix))
-        self.assertEqual(11, len(migrations), migrations)
+        self.assertEqual(13, len(migrations), migrations)
         for path in migrations:
             self.assertNotRegex(PurePosixPath(path).name, r"_AddOutbox", path)
             self.assertNotIn("OutboxMessage", self.rendered.created[path], path)
@@ -1709,7 +1711,7 @@ class RendersAPureConsumer(unittest.TestCase):
         self.assertEqual(
             [f"{MIGRATION_ID}_InitialCreate.cs", f"{INBOX_MIGRATION_ID}_AddInbox.cs",
              "20260809120400_AddIdempotencyMarkers.cs", "20260809120500_IdempotencyMarkerCommittedAtDefault.cs",
-             "20260809120600_AddIdempotencyMarkerRowVersion.cs"],
+             "20260809120600_AddIdempotencyMarkerRowVersion.cs", "20260809121000_DropInboxHandledAtIndex.cs"],
             names)
 
     def test_both_images_restore_a_closure_with_no_domain_project(self):
@@ -2595,7 +2597,7 @@ class TheCommandLine(unittest.TestCase):
             # A count and not a list: a number a test pins fails when it is
             # wrong. Six and not seven, because this root has no `.github/` and
             # §15.1's allow-list step degrades without it.
-            self.assertIn("90 files created, 6 updated", out)
+            self.assertIn("92 files created, 6 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 
@@ -2643,7 +2645,7 @@ class TheCommandLine(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertEqual("", err)
             # Six shared files and not seven, because this root has no `.github/` either.
-            self.assertIn("65 files created, 6 updated, publishing no port.", out)
+            self.assertIn("67 files created, 6 updated, publishing no port.", out)
             self.assertFalse((root / "src/Services/Zulu/Zulu.Domain").exists())
 
     def test_fourteen_digits_that_are_not_a_date_refuse_in_one_line(self):
