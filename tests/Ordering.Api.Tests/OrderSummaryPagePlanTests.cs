@@ -63,12 +63,15 @@ public sealed class OrderSummaryPagePlanTests(ServiceFixture fixture)
 
         // The cursor bounds the seek's range, not a residual predicate after it. Written as the OR alone, the keyset
         // here stays residual after the customer, and the page reads every earlier row of theirs.
-        bool seeksTheCursor = seek
-            .Element(Showplan + "IndexScan")!
-            .Elements(Showplan + "SeekPredicates")
-            .Descendants(Showplan + "ColumnReference")
-            .Any(c => (string?)c.Attribute("Column") == "@AfterPlacedAt");
-        seeksTheCursor.ShouldBe(afterCursor);
+        string[] seekColumns =
+        [
+            .. seek
+                .Element(Showplan + "IndexScan")!
+                .Elements(Showplan + "SeekPredicates")
+                .Descendants(Showplan + "ColumnReference")
+                .Select(c => (string?)c.Attribute("Column") ?? "")
+        ];
+        (seekColumns.Contains("PlacedAt") && seekColumns.Contains("@AfterPlacedAt")).ShouldBe(afterCursor);
     }
 
     // Run for real under STATISTICS XML, so the parameters are sniffed as Dapper's would be, and inside a
