@@ -50,7 +50,8 @@ function Invoke-Native {
 # Enough of a failed service's log for an init script's error or the head of a stack trace.
 $script:FailedLogLines = 30
 
-# Each container of the stack that exited non-zero, is unhealthy or was never started, one row a service.
+# Each container of the stack that exited non-zero, is unhealthy or was never started, one row a service. It reads
+# the stack as it stands, so a container an earlier up left so is listed too.
 function Get-FailedServices {
     param([Parameter(Mandatory)][string[]]$Compose)
 
@@ -106,7 +107,7 @@ function Invoke-ComposeUp {
         }
         $names = ($failed | ForEach-Object { "$($_.Service) $($_.Reason)" }) -join '; '
         $logs = if ($started.Count -gt 0) { " Each started one's log is above." } else { '' }
-        throw "$($upError.Exception.Message) Failed: $names.$logs"
+        throw "$($upError.Exception.Message) Failed in the stack after it: $names.$logs"
     }
 }
 
