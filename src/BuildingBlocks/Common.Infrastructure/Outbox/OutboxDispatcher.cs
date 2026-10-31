@@ -89,18 +89,27 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
         _clock = clock;
         _log = log;
 
-        // Selects and leases in one statement, so two replicas cannot take the same row.
+        string buckets = string.Join(", ", Enumerable.Range(0, OutboxMessage.ClaimBuckets).Select(b => $"({b})"));
+
+        // Selects and leases in one statement, so two replicas cannot take the same row. Each bucket offers its
+        // oldest rows and the claim keeps the oldest of those, so the batch is the table's oldest (ADR-180).
         _claimSql =
             $"""
             WITH claimable AS (
-                SELECT TOP ({ClaimBatchSize}) *
-                FROM {table.QualifiedName} WITH (UPDLOCK, READPAST, ROWLOCK)
-                WHERE ProcessedAt IS NULL
-                    AND Attempts < @MaxAttempts
-                    AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
-                ORDER BY OccurredAt
+                SELECT TOP ({ClaimBatchSize}) oldest.Id
+                FROM (VALUES {buckets}) AS bucket (Number)
+                CROSS APPLY (
+                    SELECT TOP ({ClaimBatchSize}) candidate.Id, candidate.OccurredAt
+                    FROM {table.QualifiedName} AS candidate WITH (UPDLOCK, READPAST, ROWLOCK)
+                    WHERE candidate.{OutboxMessage.ClaimBucketColumn} = bucket.Number
+                        AND candidate.ProcessedAt IS NULL
+                        AND candidate.Attempts < @MaxAttempts
+                        AND (candidate.LockedUntil IS NULL OR candidate.LockedUntil < SYSDATETIMEOFFSET())
+                    ORDER BY candidate.OccurredAt
+                ) AS oldest
+                ORDER BY oldest.OccurredAt
             )
-            UPDATE claimable
+            UPDATE outbox
             SET LockedUntil = DATEADD(second, {LeaseSeconds}, SYSDATETIMEOFFSET())
             OUTPUT
                 inserted.Id,
@@ -112,10 +121,12 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 inserted.Attempts,
                 inserted.OccurredAt,
                 inserted.TraceParent,
-                inserted.TraceState;
+                inserted.TraceState
+            FROM {table.QualifiedName} AS outbox
+            INNER JOIN claimable ON claimable.Id = outbox.Id;
             """;
 
-        // One statement per pass, since each commit on the key's last page takes its latch and a log flush (ADR-161).
+        // One statement per pass, since each commit takes a latch and a log flush (ADR-161).
         _completeSql =
             $"""
             UPDATE outbox

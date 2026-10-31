@@ -374,14 +374,33 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     public Task ExpireOutboxLeasesAsync() =>
         ExecuteAsync($"UPDATE {_schema}.OutboxMessages SET LockedUntil = NULL WHERE ProcessedAt IS NULL;");
 
-    /// <summary>Whether the migrated outbox key carries ADR-161's option, read from the catalogue.</summary>
-    public Task<bool> OutboxKeyOptimizedForSequentialKeyAsync() =>
-        ScalarAsync<bool>(
+    /// <summary>The migrated outbox key's identity flag and default, read from the catalogue (ADR-180).</summary>
+    public Task<string> OutboxKeyGenerationAsync() =>
+        ScalarAsync<string>(
             $"""
-            SELECT Value = optimize_for_sequential_key
-            FROM sys.indexes
-            WHERE object_id = OBJECT_ID(N'{_schema}.OutboxMessages')
-                AND is_primary_key = 1
+            SELECT Value = CONCAT(c.is_identity, ':', d.definition)
+            FROM sys.columns c
+            LEFT JOIN sys.default_constraints d
+                ON d.object_id = c.default_object_id
+            WHERE c.object_id = OBJECT_ID(N'{_schema}.OutboxMessages')
+                AND c.name = 'Id'
+            """);
+
+    /// <summary>The migrated claim index's key columns in order, read from the catalogue (ADR-180).</summary>
+    public Task<string> OutboxClaimIndexKeyAsync() =>
+        ScalarAsync<string>(
+            $"""
+            SELECT Value = STRING_AGG(c.name, ',') WITHIN GROUP (ORDER BY ic.key_ordinal)
+            FROM sys.indexes i
+            INNER JOIN sys.index_columns ic
+                ON ic.object_id = i.object_id
+                AND ic.index_id = i.index_id
+                AND ic.key_ordinal > 0
+            INNER JOIN sys.columns c
+                ON c.object_id = ic.object_id
+                AND c.column_id = ic.column_id
+            WHERE i.object_id = OBJECT_ID(N'{_schema}.OutboxMessages')
+                AND i.name = 'IX_Outbox_Unprocessed'
             """);
 
     /// <summary>Every inbox row, untracked, for asserting over (§9.5).</summary>

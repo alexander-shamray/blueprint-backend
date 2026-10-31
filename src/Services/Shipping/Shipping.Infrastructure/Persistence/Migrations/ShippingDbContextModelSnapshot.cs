@@ -18,7 +18,7 @@ namespace Shipping.Infrastructure.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("shipping")
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -112,12 +112,16 @@ namespace Shipping.Infrastructure.Persistence.Migrations
                 {
                     b.Property<long>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+                        .HasColumnType("bigint")
+                        .HasDefaultValueSql("CONVERT(bigint, CRYPT_GEN_RANDOM(8))");
 
                     b.Property<int>("Attempts")
                         .HasColumnType("int");
+
+                    b.Property<byte>("ClaimBucket")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tinyint")
+                        .HasComputedColumnSql("CONVERT(tinyint, [Id] & 15)", false);
 
                     b.Property<Guid>("CorrelationId")
                         .HasColumnType("uniqueidentifier");
@@ -168,15 +172,15 @@ namespace Shipping.Infrastructure.Persistence.Migrations
                     b.HasIndex("MessageId")
                         .IsUnique();
 
-                    b.HasIndex("OccurredAt")
-                        .HasDatabaseName("IX_Outbox_Unprocessed")
-                        .HasFilter("[ProcessedAt] IS NULL");
-
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("OccurredAt"), new[] { "Lane", "Attempts", "LockedUntil" });
-
                     b.HasIndex("ProcessedAt")
                         .HasDatabaseName("IX_Outbox_Processed")
                         .HasFilter("[ProcessedAt] IS NOT NULL");
+
+                    b.HasIndex("ClaimBucket", "OccurredAt")
+                        .HasDatabaseName("IX_Outbox_Unprocessed")
+                        .HasFilter("[ProcessedAt] IS NULL");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("ClaimBucket", "OccurredAt"), new[] { "Lane", "Attempts", "LockedUntil" });
 
                     b.ToTable("OutboxMessages", "shipping");
                 });

@@ -27,11 +27,10 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "SELECT Value = COUNT(*) FROM sys.schemas WHERE name = 'shipping'");
         schema.ShouldBe(1, "InitialCreate's hand-written EnsureSchema is what creates it");
 
-        // Named and ordered, since a count passes on a shorter prefix applied twice. The first seven
-        // and _AddOutboxTraceContext and _OptimizeOutboxKeyForSequentialInserts are wiring every service with an
-        // outbox has; the rest are this service's own (§3.2).
+        // Named and ordered, since a count passes on a shorter prefix applied twice. The first seven, the last two
+        // and _AddOutboxTraceContext are wiring every service with an outbox has; the rest are its own (§3.2).
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(17);
+        applied.Length.ShouldBe(18);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -49,6 +48,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[14].ShouldEndWith("_AddShipmentErasedUnder");
         applied[15].ShouldEndWith("_AddPersonalDataErasureClosedAt");
         applied[16].ShouldEndWith("_OptimizeOutboxKeyForSequentialInserts");
+        applied[17].ShouldEndWith("_KeyOutboxOnRandomId");
     }
 
     [Fact]

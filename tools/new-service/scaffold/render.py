@@ -424,9 +424,13 @@ ROW_VERSION_MIGRATION = re.compile(
 # copied configuration maps both columns and the dispatcher's claim reads them,
 # so a service without the migration fails its first claim on a missing column.
 TRACE_CONTEXT_MIGRATION = re.compile(r"^\d{14}_AddOutboxTraceContext(\.Designer)?\.cs$")
-# The outbox key's sequential-key option (ADR-161). It travels because the
-# outbox does: a new service's dispatcher contends for the same last page.
+# The outbox key's sequential-key option (ADR-161). It travels only as the
+# history the next migration undoes, whose Down sets the option again.
 SEQUENTIAL_KEY_MIGRATION = re.compile(r"^\d{14}_OptimizeOutboxKeyForSequentialInserts(\.Designer)?\.cs$")
+# The outbox key drawn at random and the claim index led by its bucket
+# (ADR-180). It travels because the dispatcher's claim names the bucket
+# column, so a service without it fails its first claim.
+RANDOM_KEY_MIGRATION = re.compile(r"^\d{14}_KeyOutboxOnRandomId(\.Designer)?\.cs$")
 LATER_MIGRATION = re.compile(r"^\d{14}_\w+(\.Designer)?\.cs$")
 
 # The template migrations that build §9.4's outbox, which a pure consumer does
@@ -436,6 +440,7 @@ PURE_CONSUMER_MIGRATIONS = (
     RETENTION_INDEX_MIGRATION,
     TRACE_CONTEXT_MIGRATION,
     SEQUENTIAL_KEY_MIGRATION,
+    RANDOM_KEY_MIGRATION,
 )
 
 # The migrations a scaffolded service starts with, in the order they are
@@ -453,6 +458,7 @@ TEMPLATE_MIGRATIONS = (
     ROW_VERSION_MIGRATION,
     TRACE_CONTEXT_MIGRATION,
     SEQUENTIAL_KEY_MIGRATION,
+    RANDOM_KEY_MIGRATION,
 )
 
 # The name each shape above is known by in a diagnostic, in the same order.
@@ -470,6 +476,7 @@ MIGRATION_LABELS = (
     "AddIdempotencyMarkerRowVersion",
     "AddOutboxTraceContext",
     "OptimizeOutboxKeyForSequentialInserts",
+    "KeyOutboxOnRandomId",
 )
 
 # A service key in a Compose file, at the model's own indent, and the marker
@@ -845,6 +852,7 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
                 "_AddIdempotencyMarkerRowVersion.Designer.cs",
                 "_AddOutboxTraceContext.Designer.cs",
                 "_OptimizeOutboxKeyForSequentialInserts.Designer.cs",
+                "_KeyOutboxOnRandomId.Designer.cs",
             )):
             text = without_slice_entity(text)
             if names.pure_consumer:

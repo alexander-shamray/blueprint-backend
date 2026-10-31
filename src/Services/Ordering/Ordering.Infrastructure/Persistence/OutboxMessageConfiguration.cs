@@ -12,10 +12,16 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
         builder.ToTable("OutboxMessages", "ordering");
         builder.HasKey(m => m.Id);
 
-        // Identity, which §5.2 rejects for aggregates, because this is a queue position; rows go by MessageId.
+        // Drawn at random rather than an identity, so neither the key nor the claim index fills at one end, where
+        // every insert, claim and completion met on one page (ADR-180); rows go by MessageId.
         builder
             .Property(m => m.Id)
-            .ValueGeneratedOnAdd();
+            .HasDefaultValueSql(OutboxMessage.RandomIdSql);
+
+        // Computed and never stored, so the claim index can lead on it with no column to write.
+        builder
+            .Property<byte>(OutboxMessage.ClaimBucketColumn)
+            .HasComputedColumnSql(OutboxMessage.ClaimBucketSql, stored: false);
 
         // §9.1's single identity, made structural.
         builder.HasIndex(m => m.MessageId).IsUnique();
@@ -56,11 +62,15 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
             .HasMaxLength(OutboxMessage.TraceStateMaxLength)
             .IsUnicode(false);
 
-        // Filtered and covering, so the claim stays cheap while processed rows wait for §9.4's purge.
+        // Filtered and covering, so the claim stays cheap while processed rows wait for §9.4's purge; led by the
+        // bucket, so inserts land at ClaimBuckets ends and the claim still reads each bucket oldest first (ADR-180).
         builder
-            .HasIndex(m => m.OccurredAt)
+            .HasIndex(OutboxMessage.ClaimBucketColumn, nameof(OutboxMessage.OccurredAt))
             .HasDatabaseName("IX_Outbox_Unprocessed")
-            .IncludeProperties(m => new { m.Lane, m.Attempts, m.LockedUntil })
+            .IncludeProperties(
+                nameof(OutboxMessage.Lane),
+                nameof(OutboxMessage.Attempts),
+                nameof(OutboxMessage.LockedUntil))
             .HasFilter("[ProcessedAt] IS NULL");
 
         // The purge's index: the filter above excludes every row its DELETE targets.
