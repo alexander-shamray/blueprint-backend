@@ -560,7 +560,8 @@ minute and a rate needs two exports.
 
 **The warm-up.** `STRESS_WARMUP_SECONDS`, unset by default, holds the first
 step's VUs for that long before the staircase's first ramp, and is measured
-as no step. A run on fresh volumes ends before any row passes Ordering's
+as no step, nor judged by the stop rule. On fresh volumes the default
+staircase and the levels end before any row passes Ordering's
 `SagaInboxCleanupService.DuplicateDetectionWindow`, so that cleanup has
 nothing to delete, where a deployment's always has: a warm-up longer than
 the window measures the steps with it at work. `RetentionPolicy`'s windows
