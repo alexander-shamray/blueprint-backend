@@ -408,7 +408,7 @@ string is the migrator identity (DDL), not the runtime one (§7.1), and its
 secret is mounted into no API pod.
 
 **A migration's commands run under `MigratorCommandTimeout.Seconds`, not
-EF Core's default** ([ADR-181](adr/ADR-181-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md)).
+EF Core's default** ([ADR-184](adr/ADR-184-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md)).
 Each `MigratorHost` sets it through the `MigratorCommand` beside its
 `DbContext`, the route `MigratorTransport` takes for the same §4.2 reason. A
 statement that rewrites a table runs for as long as the table is large, and a

@@ -107,7 +107,7 @@ migration this platform has". So the deploy window is set to outlive it, and
 **20m > 16m is the whole constraint between them** — change one and the other
 has to follow. The stuck age is bounded from below as well: the migrator's
 `MigratorCommandTimeout.Seconds` is sized so the Job's attempts fit under it
-([ADR-181](../../docs/backend-architecture/adr/ADR-181-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md)).
+([ADR-184](../../docs/backend-architecture/adr/ADR-184-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md)).
 
 The umbrella takes a tag per subchart, because §15.1 builds and deploys per
 service — a change under `src/Services/Catalog` rebuilds Catalog alone, and
