@@ -651,8 +651,9 @@ change: a `Bash` result added 1.2k on average in both spans, a `Read` 2.8k,
 and `Bash` was half the growth in both. B's sessions do not fill faster;
 they run longer before anything empties them. More prompts run past 150
 calls, review rounds and CI waits as background tasks wake a prompt about
-three times as often a call, 375 wakes against 85, and a later prompt in the same session, typed as
-"continue with" the next issue, inherits the earlier one's context.
+three times as often a call, 375 wakes against 85, and a later prompt in
+the same session, typed as "continue with" the next issue, inherits the
+earlier one's context.
 
 **Nothing the model can do empties a context**: a person's `/compact` or
 `/clear` does, and auto-compaction does. The transcripts' own compaction

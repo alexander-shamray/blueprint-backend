@@ -210,12 +210,13 @@ before.
 **Why, and the cut** (`token-usage.md`, 2026-10-31, *what a main session
 carried*). From 2026-10-19 on a call adds what it did before and a session
 starts where it did; what grew is how long a context runs before anything
-empties it: more prompts past 150 calls, three times the wakes a call, and later
-tasks typed into the same session. Nothing the model can do empties it:
-a person's `/compact` or `/clear` does, and auto-compaction, which in that
-span fired at a median 340k and up to 968k, under an 800k window for
-`claude-opus-5-5`; a model has no tool that compacts. The bar stays at 150k: a session's first call is 63k of it, and
-the replay with compaction at 250k reads 137k over the span that failed.
+empties it: more prompts past 150 calls, three times the wakes a call,
+and later tasks typed into the same session. Nothing the model can do
+empties it: a person's `/compact` or `/clear` does, and auto-compaction,
+which in that span fired at a median 340k and up to 968k, under an 800k
+window for `claude-opus-5-5`; a model has no tool that compacts. The bar
+stays at 150k: a session's first call is 63k of it, and the replay with
+compaction at 250k reads 137k over the span that failed.
 So the cut is the window, not another rule: `autoCompactWindow` at 260,000
 in the owner's user settings, at the top level and in place of the 800,000
 under `modelSettings`, which fires the compaction under 250k. That is a
