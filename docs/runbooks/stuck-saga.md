@@ -310,21 +310,27 @@ puts every `Send` and `Schedule` a transition makes, in the instance's own
 transaction. Rows there are delivered after that transaction commits, and each
 is joined to its triggering delivery through `InboxMessageId`/`InboxConsumerId`
 into `ordering.InboxState`, whose `LastSequenceNumber` is how far that
-delivery's sends have got. **These are MassTransit's tables and no SQL this
-repository owns touches them** — which is not the same as their being
-inert, and the difference matters at 3am. The running service writes them
-through the library's own outbox filter, in the transaction that commits the
-instance, and then clears them by two different mechanisms neither of which is
-ours:
+delivery's sends have got. **These are MassTransit's tables, and what this
+repository owns against them is the factory that opens the outbox's
+transactions and the inbox's cleanup** — which is not the same as their
+being inert, and the difference matters at 3am. The running service writes
+them through the library's own outbox filter, in transactions this service's
+`SagaOutboxContextFactory` opens
+([ADR-174](../backend-architecture/adr/ADR-174-the-saga-outbox-runs-two-transactions-a-message-1603-supersedes-adr-032s-default-delivery-limit.md)),
+the first committing the instance, and then clears them by two different
+mechanisms:
 
 - A row in `ordering.OutboxMessage` is **removed by the outbox middleware once
   the message reaches the transport.** So a row here going away means the
   command was *sent*, and finding none is the normal steady state rather than
   evidence of a purge.
-- A row in `ordering.InboxState` is removed by the hosted
-  `InboxCleanupService<OrderingDbContext>` that `AddEntityFrameworkOutbox`
-  registers alongside the filter, on a timer, once the duplicate-detection
-  window has elapsed. That service reads **this table only.**
+- A row in `ordering.InboxState` is removed by Ordering's hosted
+  `SagaInboxCleanupService`, on a timer, once the duplicate-detection window
+  has passed since its delivery, which stands in for the library's own
+  cleanup
+  ([ADR-182](../backend-architecture/adr/ADR-182-masstransits-inbox-is-cleaned-up-by-this-service-bucket-by-bucket-1634-supersedes-adr-032s-library-cleanup.md)).
+  That service reads **this table only**, and never a row whose `Delivered`
+  is null.
 
 `ordering.OutboxState` is the third table and is not part of either story:
 it belongs to the bus-side outbox, `UseBusOutbox()` is deliberately not called,
