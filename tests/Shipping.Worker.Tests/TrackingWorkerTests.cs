@@ -69,12 +69,11 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull(
             "a terminal row is released like any other, not left to its lease");
 
-        // Order, not membership: Ordering's saga finalises on the first and ADR-051's projection reads both. Read off
-        // the identity column, as both rows carry one recording instant (Shipment.Record).
+        // Membership: the outbox keeps no staging order once its key is random (ADR-180), and §9.4 promises none.
+        // ShipmentTests pins the order the two are raised in, the one place it is still recorded.
         (await fixture.OutboxAsync())
-            .OrderBy(row => row.Id)
             .Select(row => row.MessageType.Split('.')[^1])
-            .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
+            .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"], ignoreOrder: true);
     }
 
     [Fact]
@@ -112,9 +111,8 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Delivered");
         IReadOnlyList<OutboxMessage> outbox = await fixture.OutboxAsync();
         outbox
-            .OrderBy(row => row.Id)
             .Select(row => row.MessageType.Split('.')[^1])
-            .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
+            .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"], ignoreOrder: true);
 
         // The despatch carries the instant the pass raised it: §9.4 stamps the row with it, and §13.3's lag reads it.
         outbox
