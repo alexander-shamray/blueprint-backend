@@ -123,7 +123,8 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
                 inserted.TraceParent,
                 inserted.TraceState
             FROM {table.QualifiedName} AS outbox
-            INNER JOIN claimable ON claimable.Id = outbox.Id;
+            INNER JOIN claimable
+                ON claimable.Id = outbox.Id;
             """;
 
         // One statement per pass, since each commit takes a latch and a log flush (ADR-161).
