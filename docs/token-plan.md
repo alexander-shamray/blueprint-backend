@@ -369,7 +369,10 @@ left alone.
   that holds only the pull request; a wake into a long context re-sends all
   of it, and after the cache has expired it writes all of it again.
   `CLAUDE.md`'s *Subagents, review rounds and plans* gains the rule, and
-  `/ship` applies it where its runbook waits.
+  `/ship` applies it where its runbook waits. #1667 replaced the fresh
+  session with a third route: a subagent's Bash is cut at 180 seconds and
+  its own background task wakes nobody, so the wait runs as one background
+  task in the waiting session, whose exit is the only wake.
 - `/validate-blueprint`'s main session dispatches its passes and holds only
   what they return; it reads no chapter whole. A fix its findings call for
   is a task of its own after `/clear`, never an implementer spawned inside
