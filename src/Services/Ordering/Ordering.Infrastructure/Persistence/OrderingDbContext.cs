@@ -165,7 +165,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
     /// <summary>The computed column that splits the cleanup index, which the cleanup walks (ADR-182).</summary>
     public const string InboxStateCleanupBucket = "CleanupBucket";
 
-    /// <summary>How many buckets the cleanup index is split into, each filling at its own end; a power of two.</summary>
+    /// <summary>How many buckets split the cleanup index, each filling at its own end; a power of two.</summary>
     public const int InboxStateCleanupBuckets = 16;
 
     /// <summary>A mask, not a modulo, which a negative Id would take below zero.</summary>
