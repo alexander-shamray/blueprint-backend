@@ -41,6 +41,10 @@ public sealed class ObjectStoreFixture : IAsyncLifetime
     /// store.</summary>
     public Uri PublicBase => new($"http://127.0.0.1:{_edge!.GetMappedPublicPort(EdgePort)}");
 
+    /// <summary>Runs <paramref name="command"/> in the store's container, where the one-shot's script runs.</summary>
+    public Task<ExecResult> ExecInStoreAsync(IList<string> command, CancellationToken ct) =>
+        _store!.ExecAsync(command, ct);
+
     /// <summary>The key pair <c>s3.json</c> gives <paramref name="identity"/>, read so a test cannot restate
     /// it.</summary>
     public static (string AccessKey, string SecretKey) Credentials(string identity)

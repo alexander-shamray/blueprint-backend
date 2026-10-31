@@ -9,7 +9,22 @@ commands=/etc/seaweedfs/init.txt
 bucket=$(sed -n 's/^s3\.bucket\.create -name //p' "$commands" | tr -d '\r')
 tab=$(printf '\t')
 
-if echo s3.bucket.list | weed shell -master="$master" | grep -q "^  $bucket$tab"; then
+# The store reports healthy on its S3 listener before its master has a raft leader, and a list asked of it then
+# prints an error and no bucket, which read as absent sent a kept bucket to the create line. So the list is asked
+# again until it answers, up to sixty times a second apart.
+attempts=60
+until listing=$(echo s3.bucket.list | weed shell -master="$master" 2>&1) &&
+    ! printf '%s\n' "$listing" | grep -qi '^error'; do
+    attempts=$((attempts - 1))
+    if [ "$attempts" -le 0 ]; then
+        printf '%s\n' "$listing" >&2
+        echo "The master at $master did not list the buckets in sixty tries." >&2
+        exit 1
+    fi
+    sleep 1
+done
+
+if printf '%s\n' "$listing" | grep -q "^  $bucket$tab"; then
     grep -v '^s3\.bucket\.create ' "$commands" | weed shell -master="$master"
 else
     weed shell -master="$master" < "$commands"
