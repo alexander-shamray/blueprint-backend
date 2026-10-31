@@ -669,8 +669,8 @@ summary loses that the session would then make again.
 | Compact at | A | B | Compactions in B | B's input equivalent |
 |---|---|---|---|---|
 | As measured | 182k | 236k | 45 | 620M |
-| 500k | 161k | 192k | 14 | |
-| 400k | 155k | 175k | 30 | |
+| 500k | 161k | 192k | 14 | 528M |
+| 400k | 155k | 175k | 30 | 498M |
 | 300k | 141k | 152k | 62 | 458M |
 | 250k | 131k | 137k | 98 | 438M |
 | 200k | 118k | 120k | 157 | 419M |
@@ -684,6 +684,8 @@ and 84k written to the hour-long cache after it.
 
 At 250k both spans read under 150k, at one compaction per 229 calls of
 span B, about seven a day, and span B's main sessions cost 29% less, about
-180M over thirteen days. At 300k span B does not pass, at 26% less. What a
+180M over thirteen days. At 300k span B does not pass, at 26% less, and
+at 500k it saves 15% with fewer compactions than it had, 14 against 45,
+since fewer sessions reach the threshold. What a
 summary drops and the session then reads again is not in these figures, so
 they are the saving's upper side.

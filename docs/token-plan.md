@@ -222,8 +222,8 @@ under `modelSettings`, which fires the compaction under 250k. That is a
 change outside the repository, owed with the measurement after it over a
 span of at least thirteen days. Rejected: the same key in the committed
 `.claude/settings.json`, which would hold the window to this repository
-alone but is a self-locking harness change of its own; and 300k, which
-cuts 26% against 250k's 29% and leaves the span over the bar.
+alone but is a self-locking harness change of its own; and 300k or 500k,
+which cut 26% and 15% against 250k's 29% and leave the span over the bar.
 
 ### Step 3 — what every session loads
 
