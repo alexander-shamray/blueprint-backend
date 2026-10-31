@@ -695,7 +695,5 @@ and 84k written to the hour-long cache after it.
 At 250k both spans read under 150k, at one compaction per 229 calls of
 span B, about seven a day, and span B's main sessions cost 29% less, about
 180M over thirteen days. At 300k span B does not pass, at 26% less, and
-at 500k it saves 15% with fewer compactions than it had, 14 against 45,
-since fewer sessions reach the threshold. What a
-summary drops and the session then reads again is not in these figures, so
-they are the saving's upper side.
+at 500k it saves 15%. What a summary drops and the session then reads
+again is not in these figures, so they are the saving's upper side.
