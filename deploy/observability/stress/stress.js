@@ -26,11 +26,11 @@
 //     deploy/observability/stress/stress.js
 //
 // Optional: STRESS_PROFILE, STRESS_STEPS, STRESS_RAMP_SECONDS,
-// STRESS_HOLD_SECONDS and STRESS_MAX_USERS, read by steps.js's plan();
-// STRESS_STOP; STRESS_ABORT_ERROR_RATE, whose default is ABORT_ERROR_RATE's
-// below and which 0 switches off; STRESS_K6_API and PROM_URL, where the
-// knee stop reads k6's figures and Prometheus's; and STRESS_GENERATOR,
-// `remote` when k6 runs on a second machine (ADR-172).
+// STRESS_HOLD_SECONDS, STRESS_WARMUP_SECONDS and STRESS_MAX_USERS, read by
+// steps.js's plan(); STRESS_STOP; STRESS_ABORT_ERROR_RATE, whose default is
+// ABORT_ERROR_RATE's below and which 0 switches off; STRESS_K6_API and
+// PROM_URL, where the knee stop reads k6's figures and Prometheus's; and
+// STRESS_GENERATOR, `remote` when k6 runs on a second machine (ADR-172).
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { fail, sleep } from 'k6';
@@ -59,7 +59,8 @@ const PLAN = plan(__ENV);
 const STEPS = PLAN.steps;
 const RAMP_SECONDS = PLAN.rampSeconds;
 const HOLD_SECONDS = PLAN.holdSeconds;
-const HOLDS = windows(STEPS, RAMP_SECONDS, HOLD_SECONDS);
+const WARMUP_SECONDS = PLAN.warmupSeconds;
+const HOLDS = windows(STEPS, RAMP_SECONDS, HOLD_SECONDS, WARMUP_SECONDS);
 const STOP = parseStop(__ENV.STRESS_STOP);
 const GENERATOR = parseGenerator(__ENV.STRESS_GENERATOR);
 
@@ -147,7 +148,7 @@ export const options = {
         journey: {
             executor: 'ramping-vus',
             startVUs: 0,
-            stages: stages(STEPS, RAMP_SECONDS, HOLD_SECONDS),
+            stages: stages(STEPS, RAMP_SECONDS, HOLD_SECONDS, WARMUP_SECONDS),
             // A step-down lets each session finish its request rather than cut it.
             gracefulRampDown: '10s',
             gracefulStop: '10s',
@@ -388,7 +389,8 @@ function ensureUsers(realm, admin, apiId, role, password, first, last) {
 function restock(token) {
     const auth = { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } };
     const needed = Math.ceil(
-        maxOrders(STEPS, RAMP_SECONDS, HOLD_SECONDS, SHORTEST_SESSION_SECONDS, ORDER_SHARE) / PRODUCTS.length);
+        maxOrders(STEPS, RAMP_SECONDS, HOLD_SECONDS, SHORTEST_SESSION_SECONDS, ORDER_SHARE, WARMUP_SECONDS) /
+        PRODUCTS.length);
     const available = (product) =>
         Number(http.get(`${BASE_URL}/api/v1/inventory/stock/${product}`, auth).json('available'));
 
@@ -708,6 +710,7 @@ export function handleSummary(data) {
             steps: STEPS,
             rampSeconds: RAMP_SECONDS,
             holdSeconds: HOLD_SECONDS,
+            warmupSeconds: WARMUP_SECONDS,
             orderShare: ORDER_SHARE,
             thinkSeconds: [THINK_MIN_SECONDS, THINK_MAX_SECONDS],
             products: PRODUCTS.length,

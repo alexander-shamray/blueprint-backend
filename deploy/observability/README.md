@@ -558,6 +558,15 @@ shorter than `summarise.mjs`'s `MINIMUM_RANGE_SECONDS` is read over that span,
 reaching into its ramp, because the services export their meters once a
 minute and a rate needs two exports.
 
+**The warm-up.** `STRESS_WARMUP_SECONDS`, unset by default, holds the first
+step's VUs for that long before the staircase's first ramp, and is measured
+as no step. A run on fresh volumes ends before any row passes Ordering's
+`SagaInboxCleanupService.DuplicateDetectionWindow`, so that cleanup has
+nothing to delete, where a deployment's always has: a warm-up longer than
+the window measures the steps with it at work. `RetentionPolicy`'s windows
+are days, which no warm-up reaches. The stock `setup()` sets covers the
+warm-up's orders too.
+
 **What each step records.** From k6: p50, p95, p99 and max per operation,
 and per step the request rate and the failures, split into 429s, other 4xx,
 5xx, timeouts and refused connections. From Prometheus, read through Grafana
@@ -815,8 +824,9 @@ the interface holding the default route.
    pwsh -File deploy\observability\stress\remote\generator.ps1 -StackAddress <address> -Token <token>
    ```
 
-   `-Level`, `-Stop`, `-MaxUsers` and `-Steps` set `STRESS_PROFILE`,
-   `STRESS_STOP`, `STRESS_MAX_USERS` and `STRESS_STEPS`. It asks the stack's
+   `-Level`, `-Stop`, `-MaxUsers`, `-Steps` and `-WarmUp` set
+   `STRESS_PROFILE`, `STRESS_STOP`, `STRESS_MAX_USERS`, `STRESS_STEPS` and
+   `STRESS_WARMUP_SECONDS`. It asks the stack's
    machine for the run, which opens the stack's three ports to that one
    address and starts the sampler. It refuses a
    checkout at another commit, runs k6 with `STRESS_GENERATOR=remote`, and

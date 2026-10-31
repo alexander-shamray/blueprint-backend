@@ -373,7 +373,9 @@ function markdown(s) {
         `- Level ${s.plan.level ?? 'none'}, stop rule ${s.plan.stopRule}` +
             (s.plan.maxUsers ? `, at most ${s.plan.maxUsers} users` : '') +
             `; k6 on ${s.plan.generator === 'remote' ? 'a second machine' : 'this machine'}`,
-        `- Staircase ${s.plan.steps.join(', ')} VUs, ${s.plan.rampSeconds} s ramps, ${s.plan.holdSeconds} s holds; ` +
+        `- Staircase ${s.plan.steps.join(', ')} VUs, ${s.plan.rampSeconds} s ramps, ${s.plan.holdSeconds} s holds` +
+            (s.plan.warmupSeconds > 0 ? `, after a ${s.plan.warmupSeconds} s warm-up at ${s.plan.steps[0]} VUs` : '') +
+            '; ' +
             `${percent(s.plan.orderShare)} of sessions order, over ${s.plan.products} products`,
         '',
         `**${s.verdict}**`,

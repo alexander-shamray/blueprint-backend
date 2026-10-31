@@ -6,6 +6,7 @@ import {
     DEFAULT_HOLD_SECONDS,
     DEFAULT_MAX_USERS,
     DEFAULT_STEPS,
+    DEFAULT_WARMUP_SECONDS,
     LEVEL_HOLD_SECONDS,
     maxOrders,
     parseGenerator,
@@ -26,6 +27,8 @@ test('with no level the staircase is today\'s default, its holds and ramps uncha
     assert.equal(run.level, null);
     assert.equal(run.capped, false);
     assert.equal(run.maxUsers, DEFAULT_MAX_USERS);
+    assert.equal(run.warmupSeconds, DEFAULT_WARMUP_SECONDS);
+    assert.equal(DEFAULT_WARMUP_SECONDS, 0, 'a run warms up only when asked to');
 });
 
 test('a level starts at its own steps and doubles past them while the next stays within the cap', () => {
@@ -121,4 +124,34 @@ test('an instant in a ramp belongs to no step, and a hold\'s end belongs to the 
 test('the order ceiling counts every VU-second at the shortest session', () => {
     // (10 + 50) VUs × 210 s = 12,600 VU-seconds; at 4 s a session that is 3,150 sessions, a quarter ordering.
     assert.equal(maxOrders([10, 50], 30, 180, 4, 0.25), 788);
+});
+
+test('a warm-up holds the first step\'s VUs before the staircase, and moves every step\'s window past it', () => {
+    assert.equal(plan({ STRESS_WARMUP_SECONDS: '2100' }).warmupSeconds, 2100);
+    assert.throws(() => plan({ STRESS_WARMUP_SECONDS: '0' }), /STRESS_WARMUP_SECONDS must be a positive whole/);
+    assert.throws(() => plan({ STRESS_WARMUP_SECONDS: '35m' }), /STRESS_WARMUP_SECONDS/);
+
+    assert.deepEqual(stages([10, 50], 30, 180, 600), [
+        { duration: '30s', target: 10 },
+        { duration: '600s', target: 10 },
+        { duration: '30s', target: 10 },
+        { duration: '180s', target: 10 },
+        { duration: '30s', target: 50 },
+        { duration: '180s', target: 50 },
+    ]);
+
+    const holds = windows([10, 50], 30, 180, 600);
+    assert.deepEqual(holds, [
+        { step: 1, vus: 10, start: 660, end: 840 },
+        { step: 2, vus: 50, start: 870, end: 1050 },
+    ]);
+    assert.equal(stepAt(30, holds), 'ramp', 'the warm-up is measured as no step');
+    assert.equal(stepAt(659.9, holds), 'ramp');
+    assert.equal(stepAt(660, holds), '1');
+});
+
+test('the order ceiling counts the warm-up\'s VU-seconds too, so the stock covers them', () => {
+    // 788 as above, plus 10 VUs × (30 + 600) s = 6,300 VU-seconds: 1,575 sessions, a quarter ordering.
+    assert.equal(maxOrders([10, 50], 30, 180, 4, 0.25, 600), 1182);
+    assert.equal(maxOrders([10, 50], 30, 180, 4, 0.25, 0), 788);
 });
