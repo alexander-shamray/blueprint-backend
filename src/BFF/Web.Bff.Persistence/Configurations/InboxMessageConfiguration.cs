@@ -23,6 +23,6 @@ internal sealed class InboxMessageConfiguration : IEntityTypeConfiguration<Inbox
             .UseCollation("Latin1_General_BIN2");
 
         // No index on HandledAt: one keyed on it put every insert on its last page, and would copy the whole
-        // clustered key besides, so the purge scans that key for the column instead (ADR-186).
+        // clustered key besides, so the purge scans the clustered index for the column instead (ADR-186).
     }
 }
