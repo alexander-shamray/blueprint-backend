@@ -92,7 +92,7 @@ function Invoke-ComposeUp {
     } catch {
         $upError = $_
         # Listing the stack can fail as the up did, and then the up's own error is the one to keep.
-        $failed = try { @(Get-FailedServices $compose) } catch { @() }
+        $failed = @(try { Get-FailedServices $compose } catch { })
         if ($failed.Count -eq 0) {
             throw $upError
         }
