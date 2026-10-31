@@ -28,8 +28,11 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
     /// <summary>How many rows one claim leases, public so §13.6's runbook sizes this number, not a copy.</summary>
     public const int ClaimBatchSize = 100;
 
-    /// <summary>How many Broker rows a pass publishes at once; Local rows go one at a time (ADR-163).</summary>
+    /// <summary>How many Broker rows a pass publishes at once (ADR-163).</summary>
     public const int BrokerConcurrency = 8;
+
+    /// <summary>How many commands' Local rows a pass projects at once, each command's in turn (ADR-181).</summary>
+    public const int LocalConcurrency = 4;
 
     /// <summary>A claim's lease: longer than a slow batch, short enough for a killed replica.</summary>
     public const int LeaseSeconds = 60;
@@ -222,15 +225,21 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
         using SemaphoreSlim writes = new(1, 1);
 
         ParallelOptions broker = new() { MaxDegreeOfParallelism = BrokerConcurrency, CancellationToken = ct };
+        // No token here: a stop after the last command's last row would throw though every row was delivered, where
+        // the serial loop this replaced returned; each row's own delivery still stops on the token (ADR-181).
+        ParallelOptions local = new() { MaxDegreeOfParallelism = LocalConcurrency };
 
-        // A publish is a round trip that waits on nothing else, so Broker rows overlap; Local rows stay serial, as
-        // two projections writing one read table at once is the deadlock ProjectionInvoker avoids (ADR-163).
+        // A publish is a round trip that waits on nothing else, so Broker rows overlap (ADR-163). Local rows overlap
+        // across commands; one command's rows tend to write one read row, so they take turns, not contend (ADR-181).
         await Task.WhenAll(
             Parallel.ForEachAsync(
                 claimed.Where(IsBroker),
                 broker,
                 async (message, _) => await DeliverOneAsync(connection, writes, message, delivered, ct)),
-            DeliverSeriallyAsync(connection, writes, [.. claimed.Where(m => !IsBroker(m))], delivered, ct));
+            Parallel.ForEachAsync(
+                claimed.Where(m => !IsBroker(m)).GroupBy(m => m.CorrelationId),
+                local,
+                async (command, _) => await DeliverSeriallyAsync(connection, writes, [.. command], delivered, ct)));
     }
 
     private static bool IsBroker(OutboxClaim message) => message.Lane == nameof(OutboxLane.Broker);

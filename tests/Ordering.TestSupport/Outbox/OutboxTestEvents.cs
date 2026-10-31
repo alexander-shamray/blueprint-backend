@@ -90,6 +90,11 @@ public static class Overlap
     private static readonly Lock Gate = new();
     private static int _inFlight;
     private static int _most;
+    private static int _full;
+    private static TaskCompletionSource? _released;
+
+    /// <summary>Completes once the count <see cref="Reset(int)"/> was given is in delivery at once.</summary>
+    public static TaskCompletionSource Full { get; private set; } = new();
 
     public static int Most
     {
@@ -100,20 +105,47 @@ public static class Overlap
         }
     }
 
+    /// <summary>Each row holds a moment, so rows delivered side by side overlap and serial ones never do.</summary>
     public static void Reset()
     {
         lock (Gate)
-            (_inFlight, _most) = (0, 0);
+            (_inFlight, _most, _full, _released) = (0, 0, int.MaxValue, null);
+    }
+
+    /// <summary>Each row holds until <see cref="Release"/>, so a test reads a bound, not a race.</summary>
+    public static void Reset(int full)
+    {
+        lock (Gate)
+        {
+            (_inFlight, _most, _full) = (0, 0, full);
+            _released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Full = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+    }
+
+    public static void Release()
+    {
+        lock (Gate)
+            _released?.TrySetResult();
     }
 
     internal static async Task HoldAsync(CancellationToken ct)
     {
+        Task hold;
+
         lock (Gate)
+        {
             _most = Math.Max(_most, ++_inFlight);
+
+            if (_inFlight >= _full)
+                Full.TrySetResult();
+
+            hold = _released?.Task ?? Task.Delay(TimeSpan.FromMilliseconds(50), ct);
+        }
 
         try
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(50), ct);
+            await hold.WaitAsync(ct);
         }
         finally
         {

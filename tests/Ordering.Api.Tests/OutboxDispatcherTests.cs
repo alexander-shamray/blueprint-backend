@@ -270,11 +270,41 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
-    public async Task Local_rows_are_delivered_one_at_a_time()
+    public async Task Local_rows_of_different_commands_project_side_by_side_up_to_the_bound()
+    {
+        // As the Broker test: each projection is held until the bound's worth are held, which one at a time never
+        // reaches, and twice the bound is staged, each its own command, so a pass past the bound shows (ADR-181).
+        int bound = OutboxDispatcher.LocalConcurrency;
+        Overlap.Reset(bound);
+        await fixture.StageOutboxAsync(
+            [.. Enumerable.Range(0, bound * 2).Select(_ => OutboxRows.Overlapping(fixture))]);
+
+        try
+        {
+            Task<int> pass = fixture.ProcessOutboxBatchAsync();
+            await Overlap.Full.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            await Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken);
+
+            Overlap.Release();
+            (await pass.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)).ShouldBe(bound * 2);
+        }
+        finally
+        {
+            // Released whatever happened, so a failure here cannot hold the collection's later projections.
+            Overlap.Release();
+        }
+
+        Overlap.Most.ShouldBe(bound);
+    }
+
+    [Fact]
+    public async Task Local_rows_one_command_staged_are_delivered_one_at_a_time()
     {
         // Each projection holds its row a moment, so rows delivered side by side overlap, and serial ones never do.
         Overlap.Reset();
-        await fixture.StageOutboxAsync([.. Enumerable.Range(0, 4).Select(_ => OutboxRows.Overlapping(fixture))]);
+        Guid command = Guid.CreateVersion7();
+        await fixture.StageOutboxAsync(
+            [.. Enumerable.Range(0, 4).Select(_ => OutboxRows.Overlapping(fixture, command))]);
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(4);
 
