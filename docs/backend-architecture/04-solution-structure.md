@@ -1121,8 +1121,8 @@ the case in the scaffold suite's own synthetic root. The new service
 builds and its tests pass before a line of it is written, some of them against
 real SQL Server and RabbitMQ containers — the `Category=Integration` filter of
 §12.4. How many is held by no document, since a number of tests is one of the
-facts `docs/change-locality.md` §2 lets none state; it is measured by rendering
-a service and running its suites, as the scaffold README's
+facts `docs/change-locality.md` §2 lets none state in the present tense; it is
+measured by rendering a service and running its suites, as the scaffold README's
 [*What you get*](../../tools/new-service/README.md#what-you-get) describes.
 
 **There is no template directory, and that is the design.** In the reference
