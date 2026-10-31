@@ -1563,7 +1563,7 @@ CREATE TABLE ordering.InboxMessages
 -- with the present as it is handled, so an index keyed on it puts every
 -- insert on its last page, and a nonclustered index here would carry the
 -- whole clustered key anyway: it would be a second copy of the table. The
--- purge scans the clustered key instead (ADR-186).
+-- purge scans the clustered index instead (ADR-186).
 ```
 
 The second key column is the **receive endpoint**, and that choice is the whole
@@ -1597,7 +1597,7 @@ degrades with it:
 -- the window is a registered RetentionPolicy value and @Before comes from the
 -- registered TimeProvider a test host can substitute.
 --
--- With no index on HandledAt, each batch scans the clustered key until it
+-- With no index on HandledAt, each batch scans the clustered index until it
 -- holds @BatchSize rows, and the batch that comes back short reads all of
 -- it: a scan per batch, each RetentionPolicy.Interval, in exchange for no
 -- index on every insert.
