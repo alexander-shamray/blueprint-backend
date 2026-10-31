@@ -27,8 +27,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "SELECT Value = COUNT(*) FROM sys.schemas WHERE name = 'payments'");
         schema.ShouldBe(1, "InitialCreate's hand-written EnsureSchema is what creates it");
 
-        // Named and ordered, since a count passes on a shorter prefix applied twice. The first seven
-        // and the trace-context and sequential-key ones are wiring every service has; the rest are its own (§3.2).
+        // Named and ordered, since a count passes on a shorter prefix applied twice. The first seven and the
+        // trace-context, sequential-key and random-key ones are wiring every service has; the rest are its own (§3.2).
         string[] applied = await fixture.AppliedMigrationsAsync();
         applied.Length.ShouldBe(16);
         applied[0].ShouldEndWith("_InitialCreate");
