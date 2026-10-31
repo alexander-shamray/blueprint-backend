@@ -178,7 +178,8 @@ function warmupSpan(rampSeconds, warmupSeconds) {
 }
 
 /**
- * setup()'s timeout in minutes: it makes one user per VU of the top step.
+ * setup()'s timeout in minutes: it makes stress.js's USERS, which grow with
+ * the top step.
  * It made a thousand users, six hundred of them new, in ten seconds here on
  * 2026-10-28, so four hundred a minute leaves a wide margin.
  */
