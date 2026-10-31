@@ -94,6 +94,13 @@ namespace Catalog.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("AsOf")
                         .HasColumnType("datetimeoffset(7)");
 
+                    b.Property<string>("Padding")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(4100)
+                        .HasColumnType("char(4100)")
+                        .HasDefaultValue("");
+
                     b.Property<int>("QuantityAvailable")
                         .HasColumnType("int");
 

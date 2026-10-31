@@ -14,6 +14,15 @@ internal sealed class StockLevelConfiguration : IEntityTypeConfiguration<StockLe
         builder.Property(s => s.ProductId).ValueGeneratedNever();
         builder.Property(s => s.QuantityAvailable).IsRequired();
         builder.Property(s => s.AsOf).IsRequired();
+
+        // Wide enough that two rows cannot share a page's 8096 bytes, so the listing's reads and the projection's
+        // writes latch a page a product rather than one page for the whole table (ADR-183). Nothing reads or
+        // writes the column.
+        builder.Property<string>("Padding")
+            .HasColumnType("char(4100)")
+            .HasMaxLength(4100)
+            .IsRequired()
+            .HasDefaultValue(string.Empty);
     }
 }
 
