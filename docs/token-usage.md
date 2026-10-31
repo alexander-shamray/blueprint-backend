@@ -651,19 +651,25 @@ calls, review rounds and CI waits as background tasks wake a prompt four
 times as often, and a later prompt in the same session, typed as
 "continue with" the next issue, inherits the earlier one's context.
 
-**Nothing empties a context before auto-compaction**, and that fires late.
-The 59 compactions in the main sessions since 2026-10-07 fired at a median
-408k, 17 of them at 700k or more, and left a median 84k. The owner's user
-settings set `autoCompactWindow` to 800,000 for `claude-opus-5-5`, and its
-automatic compactions fired at about 765k; `claude-sonnet-5-5` has no
-window set and reached 966k. A model has no tool that compacts, so
-`CLAUDE.md`'s rule to compact before a wait is carried out only when a
-person types `/compact`, which happened 19 times in span B.
+**Nothing the model can do empties a context**: a person's `/compact` or
+`/clear` does, and auto-compaction does. The transcripts' own compaction
+records, read for this section's review and counted once each, hold 72 in
+the main sessions from 2026-10-07 to 2026-10-31, 39 automatic and 33 typed,
+17 of them at 700k or more. Span B holds 44: 19 typed, and 25 automatic at
+a median 340k, four of those at 700k or more. The owner's user settings set
+`autoCompactWindow` to 800,000 for `claude-opus-5-5` when this was
+measured, and three of its 21 automatic compactions in span B fired at 767k
+to 773k; the records do not say what fired the other 18, at 208k to 674k.
+`claude-sonnet-5-5` had no window set and once reached 968k. A model has no
+tool that compacts, so the rule `CLAUDE.md` held at e463598c, to compact
+before a wait, was carried out only when a person typed `/compact`.
 
 **The replay with an earlier compaction.** The script plays each session's
 call-by-call growth again, and where the context passes a threshold it
-drops to 84k and grows on by the same steps; a real compaction still
-drops it. It does not count the compaction's own call, or the reads a
+drops to 84k, the median it found a compaction leaving, and grows on by the
+same steps; a real compaction still drops it. Its *as measured* row counts
+45 compactions in span B from the drops in the call series, where the
+records hold 44. It does not count the compaction's own call, or the reads a
 summary loses that the session would then make again.
 
 | Compact at | A | B | Compactions in B | B's input equivalent |
