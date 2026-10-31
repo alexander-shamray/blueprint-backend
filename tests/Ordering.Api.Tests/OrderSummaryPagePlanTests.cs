@@ -44,6 +44,16 @@ public sealed class OrderSummaryPagePlanTests(ServiceFixture fixture)
         """ +
         Newest;
 
+    // The keyset as Catalog's and the BFF's cursor pages write it, which seeks to the cursor on their indexes.
+    private const string OrAfterSql =
+        Columns +
+        """
+
+            AND (PlacedAt < @AfterPlacedAt
+                OR (PlacedAt = @AfterPlacedAt AND OrderId < @AfterId))
+        """ +
+        Newest;
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -51,6 +61,25 @@ public sealed class OrderSummaryPagePlanTests(ServiceFixture fixture)
     {
         XElement[] plan = await PlanAsync(afterCursor ? AfterSql : FirstSql, afterCursor);
 
+        // Keyed without OrderId DESC, the index's order is the clustered key's ascending one, and the page sorts.
+        plan.Select(op => (string)op.Attribute("PhysicalOp")!).ShouldNotContain("Sort");
+
+        // The cursor bounds the seek's range, not a residual predicate after it.
+        SeeksTheCursor(plan).ShouldBe(afterCursor);
+    }
+
+    // Why §6.6 spells the bound out: over this index the OR form seeks the customer alone and reads every earlier
+    // row of theirs. A planner that seeks it here fails this, and the bound can go from the chapter and the test.
+    [Fact]
+    public async Task The_OR_form_alone_leaves_the_cursor_residual_on_this_index()
+    {
+        XElement[] plan = await PlanAsync(OrAfterSql, afterCursor: true);
+
+        SeeksTheCursor(plan).ShouldBeFalse();
+    }
+
+    private static bool SeeksTheCursor(XElement[] plan)
+    {
         XElement seek = plan
             .Where(op => op.Elements().Any(e => e.Name == Showplan + "IndexScan"))
             .Where(op => (string?)op.Element(Showplan + "IndexScan")!.Element(Showplan + "Object")!.Attribute("Index")
@@ -58,11 +87,6 @@ public sealed class OrderSummaryPagePlanTests(ServiceFixture fixture)
             .ShouldHaveSingleItem();
         ((string)seek.Attribute("PhysicalOp")!).ShouldBe("Index Seek");
 
-        // Keyed without OrderId DESC, the index's order is the clustered key's ascending one, and the page sorts.
-        plan.Select(op => (string)op.Attribute("PhysicalOp")!).ShouldNotContain("Sort");
-
-        // The cursor bounds the seek's range, not a residual predicate after it. Written as the OR alone, the keyset
-        // here stays residual after the customer, and the page reads every earlier row of theirs.
         string[] seekColumns =
         [
             .. seek
@@ -71,7 +95,7 @@ public sealed class OrderSummaryPagePlanTests(ServiceFixture fixture)
                 .Descendants(Showplan + "ColumnReference")
                 .Select(c => (string?)c.Attribute("Column") ?? "")
         ];
-        (seekColumns.Contains("PlacedAt") && seekColumns.Contains("@AfterPlacedAt")).ShouldBe(afterCursor);
+        return seekColumns.Contains("PlacedAt") && seekColumns.Contains("@AfterPlacedAt");
     }
 
     // Run for real under STATISTICS XML, so the parameters are sniffed as Dapper's would be, and inside a
