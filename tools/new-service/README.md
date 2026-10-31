@@ -128,9 +128,9 @@ cap and loud failure on a `Local` row with no registered handler.
 
 **No file states how many.** A number of tests is one of the facts
 [`docs/change-locality.md`](../../docs/change-locality.md) §2 lets no document
-hold, so the count is measured, never read: render `Yankee` at 5199 and run
-all three of its suites, and the container share is the
-`Category=Integration` filter, which anyone can rerun. **Adding to an earlier
+state in the present tense, so the count is measured, never read: render
+`Yankee` at 5199 and run all three of its suites, and the container share is
+the `Category=Integration` filter, which anyone can rerun. **Adding to an earlier
 figure is not recounting it**: the total need not move by the number of tests
 a change puts into the template, and a figure written down goes stale on the
 next PR's clock rather than on its own.
