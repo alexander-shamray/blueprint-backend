@@ -1621,11 +1621,14 @@ this service's.
   reached the transport. The table drains as a consequence of *delivery*, not
   of housekeeping, and nothing is on a timer.
 - **`ordering.InboxState`** is written in the same transaction, and its rows
-  are removed by the hosted `InboxCleanupService<OrderingDbContext>` that
-  `AddEntityFrameworkOutbox` registers, once the duplicate-detection window has
-  elapsed. That service is scoped to this one table — the package's own
-  documentation says it "is responsible for removing `InboxState` entries after
-  the expiration window timeout has elapsed", and nothing else.
+  are removed by Ordering's hosted `SagaInboxCleanupService`, once the
+  duplicate-detection window has passed since their delivery, a bucket of the
+  cleanup index at a time. It stands in for the library's
+  `InboxCleanupService<OrderingDbContext>`, which `AddEntityFrameworkOutbox`
+  would register on the same predicate and whose index put every delivery on
+  one page
+  ([ADR-182](adr/ADR-182-masstransits-inbox-is-cleaned-up-by-this-service-bucket-by-bucket-1634-supersedes-adr-032s-library-cleanup.md)),
+  and like it reads this one table and nothing else.
 - **`ordering.OutboxState`** belongs to the *bus-side* outbox, which is
   `UseBusOutbox()`, and this platform deliberately does not call it. **In this
   configuration nothing writes, reads or prunes that table.** The migration
@@ -1633,8 +1636,8 @@ this service's.
   the model would not build otherwise — an operator reading the schema should
   be told that outright rather than left to work it out.
 
-So the second retention policy is one library-owned cleanup timer beside this
-service's, not a second sweep of three tables. That is still the cost §9.3's
+So the second retention policy is one cleanup timer beside this service's,
+not a second sweep of three tables. That is still the cost §9.3's
 prohibition names; the ADR takes it rather than folding the two together,
 because deleting an `InboxState` row whose outbox messages have not been
 delivered turns housekeeping into the message loss the decision exists to
@@ -3712,6 +3715,10 @@ x.AddEntityFrameworkOutbox<OrderingDbContext>(o =>
     // key-range lock two first deliveries need is the saga's own hint
     // (§9.6, ADR-112).
     o.IsolationLevel = IsolationLevel.ReadCommitted;
+
+    // §9.5's SagaInboxCleanupService removes InboxState's rows instead; the
+    // library's cleanup orders by Delivered alone, on one hot page (ADR-182).
+    o.DisableInboxCleanupService();
 });
 
 cfg.ReceiveEndpoint(
@@ -3759,8 +3766,9 @@ cfg.ReceiveEndpoint(
 > instance, which is a dual write.
 >
 > **Two calls, and neither works alone.**
-> `AddEntityFrameworkOutbox<OrderingDbContext>` registers the store and the
-> cleanup service; `UseEntityFrameworkOutbox<OrderingDbContext>(context)` is
+> `AddEntityFrameworkOutbox<OrderingDbContext>` registers the store, its
+> cleanup service disabled for §9.5's `SagaInboxCleanupService`;
+> `UseEntityFrameworkOutbox<OrderingDbContext>(context)` is
 > what puts the filter on this endpoint's pipeline. It brings three tables into
 > the `ordering` schema — `InboxState`, `OutboxState` and `OutboxMessage`,
 > singular where §9.4's and §9.5's are plural, so the two sets do not collide

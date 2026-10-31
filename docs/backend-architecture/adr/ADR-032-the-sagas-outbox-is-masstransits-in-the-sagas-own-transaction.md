@@ -222,6 +222,15 @@ broker sees a message, and the transaction open across the publish is the
 second, which delivers every staged message, each bounded by
 `MessageDeliveryTimeout`, marks the row and removes the staged rows.
 
+**Superseded in part by
+[ADR-182](ADR-182-masstransits-inbox-is-cleaned-up-by-this-service-bucket-by-bucket-1634-supersedes-adr-032s-library-cleanup.md)**:
+the consequence naming `InboxCleanupService<OrderingDbContext>` as the second
+retention policy, and as what deletes the delivered rows in the one calling the
+path that leaks: `SagaInboxCleanupService` is that policy now, on the library's
+predicate, so the leak stands. The `DuplicateDetectionWindow` the consequence
+on the two defaults names, and ADR-174's note above, is now that service's
+constant, at the library's thirty minutes.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
