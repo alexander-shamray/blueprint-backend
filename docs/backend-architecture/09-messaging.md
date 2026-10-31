@@ -1191,12 +1191,12 @@ Consequences of the per-row design worth stating explicitly:
   a stale worker's update matches no row. That is a change to the claim
   protocol and to every test that drives it, and it belongs with the §13.6
   work that alerts on this table. Until then the mitigation is operational and
-  stated: a lane whose delivery approaches its bound, `LocalConcurrency` or
-  `BrokerConcurrency`, times `LeaseSeconds` divided by `ClaimBatchSize` per
-  row — for `Local` rows the fewer of `LocalConcurrency` and the commands
-  that staged them, since one command's rows take turns — wants a smaller
-  `ClaimBatchSize` or a longer `LeaseSeconds`, and
-  §13.6's outbox-age alert is what makes that visible.
+  stated: a lane whose pass approaches `LeaseSeconds` wants a smaller
+  `ClaimBatchSize` or a longer `LeaseSeconds`, and §13.6's outbox-age alert is
+  what makes that visible. A `Broker` pass lasts its rows' delivery over
+  `BrokerConcurrency`; a `Local` pass its rows' delivery over
+  `LocalConcurrency`, but never less than its largest command's rows one after
+  another, since one command's rows take turns.
 
 ### Handler contracts
 
