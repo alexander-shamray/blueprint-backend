@@ -41,7 +41,8 @@ moves is measured by a rerun of the same stress plan, not argued here.
 [ADR-180](ADR-180-the-outbox-key-is-random-and-its-claim-index-is-led-by-a-bucket-1623-supersedes-adr-161s-sequential-key-option.md)**:
 the Decision's sequential-key option, the key it was set on and the tests
 that read the option from `sys.indexes`, and the consequences that the option
-is outside the EF model and travels in the scaffold. The one-statement completion and its consequences stand.
+is outside the EF model and travels in the scaffold. The one-statement
+completion and its consequences stand.
 
 ---
 
