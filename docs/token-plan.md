@@ -198,9 +198,13 @@ counted under `/ship`. Passed on the run `token-usage.md` names.
 delegation brief and the planning rule; the review loop it held moved to
 `/ship` step 5 with step 4. **Owed:** the
 owner's user-level memory rule cut to cite that section, a change outside
-the repository; the plugin's own settings, where it has them; and the
-exit measurement, which needs the rules to have run for a span, #589. The
-cheaper model waits on step 1's quality sets.
+the repository; the plugin's own settings, where it has them; and a main
+session's mean context, #1664. The cheaper model waits on step 1's quality
+sets.
+
+**Measured** over 2026-10-07 to 2026-10-31 (`token-usage.md`, 2026-10-31):
+the `general-purpose` half of the exit passes; a main session's mean
+context does not, and it was rising over the last fortnight of the span.
 
 ### Step 3 — what every session loads
 
@@ -383,10 +387,10 @@ every plan added since the check landed is under the planning rule's limit.
 
 **Measured** over the week after it landed (`token-usage.md`, 2026-10-18):
 the wake share passes; the main session's mean context does not, and is
-step 2's owed exit, #589; the plan limit holds with no plan added; and no
-`/validate-blueprint` run had a main session of its own, since `/ship`
-dispatches the audit, so that part has no subject, and no implementer ran
-inside an audit.
+step 2's exit, which still fails, #1664; the plan limit holds with no plan
+added; and no `/validate-blueprint` run had a main session of its own,
+since `/ship` dispatches the audit, so that part has no subject, and no
+implementer ran inside an audit.
 
 ### Step 7d — which model a subagent runs on
 
