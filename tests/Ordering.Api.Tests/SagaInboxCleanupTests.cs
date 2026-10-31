@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>MassTransit's inbox, removed bucket by bucket by this service rather than by the library (ADR-182).</summary>
+/// <summary>MassTransit's inbox, removed a bucket at a time by this service, not the library (ADR-182).</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class SagaInboxCleanupTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -82,7 +82,10 @@ public sealed class SagaInboxCleanupTests(ServiceFixture fixture) : IAsyncLifeti
         (await Cleanup().CleanUpAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
         (await fixture.ScalarAsync<string>(
-            "SELECT Value = STRING_AGG(CONVERT(varchar(20), Id), ',') WITHIN GROUP (ORDER BY Id) FROM ordering.InboxState"))
+            """
+            SELECT Value = STRING_AGG(CONVERT(varchar(20), Id), ',') WITHIN GROUP (ORDER BY Id)
+            FROM ordering.InboxState
+            """))
             .ShouldBe("1,2");
     }
 
