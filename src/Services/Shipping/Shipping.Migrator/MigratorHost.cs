@@ -21,7 +21,7 @@ public static class MigratorHost
         builder.Services.AddDbContext<ShippingDbContext>(o =>
             o.UseSqlServer(
                 builder.Configuration.GetConnectionString("ShippingMigrator"),
-                sql => sql.EnableRetryOnFailure()));
+                sql => sql.EnableRetryOnFailure().CommandTimeout(MigratorCommand.TimeoutSeconds)));
 
         builder.Services.AddScoped<MigrationRunner>();
 

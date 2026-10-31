@@ -56,6 +56,8 @@ COPIED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/IdempotencyMarkerConfiguration.cs",
         # ADR-079's check as every migrator reaches it, through its own Infrastructure (§4.2).
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/MigratorTransport.cs",
+        # §7.4's command timeout, reaching the migrator by the same route.
+        "src/Services/Catalog/Catalog.Infrastructure/Persistence/MigratorCommand.cs",
         # §13.6's per-lane gauges. They travel for the reason the outbox table
         # does: every publishing service hosts the dispatcher, the alerts group by
         # service_name, and a rendered service without them is covered by
@@ -105,6 +107,7 @@ COPIED = frozenset(
         # §14.3's gate travels with the hook it guards, which every migrator holds.
         "tests/Catalog.Api.Tests/SeedGateTests.cs",
         "tests/Catalog.Api.Tests/RepublishGateTests.cs",
+        "tests/Catalog.Api.Tests/MigratorCommandTimeoutTests.cs",
         "tests/Catalog.TestSupport/Catalog.TestSupport.csproj",
         "tests/Catalog.TestSupport/CatalogApiFactory.cs",
         # §12.4's test scheme. Copied rather than omitted even though a
