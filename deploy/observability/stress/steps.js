@@ -27,6 +27,11 @@ export const LEVEL_HOLD_SECONDS = 120;
 // to delete before the first measured step, as a deployment always has.
 export const DEFAULT_WARMUP_SECONDS = 0;
 
+// The longest run plan() takes. sample.mjs stops itself an hour after it,
+// should k6 never finish, an hour that covers setup() at any cap, so no
+// step k6 runs is left without samples.
+export const RUN_LIMIT_SECONDS = 3 * 60 * 60;
+
 // k6 starts every VU of the staircase before setup(), about a quarter of a
 // MiB each (710 MiB for 3,000 on 2026-10-28), and setup() makes one Keycloak
 // user per VU. High's top is the most a workstation is asked for by default.
@@ -145,17 +150,18 @@ export function plan(env) {
     if (steps[steps.length - 1] > maxUsers)
         throw new Error(`the staircase reaches ${steps[steps.length - 1]} users, above STRESS_MAX_USERS ${maxUsers}`);
 
-    return {
-        level,
-        steps,
-        maxUsers,
-        capped,
-        rampSeconds: parseSeconds(env.STRESS_RAMP_SECONDS,
-            named === null ? DEFAULT_RAMP_SECONDS : LEVEL_RAMP_SECONDS, 'STRESS_RAMP_SECONDS'),
-        holdSeconds: parseSeconds(env.STRESS_HOLD_SECONDS,
-            named === null ? DEFAULT_HOLD_SECONDS : LEVEL_HOLD_SECONDS, 'STRESS_HOLD_SECONDS'),
-        warmupSeconds: parseSeconds(env.STRESS_WARMUP_SECONDS, DEFAULT_WARMUP_SECONDS, 'STRESS_WARMUP_SECONDS'),
-    };
+    const rampSeconds = parseSeconds(env.STRESS_RAMP_SECONDS,
+        named === null ? DEFAULT_RAMP_SECONDS : LEVEL_RAMP_SECONDS, 'STRESS_RAMP_SECONDS');
+    const holdSeconds = parseSeconds(env.STRESS_HOLD_SECONDS,
+        named === null ? DEFAULT_HOLD_SECONDS : LEVEL_HOLD_SECONDS, 'STRESS_HOLD_SECONDS');
+    const warmupSeconds = parseSeconds(env.STRESS_WARMUP_SECONDS, DEFAULT_WARMUP_SECONDS, 'STRESS_WARMUP_SECONDS');
+    const runSeconds = windows(steps, rampSeconds, holdSeconds, warmupSeconds).at(-1).end;
+
+    if (runSeconds > RUN_LIMIT_SECONDS)
+        throw new Error(`the run lasts ${runSeconds} s, past RUN_LIMIT_SECONDS ${RUN_LIMIT_SECONDS}, ` +
+            'beyond which the sampler may have stopped');
+
+    return { level, steps, maxUsers, capped, rampSeconds, holdSeconds, warmupSeconds };
 }
 
 // The warm-up's ramp and hold, at the first step's VUs: a load the staircase

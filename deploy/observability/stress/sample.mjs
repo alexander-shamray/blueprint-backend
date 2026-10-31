@@ -14,6 +14,7 @@ import os from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { QUERY_STORE_DATABASES, QUERY_STORE_INTERVAL_MINUTES, parseCpu, parseMemory, sqlcmdArgs } from './report.js';
+import { RUN_LIMIT_SECONDS } from './steps.js';
 
 const run = promisify(execFile);
 
@@ -35,8 +36,8 @@ const QUERY_STORE = join(out, 'query-store.json');
 // tightest pace that is not one read queued behind the last.
 const INTERVAL_MS = 5000;
 
-// Longer than the default staircase several times over.
-const LIMIT_MS = 4 * 60 * 60 * 1000;
+// The longest run steps.js's plan() takes, and an hour for setup().
+const LIMIT_MS = (RUN_LIMIT_SECONDS + (60 * 60)) * 1000;
 
 // Cumulative since the engine started, so a step's figure is its change.
 // Deadlocks, then time spent waiting on locks, on page latches (a hot page),

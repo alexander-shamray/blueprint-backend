@@ -8,6 +8,7 @@ import {
     DEFAULT_STEPS,
     DEFAULT_WARMUP_SECONDS,
     LEVEL_HOLD_SECONDS,
+    RUN_LIMIT_SECONDS,
     maxOrders,
     parseGenerator,
     parseSeconds,
@@ -154,4 +155,15 @@ test('the order ceiling counts the warm-up\'s VU-seconds too, so the stock cover
     // 788 as above, plus 10 VUs × (30 + 600) s = 6,300 VU-seconds: 1,575 sessions, a quarter ordering.
     assert.equal(maxOrders([10, 50], 30, 180, 4, 0.25, 600), 1182);
     assert.equal(maxOrders([10, 50], 30, 180, 4, 0.25, 0), 788);
+});
+
+test('a run longer than RUN_LIMIT_SECONDS is refused, warm-up included, and one that fits is taken', () => {
+    // 10,800 s: a 30 s ramp, a 10,710 s warm-up, then one 30 s ramp and 30 s hold reach exactly the limit.
+    assert.equal(RUN_LIMIT_SECONDS, 10800);
+    assert.equal(plan({ STRESS_STEPS: '10', STRESS_HOLD_SECONDS: '30', STRESS_WARMUP_SECONDS: '10710' })
+        .warmupSeconds, 10710);
+    assert.throws(() => plan({ STRESS_STEPS: '10', STRESS_HOLD_SECONDS: '30', STRESS_WARMUP_SECONDS: '10711' }),
+        /the run lasts 10801 s, past RUN_LIMIT_SECONDS 10800/);
+    assert.throws(() => plan({ STRESS_HOLD_SECONDS: '3000' }), /past RUN_LIMIT_SECONDS/,
+        'the holds alone count too');
 });
