@@ -204,8 +204,9 @@ property.
 
 `CustomerId` is the column §11.4's ownership check reads on every cancellation,
 and the one §6.5's history query filters by — both equality on a single
-customer, so a plain index over it is the whole requirement. An index is added
-by the query that needs it and not in anticipation.
+customer, so a plain index over it is the whole requirement of the filter; the
+history page then sorts that customer's orders, which §6.5 accepts at level 1.
+An index is added by the query that needs it and not in anticipation.
 
 The line's own mapping is a second `IEntityTypeConfiguration`,
 `OrderLineConfiguration.cs` beside it, which is what the related-entity

@@ -1194,6 +1194,19 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
 > the keyset predicate is true of every row when the parameter is null, so it
 > cannot be a seek, and page n reads every earlier page again
 > ([ADR-179](adr/ADR-179-a-listing-orders-index-covers-its-page-and-a-cursors-page-has-its-own-statement-1626.md)).
+> The cursor's statement must also seek to the cursor, which its plan shows:
+> where the planner leaves `PlacedAt < @AfterPlacedAt OR (…)` residual after
+> the customer, the bound is written as a predicate of its own,
+> `PlacedAt <= @AfterPlacedAt AND (PlacedAt < @AfterPlacedAt OR Id < @AfterId)`,
+> as §6.6's cursor page is. And it needs an index keyed in the cursor's whole
+> order, which §6.6's projection carries and this level does not:
+> `ordering.Orders` is indexed on `CustomerId` alone ([§7.2](07-persistence.md)),
+> so a page here seeks the customer and sorts their orders past the cursor.
+> That is part of the level-1 bargain, bounded by one customer's history. The
+> two differ because §6.6's table is built: its projection writes it, and
+> [§7.4](07-persistence.md) has a read model take the chapter's shape, index
+> plan included. A level-1 index would serve only this query, which is
+> specified and not built, and §7.2 adds an index by the query that needs it.
 >
 > The cursor is **opaque** — base64 of the sort key plus the tiebreaker ID — so
 > its layout stays an implementation detail rather than a public contract. Where
@@ -1397,7 +1410,7 @@ CREATE TABLE ordering.OrderSummaries
 );
 
 CREATE INDEX IX_OrderSummaries_Customer_PlacedAt
-    ON ordering.OrderSummaries (CustomerId, PlacedAt DESC)
+    ON ordering.OrderSummaries (CustomerId, PlacedAt DESC, OrderId DESC)
     INCLUDE (Status, TotalAmount, Currency, LineCount);
 ```
 
@@ -2038,15 +2051,17 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
         ORDER BY PlacedAt DESC, OrderId DESC;
         """;
 
-    // A first page and a cursor's page, as in §6.5 (ADR-179).
+    // A first page and a cursor's page, as in §6.5 (ADR-179), with the bound
+    // spelled out as its own predicate because the plan left the OR form
+    // residual here; OrderSummaryPagePlanTests holds the seek to the cursor.
     private const string FirstSql = Columns + Newest;
 
     private const string AfterSql =
         Columns +
         """
 
-            AND (PlacedAt < @AfterPlacedAt
-                OR (PlacedAt = @AfterPlacedAt AND OrderId < @AfterId))
+            AND PlacedAt <= @AfterPlacedAt
+            AND (PlacedAt < @AfterPlacedAt OR OrderId < @AfterId)
         """ +
         Newest;
 
@@ -2158,8 +2173,11 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
 > that only round-trips because matching is lenient is a payload that will not
 > survive a rename.
 
-The index from the DDL above — `(CustomerId, PlacedAt DESC)` including the
-scalar columns — serves the seek, the ordering and the cursor predicate. It is
+The index from the DDL above — `(CustomerId, PlacedAt DESC, OrderId DESC)`
+including the scalar columns — serves the seek, the ordering and the cursor
+predicate. The tiebreaker is a key column because the clustered key the index
+would otherwise carry is ascending, and a page ordered `OrderId DESC` over it
+sorts every one of the customer's rows. It is
 **not** fully covering: `Products` is `NVARCHAR(MAX)` and is left out
 deliberately, so each row costs a lookup. That is the right trade at a page of
 twenty and the wrong one at a page of a thousand, which is another reason the
