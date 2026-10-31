@@ -5,7 +5,7 @@
 `MessageId` and `Endpoint`. The retention purge's inbox statement is
 unchanged: it still deletes `TOP (@BatchSize)` rows whose `HandledAt` is
 past `RetentionPolicy.InboxWindow` and names no index, so it now scans the
-clustered key ([§9.5](../09-messaging.md)). The migration is
+clustered index ([§9.5](../09-messaging.md)). The migration is
 `DropInboxHandledAtIndex`, a template migration a new service is scaffolded
 with, pure consumer included.
 **Why.** ADR-172's two-machine stress run `20261031-102448`, on `853dce80e`
@@ -25,10 +25,11 @@ rekeyed index would be a second copy of the table written by every insert.
 Dropping it leaves the purge the same rows to read and each insert one
 index to write rather than two.
 **Consequences.** The purge reads the inbox where it sought a range of it:
-each batch scans the clustered key until it holds `RetentionPolicy.BatchSize`
-rows past the window, and the batch that comes back short reads every row,
-so a pass costs up to `RetentionPolicy.MaxBatchesPerPass` scans of a table
-the length of the window, once each `RetentionPolicy.Interval`. Most
+each batch scans the clustered index until it holds
+`RetentionPolicy.BatchSize` rows past the window, and the batch that comes
+back short reads every row, so a pass costs up to
+`RetentionPolicy.MaxBatchesPerPass` scans of a table the length of the
+window, once each `RetentionPolicy.Interval`. Most
 integration events carry random ids, `Guid.CreateVersion7()` from the
 mappers, which SQL Server orders by their random last six bytes, and
 `NEWID()` from the migrators' republishers, so their aged rows lie spread
