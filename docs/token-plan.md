@@ -204,7 +204,8 @@ sets.
 
 **Measured** over 2026-10-07 to 2026-10-31 (`token-usage.md`, 2026-10-31):
 the `general-purpose` half of the exit passes; a main session's mean
-context does not, and it was rising over the last fortnight of the span.
+context does not, and from 2026-10-19 on it read higher than the week
+before.
 
 ### Step 3 — what every session loads
 
