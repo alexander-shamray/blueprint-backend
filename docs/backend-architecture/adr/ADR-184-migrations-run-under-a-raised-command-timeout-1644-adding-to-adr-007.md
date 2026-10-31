@@ -1,4 +1,4 @@
-# ADR-181 — Migrations run under a raised command timeout (#1644), adding to ADR-007
+# ADR-184 — Migrations run under a raised command timeout (#1644), adding to ADR-007
 
 **Decision.** Every migrator's `MigratorHost` sets its context's command
 timeout to `MigratorCommandTimeout.Seconds`, which `Common.Infrastructure`
