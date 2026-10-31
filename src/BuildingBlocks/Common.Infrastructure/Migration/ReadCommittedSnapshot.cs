@@ -4,7 +4,9 @@ using Dapper;
 namespace Common.Infrastructure.Migration;
 
 /// <summary>§7.1's isolation: every service database runs read-committed snapshot, or its migrator refuses.</summary>
-/// <remarks>ADR-185 owns why. The provider's CREATE DATABASE sets it, so only one made beforehand lacks it.</remarks>
+/// <remarks>
+/// ADR-185 owns why. EF Core's CREATE DATABASE sets it; a database made beforehand, or switched off since, lacks it.
+/// </remarks>
 public static class ReadCommittedSnapshot
 {
     /// <returns>Null when the connection's database runs it; otherwise the sentence the job fails with.</returns>
