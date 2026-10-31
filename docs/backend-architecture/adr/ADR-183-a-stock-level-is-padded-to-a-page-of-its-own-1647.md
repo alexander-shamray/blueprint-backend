@@ -38,10 +38,11 @@ the reference domain's few hundred products take a few megabytes, and a
 million would take 8 GB. A listing page of 20 products now reads 21 pages of
 the table, its look-ahead row's included, rather than one. In a catalogue
 that large the writes spread over pages anyway, and the padding is all cost:
-an adopter with one drops the column, and the schema test with it. The bench's 24 products and the stress
-run's concentrate the writes more than a catalogue would; whether the stack
-agrees is for ADR-172's next two-machine run to say. `Down` drops the column
-and leaves each row a page of its own until the index is next rebuilt.
+an adopter with one drops the column, and the schema test with it. The
+bench's 24 products and the stress run's concentrate the writes more than a
+catalogue would; whether the stack agrees is for ADR-172's next two-machine
+run to say. `Down` drops the column and leaves each row a page of its own
+until the index is next rebuilt.
 
 ---
 
