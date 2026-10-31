@@ -625,7 +625,10 @@ script that imports `token_usage.py` and replays each main session's calls
 in order; it is not in the tree. It reads the report's default transcript
 directories without the `tools/quality-sets` runs, and takes a call's
 context as `mean_context` does: fresh input plus cache writes plus cache
-reads. Span A is the 2026-10-18 section's, 2026-10-11 to 2026-10-18; span
+reads. Span A is the 2026-10-18 section's, 2026-10-11 to 2026-10-18, but
+read whole: A here holds 15,992 calls at 182k where that section's
+every-main row reads 14,666 at 179k, which was measured on the span's last
+day and so, most likely, before that day's later calls. Span
 B is 2026-10-19 to 2026-10-31. Over 2026-10-07 to 2026-10-31 the script
 reads 227k a call over 49,816 calls, where the report's every-main row
 reads 228k over 49,106, so the two count the same calls to within the
