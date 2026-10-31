@@ -457,7 +457,7 @@ sequenceDiagram
         Note over D,DB: Claim: CTE + UPDATE ... OUTPUT, sets LockedUntil
         D->>DB: lease up to ClaimBatchSize rows (UPDLOCK, READPAST)
 
-        Note over D,MQ: Then each row independently, Broker rows side by side (ADR-163)
+        Note over D,MQ: Then each row independently, both lanes side by side (ADR-163, ADR-181)
         alt Lane = Broker
             D->>MQ: publish
         else Lane = Local
@@ -877,9 +877,10 @@ admits reserved words and a service may legitimately be called `User`, whose
 statements once from the registered table. **No quantity the loop runs on is
 written as a number twice.** `ClaimBatchSize`, `LeaseSeconds`,
 `BackoffBaseSeconds` and `BackoffAttemptCap` are declared on that class beside
-`MaxAttempts` and interpolated into the statements below; `PollInterval` and
-`BrokerConcurrency` are declared there too and feed the timer and the delivery
-rather than any statement; and the two that are not the dispatcher's belong
+`MaxAttempts` and interpolated into the statements below; `PollInterval`,
+`BrokerConcurrency` and `LocalConcurrency` are declared there too and feed the
+timer and the delivery rather than any statement; and the two that are not the
+dispatcher's belong
 to `OutboxMessage`: the width `LastError` is truncated to, which the fail
 statement names, and `ClaimBuckets`, which the claim's bucket list is built
 from. So this section can cite each by name and stay true when
@@ -967,17 +968,22 @@ was recording why a delivery failed.
 `ProcessBatchAsync` runs the claim-and-deliver pass the timer runs, public so
 tests drive it directly instead of racing the timer (§12.4). The pass hands the
 claimed rows to two loops that run side by side: `Broker` rows to
-`Parallel.ForEachAsync`, at most `BrokerConcurrency` in flight, and `Local` rows
-to a `foreach`, one at a time
-([ADR-163](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md)).
-A publish is a round trip that waits on nothing else, so publishes overlap; two
-projections writing one read table at once is the deadlock `ProjectionInvoker`
-runs its handlers in sequence to avoid, so each replica projects one row at a
-time and the projection writers on a table number its replicas, never its
-replicas times the bound. The loops share the pass, so the next claim waits for
-its `Local` rows: under a load past the knee the `Broker` rows not yet claimed
-wait in the outbox behind them, measured and kept, because a claim for each
-lane did not shorten the drain
+`Parallel.ForEachAsync`, at most `BrokerConcurrency` in flight
+([ADR-163](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md)),
+and `Local` rows, grouped by the `CorrelationId` of the command that staged
+them, to another, at most `LocalConcurrency` groups in flight and a group's
+rows one at a time
+([ADR-181](adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-adding-to-adr-163.md)).
+A publish is a round trip that waits on nothing else, so publishes overlap.
+Two projections writing one read table at once can deadlock, which is why
+`ProjectionInvoker` runs one event's handlers in sequence; the projection
+writers on a table number the replicas times `LocalConcurrency` all the same,
+since replicas already overlapped their projections without one, a deadlock
+victim is a failed delivery that backs off like any other, and a command's own
+rows, which most often write one read row, still take turns. The loops share
+the pass, so the next claim waits for its `Local` rows: under a load past the
+knee the `Broker` rows not yet claimed wait in the outbox behind them, measured
+and kept, because a claim for each lane did not shorten the drain
 ([ADR-165](adr/ADR-165-the-outbox-lanes-keep-one-claim-splitting-them-freeing-the-broker-lane-but-not-the-drain-1559-adding-to-adr-164.md)),
 and did not once a `Local` delivery was shorter
 ([ADR-168](adr/ADR-168-the-outbox-lanes-keep-one-claim-after-adr-166-as-well-1570-adding-to-adr-165-and-adr-166.md)).
@@ -1166,8 +1172,9 @@ Consequences of the per-row design worth stating explicitly:
   — duplicates the inbox and idempotent projections absorb, as below.
 - **And it can expire while the batch is still being delivered, which is a known
   residual rather than an oversight.** A claim leases a batch and delivers
-  its `Local` rows one at a time and its `Broker` rows `BrokerConcurrency` at a
-  time
+  its `Local` rows `LocalConcurrency` commands at a time
+  ([ADR-181](adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-adding-to-adr-163.md))
+  and its `Broker` rows `BrokerConcurrency` at a time
   ([ADR-163](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md));
   a batch slower than the lease lets a second replica reclaim
   the whole batch — the rows this one has not reached yet, and since completion
@@ -1184,9 +1191,11 @@ Consequences of the per-row design worth stating explicitly:
   a stale worker's update matches no row. That is a change to the claim
   protocol and to every test that drives it, and it belongs with the §13.6
   work that alerts on this table. Until then the mitigation is operational and
-  stated: a `Local` lane whose delivery approaches `LeaseSeconds` divided by
-  `ClaimBatchSize` per row, or a `Broker` lane at `BrokerConcurrency` times
-  that, wants a smaller `ClaimBatchSize` or a longer `LeaseSeconds`, and
+  stated: a lane whose delivery approaches its bound, `LocalConcurrency` or
+  `BrokerConcurrency`, times `LeaseSeconds` divided by `ClaimBatchSize` per
+  row — for `Local` rows the fewer of `LocalConcurrency` and the commands
+  that staged them, since one command's rows take turns — wants a smaller
+  `ClaimBatchSize` or a longer `LeaseSeconds`, and
   §13.6's outbox-age alert is what makes that visible.
 
 ### Handler contracts

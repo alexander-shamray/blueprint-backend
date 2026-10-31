@@ -29,6 +29,10 @@ public static class OutboxRows
     public static OutboxMessage Overlapping(ServiceFixture fixture) =>
         Local(new CountsOverlap { OccurredAt = Raised }, fixture);
 
+    /// <summary>An overlapping row staged by <paramref name="command"/>, as one command's rows share it.</summary>
+    public static OutboxMessage Overlapping(ServiceFixture fixture, Guid command) =>
+        Local(new CountsOverlap { OccurredAt = Raised }, fixture, command);
+
     /// <summary>A Broker-lane row carrying a real contract.</summary>
     /// <remarks>Not <c>OrderPlaced</c>, which would start §9.6's saga beside the test.</remarks>
     public static OutboxMessage Broker(ServiceFixture fixture, Guid orderId) =>
@@ -51,11 +55,12 @@ public static class OutboxRows
     public static OutboxMessage Unhandled(ServiceFixture fixture) =>
         Local(new UnhandledEvent { OccurredAt = Raised }, fixture);
 
-    private static OutboxMessage Local(object message, ServiceFixture fixture) =>
+    // Each row its own command unless the test names one, as each staging scope mints its own correlation (§9.4).
+    private static OutboxMessage Local(object message, ServiceFixture fixture, Guid? command = null) =>
         OutboxMessage.Stage(
             message,
             OutboxLane.Local,
-            Guid.CreateVersion7(),
+            command ?? Guid.CreateVersion7(),
             fixture.MessageTypes,
             fixture.OutboxJson);
 }

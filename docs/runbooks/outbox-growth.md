@@ -80,8 +80,11 @@ claims come back full and delivering, the next pass starts at once rather than
 at the next `PollInterval` tick
 ([ADR-163](../backend-architecture/adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md)).
 So under a backlog one replica's ceiling is set by delivery time, not by the
-tick: `Local` rows go one at a time and `Broker` rows up to
-`OutboxDispatcher.BrokerConcurrency` at once. The drain rate is the
+tick: `Local` rows go up to `OutboxDispatcher.LocalConcurrency` commands at
+once
+([ADR-181](../backend-architecture/adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-adding-to-adr-163.md))
+and `Broker` rows up to `OutboxDispatcher.BrokerConcurrency` at once. The
+drain rate is the
 dispatcher's own delivered count
 ([§9.4](../backend-architecture/09-messaging.md)):
 
@@ -98,10 +101,14 @@ deriv(sum by (service_name) (max by (service_name, lane) (outbox_pending_count))
 
 If arrivals genuinely exceed the drain rate, the fixes in order of preference
 are: add replicas (the claim uses `UPDLOCK, READPAST` precisely so replicas do
-not collide); then raise the batch size or the Broker bound; and only then
-question the tick, which paces only a lane that is not backlogged. Note that
-§9.4 treats the batch size, the bound and the tick as **constants rather than
-configuration** ([§15.4](../backend-architecture/15-cicd-deployment.md)
+not collide); then raise the bound of the lane whose rows fill the pass,
+`LocalConcurrency` or `BrokerConcurrency`, since a larger batch only lengthens
+a pass that lane is already busy for
+([ADR-181](../backend-architecture/adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-adding-to-adr-163.md));
+and only then question the tick, which paces only a lane that is not
+backlogged. Note that §9.4 treats the batch size, the bounds and the tick as
+**constants rather than configuration**
+([§15.4](../backend-architecture/15-cicd-deployment.md)
 argues why), so changing any of them is a code change and a pull request, not
 a values file.
 

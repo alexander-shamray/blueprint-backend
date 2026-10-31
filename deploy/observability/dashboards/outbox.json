@@ -226,7 +226,7 @@
       "id": 17,
       "type": "timeseries",
       "title": "One row's delivery p95, per lane",
-      "description": "outbox.delivery.duration (§9.4, §13.3): one publish on the Broker lane, one projection on the Local lane. Local rows go one at a time (ADR-163), so a slower Local delivery under load lowers that lane's rate beside it by the same factor.",
+      "description": "outbox.delivery.duration (§9.4, §13.3): one publish on the Broker lane, one projection on the Local lane. Local rows go LocalConcurrency commands at a time (ADR-181), so a slower Local delivery under load lowers that lane's rate beside it by the same factor.",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
