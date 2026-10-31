@@ -18,7 +18,7 @@ public sealed class SagaInboxCleanupService(
     OperatorSwitches? switches = null)
     : SwitchedPollingWorker(switches)
 {
-    /// <summary>The name an operator lists to switch the cleanup off (ADR-113).</summary>
+    /// <summary>The name ADR-113's switches would read; ADR-104 gives Ordering none, so here nothing does.</summary>
     public const string Name = "saga-inbox-cleanup";
 
     /// <summary>The library's default window, so a duplicate is still caught for as long as it was (ADR-032).</summary>
