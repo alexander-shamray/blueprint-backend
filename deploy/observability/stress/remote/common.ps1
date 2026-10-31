@@ -47,6 +47,66 @@ function Invoke-Native {
     return $output
 }
 
+# Enough of a failed service's log for an init script's error or the head of a stack trace.
+$script:FailedLogLines = 30
+
+# Each container of the stack that exited non-zero, is unhealthy or was never started, one row a service.
+function Get-FailedServices {
+    param([Parameter(Mandatory)][string[]]$Compose)
+
+    $lines = Invoke-Native { docker compose @Compose ps -a --format json } 'Listing the stack'
+    $failed = foreach ($line in @($lines | Where-Object { $_ -and $_.Trim() })) {
+        foreach ($container in @($line | ConvertFrom-Json)) {
+            $reason = if ($container.State -eq 'exited' -and $container.ExitCode -ne 0) {
+                "exited with code $($container.ExitCode)"
+            } elseif ($container.Health -eq 'unhealthy') {
+                'unhealthy'
+            } elseif ($container.State -eq 'created') {
+                'never started'
+            }
+            if ($reason) {
+                [pscustomobject]@{
+                    Service = $container.Service
+                    Reason = $reason
+                    Started = $container.State -ne 'created'
+                }
+            }
+        }
+    }
+    # A service that never started was waiting on one that failed, so the failed ones come first.
+    @($failed | Sort-Object Service -Unique | Sort-Object @{ Expression = 'Started'; Descending = $true }, Service)
+}
+
+# Compose's up names the first service it gave up on and not why, which is in that container's log; so a failed
+# up lists every service that failed and shows each one's log, and the exception names them.
+function Invoke-ComposeUp {
+    param(
+        [Parameter(Mandatory)][string[]]$Files,
+        [Parameter(Mandatory)][string]$What,
+        [string[]]$Arguments = @()
+    )
+
+    $compose = @($Files | ForEach-Object { '-f', $_ })
+    try {
+        Invoke-Native { docker compose @compose up -d @Arguments --wait } $What -Stream
+    } catch {
+        $upError = $_
+        # Listing the stack can fail as the up did, and then the up's own error is the one to keep.
+        $failed = try { @(Get-FailedServices $compose) } catch { @() }
+        if ($failed.Count -eq 0) {
+            throw $upError
+        }
+        foreach ($service in @($failed | Where-Object Started)) {
+            Write-Host ''
+            Write-Host "$($service.Service), $($service.Reason). Its log's last $FailedLogLines lines:"
+            & docker compose @compose logs --no-color --no-log-prefix --tail $FailedLogLines $service.Service |
+                Out-Host
+        }
+        $names = ($failed | ForEach-Object { "$($_.Service) $($_.Reason)" }) -join '; '
+        throw "$($upError.Exception.Message) Failed: $names. Each started one's log is above."
+    }
+}
+
 # The IPv4 address of the interface holding the default route, the one the
 # LAN reaches: WSL's and Hyper-V's switches hold none. A link-local address
 # is a missing DHCP lease, not a LAN.
