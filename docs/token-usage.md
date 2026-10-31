@@ -559,3 +559,60 @@ contexts are auditors, 6 security and 14 bug, reading a slice that held a
 chapter, which is the work a slice hands them. Their line counts are
 today's, against a tree at the run's commit. #847's decision stands: what
 reads a long chapter whole is moving or auditing that text.
+
+## 2026-10-31 — step 2's exit, over the span since its rules took force
+
+Measured by the report on the owner's machine at 41a57ee4, with
+`--since 2026-10-07`, the day #590 put `CLAUDE.md`'s *Subagents, review
+rounds and plans* in force, and repeated with `--spawns 40`, `--tools 30`
+and `--spawns 6000` for the review rounds. The span printed was 2026-10-07
+to 2026-10-31, 24 days against the 22 of the window measured since
+2026-09-15, over the main checkout's transcript directory and 437 more.
+79,754 responses in 5,377 contexts came to 1.81B input equivalent, 833M
+of it after a wake (46%); output was 50.6M.
+
+| Who | Contexts | Calls | Mean context | Input equivalent | After a wake |
+|---|---|---|---|---|---|
+| Main, `/ship` | 281 | 25,501 | 212k | 631.7M | 235.9M |
+| Main, no command | 2,339 | 16,801 | 210k | 441.7M | 213.1M |
+| Main, `skill:validate-blueprint` | 3 | 1,878 | 467k | 92.8M | 90.2M |
+| Main, `skill:ship` | 27 | 2,261 | 280k | 70.8M | 18.6M |
+| `general-purpose` under `/ship` | 568 | 6,976 | 82k | 108.5M | 31.4M |
+| Every main row | 2,691 | 49,106 | 228k | 1,320.6M | 598.2M |
+| Every `general-purpose` row | 897 | 11,532 | 90k | 189.3M | 85.9M |
+
+The last two rows sum the report's rows by agent, as the 2026-10-18
+section's do.
+
+**Step 2's exit, part by part.**
+
+- A `general-purpose` context cost 211k input equivalent on average, under
+  the exit's 0.5M; the all-history baseline of 2026-10-07 had 1.00M. That
+  half holds.
+- A main session's mean context is 228k a call, not under 150k, against
+  295k in that baseline. That half does not hold. Without the three
+  `validate-blueprint` sessions of 2026-10-08 to 2026-10-10, which step 7
+  then replaced with a dispatch, it is 219k. It is rising again: the same
+  report with `--since 2026-10-19` reads 237k over 21,882 calls, against
+  179k over the eight days of the 2026-10-18 section.
+
+**The review loop's rounds**, from the descriptions `--spawns 6000` lists:
+1,113 of the 1,125 `branch-reviewer` spawns name a round. 460 were a round
+1, 359 a round 2, 167 a round 3, 72 a round 4, 28 a round 5, 13 a round 6
+and 9 a round 7. Five went past seven, all under no command and so outside
+`/ship`'s ceiling: rounds 8 to 11 of one loop on PR 1050 on 2026-10-14,
+and one round 8 recheck on 2026-10-12. A round 1 cost about 146k and a
+later round about 51k, where the loop that set the ceiling reached round
+20 at about 15M a round.
+
+**What fills a main session**, from `--tools 30`: `Bash` results under
+`/ship`, 19,970 of them, about 6.2M tokens; `Read` under no command,
+3,452, about 4.2M; `Bash` under no command, 9,145, about 2.4M; `Read`
+under `/ship`, 1,444, about 1.5M. `Read` under `quality-sets:sweep`,
+about 4.6M, is the scored runs' auditors, each a session of its own.
+
+**The forty costliest subagents**, from `--spawns 40`, cost 1.1M to 4.0M
+each: 20 bug-sweep auditors, 12 `general-purpose` agents under the two
+`validate-blueprint` sessions of 2026-10-08 to 2026-10-09, implementers
+and history strips among them, and eight under `/ship` and `/branch`: four
+audit passes, an `Explore` map, two review rounds and one implementer.
