@@ -12,8 +12,8 @@ namespace Platform.IntegrationTests;
 [Trait("Category", "Integration")]
 public sealed class ObjectStoreInitTests(ObjectStoreFixture store) : IClassFixture<ObjectStoreFixture>
 {
-    // A weed ahead of the real one on PATH that answers the first two lists as a master with no leader did on
-    // 2026-10-31, an error line and exit 0, and hands everything else to the real one.
+    // A weed ahead of the real one on PATH that answers the first two lists as a master with no leader does, an
+    // error line and exit 0, and hands everything else to the real one.
     private const string LeaderlessWeed = """
         mkdir -p /tmp/leaderless
         cat > /tmp/leaderless/weed <<'STUB'
@@ -46,7 +46,7 @@ public sealed class ObjectStoreInitTests(ObjectStoreFixture store) : IClassFixtu
             ["/bin/sh", "-c", LeaderlessWeed.ReplaceLineEndings("\n")],
             TestContext.Current.CancellationToken);
 
-        // Read as absent, the failed list sent the create line to a store that already held the bucket.
+        // Read as absent, a failed list would send the create line to a store that already holds the bucket.
         string output = $"{init.Stdout}{init.Stderr}";
         init.ExitCode.ShouldBe(0, output);
         output.ShouldNotContain("already exists");
