@@ -35,9 +35,11 @@ internal sealed class OrderSummaryConfiguration : IEntityTypeConfiguration<Order
         builder.Property(s => s.CancelledCounted).HasDefaultValue(false);
         builder.Property(s => s.FulfilmentCounted).HasDefaultValue(false);
 
+        // Keyed in the history page's whole order, the tiebreaker too: the clustered key the index would carry
+        // otherwise is ascending, so a page ordered OrderId DESC would sort the customer's rows (§6.6).
         builder
-            .HasIndex(s => new { s.CustomerId, s.PlacedAt }, "IX_OrderSummaries_Customer_PlacedAt")
-            .IsDescending(false, true)
+            .HasIndex(s => new { s.CustomerId, s.PlacedAt, s.OrderId }, "IX_OrderSummaries_Customer_PlacedAt")
+            .IsDescending(false, true, true)
             .IncludeProperties(s => new { s.Status, s.TotalAmount, s.Currency, s.LineCount });
     }
 }

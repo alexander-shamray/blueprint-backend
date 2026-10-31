@@ -623,10 +623,10 @@ namespace Ordering.Infrastructure.Persistence.Migrations
 
                     b.HasKey("OrderId");
 
-                    b.HasIndex(new[] { "CustomerId", "PlacedAt" }, "IX_OrderSummaries_Customer_PlacedAt")
-                        .IsDescending(false, true);
+                    b.HasIndex(new[] { "CustomerId", "PlacedAt", "OrderId" }, "IX_OrderSummaries_Customer_PlacedAt")
+                        .IsDescending(false, true, true);
 
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "CustomerId", "PlacedAt" }, "IX_OrderSummaries_Customer_PlacedAt"), new[] { "Status", "TotalAmount", "Currency", "LineCount" });
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex(new[] { "CustomerId", "PlacedAt", "OrderId" }, "IX_OrderSummaries_Customer_PlacedAt"), new[] { "Status", "TotalAmount", "Currency", "LineCount" });
 
                     b.ToTable("OrderSummaries", "ordering");
                 });

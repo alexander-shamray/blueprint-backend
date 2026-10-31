@@ -56,7 +56,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "_OptimizeOutboxKeyForSequentialInserts",
             "_ClusterSagaOutboxOnInboxKey",
             "_ClusterInboxStateOnMessageKey",
-            "_KeySagaOutboxOnInboxKey"
+            "_KeySagaOutboxOnInboxKey",
+            "_KeyOrderSummariesByCursor"
         ];
 
         string[] applied = await fixture.AppliedMigrationsAsync();
