@@ -1071,8 +1071,9 @@ purge, §11.3's JWT validation, both images ([§15.2](15-cicd-deployment.md)) an
 §4.2's architecture gates. The migrations it copies are `InitialCreate`,
 `AddOutbox`, `AddInbox`, `AddOutboxRetentionIndex`, `AddIdempotencyMarkers`,
 `IdempotencyMarkerCommittedAtDefault`, `AddIdempotencyMarkerRowVersion`,
-`AddOutboxTraceContext`, `OptimizeOutboxKeyForSequentialInserts` and
-`KeyOutboxOnRandomId`, bar the five outbox ones for a pure consumer —
+`AddOutboxTraceContext`, `OptimizeOutboxKeyForSequentialInserts`,
+`KeyOutboxOnRandomId` and `DropInboxHandledAtIndex`, bar the five outbox ones
+for a pure consumer —
 the messaging tables ship with the
 dispatcher that reads them, because a service carrying the dispatcher without
 its table logs a failed claim twice a second from its first boot, and §8.5's
@@ -1101,6 +1102,10 @@ column, so a publishing service without it fails its first claim
 ([ADR-180](adr/ADR-180-the-outbox-key-is-random-and-its-claim-index-is-led-by-a-bucket-1623-supersedes-adr-161s-sequential-key-option.md)).
 `OptimizeOutboxKeyForSequentialInserts` travels only as the history the one
 after it undoes, whose `Down` sets the option again.
+`DropInboxHandledAtIndex` travels with the inbox, pure consumer included: the
+copied configuration maps no index on `HandledAt`, so a service without it
+starts with a model its migrations do not match
+([ADR-186](adr/ADR-186-the-inbox-has-no-index-on-the-time-a-row-was-handled-1648.md)).
 It then edits the shared files: `Platform.slnx`, the Compose index — one
 `include:` line for the unit it just created — the `infra-only` override, which
 excludes both halves of the pair, `.env.example`
