@@ -165,8 +165,9 @@ export const options = {
     },
     thresholds: thresholds(),
     summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(95)', 'p(99)', 'count'],
-    // Users are made and stock is set before the first VU starts, in
-    // steps.js's setupMinutes(), which plan() counts in the run's length.
+    // Users are made and stock is set before the first VU starts, within the
+    // minutes steps.js's setupMinutes() allows, which plan() counts in the
+    // run's length.
     setupTimeout: `${setupMinutes(STEPS)}m`,
 };
 
