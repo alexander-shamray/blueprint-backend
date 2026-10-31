@@ -199,8 +199,8 @@ delegation brief and the planning rule; the review loop it held moved to
 `/ship` step 5 with step 4. **Owed:** the
 owner's user-level memory rule cut to cite that section, a change outside
 the repository; the plugin's own settings, where it has them; and a main
-session's mean context, #1664, whose cut is the window below. The cheaper model waits on step 1's quality
-sets.
+session's mean context, #1664, whose cut is the window below. The
+cheaper model waits on step 1's quality sets.
 
 **Measured** over 2026-10-07 to 2026-10-31 (`token-usage.md`, 2026-10-31):
 the `general-purpose` half of the exit passes; a main session's mean
