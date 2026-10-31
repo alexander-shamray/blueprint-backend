@@ -16,19 +16,35 @@ public sealed class OrderReader(IDbConnectionFactory connections)
         o.PaymentCurrency, o.TrackingNumber, o.FirstSeenAt, o.AsOf
         """;
 
-    /// <summary>Catalog's keyset seek on <c>IX_Orders_Owned</c>; the id breaks a tie across a page.</summary>
-    private const string PageSql =
+    /// <summary>What both pages select, narrowed to the buyer's rows of <c>IX_Orders_Owned</c>.</summary>
+    private const string Owned =
         $"""
         SELECT TOP (@Take) {Columns}
         FROM bff.Orders o
         -- IS NOT NULL repeats the index's filter, so the seek matches it whatever the parameter.
         WHERE o.CustomerId = @CustomerId
             AND o.CustomerId IS NOT NULL
-            AND (@AfterFirstSeenAt IS NULL
-                OR o.FirstSeenAt < @AfterFirstSeenAt
-                OR (o.FirstSeenAt = @AfterFirstSeenAt AND o.OrderId < @AfterId))
+        """;
+
+    /// <summary>The index's own order, so the walk needs no sort; the id breaks a tie across a page.</summary>
+    private const string Newest =
+        """
+
         ORDER BY o.FirstSeenAt DESC, o.OrderId DESC;
         """;
+
+    // A cursor's page has a statement of its own, so the seek reaches the cursor rather than the buyer's newest row;
+    // an "@After IS NULL OR" predicate cannot seek, as ADR-179 found for Catalog's.
+    internal const string FirstPageSql = Owned + Newest;
+
+    internal const string AfterPageSql =
+        Owned +
+        """
+
+            AND (o.FirstSeenAt < @AfterFirstSeenAt
+                OR (o.FirstSeenAt = @AfterFirstSeenAt AND o.OrderId < @AfterId))
+        """ +
+        Newest;
 
     /// <summary>Every line and name on the page in one statement, the ids as one JSON parameter (§6.6).</summary>
     private const string PageLinesSql =
@@ -83,7 +99,7 @@ public sealed class OrderReader(IDbConnectionFactory connections)
         // One extra row says whether a next page exists, without a COUNT(*).
         List<OrderReadRow> rows = (await connection.QueryAsync<OrderReadRow>(
             new CommandDefinition(
-                PageSql,
+                after is null ? FirstPageSql : AfterPageSql,
                 new
                 {
                     CustomerId = customerId,

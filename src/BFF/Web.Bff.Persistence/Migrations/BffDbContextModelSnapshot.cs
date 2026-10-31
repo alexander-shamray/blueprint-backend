@@ -18,7 +18,7 @@ namespace Web.Bff.Persistence.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("bff")
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -198,6 +198,8 @@ namespace Web.Bff.Persistence.Migrations
                         .IsDescending(false, true, true)
                         .HasDatabaseName("IX_Orders_Owned")
                         .HasFilter("[CustomerId] IS NOT NULL");
+
+                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("CustomerId", "FirstSeenAt", "OrderId"), new[] { "Currency", "TotalAmount", "PlacedAt", "ConfirmedAt", "DispatchedAt", "DeliveredAt", "CancelledAt", "CancelOutcome", "AuthorisedAt", "AuthorisedAmount", "RefundedAt", "RefundedAmount", "PaymentCurrency", "TrackingNumber", "AsOf" });
 
                     b.ToTable("Orders", "bff", t =>
                         {

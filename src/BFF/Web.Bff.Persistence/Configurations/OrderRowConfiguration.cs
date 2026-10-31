@@ -46,12 +46,32 @@ internal sealed class OrderRowConfiguration : IEntityTypeConfiguration<OrderRow>
         // Written by the Ordering events' MERGEs, so a row an earlier event made carries the empty list (ADR-099).
         builder.Property(o => o.ErasedUnder).HasColumnType("nvarchar(max)").HasDefaultValueSql("N'[]'");
 
-        // The list's keyset seek (§10.7), filtered so it never reads a row with no owner.
+        // The list's keyset seek (§10.7), filtered so it never reads a row with no owner. It includes every column the
+        // page reads, so the walk pays no lookup a row and the planner never prices a scan and a sort below it, as
+        // ADR-179 argues for Catalog's; every handler's MERGE updates it as well as the row.
         builder
             .HasIndex(o => new { o.CustomerId, o.FirstSeenAt, o.OrderId })
             .HasDatabaseName("IX_Orders_Owned")
             .IsDescending(false, true, true)
-            .HasFilter("[CustomerId] IS NOT NULL");
+            .HasFilter("[CustomerId] IS NOT NULL")
+            .IncludeProperties(o => new
+            {
+                o.Currency,
+                o.TotalAmount,
+                o.PlacedAt,
+                o.ConfirmedAt,
+                o.DispatchedAt,
+                o.DeliveredAt,
+                o.CancelledAt,
+                o.CancelOutcome,
+                o.AuthorisedAt,
+                o.AuthorisedAmount,
+                o.RefundedAt,
+                o.RefundedAmount,
+                o.PaymentCurrency,
+                o.TrackingNumber,
+                o.AsOf
+            });
 
         // The unattributed gauge's seek: unowned rows alone, oldest first.
         builder
