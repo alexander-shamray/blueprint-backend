@@ -98,7 +98,7 @@ in `IEntityTypeConfiguration<T>` classes, never in attributes on domain types â€
 attributes would put an EF Core dependency in the Domain project.
 
 **One call in the solution maps outside a configuration class, and it is
-stated here rather than left to be discovered, with the two amendments made to
+stated here rather than left to be discovered, with the amendments made to
 what it maps.** `OrderingDbContext` calls
 `modelBuilder.AddTransactionalOutboxEntities()` after the assembly scan, for
 the three tables
