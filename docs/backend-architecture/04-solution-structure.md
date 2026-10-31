@@ -1068,8 +1068,8 @@ purge, §11.3's JWT validation, both images ([§15.2](15-cicd-deployment.md)) an
 §4.2's architecture gates. The migrations it copies are `InitialCreate`,
 `AddOutbox`, `AddInbox`, `AddOutboxRetentionIndex`, `AddIdempotencyMarkers`,
 `IdempotencyMarkerCommittedAtDefault`, `AddIdempotencyMarkerRowVersion`,
-`AddOutboxTraceContext` and `OptimizeOutboxKeyForSequentialInserts`, bar the
-four outbox ones for a pure consumer —
+`AddOutboxTraceContext`, `OptimizeOutboxKeyForSequentialInserts` and
+`KeyOutboxOnRandomId`, bar the five outbox ones for a pure consumer —
 the messaging tables ship with the
 dispatcher that reads them, because a service carrying the dispatcher without
 its table logs a failed claim twice a second from its first boot, and §8.5's
@@ -1093,10 +1093,11 @@ the first pass
 `AddOutboxTraceContext` travels on the same argument one table over: the
 outbox dispatcher's claim reads both trace columns ([§9.4](09-messaging.md)),
 so a publishing service without them fails its first claim.
-`OptimizeOutboxKeyForSequentialInserts` travels on a weaker one: a service
-without it still runs, but its outbox key is the hot last page
-[ADR-161](adr/ADR-161-the-outbox-key-is-optimised-for-sequential-inserts-and-a-pass-completes-its-rows-in-one-statement-1531.md)
-found, and its `OutboxDispatcherTests` would fail on the missing option.
+`KeyOutboxOnRandomId` travels on it too: the claim names its `ClaimBucket`
+column, so a publishing service without it fails its first claim
+([ADR-180](adr/ADR-180-the-outbox-key-is-random-and-its-claim-index-is-led-by-a-bucket-1623-supersedes-adr-161s-sequential-key-option.md)).
+`OptimizeOutboxKeyForSequentialInserts` travels only as the history the one
+after it undoes, whose `Down` sets the option again.
 It then edits the shared files: `Platform.slnx`, the Compose index — one
 `include:` line for the unit it just created — the `infra-only` override, which
 excludes both halves of the pair, `.env.example`
@@ -1117,10 +1118,10 @@ be a second implementation of which substring each rule matches — and a
 fingerprint matching nothing is a stale entry that fails the build. Where
 `.github/secret-scan/` is absent it writes nothing and says nothing, which is
 the case in the scaffold suite's own synthetic root. The new service
-builds and its **142** tests pass before a line of it is written, **57** of
+builds and its **143** tests pass before a line of it is written, **58** of
 them against real SQL Server and RabbitMQ containers — counts measured on
-2026-10-28 against a rendered service, whose `Yankee.Domain.Tests`,
-`Yankee.Application.Tests` and `Yankee.Api.Tests` hold 1, 18 and 123 of them.
+2026-10-31 against a rendered service, whose `Yankee.Domain.Tests`,
+`Yankee.Application.Tests` and `Yankee.Api.Tests` hold 1, 18 and 124 of them.
 The container figure is the `Category=Integration` count of §12.4, which is a
 filter rather than a tally.
 

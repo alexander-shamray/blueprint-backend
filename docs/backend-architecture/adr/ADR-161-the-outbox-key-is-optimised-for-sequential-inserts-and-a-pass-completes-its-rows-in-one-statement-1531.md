@@ -37,6 +37,12 @@ template one, so a new publishing service has it. It needs SQL Server 2019 or
 later, and `OPENJSON` a compatibility level of 130 or more. Whether the knee
 moves is measured by a rerun of the same stress plan, not argued here.
 
+**Superseded in part by
+[ADR-180](ADR-180-the-outbox-key-is-random-and-its-claim-index-is-led-by-a-bucket-1623-supersedes-adr-161s-sequential-key-option.md)**:
+the Decision's sequential-key option, the key it was set on, and the
+consequences that the option is outside the EF model and travels in the
+scaffold. The one-statement completion and its consequences stand.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

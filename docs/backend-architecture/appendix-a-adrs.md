@@ -186,6 +186,7 @@ decision looks wrong.
 | **ADR-177** | [The BFF's order events run one order at a time in the host (#1625)](adr/ADR-177-the-bffs-order-events-run-one-order-at-a-time-in-the-host-1625.md) |
 | **ADR-178** | [The saga outbox is keyed on its inbox-message index, and the inbox's id is random (#1624)](adr/ADR-178-the-saga-outbox-is-keyed-on-its-inbox-message-index-and-the-inboxs-id-is-random-1624.md) |
 | **ADR-179** | [A listing order's index covers its page, and a cursor's page has its own statement (#1626)](adr/ADR-179-a-listing-orders-index-covers-its-page-and-a-cursors-page-has-its-own-statement-1626.md) |
+| **ADR-180** | [The outbox key is random and its claim index is led by a bucket (#1623); supersedes ADR-161's sequential-key option](adr/ADR-180-the-outbox-key-is-random-and-its-claim-index-is-led-by-a-bucket-1623-supersedes-adr-161s-sequential-key-option.md) |
 
 ---
 
