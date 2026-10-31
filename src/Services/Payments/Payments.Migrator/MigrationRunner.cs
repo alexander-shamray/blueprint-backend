@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Payments.Migrator;
 
-/// <summary><c>Database.Migrate()</c> and nothing else (§7.4), plus the exit code that makes it a job.</summary>
+/// <summary>§7.1's isolation read, <c>Database.Migrate()</c> (§7.4), and the exit code that makes it a job.</summary>
 /// <remarks>A type, since the exit code is the whole contract with §7.4's <c>backoffLimit</c>.</remarks>
 public sealed class MigrationRunner(PaymentsDbContext db, ILogger<MigrationRunner> logger)
 {
@@ -38,6 +38,10 @@ public sealed class MigrationRunner(PaymentsDbContext db, ILogger<MigrationRunne
     {
         try
         {
+            // §7.1's isolation, read before any DDL so a refused database is left as it was (ADR-185).
+            if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)
+                throw new InvalidOperationException(refusal);
+
             // Read before applying, so the log says what this run did.
             string[] pending = [.. await db.Database.GetPendingMigrationsAsync(ct)];
 

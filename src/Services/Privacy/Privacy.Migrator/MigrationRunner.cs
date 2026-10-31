@@ -53,6 +53,10 @@ public sealed class MigrationRunner(
     {
         try
         {
+            // §7.1's isolation, read before any DDL so a refused database is left as it was (ADR-185).
+            if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)
+                throw new InvalidOperationException(refusal);
+
             // Read before applying, so the log says what this run did.
             string[] pending = [.. await db.Database.GetPendingMigrationsAsync(ct)];
 
