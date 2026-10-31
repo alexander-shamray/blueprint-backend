@@ -199,13 +199,31 @@ delegation brief and the planning rule; the review loop it held moved to
 `/ship` step 5 with step 4. **Owed:** the
 owner's user-level memory rule cut to cite that section, a change outside
 the repository; the plugin's own settings, where it has them; and a main
-session's mean context, #1664. The cheaper model waits on step 1's quality
+session's mean context, #1664, whose cut is the window below. The cheaper model waits on step 1's quality
 sets.
 
 **Measured** over 2026-10-07 to 2026-10-31 (`token-usage.md`, 2026-10-31):
 the `general-purpose` half of the exit passes; a main session's mean
 context does not, and from 2026-10-19 on it read higher than the week
 before.
+
+**Why, and the cut** (`token-usage.md`, 2026-10-31, *what a main session
+carried*). From 2026-10-19 on a call adds what it did before and a session
+starts where it did; what grew is how long a context runs before anything
+empties it: more prompts past 150 calls, four times the wakes, and later
+tasks typed into the same session. Nothing empties it before
+auto-compaction, which the owner's settings put at an 800k window for
+`claude-opus-5-5`, firing at about 765k, and a model has no tool that
+compacts. The bar stays at 150k: a session's first call is 63k of it, and
+the replay with compaction at 250k reads 137k over the span that failed.
+So the cut is the window, not another rule: `autoCompactWindow` at 260,000
+in the owner's user settings, at the top level and in place of the 800,000
+under `modelSettings`, which fires the compaction under 250k. That is a
+change outside the repository, owed with the measurement after it over a
+span of at least thirteen days. Rejected: the same key in the committed
+`.claude/settings.json`, which would hold the window to this repository
+alone but is a self-locking harness change of its own; and 300k, which
+cuts 26% against 250k's 29% and leaves the span over the bar.
 
 ### Step 3 — what every session loads
 

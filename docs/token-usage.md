@@ -617,3 +617,73 @@ each: 20 bug-sweep auditors, 12 `general-purpose` agents under the two
 `validate-blueprint` sessions of 2026-10-08 to 2026-10-09, implementers
 and history strips among them, and eight under `/ship` and `/branch`: four
 audit passes, an `Explore` map, two review rounds and one implementer.
+
+## 2026-10-31 — what a main session carried from 2026-10-19 on
+
+Measured for #1664 on the owner's machine at e463598c, by a one-off
+script that imports `token_usage.py` and replays each main session's calls
+in order; it is not in the tree. It reads the report's default transcript
+directories without the `tools/quality-sets` runs, and takes a call's
+context as `mean_context` does: fresh input plus cache writes plus cache
+reads. Span A is the 2026-10-18 section's, 2026-10-11 to 2026-10-18; span
+B is 2026-10-19 to 2026-10-31. Over 2026-10-07 to 2026-10-31 the script
+reads 227k a call over 49,816 calls, where the report's every-main row
+reads 228k over 49,106, so the two count the same calls to within the
+day's extra responses.
+
+| | A | B |
+|---|---|---|
+| Calls | 15,992 | 22,491 |
+| Mean context | 182k | 236k |
+| The session's first call, averaged per call | 64k | 63k |
+| Carried into a prompt from the session's earlier prompts | 24k | 48k |
+| Grown inside the prompt | 95k | 125k |
+| Calls inside a prompt that ran past 150 calls | 21% (13 prompts) | 44% (37 prompts) |
+| Wakes: background agents, background commands | 37, 48 | 197, 178 |
+| Calls after a wake in their prompt | 17% | 39% |
+| Calls over 250k, over 400k | 20%, 7% | 36%, 15% |
+
+The first three context rows sum to the mean. What a call adds did not
+change: a `Bash` result added 1.2k on average in both spans, a `Read` 2.8k,
+and `Bash` was half the growth in both. B's sessions do not fill faster;
+they run longer before anything empties them. More prompts run past 150
+calls, review rounds and CI waits as background tasks wake a prompt four
+times as often, and a later prompt in the same session, typed as
+"continue with" the next issue, inherits the earlier one's context.
+
+**Nothing empties a context before auto-compaction**, and that fires late.
+The 59 compactions in the main sessions since 2026-10-07 fired at a median
+408k, 17 of them at 700k or more, and left a median 84k. The owner's user
+settings set `autoCompactWindow` to 800,000 for `claude-opus-5-5`, and its
+automatic compactions fired at about 765k; `claude-sonnet-5-5` has no
+window set and reached 966k. A model has no tool that compacts, so
+`CLAUDE.md`'s rule to compact before a wait is carried out only when a
+person types `/compact`, which happened 19 times in span B.
+
+**The replay with an earlier compaction.** The script plays each session's
+call-by-call growth again, and where the context passes a threshold it
+drops to 84k and grows on by the same steps; a real compaction still
+drops it. It does not count the compaction's own call, or the reads a
+summary loses that the session would then make again.
+
+| Compact at | A | B | Compactions in B | B's input equivalent |
+|---|---|---|---|---|
+| As measured | 182k | 236k | 45 | 620M |
+| 500k | 161k | 192k | 14 | |
+| 400k | 155k | 175k | 30 | |
+| 300k | 141k | 152k | 62 | 458M |
+| 250k | 131k | 137k | 98 | 438M |
+| 200k | 118k | 120k | 157 | 419M |
+
+A replayed row's compactions are the ones its threshold fires. Its input
+equivalent prices each call at the report's rates with the cache read
+scaled to the replayed context, and a call that wrote its whole context
+again, after the cache expired, scaled whole; each compaction is charged
+its context read uncached, 10k of output at five times the input price,
+and 84k written to the hour-long cache after it.
+
+At 250k both spans read under 150k, at one compaction per 229 calls of
+span B, about seven a day, and span B's main sessions cost 29% less, about
+180M over thirteen days. At 300k span B does not pass, at 26% less. What a
+summary drops and the session then reads again is not in these figures, so
+they are the saving's upper side.
