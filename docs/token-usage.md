@@ -602,9 +602,9 @@ section's do.
 and 9 a round 7. Five went past seven, all under no command: rounds 8 to
 11 of one loop on PR 1050 on 2026-10-14, and one round 8 recheck on
 2026-10-12. A description numbers rounds per pull request, where the
-ceiling counts a run's, so these do not show the ceiling passed. A round 1 cost about 146k and a
-later round about 51k, where the loop that set the ceiling reached round
-20 at about 15M a round.
+ceiling counts a run's, so these do not show the ceiling passed. A round
+1 cost about 146k and a later round about 51k, where the loop that set
+the ceiling reached round 20 at about 15M a round.
 
 **What fills a main session**, from `--tools 30`: `Bash` results under
 `/ship`, 19,970 of them, about 6.2M tokens; `Read` under no command,
