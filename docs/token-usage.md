@@ -672,7 +672,8 @@ call-by-call growth again, and where the context passes a threshold it
 drops to 84k, the median it found a compaction leaving, and grows on by the
 same steps; a real compaction still drops it. Its *as measured* row counts
 45 compactions in span B from the drops in the call series, where the
-records hold 44. It does not count the compaction's own call, or the reads a
+records hold 44. Its mean context leaves the compaction's own call out,
+which the input equivalent below charges, and neither counts the reads a
 summary loses that the session would then make again.
 
 | Compact at | A | B | Compactions in B | B's input equivalent |
