@@ -164,8 +164,9 @@ export function plan(env) {
     return { level, steps, maxUsers, capped, rampSeconds, holdSeconds, warmupSeconds };
 }
 
-// The warm-up's ramp and hold, at the first step's VUs: a load the staircase
-// has already chosen to hold, so the warm-up is never what gives out.
+// The warm-up's ramp and hold, at the first step's VUs: no load the
+// staircase did not choose. No stop rule reads it, so a first step past the
+// knee gives out inside it unmeasured.
 function warmup(steps, rampSeconds, warmupSeconds) {
     return warmupSeconds > 0
         ? [{ duration: `${rampSeconds}s`, target: steps[0] }, { duration: `${warmupSeconds}s`, target: steps[0] }]
