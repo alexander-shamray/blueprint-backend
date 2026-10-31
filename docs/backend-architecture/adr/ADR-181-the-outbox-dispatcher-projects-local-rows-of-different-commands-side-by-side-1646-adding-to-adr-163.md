@@ -41,11 +41,9 @@ where it would show. One command's rows are serial within a pass only:
 across replicas, or across passes, nothing orders them, as before. The bound
 is a constant chosen, not measured; whether it moves the knee is a rerun of
 ADR-172's two-machine run, each change on its own, as ADR-163's
-`BrokerConcurrency` was. §9.4's lease residual now reads a `Local` lane at
-`LocalConcurrency` times its delivery limit, as it reads the `Broker` lane at
-`BrokerConcurrency` times, but only for rows spread over that many commands: a
-claim's `Local` rows run at the fewer of `LocalConcurrency` and the commands
-that staged them, and one command's rows one at a time.
+`BrokerConcurrency` was. §9.4's lease residual now reads a `Local` pass as its
+rows' delivery over `LocalConcurrency`, but never less than its largest
+command's rows one after another, since one command's rows take turns.
 
 ---
 
