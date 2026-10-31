@@ -80,6 +80,20 @@ ROWLOCK` when constructed with `serializable: true`.
   error 1205. The transaction it meets is serializable on the saga's row only,
   no longer across three tables.
 
+**Superseded in part by
+[ADR-185](ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md)**:
+the first consequence's clause that the Ordering database does not enable
+read-committed snapshot, with its claim that the delivery read waits for
+other consumers' commits, and the consequence that read-committed snapshot
+was not taken. Every service database runs it; the delivery read takes the
+committed version and waits for no writer. The `DELETE` beside it still
+waits on update locks, the queue
+[ADR-167](ADR-167-the-saga-outbox-is-clustered-on-its-inbox-message-index-1570-adding-to-adr-032-and-adr-112.md)
+measured, and that is still a queue rather than a cycle. The Why's account of
+read committed releasing each shared lock described locking reads; the read
+now takes none, and still holds nothing a writer waits for. The Decision and
+its other consequences stand.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

@@ -65,7 +65,20 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::[<service>] TO [<service>-runtim
 -- Migrator: schema plane, used by the pre-deploy job only.
 ALTER ROLE db_ddladmin   ADD MEMBER [<service>-migrator];
 ALTER ROLE db_datawriter ADD MEMBER [<service>-migrator];   -- for data backfills
+
+-- Row versioning, which the migrator holds no right to switch on. Run it
+-- before the first deploy: the switch waits for every other session to leave.
+ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT ON;
 ```
+
+**Every service database runs read-committed snapshot**
+([ADR-185](adr/ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md)).
+A database a migrator makes gets it from EF Core's `CREATE DATABASE`, and one
+an operator makes gets it from the last statement above; §7.4's migrator
+refuses a database without it before applying anything. A read at read
+committed then takes the last committed version rather than waiting for a
+writer, so a decision that needs a read to hold a lock takes it by a hint, a
+level or an application lock, as each in this blueprint does.
 
 > **Do not let local convenience collapse the two keys.** Locally there is one
 > `sa` account — [§14.2](14-local-development.md) states the simplification
@@ -328,11 +341,11 @@ write model's schema is a projection of the aggregate, and duplicating it as SQL
 would create two definitions that drift.
 
 **Generated and hand-written DDL ship in the same EF migration.** There is no
-second mechanism: the migrator job runs `Database.Migrate()` and nothing else,
-so hand-written DDL that is not inside a migration never executes.
+second mechanism: the migrator job's only DDL is `Database.Migrate()`, so
+hand-written DDL that is not inside a migration never executes.
 
-**`Database.Migrate()` and nothing else is also a security boundary, and
-[§14.3](14-local-development.md) is what keeps it one.** Development seeding
+**The migrator's only DDL, `Database.Migrate()`, is also a security boundary,
+and [§14.3](14-local-development.md) is what keeps it one.** Development seeding
 runs from this same container, behind a gate that fails closed — an explicit
 `Seed:Enabled` flag *and* a Development environment name, both read once at the
 job host's composition root — because the hook below runs on every production
@@ -423,6 +436,14 @@ blocked command on each of the Job's attempts, its `backoffLimit` and one,
 fits under the age at which §13.6's `MigrationJobFailed` calls a Job stuck: a
 blocked command fails with its text in the Job's log, and a Job blocked on
 every attempt has failed before that branch pages.
+
+**Before it migrates, each `MigrationRunner` reads its database's
+isolation** through the same `MigratorCommand`, and a database without §7.1's
+read-committed snapshot fails the Job with the statement that sets it, nothing
+applied
+([ADR-185](adr/ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md)).
+A database not yet made is not read, since the provider's `CREATE DATABASE`
+sets it.
 
 Because migrations and application code deploy separately, **every migration
 must be backward compatible with the currently running version**. Renaming a

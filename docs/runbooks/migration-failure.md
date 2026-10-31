@@ -76,6 +76,19 @@ deliberately withholds from the service. Three ways it fails:
   not the cluster.
 - The database is unreachable — a NetworkPolicy or a firewall, not the app.
 
+### It refused the database's isolation
+
+The log says the database runs read committed without row versioning, with
+`READ_COMMITTED_SNAPSHOT` off. The Job read that before applying anything, so
+the schema is as it was, whatever the line before it says about a partial apply
+(ADR-185). This is a database made without §7.1's last statement, or one
+switched off since. Run it as an operator, with no service connected, since the
+switch waits for every other session to leave, then rerun the release:
+
+```sql
+ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT ON;
+```
+
 ### A migration threw
 
 The log names the migration. This is the interesting case and the one where
