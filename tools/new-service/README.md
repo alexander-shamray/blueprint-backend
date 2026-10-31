@@ -94,8 +94,8 @@ readiness checks, the §7.4 migrator host, the `InitialCreate` migration that
 creates the schema and the `AddOutbox`, `AddInbox`,
 `AddOutboxRetentionIndex`, `AddIdempotencyMarkers`,
 `IdempotencyMarkerCommittedAtDefault`, `AddIdempotencyMarkerRowVersion`,
-`AddOutboxTraceContext` and `OptimizeOutboxKeyForSequentialInserts` ones
-beside it, §9.4's
+`AddOutboxTraceContext`, `OptimizeOutboxKeyForSequentialInserts` and
+`KeyOutboxOnRandomId` ones beside it, §9.4's
 outbox with its dispatcher and allow-list mapper, §9.5's inbox filter, §8.5's
 durable idempotency marker and the retention purge over all three of their
 tables, the §9 bus
@@ -117,8 +117,8 @@ its marker statements — the candidate select and the delete that joins the
 rows it returned — so a service scaffolded without the migration fails its own
 purge with `Invalid column name 'RowVersion'` on the first pass.
 
-The service builds and its 142 tests pass before you have written a line,
-and 57 of them run against real SQL Server and RabbitMQ containers:
+The service builds and its 143 tests pass before you have written a line,
+and 58 of them run against real SQL Server and RabbitMQ containers:
 the migrator's exit code, §7.1's two-key boundary, the readiness probe — 200
 only once the bus connects — `EfUnitOfWork`'s commit, rollback and retry
 semantics, the inbox filter's once-per-endpoint guarantee, §8.5's marker
@@ -139,7 +139,9 @@ and a render read 1, 18 and 75, ninety-four until a render on 2026-10-09
 read 1, 18 and 103 with forty-seven against containers, and 122 until a
 render on 2026-10-28 read 1, 18 and 123 with fifty-seven: twenty more,
 nineteen of them not the sequential-key test it was rendered for, so the pair
-was stale again before it added one. A figure nobody recounts goes stale on
+was stale again before it added one, and 142 until a render on 2026-10-31
+read 1, 18 and 124 with fifty-eight, the random-key and claim-index tests
+taking that one's place. A figure nobody recounts goes stale on
 the next PR's clock rather than on its own.
 
 **Adding to the number is not recounting it.** PR-22 put three tests into the
@@ -230,7 +232,7 @@ holds its premise. Its broker account writes its own endpoints and the fault
 exchanges and no contract. **`Notifications` is refused without it.** The mode
 is four tables in `scaffold/`: `PURE_CONSUMER_OMITTED`, `PURE_CONSUMER_PATCHES`,
 `PURE_CONSUMER_SPANS` — the third a cut from one anchor through another, each
-bound exactly once — and `PURE_CONSUMER_MIGRATIONS`, the four outbox
+bound exactly once — and `PURE_CONSUMER_MIGRATIONS`, the five outbox
 migrations it skips, with the outbox entity cut from the designers and
 snapshot.
 
