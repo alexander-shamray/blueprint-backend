@@ -1621,7 +1621,7 @@ this service's.
   reached the transport. The table drains as a consequence of *delivery*, not
   of housekeeping, and nothing is on a timer.
 - **`ordering.InboxState`** is written in the same transaction, and its rows
-  are removed by Ordering's hosted `SagaInboxCleanupService`, once the
+  are removed by the hosted `SagaInboxCleanupService`, once the
   duplicate-detection window has passed since their delivery, a bucket of the
   cleanup index at a time. It stands in for the library's
   `InboxCleanupService<OrderingDbContext>`, which `AddEntityFrameworkOutbox`
