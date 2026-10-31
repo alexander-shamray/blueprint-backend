@@ -9,6 +9,7 @@ import {
     DEFAULT_WARMUP_SECONDS,
     LEVEL_HOLD_SECONDS,
     RUN_LIMIT_SECONDS,
+    setupMinutes,
     maxOrders,
     parseGenerator,
     parseSeconds,
@@ -158,12 +159,16 @@ test('the order ceiling counts the warm-up\'s VU-seconds too, so the stock cover
 });
 
 test('a run longer than RUN_LIMIT_SECONDS is refused, warm-up included, and one that fits is taken', () => {
-    // 10,800 s: a 30 s ramp, a 10,710 s warm-up, then one 30 s ramp and 30 s hold reach exactly the limit.
+    // 10,800 s: setup()'s 600 s, a 30 s ramp, a 10,110 s warm-up, then a 30 s ramp and 30 s hold.
     assert.equal(RUN_LIMIT_SECONDS, 10800);
-    assert.equal(plan({ STRESS_STEPS: '10', STRESS_HOLD_SECONDS: '30', STRESS_WARMUP_SECONDS: '10710' })
-        .warmupSeconds, 10710);
-    assert.throws(() => plan({ STRESS_STEPS: '10', STRESS_HOLD_SECONDS: '30', STRESS_WARMUP_SECONDS: '10711' }),
-        /the run lasts 10801 s, past RUN_LIMIT_SECONDS 10800/);
+    assert.equal(plan({ STRESS_STEPS: '10', STRESS_HOLD_SECONDS: '30', STRESS_WARMUP_SECONDS: '10110' })
+        .warmupSeconds, 10110);
+    assert.throws(() => plan({ STRESS_STEPS: '10', STRESS_HOLD_SECONDS: '30', STRESS_WARMUP_SECONDS: '10111' }),
+        /the run lasts 10801 s with setup\(\)'s allowance, past RUN_LIMIT_SECONDS 10800/);
     assert.throws(() => plan({ STRESS_HOLD_SECONDS: '3000' }), /past RUN_LIMIT_SECONDS/,
         'the holds alone count too');
+    assert.throws(() => plan({ STRESS_STEPS: '10,80000', STRESS_MAX_USERS: '80000' }), /past RUN_LIMIT_SECONDS/,
+        'and so does setup() at a top step whose users take past the limit to make');
+    assert.equal(setupMinutes([10, 400]), 10);
+    assert.equal(setupMinutes([25600, 51200]), 128);
 });

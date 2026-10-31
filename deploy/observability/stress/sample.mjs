@@ -36,7 +36,7 @@ const QUERY_STORE = join(out, 'query-store.json');
 // tightest pace that is not one read queued behind the last.
 const INTERVAL_MS = 5000;
 
-// The longest run steps.js's plan() takes, and an hour for setup().
+// The longest run steps.js's plan() takes, setup() included, and an hour's margin for what precedes it.
 const LIMIT_MS = (RUN_LIMIT_SECONDS + (60 * 60)) * 1000;
 
 // Cumulative since the engine started, so a step's figure is its change.
