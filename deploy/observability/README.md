@@ -702,7 +702,8 @@ node deploy/observability/stress/summarise.mjs "$out"
 k6 exits 0 when no rule stopped the run; 108 when the knee stop did, which
 `summary.md` marks `(knee stop)`; and 99 when a step's errors passed the abort
 rate under `errors`, which `summary.md` marks `(past the abort rate)`. Either
-stop ends the run there unless it was the last step. 107 is a refusal, of a
+stop ends the run unless it was the last step, though the next step's hold
+may have begun when it lands. 107 is a refusal, of a
 variable at start or from `setup()`, with no load driven. `summarise.mjs`
 prints four machine-readable lines: `Knee:`; then `First to give up:`, each
 service with what crossed and services apart by ` | `, as in
