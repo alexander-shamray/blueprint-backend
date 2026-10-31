@@ -1,5 +1,4 @@
 using Common.Infrastructure.Migration;
-using Dapper;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
@@ -19,8 +18,11 @@ public sealed class ReadCommittedSnapshotTests(SqlServerFixture sql) : IClassFix
 
     private async Task OnMasterAsync(string statement)
     {
+        CancellationToken ct = TestContext.Current.CancellationToken;
         await using SqlConnection master = new(sql.ConnectionStringTo("master"));
-        await master.ExecuteAsync(statement);
+        await master.OpenAsync(ct);
+        await using SqlCommand command = new(statement, master);
+        await command.ExecuteNonQueryAsync(ct);
     }
 
     [Fact]
