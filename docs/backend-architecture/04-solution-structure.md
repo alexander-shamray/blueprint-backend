@@ -1118,21 +1118,12 @@ be a second implementation of which substring each rule matches — and a
 fingerprint matching nothing is a stale entry that fails the build. Where
 `.github/secret-scan/` is absent it writes nothing and says nothing, which is
 the case in the scaffold suite's own synthetic root. The new service
-builds and its **143** tests pass before a line of it is written, **58** of
-them against real SQL Server and RabbitMQ containers — counts measured on
-2026-10-31 against a rendered service, whose `Yankee.Domain.Tests`,
-`Yankee.Application.Tests` and `Yankee.Api.Tests` hold 1, 18 and 124 of them.
-The container figure is the `Category=Integration` count of §12.4, which is a
-filter rather than a tally.
-
-**Arithmetic is not a remeasurement.** The total need not move by the number of
-tests a change adds to the template, so whoever changes what the scaffold copies
-renders `Yankee` and runs it rather than adding to the number here, and renders
-again after the last commit that changes the template, because a figure taken
-before it is stale by the next one. **A figure nobody recounts goes stale on the
-next PR's clock, not on its own**, and this is the only figure in this section a
-reader cannot check from the tree, so it is the one to distrust first — a number
-three PRs stale looks exactly like a number taken yesterday.
+builds and its tests pass before a line of it is written, some of them against
+real SQL Server and RabbitMQ containers — the `Category=Integration` filter of
+§12.4. How many, and how the figure is recounted, is the scaffold README's
+[*What you get*](../../tools/new-service/README.md#what-you-get): a count is
+not a chapter's to hold (`docs/change-locality.md` §1), so this section states
+none, and whoever changes what the scaffold copies recounts it there.
 
 **There is no template directory, and that is the design.** In the reference
 domain the script reads `src/Services/Catalog` at run time ([E.2.8](appendix-e-reference-domain.md#e28-the-scaffold-template)), so
