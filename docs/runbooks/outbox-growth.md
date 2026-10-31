@@ -82,7 +82,7 @@ at the next `PollInterval` tick
 So under a backlog one replica's ceiling is set by delivery time, not by the
 tick: `Local` rows go up to `OutboxDispatcher.LocalConcurrency` commands at
 once
-([ADR-181](../backend-architecture/adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-adding-to-adr-163.md))
+([ADR-181](../backend-architecture/adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-supersedes-adr-163s-serial-local-lane.md))
 and `Broker` rows up to `OutboxDispatcher.BrokerConcurrency` at once. The
 drain rate is the
 dispatcher's own delivered count
@@ -104,7 +104,7 @@ are: add replicas (the claim uses `UPDLOCK, READPAST` precisely so replicas do
 not collide); then raise the bound of the lane whose rows fill the pass,
 `LocalConcurrency` or `BrokerConcurrency`, since a larger batch only lengthens
 a pass that lane is already busy for
-([ADR-181](../backend-architecture/adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-adding-to-adr-163.md));
+([ADR-181](../backend-architecture/adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-supersedes-adr-163s-serial-local-lane.md));
 and only then question the tick, which paces only a lane that is not
 backlogged. Note that §9.4 treats the batch size, the bounds and the tick as
 **constants rather than configuration**
