@@ -4,7 +4,7 @@ using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
 using Common.Infrastructure.Redis;
 using Common.Web;
-using MassTransit.EntityFrameworkCoreIntegration;
+using Ordering.Infrastructure.Messaging;
 using Ordering.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
@@ -70,12 +70,14 @@ public class OrderingApiFactory(
 
                 services.AddSingleton<RetentionPurgeService>();
 
-                // ADR-032's inbox cleanup, removed on the same terms: a writer, on a timer no test drives, to a table
+                // ADR-182's inbox cleanup, removed on the same terms: a writer, on a timer no test drives, to a table
                 // this suite asserts over.
                 ServiceDescriptor inboxCleanup = services.Single(d =>
                     d.ServiceType == typeof(IHostedService) &&
-                    d.ImplementationType == typeof(InboxCleanupService<OrderingDbContext>));
+                    d.ImplementationType == typeof(SagaInboxCleanupService));
                 services.Remove(inboxCleanup);
+
+                services.AddSingleton<SagaInboxCleanupService>();
 
                 // §9.4: added to rather than replaced, so a test cannot stage a type the real host would refuse.
                 services

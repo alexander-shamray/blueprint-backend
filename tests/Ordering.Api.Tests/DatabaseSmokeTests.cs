@@ -58,7 +58,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "_ClusterInboxStateOnMessageKey",
             "_KeySagaOutboxOnInboxKey",
             "_KeyOutboxOnRandomId",
-            "_KeyOrderSummariesByCursor"
+            "_KeyOrderSummariesByCursor",
+            "_BucketInboxStateCleanupIndex"
         ];
 
         string[] applied = await fixture.AppliedMigrationsAsync();
