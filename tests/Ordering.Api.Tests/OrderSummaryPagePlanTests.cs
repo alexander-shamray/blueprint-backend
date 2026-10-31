@@ -65,7 +65,8 @@ public sealed class OrderSummaryPagePlanTests(ServiceFixture fixture)
         plan.Select(op => (string)op.Attribute("PhysicalOp")!).ShouldNotContain("Sort");
 
         // The cursor bounds the seek's range, not a residual predicate after it.
-        SeeksTheCursor(plan).ShouldBe(afterCursor);
+        string[] seekColumns = SeekColumns(plan);
+        (seekColumns.Contains("PlacedAt") && seekColumns.Contains("@AfterPlacedAt")).ShouldBe(afterCursor);
     }
 
     // Why §6.6 spells the bound out: over this index the OR form seeks the customer alone and reads every earlier
@@ -75,10 +76,11 @@ public sealed class OrderSummaryPagePlanTests(ServiceFixture fixture)
     {
         XElement[] plan = await PlanAsync(OrAfterSql, afterCursor: true);
 
-        SeeksTheCursor(plan).ShouldBeFalse();
+        // PlacedAt absent from the seek in any form, a dynamic range's included, so any seek on it fails this.
+        SeekColumns(plan).ShouldNotContain("PlacedAt");
     }
 
-    private static bool SeeksTheCursor(XElement[] plan)
+    private static string[] SeekColumns(XElement[] plan)
     {
         XElement seek = plan
             .Where(op => op.Elements().Any(e => e.Name == Showplan + "IndexScan"))
@@ -87,7 +89,7 @@ public sealed class OrderSummaryPagePlanTests(ServiceFixture fixture)
             .ShouldHaveSingleItem();
         ((string)seek.Attribute("PhysicalOp")!).ShouldBe("Index Seek");
 
-        string[] seekColumns =
+        return
         [
             .. seek
                 .Element(Showplan + "IndexScan")!
@@ -95,7 +97,6 @@ public sealed class OrderSummaryPagePlanTests(ServiceFixture fixture)
                 .Descendants(Showplan + "ColumnReference")
                 .Select(c => (string?)c.Attribute("Column") ?? "")
         ];
-        return seekColumns.Contains("PlacedAt") && seekColumns.Contains("@AfterPlacedAt");
     }
 
     // Run for real under STATISTICS XML, so the parameters are sniffed as Dapper's would be, and inside a
