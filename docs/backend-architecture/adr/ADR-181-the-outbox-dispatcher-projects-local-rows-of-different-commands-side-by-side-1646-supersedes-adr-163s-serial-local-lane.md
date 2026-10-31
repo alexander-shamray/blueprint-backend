@@ -1,4 +1,4 @@
-# ADR-181 — The outbox dispatcher projects Local rows of different commands side by side (#1646), adding to ADR-163
+# ADR-181 — The outbox dispatcher projects Local rows of different commands side by side (#1646); supersedes ADR-163's serial Local lane
 
 **Decision.** [§9.4](../09-messaging.md)'s `OutboxDispatcher` groups a pass's
 `Local` rows by `CorrelationId`, the command that staged them, and projects

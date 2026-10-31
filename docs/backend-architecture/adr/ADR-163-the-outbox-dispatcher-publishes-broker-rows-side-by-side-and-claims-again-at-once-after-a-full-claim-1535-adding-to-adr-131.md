@@ -41,6 +41,13 @@ option, chosen at 8 from the issue's 8 to 16 and not yet measured. Whether the
 drain rate moves is measured by a rerun of the same stress plan, each change on
 its own, not argued here.
 
+**Superseded in part by
+[ADR-181](ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-supersedes-adr-163s-serial-local-lane.md)**:
+the Decision's `Local` rows one at a time, the test that holds them to one,
+the reason they stay serial and the consequence of one projecting scope a
+replica. The `Broker` lane's bound, the next pass after a full claim and
+their consequences stand.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

@@ -973,7 +973,7 @@ claimed rows to two loops that run side by side: `Broker` rows to
 and `Local` rows, grouped by the `CorrelationId` of the command that staged
 them, to another, at most `LocalConcurrency` groups in flight and a group's
 rows one at a time
-([ADR-181](adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-adding-to-adr-163.md)).
+([ADR-181](adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-supersedes-adr-163s-serial-local-lane.md)).
 A publish is a round trip that waits on nothing else, so publishes overlap.
 Two projections writing one read table at once can deadlock, which is why
 `ProjectionInvoker` runs one event's handlers in sequence; the projection
@@ -1173,7 +1173,7 @@ Consequences of the per-row design worth stating explicitly:
 - **And it can expire while the batch is still being delivered, which is a known
   residual rather than an oversight.** A claim leases a batch and delivers
   its `Local` rows `LocalConcurrency` commands at a time
-  ([ADR-181](adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-adding-to-adr-163.md))
+  ([ADR-181](adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-supersedes-adr-163s-serial-local-lane.md))
   and its `Broker` rows `BrokerConcurrency` at a time
   ([ADR-163](adr/ADR-163-the-outbox-dispatcher-publishes-broker-rows-side-by-side-and-claims-again-at-once-after-a-full-claim-1535-adding-to-adr-131.md));
   a batch slower than the lease lets a second replica reclaim
