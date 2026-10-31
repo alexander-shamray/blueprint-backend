@@ -10,12 +10,14 @@ param(
     [Parameter(Mandatory)][string]$StackAddress,
     [Parameter(Mandatory)][string]$Token,
 
-    # STRESS_PROFILE, STRESS_STOP, STRESS_MAX_USERS and STRESS_STEPS, as the
-    # README's stress run names them; unset, stress.js's own defaults hold.
+    # STRESS_PROFILE, STRESS_STOP, STRESS_MAX_USERS, STRESS_STEPS and
+    # STRESS_WARMUP_SECONDS, as the README's stress run names them; unset,
+    # stress.js's own defaults hold.
     [string]$Level,
     [string]$Stop,
     [string]$MaxUsers,
-    [string]$Steps
+    [string]$Steps,
+    [string]$WarmUp
 )
 
 . (Join-Path $PSScriptRoot 'common.ps1')
@@ -109,7 +111,7 @@ try {
     $options = @()
     foreach ($pair in @(
             @('STRESS_PROFILE', $Level), @('STRESS_STOP', $Stop), @('STRESS_MAX_USERS', $MaxUsers),
-            @('STRESS_STEPS', $Steps))) {
+            @('STRESS_STEPS', $Steps), @('STRESS_WARMUP_SECONDS', $WarmUp))) {
         if ($pair[1]) {
             $options += '-e', "$($pair[0])=$($pair[1])"
         }

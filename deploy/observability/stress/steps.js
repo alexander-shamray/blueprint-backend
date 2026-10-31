@@ -22,6 +22,11 @@ export const LEVELS = {
 export const LEVEL_RAMP_SECONDS = 30;
 export const LEVEL_HOLD_SECONDS = 120;
 
+// No warm-up unless asked for. One longer than Ordering's
+// SagaInboxCleanupService.DuplicateDetectionWindow gives that cleanup rows
+// to delete before the first measured step, as a deployment always has.
+export const DEFAULT_WARMUP_SECONDS = 0;
+
 // k6 starts every VU of the staircase before setup(), about a quarter of a
 // MiB each (710 MiB for 3,000 on 2026-10-28), and setup() makes one Keycloak
 // user per VU. High's top is the most a workstation is asked for by default.
@@ -149,29 +154,51 @@ export function plan(env) {
             named === null ? DEFAULT_RAMP_SECONDS : LEVEL_RAMP_SECONDS, 'STRESS_RAMP_SECONDS'),
         holdSeconds: parseSeconds(env.STRESS_HOLD_SECONDS,
             named === null ? DEFAULT_HOLD_SECONDS : LEVEL_HOLD_SECONDS, 'STRESS_HOLD_SECONDS'),
+        warmupSeconds: parseSeconds(env.STRESS_WARMUP_SECONDS, DEFAULT_WARMUP_SECONDS, 'STRESS_WARMUP_SECONDS'),
     };
 }
 
-/** The staircase as ramping-vus stages: a ramp to each step's VUs, then a hold at them. */
-export function stages(steps, rampSeconds, holdSeconds) {
-    return steps.flatMap((target) => [
-        { duration: `${rampSeconds}s`, target },
-        { duration: `${holdSeconds}s`, target },
-    ]);
+// The warm-up's ramp and hold, at the first step's VUs: a load the staircase
+// has already chosen to hold, so the warm-up is never what gives out.
+function warmup(steps, rampSeconds, warmupSeconds) {
+    return warmupSeconds > 0
+        ? [{ duration: `${rampSeconds}s`, target: steps[0] }, { duration: `${warmupSeconds}s`, target: steps[0] }]
+        : [];
+}
+
+function warmupSpan(rampSeconds, warmupSeconds) {
+    return warmupSeconds > 0 ? rampSeconds + warmupSeconds : 0;
+}
+
+/**
+ * The staircase as ramping-vus stages: the warm-up, if any, then a ramp to
+ * each step's VUs and a hold at them.
+ */
+export function stages(steps, rampSeconds, holdSeconds, warmupSeconds = 0) {
+    return [
+        ...warmup(steps, rampSeconds, warmupSeconds),
+        ...steps.flatMap((target) => [
+            { duration: `${rampSeconds}s`, target },
+            { duration: `${holdSeconds}s`, target },
+        ]),
+    ];
 }
 
 /**
  * Each step's hold, in seconds from the run's start: the span in which all of
- * its VUs run. A ramp belongs to no step, because it mixes two loads.
+ * its VUs run. A ramp belongs to no step, because it mixes two loads, and nor
+ * does the warm-up, which is there to age the data, not to be measured.
  */
-export function windows(steps, rampSeconds, holdSeconds) {
+export function windows(steps, rampSeconds, holdSeconds, warmupSeconds = 0) {
+    const offset = warmupSpan(rampSeconds, warmupSeconds);
+
     return steps.map((vus, i) => {
-        const start = (i * (rampSeconds + holdSeconds)) + rampSeconds;
+        const start = offset + (i * (rampSeconds + holdSeconds)) + rampSeconds;
         return { step: i + 1, vus, start, end: start + holdSeconds };
     });
 }
 
-/** The step whose hold holds `elapsedSeconds`, as the tag value, or 'ramp'. */
+/** The step whose hold holds `elapsedSeconds`, as the tag value, or 'ramp', which takes in the warm-up. */
 export function stepAt(elapsedSeconds, holds) {
     const hold = holds.find((w) => elapsedSeconds >= w.start && elapsedSeconds < w.end);
     return hold ? String(hold.step) : 'ramp';
@@ -182,7 +209,8 @@ export function stepAt(elapsedSeconds, holds) {
  * sessions of the shortest length end to end, the ordering share of them
  * ending in an order. Ramps count at their target, so this is an upper bound.
  */
-export function maxOrders(steps, rampSeconds, holdSeconds, shortestSessionSeconds, orderShare) {
-    const vuSeconds = steps.reduce((sum, vus) => sum + (vus * (rampSeconds + holdSeconds)), 0);
+export function maxOrders(steps, rampSeconds, holdSeconds, shortestSessionSeconds, orderShare, warmupSeconds = 0) {
+    const vuSeconds = steps.reduce((sum, vus) => sum + (vus * (rampSeconds + holdSeconds)),
+        steps[0] * warmupSpan(rampSeconds, warmupSeconds));
     return Math.ceil((vuSeconds / shortestSessionSeconds) * orderShare);
 }
