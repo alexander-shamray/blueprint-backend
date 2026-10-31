@@ -73,7 +73,8 @@ function Get-FailedServices {
             }
         }
     }
-    # A service that never started was waiting on one that failed, so the failed ones come first.
+    # A container left created waited on one that failed, or the daemon refused its start with the reason in the
+    # up's own output, so the ones that ran come first.
     @($failed | Sort-Object Service -Unique | Sort-Object @{ Expression = 'Started'; Descending = $true }, Service)
 }
 
@@ -96,14 +97,16 @@ function Invoke-ComposeUp {
         if ($failed.Count -eq 0) {
             throw $upError
         }
-        foreach ($service in @($failed | Where-Object Started)) {
+        $started = @($failed | Where-Object Started)
+        foreach ($service in $started) {
             Write-Host ''
             Write-Host "$($service.Service), $($service.Reason). Its log's last $FailedLogLines lines:"
             & docker compose @compose logs --no-color --no-log-prefix --tail $FailedLogLines $service.Service |
                 Out-Host
         }
         $names = ($failed | ForEach-Object { "$($_.Service) $($_.Reason)" }) -join '; '
-        throw "$($upError.Exception.Message) Failed: $names. Each started one's log is above."
+        $logs = if ($started.Count -gt 0) { " Each started one's log is above." } else { '' }
+        throw "$($upError.Exception.Message) Failed: $names.$logs"
     }
 }
 
