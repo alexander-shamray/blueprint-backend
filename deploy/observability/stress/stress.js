@@ -46,7 +46,7 @@ import {
     crossings,
     liveRow,
 } from './report.js';
-import { maxOrders, parseGenerator, parseStop, plan, stages, stepAt, windows } from './steps.js';
+import { maxOrders, parseGenerator, parseStop, plan, setupMinutes, stages, stepAt, windows } from './steps.js';
 
 const BASE_URL = __ENV.BASE_URL;
 const KEYCLOAK_URL = __ENV.KEYCLOAK_URL;
@@ -165,10 +165,9 @@ export const options = {
     },
     thresholds: thresholds(),
     summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(95)', 'p(99)', 'count'],
-    // Users are made and stock is set before the first VU starts. setup()
-    // made a thousand users, six hundred of them new, in ten seconds here on
-    // 2026-10-28, so four hundred a minute leaves a wide margin.
-    setupTimeout: `${Math.max(10, Math.ceil(STEPS[STEPS.length - 1] / 400))}m`,
+    // Users are made and stock is set before the first VU starts, in
+    // steps.js's setupMinutes(), which plan() counts in the run's length.
+    setupTimeout: `${setupMinutes(STEPS)}m`,
 };
 
 // One user per VU in the test: the judge's VU comes from the same pool, so

@@ -27,9 +27,9 @@ export const LEVEL_HOLD_SECONDS = 120;
 // to delete before the first measured step, as a deployment always has.
 export const DEFAULT_WARMUP_SECONDS = 0;
 
-// The longest run plan() takes. sample.mjs stops itself an hour after it,
-// should k6 never finish, an hour that covers setup() at any cap, so no
-// step k6 runs is left without samples.
+// The longest run plan() takes, setup()'s allowance included. sample.mjs
+// stops itself an hour after it, should k6 never finish, a margin for what
+// precedes setup(): the generator's handshake and k6 starting its VUs.
 export const RUN_LIMIT_SECONDS = 3 * 60 * 60;
 
 // k6 starts every VU of the staircase before setup(), about a quarter of a
@@ -155,11 +155,11 @@ export function plan(env) {
     const holdSeconds = parseSeconds(env.STRESS_HOLD_SECONDS,
         named === null ? DEFAULT_HOLD_SECONDS : LEVEL_HOLD_SECONDS, 'STRESS_HOLD_SECONDS');
     const warmupSeconds = parseSeconds(env.STRESS_WARMUP_SECONDS, DEFAULT_WARMUP_SECONDS, 'STRESS_WARMUP_SECONDS');
-    const runSeconds = windows(steps, rampSeconds, holdSeconds, warmupSeconds).at(-1).end;
+    const runSeconds = (setupMinutes(steps) * 60) + windows(steps, rampSeconds, holdSeconds, warmupSeconds).at(-1).end;
 
     if (runSeconds > RUN_LIMIT_SECONDS)
-        throw new Error(`the run lasts ${runSeconds} s, past RUN_LIMIT_SECONDS ${RUN_LIMIT_SECONDS}, ` +
-            'beyond which the sampler may have stopped');
+        throw new Error(`the run lasts ${runSeconds} s with setup()'s allowance, past RUN_LIMIT_SECONDS ` +
+            `${RUN_LIMIT_SECONDS}, beyond which the sampler may have stopped`);
 
     return { level, steps, maxUsers, capped, rampSeconds, holdSeconds, warmupSeconds };
 }
@@ -175,6 +175,15 @@ function warmup(steps, rampSeconds, warmupSeconds) {
 
 function warmupSpan(rampSeconds, warmupSeconds) {
     return warmupSeconds > 0 ? rampSeconds + warmupSeconds : 0;
+}
+
+/**
+ * setup()'s timeout in minutes: it makes one user per VU of the top step.
+ * It made a thousand users, six hundred of them new, in ten seconds here on
+ * 2026-10-28, so four hundred a minute leaves a wide margin.
+ */
+export function setupMinutes(steps) {
+    return Math.max(10, Math.ceil(steps[steps.length - 1] / 400));
 }
 
 /**
