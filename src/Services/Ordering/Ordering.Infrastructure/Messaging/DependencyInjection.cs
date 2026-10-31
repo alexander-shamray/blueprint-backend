@@ -124,6 +124,10 @@ public static class DependencyInjection
                 // The saga repository joins this transaction. Serializable here range-locked MassTransit's own
                 // outbox reads and deadlocked the endpoint; RepeatableRead holds the same reads' row locks (ADR-112).
                 o.IsolationLevel = IsolationLevel.ReadCommitted;
+
+                // Its cleanup orders by Delivered alone, which put every delivery on one page; ours, registered
+                // below, seeks the bucketed index instead (ADR-182).
+                o.DisableInboxCleanupService();
             });
 
             // ADR-021's scheduler; without UseDelayedMessageScheduler below, the first Schedule(…) throws.
@@ -227,6 +231,9 @@ public static class DependencyInjection
         // In place of the factory AddEntityFrameworkOutbox registers, which takes four or more a message (ADR-174).
         services.Replace(
             ServiceDescriptor.Scoped<IOutboxContextFactory<OrderingDbContext>, SagaOutboxContextFactory>());
+
+        // In place of the cleanup AddEntityFrameworkOutbox would register (ADR-182).
+        services.AddHostedService<SagaInboxCleanupService>();
 
         // AddMassTransit registers the "masstransit-bus" ready check §13.5 picks up. WaitUntilStarted stays
         // false, so a broker outage leaves a pod unready rather than unable to boot (§13.5).

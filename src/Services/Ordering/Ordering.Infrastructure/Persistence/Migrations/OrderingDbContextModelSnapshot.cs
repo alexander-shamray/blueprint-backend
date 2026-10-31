@@ -194,6 +194,11 @@ namespace Ordering.Infrastructure.Persistence.Migrations
                         .HasDefaultValueSql("CONVERT(bigint, CRYPT_GEN_RANDOM(8))")
                         .HasAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
+                    b.Property<byte>("CleanupBucket")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tinyint")
+                        .HasComputedColumnSql("CONVERT(tinyint, [Id] & 15)", false);
+
                     b.Property<DateTime?>("Consumed")
                         .HasColumnType("datetime2");
 
@@ -234,7 +239,8 @@ namespace Ordering.Infrastructure.Persistence.Migrations
 
                     SqlServerKeyBuilderExtensions.IsClustered(b.HasAlternateKey("MessageId", "ConsumerId"));
 
-                    b.HasIndex("Delivered");
+                    b.HasIndex("CleanupBucket", "Delivered")
+                        .HasFilter("[Delivered] IS NOT NULL");
 
                     b.ToTable("InboxState", "ordering");
                 });

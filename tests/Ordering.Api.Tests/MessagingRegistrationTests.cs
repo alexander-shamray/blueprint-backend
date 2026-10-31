@@ -186,8 +186,7 @@ public class MessagingRegistrationTests
         services.ShouldContain(
             d => d.ServiceType == typeof(IConfigureOptions<EntityFrameworkOutboxOptions<OrderingDbContext>>),
             "AddEntityFrameworkOutbox<OrderingDbContext> is what configures these, and nothing else here " +
-            "does — its absence leaves the outbox at MassTransit's RepeatableRead (ADR-112) and drops its " +
-            "inbox cleanup service (ADR-032)");
+            "does — its absence leaves the outbox at MassTransit's RepeatableRead (ADR-112)");
 
         services.Where(d => d.ServiceType == typeof(IOutboxContextFactory<OrderingDbContext>))
             .Select(d => d.ImplementationType)
@@ -266,6 +265,28 @@ public class MessagingRegistrationTests
             256,
             "the addresses are the columns MassTransit does bound, and a 400 here would mean the " +
             "convention won after all");
+    }
+
+    [Fact]
+    public void The_inbox_cleanup_is_this_services_and_the_librarys_is_not_registered()
+    {
+        // The library's cleanup orders by Delivered alone, so it needs the index that put every delivery on one
+        // page; ours reads the bucketed one (ADR-182). Both would delete the same rows on two timers.
+        ServiceCollection services = new();
+
+        services.AddMassTransitMessaging(Configuration());
+
+        Type?[] hosted =
+        [
+            .. services
+                .Where(d => d.ServiceType == typeof(IHostedService))
+                .Select(d => d.ImplementationType)
+        ];
+
+        hosted.ShouldContain(typeof(SagaInboxCleanupService));
+        hosted.ShouldNotContain(
+            typeof(MassTransit.EntityFrameworkCoreIntegration.InboxCleanupService<OrderingDbContext>),
+            "AddEntityFrameworkOutbox registers it unless DisableInboxCleanupService() is called (ADR-182)");
     }
 
     [Fact]

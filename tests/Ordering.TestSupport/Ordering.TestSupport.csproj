@@ -13,8 +13,6 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <!-- Named although transitive, because ServiceFixture uses its types directly. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
-    <!-- Named although transitive, because OrderingApiFactory names ADR-032's InboxCleanupService<T>. -->
-    <PackageReference Include="MassTransit.EntityFrameworkCore" />
   </ItemGroup>
 
   <ItemGroup>

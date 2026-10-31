@@ -5,6 +5,7 @@ using Common.Infrastructure.Outbox;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Ordering.Application;
 using Ordering.Domain.Orders;
 using SagaInboxState = MassTransit.EntityFrameworkCoreIntegration.InboxState;
@@ -39,10 +40,11 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 
         // ADR-032's three tables, which MassTransit maps itself; a configuration of ours would be a second
         // definition of a schema the library owns (§7.2), so KeySagaOutboxOnInboxKey amends its mapping and
-        // never restates it, and ClusterInboxStateOnMessageKey likewise.
+        // never restates it, and the two InboxState amendments likewise.
         modelBuilder.AddTransactionalOutboxEntities();
         KeySagaOutboxOnInboxKey(modelBuilder.Entity<SagaOutboxMessage>().Metadata);
         ClusterInboxStateOnMessageKey(modelBuilder.Entity<SagaInboxState>().Metadata);
+        BucketInboxStateCleanupIndex(modelBuilder.Entity<SagaInboxState>());
     }
 
     /// <summary>
@@ -127,15 +129,48 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
         id.SetDefaultValueSql(InboxStateRandomId);
     }
 
+    /// <summary>
+    /// Replaces the library's index on Delivered, to whose last page every delivery moved its row, with one led by a
+    /// bucket of the random Id and holding delivered rows only, which this service's cleanup seeks a bucket at a
+    /// time in place of the library's (ADR-182); refuses a moved mapping.
+    /// </summary>
+    private static void BucketInboxStateCleanupIndex(EntityTypeBuilder<SagaInboxState> inbox)
+    {
+        IMutableIndex delivered = inbox.Metadata.GetIndexes()
+                .SingleOrDefault(i => i.Properties is [{ Name: nameof(SagaInboxState.Delivered) }])
+            ?? throw InboxMappingMoved("no index on Delivered");
+        inbox.Metadata.RemoveIndex(delivered);
+
+        // Computed and never stored, so the index can lead on it with no column for the library to write.
+        inbox
+            .Property<byte>(InboxStateCleanupBucket)
+            .HasComputedColumnSql(InboxStateCleanupBucketSql, stored: false);
+
+        // Filtered, so an insert, whose Delivered is null, writes nothing here and only the delivery does.
+        inbox
+            .HasIndex(InboxStateCleanupBucket, nameof(SagaInboxState.Delivered))
+            .HasFilter($"[{nameof(SagaInboxState.Delivered)}] IS NOT NULL");
+    }
+
     private static InvalidOperationException InboxMappingMoved(string found) =>
         new($"MassTransit's InboxState mapping has moved ({found}); "
-            + "revisit ADR-171 and ADR-178 before it is re-keyed.");
+            + "revisit ADR-171, ADR-178 and ADR-182 before it is re-keyed.");
 
     /// <summary>Sixty-four random bits: a collision fails one insert into the endpoint's retry (ADR-178).</summary>
     internal const string InboxStateRandomId = "CONVERT(bigint, CRYPT_GEN_RANDOM(8))";
 
     private static readonly string[] InboxStateMessageKey =
         [nameof(SagaInboxState.MessageId), nameof(SagaInboxState.ConsumerId)];
+
+    /// <summary>The computed column that splits the cleanup index, which the cleanup walks (ADR-182).</summary>
+    public const string InboxStateCleanupBucket = "CleanupBucket";
+
+    /// <summary>How many buckets the cleanup index is split into, each filling at its own end; a power of two.</summary>
+    public const int InboxStateCleanupBuckets = 16;
+
+    /// <summary>A mask, not a modulo, which a negative Id would take below zero.</summary>
+    private static readonly string InboxStateCleanupBucketSql =
+        $"CONVERT(tinyint, [{nameof(SagaInboxState.Id)}] & {InboxStateCleanupBuckets - 1})";
 
     /// <summary>§7.2's global conventions, for every row this context maps.</summary>
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
