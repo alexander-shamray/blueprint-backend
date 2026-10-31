@@ -392,7 +392,7 @@ left alone.
   its own background task wakes nobody, so the wait runs as one background
   task in the waiting session, whose exit is the only wake. #1664 found
   that no tool compacts, so the rule dropped its compacting half for the
-  auto-compact window step 2 sets.
+  auto-compact window step 2 owes.
 - `/validate-blueprint`'s main session dispatches its passes and holds only
   what they return; it reads no chapter whole. A fix its findings call for
   is a task of its own after `/clear`, never an implementer spawned inside
