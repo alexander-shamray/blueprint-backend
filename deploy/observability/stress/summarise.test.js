@@ -15,7 +15,7 @@ test('the summary names the commit of the checkout holding summarise.mjs, not of
     const elsewhere = mkdtempSync(join(os.tmpdir(), 'stress-summary-'));
 
     try {
-        // A run that reached no step reads no Prometheus series, so only the machine is measured.
+        // A run that reached no step queries Prometheus for nothing, so an unreachable PROM_URL changes nothing.
         writeFileSync(join(elsewhere, 'raw.json'),
             JSON.stringify({
                 plan: { steps: [], rampSeconds: 30, holdSeconds: 60, orderShare: 0.2, products: 1 },
