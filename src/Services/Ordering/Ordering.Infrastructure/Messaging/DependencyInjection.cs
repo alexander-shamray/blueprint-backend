@@ -125,8 +125,8 @@ public static class DependencyInjection
                 // outbox reads and deadlocked the endpoint; RepeatableRead holds the same reads' row locks (ADR-112).
                 o.IsolationLevel = IsolationLevel.ReadCommitted;
 
-                // Its cleanup orders by Delivered alone, which put every delivery on one page; ours, registered
-                // below, seeks the bucketed index instead (ADR-182).
+                // Its cleanup orders by Delivered alone, so it needs the index that put every delivery on one
+                // page; ours, registered below, seeks the bucketed one instead (ADR-182).
                 o.DisableInboxCleanupService();
             });
 
