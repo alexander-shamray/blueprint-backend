@@ -17,6 +17,10 @@ public sealed class SagaInboxCleanupTests(ServiceFixture fixture) : IAsyncLifeti
     private static DateTime LongAgo => DateTime.UtcNow.AddDays(-1);
     private static DateTime Recently => DateTime.UtcNow.AddMinutes(-1);
 
+    // The rows' own consumer, so a read counts them alone: a saga transaction from an earlier test may still
+    // commit a row of its own after the reset (ServiceFixture.ResetAsync).
+    private static readonly Guid Consumer = Guid.CreateVersion7();
+
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -85,7 +89,9 @@ public sealed class SagaInboxCleanupTests(ServiceFixture fixture) : IAsyncLifeti
             """
             SELECT Value = STRING_AGG(CONVERT(varchar(20), Id), ',') WITHIN GROUP (ORDER BY Id)
             FROM ordering.InboxState
-            """))
+            WHERE ConsumerId = {0}
+            """,
+            Consumer))
             .ShouldBe("1,2");
     }
 
@@ -133,12 +139,13 @@ public sealed class SagaInboxCleanupTests(ServiceFixture fixture) : IAsyncLifeti
         fixture.ExecuteAsync(
             """
             INSERT INTO ordering.InboxState (Id, MessageId, ConsumerId, LockId, Received, ReceiveCount, Delivered)
-            VALUES ({0}, NEWID(), NEWID(), NEWID(), {1}, 1, {2});
+            VALUES ({0}, NEWID(), {3}, NEWID(), {1}, 1, {2});
             """,
             id,
             received ?? delivered!.Value,
-            new SqlParameter { SqlDbType = SqlDbType.DateTime2, Value = (object?)delivered ?? DBNull.Value });
+            new SqlParameter { SqlDbType = SqlDbType.DateTime2, Value = (object?)delivered ?? DBNull.Value },
+            Consumer);
 
     private Task<int> CountAsync() =>
-        fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM ordering.InboxState");
+        fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM ordering.InboxState WHERE ConsumerId = {0}", Consumer);
 }
