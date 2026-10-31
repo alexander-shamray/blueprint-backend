@@ -17,7 +17,8 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.StackExchangeRedis" />
     <!-- The outbox (§9.4); core, not the transport, which stays in each service's Infrastructure. -->
     <PackageReference Include="MassTransit" />
-    <!-- The outbox claim (§9.4) and the retention purge (§9.5): raw SQL outside any command's transaction. -->
+    <!-- The outbox claim (§9.4), the retention purge (§9.5) and the migrators' isolation read (§7.4): raw
+         SQL outside any command's transaction. -->
     <PackageReference Include="Dapper" />
     <!-- The inbox shares the handler's transaction through the service's DbContext; no provider here (§9.5). -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />

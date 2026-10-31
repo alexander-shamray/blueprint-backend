@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Web.Bff.Migrator;
 
-/// <summary><c>Database.Migrate()</c> and nothing else (§7.4), plus the exit code that makes it a job.</summary>
+/// <summary>§7.1's isolation read, <c>Database.Migrate()</c> (§7.4), and the exit code that makes it a job.</summary>
 public sealed class MigrationRunner(BffDbContext db, ILogger<MigrationRunner> logger)
 {
     private static readonly Action<ILogger, int, string, Exception?> Applying =
@@ -37,6 +37,10 @@ public sealed class MigrationRunner(BffDbContext db, ILogger<MigrationRunner> lo
     {
         try
         {
+            // §7.1's isolation, read before any DDL so a refused database is left as it was (ADR-185).
+            if (await MigratorCommand.IsolationRefusalAsync(db, ct) is { } refusal)
+                throw new InvalidOperationException(refusal);
+
             // Read before applying, so the log says what this run did.
             string[] pending = [.. await db.Database.GetPendingMigrationsAsync(ct)];
 
