@@ -919,7 +919,8 @@ OUTPUT
     inserted.TraceParent,
     inserted.TraceState
 FROM {table.QualifiedName} AS outbox
-INNER JOIN claimable ON claimable.Id = outbox.Id;
+INNER JOIN claimable
+    ON claimable.Id = outbox.Id;
 ```
 
 A completed row gets `ProcessedAt` set and its lease cleared, and a pass
