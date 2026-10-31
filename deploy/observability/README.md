@@ -639,8 +639,9 @@ and `not measured` one that ran no step.
 `raw.json` from k6, `samples.jsonl` and `query-store.json` from the sampler,
 and `summary.json` and `summary.md` from `stress/summarise.mjs`. The summary
 records the machine's processor, memory and operating system, Docker's
-processors and memory, the commit and the override's k6 image, since a local
-number means nothing without them.
+processors and memory, the commit of the checkout holding `summarise.mjs`
+rather than of the shell's directory, and the override's k6 image, since a
+local number means nothing without them.
 
 ### Running it
 

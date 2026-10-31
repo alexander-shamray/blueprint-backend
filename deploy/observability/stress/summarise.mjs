@@ -14,6 +14,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
     DEFAULT_PROM_URL,
     OUTBOX_OLDEST,
@@ -206,9 +207,9 @@ async function serverRow(window, range) {
     };
 }
 
-function read(command, args) {
+function read(command, args, cwd) {
     try {
-        return execFileSync(command, args, { encoding: 'utf8', windowsHide: true }).trim();
+        return execFileSync(command, args, { cwd, encoding: 'utf8', windowsHide: true }).trim();
     } catch (error) {
         unavailable.push(`${command} ${args[0]}: ${String(error.message).split('\n')[0]}`);
         return null;
@@ -231,7 +232,8 @@ function machine() {
             cpus: info.NCPU ?? null,
             memoryBytes: info.MemTotal ?? null,
         },
-        commit: read('git', ['rev-parse', 'HEAD']),
+        // This file's checkout, the one stack.ps1 builds the stack from, wherever the caller stands.
+        commit: read('git', ['rev-parse', 'HEAD'], fileURLToPath(new URL('.', import.meta.url))),
         k6: k6Image(),
     };
 }
