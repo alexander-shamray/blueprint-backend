@@ -622,7 +622,7 @@ callers' figures too, so the order is evidence, not a cause.
 
 **Why it ended** is read by `stress/report.js`'s `ending()` at the first
 step a stop rule flagged, since the judge flags a step after its hold and the
-next step's ramp can carry requests before the abort lands, and otherwise at
+next step's hold can begin before the abort lands, and otherwise at
 the last step that carried requests. At high counts the client can give out
 first: a step at which k6 ran fewer VUs than it asked for, or, with k6 on the
 machine the stack runs on, the machine's CPU stayed at `HOST_CPU_LIMIT` over
