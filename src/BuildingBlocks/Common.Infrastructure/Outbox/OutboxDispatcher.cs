@@ -225,8 +225,8 @@ public sealed class OutboxDispatcher : SwitchedPollingWorker
         using SemaphoreSlim writes = new(1, 1);
 
         ParallelOptions broker = new() { MaxDegreeOfParallelism = BrokerConcurrency, CancellationToken = ct };
-        // No token here: a stop after the last command's last row would throw though every row was delivered, where
-        // the serial loop this replaced returned; each row's own delivery still stops on the token (ADR-181).
+        // No token here: with one, a stop after the last command's last row would throw though every row was
+        // delivered; each row's own delivery still stops on the token (ADR-181).
         ParallelOptions local = new() { MaxDegreeOfParallelism = LocalConcurrency };
 
         // A publish is a round trip that waits on nothing else, so Broker rows overlap (ADR-163). Local rows overlap
