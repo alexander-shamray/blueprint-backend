@@ -7,8 +7,8 @@ it as a shadow property with an empty default, so `migrations add` emits it;
 the migration `PadStockLevelsToAPage` adds it and rebuilds `PK_StockLevels`,
 because adding a column with a constant default writes no row and the rows
 already there would keep sharing their page until each was next updated.
-`StockLevelsSchemaTests` holds it: with two rows or more, the table has at
-least as many pages as rows.
+`StockLevelsSchemaTests` holds it: the table's narrowest row is wider than
+half a page.
 **Why.** [ADR-172](ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md)'s
 run 20261031-102448 on 853dce80e read `PK_StockLevels` as its hottest index by
 far: 168.2 s of page latch over 26 012 updates, against 44 s for the next. At
@@ -19,9 +19,9 @@ was buffer latch. The table's 130 rows sat on one page, so the projection's
 levels, all latched that one page; with the host's CPU spent, SQL Server at
 23% of 24 cores and none idle, a latch holder taken off its core held every
 waiter behind it. Read-committed snapshot takes the listing's locks away and
-not its latches; every database of that stack ran it, the migrators having
-created them through EF Core's SQL Server provider, while a database created
-by a plain `CREATE DATABASE` on the same server did not. On a
+not its latches; that stack's Catalog database ran it, its migrator having
+created it through EF Core's SQL Server provider, while a database created by
+a plain `CREATE DATABASE` on the same server did not. On a
 throwaway SQL Server held to 2 CPUs, with snapshot reads, 8 writers at about
 55 a second over 24 products and 32 readers at about 280 a second, 30 s each:
 one page gave 106 s to 266 s of latch and a 12 ms to 37 ms listing; three rows
