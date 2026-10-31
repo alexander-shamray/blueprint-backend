@@ -118,7 +118,7 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   written. Small tasks
   run with `executing-plans`; under `subagent-driven-development`, each
   reviewer is handed its task's diff, not the tree.
-- **Before a wait, shed the context.** A session about to wait on CI, a
+- **A wait wakes once.** A session about to wait on CI, a
   background agent or a scheduled check-in runs it as one background task
   whose exit is the only wake; a wake re-sends the whole context, and after
   the cache has expired writes all of it again (`docs/token-plan.md` step
