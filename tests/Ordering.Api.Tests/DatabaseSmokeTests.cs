@@ -57,6 +57,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "_ClusterSagaOutboxOnInboxKey",
             "_ClusterInboxStateOnMessageKey",
             "_KeySagaOutboxOnInboxKey",
+            "_KeyOutboxOnRandomId",
             "_KeyOrderSummariesByCursor"
         ];
 

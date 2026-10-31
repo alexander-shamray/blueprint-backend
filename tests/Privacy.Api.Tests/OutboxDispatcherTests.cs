@@ -147,7 +147,14 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
     }
 
+    // An identity fills the key at one end, where every insert, claim and completion met (ADR-180).
     [Fact]
-    public async Task The_outbox_key_is_optimized_for_sequential_inserts() =>
-        (await fixture.OutboxKeyOptimizedForSequentialKeyAsync()).ShouldBeTrue();
+    public async Task The_outbox_key_is_drawn_at_random_rather_than_counted() =>
+        (await fixture.OutboxKeyGenerationAsync()).ShouldBe("0:(CONVERT([bigint],Crypt_Gen_Random((8))))");
+
+    // Keyed on OccurredAt alone, the claim index fills at one end as an identity does (ADR-180).
+    [Fact]
+    public async Task The_claim_index_is_led_by_the_bucket_and_then_the_age() =>
+        (await fixture.OutboxClaimIndexKeyAsync())
+            .ShouldBe($"{OutboxMessage.ClaimBucketColumn},{nameof(OutboxMessage.OccurredAt)}");
 }

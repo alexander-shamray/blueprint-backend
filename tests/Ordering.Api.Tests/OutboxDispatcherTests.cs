@@ -185,9 +185,44 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         (await fixture.OutboxAsync()).ShouldHaveSingleItem().ProcessedAt.ShouldNotBeNull();
     }
 
+    // An identity fills the key at one end, where every insert, claim and completion met (ADR-180).
     [Fact]
-    public async Task The_outbox_key_is_optimized_for_sequential_inserts() =>
-        (await fixture.OutboxKeyOptimizedForSequentialKeyAsync()).ShouldBeTrue();
+    public async Task The_outbox_key_is_drawn_at_random_rather_than_counted() =>
+        (await fixture.OutboxKeyGenerationAsync()).ShouldBe("0:(CONVERT([bigint],Crypt_Gen_Random((8))))");
+
+    // Keyed on OccurredAt alone, the claim index fills at one end as an identity does (ADR-180).
+    [Fact]
+    public async Task The_claim_index_is_led_by_the_bucket_and_then_the_age() =>
+        (await fixture.OutboxClaimIndexKeyAsync())
+            .ShouldBe($"{OutboxMessage.ClaimBucketColumn},{nameof(OutboxMessage.OccurredAt)}");
+
+    // Each bucket offers its oldest rows, so a claim that took a share from each bucket in turn would fail here.
+    [Fact]
+    public async Task A_claim_takes_the_oldest_rows_whichever_bucket_holds_them()
+    {
+        int staged = OutboxDispatcher.ClaimBatchSize + OutboxMessage.ClaimBuckets;
+        await fixture.StageOutboxAsync([.. Enumerable.Range(0, staged).Select(_ => OutboxRows.Healthy(fixture))]);
+
+        // Aged in the random key's order, so the oldest rows fall across the buckets rather than in one.
+        await fixture.ExecuteAsync(
+            """
+            WITH aged AS (
+                SELECT OccurredAt, Position = ROW_NUMBER() OVER (ORDER BY Id)
+                FROM ordering.OutboxMessages
+            )
+            UPDATE aged
+            SET OccurredAt = DATEADD(second, Position, CONVERT(datetimeoffset, '2026-08-11T00:00:00+00:00'));
+            """);
+
+        (await fixture.ProcessOutboxBatchAsync()).ShouldBe(OutboxDispatcher.ClaimBatchSize);
+
+        IReadOnlyList<OutboxMessage> rows = await fixture.OutboxAsync();
+        List<OutboxMessage> taken = [.. rows.Where(r => r.ProcessedAt is not null)];
+        DateTimeOffset newestTaken = taken.Max(r => r.OccurredAt);
+
+        rows.Where(r => r.ProcessedAt is null).ShouldAllBe(r => r.OccurredAt > newestTaken);
+        taken.Select(r => r.Id & (OutboxMessage.ClaimBuckets - 1)).Distinct().Count().ShouldBeGreaterThan(1);
+    }
 
     [Fact]
     public async Task A_broker_row_is_published_and_completed()

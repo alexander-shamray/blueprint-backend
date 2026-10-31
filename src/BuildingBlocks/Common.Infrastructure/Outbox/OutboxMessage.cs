@@ -21,6 +21,21 @@ public sealed class OutboxMessage
     /// <summary>The <c>TraceState</c> column's width, which <see cref="StagedTrace"/> owns.</summary>
     public const int TraceStateMaxLength = StagedTrace.StateMaxLength;
 
+    /// <summary>The key's default: drawn at random, so no index keyed on it fills at one end (ADR-180).</summary>
+    public const string RandomIdSql = "CONVERT(bigint, CRYPT_GEN_RANDOM(8))";
+
+    /// <summary>The computed column that splits the claim index, which the claim walks (ADR-180).</summary>
+    public const string ClaimBucketColumn = "ClaimBucket";
+
+    /// <summary>How many low bits of the key pick a row's bucket, so the count is a power of two.</summary>
+    public const int ClaimBucketBits = 4;
+
+    /// <summary>How many buckets the claim index is split into, each filling at its own end.</summary>
+    public const int ClaimBuckets = 1 << ClaimBucketBits;
+
+    /// <summary>The bucket's expression: a mask, not a modulo, which a negative key would take below zero.</summary>
+    public static readonly string ClaimBucketSql = $"CONVERT(tinyint, [Id] & {ClaimBuckets - 1})";
+
     public long Id { get; private set; }
 
     public Guid MessageId { get; private set; }
