@@ -138,12 +138,11 @@ PR-11 has since landed, and it changes what PR-18 is an estimate *of* rather
 than what it costs. The scaffold renders the wiring and none of the domain
 ([§4.5](backend-architecture/04-solution-structure.md)): a new service arrives
 with its five projects, its migrator, its schema migration, both images, its
-Compose pair and the passing tests whose count
-[the scaffold's README](../tools/new-service/README.md#what-you-get) owns, and
-with no aggregate, no command, no query and no endpoint. So PR-18's three days
-are now three days of Ordering's *domain* — which is the shape the estimate
-always assumed, and was the first thing on this page that could be checked
-against a delivered pull request rather than argued about.
+Compose pair and its passing tests, and with no aggregate, no command,
+no query and no endpoint. So PR-18's three days are now three days of Ordering's
+*domain* — which is the shape the estimate always assumed, and was the first
+thing on this page that could be checked against a delivered pull request rather
+than argued about.
 
 **PR-18 has since landed, and the check came out the way this paragraph
 predicted.** Ordering was rendered by the scaffold and then given its
