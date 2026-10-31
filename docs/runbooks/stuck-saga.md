@@ -311,7 +311,7 @@ transaction. Rows there are delivered after that transaction commits, and each
 is joined to its triggering delivery through `InboxMessageId`/`InboxConsumerId`
 into `ordering.InboxState`, whose `LastSequenceNumber` is how far that
 delivery's sends have got. **These are MassTransit's tables, and what this
-repository owns against them is the factory that opens the outbox's
+repository runs against them is the factory that opens the outbox's
 transactions and the inbox's cleanup** — which is not the same as their
 being inert, and the difference matters at 3am. The running service writes
 them through the library's own outbox filter, in transactions this service's
