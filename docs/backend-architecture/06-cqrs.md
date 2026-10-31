@@ -2053,7 +2053,7 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
 
     // A first page and a cursor's page, as in §6.5 (ADR-179), with the bound
     // spelled out as its own predicate because the plan left the OR form
-    // residual here; OrderSummaryPagePlanTests holds the seek to the cursor.
+    // residual here; OrderSummaryPagePlanTests holds both halves of that.
     private const string FirstSql = Columns + Newest;
 
     private const string AfterSql =
