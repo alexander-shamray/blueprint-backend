@@ -247,8 +247,9 @@ Api ──────────► Application ──────────
 | `*.Api` | Application, Infrastructure (**composition root only**) | another service's projects; the AI assistant's two building blocks |
 
 **The migrator's row is the narrowest, and deliberately.** It is not a second
-composition root: it builds a host, resolves the `DbContext` and calls
-`Database.Migrate()` ([§7.4](07-persistence.md)), and it needs no Application,
+composition root: it builds a host, resolves the `DbContext`, reads its
+isolation and calls `Database.Migrate()` ([§7.4](07-persistence.md)), and it
+needs no Application,
 no dispatcher and no Redis to do that. The temptation is to reach for
 `AddXInfrastructure(config)` and get the context for free — which also gets
 the readiness checks, the bus registration and the runtime connection string,
@@ -442,8 +443,10 @@ the paragraph above about a migration job that can open a message broker is a
 build failure; no ASP.NET, because it is a job host
 ([§7.4](07-persistence.md)) and not a second composition root; and **no
 `Common.*` at all**, which is the strongest statement of the row — the migrator
-resolves a `DbContext` and calls `Database.Migrate()`, and none of the building
-blocks is on that path.
+resolves a `DbContext` and calls `Database.Migrate()`, and what a building block
+gives that path arrives only through the Infrastructure's `MigratorTransport`
+and `MigratorCommand` ([ADR-184](adr/ADR-184-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md),
+[ADR-185](adr/ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md)).
 
 **Nothing references the migrator, and saying so is a third gate rather than a
 shorter list of this service's own projects.** No row in the table names the

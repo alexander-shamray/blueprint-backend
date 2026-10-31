@@ -1518,9 +1518,11 @@ price history with it.
 >
 > **The upsert's read of that watermark needs its own `HOLDLOCK`, and taking
 > it first is what stops the two statements deadlocking.** The answer that
-> matters there is an *absence*, and at read committed the lock protecting it
-> is released immediately — so a discontinuation can commit between the read
-> and the insert, and the hole reopens one level down. `HOLDLOCK` on
+> matters there is an *absence*, and at read committed nothing protects it past
+> the read — under the read-committed snapshot every service database runs
+> ([§7.1](07-persistence.md)) the read takes no lock at all — so a
+> discontinuation can commit between the read and the insert, and the hole
+> reopens one level down. `HOLDLOCK` on
 > `ProductPrices` does not reach `ProductWithdrawals`; each table's lock is its
 > own. The discontinue statement already takes the two in watermark-then-prices
 > order, so the upsert takes them in that order as well, which is the whole of

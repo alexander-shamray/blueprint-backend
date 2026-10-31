@@ -944,7 +944,8 @@ public sealed class MigrationRunner(
     CatalogSeeder? seeder = null)
 ```
 
-The runner is otherwise §7.4's: `MigrateAsync`, a log line and an exit code.
+The runner is otherwise §7.4's: an isolation read, `MigrateAsync`, a log line
+and an exit code.
 After `MigrateAsync` returns, it seeds when it has a seeder and logs
 `NotSeeding` when it has none. The log line is not decoration: a gate that
 fails closed in silence is indistinguishable from a seeder that is broken, and
@@ -964,7 +965,8 @@ it is the seeder a developer debugs.
 > `= null` supplies. Resolving it explicitly with
 > `IServiceProvider.GetService<CatalogSeeder>()` is the other correct spelling
 > and is not the one taken here, because it puts a service locator inside the
-> one type §7.4 keeps to `Database.Migrate()` and an exit code.
+> one type §7.4 keeps to an isolation read, `Database.Migrate()` and an exit
+> code.
 
 **Both conditions are load-bearing, and they close different doors.** The flag
 is the half somebody writes down, and [§15.3](15-cicd-deployment.md) says what

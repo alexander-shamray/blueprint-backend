@@ -191,6 +191,7 @@ decision looks wrong.
 | **ADR-182** | [MassTransit's inbox is cleaned up by this service, bucket by bucket (#1634); supersedes ADR-032's library cleanup](adr/ADR-182-masstransits-inbox-is-cleaned-up-by-this-service-bucket-by-bucket-1634-supersedes-adr-032s-library-cleanup.md) |
 | **ADR-183** | [A stock level is padded to a page of its own (#1647)](adr/ADR-183-a-stock-level-is-padded-to-a-page-of-its-own-1647.md) |
 | **ADR-184** | [Migrations run under a raised command timeout (#1644), adding to ADR-007](adr/ADR-184-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md) |
+| **ADR-185** | [Every service database runs read-committed snapshot, and its migrator refuses one that does not (#1653); supersedes ADR-112's locking reads](adr/ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md) |
 
 ---
 
