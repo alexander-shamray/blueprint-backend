@@ -858,10 +858,13 @@ further four, so nesting depth is visible:
 
 ```sql
 WHERE o.CustomerId = @CustomerId
-    AND (@AfterPlacedAt IS NULL
-        OR o.PlacedAt < @AfterPlacedAt
+    AND (o.PlacedAt < @AfterPlacedAt
         OR (o.PlacedAt = @AfterPlacedAt AND o.Id < @AfterId))
 ```
+
+That is a cursor's page; the first page is a statement of its own, without
+the group, because `@AfterPlacedAt IS NULL OR` in front of it cannot seek
+([ADR-179](backend-architecture/adr/ADR-179-a-listing-orders-index-covers-its-page-and-a-cursors-page-has-its-own-statement-1626.md)).
 
 **Column aliases are assignments, not `AS`** — `Total = SUM(…)`, never
 `SUM(…) AS Total`. The name being defined then starts the line, so a

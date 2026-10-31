@@ -1102,7 +1102,7 @@ public sealed record OrderSummaryDto(
 public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, ICurrentUser currentUser)
     : IQueryHandler<GetOrderSummariesQuery, CursorPage<OrderSummaryDto>>
 {
-    private const string Sql =
+    private const string Columns =
         """
         SELECT TOP (@Take)
             OrderId   = o.Id,
@@ -1115,12 +1115,27 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
         INNER JOIN ordering.OrderLines l
             ON l.OrderId = o.Id
         WHERE o.CustomerId = @CustomerId
-            AND (@AfterPlacedAt IS NULL
-                OR o.PlacedAt < @AfterPlacedAt
-                OR (o.PlacedAt = @AfterPlacedAt AND o.Id < @AfterId))
+        """;
+
+    private const string Newest =
+        """
+
         GROUP BY o.Id, o.Status, o.Currency, o.PlacedAt
         ORDER BY o.PlacedAt DESC, o.Id DESC;
         """;
+
+    // A cursor's page has a statement of its own: the keyset predicate
+    // behind "@AfterPlacedAt IS NULL OR" cannot seek (ADR-179).
+    private const string FirstSql = Columns + Newest;
+
+    private const string AfterSql =
+        Columns +
+        """
+
+            AND (o.PlacedAt < @AfterPlacedAt
+                OR (o.PlacedAt = @AfterPlacedAt AND o.Id < @AfterId))
+        """ +
+        Newest;
 
     public async Task<CursorPage<OrderSummaryDto>> HandleAsync(GetOrderSummariesQuery query, CancellationToken ct)
     {
@@ -1132,7 +1147,7 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
         // without a second COUNT(*) over the whole table.
         List<OrderSummaryDto> rows = (await connection.QueryAsync<OrderSummaryDto>(
             new CommandDefinition(
-                Sql,
+                after is null ? FirstSql : AfterSql,
                 new
                 {
                     // The one parameter that does not come from the query.
@@ -1174,7 +1189,11 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
 > every skipped row, so page 500 costs roughly 500 times page 1. Worse, rows
 > inserted while a user pages cause items to be skipped or repeated. A keyset
 > cursor over `(PlacedAt DESC, Id DESC)` reads the same number of rows for every
-> page and is stable under concurrent inserts.
+> page and is stable under concurrent inserts. That holds only when a cursor's
+> page has a statement of its own: written behind `@AfterPlacedAt IS NULL OR`,
+> the keyset predicate is true of every row when the parameter is null, so it
+> cannot be a seek, and page n reads every earlier page again
+> ([ADR-179](adr/ADR-179-a-listing-orders-index-covers-its-page-and-a-cursors-page-has-its-own-statement-1626.md)).
 >
 > The cursor is **opaque** — base64 of the sort key plus the tiebreaker ID — so
 > its layout stays an implementation detail rather than a public contract. Where
@@ -2002,7 +2021,7 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
     // write time. Compare the level-1 query in §6.5, which groups over
     // OrderLines on every read. The names are a second statement below,
     // keyed and bounded; they are not a join across this one.
-    private const string Sql =
+    private const string Columns =
         """
         SELECT TOP (@Take) OrderId, Status, Total = TotalAmount, Currency, LineCount, PlacedAt, Products
         FROM ordering.OrderSummaries
@@ -2011,11 +2030,25 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
         -- customer, so a half-built order is never returned. It becomes
         -- visible the moment the MERGE above fills it in.
         WHERE CustomerId = @CustomerId
-            AND (@AfterPlacedAt IS NULL
-                OR PlacedAt < @AfterPlacedAt
-                OR (PlacedAt = @AfterPlacedAt AND OrderId < @AfterId))
+        """;
+
+    private const string Newest =
+        """
+
         ORDER BY PlacedAt DESC, OrderId DESC;
         """;
+
+    // A first page and a cursor's page, as in §6.5 (ADR-179).
+    private const string FirstSql = Columns + Newest;
+
+    private const string AfterSql =
+        Columns +
+        """
+
+            AND (PlacedAt < @AfterPlacedAt
+                OR (PlacedAt = @AfterPlacedAt AND OrderId < @AfterId))
+        """ +
+        Newest;
 
     // One statement for the whole page rather than one per row. The ids
     // arrive as ONE parameter holding a JSON array, not as an expanded IN
@@ -2048,7 +2081,7 @@ public sealed class GetOrderSummariesHandler(IDbConnectionFactory connections, I
 
         List<SummaryRow> rows = (await connection.QueryAsync<SummaryRow>(
             new CommandDefinition(
-                Sql,
+                after is null ? FirstSql : AfterSql,
                 new
                 {
                     // Bound from the principal, not the query — §11.4, and the
