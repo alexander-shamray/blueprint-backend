@@ -210,7 +210,7 @@ before.
 **Why, and the cut** (`token-usage.md`, 2026-10-31, *what a main session
 carried*). From 2026-10-19 on a call adds what it did before and a session
 starts where it did; what grew is how long a context runs before anything
-empties it: more prompts past 150 calls, four times the wakes, and later
+empties it: more prompts past 150 calls, three times the wakes a call, and later
 tasks typed into the same session. Nothing the model can do empties it:
 a person's `/compact` or `/clear` does, and auto-compaction, which in that
 span fired at a median 340k and up to 968k, under an 800k window for
