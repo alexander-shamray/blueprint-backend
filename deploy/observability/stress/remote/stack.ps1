@@ -106,7 +106,7 @@ foreach ($tool in 'docker', 'node', 'git') {
 
 if ($Restore) {
     Remove-StressFirewall
-    Invoke-Native { docker compose -f $BaseFile up -d --wait } 'Bringing the stack up without the overrides' -Stream
+    Invoke-ComposeUp @($BaseFile) 'Bringing the stack up without the overrides'
 
     $open = @(Get-OpenPublishers)
     if ($open.Count -gt 0) {
@@ -201,8 +201,8 @@ if (Invoke-Native { git -C $RepoRoot status --porcelain } 'Reading the tree') {
 $env:STRESS_BIND_ADDRESS = $lan.Address
 # In @(), since an if statement's one value is a string, which splatting spreads one character an argument.
 $build = @(if (-not $NoBuild) { '--build' })
-Invoke-Native { docker compose -f $BaseFile -f $StressFile -f $RemoteOverride up -d @build --wait } `
-    'Bringing the stack up with the stress overrides' -Stream
+Invoke-ComposeUp @($BaseFile, $StressFile, $RemoteOverride) 'Bringing the stack up with the stress overrides' `
+    -Arguments $build
 Write-Host "Letting the stack idle a minute, as the run's step 1 does."
 Start-Sleep -Seconds 60
 
