@@ -118,6 +118,20 @@ test('the run ended on the rule that fired at its last measured step, the genera
     assert.equal(saturated.step, 2);
 });
 
+test('a stop the judge flagged ends the run at its step, though the next step\'s ramp sent requests', () => {
+    const step = (n, extra = {}) => ({ step: n, vus: 400 * n, requests: 500, ...extra });
+    const level = { level: 'custom', stopRule: 'knee', capped: true };
+    const ramped = { requests: 1208, hostCpu: 97 };
+
+    const knee = ending([step(1), step(2), step(3, { kneeStop: true }), step(4, ramped), step(5, { requests: 0 })],
+        level);
+    assert.deepEqual(knee, { reason: 'knee', step: 3, vus: 1200, detail: null });
+
+    const errors = ending([step(1), step(2, { aborted: true }), step(3, ramped)], { ...level, stopRule: 'errors' });
+    assert.equal(errors.reason, 'errors');
+    assert.equal(errors.step, 2);
+});
+
 test('the clock skew is Prometheus\'s time less the midpoint of the round trip, and unread without an answer', () => {
     assert.equal(clockSkewMs(1000.5, 1_000_000, 1_000_200), 400, 'Prometheus answered 400 ms ahead of the midpoint');
     assert.equal(clockSkewMs(999.9, 1_000_000, 1_000_000), -100);

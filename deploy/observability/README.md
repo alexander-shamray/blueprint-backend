@@ -620,8 +620,10 @@ work outright, by an `_error` queue gaining messages or a deadlock, which
 has no threshold to be a multiple of. One service's failure reaches its
 callers' figures too, so the order is evidence, not a cause.
 
-**Why it ended** is read at the last step that carried requests, by
-`stress/report.js`'s `ending()`. At high counts the client can give out
+**Why it ended** is read by `stress/report.js`'s `ending()` at the first
+step a stop rule flagged, since the judge flags a step after its hold and the
+next step's ramp can carry requests before the abort lands, and otherwise at
+the last step that carried requests. At high counts the client can give out
 first: a step at which k6 ran fewer VUs than it asked for, or, with k6 on the
 machine the stack runs on, the machine's CPU stayed at `HOST_CPU_LIMIT` over
 the hold, measured the workstation, and the run ended on the `generator`,
