@@ -455,26 +455,28 @@ export function generatorLimit(row, generator = 'local') {
 }
 
 /**
- * Why the run ended, read at the last step that carried requests: the
- * generator, when that step measured the workstation, whatever stopped it;
+ * Why the run ended, read at the first step a stop rule flagged, or else the
+ * last that carried requests: the judge flags a step after its hold, so the
+ * next step's ramp may carry requests before the abort lands. The generator
+ * comes first, when that step measured the workstation, whatever stopped it;
  * then the knee stop, the error abort, a run cut short with no rule firing,
  * or the top of a staircase that held, a level's being the cap's.
  */
 export function ending(rows, plan) {
     const measured = rows.filter((row) => row.requests > 0);
-    const last = measured[measured.length - 1];
+    const at = measured.find((row) => row.kneeStop || row.aborted) ?? measured[measured.length - 1];
 
-    if (!last)
+    if (!at)
         return { reason: 'not measured', step: null, vus: null, detail: null };
 
-    const generator = generatorLimit(last, plan.generator);
+    const generator = generatorLimit(at, plan.generator);
     const reason = generator ? 'generator'
-        : last.kneeStop ? 'knee'
-            : last.aborted ? 'errors'
-                : last.step < rows[rows.length - 1].step ? 'interrupted'
+        : at.kneeStop ? 'knee'
+            : at.aborted ? 'errors'
+                : at.step < rows[rows.length - 1].step ? 'interrupted'
                     : plan.capped ? 'cap' : 'held';
 
-    return { reason, step: last.step, vus: last.vus, detail: generator };
+    return { reason, step: at.step, vus: at.vus, detail: generator };
 }
 
 /** The run's machine-readable `Ended:` line. */
