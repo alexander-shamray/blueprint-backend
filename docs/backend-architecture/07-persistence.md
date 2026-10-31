@@ -407,6 +407,18 @@ Job is left behind on purpose, because the runbook needs it. The connection
 string is the migrator identity (DDL), not the runtime one (§7.1), and its
 secret is mounted into no API pod.
 
+**A migration's commands run under `MigratorCommandTimeout.Seconds`, not
+EF Core's default** ([ADR-181](adr/ADR-181-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md)).
+Each `MigratorHost` sets it through the `MigratorCommand` beside its
+`DbContext`, the route `MigratorTransport` takes for the same §4.2 reason. A
+statement that rewrites a table runs for as long as the table is large, and a
+retained table is at its largest on the first deploy that rewrites it. The
+number is sized for that, and kept small enough that one
+blocked command on each of the Job's attempts, its `backoffLimit` and one,
+fits under the age at which §13.6's `MigrationJobFailed` calls a Job stuck: a
+blocked command fails with its text in the Job's log, and a Job blocked on
+every attempt has failed before that branch pages.
+
 Because migrations and application code deploy separately, **every migration
 must be backward compatible with the currently running version**. Renaming a
 column is therefore a multi-release operation: add the new column, write to
