@@ -188,6 +188,7 @@ decision looks wrong.
 | **ADR-179** | [A listing order's index covers its page, and a cursor's page has its own statement (#1626)](adr/ADR-179-a-listing-orders-index-covers-its-page-and-a-cursors-page-has-its-own-statement-1626.md) |
 | **ADR-180** | [The outbox key is random and its claim index is led by a bucket (#1623); supersedes ADR-161's sequential-key option](adr/ADR-180-the-outbox-key-is-random-and-its-claim-index-is-led-by-a-bucket-1623-supersedes-adr-161s-sequential-key-option.md) |
 | **ADR-181** | [The outbox dispatcher projects Local rows of different commands side by side (#1646); supersedes ADR-163's serial Local lane](adr/ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-supersedes-adr-163s-serial-local-lane.md) |
+| **ADR-183** | [A stock level is padded to a page of its own (#1647)](adr/ADR-183-a-stock-level-is-padded-to-a-page-of-its-own-1647.md) |
 | **ADR-184** | [Migrations run under a raised command timeout (#1644), adding to ADR-007](adr/ADR-184-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md) |
 
 ---

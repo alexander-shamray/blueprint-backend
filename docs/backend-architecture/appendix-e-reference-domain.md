@@ -741,7 +741,9 @@ to level 2, and [E.4.5](#e45-the-ordering-escalation) is its case. The one
 level 2 read outside Ordering is the stock level a Catalog product read joins:
 a local projection, `StockLevelProjection` in
 `Catalog.Infrastructure/Projections/`, of Inventory's stock events
-([§3.2](03-bounded-contexts.md)). Payments' order record and Shipping's
+([§3.2](03-bounded-contexts.md)), each level padded to a page of its own
+([ADR-183](adr/ADR-183-a-stock-level-is-padded-to-a-page-of-its-own-1647.md)).
+Payments' order record and Shipping's
 `DeliveryAddresses` are not read models that serve a query, so they are not
 level 2.
 
