@@ -22,7 +22,7 @@ public static class MigratorHost
         builder.Services.AddDbContext<BffDbContext>(o =>
             o.UseSqlServer(
                 builder.Configuration.GetConnectionString("BffMigrator"),
-                sql => sql.EnableRetryOnFailure()));
+                sql => sql.EnableRetryOnFailure().CommandTimeout(MigratorCommand.TimeoutSeconds)));
 
         builder.Services.AddScoped<MigrationRunner>();
 

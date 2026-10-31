@@ -21,7 +21,7 @@ public static class MigratorHost
         builder.Services.AddDbContext<PaymentsDbContext>(o =>
             o.UseSqlServer(
                 builder.Configuration.GetConnectionString("PaymentsMigrator"),
-                sql => sql.EnableRetryOnFailure()));
+                sql => sql.EnableRetryOnFailure().CommandTimeout(MigratorCommand.TimeoutSeconds)));
 
         builder.Services.AddScoped<MigrationRunner>();
 

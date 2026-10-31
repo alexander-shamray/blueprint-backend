@@ -22,7 +22,7 @@ public static class MigratorHost
         builder.Services.AddDbContext<NotificationsDbContext>(o =>
             o.UseSqlServer(
                 builder.Configuration.GetConnectionString("NotificationsMigrator"),
-                sql => sql.EnableRetryOnFailure()));
+                sql => sql.EnableRetryOnFailure().CommandTimeout(MigratorCommand.TimeoutSeconds)));
 
         builder.Services.AddScoped<MigrationRunner>();
 

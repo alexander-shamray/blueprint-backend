@@ -32,7 +32,9 @@ public static class MigratorHost
             throw new InvalidOperationException("Republish needs ConnectionStrings:Privacy, the runtime key (§7.1).");
 
         builder.Services.AddDbContext<PrivacyDbContext>(o =>
-            o.UseSqlServer(connection, sql => sql.EnableRetryOnFailure()));
+            o.UseSqlServer(
+                connection,
+                sql => sql.EnableRetryOnFailure().CommandTimeout(MigratorCommand.TimeoutSeconds)));
 
         builder.Services.AddScoped<MigrationRunner>();
 
