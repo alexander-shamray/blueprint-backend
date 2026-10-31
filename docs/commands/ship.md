@@ -716,19 +716,26 @@ rather than reading whichever finished last.
 ## Step 6: the wait
 
 **The CI wait is the one place this chain sleeps, and a session that
-sleeps holds its context across the wake.** `gh pr checks --watch` outlasts
-a tool call's ten-minute bound on a slow run, the harness moves it to the
-background, and each notification then re-sends the whole conversation. A
-`/ship` main session's call sends about 274k tokens
-(`docs/token-usage.md`, 2026-10-10), so a wait kept here is that sent again
-at every wake.
+sleeps pays for its context at every wake.** A `/ship` main session's call
+sends about 274k tokens (`docs/token-usage.md`, 2026-10-10), so what
+matters is how many times the wait wakes it.
 
-**The wait goes to a fresh `general-purpose` agent holding only the PR
-number**: its context is a few thousand tokens, so its wakes cost almost
-nothing, and what returns is the exit and the names of the failing checks,
-which is all the gate reads. This is `docs/token-plan.md` step 7's rule in
-`CLAUDE.md`, applied where the runbook waits; the other option it names,
-compacting first, is the owner's command, which this chain cannot type.
+**The wait runs in this session as one background task.**
+`run_in_background` detaches `gh pr checks --watch`, nothing is sent while it
+runs, and the harness re-invokes the session once, when it exits. That one
+wake is owed by any route, since the merge is this session's to make: an
+agent's reply wakes it the same way. Reading the task's output before the
+exit is a poll and costs a wake each time, so nothing reads it until then.
+This is `docs/token-plan.md` step 7's rule in `CLAUDE.md`, applied where the
+runbook waits.
+
+**No agent holds it, because none can.** The wait first went to a fresh
+`general-purpose` agent holding only the PR number, so that its wakes would
+cost a few thousand tokens. A subagent's foreground Bash call is cut at
+180 seconds and moved to the background, and a subagent's own background
+task notifies nobody: on PR 1665, 2026-10-31, the agent replied with an
+interim list and no exit while `build`, `commits` and six integration jobs
+were still pending, and the parent ran the watch itself to merge (#1667).
 
 **An exit of 0 is not a pass on its own.** On a pull request whose
 `mergeable` reads `CONFLICTING`, GitHub starts none of the `pull_request`
@@ -739,10 +746,10 @@ passes only when the list names the `changes`, `build`, `closure-gate`,
 `MERGEABLE`; an absent check is
 a failure of the wait, reported as what it is.
 
-**The agent only waits.** It decides nothing: a red check is fixed here, in
+**The task only waits.** It decides nothing: a red check is fixed here, in
 its own commit, as the gate above already says, and a verdict it cannot
-reach — the agent missing, or no exit in its reply — is the gate not
-having run, which stops the chain like any helper that did not.
+reach — no exit in the task's result — is the gate not having run, which
+stops the chain like any helper that did not.
 
 ## Step 6: the landing
 
