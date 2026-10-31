@@ -1120,10 +1120,10 @@ fingerprint matching nothing is a stale entry that fails the build. Where
 the case in the scaffold suite's own synthetic root. The new service
 builds and its tests pass before a line of it is written, some of them against
 real SQL Server and RabbitMQ containers — the `Category=Integration` filter of
-§12.4. How many, and how the figure is recounted, is the scaffold README's
-[*What you get*](../../tools/new-service/README.md#what-you-get): a count is
-not a chapter's to hold (`docs/change-locality.md` §1), so this section states
-none, and whoever changes what the scaffold copies recounts it there.
+§12.4. How many is held by no document, since a number of tests is one of the
+facts `docs/change-locality.md` §2 lets none state; it is measured by rendering
+a service and running its suites, as the scaffold README's
+[*What you get*](../../tools/new-service/README.md#what-you-get) describes.
 
 **There is no template directory, and that is the design.** In the reference
 domain the script reads `src/Services/Catalog` at run time ([E.2.8](appendix-e-reference-domain.md#e28-the-scaffold-template)), so

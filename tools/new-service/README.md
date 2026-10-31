@@ -117,8 +117,8 @@ its marker statements — the candidate select and the delete that joins the
 rows it returned — so a service scaffolded without the migration fails its own
 purge with `Invalid column name 'RowVersion'` on the first pass.
 
-The service builds and its 144 tests pass before you have written a line,
-and 58 of them run against real SQL Server and RabbitMQ containers:
+The service builds and its tests pass before you have written a line, and
+some of them run against real SQL Server and RabbitMQ containers:
 the migrator's exit code, §7.1's two-key boundary, the readiness probe — 200
 only once the bus connects — `EfUnitOfWork`'s commit, rollback and retry
 semantics, the inbox filter's once-per-endpoint guarantee, §8.5's marker
@@ -126,41 +126,14 @@ committing with the work and vanishing with a rollback, the retention purge
 over every table, and the outbox dispatcher's per-row isolation, attempt
 cap and loud failure on a `Local` row with no registered handler.
 
-Those two counts are measured rather than estimated, and they move whenever a
-PR adds to the template — they read forty-one and sixteen until PR-18
-recounted them against a rendered service, three PRs after they stopped being
-true, fifty-six until PR-22 did it again, seventy-eight until PR-32 rendered a
-service carrying §8.5's marker suite, seventy-nine until PR-33 put four
-more into it across two of its review rounds, eighty-three until PR-35 —
-which found the pair already stale by four before it had added anything, PR-34
-having put its own four into `RetentionPurgeTests` without recounting — and
-eighty-nine until the outbox gauges' registration suite joined the template
-and a render read 1, 18 and 75, ninety-four until a render on 2026-10-09
-read 1, 18 and 103 with forty-seven against containers, and 122 until a
-render on 2026-10-28 read 1, 18 and 123 with fifty-seven: twenty more,
-nineteen of them not the sequential-key test it was rendered for, so the pair
-was stale again before it added one, and 142 until a render on 2026-10-31
-read 1, 18 and 124 with fifty-eight, the random-key and claim-index tests
-taking that one's place, and 143 until a second render that day read 1, 18
-and 125, the migrator's command-timeout test added. A figure nobody
-recounts goes stale on the next PR's clock rather than on its own.
-
-**Adding to the number is not recounting it.** PR-22 put three tests into the
-template and the total moved by four, so the only way to know this pair is to
-render `Yankee` at 5199 and run all three of its suites — which is what PR-32
-did, twice: 1, 18 and 60. PR-33 did the same and read 1, 18 and 64; its four
-were the marker's database-generated stamp, the default constraint behind it,
-the scoped inbox reader's own subject test and the skewed-clock pass that
-separates the marker's cutoff from the other two, all of which land in
-`Yankee.Api.Tests` and all of which want a container. **It rendered twice**,
-because the fourth arrived in a later review round than the other three — the
-same reason PR-32 rendered twice, one pull request on. PR-35 read 1, 18 and 70:
-its own two are §8.5's marker `rowversion` — the mapping gate and the
-replacement a stale delete must not remove — and the other four were PR-34's,
-already in the template and never counted. **Two added, six apparent**, which
-is the rule above failing in the direction it warns about. The container
-figure is the `Category=Integration` count, which is a filter anyone can rerun
-rather than a tally somebody kept.
+**No file states how many.** A number of tests is one of the facts
+[`docs/change-locality.md`](../../docs/change-locality.md) §2 lets no document
+hold, so the count is measured, never read: render `Yankee` at 5199 and run
+all three of its suites, and the container share is the
+`Category=Integration` filter, which anyone can rerun. **Adding to an earlier
+figure is not recounting it**: the total need not move by the number of tests
+a change puts into the template, and a figure written down goes stale on the
+next PR's clock rather than on its own.
 
 **The outbox arrives wired and empty**, which is the state to expect: the
 allow-list mapper has no entries, so every domain event this service raises is
