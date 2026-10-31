@@ -119,10 +119,11 @@ rest of the session; `docs/token-plan.md` step 2 measured where that went.
   run with `executing-plans`; under `subagent-driven-development`, each
   reviewer is handed its task's diff, not the tree.
 - **Before a wait, shed the context.** A session about to wait on CI, a
-  background agent or a scheduled check-in compacts first, or runs it as one
-  background task whose exit is the only wake; a wake re-sends the whole
-  context, and after the cache has expired writes all of it again
-  (`docs/token-plan.md` step 7). Never hand a wait to a subagent: its Bash
+  background agent or a scheduled check-in runs it as one background task
+  whose exit is the only wake; a wake re-sends the whole context, and after
+  the cache has expired writes all of it again (`docs/token-plan.md` step
+  7). No tool compacts, so the auto-compact window empties a long context,
+  not this rule (step 2). Never hand a wait to a subagent: its Bash
   is cut at 180 seconds and its own background task wakes nobody.
 - **A comment sweep** hands each agent what `.github/comment-gate/` finds in
   its files with `--tree`, not whole suites to read.
