@@ -57,7 +57,7 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_delivered_page_stages_the_despatch_first_and_stops_the_polling()
+    public async Task A_delivered_page_stages_the_despatch_and_the_delivery_and_stops_the_polling()
     {
         Shipment shipment = await fixture.BookedAsync("050000");
 
