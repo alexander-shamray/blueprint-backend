@@ -457,7 +457,7 @@ export function generatorLimit(row, generator = 'local') {
 /**
  * Why the run ended, read at the first step a stop rule flagged, or else the
  * last that carried requests: the judge flags a step after its hold, so the
- * next step's ramp may carry requests before the abort lands. The generator
+ * next step's hold may begin before the abort lands. The generator
  * comes first, when that step measured the workstation, whatever stopped it;
  * then the knee stop, the error abort, a run cut short with no rule firing,
  * or the top of a staircase that held, a level's being the cap's.
