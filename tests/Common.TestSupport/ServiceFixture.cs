@@ -403,6 +403,16 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
                 AND i.name = 'IX_Outbox_Unprocessed'
             """);
 
+    /// <summary>Every index of the migrated inbox by name, read from the catalogue (ADR-186).</summary>
+    public Task<string> InboxIndexesAsync() =>
+        ScalarAsync<string>(
+            $"""
+            SELECT Value = STRING_AGG(name, ',') WITHIN GROUP (ORDER BY name)
+            FROM sys.indexes
+            WHERE object_id = OBJECT_ID(N'{_schema}.InboxMessages')
+                AND index_id > 0
+            """);
+
     /// <summary>Every inbox row, untracked, for asserting over (§9.5).</summary>
     public async Task<IReadOnlyList<InboxMessage>> InboxAsync()
     {

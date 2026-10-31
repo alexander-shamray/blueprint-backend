@@ -103,9 +103,6 @@ namespace Ordering.Infrastructure.Persistence.Migrations
 
                     b.HasKey("MessageId", "Endpoint");
 
-                    b.HasIndex("HandledAt")
-                        .HasDatabaseName("IX_Inbox_HandledAt");
-
                     b.ToTable("InboxMessages", "ordering");
                 });
 

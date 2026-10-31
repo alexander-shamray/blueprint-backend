@@ -753,7 +753,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "\n"
             "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
-            "        applied.Length.ShouldBe(17);\n"
+            "        applied.Length.ShouldBe(18);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddProducts\");\n"
             "        applied[2].ShouldEndWith(\"_AddOutbox\");\n"
@@ -770,12 +770,13 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[13].ShouldEndWith(\"_OptimizeOutboxKeyForSequentialInserts\");\n"
             "        applied[14].ShouldEndWith(\"_CoverProductListingIndexes\");\n"
             "        applied[15].ShouldEndWith(\"_KeyOutboxOnRandomId\");\n"
-            "        applied[16].ShouldEndWith(\"_PadStockLevelsToAPage\");\n",
+            "        applied[16].ShouldEndWith(\"_PadStockLevelsToAPage\");\n"
+            "        applied[17].ShouldEndWith(\"_DropInboxHandledAtIndex\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
             "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
-            "        applied.Length.ShouldBe(10);\n"
+            "        applied.Length.ShouldBe(11);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddOutbox\");\n"
             "        applied[2].ShouldEndWith(\"_AddInbox\");\n"
@@ -785,7 +786,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[6].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n"
             "        applied[7].ShouldEndWith(\"_AddOutboxTraceContext\");\n"
             "        applied[8].ShouldEndWith(\"_OptimizeOutboxKeyForSequentialInserts\");\n"
-            "        applied[9].ShouldEndWith(\"_KeyOutboxOnRandomId\");\n",
+            "        applied[9].ShouldEndWith(\"_KeyOutboxOnRandomId\");\n"
+            "        applied[10].ShouldEndWith(\"_DropInboxHandledAtIndex\");\n",
         ),
     ),
 }
@@ -1112,7 +1114,7 @@ PURE_CONSUMER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "tests/Catalog.Api.Tests/DatabaseSmokeTests.cs": (
         (
-            "        applied.Length.ShouldBe(10);\n"
+            "        applied.Length.ShouldBe(11);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddOutbox\");\n"
             "        applied[2].ShouldEndWith(\"_AddInbox\");\n"
@@ -1122,13 +1124,15 @@ PURE_CONSUMER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[6].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n"
             "        applied[7].ShouldEndWith(\"_AddOutboxTraceContext\");\n"
             "        applied[8].ShouldEndWith(\"_OptimizeOutboxKeyForSequentialInserts\");\n"
-            "        applied[9].ShouldEndWith(\"_KeyOutboxOnRandomId\");\n",
-            "        applied.Length.ShouldBe(5);\n"
+            "        applied[9].ShouldEndWith(\"_KeyOutboxOnRandomId\");\n"
+            "        applied[10].ShouldEndWith(\"_DropInboxHandledAtIndex\");\n",
+            "        applied.Length.ShouldBe(6);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddInbox\");\n"
             "        applied[2].ShouldEndWith(\"_AddIdempotencyMarkers\");\n"
             "        applied[3].ShouldEndWith(\"_IdempotencyMarkerCommittedAtDefault\");\n"
-            "        applied[4].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n",
+            "        applied[4].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n"
+            "        applied[5].ShouldEndWith(\"_DropInboxHandledAtIndex\");\n",
         ),
     ),
     "tests/Catalog.Api.Tests/MetricsRegistrationTests.cs": (

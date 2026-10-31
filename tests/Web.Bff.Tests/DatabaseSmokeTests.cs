@@ -20,7 +20,7 @@ public sealed class DatabaseSmokeTests(BffServiceFixture fixture)
 
         // Named, since a count passes on a different migration of the same length.
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(9);
+        applied.Length.ShouldBe(10);
         applied[0].ShouldEndWith("_AddOrderProjection");
         applied[1].ShouldEndWith("_IndexUnattributedOrders");
         applied[2].ShouldEndWith("_AddPersonalDataErasures");
@@ -30,6 +30,7 @@ public sealed class DatabaseSmokeTests(BffServiceFixture fixture)
         applied[6].ShouldEndWith("_AddSavedAddressErasedUnder");
         applied[7].ShouldEndWith("_AddPersonalDataErasureClosedAt");
         applied[8].ShouldEndWith("_CoverOwnedOrdersIndex");
+        applied[9].ShouldEndWith("_DropInboxHandledAtIndex");
     }
 
     [Fact]
