@@ -2925,11 +2925,11 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
             parent = self.parent_carrying(root, {"tools/new-service/new_service.py": RECORDING_SCAFFOLD})
             scaffold.reproduce.git(root, "update-ref", scaffold.reproduce.LANDED, parent)
 
-            with mock.patch.dict(scaffold.reproduce.os.environ, {"GH_TOKEN": "caller-only"}):
+            with mock.patch.dict(scaffold.reproduce.os.environ, {"SCAFFOLD_CALLER_ONLY": "1"}):
                 rendered, _ = self.render(root, parent)
 
         seen = rendered["seen.txt"].decode("utf-8").split()
-        self.assertNotIn("GH_TOKEN", seen)
+        self.assertNotIn("SCAFFOLD_CALLER_ONLY", seen)
         self.assertIn("PYTHONUTF8", seen)
 
     def test_bytecode_the_parent_carries_is_never_read_in_place_of_its_source(self):
