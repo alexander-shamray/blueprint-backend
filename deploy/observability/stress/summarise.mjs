@@ -1,7 +1,7 @@
 // Turns one stress run into its per-step table: k6's client figures from
 // raw.json, the server's from Prometheus at each step's hold, the resources
-// from sample.mjs's samples, the statements from Query Store, and the machine
-// they all describe. Writes
+// and lock waits from sample.mjs's samples, the statements from Query Store,
+// and the machine they all describe. Writes
 // summary.json and summary.md beside them and prints the knee and the first
 // service to give up. It reports and never gates, so a reading it cannot make
 // is recorded as unavailable.
@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     DEFAULT_PROM_URL,
+    LOCK_WAITS_READ,
     OUTBOX_OLDEST,
     QUERY_STORE_DATABASES,
     QUERY_STORE_INTERVAL_MINUTES,
@@ -34,6 +35,8 @@ import {
     hostCpu,
     inboxLatchDelta,
     knee,
+    lockWaits,
+    lockWaitsLine,
     parseQueryStore,
     promRange,
     queryStoreLine,
@@ -297,6 +300,7 @@ for (const step of raw.steps) {
         hostCpu: hostCpu(samples, window),
         sql: sqlDelta(samples, window),
         inboxLatch: inboxLatchDelta(samples, window),
+        lockWaits: lockWaits(samples, window),
         queryStore: row.requests > 0 ? statements(window) : null,
     });
 }
@@ -330,8 +334,8 @@ const summary = {
     firstToGiveUp: { step: null, vus: null, unread: false, services: [], ...first, line: firstLine(first) },
     ended: { ...ended, line: endedLine(ended, plan) },
     steps: rows,
-    samplerErrors: [...new Set(samples.flatMap((s) => [s.containersError, s.sqlError, s.inboxLatchError])
-        .filter(Boolean))],
+    samplerErrors: [...new Set(samples.flatMap((s) =>
+        [s.containersError, s.sqlError, s.inboxLatchError, s.lockWaitsError]).filter(Boolean))],
     unavailable,
     // Named so that a reader does not take the table's silence for a healthy reading.
     notObservable: [
@@ -458,6 +462,13 @@ function markdown(s) {
             ? 'not read'
             : r.inboxLatch.map((d) => `${d.database} ${ms(d.ms)}`).join(', ') ||
                 'no database\'s counter held over the hold')),
+        '',
+        'Lock waits the sampler caught, at most ' +
+            `${LOCK_WAITS_READ} a sample: the waiting statement, the lock it waits on, and the statement and state`,
+        'of the session holding it, the most often seen first. A holder\'s statement is the one it runs now, or',
+        'the last it sent when idle, and need not be the one that took the lock.',
+        '',
+        ...s.steps.filter((r) => r.requests > 0).map((r) => lockWaitsLine(r.step, r.lockWaits)),
         '',
         '## Statements',
         '',

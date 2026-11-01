@@ -766,3 +766,139 @@ export function queryStoreLine(step, row) {
     return `- Step ${step}: ${statements.join('; ') || 'no statement'}; ` +
         `waits ${row.waits.map((w) => `${w.category} ${s(w.ms)} s`).join(', ') || 'none'}`;
 }
+
+// LOCK WAITS: which statement waits on a lock and what the session holding it
+// is doing, read every few seconds, since the counters above give only the
+// total. A holder's text is the statement it runs now, or, idle inside its
+// transaction, the last batch it sent: neither need be the one that took it.
+export const LOCK_WAITS_READ = 50;
+export const LOCK_WAITS_TOP = 5;
+
+const offsetText = (text, request) => `SUBSTRING(${text}, ${request}.statement_start_offset / 2 + 1, ` +
+    `(CASE ${request}.statement_end_offset WHEN -1 THEN DATALENGTH(${text}) ` +
+    `ELSE ${request}.statement_end_offset END - ${request}.statement_start_offset) / 2 + 1)`;
+
+export const LOCK_WAITS = [
+    'SET NOCOUNT ON;',
+    `SELECT TOP (${LOCK_WAITS_READ}) DB_NAME(r.database_id), w.session_id, w.blocking_session_id,`,
+    '    w.wait_type, w.wait_duration_ms, hs.status, hs.open_transaction_count, hr.wait_type,',
+    '    CASE WHEN hr.session_id IS NULL THEN DATEDIFF(millisecond, hs.last_request_end_time, GETDATE()) END,',
+    "    CAST(REPLACE(w.resource_description, '|', '/') AS nvarchar(200)),",
+    `    ${sqlTextColumn('ws.text')},`,
+    `    ${sqlTextColumn('hst.text')}`,
+    'FROM sys.dm_os_waiting_tasks AS w',
+    'INNER JOIN sys.dm_exec_requests AS r ON r.session_id = w.session_id',
+    'LEFT JOIN sys.dm_exec_sessions AS hs ON hs.session_id = w.blocking_session_id',
+    'LEFT JOIN sys.dm_exec_requests AS hr ON hr.session_id = w.blocking_session_id',
+    'LEFT JOIN sys.dm_exec_connections AS hc',
+    '    ON hc.session_id = w.blocking_session_id AND hc.parent_connection_id IS NULL',
+    'OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) AS wt',
+    `OUTER APPLY (SELECT ${offsetText('wt.text', 'r')} AS text) AS ws`,
+    'OUTER APPLY sys.dm_exec_sql_text(COALESCE(hr.sql_handle, hc.most_recent_sql_handle)) AS ht',
+    `OUTER APPLY (SELECT CASE WHEN hr.sql_handle IS NULL THEN ht.text ELSE ${offsetText('ht.text', 'hr')} END`,
+    '    AS text) AS hst',
+    "WHERE w.wait_type LIKE 'LCK[_]%' AND w.blocking_session_id > 0 AND w.blocking_session_id <> w.session_id",
+    'ORDER BY w.wait_duration_ms DESC;',
+].join('\n');
+
+const nullable = (field) => (field === 'NULL' ? null : field);
+const count = (field) => (field === 'NULL' ? null : Number(field));
+
+/** sqlcmd's lines for LOCK_WAITS, one waiting task each, with the session holding the lock it waits on. */
+export function parseLockWaits(output) {
+    return String(output ?? '').split(/\r?\n/)
+        .map((line) => line.trim().split('|'))
+        .filter((fields) => fields.length === 12 && /^\d+$/.test(fields[1]) && /^\d+$/.test(fields[2]))
+        .map((f) => ({
+            database: nullable(f[0]),
+            session: Number(f[1]),
+            holder: Number(f[2]),
+            waitType: f[3],
+            waitMs: count(f[4]),
+            holderStatus: nullable(f[5]),
+            holderTransactions: count(f[6]),
+            holderWait: nullable(f[7]),
+            holderIdleMs: count(f[8]),
+            resource: nullable(f[9]),
+            statement: nullable(f[10]),
+            holderStatement: nullable(f[11]),
+        }));
+}
+
+// "keylock hobtid=72057594043760640 dbid=7 id=lock1f2 mode=X associatedObjectId=72057594043760640" as the
+// lock's kind, the mode it is held in, and the index or heap it is on, which sys.partitions names.
+function lockResource(description) {
+    const text = String(description ?? '');
+    const kind = /^\s*(\w+)/.exec(text)?.[1] ?? 'lock';
+    const mode = /\bmode=(\w+)/.exec(text)?.[1];
+    const hobt = /\b(?:associatedObjectId|hobtid)=(\d+)/.exec(text)?.[1];
+    return [kind, mode && `held ${mode}`, hobt && `hobt ${hobt}`].filter(Boolean).join(' ');
+}
+
+// What the holder was doing: waiting itself, which makes it a link in a longer chain, idle with its
+// transaction open, or running.
+function holderState(wait) {
+    if (wait.holderWait)
+        return `waiting ${wait.holderWait}`;
+
+    return wait.holderStatus === 'sleeping' ? 'idle in its transaction' : wait.holderStatus ?? 'gone';
+}
+
+/**
+ * A step's lock waits, from every sample inside it: the LOCK_WAITS_TOP
+ * pairings of waiting statement, lock and holding statement seen most often,
+ * each with its longest wait and the holder's longest idle; null when no
+ * sample read it.
+ */
+export function lockWaits(samples, window) {
+    const read = within(samples, window).filter((sample) => Array.isArray(sample.lockWaits));
+
+    if (read.length === 0)
+        return null;
+
+    const chains = new Map();
+
+    for (const wait of read.flatMap((sample) => sample.lockWaits)) {
+        const chain = {
+            database: wait.database,
+            waitType: wait.waitType,
+            resource: lockResource(wait.resource),
+            statement: statementText(wait.statement),
+            holder: { statement: statementText(wait.holderStatement), state: holderState(wait) },
+        };
+        const key = JSON.stringify(chain);
+        const seen = chains.get(key) ?? { ...chain, seen: 0, longestMs: 0, holderIdleMs: null };
+
+        seen.seen += 1;
+        seen.longestMs = Math.max(seen.longestMs, wait.waitMs ?? 0);
+
+        if (Number.isFinite(wait.holderIdleMs))
+            seen.holderIdleMs = Math.max(seen.holderIdleMs ?? 0, wait.holderIdleMs);
+
+        chains.set(key, seen);
+    }
+
+    const all = [...chains.values()];
+
+    return {
+        samples: read.length,
+        seen: all.reduce((sum, chain) => sum + chain.seen, 0),
+        chains: all.sort((a, b) => b.seen - a.seen || b.longestMs - a.longestMs).slice(0, LOCK_WAITS_TOP),
+    };
+}
+
+/** A step's line of summary.md's lock waits; null is a reading no sample made. */
+export function lockWaitsLine(step, row) {
+    if (!row)
+        return `- Step ${step}: not read`;
+
+    if (row.seen === 0)
+        return `- Step ${step}: no session waited on a lock in any of ${row.samples} samples`;
+
+    const chains = row.chains.map((c) =>
+        `${c.database} \`${c.statement}\` ${c.waitType} on ${c.resource}, behind \`${c.holder.statement}\` ` +
+        `${c.holder.state}${c.holderIdleMs === null ? '' : ` up to ${c.holderIdleMs} ms`}, ` +
+        `seen ${c.seen} times, longest ${c.longestMs} ms`);
+
+    return `- Step ${step}: ${row.seen} waits in ${row.samples} samples; ${chains.join('; ')}`;
+}
