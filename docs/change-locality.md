@@ -349,7 +349,10 @@ Beside those, how a change is made here:
   for the user, and it lists open PRs (with the issues each closes) and
   open issues with no PR. Update it the moment a session starts a branch,
   opens, merges or closes a PR, or files, closes or reopens an issue;
-  `/branch` adds the *In progress* row and `/ship` step 6 deletes it. It
+  `/branch` adds the *In progress* row and `/ship` step 6 deletes it. One
+  exception: a session running under `--dispatched` writes nothing, and its
+  dispatcher writes for it from the run's start to its report
+  (`.claude/commands/dispatch.md`). It
   lives outside the checkout because Claude Code's isolation refuses a
   session moved into `.claude/worktrees/` with `EnterWorktree` every path
   in the main checkout outside that worktree, and admits one that no
