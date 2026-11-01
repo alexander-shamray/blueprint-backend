@@ -77,7 +77,7 @@
       "vhost": "/",
       "configure": "^(ordering-|inventory-commands$|payments-commands$|privacy-completions$|Common\\.Contracts(\\.(Catalog|Inventory|Ordering|Payments|Privacy|Shipping)\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(ordering-|inventory-commands$|payments-commands$|privacy-completions$|Common\\.Contracts(\\.Ordering\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(ordering-|inventory-commands$|payments-commands$|privacy-completions$|Common\\.Contracts\\.(Catalog|Inventory|Ordering|Payments|Privacy|Shipping)\\.V1:|Ordering\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Catalog|Inventory|Ordering|Payments|Privacy|Shipping)\\.V1:|Ordering\\.Infrastructure\\.Messaging:)))"
+      "read": "^(ordering-|inventory-commands$|payments-commands$|Common\\.Contracts\\.(Catalog|Inventory|Ordering|Payments|Privacy|Shipping)\\.V1:|Ordering\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Catalog|Inventory|Ordering|Payments|Privacy|Shipping)\\.V1:|Ordering\\.Infrastructure\\.Messaging:)))"
     },
     {
       "user": "inventory-svc",
@@ -91,28 +91,28 @@
       "vhost": "/",
       "configure": "^(payments-|privacy-completions$|Common\\.Contracts(\\.(Ordering|Payments|Privacy)\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(payments-|privacy-completions$|Common\\.Contracts(\\.Payments\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(payments-|privacy-completions$|Common\\.Contracts\\.(Ordering|Payments|Privacy)\\.V1:|Payments\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Ordering|Payments|Privacy)\\.V1:|Payments\\.Infrastructure\\.Messaging:)))"
+      "read": "^(payments-|Common\\.Contracts\\.(Ordering|Payments|Privacy)\\.V1:|Payments\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Ordering|Payments|Privacy)\\.V1:|Payments\\.Infrastructure\\.Messaging:)))"
     },
     {
       "user": "shipping-svc",
       "vhost": "/",
       "configure": "^(shipping-|privacy-completions$|Common\\.Contracts(\\.(Ordering|Privacy|Shipping)\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(shipping-|privacy-completions$|Common\\.Contracts(\\.Shipping\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
-      "read": "^(shipping-|privacy-completions$|Common\\.Contracts\\.(Ordering|Privacy|Shipping)\\.V1:|Shipping\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Ordering|Privacy|Shipping)\\.V1:|Shipping\\.Infrastructure\\.Messaging:)))"
+      "read": "^(shipping-|Common\\.Contracts\\.(Ordering|Privacy|Shipping)\\.V1:|Shipping\\.Infrastructure\\.Messaging:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Ordering|Privacy|Shipping)\\.V1:|Shipping\\.Infrastructure\\.Messaging:)))"
     },
     {
       "user": "notifications-svc",
       "vhost": "/",
       "configure": "^(notifications-|privacy-completions$|Common\\.Contracts\\.(Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:)",
       "write": "^(notifications-|privacy-completions$|MassTransit:)",
-      "read": "^(notifications-|privacy-completions$|Common\\.Contracts\\.(Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Ordering|Payments|Privacy|Shipping)\\.V1:|Notifications\\.Infrastructure\\.Messaging:)))"
+      "read": "^(notifications-|Common\\.Contracts\\.(Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Ordering|Payments|Privacy|Shipping)\\.V1:|Notifications\\.Infrastructure\\.Messaging:)))"
     },
     {
       "user": "bff-svc",
       "vhost": "/",
       "configure": "^(bff-|privacy-completions$|Common\\.Contracts\\.(Catalog|Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:)",
       "write": "^(bff-|privacy-completions$|MassTransit:)",
-      "read": "^(bff-|privacy-completions$|Common\\.Contracts\\.(Catalog|Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Catalog|Ordering|Payments|Privacy|Shipping)\\.V1:|Web\\.Bff\\.Messaging:)))"
+      "read": "^(bff-|Common\\.Contracts\\.(Catalog|Ordering|Payments|Privacy|Shipping)\\.V1:|MassTransit:(ReceiveFault$|Fault--(Common\\.Contracts\\.(Catalog|Ordering|Payments|Privacy|Shipping)\\.V1:|Web\\.Bff\\.Messaging:)))"
     },
     {
       "user": "dead-letter-operator",

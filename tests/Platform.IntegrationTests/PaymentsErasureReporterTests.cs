@@ -12,14 +12,14 @@ public class PaymentsErasureReporterTests
     private static readonly Guid Request = new("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
     [Fact]
-    public async Task The_completion_names_payments_and_the_request_and_goes_to_privacys_queue()
+    public async Task The_completion_names_payments_and_the_request_and_goes_to_privacys_exchange()
     {
         RecordingProvider provider = new();
         ErasureReporter reporter = new(provider);
 
         await reporter.ReportAsync(Request, 3, TestContext.Current.CancellationToken);
 
-        provider.Addresses.ShouldBe([new Uri("queue:privacy-completions")]);
+        provider.Addresses.ShouldBe([new Uri("exchange:privacy-completions")]);
         PersonalDataDeleteCompleted sent = provider.Sent
             .ShouldHaveSingleItem()
             .ShouldBeOfType<PersonalDataDeleteCompleted>();

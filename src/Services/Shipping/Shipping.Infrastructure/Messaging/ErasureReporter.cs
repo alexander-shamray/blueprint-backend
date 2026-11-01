@@ -13,7 +13,7 @@ internal sealed class ErasureReporter(ISendEndpointProvider sends) : IErasureRep
 
     public async Task ReportAsync(Guid requestId, int count, CancellationToken ct)
     {
-        ISendEndpoint endpoint = await sends.GetSendEndpoint(Endpoints.PrivacyCompletionsQueue);
+        ISendEndpoint endpoint = await sends.GetSendEndpoint(Endpoints.PrivacyCompletionsExchange);
 
         await endpoint.Send(new PersonalDataDeleteCompleted(requestId, Responder, count), ct);
     }

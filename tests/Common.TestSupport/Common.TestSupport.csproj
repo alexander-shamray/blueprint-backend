@@ -22,6 +22,8 @@
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <!-- The relational raw-SQL surface the helpers read and write through. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- A topology-only bus that declares Privacy's receive endpoint, which a holder's send no longer does (ADR-190). -->
+    <PackageReference Include="MassTransit.RabbitMQ" />
   </ItemGroup>
 
   <ItemGroup>

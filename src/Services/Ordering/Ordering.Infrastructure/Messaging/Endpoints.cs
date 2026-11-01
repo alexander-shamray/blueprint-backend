@@ -14,6 +14,7 @@ internal static class Endpoints
     /// <summary>This service's own queue: the saga coordinates by message only (§9.6).</summary>
     public static readonly Uri OrderingQueue = new("queue:ordering-commands");
 
-    /// <summary>Where a holder reports an erasure (ADR-094).</summary>
-    public static readonly Uri PrivacyCompletionsQueue = new("queue:privacy-completions");
+    /// <summary>Where a holder reports an erasure (ADR-094): Privacy's exchange, which binds no queue.</summary>
+    /// <remarks>A <c>queue:</c> send binds, which takes the read that consumes the queue (ADR-190).</remarks>
+    public static readonly Uri PrivacyCompletionsExchange = new("exchange:privacy-completions");
 }

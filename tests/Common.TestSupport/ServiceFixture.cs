@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using MassTransit;
 using Microsoft.Extensions.Logging;
 using Respawn;
 using Testcontainers.MsSql;
@@ -629,6 +630,27 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries)
                 .Select(line => line.Split('\t', StringSplitOptions.TrimEntries))
         ];
+    }
+
+    /// <summary>Privacy's receive side of <c>privacy-completions</c>, declared as its endpoint declares it.</summary>
+    /// <remarks>
+    /// A holder sends to the exchange and binds nothing (ADR-190), so until Privacy has bound its queue a completion
+    /// is dropped. This declares it as Privacy's own account, whose password is §14.1's local-development default.
+    /// </remarks>
+    public async Task DeclarePrivacyCompletionsAsync()
+    {
+        const string owner = "privacy";
+        Uri broker = new UriBuilder(BrokerConnectionString) { UserName = $"{owner}-svc", Password = $"local-dev-{owner}" }
+            .Uri;
+
+        IBusControl bus = Bus.Factory.CreateUsingRabbitMq(cfg =>
+        {
+            cfg.Host(broker);
+            cfg.DeployTopologyOnly = true;
+            cfg.ReceiveEndpoint("privacy-completions", _ => { });
+        });
+
+        await bus.DeployAsync(TestContext.Current.CancellationToken);
     }
 
     public async ValueTask DisposeAsync()

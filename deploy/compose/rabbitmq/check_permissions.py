@@ -218,6 +218,16 @@ def sends_and_consumes(directory: Path) -> tuple[set[str], set[str]]:
     return sends, consumes
 
 
+def exchange_sends(directory: Path) -> set[str]:
+    """The peer endpoints a service sends to as `exchange:NAME`, which declares the exchange and binds nothing.
+
+    The endpoint's own receive side declares the queue and its binding, so the sender is owed configure and
+    write on the name and never read: the queue shares it, and read on it is a consume of the owner's work.
+    """
+    return {name for path in sorted(directory.rglob("*.cs"))
+            for name in re.findall(r'new\("exchange:([A-Za-z0-9._-]+)"\)', read(path))}
+
+
 def private_namespaces(directory: Path) -> set[str]:
     """The exchange prefixes of a service's own messages: every namespace its Messaging tree declares.
 
@@ -375,7 +385,8 @@ def main() -> int:
     directories = messaging_dirs()
     prefixes = contract_prefixes()
     code = {name: sends_and_consumes(path) for name, path in directories.items()}
-    private = {name: private_namespaces(path) for name, path in directories.items()}
+    exchanges = {name: exchange_sends(path) for name, path in directories.items()}
+    private ={name: private_namespaces(path) for name, path in directories.items()}
     names = declared_names([*CONTRACTS.rglob("*.cs"), *(
         path for directory in directories.values() for path in directory.rglob("*.cs"))])
     referenced = {name: referenced_contexts(path, names) & prefixes for name, path in directories.items()}
@@ -452,6 +463,17 @@ def main() -> int:
     if failures:
         return report()
 
+    # A queue two services send to by `queue:` is one each of them binds, so each holds the read that
+    # consumes it, and one can swallow what the others send. Check 1b's `exchange:` send binds nothing.
+    senders: dict[str, list[str]] = {}
+    for key, (sends, _) in sorted(code.items()):
+        for queue in sends:
+            senders.setdefault(queue, []).append(f"{key.lower()}{USER_SUFFIX}")
+    for queue, held in sorted(senders.items()):
+        if len(held) > 1:
+            fail(f"`{queue}`: {', '.join(held)} each send to it as `queue:{queue}`, which binds it, and "
+                 f"the read that bind takes consumes it. Send to `exchange:{queue}` instead")
+
     for user in services:
         entry = permissions[user]
         name = user[: -len(USER_SUFFIX)]
@@ -469,6 +491,18 @@ def main() -> int:
                          f"Endpoints addresses. The send is refused and MassTransit "
                          f"retries the topology for ever, service healthy and silent")
 
+        # 1b. An `exchange:` send declares and writes the exchange and binds nothing. Read there is
+        #     owed nothing, and it consumes the queue of the same name, which is the endpoint's own.
+        service = next(k for k in directories if k.lower() == name)
+        for endpoint in sorted(exchanges[service]):
+            for verb in ("configure", "write"):
+                if not matches(entry[verb], endpoint):
+                    fail(f"{user}: {verb} does not cover `{endpoint}`, the exchange its own Endpoints "
+                         f"addresses. The send is refused and the message goes nowhere")
+            if not endpoint.startswith(f"{name}-") and matches(entry["read"], endpoint):
+                fail(f"{user}: read COVERS `{endpoint}`, which it sends to by exchange and so never binds. "
+                     f"The queue shares the name, and read consumes the messages its peers send there")
+
         # 2. It may run every receive endpoint it declares, and the three names
         #    MassTransit derives from each.
         for queue in sorted(consumes):
@@ -480,7 +514,6 @@ def main() -> int:
 
         # 3. It declares and writes the framework's fault exchanges and, if it
         #    publishes, the polymorphic interface exchange.
-        service = next(k for k in directories if k.lower() == name)
         owed = (f"{FRAMEWORK_PREFIX}ReceiveFault", *((INTERFACE_EXCHANGE,) if publishes(service) else ()))
         for resource in owed:
             for verb in ("configure", "write"):
@@ -519,7 +552,6 @@ def main() -> int:
         if matches(entry["read"], f"{FRAMEWORK_PREFIX}Anything"):
             fail(f"{user}: read COVERS `{FRAMEWORK_PREFIX}Anything`, beyond the fault exchanges "
                  f"a fault's publish binds from")
-
         # A fault carries the message that faulted, so read on another namespace's fault exchange
         # receives that context's messages whole: check 5's refusal, one exchange over.
         for prefix in sorted((prefixes | set().union(*private.values())) - consumed):
@@ -583,13 +615,15 @@ def main() -> int:
     for user in services:
         entry = permissions[user]
         name = user[: -len(USER_SUFFIX)]
-        sends, _ = code[next(k for k in directories if k.lower() == name)]
+        service = next(k for k in directories if k.lower() == name)
+        sends, _ = code[service]
         # A delay exchange republishes into its queue, so a foreign endpoint's derived names are its own.
-        # A peer queue the source sends to is owed by check 1, and none of the names derived from it.
+        # A peer queue the source sends to is owed by check 1, and none of the names derived from it;
+        # an exchange it sends to is owed by check 1b, which judges the read on it.
         for queue in sorted(every_endpoint):
             if queue.startswith(f"{name}-"):
                 continue
-            foreign = sorted(derived_names(queue) - sends)
+            foreign = sorted(derived_names(queue) - sends - exchanges[service])
             for verb in ("configure", "write", "read"):
                 resource = first_covered(entry[verb], foreign)
                 if resource:
@@ -603,7 +637,6 @@ def main() -> int:
                 fail(f"{user}: {verb} COVERS `{resource}`, a built-in exchange. No MassTransit topology uses one, "
                      f"and a write on the default exchange delivers to any queue by name (#44)")
 
-        service = next(k for k in directories if k.lower() == name)
         for prefix in sorted(prefixes - {owned_contract(user)}):
             if prefix == f"{INTERFACE_EXCHANGE.split(':')[0]}:":
                 continue
