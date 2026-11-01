@@ -463,16 +463,21 @@ def main() -> int:
     if failures:
         return report()
 
-    # A queue two services send to by `queue:` is one each of them binds, so each holds the read that
-    # consumes it, and one can swallow what the others send. Check 1b's `exchange:` send binds nothing.
+    # A `queue:` send binds the queue, and that bind is a read that consumes it, so a queue sent to that
+    # way has no other sender, by either address: one sender swallowing its own commands is ADR-036's residual.
     senders: dict[str, list[str]] = {}
-    for key, (sends, _) in sorted(code.items()):
-        for queue in sends:
-            senders.setdefault(queue, []).append(f"{key.lower()}{USER_SUFFIX}")
-    for queue, held in sorted(senders.items()):
-        if len(held) > 1:
-            fail(f"`{queue}`: {', '.join(held)} each send to it as `queue:{queue}`, which binds it, and "
-                 f"the read that bind takes consumes it. Send to `exchange:{queue}` instead")
+    binders: dict[str, list[str]] = {}
+    for key in sorted(code):
+        account = f"{key.lower()}{USER_SUFFIX}"
+        for queue in code[key][0] | exchanges[key]:
+            senders.setdefault(queue, []).append(account)
+        for queue in code[key][0]:
+            binders.setdefault(queue, []).append(account)
+    for queue, bound in sorted(binders.items()):
+        if len(senders[queue]) > 1:
+            fail(f"`{queue}`: {len(senders[queue])} services send to it ({', '.join(senders[queue])}), and "
+                 f"{', '.join(bound)} by `queue:{queue}`, which binds it, so the read that bind takes consumes "
+                 f"what the others send. Send to `exchange:{queue}` instead")
 
     for user in services:
         entry = permissions[user]
