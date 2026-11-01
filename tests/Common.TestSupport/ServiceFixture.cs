@@ -632,7 +632,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         ];
     }
 
-    /// <summary>Privacy's receive side of <c>privacy-completions</c>: its queue and the exchange of that name.</summary>
+    /// <summary>Privacy's receive side of <c>privacy-completions</c>: its queue and its same-name exchange.</summary>
     /// <remarks>
     /// A holder sends to the exchange and binds nothing (ADR-190), so until Privacy has bound its queue a completion
     /// is dropped. This declares it as Privacy's own account, whose password is §14.1's local-development default.
