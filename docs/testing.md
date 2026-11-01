@@ -76,10 +76,13 @@ each ceiling to its row, so a module added there is measured here too.
 | `test_git_worktree_detach.py` | 7.4 | `test_system_sleep.py` | 0.3 |
 | `test_index_mcp_root.py` | 6.6 | `test_command_grants.py` | 0.2 |
 | `test_gh_issue_create.py` | 5.3 | `test_command_runbooks.py` | 0.2 |
-| | | `test_hook_timeouts.py` | 0.2 |
+| `test_issue_decisions.py` | 4.2 | `test_hook_timeouts.py` | 0.2 |
+| `test_dispatch_run.py` | 4.1 | `test_watch_session.py` | 0.3 |
+| `test_dispatch_board.py` | 1.5 | `test_ship_dispatched.py` | 0.1 |
 
 `test_team_board.py` arrived after that measurement and was timed the same
-way on its own branch, #1574's.
+way on its own branch, #1574's; so were the five `/dispatch` modules, on
+#1691's, each run alone by this script.
 
 **`py -3.12`, not `python`.** Every CI job that runs Python pins 3.12, and a
 newer interpreter is the hazard — it accepts APIs 3.12 does not, so the local
