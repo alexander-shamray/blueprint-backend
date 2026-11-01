@@ -2859,6 +2859,93 @@ class ReadsAScaffoldCommitsShape(unittest.TestCase):
         self.assertEqual([PROBE, "--pure-consumer", "--migration-id", MIGRATION_ID], scaffolded.argv)
 
 
+# A parent's scaffold that records the environment it was run with and the fact that it ran.
+RECORDING_SCAFFOLD = (
+    "import os, pathlib, sys\n"
+    "root = pathlib.Path(sys.argv[sys.argv.index('--repo-root') + 1])\n"
+    "(root / 'seen.txt').write_text(' '.join(sorted(os.environ)), encoding='utf-8')\n"
+)
+
+
+class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
+    """`--verify` executes the parent's tree, so it holds that tree to `load_scan_gate`'s trust rule."""
+
+    def parent_carrying(self, root: Path, files: dict[str, str]) -> str:
+        def git(*args: str, stdin: bytes | None = None) -> str:
+            return scaffold.reproduce.git(root, *args, stdin=stdin).decode("ascii").strip()
+
+        git("init", "--quiet")
+        for relative, text in files.items():
+            (root / relative).parent.mkdir(parents=True, exist_ok=True)
+            (root / relative).write_text(text, encoding="utf-8")
+        git("add", "--all")
+        identity = ("-c", "user.name=scaffold", "-c", "user.email=scaffold@example.invalid")
+        parent = git(*identity, "commit-tree", git("write-tree"), "-m", "parent")
+        git("update-ref", "HEAD", parent)
+        return parent
+
+    def render(self, root: Path, parent: str) -> tuple[dict[str, bytes], Path]:
+        scaffolded = scaffold.reproduce.Scaffolded("c" * 40, parent, PROBE, True, None, MIGRATION_ID)
+        directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        return scaffold.reproduce.render(root, scaffolded, directory), directory
+
+    def shipped_copy(self, directory: Path) -> None:
+        source = REPO_ROOT / scaffold.reproduce.SCAFFOLD
+        shutil.copytree(source, directory / scaffold.reproduce.SCAFFOLD,
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        (directory / SCAN_GATE).parent.mkdir(parents=True)
+        shutil.copyfile(REPO_ROOT / SCAN_GATE, directory / SCAN_GATE)
+
+    def test_a_parent_scaffold_that_neither_landed_nor_shipped_is_not_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            parent = self.parent_carrying(root, {"tools/new-service/new_service.py": RECORDING_SCAFFOLD})
+
+            with self.assertRaisesRegex(
+                    ScaffoldError, "tools/new-service/new_service.py is not the one this script shipped with"):
+                self.render(root, parent)
+
+    def test_a_landed_parent_scaffold_runs_without_the_caller_s_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            parent = self.parent_carrying(root, {"tools/new-service/new_service.py": RECORDING_SCAFFOLD})
+            scaffold.reproduce.git(root, "update-ref", scaffold.reproduce.LANDED, parent)
+
+            with mock.patch.dict(scaffold.reproduce.os.environ, {"GH_TOKEN": "caller-only"}):
+                rendered, _ = self.render(root, parent)
+
+        seen = rendered["seen.txt"].decode("utf-8").split()
+        self.assertNotIn("GH_TOKEN", seen)
+        self.assertIn("PYTHONUTF8", seen)
+
+    def test_a_parent_carrying_the_shipped_scaffold_is_vouched_for(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.shipped_copy(Path(directory))
+
+            scaffold.reproduce.vouch(Path(directory), "p" * 40, Path(directory), REPO_ROOT)
+
+    def test_a_file_the_shipped_scaffold_lacks_or_a_changed_gate_is_refused(self):
+        for relative, content in (("tools/new-service/re.py", "raise SystemExit"),
+                                  (SCAN_GATE, "raise SystemExit")):
+            with self.subTest(relative), tempfile.TemporaryDirectory() as directory:
+                self.shipped_copy(Path(directory))
+                (Path(directory) / relative).write_text(content, encoding="utf-8")
+
+                with self.assertRaisesRegex(ScaffoldError, f"its {re.escape(relative)} is not"):
+                    scaffold.reproduce.vouch(Path(directory), "p" * 40, Path(directory), REPO_ROOT)
+
+    def test_a_link_on_the_way_to_the_scaffold_is_refused_though_every_file_matches(self):
+        # Patched rather than created: Windows grants a symlink only to an elevated or developer account.
+        for linked in ("tools", "tools/new-service/scaffold", ".github/secret-scan"):
+            with self.subTest(linked), tempfile.TemporaryDirectory() as directory:
+                self.shipped_copy(Path(directory))
+                link = Path(directory) / linked
+
+                with (mock.patch.object(scaffold.reproduce.Path, "is_symlink", lambda path: path == link),
+                      self.assertRaisesRegex(ScaffoldError, f"'s {re.escape(linked)} is a link")):
+                    scaffold.reproduce.vouch(Path(directory), "p" * 40, Path(directory), REPO_ROOT)
+
+
 
 if __name__ == "__main__":
     unittest.main()

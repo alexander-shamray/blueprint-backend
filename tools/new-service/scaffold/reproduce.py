@@ -14,11 +14,19 @@ import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from scaffold import ScaffoldError
+from scaffold.verify import SCAN_GATE, TOOL_ROOT
 
 KNOWN_DIFFERENCES = Path(__file__).resolve().parents[1] / "known-differences.txt"
+
+# What a render executes from the parent's tree: the scaffold, the package beside
+# it that `sys.path` resolves first, and the secret scan its verify module loads.
+SCAFFOLD = "tools/new-service"
+LANDED = "refs/remotes/origin/main"
+# The child's whole environment: Windows' interpreter does not start without SYSTEMROOT.
+KEPT_ENVIRONMENT = ("SYSTEMROOT",)
 
 SERVICES = "src/Services/"
 INITIAL_CREATE = re.compile(r"(\d{14})_InitialCreate\.cs")
@@ -119,6 +127,42 @@ def arguments(repo_root: Path, commit: str) -> Scaffolded:
     return Scaffolded(full, parent, name, worker, port, ids[0], pure_consumer)
 
 
+def landed(repo_root: Path, commit: str) -> bool:
+    """Whether the commit is in the history of the main branch this checkout fetched."""
+    ancestry = subprocess.run(
+        ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", commit, LANDED],
+        capture_output=True, check=False)
+    return ancestry.returncode == 0
+
+
+def vouch(repo_root: Path, parent: str, directory: Path, tool_root: Path = TOOL_ROOT) -> None:
+    """Refuse to run a parent's scaffold that neither landed nor is the shipped one.
+
+    `load_scan_gate`'s rule, made before the tree runs, where that check compares
+    the tree with itself. A landed parent ran through review, so it stands as it is."""
+    if landed(repo_root, parent):
+        return
+    entries = [directory / SCAN_GATE]
+    for top, folders, files in os.walk(directory / SCAFFOLD):
+        entries += [Path(top) / name for name in folders + files]
+    # A walk does not descend a link and an import does, so a link is refused rather than compared.
+    anchors = [PurePosixPath(anchor).parts for anchor in (SCAFFOLD, SCAN_GATE)]
+    ancestors = {directory.joinpath(*parts[:end]) for parts in anchors for end in range(1, len(parts) + 1)}
+    for path in sorted(ancestors | set(entries)):
+        if path.is_symlink():
+            raise ScaffoldError(
+                f"{parent[:8]}'s {path.relative_to(directory).as_posix()} is a link, and verifying "
+                f"it would execute code this script cannot compare with its own.")
+    for path in sorted(path for path in entries if path.is_file()):
+        relative = path.relative_to(directory).as_posix()
+        shipped = tool_root / relative
+        if not shipped.is_file() or normalised(shipped.read_bytes()) != normalised(path.read_bytes()):
+            raise ScaffoldError(
+                f"{parent[:8]} is not on {LANDED} and its {relative} is not the one this script "
+                f"shipped with, so verifying it would execute code nobody has reviewed. Verify it "
+                f"from a checkout whose {SCAFFOLD} matches, or once the parent has landed.")
+
+
 def render(repo_root: Path, scaffolded: Scaffolded, directory: Path) -> dict[str, bytes]:
     """Every file the parent's scaffold writes, rendered into the parent's own tree."""
     archive = git(repo_root, "archive", "--format=tar", scaffolded.parent)
@@ -129,9 +173,11 @@ def render(repo_root: Path, scaffolded: Scaffolded, directory: Path) -> dict[str
     script = directory / "tools" / "new-service" / "new_service.py"
     if not script.is_file():
         raise ScaffoldError(f"{scaffolded.parent[:8]} carries no scaffold to render {scaffolded.name} with")
+    vouch(repo_root, scaffolded.parent, directory)
+    kept = {name: os.environ[name] for name in KEPT_ENVIRONMENT if name in os.environ}
     result = subprocess.run(
         [sys.executable, "-B", str(script), *scaffolded.argv, "--repo-root", str(directory)],
-        capture_output=True, check=False, env={**os.environ, "PYTHONUTF8": "1"})
+        capture_output=True, check=False, env={**kept, "PYTHONUTF8": "1"})
     if result.returncode != 0:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise ScaffoldError(f"the scaffold at {scaffolded.parent[:8]} refused the render: {detail}")
