@@ -4,9 +4,10 @@
 stays at 4, as
 [ADR-181](ADR-181-the-outbox-dispatcher-projects-local-rows-of-different-commands-side-by-side-1646-supersedes-adr-163s-serial-local-lane.md)
 set it: a two-machine A/B across ADR-181 moved Ordering's outbox from the
-first service to give up to one that kept up past the knee, with no deadlock
-among the projection writers ADR-181 added, and no run varied the bound, so
-there is no figure to tune toward. The A/B's second arm carried
+first service to give up to one that kept up through the step where it had
+given up, the knee moving a step later and to another service, with no
+deadlock among the projection writers ADR-181 added, and no run varied the
+bound, so there is no figure to tune toward. The A/B's second arm carried
 other changes beside ADR-181, so it credits the move to them together. The
 bound moves only on a run whose knee is Ordering's outbox again with its
 `Local` lane staging more than it delivers.
