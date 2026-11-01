@@ -100,8 +100,8 @@ public sealed class SagaInboxCleanupService(
     protected override void OnPassFailed(Exception exception) => CleanupFailed(log, exception);
 
     /// <summary>
-    /// One statement a bucket, on the replica holding <see cref="PassLock"/>; another replica's pass removes
-    /// nothing. Public so tests drive a pass rather than race a timer.
+    /// One statement a bucket on the replica holding <see cref="PassLock"/>, another's pass removing nothing, public
+    /// so tests drive a pass rather than race a timer.
     /// </summary>
     public async Task<int> CleanUpAsync(CancellationToken ct)
     {
