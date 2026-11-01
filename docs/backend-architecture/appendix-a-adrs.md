@@ -194,6 +194,7 @@ decision looks wrong.
 | **ADR-185** | [Every service database runs read-committed snapshot, and its migrator refuses one that does not (#1653); supersedes ADR-112's locking reads](adr/ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md) |
 | **ADR-186** | [The inbox has no index on the time a row was handled (#1648)](adr/ADR-186-the-inbox-has-no-index-on-the-time-a-row-was-handled-1648.md) |
 | **ADR-187** | [A switch file contributes only its switch's keys (#1681), amending ADR-113 and ADR-119](adr/ADR-187-a-switch-file-contributes-only-its-switchs-keys-1681-amending-adr-113-and-adr-119.md) |
+| **ADR-188** | [LocalConcurrency stays at 4, the A/B moving Ordering's outbox off the knee (#1650), adding to ADR-181](adr/ADR-188-localconcurrency-stays-at-4-the-ab-moving-orderings-outbox-off-the-knee-1650-adding-to-adr-181.md) |
 
 ---
 
