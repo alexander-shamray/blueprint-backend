@@ -274,10 +274,13 @@ class LaunchTests(InRoot):
         listed = (f"worktree {self.root.as_posix()}\nHEAD {HEAD}\nbranch refs/heads/main\n\n"
                   f"worktree {(self.root / WORKTREE).as_posix()}\nHEAD {HEAD}\nbranch refs/heads/{BRANCH}\n\n")
         calls = []
+        earlier = state_dir() / "S1.refused.json"
+        earlier.write_text('{"refused": "stop file"}\n', encoding="utf-8")
         with mock.patch.object(dr, "git", lambda root, *args: calls.append(args) or listed):
             out = run_cli(["launch", RUN, "S1", "--tasks", "todo.md", "--branch", BRANCH, "--worktree", WORKTREE])
         self.assertEqual("", out)
         self.assertEqual([("worktree", "list", "--porcelain")], calls)
+        self.assertFalse(earlier.exists(), "a relaunch kept the refusal of the run before it")
         entry = group_state(RUN, "S1")
         self.assertEqual(("running", "Opus", [1682, 1683], BRANCH, WORKTREE, 0),
                          (entry["status"], entry["model"], entry["issues"], entry["branch"], entry["worktree"],
