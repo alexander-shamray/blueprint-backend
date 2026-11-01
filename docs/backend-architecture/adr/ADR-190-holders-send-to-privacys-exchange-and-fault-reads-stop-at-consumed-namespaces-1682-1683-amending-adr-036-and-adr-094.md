@@ -59,6 +59,12 @@ of Privacy's own completions consumer. Narrowing to the types consumed is
 [ADR-094](ADR-094-a-holder-reports-its-erasure-by-sending-to-privacys-queue-and-does-not-publish-it.md)'s
 send is otherwise unchanged.
 
+**Amended by
+[ADR-192](ADR-192-fault-reads-stop-at-consumed-types-1702-amending-adr-190.md)**:
+each account reads the fault exchanges of the types it consumes, not of
+whole namespaces, and of its own Messaging namespaces whole. This record is
+otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

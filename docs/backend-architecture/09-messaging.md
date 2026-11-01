@@ -1427,16 +1427,17 @@ public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, Cance
 > answer Privacy, so they send to `exchange:privacy-completions`, which binds
 > nothing, and none of them can read Privacy's queue
 > ([ADR-190](adr/ADR-190-holders-send-to-privacys-exchange-and-fault-reads-stop-at-consumed-namespaces-1682-1683-amending-adr-036-and-adr-094.md)).
-> **The per-type fault exchanges are read per namespace**: MassTransit names
+> **The per-type fault exchanges are read per type**: MassTransit names
 > one per message type, `MassTransit:Fault--<namespace>:<type>--`, beside
 > `MassTransit:ReceiveFault`, which every service still reads because each
 > fault's publish binds from it, and a service's `read` on the per-type ones
-> names only the namespaces it consumes, since a fault carries the
-> message that faulted and a queue bound to a fault exchange receives it. A
-> peer's consumer of a message in a namespace both consume is still within
-> reach, because the narrowing is per namespace and not per type (#1702), and
-> `configure` on `MassTransit:` still reaches every service's, the residual
-> above.
+> names only the types it consumes and its own Messaging namespaces, since a
+> fault carries the message that faulted and a queue bound to a fault exchange
+> receives it
+> ([ADR-192](adr/ADR-192-fault-reads-stop-at-consumed-types-1702-amending-adr-190.md)).
+> Two consumers of one type still read each other's, a message both already
+> receive, and `configure` on `MassTransit:` still reaches every service's,
+> the residual above.
 
 **A command reachable both ways maps its origin only as a literal**, written
 where the command is constructed: `CommandOrigin.User` at the endpoint,
