@@ -1236,10 +1236,10 @@ def update_env_example(repo_root: Path, names: Names) -> str:
 # What the template's configure and read grant for the StockLevelConsumer.cs the
 # render omits. A rendered service subscribes to nothing, and check_permissions.py
 # refuses an account that may bind a context its Messaging code never names, or
-# read the fault exchange of one it does not consume. Each cut is held once.
+# read the fault exchange of a type it does not consume. Each cut is held once.
 TEMPLATE_SUBSCRIPTION = {
     "configure": (r"\.Inventory\.V1:|",),
-    "read": (r"Common\.Contracts\.Inventory\.V1:|", "|Inventory"),
+    "read": (r"Common\.Contracts\.Inventory\.V1:|", r"Common\.Contracts\.Inventory\.V1:StockLevelChanged--$|"),
 }
 
 

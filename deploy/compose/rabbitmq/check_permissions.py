@@ -104,14 +104,14 @@ FRAMEWORK_PREFIX = "MassTransit:"
 FAULT_ROOT = f"{FRAMEWORK_PREFIX}Fault"
 
 
-def fault_of(prefix: str) -> str:
-    """The fault exchange for a message in one namespace, `MassTransit:Fault--<ns>:<type>--`."""
-    return f"{FAULT_ROOT}--{prefix}Anything--"
+def fault_of(prefix: str, name: str = "Anything") -> str:
+    """The fault exchange for one message type, `MassTransit:Fault--<ns>:<type>--`."""
+    return f"{FAULT_ROOT}--{prefix}{name}--"
 
 
 def fault_probes(prefix: str, names: dict[str, set[str]]) -> list[str]:
     """The fault exchanges a read on one namespace's faults is tested against, as `probes` tests a write."""
-    return [fault_of(prefix), *(f"{FAULT_ROOT}--{prefix}{name}--" for name in sorted(names.get(prefix, ())))]
+    return [fault_of(prefix), *(fault_of(prefix, name) for name in sorted(names.get(prefix, ())))]
 
 
 # The polymorphic publish exchange. MassTransit binds each concrete contract
@@ -254,11 +254,7 @@ def referenced_contexts(directory: Path, names: dict[str, set[str]]) -> set[str]
     A type argument one context alone declares counts, as in `IntegrationEventConsumer<T>` or
     `Event<T>`, so a namespace a global using imports is not missed and a property of that name is.
     """
-    owners: dict[str, set[str]] = {}
-    for prefix, declared in names.items():
-        if prefix.startswith("Common.Contracts."):
-            for type_name in declared:
-                owners.setdefault(type_name, set()).add(prefix)
+    owners = contract_owners(names)
     found: set[str] = set()
     for path in sorted(directory.rglob("*.cs")):
         code = code_only(read(path), keep_strings=False)
@@ -266,6 +262,31 @@ def referenced_contexts(directory: Path, names: dict[str, set[str]]) -> set[str]
         for identifier in type_arguments(code):
             if len(owners.get(identifier, ())) == 1:
                 found |= owners[identifier]
+    return found
+
+
+def contract_owners(names: dict[str, set[str]]) -> dict[str, set[str]]:
+    """Each type name `Common.Contracts` declares, and the context prefixes declaring it."""
+    owners: dict[str, set[str]] = {}
+    for prefix, declared in names.items():
+        if prefix.startswith("Common.Contracts."):
+            for type_name in declared:
+                owners.setdefault(type_name, set()).add(prefix)
+    return owners
+
+
+def consumed_types(directory: Path, names: dict[str, set[str]], referenced: set[str]) -> set[tuple[str, str]]:
+    """Each `(prefix, type)` of `Common.Contracts` a service's Messaging code takes as a type argument.
+
+    A consumer's fault is published for the type it consumed, so these are the fault exchanges its read is owed.
+    A name two contexts declare counts in each the service references, so an ambiguity widens the grant owed.
+    """
+    owners = contract_owners(names)
+    found: set[tuple[str, str]] = set()
+    for path in sorted(directory.rglob("*.cs")):
+        for identifier in type_arguments(code_only(read(path), keep_strings=False)):
+            held = owners.get(identifier, set())
+            found |= {(prefix, identifier) for prefix in (held if len(held) == 1 else held & referenced)}
     return found
 
 
@@ -390,6 +411,7 @@ def main() -> int:
     names = declared_names([*CONTRACTS.rglob("*.cs"), *(
         path for directory in directories.values() for path in directory.rglob("*.cs"))])
     referenced = {name: referenced_contexts(path, names) & prefixes for name, path in directories.items()}
+    types = {name: consumed_types(path, names, referenced[name]) for name, path in directories.items()}
 
     # THE GATE'S OWN SUBJECT, before anything relies on it. A scan that found
     # nothing would agree with any permission set at all, which is this
@@ -543,10 +565,12 @@ def main() -> int:
             fail(f"{user}: read COVERS `{INTERFACE_EXCHANGE}`. A queue of its own bound there "
                  f"receives every integration event of every context")
 
-        # 3d. A fault's publish binds `ReceiveFault` and each `Fault--<type>--` to the
-        #     root `Fault` interface, so read is owed on those sources and never on the root.
-        consumed = referenced[service] | ({owned_contract(user)} & prefixes) | private[service]
-        sources = [f"{FRAMEWORK_PREFIX}ReceiveFault", *(fault_of(prefix) for prefix in sorted(consumed))]
+        # 3d. A fault's publish binds `ReceiveFault` and each `Fault--<type>--` to the root `Fault` interface,
+        #     so read is owed on those sources and never on the root: per contract type consumed, and on the
+        #     service's own Messaging namespaces whole, which no peer consumes (ADR-192).
+        sources = [f"{FRAMEWORK_PREFIX}ReceiveFault",
+                   *(fault_of(prefix, name) for prefix, name in sorted(types[service])),
+                   *(fault_of(prefix) for prefix in sorted(private[service]))]
         for resource in sources:
             if not matches(entry["read"], resource):
                 fail(f"{user}: read does not cover `{resource}`, the source of the binding a "
@@ -557,13 +581,15 @@ def main() -> int:
         if matches(entry["read"], f"{FRAMEWORK_PREFIX}Anything"):
             fail(f"{user}: read COVERS `{FRAMEWORK_PREFIX}Anything`, beyond the fault exchanges "
                  f"a fault's publish binds from")
-        # A fault carries the message that faulted, so read on another namespace's fault exchange
-        # receives that context's messages whole: check 5's refusal, one exchange over.
-        for prefix in sorted((prefixes | set().union(*private.values())) - consumed):
-            resource = first_covered(entry["read"], fault_probes(prefix, names))
+        # A fault carries the message that faulted, so read on the fault exchange of a type it does not consume
+        # receives a peer consumer's messages whole, in a namespace both consume as well: check 5, one exchange over.
+        root = f"{INTERFACE_EXCHANGE.split(':')[0]}:"
+        for prefix in sorted((prefixes | {root} | set().union(*private.values())) - private[service]):
+            resource = first_covered(entry["read"], [probe for probe in fault_probes(prefix, names)
+                                                     if probe not in sources])
             if resource:
-                fail(f"{user}: read COVERS `{resource}`, the fault exchange of `{prefix}`, which it does "
-                     f"not consume. A queue of its own bound there receives each faulted message whole")
+                fail(f"{user}: read COVERS `{resource}`, a fault exchange in `{prefix}` of a type it does not "
+                     f"consume. A queue of its own bound there receives each faulted message whole")
         if matches(entry["read"], fault_of("Elsewhere:")):
             fail(f"{user}: read COVERS `{fault_of('Elsewhere:')}`, a fault exchange in no namespace "
                  f"it consumes")

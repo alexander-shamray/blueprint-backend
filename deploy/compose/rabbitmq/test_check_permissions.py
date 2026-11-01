@@ -540,6 +540,25 @@ class ConfigureAndReadAreBoundedToo(unittest.TestCase):
                 "x.AddConsumer<IntegrationEventConsumer<Line>>();\n", encoding="utf-8")
             self.assertEqual(set(), gate.referenced_contexts(Path(directory), names))
 
+    def test_the_types_consumed_are_the_type_arguments_one_context_declares(self):
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "Consumers.cs").write_text(
+                "x.AddConsumer<IntegrationEventConsumer<PaymentDeclined>>();\n"
+                "// IntegrationEventConsumer<PaymentRefunded> is not consumed here.\n", encoding="utf-8")
+            self.assertEqual({("Common.Contracts.Payments.V1:", "PaymentDeclined")},
+                             gate.consumed_types(Path(directory), self.names(), set()))
+
+    def test_a_type_two_contexts_declare_is_consumed_in_each_the_service_names(self):
+        # Owed rather than dropped: a fault exchange missing from the grant is a fault the broker refuses.
+        names = {"Common.Contracts.Ordering.V1:": {"Line"}, "Common.Contracts.Payments.V1:": {"Line"},
+                 "Common.Contracts.Shipping.V1:": {"Line"}}
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "Consumers.cs").write_text(
+                "x.AddConsumer<IntegrationEventConsumer<Line>>();\n", encoding="utf-8")
+            found = gate.consumed_types(
+                Path(directory), names, {"Common.Contracts.Ordering.V1:", "Common.Contracts.Payments.V1:"})
+        self.assertEqual({("Common.Contracts.Ordering.V1:", "Line"), ("Common.Contracts.Payments.V1:", "Line")}, found)
+
     def test_a_subdirectory_of_messaging_is_read(self):
         with tempfile.TemporaryDirectory() as directory:
             nested = Path(directory) / "Sagas"
@@ -595,9 +614,46 @@ class TheFaultExchangesAreReadOnlyAsSources(unittest.TestCase):
         # One alternative covering every namespace's fault exchange.
         failures = self.failures_with("MassTransit:(ReceiveFault$|Fault--))")
         self.assertIn(
-            "catalog-svc: read COVERS `MassTransit:Fault--Common.Contracts.Payments.V1:Anything--`, the fault "
-            "exchange of `Common.Contracts.Payments.V1:`, which it does not consume. A queue of its own bound "
+            "catalog-svc: read COVERS `MassTransit:Fault--Common.Contracts.Payments.V1:Anything--`, a fault "
+            "exchange in `Common.Contracts.Payments.V1:` of a type it does not consume. A queue of its own bound "
             "there receives each faulted message whole", failures)
+
+    def test_a_consumed_namespace_read_whole_is_refused(self):
+        # ADR-192's narrowing: Catalog consumes one Inventory type, and the namespace holds others' messages.
+        failures = self.with_catalog_faults(r"Common\.Contracts\.Inventory\.V1:")
+        self.assertTrue(
+            any("catalog-svc: read COVERS `MassTransit:Fault--Common.Contracts.Inventory.V1:Anything--`" in f
+                for f in failures), failures)
+
+    def test_a_holder_reading_privacys_completions_fault_is_refused(self):
+        # Shipping consumes Privacy's requests, and the completions consumer's fault carries other holders' answers.
+        definitions = real()
+        entry = permission(definitions, "shipping-svc")
+        self.assertEqual(1, entry["read"].count("--$|"), "the case, not the gate")
+        completions = r"Common\.Contracts\.Privacy\.V1:PersonalDataDeleteCompleted--$|"
+        entry["read"] = entry["read"].replace("--$|", f"--$|{completions}")
+        failures = run_against(definitions)
+        self.assertIn(
+            "shipping-svc: read COVERS `MassTransit:Fault--Common.Contracts.Privacy.V1:PersonalDataDeleteCompleted--`, "
+            "a fault exchange in `Common.Contracts.Privacy.V1:` of a type it does not consume. A queue of its own "
+            "bound there receives each faulted message whole", failures)
+
+    def test_a_consumed_type_s_fault_left_out(self):
+        definitions = real()
+        entry = permission(definitions, "catalog-svc")
+        cut = r"Common\.Contracts\.Inventory\.V1:StockLevelChanged--$|"
+        self.assertEqual(1, entry["read"].count(cut), "the case, not the gate")
+        entry["read"] = entry["read"].replace(cut, "")
+        self.assertIn("catalog-svc: read does not cover `MassTransit:Fault--Common.Contracts.Inventory.V1:"
+                      "StockLevelChanged--`, the source of the binding a fault's publish declares, so the fault is "
+                      "refused (§13.6)", run_against(definitions))
+
+    def test_the_root_contract_namespace_s_fault_exchange_is_refused(self):
+        # No context's dotted prefix, so only the root's own probe reaches it.
+        failures = self.with_catalog_faults(r"Common\.Contracts:")
+        self.assertIn("catalog-svc: read COVERS `MassTransit:Fault--Common.Contracts:Anything--`, a fault exchange "
+                      "in `Common.Contracts:` of a type it does not consume. A queue of its own bound there receives "
+                      "each faulted message whole", failures)
 
     def test_a_peer_context_s_fault_exchange_is_refused(self):
         failures = self.with_catalog_faults(r"Common\.Contracts\.Privacy\.V1:")
@@ -606,7 +662,7 @@ class TheFaultExchangesAreReadOnlyAsSources(unittest.TestCase):
 
     def test_a_peer_s_private_fault_exchange_is_refused(self):
         failures = self.with_catalog_faults(r"Ordering\.Infrastructure\.Messaging:")
-        self.assertTrue(any("the fault exchange of `Ordering.Infrastructure.Messaging:`" in f for f in failures),
+        self.assertTrue(any("a fault exchange in `Ordering.Infrastructure.Messaging:`" in f for f in failures),
                         failures)
 
     def test_one_real_fault_exchange_named_exactly_is_refused(self):
