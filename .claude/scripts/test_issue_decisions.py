@@ -1,7 +1,7 @@
 """Tests for issue_decisions.py: the entry shape, the body edit, and the gh calls a stub records.
 
-The stub is a gh.cmd wrapper around a Python recorder, because the helper is Python on Windows and subprocess runs
-a .cmd found through PATHEXT but not a shell script.
+The stub wraps a Python recorder: gh.cmd on Windows, where subprocess runs a .cmd found through PATHEXT but not a
+shell script, and an executable gh script elsewhere, where the helper looks up the bare name.
 """
 
 import io
@@ -60,9 +60,13 @@ class StubGh(unittest.TestCase):
         self.stub = self.dir / "stub"
         self.stub.mkdir()
         (self.stub / "gh_recorder.py").write_text(RECORDER, encoding="utf-8")
-        (self.stub / "gh.cmd").write_text(
-            f'@"{__import__("sys").executable}" "%~dp0gh_recorder.py" %*\r\n', encoding="ascii"
-        )
+        python = __import__("sys").executable
+        if os.name == "nt":
+            (self.stub / "gh.cmd").write_text(f'@"{python}" "%~dp0gh_recorder.py" %*\r\n', encoding="ascii")
+        else:
+            script = self.stub / "gh"
+            script.write_text(f'#!/bin/sh\nexec "{python}" "$(dirname "$0")/gh_recorder.py" "$@"\n', encoding="ascii")
+            script.chmod(0o755)
         patcher = mock.patch.dict(os.environ, {"PATH": str(self.stub) + os.pathsep + os.environ["PATH"]})
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -284,7 +288,12 @@ class Cli(StubGh):
     def test_a_gh_planted_in_the_cwd_is_not_run_and_the_one_on_path_is(self):
         work = self.dir / "work"
         work.mkdir()
-        (work / "gh.cmd").write_text(f'@echo planted> "{work}\\ran"\r\n', encoding="ascii")
+        if os.name == "nt":
+            (work / "gh.cmd").write_text(f'@echo planted> "{work}\\ran"\r\n', encoding="ascii")
+        else:
+            planted = work / "gh"
+            planted.write_text(f'#!/bin/sh\necho planted > "{work}/ran"\n', encoding="ascii")
+            planted.chmod(0o755)
         here = os.getcwd()
         os.chdir(work)
         self.addCleanup(os.chdir, here)
