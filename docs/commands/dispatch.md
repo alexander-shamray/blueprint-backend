@@ -241,11 +241,18 @@ or a worktree it never forked.
 **A report does not close a run that still holds rows.** Step 3 writes
 `report.md` on every night, the interrupted ones included, but a run's *In
 progress* rows change only through its own `done` and `back`, and a fresh
-run would read them as another session's claim. So `start` reopens a
-reported run while any group it moved is neither done nor sent back — an
-interrupted one, a merge not confirmed in main, a hand-back not yet sent
-back — and the report's *Interrupted* ends with the resume line exactly
-then. The resumed night writes `report.md` again, over the first.
+run would read them as another session's claim. So `start`, given the
+task list, reopens a reported run while *In progress* still lists the keys
+it recorded for a group it has neither done nor sent back — an interrupted
+one, a merge not confirmed in main, a hand-back not yet sent back — and the
+report's *Interrupted* ends with the resume line exactly then. The list is
+the test, not the run's own statuses: a group whose rows the owner removed
+by hand, which `done` and `back` would refuse, holds nothing and closes the
+run, and an active group whose worktree is gone holds the run only while
+its rows are listed, the report naming it under *Needs a human* so the
+owner can clear them. A list `start` cannot read keeps the run open and
+says why, since closing on a guess could leave rows to no run. The resumed
+night writes `report.md` again, over the first.
 
 ## Grants
 
