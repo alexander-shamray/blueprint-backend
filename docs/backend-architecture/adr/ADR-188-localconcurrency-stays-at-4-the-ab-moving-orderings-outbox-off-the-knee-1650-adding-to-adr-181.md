@@ -46,8 +46,8 @@ ADR-181 read them:
 | 2, 1600 VUs | `Broker` | 8 155 | 8 147 | 437 | 890 |
 | 2, 1600 VUs | `Local` | 15 504 | 15 518 | 374 | 890 |
 
-Both lanes delivered what they staged, the oldest row stayed at 0.7 s and the
-deadlock column read 0. Step 2's `Local` lane delivered some 86 rows a second
+Both lanes delivered what they staged, no row waited longer than 890 ms, and
+the deadlock column read 0. Step 2's `Local` lane delivered some 86 rows a second
 across three replicas, under the 31 a replica ADR-181 measured its serial lane
 at, so these rows show the lanes keeping up with ADR-181 in place and do not,
 on their own, tell 4 from 1.
