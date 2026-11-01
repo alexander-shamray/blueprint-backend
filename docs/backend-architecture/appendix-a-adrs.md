@@ -196,6 +196,7 @@ decision looks wrong.
 | **ADR-187** | [A switch file contributes only its switch's keys (#1681), amending ADR-113 and ADR-119](adr/ADR-187-a-switch-file-contributes-only-its-switchs-keys-1681-amending-adr-113-and-adr-119.md) |
 | **ADR-188** | [LocalConcurrency stays at 4, the A/B moving Ordering's outbox off the knee (#1650), adding to ADR-181](adr/ADR-188-localconcurrency-stays-at-4-the-ab-moving-orderings-outbox-off-the-knee-1650-adding-to-adr-181.md) |
 | **ADR-189** | [Saga inbox cleanup runs on one replica and yields to lock waits (#1671), adding to ADR-182](adr/ADR-189-saga-inbox-cleanup-runs-on-one-replica-and-yields-to-lock-waits-1671-adding-to-adr-182.md) |
+| **ADR-190** | [Holders send to Privacy's exchange and fault reads stop at consumed namespaces (#1682, #1683), amending ADR-036 and ADR-094](adr/ADR-190-holders-send-to-privacys-exchange-and-fault-reads-stop-at-consumed-namespaces-1682-1683-amending-adr-036-and-adr-094.md) |
 
 ---
 

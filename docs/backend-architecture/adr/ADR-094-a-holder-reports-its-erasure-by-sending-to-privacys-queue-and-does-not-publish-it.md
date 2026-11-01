@@ -40,6 +40,12 @@ responder and the count, without the envelope an event has, because §3.2 gives
 a queue's owner a column for what many senders put on its queue and an event
 must have exactly one publisher.
 
+**Amended by
+[ADR-190](ADR-190-holders-send-to-privacys-exchange-and-fault-reads-stop-at-consumed-namespaces-1682-1683-amending-adr-036-and-adr-094.md)**:
+the holder sends to `exchange:privacy-completions`, so the send declares the
+exchange and Privacy's endpoint alone declares and binds the queue. This record
+is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

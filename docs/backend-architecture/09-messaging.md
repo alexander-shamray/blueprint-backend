@@ -1416,16 +1416,24 @@ public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, Cance
 > a service's `configure` reaches `Common.Contracts.*` including its peers',
 > and it could delete an exchange it does not own. Closing that needs a topology
 > where producers pre-declare and consumers only bind, which MassTransit does
-> not offer. **Nor is `read` on a peer's command endpoint avoidable**: a send
-> to `queue:inventory-commands` declares and binds it, `queue.bind` takes
-> `read` on the exchange, and a RabbitMQ permission pattern cannot tell a queue
-> from an exchange — so granting the bind grants the consume. **Nor are the
-> fault exchanges any service's own**: MassTransit names one per message type,
-> `MassTransit:Fault--<type>--`, and `MassTransit:ReceiveFault` is one
-> exchange every service may publish to, so the `read` and `configure` a
-> service needs to publish its own faults reach every service's — a queue of
-> its own bound to a peer's fault exchange receives the messages that faulted
-> there.
+> not offer. **Nor is `read` on a peer's command endpoint avoidable when the
+> sender binds it**: a send to `queue:inventory-commands` declares and binds
+> it, `queue.bind` takes `read` on the exchange, and a RabbitMQ permission
+> pattern cannot tell a queue from an exchange — so granting the bind grants
+> the consume. That is taken only for a queue with one sender. Five holders
+> answer Privacy, so they send to `exchange:privacy-completions`, which binds
+> nothing, and none of them can read Privacy's queue
+> ([ADR-190](adr/ADR-190-holders-send-to-privacys-exchange-and-fault-reads-stop-at-consumed-namespaces-1682-1683-amending-adr-036-and-adr-094.md)).
+> **The per-type fault exchanges are read per namespace**: MassTransit names
+> one per message type, `MassTransit:Fault--<namespace>:<type>--`, beside
+> `MassTransit:ReceiveFault`, which every service still reads because each
+> fault's publish binds from it, and a service's `read` on the per-type ones
+> names only the namespaces it consumes, since a fault carries the
+> message that faulted and a queue bound to a fault exchange receives it. A
+> peer's consumer of a message in a namespace both consume is still within
+> reach, because the narrowing is per namespace and not per type (#1702), and
+> `configure` on `MassTransit:` still reaches every service's, the residual
+> above.
 
 **A command reachable both ways maps its origin only as a literal**, written
 where the command is constructed: `CommandOrigin.User` at the endpoint,

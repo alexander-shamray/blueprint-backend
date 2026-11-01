@@ -116,6 +116,13 @@ build rather than the deployment.
 > derivation as a service's, so the account is held to its source as theirs
 > are.
 
+**Amended by
+[ADR-190](ADR-190-holders-send-to-privacys-exchange-and-fault-reads-stop-at-consumed-namespaces-1682-1683-amending-adr-036-and-adr-094.md)**:
+a holder sends its erasure completion to Privacy's exchange and binds
+nothing, so it holds no `read` on Privacy's queue, and each account reads only
+the fault exchanges of the namespaces it consumes. The `read` on a peer's
+command queue with one sender stands. This record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
