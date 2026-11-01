@@ -3,6 +3,9 @@
 `record` appends one dated question-and-answer line under `## Owner decisions` in the issue body; `unblock` removes
 the `question` or `paused` label; `close` comments and closes as not planned. Exit 2 is a refusal, nothing was
 written; exit 3 is a failed `gh` call.
+
+The issue body is untrusted and only the heading line is located: a heading inside a code fence or an HTML comment
+counts as the heading. `close` is two calls, so a retry after a failed close posts a second comment.
 """
 
 import argparse
@@ -44,6 +47,8 @@ def part(name, text):
         raise Refusal(f"the {name} opens with #, which would read as a heading")
     if len(text) > PART_LIMIT:
         raise Refusal(f"the {name} is over {PART_LIMIT} characters")
+    if name == "question" and " A: " in text:
+        raise Refusal("the question holds ' A: ', which a later split would read as the answer")
     return text
 
 
@@ -100,11 +105,39 @@ def read_utf8(path):
         raise Refusal(f"cannot read {path} as UTF-8: {error}")
 
 
+def path_which(name):
+    """The first executable `name` on PATH, never one in the current directory, or None.
+
+    shutil.which looks in the current directory first on Windows, and the checkout is writable by any merged change,
+    so a planted gh.cmd would run in place of gh. Same function as dispatch_board's, copied because this helper
+    imports nothing else of the dispatcher's.
+    """
+    here = os.path.normcase(os.path.realpath(os.getcwd()))
+    if os.name == "nt":
+        exts = [e for e in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(os.pathsep) if e]
+        names = [name] if os.path.splitext(name)[1].upper() in (e.upper() for e in exts) else [name + e for e in exts]
+    else:
+        names = [name]
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if directory in ("", ".") or os.path.normcase(os.path.realpath(directory)) == here:
+            continue
+        for candidate in names:
+            path = os.path.join(directory, candidate)
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                real = os.path.normcase(os.path.realpath(path))
+                if real != here and not real.startswith(here + os.sep):
+                    return path
+    return None
+
+
 def gh(*args):
-    exe = shutil.which("gh")
+    exe = path_which("gh")
     if exe is None:
         raise GhFailure("gh is not on PATH")
-    done = subprocess.run([exe, *args], capture_output=True)
+    try:
+        done = subprocess.run([exe, *args], capture_output=True)
+    except OSError as error:
+        raise GhFailure(f"gh {' '.join(args[:2])} could not start: {error}")
     if done.returncode != 0:
         detail = done.stderr.decode("utf-8", errors="replace").strip()
         raise GhFailure(f"gh {' '.join(args[:2])} exited {done.returncode}: {detail}")
@@ -162,7 +195,9 @@ def main(argv=None):
                 day = date.fromisoformat(args.date) if args.date else date.today()
             except ValueError:
                 raise Refusal(f"--date {args.date!r} is not an ISO date")
-            run_dir = args.run_dir if args.run_dir and os.path.isdir(args.run_dir) else None
+            if args.run_dir and not os.path.isdir(args.run_dir):
+                raise Refusal(f"--run-dir {args.run_dir} is not a directory")
+            run_dir = args.run_dir
             record(number, read_utf8(args.question_file), read_utf8(args.answer_file), day, run_dir)
         elif args.command == "unblock":
             label = unblock_label(args.label)
@@ -170,8 +205,14 @@ def main(argv=None):
         else:
             read_utf8(args.comment_file)
             repo = repository()
-            gh("issue", "comment", number, "--repo", repo, "--body-file", args.comment_file)
-            gh("issue", "close", number, "--repo", repo, "--reason", "not planned")
+            try:
+                gh("issue", "comment", number, "--repo", repo, "--body-file", args.comment_file)
+            except GhFailure as failure:
+                raise GhFailure(f"comment step failed, the issue is still open: {failure}")
+            try:
+                gh("issue", "close", number, "--repo", repo, "--reason", "not planned")
+            except GhFailure as failure:
+                raise GhFailure(f"close step failed after the comment was posted; a retry posts a second: {failure}")
     except Refusal as refusal:
         print(f"refused: {refusal}", file=sys.stderr)
         return 2

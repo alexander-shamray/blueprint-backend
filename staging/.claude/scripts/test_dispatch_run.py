@@ -140,6 +140,27 @@ class InRoot(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
 
+class PathWhichTests(InRoot):
+    def test_a_claude_planted_in_the_cwd_is_not_found_and_one_on_path_is(self):
+        (self.root / "claude.cmd").write_text("@echo planted\r\n", encoding="ascii")
+        (self.root / "claude").write_text("#!/bin/sh\n", encoding="ascii")
+        with tempfile.TemporaryDirectory() as other:
+            env = {"PATH": os.pathsep.join(["", ".", other])}
+            with mock.patch.dict(os.environ, env):
+                self.assertIsNone(db.path_which("claude"))
+                real = Path(other) / ("claude.cmd" if os.name == "nt" else "claude")
+                real.write_text("@echo real\r\n" if os.name == "nt" else "#!/bin/sh\n", encoding="ascii")
+                real.chmod(0o755)
+                self.assertEqual(os.path.normcase(real), os.path.normcase(db.path_which("claude")))
+
+    def test_a_path_entry_that_is_the_cwd_is_skipped(self):
+        name = "claude.cmd" if os.name == "nt" else "claude"
+        (self.root / name).write_text("x", encoding="ascii")
+        (self.root / name).chmod(0o755)
+        with mock.patch.dict(os.environ, {"PATH": str(self.root)}):
+            self.assertIsNone(db.path_which("claude"))
+
+
 class RunDirectoryTests(InRoot):
     def test_pairs_outside_one_to_four_is_refused(self):
         for pairs in (0, 5, -1):
@@ -284,7 +305,7 @@ class LaunchTests(InRoot):
 
     def test_run_refuses_a_group_with_no_claude_or_already_handed_back(self):
         record(RUN, "S1", status="running")
-        with mock.patch.object(dr, "CLAUDE_COMMAND", None), mock.patch.object(db.shutil, "which", lambda _: None):
+        with mock.patch.object(dr, "CLAUDE_COMMAND", None), mock.patch.object(dr, "path_which", lambda _: None):
             self.assertIn("refused: no claude on PATH", run_cli(["run", RUN, "S1", "--description", "x"]))
         record(RUN, "S1", status="handed-back")
         self.assertIn("refused: S1 is handed-back, not waiting for an executor",

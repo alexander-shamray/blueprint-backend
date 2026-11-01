@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dispatch_board import (BRANCH_NAME, MODEL, Group, Refusal, _bodies, _held, _number, _read, _row, _write, git,
-                            group_claim, groups, helper, one_line, parse_tasks, pick, ready, row_branch)
+                            group_claim, groups, helper, one_line, parse_tasks, path_which, pick, ready, row_branch)
 
 RUN_NAME = re.compile(r"\d{8}-\d{6}")
 LANG = re.compile(r"[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?")
@@ -262,7 +262,7 @@ def run_session(root, run, gid, description):
     worktree = Path(root) / _field(entry, gid, "worktree", _path_text)
     if not worktree.is_dir():
         raise Refusal(f"{entry['worktree']} is not a directory")
-    command = list(CLAUDE_COMMAND) if CLAUDE_COMMAND else [shutil.which("claude")]
+    command = list(CLAUDE_COMMAND) if CLAUDE_COMMAND else [path_which("claude")]
     if not command[0]:
         raise Refusal("no claude on PATH")
     for stale in (worktree / "artifacts" / "dispatch" / run / f"{gid}.json", directory / f"{gid}.json",
