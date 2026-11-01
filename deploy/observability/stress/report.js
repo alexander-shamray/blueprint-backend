@@ -29,6 +29,49 @@ export const WORK_QUEUES = `rabbitmq_queue_messages{${WORK_FILTER}}`;
 export const OUTBOX_OLDEST = 'max(outbox_oldest_age_seconds)';
 export const QUEUED = `sum(${WORK_QUEUES})`;
 
+// The services export their meters once a minute, and a rate needs two
+// exports, so a hold shorter than two minutes is read over two minutes that
+// reach back into its ramp.
+export const MINIMUM_RANGE_SECONDS = 120;
+
+/** The range a rate over one hold is read across, as Prometheus spells it. */
+export function promRange(holdSeconds) {
+    return `${Math.max(holdSeconds, MINIMUM_RANGE_SECONDS)}s`;
+}
+
+// WHERE A P95 JUMP SITS. Every journey request passes the gateway, so a rise
+// in k6's waiting the gateway's own p95 never saw is the path between them, as
+// a port forward retrying a connection is, and one in k6's connection setup
+// never reached the platform. P95s do not add, so a rise is outside the
+// gateway when more than this share of waiting's rise is not the gateway's.
+export const GATEWAY_SERVICE = 'Gateway.Api';
+export const OUTSIDE_SHARE = 0.5;
+
+/** The gateway's own p95 over `range`, in seconds, from ASP.NET Core's server meter. */
+export function gatewayP95(range) {
+    return 'histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket' +
+        `{service_name="${GATEWAY_SERVICE}"}[${range}])))`;
+}
+
+// Each platform database's page latch on its inbox's clustered key,
+// PK_InboxMessages as every service's migration makes it, cumulative while
+// the index's metadata stays cached, so a step's figure is its change.
+export const INBOX_LATCH = [
+    'SET NOCOUNT ON;',
+    'SELECT DB_NAME(s.database_id), SUM(s.page_latch_wait_in_ms)',
+    'FROM sys.dm_db_index_operational_stats(NULL, NULL, NULL, NULL) AS s',
+    "WHERE s.index_id = 1 AND OBJECT_NAME(s.object_id, s.database_id) = 'InboxMessages'",
+    'GROUP BY s.database_id;',
+].join(' ');
+
+/** sqlcmd's `database|ms` lines for INBOX_LATCH as a map of database to milliseconds. */
+export function parseInboxLatch(output) {
+    return Object.fromEntries(String(output ?? '').split(/\r?\n/)
+        .map((line) => line.trim().split('|'))
+        .filter((fields) => fields.length === 2 && /^\w+$/.test(fields[0]) && Number.isFinite(Number(fields[1])))
+        .map(([database, ms]) => [database, Number(ms)]));
+}
+
 // THE FIRST TO GIVE UP: at the step that stopped the run, each service's own
 // figures, held to the journey's ratios and floors. A container is saturated
 // at this share of the cores it may use. A doubled load doubles SQL Server's
@@ -136,6 +179,26 @@ export function sqlDelta(samples, window) {
 }
 
 /**
+ * Each database's inbox latch over a step, as sqlDelta() reads a counter,
+ * most first; null when no two samples read it. A counter that fell had its
+ * metadata evicted mid-step, and is left out rather than read as a negative.
+ */
+export function inboxLatchDelta(samples, window) {
+    const read = within(samples, window).filter((sample) => sample.inboxLatch);
+
+    if (read.length < 2)
+        return null;
+
+    const first = read[0].inboxLatch;
+    const last = read[read.length - 1].inboxLatch;
+
+    return Object.keys(last)
+        .filter((database) => Number.isFinite(first[database]) && last[database] >= first[database])
+        .map((database) => ({ database, ms: last[database] - first[database] }))
+        .sort((a, b) => b.ms - a.ms || a.database.localeCompare(b.database));
+}
+
+/**
  * A step's client half, from the figures stress.js's handleSummary wrote in
  * k6's own trend keys: wall-clock in milliseconds, rates as fractions.
  */
@@ -145,6 +208,7 @@ export function clientRow(step, holdSeconds) {
     // k6 reports a trend nothing was added to as zeros, which would read as instant answers.
     const measured = (figures) => (figures?.count > 0 ? figures : {});
     const journey = measured(step.journey);
+    const phase = (name) => measured(step.phases?.[name])['p(95)'] ?? null;
 
     return {
         step: step.step,
@@ -155,6 +219,9 @@ export function clientRow(step, holdSeconds) {
         p95: journey['p(95)'] ?? null,
         p99: journey['p(99)'] ?? null,
         max: journey.max ?? null,
+        blockedP95: phase('blocked'),
+        connectingP95: phase('connecting'),
+        waitingP95: phase('waiting'),
         errorRate: step.failed?.rate ?? 0,
         failures: step.failures ?? {},
         aborted: Boolean(step.aborted),
@@ -178,12 +245,16 @@ export function liveRow(hold, metrics) {
     const sample = (name) =>
         (metrics ?? []).find((m) => m.id === `${name}{step:${hold.step}}`)?.attributes?.sample ?? {};
     const requests = sample('http_reqs').count ?? 0;
+    const p95 = (name) => (requests > 0 ? sample(name)['p(95)'] ?? null : null);
 
     return {
         step: hold.step,
         vus: hold.vus,
         requests,
-        p95: requests > 0 ? sample('stress_journey_duration')['p(95)'] ?? null : null,
+        p95: p95('stress_journey_duration'),
+        blockedP95: p95('stress_journey_blocked'),
+        connectingP95: p95('stress_journey_connecting'),
+        waitingP95: p95('stress_journey_waiting'),
         errorRate: sample('stress_failed').rate ?? 0,
     };
 }
@@ -203,6 +274,56 @@ function growing(middle, end, floor) {
     return beyond(middle, end, GROWTH_RATIO, floor) !== null;
 }
 
+/**
+ * Where a journey p95 jump sits: `setup` when k6's connection setup rose more
+ * than its waiting, `path` when the gateway's own p95 explains too little of
+ * waiting's rise, `platform` when it explains the rest, `transfer` when neither
+ * phase rose, `waiting` with no gateway reading; null with no phase figures.
+ */
+export function p95Where(row, previous) {
+    const rise = (field) =>
+        (Number.isFinite(row[field]) && Number.isFinite(previous?.[field]) ? row[field] - previous[field] : null);
+    const ms = (value) => (Number.isFinite(value) ? `${Math.round(value)} ms` : 'unread');
+    const fromTo = (field, name) => `${name} p95 ${ms(previous[field])} to ${ms(row[field])}`;
+    const waiting = rise('waitingP95');
+
+    if (waiting === null)
+        return null;
+
+    const setup = Math.max(rise('blockedP95') ?? -Infinity, rise('connectingP95') ?? -Infinity);
+
+    if (setup > waiting && setup > 0) {
+        return {
+            where: 'setup',
+            detail: `in connection setup, ${fromTo('blockedP95', 'blocked')}, ` +
+                `${fromTo('connectingP95', 'connecting')}: k6's own connections, not the platform`,
+        };
+    }
+
+    if (waiting <= 0)
+        return { where: 'transfer', detail: `in sending or receiving, ${fromTo('waitingP95', 'waiting')}` };
+
+    const gateway = rise('gatewayP95');
+
+    if (gateway === null) {
+        return {
+            where: 'waiting',
+            detail: `in waiting, ${fromTo('waitingP95', 'waiting')}; the gateway's own p95 unread`,
+        };
+    }
+
+    if (waiting - gateway > waiting * OUTSIDE_SHARE) {
+        return {
+            where: 'path',
+            detail: `outside the gateway, ${fromTo('waitingP95', 'waiting')} against ` +
+                `${fromTo('gatewayP95', 'the gateway\'s own')}: the path from k6 to the gateway's listener, ` +
+                'not a service',
+        };
+    }
+
+    return { where: 'platform', detail: `in the platform, ${fromTo('gatewayP95', 'the gateway\'s own')}` };
+}
+
 /** The signals a step crossed, measured against the step before it. */
 export function crossings(row, previous) {
     const crossed = [];
@@ -211,9 +332,12 @@ export function crossings(row, previous) {
         crossed.push({ signal: 'errors', detail: `${(row.errorRate * 100).toFixed(1)}% of requests failed` });
 
     if (previous && beyond(previous.p95, row.p95, P95_JUMP_RATIO, P95_JUMP_FLOOR_MS) !== null) {
+        const where = p95Where(row, previous);
         crossed.push({
             signal: 'p95',
-            detail: `journey p95 ${Math.round(previous.p95)} ms to ${Math.round(row.p95)} ms`,
+            where: where?.where ?? null,
+            detail: `journey p95 ${Math.round(previous.p95)} ms to ${Math.round(row.p95)} ms` +
+                (where ? `, ${where.detail}` : ''),
         });
     }
 

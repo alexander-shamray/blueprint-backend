@@ -29,10 +29,13 @@ import {
     ending,
     firstLine,
     firstToGiveUp,
+    gatewayP95,
     givingUpStep,
     hostCpu,
+    inboxLatchDelta,
     knee,
     parseQueryStore,
+    promRange,
     queryStoreLine,
     queryStoreRow,
     queryStoreSql,
@@ -161,11 +164,14 @@ async function serverRow(window, range) {
     ]);
 
     const placed = await scalar('orders.placed', `sum(increase(orders_placed_total[${range}]))`, end);
+    const gateway = await scalar('gateway p95', gatewayP95(range), end);
     const confirmed = await scalar(
         'orders confirmed', `sum(increase(orders_fulfilment_duration_seconds_count[${range}]))`, end);
 
     return {
         ...services,
+        // In ms, as k6's phases are, for report.js's p95Where().
+        gatewayP95: gateway === null ? null : gateway * 1000,
         slowestRequests: [...services.requestTypes].sort((a, b) => b.p95Seconds - a.p95Seconds).slice(0, 5),
         outboxOldest: outboxes.map((s) => ({ service: s.labels.service_name, seconds: s.value })),
         deepestQueues: queues.map((s) => ({ queue: s.labels.queue, messages: s.value })),
@@ -249,11 +255,7 @@ function k6Image() {
     return image ? `k6 ${image[1]}` : null;
 }
 
-// The services export their meters once a minute, and a rate needs two
-// exports, so a hold shorter than two minutes is read over two minutes that
-// reach back into its ramp.
-const MINIMUM_RANGE_SECONDS = 120;
-const range = `${Math.max(raw.plan.holdSeconds, MINIMUM_RANGE_SECONDS)}s`;
+const range = promRange(raw.plan.holdSeconds);
 
 // Every database Query Store records, whose statements each hold is read for.
 const queryStoreListing = read('docker', sqlcmdArgs(QUERY_STORE_DATABASES));
@@ -294,6 +296,7 @@ for (const step of raw.steps) {
         containers: containerStats(samples, window),
         hostCpu: hostCpu(samples, window),
         sql: sqlDelta(samples, window),
+        inboxLatch: inboxLatchDelta(samples, window),
         queryStore: row.requests > 0 ? statements(window) : null,
     });
 }
@@ -327,7 +330,8 @@ const summary = {
     firstToGiveUp: { step: null, vus: null, unread: false, services: [], ...first, line: firstLine(first) },
     ended: { ...ended, line: endedLine(ended, plan) },
     steps: rows,
-    samplerErrors: [...new Set(samples.flatMap((s) => [s.containersError, s.sqlError]).filter(Boolean))],
+    samplerErrors: [...new Set(samples.flatMap((s) => [s.containersError, s.sqlError, s.inboxLatchError])
+        .filter(Boolean))],
     unavailable,
     // Named so that a reader does not take the table's silence for a healthy reading.
     notObservable: [
@@ -397,6 +401,15 @@ function markdown(s) {
             `${r.failures['4xx'] ?? 0} | ${r.failures['5xx'] ?? 0} | ${r.failures.timeout ?? 0} | ` +
             `${r.failures.connection ?? 0} |`),
         '',
+        'Where the journey\'s time went, p95 ms: k6\'s connection setup, blocked and connecting, which the',
+        'journey\'s figures leave out, then its wait for a first byte, which they hold, against the gateway\'s',
+        'own p95 from `http.server.request.duration`:',
+        '',
+        '| Step | blocked | connecting | waiting | gateway |',
+        '|---|---|---|---|---|',
+        ...s.steps.map((r) => `| ${r.step} | ${ms(r.blockedP95)} | ${ms(r.connectingP95)} | ${ms(r.waitingP95)} | ` +
+            `${ms(r.gatewayP95)} |`),
+        '',
         'p95 by operation, ms (`token` is Keycloak, outside the journey\'s figures):',
         '',
         `| Step | ${Object.keys(s.steps[0]?.ops ?? {}).join(' | ')} |`,
@@ -438,6 +451,12 @@ function markdown(s) {
                 `${c.name} ${ms(c.cpuMean)} / ${ms(c.cpuPeak)}, ${mib(c.memoryPeak)}`).join('; ') || '—') +
             ` | ${ms(r.sql?.deadlocks)} | ${ms(r.sql?.lockWaitMs)} | ${ms(r.sql?.pageLatchWaitMs)} | ` +
             `${ms(r.sql?.logWaitMs)} |`),
+        '',
+        'Page latch on each database\'s `InboxMessages` primary key over the hold, ms, most first:',
+        '',
+        ...s.steps.filter((r) => r.requests > 0).map((r) => `- Step ${r.step}: ` + (r.inboxLatch === null
+            ? 'not read'
+            : r.inboxLatch.map((d) => `${d.database} ${ms(d.ms)}`).join(', ') || 'no database holds one')),
         '',
         '## Statements',
         '',
