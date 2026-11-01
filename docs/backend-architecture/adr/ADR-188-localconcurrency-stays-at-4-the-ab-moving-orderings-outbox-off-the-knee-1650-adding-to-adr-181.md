@@ -11,7 +11,9 @@ bound, so there is no figure to tune toward. The A/B's second arm carried
 other changes beside ADR-181, so it credits the move to them together. The
 bound moves only on a run whose knee is Ordering's outbox again with its
 `Local` lane staging more than it delivers.
-**Why.** On 2026-10-31 ADR-172's two-machine run, the plan of
+**Why.** On 2026-10-31
+[ADR-172](ADR-172-the-stress-runs-generator-may-run-on-a-second-machine-1589-adding-to-adr-170.md)'s
+two-machine run, the plan of
 `20261031-102448`, ran once at a commit before ADR-181 and once at one after
 it, both on fresh SQL Server and RabbitMQ volumes and the generator's machine
 at the stack's commit. Run `20261031-180056`, at `853dce80e`, knee-stopped at
@@ -47,10 +49,10 @@ ADR-181 read them:
 | 2, 1600 VUs | `Local` | 15 504 | 15 518 | 374 | 890 |
 
 Both lanes delivered what they staged, no row waited longer than 890 ms, and
-the deadlock column read 0. Step 2's `Local` lane delivered some 86 rows a second
-across three replicas, under the 31 a replica ADR-181 measured its serial lane
-at, so these rows show the lanes keeping up with ADR-181 in place and do not,
-on their own, tell 4 from 1.
+the deadlock column read 0. Step 2's `Local` lane delivered some 86 rows a
+second across three replicas, under the 31 a replica ADR-181 measured its
+serial lane at, so these rows show the lanes keeping up with ADR-181 in
+place and do not, on their own, tell 4 from 1.
 **Consequences.** The A/B is not the run ADR-181 asked for, each change on its
 own: what share of the move is the bound's, and what share the inbox changes',
 it cannot say. One commit run with the bound at 4 and at 1 is what would, and
