@@ -966,7 +966,7 @@ class EditsTheSharedFiles(unittest.TestCase):
         # template's Inventory consumer is omitted, so its grant goes with it.
         self.assertEqual("^(zulu-|Common\\.Contracts(\\.Zulu\\.V1:|:)|MassTransit:)", permission["configure"])
         self.assertEqual("^(zulu-|Common\\.Contracts\\.Zulu\\.V1:|MassTransit:(ReceiveFault$|Fault--("
-                         "Common\\.Contracts\\.(Zulu)\\.V1:|Zulu\\.Infrastructure\\.Messaging:)))",
+                         "Zulu\\.Infrastructure\\.Messaging:)))",
                          permission["read"])
 
     def test_the_service_gets_the_redis_user_its_unit_names(self):
