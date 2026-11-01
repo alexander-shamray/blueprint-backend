@@ -92,7 +92,7 @@ public sealed class SourceExchangeFilterBrokerTests(RabbitFixture fixture)
                 cfg.Message<Granted>(m => m.SetEntityName(names.Granted));
                 cfg.Message<Forged>(m => m.SetEntityName(names.Forged));
 
-                // Two publishers' types on one queue, the shape ADR-191 found on the saga's and on four others.
+                // Two publishers' types on one queue, the shape ADR-191 found on the saga's and on three others.
                 cfg.ReceiveEndpoint(
                     names.Queue,
                     e =>
