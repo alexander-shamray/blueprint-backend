@@ -303,7 +303,7 @@ def load_scan_gate(repo_root: Path, tool_root: Path = TOOL_ROOT) -> ModuleType |
     module = importlib.util.module_from_spec(specification)
     try:
         # The bytes compared above: exec_module would run a pyc beside the gate in their place.
-        exec(compile(source, str(gate), "exec"), module.__dict__)
+        exec(compile(source, str(gate), "exec", dont_inherit=True), module.__dict__)
     # Every exception class there is, because the subject is arbitrary
     # module-level code and nothing narrows the set. What matters is not which
     # one arrives but that it arrives as a ScaffoldError: `main` catches that
