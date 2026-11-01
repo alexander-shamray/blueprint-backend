@@ -625,10 +625,11 @@ be seen, and the summary names every signal that crossed at the knee.
 request passes the gateway, so a rise in k6's waiting that the gateway's own
 p95 does not show, past `OUTSIDE_SHARE` of it, is the path from k6 to the
 gateway's listener, as a port forward retrying a connection is, rather than
-a service. The journey's figure leaves k6's connection setup out, so a jump
-is never placed there; a setup rise past `P95_JUMP_FLOOR_MS` is noted beside
-it. P95s do not add, so the placing is evidence, not a measurement of the
-path.
+a service; a jump of which waiting carries no more than that share is placed
+in sending or receiving. The journey's figure leaves k6's connection setup
+out, so a jump is never placed there; a setup rise past `P95_JUMP_FLOOR_MS`
+is noted beside it. P95s do not add, so the placing is evidence, not a
+measurement of the path.
 
 **The first to give up** is named at the step that stopped the run, the one
 whose errors passed the abort rate under an `errors` stop and otherwise the
