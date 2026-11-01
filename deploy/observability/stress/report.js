@@ -41,9 +41,9 @@ export function promRange(holdSeconds) {
 
 // WHERE A P95 JUMP SITS. Every journey request passes the gateway, so a rise
 // in k6's waiting the gateway's own p95 never saw is the path between them, as
-// a port forward retrying a connection is. P95s do not add, so a rise is
-// outside the gateway when more than this share of waiting's rise is not the
-// gateway's. k6's connection setup is outside the journey's figure altogether.
+// a port forward retrying a connection is. P95s do not add, so a part carries
+// a rise when more than this share of it is that part's: waiting of the
+// journey's, outside the gateway of waiting's. Setup is outside the figure.
 export const GATEWAY_SERVICE = 'Gateway.Api';
 export const OUTSIDE_SHARE = 0.5;
 
@@ -294,7 +294,7 @@ export function p95Where(row, previous) {
         : '';
     const placed = (where, detail) => ({ where, detail: detail + note });
 
-    if (waiting <= 0)
+    if (!(waiting > rise('p95') * OUTSIDE_SHARE))
         return placed('transfer', `in sending or receiving, ${fromTo('waitingP95', 'waiting')}`);
 
     const gateway = rise('gatewayP95');

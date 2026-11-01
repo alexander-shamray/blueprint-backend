@@ -606,6 +606,11 @@ test('k6\'s connection setup, outside the journey\'s figure, is noted beside a j
 
 test('a jump with no rise in setup or waiting is in the transfer, and one with no gateway reading says so', () => {
     assert.equal(p95Where({ ...steady, p95: 400, waitingP95: 30 }, steady).where, 'transfer');
+    assert.equal(p95Where({ ...steady, p95: 1040, waitingP95: 45, gatewayP95: 30 }, steady).where, 'transfer',
+        'a waiting that rose 10 ms under a 1000 ms jump does not carry it');
+    assert.equal(p95Where({ ...steady, p95: 1040, waitingP95: 535, gatewayP95: 530 }, steady).where, 'transfer',
+        'half of the jump in waiting is not more than half');
+    assert.equal(p95Where({ ...steady, p95: 1040, waitingP95: 536, gatewayP95: 531 }, steady).where, 'platform');
     const unread = p95Where({ ...steady, p95: 400, waitingP95: 390, gatewayP95: null }, steady);
 
     assert.equal(unread.where, 'waiting');
