@@ -611,7 +611,7 @@ class WriteTests(unittest.TestCase):
                 self.assertEqual("{not json", (self.run_dir / "state.json").read_text(encoding="utf-8"))
 
     def test_done_deletes_only_this_runs_verified_rows_and_back_only_its_own(self):
-        # Another session's row carries the letter S1 too; the run's own move recorded only #1682 and #1683.
+        # Another session's row carries the letter S1 too; the run's own move recorded only S1's Remaining rows.
         foreign = "| S1 | #1690 | Another session's work | `fix/other`, `.claude/worktrees/other` | started |"
         text = FIXTURE.replace("| started |\n", f"| started |\n{foreign}\n", 1)
         self.start()
