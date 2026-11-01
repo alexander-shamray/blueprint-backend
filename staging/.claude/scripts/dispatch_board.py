@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -652,7 +651,7 @@ def path_which(name):
 
 
 def git_bash():
-    return _no_relay(_bash_beside(shutil.which("git") or "") if os.name == "nt" else shutil.which("bash"))
+    return _no_relay(_bash_beside(path_which("git") or "") if os.name == "nt" else path_which("bash"))
 
 
 def _child(argv, cwd):
@@ -677,7 +676,7 @@ def helper(root, script, *args):
 
 
 def git(root, *args):
-    exe = shutil.which("git")
+    exe = path_which("git")
     if not exe:
         raise Refusal("no git on PATH")
     code, out, err = _child([exe, *args], root)

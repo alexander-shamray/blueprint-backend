@@ -153,6 +153,17 @@ class PathWhichTests(InRoot):
                 real.chmod(0o755)
                 self.assertEqual(os.path.normcase(real), os.path.normcase(db.path_which("claude")))
 
+    def test_a_git_planted_in_the_cwd_is_not_used_by_git_or_git_bash(self):
+        for name in ("git.cmd", "git.exe", "git", "bash.exe", "bash"):
+            (self.root / name).write_text("@echo planted\r\n", encoding="ascii")
+            (self.root / name).chmod(0o755)
+        with mock.patch.dict(os.environ, {"PATH": os.pathsep.join(["", "."])}):
+            with self.assertRaises(db.Refusal) as caught:
+                db.git(str(self.root), "status")
+            self.assertEqual("no git on PATH", str(caught.exception))
+            with self.assertRaises(db.Refusal):
+                db.git_bash()
+
     def test_a_path_entry_that_is_the_cwd_is_skipped(self):
         name = "claude.cmd" if os.name == "nt" else "claude"
         (self.root / name).write_text("x", encoding="ascii")
