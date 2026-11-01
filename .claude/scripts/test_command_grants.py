@@ -41,6 +41,18 @@ def bash_deny_matches(rule, command):
 BUILT_IN_AGENTS = {"general-purpose", "claude", "Explore", "Plan", "claude-code-guide", "statusline-setup"}
 
 
+def profiles():
+    """Every agent type a profile under `.claude/agents/` names, read on each run so one added tomorrow counts."""
+    found = set()
+    for path in sorted(AGENTS.glob("*.md")):
+        front = path.read_text(encoding="utf-8").split("\n---", 1)[0]
+        names = re.findall(r"^name:\s*(\S+)\s*$", front, re.MULTILINE)
+        if len(names) != 1:
+            raise AssertionError(f"{path.name} names {len(names)} agent types, not exactly one")
+        found.update(names)
+    return found
+
+
 def undenied_agents(text, profiles):
     """The agent types a command that grants some neither grants nor denies, or None if it grants none."""
     granted = {m for t in frontmatter_list(text, "allowed-tools")
@@ -89,19 +101,13 @@ class AnAgentIsGrantedByExactType(unittest.TestCase):
     def test_every_other_exact_agent_grant_denies_every_other_profile(self):
         # The profiles are read from `.claude/agents/` each run, so one added tomorrow fails every command that
         # grants a type and does not deny it. /ship states no deny list: it grants one type, the reviewer above.
-        profiles = set()
-        for path in sorted(AGENTS.glob("*.md")):
-            front = path.read_text(encoding="utf-8").split("\n---", 1)[0]
-            names = re.findall(r"^name:\s*(\S+)\s*$", front, re.MULTILINE)
-            with self.subTest(profile=path.name):
-                self.assertEqual(1, len(names), "exactly one `name:`")
-            profiles.update(names)
-        self.assertIn("branch-reviewer", profiles)
+        names = profiles()
+        self.assertIn("branch-reviewer", names)
         granting = 0
         for path in sorted(COMMANDS.glob("*.md")):
             if path.name == "ship.md":
                 continue
-            missing = undenied_agents(path.read_text(encoding="utf-8"), profiles)
+            missing = undenied_agents(path.read_text(encoding="utf-8"), names)
             if missing is None:
                 continue
             granting += 1
@@ -121,6 +127,38 @@ class ABuiltInDenyIsHeldToo(unittest.TestCase):
         self.assertNotEqual(text, stripped)
         self.assertEqual(["general-purpose"], undenied_agents(stripped, profiles))
         self.assertIsNone(undenied_agents("---\nname: x\n---\n", profiles))
+
+
+class TheDispatcherSpawnsSessionsNotAgents(unittest.TestCase):
+    """/dispatch grants no agent type and starts `claude -p` only through its helper (spec section 11)."""
+
+    def frontmatter(self, key):
+        return frontmatter_list((COMMANDS / "dispatch.md").read_text(encoding="utf-8"), key)
+
+    def test_dispatch_grants_no_agent_and_denies_every_profile(self):
+        # undenied_agents passes a command that grants none, so this deny list is held by its own case.
+        allowed = self.frontmatter("allowed-tools")
+        self.assertTrue(allowed, "dispatch.md gave no allowed-tools entries, so nothing was checked")
+        self.assertEqual([], [t for t in allowed if t == "Agent" or t.startswith("Agent(")])
+        denied = set(self.frontmatter("disallowed-tools"))
+        self.assertEqual([], sorted(n for n in profiles() | BUILT_IN_AGENTS if f"Agent({n})" not in denied))
+
+    def test_dispatch_launches_sessions_only_through_its_helper(self):
+        allowed = self.frontmatter("allowed-tools")
+        self.assertEqual([], [t for t in allowed if t.startswith("Bash(claude")])
+        denied = self.frontmatter("disallowed-tools")
+        self.assertIn("Bash(claude:*)", denied)
+        for command in ("claude -p --model opus", "gh issue edit 1 --body x", "gh issue close 1",
+                        "gh issue create --title t"):
+            with self.subTest(refused=command):
+                self.assertTrue(any(bash_deny_matches(rule, command) for rule in denied))
+        # The control: a deny that refused these would take the night's only launcher and writer with it.
+        for command in ("py -3.12 .claude/scripts/dispatch_board.py run 20261101-220000 S1 --description d",
+                        "py -3.12 .claude/scripts/issue_decisions.py record 1 --question-file q --answer-file a "
+                        "--run 20261101-220000",
+                        "bash .claude/scripts/gh-issue-create.sh bug low code hand"):
+            with self.subTest(reachable=command):
+                self.assertFalse(any(bash_deny_matches(rule, command) for rule in denied))
 
 
 class TheSweepsDenyEveryGhCommand(unittest.TestCase):

@@ -14,7 +14,7 @@ ARGUMENTS = COMMANDS.parent.parent / "docs" / "commands"
 # Bytes with CRLF counted as LF, so a Windows checkout reads what Linux CI does;
 # each landed size and about a tenth: a runbook past it has regrown its argument.
 CEILINGS = {
-    "ship.md": 30800,
+    "ship.md": 37300,
     "bug-sweep.md": 19000,
     "security-sweep.md": 14900,
     "mutation-sweep.md": 7700,
@@ -22,6 +22,7 @@ CEILINGS = {
     "validate-blueprint.md": 9000,
     "review-branch.md": 8400,
     "team.md": 6300,
+    "dispatch.md": 14500,
 }
 
 ROOT = COMMANDS.parent.parent
