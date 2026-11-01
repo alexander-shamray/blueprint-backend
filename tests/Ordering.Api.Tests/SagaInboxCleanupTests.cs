@@ -109,15 +109,15 @@ public sealed class SagaInboxCleanupTests(ServiceFixture fixture) : IAsyncLifeti
         (await Cleanup().CleanUpAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
         (await CountAsync()).ShouldBe(2);
 
-        await using (SqlCommand release = new(
-            $"EXEC sp_releaseapplock @Resource = '{SagaInboxCleanupService.PassLock}', @LockOwner = 'Session';",
-            replica))
-            await release.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+        await ReleasePassLockAsync(replica);
 
         (await Cleanup().CleanUpAsync(TestContext.Current.CancellationToken)).ShouldBe(2);
 
         // Released by the pass itself: a pooled session keeps a session lock until it is next reused.
         (await TakePassLockAsync(replica)).ShouldBeTrue();
+
+        // And by this test, for the same reason, so a later test's pass is not refused.
+        await ReleasePassLockAsync(replica);
     }
 
     // The delete's checks waited on consumers' rows in flight, holding the cleanup index meanwhile (ADR-189).
@@ -210,6 +210,15 @@ public sealed class SagaInboxCleanupTests(ServiceFixture fixture) : IAsyncLifeti
             connection);
 
         return (bool)(await take.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+    }
+
+    private static async Task ReleasePassLockAsync(SqlConnection connection)
+    {
+        await using SqlCommand release = new(
+            $"EXEC sp_releaseapplock @Resource = '{SagaInboxCleanupService.PassLock}', @LockOwner = 'Session';",
+            connection);
+
+        await release.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
     private Task InsertAsync(long id, DateTime? delivered, DateTime? received = null) =>
