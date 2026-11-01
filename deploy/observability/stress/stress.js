@@ -44,7 +44,9 @@ import {
     QUEUED,
     clockSkewMs,
     crossings,
+    gatewayP95,
     liveRow,
+    promRange,
 } from './report.js';
 import { maxOrders, parseGenerator, parseStop, plan, setupMinutes, stages, stepAt, windows } from './steps.js';
 
@@ -108,6 +110,12 @@ const FAILURE_KINDS = ['429', '4xx', '5xx', 'timeout', 'connection'];
 // Each journey request's duration, Keycloak's token calls left out, so a slow
 // identity provider is reported apart from the platform it fronts.
 const journeyDuration = new Trend('stress_journey_duration', true);
+
+// The same requests' connection setup, which k6's duration leaves out, and
+// their wait for a first byte, which it holds, so report.js's p95Where() can
+// place a jump.
+const PHASES = ['blocked', 'connecting', 'waiting'];
+const journeyPhases = Object.fromEntries(PHASES.map((phase) => [phase, new Trend(`stress_journey_${phase}`, true)]));
 const failures = new Counter('stress_failures');
 const failed = new Rate('stress_failed');
 
@@ -127,6 +135,8 @@ function thresholds() {
 
     for (const hold of HOLDS) {
         named[`stress_journey_duration{step:${hold.step}}`] = ['max>=0'];
+        for (const phase of PHASES)
+            named[`stress_journey_${phase}{step:${hold.step}}`] = ['max>=0'];
         named[`http_reqs{step:${hold.step}}`] = ['count>=0'];
         named[`stress_vus{step:${hold.step}}`] = ['value>=0'];
         named[`stress_knee_stop{step:${hold.step}}`] = ['count>=0'];
@@ -483,8 +493,11 @@ function kindOf(response) {
 function record(op, response, expected) {
     const ok = expected.includes(response.status);
 
-    if (op !== 'token')
+    if (op !== 'token') {
         journeyDuration.add(response.timings.duration, { op });
+        for (const phase of PHASES)
+            journeyPhases[phase].add(response.timings[phase], { op });
+    }
 
     failed.add(!ok, { op });
 
@@ -638,8 +651,10 @@ export function judge() {
             continue;
         }
 
+        const gateway = promScalar(gatewayP95(promRange(HOLD_SECONDS)), endMs);
         const row = {
             ...client,
+            gatewayP95: gateway === null ? null : gateway * 1000,
             outboxMiddle: promScalar(OUTBOX_OLDEST, (startMs + endMs) / 2),
             outboxEnd: promScalar(OUTBOX_OLDEST, endMs),
             queueMiddle: promScalar(QUEUED, (startMs + endMs) / 2),
@@ -688,6 +703,8 @@ export function handleSummary(data) {
         return {
             ...hold,
             journey: values('stress_journey_duration', `step:${hold.step}`),
+            phases: Object.fromEntries(PHASES.map((phase) =>
+                [phase, values(`stress_journey_${phase}`, `step:${hold.step}`)])),
             ops: Object.fromEntries(OPS.map((op) => [op, values('http_req_duration', `step:${hold.step},op:${op}`)])),
             failures: Object.fromEntries(FAILURE_KINDS.map((kind) =>
                 [kind, values('stress_failures', `step:${hold.step},kind:${kind}`).count || 0])),

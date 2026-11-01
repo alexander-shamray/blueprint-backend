@@ -9,6 +9,9 @@ import {
     ERROR_RATE_LIMIT,
     GENERATOR_SERVICE,
     HOST_CPU_LIMIT,
+    INBOX_LATCH,
+    MINIMUM_RANGE_SECONDS,
+    OUTSIDE_SHARE,
     clientRow,
     clockSkewMs,
     containerOwner,
@@ -21,10 +24,14 @@ import {
     generatorLimit,
     givingUpStep,
     hostCpu,
+    inboxLatchDelta,
     knee,
     liveRow,
+    p95Where,
     parseCpu,
+    parseInboxLatch,
     parseMemory,
+    promRange,
     serviceCrossings,
     sqlDelta,
     QUERY_STORE_TOP,
@@ -49,7 +56,10 @@ function rest(step, { requests, p95, rate }) {
 test('the live row reads the step\'s own submetrics from k6\'s REST API, never the run-wide metric', () => {
     const row = liveRow({ step: 2, vus: 50 }, rest(2, { requests: 900, p95: 120, rate: 0.004 }));
 
-    assert.deepEqual(row, { step: 2, vus: 50, requests: 900, p95: 120, errorRate: 0.004 });
+    assert.deepEqual(row, {
+        step: 2, vus: 50, requests: 900, p95: 120, blockedP95: null, connectingP95: null, waitingP95: null,
+        errorRate: 0.004,
+    });
     assert.equal(liveRow({ step: 3, vus: 100 }, rest(2, { requests: 900, p95: 120, rate: 0 })).requests, 0,
         'a step with no submetric yet carries no requests');
 });
@@ -519,4 +529,116 @@ test('the statements line reads each statement\'s time, runs, CPU and waits, and
     assert.equal(queryStoreLine(4, null), '- Step 4: no whole Query Store interval inside the hold');
     assert.equal(queryStoreLine(5, { unread: true }), '- Step 5: Query Store not read; Not measured says why',
         'a failed read is not an empty window');
+});
+
+test('the live row reads each phase\'s p95 from the step\'s own submetrics', () => {
+    const metrics = [
+        ...rest(2, { requests: 900, p95: 1100, rate: 0 }),
+        { id: 'stress_journey_blocked{step:2}', attributes: { sample: { 'p(95)': 3 } } },
+        { id: 'stress_journey_connecting{step:2}', attributes: { sample: { 'p(95)': 0 } } },
+        { id: 'stress_journey_waiting{step:2}', attributes: { sample: { 'p(95)': 1050 } } },
+        { id: 'stress_journey_waiting', attributes: { sample: { 'p(95)': 9999 } } },
+    ];
+    const row = liveRow({ step: 2, vus: 50 }, metrics);
+
+    assert.equal(row.blockedP95, 3);
+    assert.equal(row.connectingP95, 0, 'a reused connection opens none, which is a reading');
+    assert.equal(row.waitingP95, 1050);
+});
+
+test('a step\'s client row reads each phase\'s p95, and a phase nothing was added to is no reading', () => {
+    const row = clientRow({
+        step: 2,
+        vus: 50,
+        journey: { 'p(95)': 1063, count: 1700 },
+        phases: {
+            blocked: { 'p(95)': 2, count: 1700 },
+            connecting: { 'p(95)': 0, count: 0 },
+            waiting: { 'p(95)': 1040, count: 1700 },
+        },
+        ops: { listing: { count: 1700 } },
+    }, 100);
+
+    assert.equal(row.blockedP95, 2);
+    assert.equal(row.connectingP95, null);
+    assert.equal(row.waitingP95, 1040);
+    assert.equal(clientRow({ step: 1, vus: 10 }, 100).waitingP95, null, 'a raw.json from before the phases');
+});
+
+// The step before a jump: a healthy journey, its waiting most of it, the gateway's own a little less.
+const steady = { ...healthy, p95: 40, blockedP95: 1, connectingP95: 0, waitingP95: 35, gatewayP95: 30 };
+
+test('a jump k6 waited for and the gateway never saw is placed on the path to it', () => {
+    // Run 20261031-193139's step 2: the journey to about 1.1 s, the gateway's own at 49 ms.
+    const row = { ...steady, step: 2, p95: 1063, waitingP95: 1050, gatewayP95: 49 };
+    const [jump] = crossings(row, steady);
+
+    assert.equal(jump.signal, 'p95');
+    assert.equal(jump.where, 'path');
+    assert.equal(jump.detail, 'journey p95 40 ms to 1063 ms, outside the gateway, waiting p95 35 ms to 1050 ms ' +
+        'against the gateway\'s own p95 30 ms to 49 ms: the path from k6 to the gateway\'s listener, not a service');
+});
+
+test('a jump the gateway\'s own p95 explains is placed in the platform, at the share\'s edge too', () => {
+    const rise = 1000;
+    const edge = { ...steady, step: 2, p95: 1040, waitingP95: 35 + rise, gatewayP95: 30 + rise * OUTSIDE_SHARE };
+    const past = { ...edge, gatewayP95: edge.gatewayP95 - 1 };
+
+    assert.equal(p95Where(edge, steady).where, 'platform', 'half of the rise outside is not more than half');
+    assert.equal(p95Where(past, steady).where, 'path');
+    assert.equal(p95Where(edge, steady).detail, 'in the platform, the gateway\'s own p95 30 ms to 530 ms');
+});
+
+test('a jump in k6\'s own connection setup is placed there, ahead of any waiting', () => {
+    const row = { ...steady, step: 2, p95: 300, blockedP95: 3001, connectingP95: 3000, waitingP95: 290 };
+    const where = p95Where(row, steady);
+
+    assert.equal(where.where, 'setup');
+    assert.equal(where.detail, 'in connection setup, blocked p95 1 ms to 3001 ms, connecting p95 0 ms to 3000 ms: ' +
+        'k6\'s own connections, not the platform');
+    assert.equal(p95Where({ ...row, blockedP95: null }, steady).where, 'setup', 'connecting alone is setup');
+    assert.equal(p95Where({ ...row, blockedP95: 2, connectingP95: 0, gatewayP95: 280 }, steady).where, 'platform',
+        'a setup that barely moved leaves the rise to waiting');
+});
+
+test('a jump with no rise in setup or waiting is in the transfer, and one with no gateway reading says so', () => {
+    assert.equal(p95Where({ ...steady, p95: 400, waitingP95: 30 }, steady).where, 'transfer');
+    const unread = p95Where({ ...steady, p95: 400, waitingP95: 390, gatewayP95: null }, steady);
+
+    assert.equal(unread.where, 'waiting');
+    assert.equal(unread.detail, 'in waiting, waiting p95 35 ms to 390 ms; the gateway\'s own p95 unread');
+});
+
+test('a run from before the phases keeps its p95 signal\'s detail as it was', () => {
+    const [jump] = crossings({ ...healthy, p95: 200 }, healthy);
+
+    assert.equal(p95Where({ ...healthy, p95: 200 }, healthy), null);
+    assert.equal(jump.where, null);
+    assert.equal(jump.detail, 'journey p95 80 ms to 200 ms');
+});
+
+test('a rate over a hold reaches back to two minutes, and a longer hold is read whole', () => {
+    assert.equal(promRange(60), `${MINIMUM_RANGE_SECONDS}s`);
+    assert.equal(promRange(180), '180s');
+});
+
+test('the inbox latch is read from every database\'s InboxMessages clustered index, and parsed by database', () => {
+    assert.match(INBOX_LATCH, /sys\.dm_db_index_operational_stats\(NULL, NULL, NULL, NULL\)/);
+    assert.match(INBOX_LATCH, /s\.index_id = 1 AND OBJECT_NAME\(s\.object_id, s\.database_id\) = 'InboxMessages'/);
+    assert.deepEqual(parseInboxLatch('Ordering|194\r\nPayments|97\r\n\r\nnoise\r\nInventory|x\r\n'),
+        { Ordering: 194, Payments: 97 });
+});
+
+test('a step\'s inbox latch is each database\'s change, most first, and a counter that fell is left out', () => {
+    const samples = [
+        { at: 1000, inboxLatch: { Ordering: 100, Payments: 50, Inventory: 900 } },
+        { at: 1500, inboxLatchError: 'sqlcmd failed' },
+        { at: 2000, inboxLatch: { Ordering: 294, Payments: 147, Inventory: 10, Shipping: 5 } },
+    ];
+
+    assert.deepEqual(inboxLatchDelta(samples, { startMs: 1000, endMs: 2000 }), [
+        { database: 'Ordering', ms: 194 },
+        { database: 'Payments', ms: 97 },
+    ], 'Inventory\'s fell and Shipping has no first reading');
+    assert.equal(inboxLatchDelta(samples, { startMs: 1500, endMs: 2500 }), null, 'one reading is no change');
 });

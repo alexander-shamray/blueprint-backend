@@ -570,12 +570,16 @@ warm-up's orders too.
 
 **What each step records.** From k6: p50, p95, p99 and max per operation,
 and per step the request rate and the failures, split into 429s, other 4xx,
-5xx, timeouts and refused connections. From Prometheus, read through Grafana
-as the SLO run reads it and evaluated at the step's end: the slowest request
-types' `request.duration`, the oldest outbox row per service, the deepest
-queues, the consumed queues with the lowest consumer utilisation, the
-`_error` queues, `messaging.delivery.lag` overall and for the BFF's consumers
-(the BFF's read model is their projection, so that lag is its staleness),
+5xx, timeouts and refused connections, and the p95 of the journey requests'
+`blocked`, `connecting` and `waiting` timings: connection setup, which the
+journey's figures leave out, and the wait for a first byte, which they hold.
+From Prometheus, read through Grafana as the SLO run reads it and evaluated
+at the step's end: the gateway's own p95 from `http.server.request.duration`,
+the slowest request types' `request.duration`, the oldest outbox row per
+service, the deepest queues, the consumed queues with the lowest consumer
+utilisation, the `_error` queues, `messaging.delivery.lag` overall and for
+the BFF's consumers (the BFF's read model is their projection, so that lag is
+its staleness),
 `orders.fulfilment.duration` and the share of orders confirmed, both overdue
 gauges, and, from the runtime meter every service exports, the work waiting
 for a thread-pool thread and the time collections paused it. From
@@ -583,8 +587,10 @@ for a thread-pool thread and the time collections paused it. From
 all its processors, each container's CPU and memory from
 `docker stats`, where a CPU figure is a share of one core and passes 100 on
 several, with its Compose service and CPU limit read at the start and again
-for a container started since, as the k6 run's is, and
-SQL Server's deadlocks and lock, page-latch and log-flush waits.
+for a container started since, as the k6 run's is, SQL Server's deadlocks
+and lock, page-latch and log-flush waits, and each platform database's page
+latch on its `InboxMessages` primary key, by `stress/report.js`'s
+`INBOX_LATCH`.
 From the `judge`, the VUs k6 ran a second before each hold's end.
 Nothing is added to the stack to read any of them. What could only be read by
 adding a component is listed in the summary under *Not measured*.
@@ -613,6 +619,14 @@ or the oldest outbox row or the queued messages still growing by
 `stress/report.js`'s constants, held by `stress/report.test.js`. Each signal
 is read once a step, so the order in which two crossed within one step cannot
 be seen, and the summary names every signal that crossed at the knee.
+
+**Where a p95 jump sits** is named with it, by `stress/report.js`'s
+`p95Where()`, so a knee the platform did not cause says so. Every journey
+request passes the gateway: a jump in k6's connection setup never reached
+the platform, and a rise in k6's waiting that the gateway's own p95 does not
+show, past `OUTSIDE_SHARE` of it, is the path from k6 to the gateway's
+listener, as a port forward retrying a connection is, rather than a service.
+P95s do not add, so the placing is evidence, not a measurement of the path.
 
 **The first to give up** is named at the step that stopped the run, the one
 whose errors passed the abort rate under an `errors` stop and otherwise the
