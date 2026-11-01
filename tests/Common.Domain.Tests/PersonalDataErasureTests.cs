@@ -167,4 +167,20 @@ public class PersonalDataErasureTests
         PersonalDataErasure.AskedSince(DateTimeOffset.MinValue).ShouldBe(DateTimeOffset.MinValue);
         PersonalDataErasure.AskedSince(DateTimeOffset.MinValue.AddHours(1)).ShouldBe(DateTimeOffset.MinValue);
     }
+
+    [Fact]
+    public void A_check_exactly_one_margin_after_the_start_of_time_asks_from_the_start_of_time()
+    {
+        var atTheMargin = DateTimeOffset.MinValue + PersonalDataErasure.ClockMargin;
+
+        PersonalDataErasure.AskedSince(atTheMargin).ShouldBe(DateTimeOffset.MinValue);
+    }
+
+    [Fact]
+    public void A_check_one_tick_past_the_floor_s_margin_asks_from_one_tick_after_the_start_of_time()
+    {
+        var pastTheMargin = DateTimeOffset.MinValue + PersonalDataErasure.ClockMargin + TimeSpan.FromTicks(1);
+
+        PersonalDataErasure.AskedSince(pastTheMargin).ShouldBe(DateTimeOffset.MinValue + TimeSpan.FromTicks(1));
+    }
 }
