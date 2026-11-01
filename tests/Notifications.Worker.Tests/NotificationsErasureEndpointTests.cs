@@ -26,6 +26,7 @@ public sealed class NotificationsErasureEndpointTests(ServiceFixture fixture) : 
     public async ValueTask InitializeAsync()
     {
         await fixture.ResetAsync();
+        await fixture.DeclarePrivacyCompletionsAsync();
         _baseline = await fixture.QueueDepthAsync(PrivacyQueue);
     }
 

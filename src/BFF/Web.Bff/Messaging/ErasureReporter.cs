@@ -11,11 +11,9 @@ internal sealed class ErasureReporter(ISendEndpointProvider sends) : IErasureRep
     // The name Privacy's responder set holds for this service (ADR-092).
     private const string Responder = "bff";
 
-    private static readonly Uri PrivacyCompletionsQueue = new("queue:privacy-completions");
-
     public async Task ReportAsync(Guid requestId, int count, CancellationToken ct)
     {
-        ISendEndpoint endpoint = await sends.GetSendEndpoint(PrivacyCompletionsQueue);
+        ISendEndpoint endpoint = await sends.GetSendEndpoint(Endpoints.PrivacyCompletionsExchange);
 
         await endpoint.Send(new PersonalDataDeleteCompleted(requestId, Responder, count), ct);
     }

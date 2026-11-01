@@ -378,6 +378,56 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
                 for f in failures), failures)
 
 
+def run_with_sources(definitions: dict, old: str, new: str) -> list[str]:
+    """`run_against`, with every Messaging source the gate reads rewritten one way."""
+    original_read = gate.read
+    gate.read = lambda path: original_read(path).replace(old, new) if Path(path).suffix == ".cs" \
+        else original_read(path)
+    try:
+        return run_against(definitions)
+    finally:
+        gate.read = original_read
+
+
+class ASendToAPeerExchangeBindsNothing(unittest.TestCase):
+    """Privacy's queue is sent to by five holders, and a holder able to consume it swallows the others' answers."""
+
+    def test_the_holders_send_by_exchange(self):
+        found = {name: gate.exchange_sends(path) for name, path in gate.messaging_dirs().items()}
+        self.assertEqual({"BFF", "Notifications", "Ordering", "Payments", "Shipping"},
+                         {name for name, held in found.items() if "privacy-completions" in held})
+
+    def test_the_read_before_the_change_is_refused(self):
+        definitions = real()
+        entry = permission(definitions, "payments-svc")
+        entry["read"] = entry["read"].replace("^(payments-|", "^(payments-|privacy-completions$|", 1)
+        self.assertIn("privacy-completions$", entry["read"], "the case, not the gate")
+        self.assertIn(
+            "payments-svc: read COVERS `privacy-completions`, which it sends to by exchange and so never binds. "
+            "The queue shares the name, and read consumes the messages its peers send there",
+            run_against(definitions))
+
+    def test_the_write_an_exchange_send_needs_left_out(self):
+        definitions = real()
+        entry = permission(definitions, "shipping-svc")
+        self.assertIn("|privacy-completions$|", entry["write"], "the case, not the gate")
+        entry["write"] = entry["write"].replace("|privacy-completions$|", "|")
+        self.assertIn(
+            "shipping-svc: write does not cover `privacy-completions`, the exchange its own Endpoints addresses. "
+            "The send is refused and the message goes nowhere", run_against(definitions))
+
+    def test_a_queue_two_services_send_to_by_queue_address_is_refused(self):
+        # The source before the change: each holder bound Privacy's queue, so each held the read that consumes it.
+        failures = run_with_sources(real(), 'new("exchange:privacy-completions")', 'new("queue:privacy-completions")')
+        self.assertIn(
+            "`privacy-completions`: bff-svc, notifications-svc, ordering-svc, payments-svc, shipping-svc each send "
+            "to it as `queue:privacy-completions`, which binds it, and the read that bind takes consumes it. Send "
+            "to `exchange:privacy-completions` instead", failures)
+
+    def test_one_service_sending_by_queue_address_is_not_refused(self):
+        self.assertFalse(any("each send to it as" in f for f in run_against(real())))
+
+
 class ConfigureAndReadAreBoundedToo(unittest.TestCase):
     """Each account declares and binds its own context and the ones its Messaging code names, and no others."""
 

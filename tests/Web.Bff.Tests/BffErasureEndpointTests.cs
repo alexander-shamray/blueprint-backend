@@ -29,6 +29,7 @@ public sealed class BffErasureEndpointTests(BffServiceFixture fixture) : IAsyncL
     public async ValueTask InitializeAsync()
     {
         await fixture.ResetAsync();
+        await fixture.DeclarePrivacyCompletionsAsync();
         _baseline = await fixture.QueueDepthAsync(PrivacyQueue);
     }
 
