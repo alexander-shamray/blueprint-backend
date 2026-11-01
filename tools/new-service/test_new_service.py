@@ -1732,7 +1732,8 @@ class RendersAPureConsumer(unittest.TestCase):
         permission = next(e for e in definitions["permissions"] if e["user"] == f"{PROBE.lower()}-svc")
         for verb in ("configure", "write"):
             self.assertEqual(f"^({PROBE.lower()}-|MassTransit:)", permission[verb])
-        self.assertEqual(f"^({PROBE.lower()}-|MassTransit:(ReceiveFault$|Fault--{PROBE}\\.Infrastructure\\.Messaging:))",
+        self.assertEqual(f"^({PROBE.lower()}-|MassTransit:(ReceiveFault$|"
+                         f"Fault--{PROBE}\\.Infrastructure\\.Messaging:))",
                          permission["read"])
 
     def test_no_building_block_is_written(self):
