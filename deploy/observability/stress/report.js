@@ -826,13 +826,16 @@ export function parseLockWaits(output) {
 }
 
 // "keylock hobtid=72057594043760640 dbid=7 id=lock1f2 mode=X associatedObjectId=72057594043760640" as the
-// lock's kind, the mode it is held in, and the index or heap it is on, which sys.partitions names.
+// lock's kind, the mode it is held in, and what it is on: a table lock's object id, which OBJECT_NAME
+// names, or a row, page or hobt lock's index or heap, which sys.partitions names.
 function lockResource(description) {
     const text = String(description ?? '');
     const kind = /^\s*(\w+)/.exec(text)?.[1] ?? 'lock';
     const mode = /\bmode=(\w+)/.exec(text)?.[1];
-    const hobt = /\b(?:associatedObjectId|hobtid)=(\d+)/.exec(text)?.[1];
-    return [kind, mode && `held ${mode}`, hobt && `hobt ${hobt}`].filter(Boolean).join(' ');
+    const object = /\bobjid=(\d+)/.exec(text)?.[1];
+    const hobt = /\b(?:hobtid|associatedObjectId)=(\d+)/.exec(text)?.[1];
+    const on = kind === 'objectlock' ? object && `object ${object}` : hobt && `hobt ${hobt}`;
+    return [kind, mode && `held ${mode}`, on].filter(Boolean).join(' ');
 }
 
 // What the holder was doing: waiting itself, which makes it a link in a longer chain, idle with its
