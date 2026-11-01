@@ -920,7 +920,7 @@ jobs:
         run: |
           for f in TestResults/sightings/*.txt; do
             {
-              echo "A passing FulfilmentJourney run saw a double send. Run $RUN_URL, shard $SHARD, ref $REF_NAME."
+              echo "A passing run saw $(basename "$f" .txt). Run $RUN_URL, shard $SHARD, ref $REF_NAME."
               echo
               echo '```'
               head -c 60000 "$f"
