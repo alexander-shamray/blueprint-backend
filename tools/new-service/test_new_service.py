@@ -11,6 +11,7 @@ import io
 import py_compile
 import re
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path, PurePosixPath
@@ -2940,7 +2941,7 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
             compiled = Path(directory) / "helper.pyc"
             py_compile.compile(str(planted), cfile=str(compiled),
                                invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)
-            cache = Path(importlib.util.cache_from_source("tools/new-service/helper.py")).as_posix()
+            cache = f"tools/new-service/__pycache__/helper.{sys.implementation.cache_tag}.pyc"
             root = Path(directory) / "repository"
             root.mkdir()
             parent = self.parent_carrying(root, {
