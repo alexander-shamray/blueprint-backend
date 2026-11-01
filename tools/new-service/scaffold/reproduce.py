@@ -175,9 +175,12 @@ def render(repo_root: Path, scaffolded: Scaffolded, directory: Path) -> dict[str
         raise ScaffoldError(f"{scaffolded.parent[:8]} carries no scaffold to render {scaffolded.name} with")
     vouch(repo_root, scaffolded.parent, directory)
     kept = {name: os.environ[name] for name in KEPT_ENVIRONMENT if name in os.environ}
-    result = subprocess.run(
-        [sys.executable, "-B", str(script), *scaffolded.argv, "--repo-root", str(directory)],
-        capture_output=True, check=False, env={**kept, "PYTHONUTF8": "1"})
+    # -B stops writing bytecode, not reading it; an empty prefix means no pyc vouch never saw is run.
+    with tempfile.TemporaryDirectory(prefix="scaffold-bytecode-") as bytecode:
+        result = subprocess.run(
+            [sys.executable, "-B", "-X", f"pycache_prefix={bytecode}", str(script), *scaffolded.argv,
+             "--repo-root", str(directory)],
+            capture_output=True, check=False, env={**kept, "PYTHONUTF8": "1"})
     if result.returncode != 0:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise ScaffoldError(f"the scaffold at {scaffolded.parent[:8]} refused the render: {detail}")

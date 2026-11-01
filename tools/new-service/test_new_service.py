@@ -8,6 +8,7 @@ import contextlib
 import difflib
 import importlib.util
 import io
+import py_compile
 import re
 import shutil
 import tempfile
@@ -2439,6 +2440,18 @@ class RefusesToRun(unittest.TestCase):
                 render(repo_root=root)
             self.assertIn("shipped", str(raised.exception))
 
+    def test_bytecode_beside_the_target_s_gate_is_not_run_in_place_of_it(self):
+        # An unchecked-hash pyc is never compared with its source, so the gate
+        # passing the byte check must still be what runs.
+        with tempfile.TemporaryDirectory() as directory:
+            root = template_copy_with_gate(Path(directory))
+            impostor = Path(directory) / "impostor.py"
+            impostor.write_text("RULES = []\n", encoding="utf-8")
+            py_compile.compile(str(impostor), cfile=importlib.util.cache_from_source(str(root / SCAN_GATE)),
+                               invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)
+
+            self.assertTrue(hasattr(load_scan_gate(root, REPO_ROOT), "scan_text"))
+
     def test_an_allow_list_that_does_not_parse(self):
         # This script appends to that file, so it reads it first — and a file
         # the gate already rejects is not one to append to: the run would
@@ -2474,7 +2487,7 @@ class RefusesToRun(unittest.TestCase):
                 self.assertIn(missing, str(raised.exception), missing)
 
     def test_a_gate_that_is_not_a_python_module(self):
-        # `exec_module` runs whatever is at that path, so a malformed one must
+        # The gate's source is executed as it is, so a malformed one must
         # leave as a ScaffoldError, past which `main` prints one stderr line.
         # TOOL_ROOT is pointed at the same root, so the trust check next door
         # passes and this one answers; otherwise the two refusals race, and
@@ -2870,15 +2883,16 @@ RECORDING_SCAFFOLD = (
 class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
     """`--verify` executes the parent's tree, so it holds that tree to `load_scan_gate`'s trust rule."""
 
-    def parent_carrying(self, root: Path, files: dict[str, str]) -> str:
+    def parent_carrying(self, root: Path, files: dict[str, str | bytes]) -> str:
         def git(*args: str, stdin: bytes | None = None) -> str:
             return scaffold.reproduce.git(root, *args, stdin=stdin).decode("ascii").strip()
 
         git("init", "--quiet")
-        for relative, text in files.items():
+        for relative, content in files.items():
             (root / relative).parent.mkdir(parents=True, exist_ok=True)
-            (root / relative).write_text(text, encoding="utf-8")
-        git("add", "--all")
+            data = content.encode("utf-8") if isinstance(content, str) else content
+            (root / relative).write_bytes(data)
+        git("add", "--all", "--force")
         identity = ("-c", "user.name=scaffold", "-c", "user.email=scaffold@example.invalid")
         parent = git(*identity, "commit-tree", git("write-tree"), "-m", "parent")
         git("update-ref", "HEAD", parent)
@@ -2917,6 +2931,29 @@ class RunsOnlyAParentScaffoldItCanVouchFor(unittest.TestCase):
         seen = rendered["seen.txt"].decode("utf-8").split()
         self.assertNotIn("GH_TOKEN", seen)
         self.assertIn("PYTHONUTF8", seen)
+
+    def test_bytecode_the_parent_carries_is_never_read_in_place_of_its_source(self):
+        # An unchecked-hash pyc is run without reading its source, so vouch's comparison never sees it.
+        with tempfile.TemporaryDirectory() as directory:
+            planted = Path(directory) / "helper.py"
+            planted.write_text("MARK = 'pyc'\n", encoding="utf-8")
+            compiled = Path(directory) / "helper.pyc"
+            py_compile.compile(str(planted), cfile=str(compiled),
+                               invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH)
+            cache = Path(importlib.util.cache_from_source("tools/new-service/helper.py")).as_posix()
+            root = Path(directory) / "repository"
+            root.mkdir()
+            parent = self.parent_carrying(root, {
+                "tools/new-service/new_service.py":
+                    RECORDING_SCAFFOLD + "import helper\n(root / 'mark.txt').write_text(helper.MARK)\n",
+                "tools/new-service/helper.py": "MARK = 'source'\n",
+                cache: compiled.read_bytes(),
+            })
+            scaffold.reproduce.git(root, "update-ref", scaffold.reproduce.LANDED, parent)
+
+            rendered, _ = self.render(root, parent)
+
+        self.assertEqual(b"source", rendered["mark.txt"])
 
     def test_a_parent_carrying_the_shipped_scaffold_is_vouched_for(self):
         with tempfile.TemporaryDirectory() as directory:
