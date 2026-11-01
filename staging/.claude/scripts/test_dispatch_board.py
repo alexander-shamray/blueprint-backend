@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from unittest import mock
 
 import dispatch_board as db
 
@@ -15,9 +16,9 @@ TODAY = date(2026, 11, 1)
 NOTE = "# TODO\n\n> Rules for filling this file.\n> 1. Four sections follow.\n\n"
 IN_PROGRESS = """## In progress
 
-| # | What | Branch or PR | State |
-|---|---|---|---|
-| owed (not filed) | `/dispatch` implementation, plan `docs/superpowers/plans/2026-11-01-dispatch.md` | `chore/dispatch-command` | started |
+| Group | # | What | Branch or PR | State |
+|---|---|---|---|---|
+| — | owed (not filed) | `/dispatch` implementation, plan `docs/superpowers/plans/2026-11-01-dispatch.md` | `chore/dispatch-command` | started |
 
 """
 REMAINING_HEAD = """## Remaining
@@ -105,7 +106,7 @@ class ParseTests(unittest.TestCase):
     def test_an_owed_row_gets_a_stable_key(self):
         first = db.parse_tasks(FIXTURE).in_progress[0]
         again = db.parse_tasks(FIXTURE).in_progress[0]
-        digest = hashlib.sha1(first.cells[1].encode("utf-8")).hexdigest()[:8]
+        digest = hashlib.sha1(first.cells[2].encode("utf-8")).hexdigest()[:8]
         self.assertEqual(f"owed:{digest}", first.key)
         self.assertEqual(first.key, again.key)
         self.assertIsNone(first.number)
@@ -167,6 +168,18 @@ class ReadyTests(unittest.TestCase):
         self.assertEqual((False, "edits .claude/"), self.ready(line(conflicts="`staging/.claude/commands`")))
         self.assertEqual((False, "edits .claude/"), self.ready(line(number=7), bodies={7: "see .claude/hooks/a.sh"}))
         self.assertEqual((True, ""), self.ready(line(task="Edit `docs/a.md`")))
+        for body in ("edit .claude/commands/ship.md frontmatter", "the .claude/hooks tree", r"under .Claude\skills"):
+            self.assertEqual((False, "edits .claude/"), self.ready(line(number=7), bodies={7: body}), body)
+        self.assertEqual((True, ""), self.ready(line(number=7), bodies={7: "see claude and my.claudex"}))
+
+    def test_a_bare_number_in_depends_on_is_not_an_issue(self):
+        self.assertFalse(self.ready(line(depends="14 days after 1440 closes"), {1440})[0])
+        ok, why = self.ready(line(depends="14 days after 1440 closes"), {99})
+        self.assertFalse(ok)
+        self.assertIn("cannot judge", why)
+        ok, why = self.ready(line(depends="a thirteen-day span"))
+        self.assertFalse(ok)
+        self.assertEqual((False, "depends on open #1440"), self.ready(line(depends="waits on 1440"), {1440}))
 
 
 class PathTests(unittest.TestCase):
@@ -180,6 +193,13 @@ class PathTests(unittest.TestCase):
         found = db.extract_paths("Edit `src/A/b.cs:28`, then definitions.json and docs/x.md. Run `gh issue list`.")
         self.assertEqual({"src/a/b.cs", "definitions.json", "docs/x.md"}, found)
         self.assertEqual({"deploy/rabbitmq"}, db.extract_paths("the `deploy/rabbitmq/` folder"))
+
+    def test_slash_commands_and_dotted_identifiers_are_not_paths(self):
+        self.assertEqual(frozenset(), db.extract_paths("`/ship` `OrderLine.Total` `--dispatched` `gh issue list`"))
+        found = db.extract_paths("`src/Services/Catalog/` and `deploy/rabbitmq/definitions.json` and `/ship`")
+        self.assertEqual({"src/services/catalog", "deploy/rabbitmq/definitions.json"}, found)
+        claim = db.group_claim(group_of(line(task="Run `/ship` on `OrderLine.Total`")), {1700: "no files"})
+        self.assertTrue(claim.unknown)
 
     def test_paths_are_normalised_case_slashes_and_dot_prefix(self):
         found = db.extract_paths(r"`.\Src\Gateway\Program.cs` and `./Docs/A.MD`")
@@ -306,8 +326,8 @@ class WriteTests(unittest.TestCase):
     def test_a_move_puts_the_rows_in_progress_with_branch_and_worktree(self):
         text = db.move_to_in_progress(FIXTURE, self.s1(), "fix/s1", ".claude/worktrees/s1", TODAY)
         progress = section(text, "In progress")
-        self.assertIn("| #1682 | Narrow the read grant", progress)
-        self.assertIn("| #1683 |", progress)
+        self.assertIn("| S1 | #1682 | Narrow the read grant", progress)
+        self.assertIn("| S1 | #1683 |", progress)
         self.assertIn("`fix/s1`, `.claude/worktrees/s1` | dispatched 2026-11-01 |", progress)
         self.assertIn("owed (not filed)", progress)
         remaining = section(text, "Remaining")
@@ -370,18 +390,65 @@ class WriteTests(unittest.TestCase):
 
     def test_a_move_rereads_the_file_and_keeps_another_sessions_edit(self):
         self.write(FIXTURE)
-        db.parse_tasks(self.read())  # the stale read a board run held
-        self.write(FIXTURE.replace("| 1683 | ", "| 1683 | x "))
-        self.assertEqual((0, ""), self.cli("move", "S1"))
-        text = self.read()
-        self.assertIn("| #1683 | x Narrow read", section(text, "In progress"))
-        self.assertIn("| #1682 |", section(text, "In progress"))
 
-    def test_a_move_keeps_an_edit_to_another_group(self):
+        def fetch(_):
+            # Another session's edit lands after `board` has read the file and before the move.
+            self.write(FIXTURE.replace("| 1683 | ", "| 1683 | x "))
+            return "a.cs"
+        with contextlib.redirect_stdout(io.StringIO()):
+            db.main(["board", "--tasks", str(self.path), "--today", "2026-11-01"],
+                    body_source=fetch, open_source=set)
+        events = []
+        real_read, real_write = db._read, db._write
+        with mock.patch.object(db, "_read", lambda p: events.append(("read", Path(p).name)) or real_read(p)), \
+                mock.patch.object(db, "_write", lambda p, t: events.append(("write", Path(p).name)) or real_write(p, t)):
+            self.assertEqual((0, ""), self.cli("move", "S1"))
+        # The tasks file is read once, then written, with nothing carried over from `board`.
+        self.assertEqual([("read", "todo.md"), ("write", "todo.md")], events[:2])
+        text = self.read()
+        self.assertIn("| S1 | #1683 | x Narrow read", section(text, "In progress"))
+        self.assertIn("| S1 | #1682 |", section(text, "In progress"))
+
+    def test_a_refused_write_leaves_no_temporary_file_and_no_sidecar(self):
         self.write(FIXTURE)
-        self.write(FIXTURE.replace("Bind only", "Bind just"))
-        self.assertEqual((0, ""), self.cli("move", "S1"))
-        self.assertIn("Bind just", self.read())
+        with mock.patch.object(db.os, "replace", side_effect=PermissionError("held open")):
+            code, err = self.cli("move", "S1")
+        self.assertEqual(2, code)
+        self.assertIn("refused: could not write", err)
+        self.assertEqual(FIXTURE, self.read())
+        self.assertEqual(["todo.md"], sorted(p.name for p in self.dir.iterdir() if p.is_file()))
+        self.assertFalse((self.run_dir / "groups" / "S1.json").exists())
+
+    def test_a_group_id_that_is_not_a_letter_and_number_is_refused(self):
+        self.write(FIXTURE)
+        for bad in ("../x", "s1", "S1/../../y"):
+            code, err = self.cli("move", bad)
+            self.assertEqual(2, code, bad)
+            self.assertIn("is not a group id", err)
+        self.assertFalse((self.dir / "x.json").exists())
+
+    def test_place_refuses_a_group_an_in_progress_row_holds(self):
+        moved = db.move_to_in_progress(FIXTURE, self.s1(), "b", "w", TODAY)
+        with self.assertRaisesRegex(db.Refusal, "S1 is held by an In progress row"):
+            db.place(moved, 1, "S1", 1700)
+
+    def test_the_old_four_column_in_progress_header_is_refused(self):
+        old = FIXTURE.replace("| Group | # | What | Branch or PR | State |", "| # | What | Branch or PR | State |")
+        with self.assertRaisesRegex(db.Refusal, "In progress header"):
+            db.parse_tasks(old)
+
+    def test_a_running_group_no_longer_a_candidate_still_holds_the_group_naming_it(self):
+        moved = db.move_to_in_progress(FIXTURE, next(g for g in db.groups(db.parse_tasks(FIXTURE))
+                                                      if g.id == "M1"), "b", "w", TODAY)
+        tasks = db.parse_tasks(moved)
+        running = [r for r in tasks.in_progress if r.group == "M1"][0]
+        held = db.in_progress_claim(running, {1685: "src/m1.cs"})
+        self.assertEqual("M1", held.ident)
+        m2 = next(g for g in db.groups(tasks) if g.id == "M2")
+        claim = db.group_claim(m2, {1686: "src/m2.cs"})
+        self.assertEqual([], db.pick([m2], {"M2": (True, "")}, {"M2": claim}, [], [held], 2))
+        free = db.pick([m2], {"M2": (True, "")}, {"M2": claim}, [], [], 2)
+        self.assertEqual(["M2"], free)
 
     def test_the_cli_moves_finishes_and_returns_a_group(self):
         self.write(FIXTURE)
@@ -418,7 +485,7 @@ class WriteTests(unittest.TestCase):
         self.assertEqual((0, ""), self.cli("move", "S1"))
         text = self.read()
         self.assertEqual(text.count("\n"), text.count("\r\n"))
-        self.assertIn("| #1682 |", text)
+        self.assertIn("| S1 | #1682 |", text)
         self.assertEqual((0, ""), self.cli("done", "S1"))
         text = self.read()
         self.assertEqual(text.count("\n"), text.count("\r\n"))
