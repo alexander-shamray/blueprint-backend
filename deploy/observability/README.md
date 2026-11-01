@@ -622,11 +622,13 @@ be seen, and the summary names every signal that crossed at the knee.
 
 **Where a p95 jump sits** is named with it, by `stress/report.js`'s
 `p95Where()`, so a knee the platform did not cause says so. Every journey
-request passes the gateway: a jump in k6's connection setup never reached
-the platform, and a rise in k6's waiting that the gateway's own p95 does not
-show, past `OUTSIDE_SHARE` of it, is the path from k6 to the gateway's
-listener, as a port forward retrying a connection is, rather than a service.
-P95s do not add, so the placing is evidence, not a measurement of the path.
+request passes the gateway, so a rise in k6's waiting that the gateway's own
+p95 does not show, past `OUTSIDE_SHARE` of it, is the path from k6 to the
+gateway's listener, as a port forward retrying a connection is, rather than
+a service. The journey's figure leaves k6's connection setup out, so a jump
+is never placed there; a setup rise past `P95_JUMP_FLOOR_MS` is noted beside
+it. P95s do not add, so the placing is evidence, not a measurement of the
+path.
 
 **The first to give up** is named at the step that stopped the run, the one
 whose errors passed the abort rate under an `errors` stop and otherwise the
