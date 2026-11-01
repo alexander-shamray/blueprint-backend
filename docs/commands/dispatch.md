@@ -100,7 +100,12 @@ so a cut-short interview loses nothing: the question and the answer go to
 files under the run first, and `issue_decisions.py record` appends them to
 the issue's `## Owner decisions`, in English whatever `--lang` is, and
 refuses any other shape. The files keep the owner's words out of a shell
-line. *skip* records nothing; *stop* starts the night with what was
+line. `record` and `close` take the run's name, as every other helper does,
+resolve it under their own checkout's `artifacts/dispatch/` to a run `start`
+opened, and read only files under that run, because what they read is
+posted to a public issue. What they post is the text they checked, handed
+to `gh` on stdin: a path `gh` reopened could name another file by then.
+*skip* records nothing; *stop* starts the night with what was
 answered. `<run>/interview.md` names each issue as it is finished, so a
 resumed run asks nothing twice.
 
@@ -148,7 +153,11 @@ the executor its shape.
 
 A relaunch onto a PR that already merged returns `merged` with no rounds
 and no review end, because the review ran in the session before it; the
-dispatcher verifies it like any other merge.
+dispatcher verifies it like any other merge. `result` believes that only of
+a relaunch, a group whose earlier session this launch has already read:
+from a first session a merge with no round is one nobody reviewed, so it
+still verifies and lands, but the report lists it under *Needs a human*,
+never *Merged*.
 
 ## Waking
 
@@ -174,7 +183,11 @@ since `result` has no session to read. So it leaves `<group>.refused.json`
 beside the session record, never a write to `state.json`, which is the
 dispatcher's alone, and `result` records the group `crashed-before-launch`,
 which frees the slot and goes back like a hand-back: whatever refused one
-launch would refuse the next.
+launch would refuse the next. The marker sends a group back unread, so it
+counts only when no session record sits beside it and it is no older than
+the launch, and an earlier launch's marker never ends a later one; a marker
+beside a session record is refused, since either could be the one that
+does not describe this launch.
 
 ## When the night ends
 
