@@ -180,55 +180,126 @@ class RunDirectoryTests(InRoot):
         for pairs in (0, 5, -1):
             with self.assertRaisesRegex(db.Refusal, f"--pairs {pairs} is outside 1 to 4"):
                 dr.new_run(".", pairs, "en", NOW)
-        self.assertIn("refused: --pairs 5", run_cli(["start", "--pairs", "5"]))
+        self.assertIn("refused: --pairs 5", run_cli(["start", "--pairs", "5", "--tasks", "todo.md"]))
         self.assertFalse((self.root / "artifacts").exists())
         self.assertEqual(RUN, dr.new_run(".", 4, "en", NOW))
 
     def test_lang_defaults_to_en(self):
-        self.assertEqual(f"{RUN}\n", run_cli(["start", "--pairs", "2"]))
+        self.assertEqual(f"{RUN}\n", run_cli(["start", "--pairs", "2", "--tasks", "todo.md"]))
         state = dr.load_state(state_dir())
         self.assertEqual(("en", 2, {}), (state["lang"], state["pairs"], state["groups"]))
         self.clock = NOW + timedelta(hours=1)
         (state_dir() / "report.md").write_text("done", encoding="utf-8")
-        run_cli(["start", "--pairs", "1", "--lang", "ru"])
+        run_cli(["start", "--pairs", "1", "--lang", "ru", "--tasks", "todo.md"])
         self.assertEqual("ru", dr.load_state(state_dir("20261101-230000"))["lang"])
-        self.assertIn("refused: --lang", run_cli(["start", "--pairs", "1", "--lang", "../x"]))
+        self.assertIn("refused: --lang", run_cli(["start", "--pairs", "1", "--lang", "../x", "--tasks", "t"]))
 
     def test_a_second_start_with_a_run_open_names_it_and_exits_3(self):
-        run_cli(["start", "--pairs", "2"])
+        run_cli(["start", "--pairs", "2", "--tasks", "todo.md"])
         self.clock = NOW + timedelta(minutes=5)
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            self.assertEqual(3, db.main(["start", "--pairs", "3"]))
+            self.assertEqual(3, db.main(["start", "--pairs", "3", "--tasks", "todo.md"]))
         self.assertEqual(f"{RUN}\n", out.getvalue())
-        self.assertEqual(RUN, dr.open_run("."))
+        self.assertEqual(RUN, dr.open_run(".", "todo.md")[0])
         (state_dir() / "report.md").write_text("done", encoding="utf-8")
-        self.assertIsNone(dr.open_run("."))
+        self.assertIsNone(dr.open_run(".", "todo.md")[0])
         os.makedirs("artifacts/dispatch/spike-notes")
-        self.assertIsNone(dr.open_run("."))
+        self.assertIsNone(dr.open_run(".", "todo.md")[0])
 
-    def test_a_reported_run_stays_open_while_it_holds_in_progress_rows(self):
+    def start(self, tasks="todo.md"):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = db.main(["start", "--pairs", "2", "--tasks", tasks])
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_reported_run_stays_open_while_in_progress_holds_its_rows(self):
         # Only this run's `done` and `back` touch its rows, so a run its report left holding some is resumed.
-        run_cli(["start", "--pairs", "2"])
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
+        self.assertEqual(0, self.start()[0])
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, "S1",
+                                      "--branch", BRANCH, "--worktree", WORKTREE]))
+        Path("moved.md").write_bytes(Path("todo.md").read_bytes())
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
         (state_dir() / "report.md").write_text("the first night", encoding="utf-8")
+        make_worktree(WORKTREE)
         self.clock = NOW + timedelta(hours=10)
-        cases = {"interrupted in its window": ("window", RUN), "moved, never launched": (None, RUN),
-                 "a merge not confirmed in main": ("verified", RUN), "a hand-back not sent back": ("handed-back", RUN),
-                 "done": ("done", None), "sent back": ("returned", None)}
-        for name, (status, reopened) in cases.items():
+        fresh = "20261102-080000"
+        cases = {"interrupted in its window": ("window", "moved.md", RUN),
+                 "moved, never launched": (None, "moved.md", RUN),
+                 "a merge not confirmed in main": ("verified", "moved.md", RUN),
+                 "a hand-back not sent back": ("handed-back", "moved.md", RUN),
+                 "done": ("done", "moved.md", None), "sent back": ("returned", "moved.md", None),
+                 "a window group whose rows the owner removed": ("window", "todo.md", None),
+                 "a verified group whose rows the owner removed": ("verified", "todo.md", None)}
+        for name, (status, listed, reopened) in cases.items():
             with self.subTest(group=name):
-                record(RUN, "S1", **({"status": status} if status else {}))
-                self.assertEqual(reopened, dr.open_run("."))
-                out = io.StringIO()
-                with contextlib.redirect_stdout(out):
-                    code = db.main(["start", "--pairs", "2"])
-                self.assertEqual((3, f"{RUN}\n") if reopened else (0, "20261102-080000\n"), (code, out.getvalue()))
-                shutil.rmtree(state_dir("20261102-080000"), ignore_errors=True)
-                with open("todo.md", "w", encoding="utf-8", newline="") as handle:
-                    handle.write(FIXTURE)
-                report = run_cli(["report", RUN, "--tasks", "todo.md", "--today", "2026-11-02"],
+                state = dr.load_state(state_dir())
+                state["groups"]["S1"].pop("status", None)
+                state["groups"]["S1"].update({"status": status, "worktree": WORKTREE} if status else {})
+                dr.save_state(state_dir(), state)
+                self.assertEqual((reopened, None), dr.open_run(".", listed))
+                code, out, _ = self.start(listed)
+                self.assertEqual((3, f"{RUN}\n") if reopened else (0, f"{fresh}\n"), (code, out))
+                shutil.rmtree(state_dir(fresh), ignore_errors=True)
+                report = run_cli(["report", RUN, "--tasks", listed, "--today", "2026-11-02"],
                                  body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH)
                 self.assertEqual(bool(reopened), f"it resumes run {RUN}" in report)
+        # A list that cannot be read keeps the run open, and says why, rather than leave its rows to no run.
+        code, out, err = self.start("missing.md")
+        self.assertEqual((3, f"{RUN}\n"), (code, out))
+        self.assertIn("kept open: the task list missing.md could not be read", err)
+
+    def test_the_resume_line_follows_the_listed_rows_not_the_statuses(self):
+        # A verified or window group whose rows the owner removed by hand holds nothing, whatever its status.
+        dr.new_run(".", 2, "en", NOW)
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, "S1",
+                                      "--branch", BRANCH, "--worktree", WORKTREE]))
+        make_worktree(WORKTREE)
+        for status in ("window", "verified", "handed-back"):
+            for listed, resumed in (("todo.md", True), ("cleared.md", False)):
+                with self.subTest(status=status, rows="listed" if resumed else "removed"):
+                    state = dr.load_state(state_dir())
+                    state["groups"]["S1"].update(status=status, worktree=WORKTREE)
+                    dr.save_state(state_dir(), state)
+                    with open("cleared.md", "w", encoding="utf-8", newline="") as handle:
+                        handle.write(FIXTURE)
+                    report = run_cli(["report", RUN, "--tasks", listed, "--today", "2026-11-02"],
+                                     body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH)
+                    self.assertEqual(resumed, f"it resumes run {RUN}" in report, report)
+
+    def test_a_group_whose_worktree_is_gone_holds_the_run_while_its_rows_are_listed(self):
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
+        self.start()
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, "S1",
+                                      "--branch", BRANCH, "--worktree", WORKTREE]))
+        state = dr.load_state(state_dir())
+        state["groups"]["S1"].update(status="running", worktree=WORKTREE, launched=NOW.isoformat())
+        dr.save_state(state_dir(), state)
+        (state_dir() / "report.md").write_text("the first night", encoding="utf-8")
+        self.assertFalse(Path(WORKTREE).exists())
+        self.assertIn(f"refused S1: its worktree {WORKTREE} is gone", run_cli(["resume", RUN]))
+        self.assertEqual((RUN, None), dr.open_run(".", "todo.md"))
+        lines = run_cli(["report", RUN, "--tasks", "todo.md", "--today", "2026-11-02"], body_source=lambda n: "",
+                        open_source=lambda: {1440}, branch_source=NO_BRANCH).splitlines()
+        needs = lines[lines.index("## Needs a human") + 1:lines.index("## Interrupted")]
+        self.assertIn(f"S1 running: its worktree {WORKTREE} is gone; its In progress rows keep run {RUN} open until "
+                      "they are sent back or removed", needs)
+        interrupted = lines[lines.index("## Interrupted") + 1:lines.index("## Filed overnight")]
+        self.assertEqual([f"resume: run /dispatch again in the main checkout; it resumes run {RUN}"], interrupted)
+        # Once the owner clears the rows the ghost holds nothing, and the run closes.
+        with open("cleared.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
+        self.assertEqual((None, None), dr.open_run(".", "cleared.md"))
+        lines = run_cli(["report", RUN, "--tasks", "cleared.md", "--today", "2026-11-02"], body_source=lambda n: "",
+                        open_source=lambda: {1440}, branch_source=NO_BRANCH).splitlines()
+        self.assertIn(f"S1 running: its worktree {WORKTREE} is gone; its rows are no longer In progress", lines)
+        self.assertNotIn(f"it resumes run {RUN}", "\n".join(lines))
 
     def test_a_run_name_that_is_not_a_timestamp_is_refused(self):
         for bad in ("../x", "20261101", "20261101-22000", "20261101-220000/..", ""):
@@ -1120,9 +1191,8 @@ class ReportTests(InRoot):
                      "recheck raised 2 fixed 1 refused 1", "review clean", "filed #1701"):
             self.assertIn(fact, merged[0])
         self.assertEqual(["none"], self.section(lines, "## Needs a human"))
-        interrupted = self.section(lines, "## Interrupted")
-        self.assertTrue(interrupted[0].startswith("M2 running"), interrupted)
-        self.assertIn(f"resumes run {RUN}", interrupted[-1])
+        # FIXTURE's In progress holds none of M2's rows, so nothing keeps the run open for a resume line.
+        self.assertEqual(["M2 running"], self.section(lines, "## Interrupted"))
         self.assertEqual(["#1701"], self.section(lines, "## Filed overnight"))
         self.assertIn("J1 wave 2: waits until 2026-11-09", self.section(lines, "## Left in the backlog"))
         self.assertIn("S1: 762696 tokens (input 20, cache write 5265, cache read 754597, output 2814)",
