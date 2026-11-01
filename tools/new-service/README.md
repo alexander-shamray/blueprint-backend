@@ -250,6 +250,16 @@ listed one the render reproduces. That file records, as of each commit it
 names, what this rule would have refused; a commit after the rule adds no
 line to it. The check reads history, so a shallow clone refuses it.
 
+Running the parent's scaffold runs that tree's Python, so `--verify` holds
+it to `load_scan_gate`'s trust rule: the parent must be in the history of
+`origin/main` as this checkout fetched it, or carry `tools/new-service/`
+and the secret scan byte for byte as this script's own copy has them, with
+no link on the way to either. Anything else is refused before it runs: a
+commit on a pull request branch is the author's code, and the pull
+request's diff need not show it. The scaffold runs with none of the
+caller's environment but `SYSTEMROOT`, which Windows' interpreter needs to
+start.
+
 ## The tests
 
 ```bash
