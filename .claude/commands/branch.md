@@ -125,8 +125,11 @@ sweeps' `mktemp -d` ones.
 
    Whichever row ran, add the change to *In progress* in the task list,
    `.todo/blueprint-backend.md` in the main checkout's parent directory
-   (`#n`, what, branch and worktree, `started`), by that path and never
+   (the issue's group from *Remaining*, or `—` where none held it, `#n`,
+   what, branch and worktree, `started`), by that path and never
    through a `TODO.md` link; a linked worktree writes it too (why:
+   docs/commands/branch.md, *Step 5*). Under `--dispatched`, skip this
+   write: `/dispatch` is the task list's one writer (why:
    docs/commands/branch.md, *Step 5*).
 
    Then **`EnterWorktree`** with the new directory as `path`. Git writes go
