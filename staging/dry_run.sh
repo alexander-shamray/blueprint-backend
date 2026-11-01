@@ -2,11 +2,11 @@
 # Run .claude/scripts suites on the tree apply.sh would leave: HEAD's files with
 # staging/.claude/ laid over .claude/, in a scratch directory, so the edit-denied
 # .claude/ of this checkout is never touched.
-# Usage: staging/dry_run.sh <scratch-dir> <test-module>...
+# Usage: staging/dry_run.sh <scratch-dir> [<test-module>...]
 set -euo pipefail
 
-if [ "$#" -lt 2 ]; then
-  echo "usage: staging/dry_run.sh <scratch-dir> <test-module>..." >&2
+if [ "$#" -lt 1 ]; then
+  echo "usage: staging/dry_run.sh <scratch-dir> [<test-module>...]" >&2
   exit 2
 fi
 scratch=$1
@@ -32,28 +32,56 @@ mkdir -p -- "$scratch"
 : > "$scratch/$marker"
 
 (cd -- "$root" && git archive --format=tar HEAD) | (cd -- "$scratch" && tar -xf -)
-cp -R -- "$root/staging/.claude/." "$scratch/.claude/"
+# With no module named, apply.sh's own steps lay the files over one at a time.
+if [ "$#" -gt 0 ]; then
+  cp -R -- "$root/staging/.claude/." "$scratch/.claude/"
+fi
 find "$scratch/.claude" -type d -name __pycache__ -prune -exec rm -rf {} +
 # apply.sh removes staging/ once its files are in place, so the copy does too.
 rm -rf -- "$scratch/staging"
 
 # Suites that list tracked files need a repository, holding the staged files as
 # tracked, which is what the tree is once apply.sh has run.
+dry_commit() {
+  git -c user.name=dry-run -c user.email=dry-run@invalid -c commit.gpgsign=false \
+    commit -q --no-verify -m "$1"
+}
 (
   cd -- "$scratch"
   git init -q -b main
   git config core.longpaths true  # some ADR slugs pass Windows' 260 under a scratch path
   echo "/$marker" >> .git/info/exclude  # a tracked root file would fail test_harness_denies
   git add -A
-  git -c user.name=dry-run -c user.email=dry-run@invalid -c commit.gpgsign=false \
-    commit -q --no-verify -m "dry run"
+  dry_commit "dry run"
 )
 
 # CI pins 3.12 and the local default is newer; py is the Windows launcher.
 if command -v py >/dev/null 2>&1; then
-  python=(py -3.12)
+  PY=(py -3.12)
 else
-  python=(python3)
+  PY=(python3)
 fi
-cd -- "$scratch/.claude/scripts"
-"${python[@]}" -m unittest "$@"
+if [ "$#" -gt 0 ]; then
+  cd -- "$scratch/.claude/scripts"
+  "${PY[@]}" -m unittest "$@"
+  exit
+fi
+
+# apply.sh's steps in order, each committed as apply.sh commits it, so a later
+# step sees what the real tree would; a failed before or after exits 1 there.
+# shellcheck source=apply.sh
+. "$root/staging/apply.sh"
+cd -- "$scratch"
+for n in 1 2 3 4; do
+  step "$n"
+  echo "step $n: $SUBJECT"
+  land "$root"
+  git add -- $TESTS $CODE
+  dry_commit "$SUBJECT"
+done
+all_landed "$root"
+echo "the whole discovery, as CI runs it"
+"${PY[@]}" -m unittest discover -s .claude/scripts
+echo "the precedent suites"
+(cd .claude/scripts && "${PY[@]}" -m unittest test_command_grants test_ship_landing_method test_command_runbooks)
+echo "dry run: every before failed and every after passed"
