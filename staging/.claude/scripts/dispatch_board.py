@@ -698,7 +698,7 @@ def open_issues(root):
 
 # Command line
 
-def main(argv=None, body_source=None, open_source=None, branch_source=None):
+def main(argv=None, body_source=None, open_source=None, branch_source=None, weekly_source=None):
     import dispatch_run
     parser = argparse.ArgumentParser(prog="dispatch_board.py")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -747,7 +747,7 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None):
         elif args.command == "tasks":
             _tasks_command(args, today)
         else:
-            return dispatch_run.command(args, today, bodies_from, open_from, branch_from)
+            return dispatch_run.command(args, today, bodies_from, open_from, branch_from, weekly_source)
     except Refusal as refusal:
         print(f"refused: {refusal}", file=sys.stderr)
         return 2
