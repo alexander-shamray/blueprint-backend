@@ -463,8 +463,8 @@ def main() -> int:
     if failures:
         return report()
 
-    # A `queue:` send binds the queue, and that bind is a read that consumes it, so a queue sent to that
-    # way has no other sender, by either address: one sender swallowing its own commands is ADR-036's residual.
+    # A `queue:` send binds the queue, which takes read on the same-name exchange, and that read consumes the
+    # queue too, so a queue sent to that way has no other sender: one swallowing its own is ADR-036's residual.
     senders: dict[str, list[str]] = {}
     binders: dict[str, list[str]] = {}
     for key in sorted(code):
