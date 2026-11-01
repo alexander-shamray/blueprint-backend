@@ -905,9 +905,10 @@ jobs:
           name: sightings-${{ matrix.shard }}
           path: TestResults/sightings
 
-      # An unreproduced flake is a comment on the flaky tests tracker, so the
-      # sighting names its test there. A fork's token cannot comment, and a missed
-      # comment must not fail a shard that passed. The artifact above is the record.
+      # A sighting is a flake that did not fail, so it goes where flakes are counted,
+      # the flaky tests tracker (docs/change-locality.md §6), named by its file. A
+      # fork's token cannot comment, and a missed comment must not fail a shard that
+      # passed. The artifact above is the record.
       - name: "Post the sightings on #1406"
         if: always() && hashFiles('TestResults/sightings/*.txt') != ''
         continue-on-error: true
