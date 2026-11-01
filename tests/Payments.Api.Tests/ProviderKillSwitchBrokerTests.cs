@@ -68,7 +68,7 @@ public sealed class ProviderKillSwitchBrokerTests(ServiceFixture fixture)
                 {
                     // Binding this test's message-type exchange is outside payments-svc's grant (ADR-036).
                     e.ConfigureConsumeTopology = false;
-                    // payments-svc reads no fault exchange outside its own namespaces, Probe's included (ADR-190).
+                    // payments-svc reads no fault exchange outside its consumed namespaces, Probe's included (ADR-190).
                     e.PublishFaults = false;
                     e.UseKillSwitch(ProviderKillSwitch.Configure);
                     e.Consumer<UnavailableConsumer>();
