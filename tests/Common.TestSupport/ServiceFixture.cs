@@ -640,12 +640,11 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     public async Task DeclarePrivacyCompletionsAsync()
     {
         const string owner = "privacy";
-        Uri broker = new UriBuilder(BrokerConnectionString) { UserName = $"{owner}-svc", Password = $"local-dev-{owner}" }
-            .Uri;
+        UriBuilder broker = new(BrokerConnectionString) { UserName = $"{owner}-svc", Password = $"local-dev-{owner}" };
 
         IBusControl bus = Bus.Factory.CreateUsingRabbitMq(cfg =>
         {
-            cfg.Host(broker);
+            cfg.Host(broker.Uri);
             cfg.DeployTopologyOnly = true;
             cfg.ReceiveEndpoint("privacy-completions", _ => { });
         });
