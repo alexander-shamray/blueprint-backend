@@ -210,6 +210,13 @@ session: what still holds a slot is an earlier dispatcher's executor, whose
 exit wakes no task here, so nothing left can change before the report. That
 group is reported as interrupted.
 
+`end: held` is §8's nothing running too, with one difference the report must
+not hide: a group is ready, and only an *In progress* row holds it, another
+session's or one this run could not close. Nothing this dispatcher waits on
+will free that row, so it cannot wake past it, and `wake` says `held`
+rather than `drained` so that a blocked backlog is never reported as an
+empty one.
+
 No script can read the weekly figure, so `usage` says `not read` and the
 limit is ignored, by the owner's decision in the spec's §8. Token Weather's
 pause notice can still reach this interactive session; when it does it is
@@ -230,6 +237,15 @@ says how far the interview got, and `resume` says what each unfinished
 group needs next. It adopts only groups this run recorded and refuses one
 whose executor is still alive, so it never relaunches over a live session
 or a worktree it never forked.
+
+**A report does not close a run that still holds rows.** Step 3 writes
+`report.md` on every night, the interrupted ones included, but a run's *In
+progress* rows change only through its own `done` and `back`, and a fresh
+run would read them as another session's claim. So `start` reopens a
+reported run while any group it moved is neither done nor sent back — an
+interrupted one, a merge not confirmed in main, a hand-back not yet sent
+back — and the report's *Interrupted* ends with the resume line exactly
+then. The resumed night writes `report.md` again, over the first.
 
 ## Grants
 
