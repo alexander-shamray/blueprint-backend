@@ -303,7 +303,12 @@ could not make it, and a branch holding commits with no PR was missing from
 *In progress*. The contract's §6 now puts the file outside every checkout,
 where the isolation refuses no session, so the row goes in at step 5
 whichever row ran, a linked worktree found at step 0 included, and nothing
-is carried as owed.
+is carried as owed. The row carries the issue's group from *Remaining*, or
+`—` where no group held it, so that a conflicts cell naming the group still
+sees the work while it runs, and under `/ship`'s `--dispatched` the write is
+skipped, because `/dispatch` is the list's one writer for the night and
+moved the row itself when it forked the worktree (`docs/commands/ship.md`,
+*Dispatched: the one token /dispatch passes*).
 
 **If the session cannot enter a worktree that was created, stop and report
 the path** — this is the other half and it fails the other way. Do

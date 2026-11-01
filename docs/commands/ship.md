@@ -929,3 +929,91 @@ the call a sleep.
 **A hook is the wrong home for it.** A `Stop` hook fires at the end of every
 turn, not at the end of a ship that was asked to sleep afterwards, and it
 cannot read the argument.
+
+## Dispatched: the one token /dispatch passes
+
+`/dispatch` forks a worktree per task-list group and starts `/ship` in it as
+a headless session, with the group's tag first and
+`--dispatched <run-dir>` last; the list of what the token changes is the
+dispatch design's §6.2
+(`docs/superpowers/specs/2026-11-01-dispatch-design.md`), and the runbook
+carries that list and one consequence the design left unspelt: step 6's
+lines 3 to 6 go with the worktree's removal, for the reason given below.
+**An interactive `/ship` reads exactly as
+it did**: every rule the token adds opens "Under `--dispatched`".
+
+**It is a token, not a word**, for *Step 7*'s reason, and only the
+dispatcher passes it: the launcher refuses a description that carries
+`--dispatched` or `--sleep`, so a description cannot switch the mode on or
+put the machine to sleep under a night run.
+
+**Nobody is there to ask, so the token's one new decision is when to hand
+back.** Three cases hand the change back unmerged beyond the seven stops,
+and they are the questions `/ship` has no recommended option for:
+
+- *An edit under `.claude/`.* The nested session's own sensitive-file
+  check refuses it (`docs/harness-boundaries.md`, *Settings self-lock and
+  permission root*), and such a change lands as a `staging/` directory and an
+  `apply.sh` the owner runs, which nobody runs at night.
+- *A resource only the owner has* — a second machine, a provider key, a
+  deployment, a paid account. No grant reaches it, and widening one at
+  night to get past a refusal is what the guards exist to stop.
+- *A decision the issue reserves for the owner*, unless an entry under the
+  issue's `## Owner decisions` settles it: that section is where the
+  dispatcher's interview records each answer, so a decision missing from it
+  is one the owner was not asked.
+
+Narrower would merge what the owner had to decide; wider would hand back what
+`/ship` already decides well, a review judgement or a check reconciled. So
+every other judgement is taken as *It runs to the end* takes it, the
+recommended option, and named in the result's `decisions`, which the morning
+report shows in place of the report nobody read.
+
+**The task list has one writer for the night.** The dispatcher moved the
+group's rows to *In progress* when it forked the worktree, and it re-reads the
+file before every write; an executor writing beside it, `/branch` step 5's
+row or step 6's deletion, would be a second writer racing the first, and a
+row deleted before the dispatcher verified the merge would hide a claimed
+merge that did not happen. Both writes are skipped.
+
+**The workspace is the worktree the session starts in**, and nothing new
+makes it so: the branch there is clean and holds nothing `origin/main` lacks,
+which is step 0's *unused* row, so step 0 stays and step 1 skips `/branch`.
+
+**The worktree outlives the session, and the dispatcher tears it down.** A
+session started inside a worktree it did not enter has no `EnterWorktree`
+to undo, so `ExitWorktree` answers with an error that it had nothing to exit,
+and `git-worktree-remove.sh` deregisters the worktree but cannot delete the
+directory the session is standing in, which Windows holds open. Lines 3 to
+6 go with them: the main checkout holds `main` for the whole night, so the
+switch to `main` is refused, and from a linked worktree
+`git fetch origin main:main` is refused too, git declining to move a branch
+another worktree has checked out; local `main` is then not pulled, so the
+containment read has nothing true to ask. A refused line would end a merged
+run on a stop. So step 6 verifies the merge from the remote, line 1, and
+stops there; the dispatcher re-verifies the PR and its oid from GitHub,
+fast-forwards the main checkout, checks that `main` contains the merge, and
+removes the worktree from the main checkout with the same helper, reporting a
+refusal (the design's §6.4).
+
+**A result on every end, because a missing result reads as a crash.** The
+dispatcher reads the file, never the reply: a reply is prose, in whatever
+language the session chose, and the file is checked as untrusted data
+against `.claude/scripts/dispatch_run.py`'s `RESULT_KEYS` and
+`_result_problem`, an unparsable or out-of-shape file counting as a failed
+run. A crash is relaunched once, and a deliberate stop must never be retried
+(a closed PR, a red `main`, a refused guard), so a stop that wrote nothing
+would be run again as if the session had died. The file is written on a
+merge, a hand-back, each of the seven stops and a run step 0 ended alike, and
+a session that dies writes nothing, which the dispatcher reads from its exit.
+The runbook shows the shape as a skeleton rather than prose because
+`test_ship_dispatched.py` parses it and holds its keys and its alternatives
+equal to the validator's, so the two cannot drift.
+
+**The path comes from the prompt, not from a convention.** The group is the
+argument's leading `#<group>-<n>[+<n>]` tag, which the launcher builds, and
+`<run-dir>` is the relative `artifacts/dispatch/<run>`, so the file lands in
+the executor's own worktree, under the gitignored `artifacts/`, where the
+dispatcher copies it from. `Write` is already granted, so the token adds no
+grant; one that needed a grant would be a wider change than the design's
+§6.2, and the suite pins the list.
