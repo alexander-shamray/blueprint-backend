@@ -386,7 +386,7 @@ def main() -> int:
     prefixes = contract_prefixes()
     code = {name: sends_and_consumes(path) for name, path in directories.items()}
     exchanges = {name: exchange_sends(path) for name, path in directories.items()}
-    private ={name: private_namespaces(path) for name, path in directories.items()}
+    private = {name: private_namespaces(path) for name, path in directories.items()}
     names = declared_names([*CONTRACTS.rglob("*.cs"), *(
         path for directory in directories.values() for path in directory.rglob("*.cs"))])
     referenced = {name: referenced_contexts(path, names) & prefixes for name, path in directories.items()}
