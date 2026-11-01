@@ -46,8 +46,8 @@ consumes, so whoever may write it — the owner, the senders its peer
 command grants name, and
 [ADR-072](ADR-072-a-person-replays-dead-letters-as-a-broker-account-of-its-own.md)'s
 `dead-letter-operator`, whose `write` covers every endpoint's exchange — can
-still deliver any of those types there; that is the command boundary ADR-036
-already draws, and each holder writing
+still deliver any of those types there; that is the boundary ADR-036 and
+ADR-072 already draw, and each holder writing
 `privacy-completions` keeps
 [ADR-190](ADR-190-holders-send-to-privacys-exchange-and-fault-reads-stop-at-consumed-namespaces-1682-1683-amending-adr-036-and-adr-094.md)'s
 residual unchanged. A message published to the default exchange, as the
