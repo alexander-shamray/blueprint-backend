@@ -264,7 +264,7 @@ class LaunchTests(InRoot):
 
     def move(self, gid, branch=BRANCH, worktree=WORKTREE):
         dr.save_state(state_dir(), {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
-        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", str(state_dir()), gid,
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, gid,
                                       "--branch", branch, "--worktree", worktree]))
         make_worktree(worktree)
 
@@ -944,6 +944,16 @@ class ReportTests(InRoot):
         self.assertIn("M1 crash-hand-back: a second crash: no result; exit 1; "
                       "worktree .claude/worktrees/dispatch-m1 removed", needs)
         self.assertIn("#1702: filed overnight, waits on a human", needs)
+
+
+    def test_a_merge_main_does_not_hold_yet_is_not_reported_as_merged(self):
+        # verify passed, then the pull or the containment read failed, so `tasks done` never ran.
+        record(RUN, "S1", status="verified", pr=1690, merge_oid=OID, rounds=MERGED_S1["rounds"], review_end="clean")
+        lines = self.report()
+        self.assertEqual(["none"], self.section(lines, "## Merged"))
+        self.assertIn(f"S1 #1690 merged as {OID}, not confirmed in main: its rows are still In progress and "
+                      "worktree .claude/worktrees/dispatch-s1 is left in place",
+                      self.section(lines, "## Needs a human"))
 
 
 class TranscriptTests(unittest.TestCase):

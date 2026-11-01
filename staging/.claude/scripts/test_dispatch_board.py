@@ -13,6 +13,7 @@ import dispatch_board as db
 import dispatch_run as dr
 
 TODAY = date(2026, 11, 1)
+RUN = "20261101-220000"
 NO_BRANCH = lambda _branch: frozenset()  # noqa: E731
 
 
@@ -351,7 +352,7 @@ class WriteTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.dir = Path(self.tmp.name)
         self.path = self.dir / "todo.md"
-        self.run_dir = self.dir / "run"
+        self.run_dir = self.dir / "artifacts" / "dispatch" / RUN
 
     def write(self, text):
         with open(self.path, "w", encoding="utf-8", newline="") as handle:
@@ -364,7 +365,8 @@ class WriteTests(unittest.TestCase):
     def cli(self, *args):
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            code = db.main(["tasks", args[0], "--tasks", str(self.path), "--run", str(self.run_dir), *args[1:]])
+            code = db.main(["tasks", args[0], "--tasks", str(self.path), "--root", str(self.dir), "--run", RUN,
+                            *args[1:]])
         return code, err.getvalue()
 
     def s1(self):
@@ -564,8 +566,11 @@ class WriteTests(unittest.TestCase):
 
     def board(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            return db.main(["board", "--tasks", str(self.path), "--today", "2026-11-01", "--run", str(self.run_dir)],
-                           body_source=lambda n: "", open_source=set, branch_source=NO_BRANCH)
+            return db.main(["board", "--tasks", str(self.path), "--today", "2026-11-01", "--root", str(self.dir),
+                            "--run", RUN], body_source=lambda n: "", open_source=set, branch_source=NO_BRANCH)
+
+    def start(self):
+        dr.save_state(self.run_dir, {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
 
     def rebuild(self, text):
         path = self.dir / "rebuilt.md"
@@ -574,6 +579,7 @@ class WriteTests(unittest.TestCase):
 
     def test_a_rewrite_replaces_the_list_with_the_rebuild_from_what_board_read(self):
         # The rebuild is the session's judgement written under the run; the helper is the only writer of the list.
+        self.start()
         self.write(FIXTURE.replace("\n", "\r\n"))
         self.assertEqual(0, self.board())
         self.assertEqual(FIXTURE.replace("\n", "\r\n"), (self.run_dir / "tasks.read.md").read_bytes().decode())
@@ -582,6 +588,7 @@ class WriteTests(unittest.TestCase):
         self.assertEqual(rebuilt.replace("\n", "\r\n"), self.read())
 
     def test_a_rewrite_refuses_a_list_changed_since_board_read_it(self):
+        self.start()
         self.write(FIXTURE)
         code, err = self.rebuild(FIXTURE)
         self.assertEqual(2, code)
@@ -602,7 +609,7 @@ class WriteTests(unittest.TestCase):
         held = [line for line in moved.split("\n") if line.startswith("| S1 | #")]
         self.assertEqual(2, len(held))
         cases = {"the note above the sections": moved.replace("Rules for filling", "Rules"),
-                 "S1's In progress rows": moved.replace(held[0] + "\n", ""),
+                 "changes the In progress section": moved.replace(held[0] + "\n", ""),
                  "unexpected section 'Done'": moved + "\n## Done\n\nnone\n"}
         for why, rebuilt in cases.items():
             with self.subTest(why=why):
@@ -610,6 +617,57 @@ class WriteTests(unittest.TestCase):
                 self.assertEqual(2, code)
                 self.assertIn(why, err)
                 self.assertEqual(moved, self.read())
+
+    def test_a_fresh_run_cannot_drop_or_edit_another_sessions_in_progress_row(self):
+        # At step 0 state.json lists no group, so the guard is the whole section, not this run's groups.
+        self.start()
+        self.write(FIXTURE)
+        self.board()
+        foreign = next(line for line in FIXTURE.split("\n") if line.startswith("| — | owed"))
+        cases = {"dropped": FIXTURE.replace(foreign + "\n", "", 1),
+                 "edited": FIXTURE.replace(foreign, foreign.replace("| started |", "| done |"), 1)}
+        for why, rebuilt in cases.items():
+            with self.subTest(row=why):
+                self.assertNotEqual(FIXTURE, rebuilt)
+                code, err = self.rebuild(rebuilt)
+                self.assertEqual(2, code)
+                self.assertIn("changes the In progress section", err)
+                self.assertEqual(FIXTURE, self.read())
+
+    def test_a_rewrite_or_a_board_without_a_started_run_is_refused(self):
+        self.write(FIXTURE)
+        code, err = self.rebuild(FIXTURE)
+        self.assertEqual(2, code)
+        self.assertIn("the run was never started", err)
+        self.assertEqual(2, self.board())
+        self.assertFalse(self.run_dir.exists())
+        self.start()
+        (self.run_dir / "state.json").write_text("{not json", encoding="utf-8")
+        code, err = self.rebuild(FIXTURE)
+        self.assertEqual(2, code)
+        self.assertIn("is not JSON", err)
+        self.assertEqual(FIXTURE, self.read())
+
+    def test_a_run_that_is_not_a_timestamp_is_refused_before_anything_is_written(self):
+        self.write(FIXTURE)
+        fetched = []
+        for run in ("../x", "notatime", str(self.dir / "run")):
+            with self.subTest(run=run):
+                err = io.StringIO()
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                    code = db.main(["board", "--tasks", str(self.path), "--root", str(self.dir), "--run", run],
+                                   body_source=fetched.append, open_source=set, branch_source=NO_BRANCH)
+                self.assertEqual(2, code)
+                self.assertIn("is not a yyyymmdd-hhmmss timestamp", err.getvalue())
+        self.assertEqual([], fetched)
+        self.assertEqual(["todo.md"], sorted(p.name for p in self.dir.iterdir()))
+        bad = io.StringIO()
+        with contextlib.redirect_stderr(bad):
+            code = db.main(["tasks", "place", "--tasks", str(self.path), "--root", str(self.dir), "--run", "../x",
+                            "1", "S3", "1700"])
+        self.assertEqual(2, code)
+        self.assertIn("is not a yyyymmdd-hhmmss timestamp", bad.getvalue())
+        self.assertEqual(FIXTURE, self.read())
 
     def test_place_records_the_issue_in_the_runs_state(self):
         # The morning report's Filed overnight names what the dispatcher placed as well as what results named.
@@ -667,12 +725,13 @@ class BoardTests(unittest.TestCase):
 
     def test_board_caches_bodies_under_the_run(self):
         calls = []
-        run = Path(self.tmp.name) / "run"
-        self.run_board(calls, ("--run", str(run)))
+        run = Path(self.tmp.name) / "artifacts" / "dispatch" / RUN
+        dr.save_state(run, {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
+        self.run_board(calls, ("--root", self.tmp.name, "--run", RUN))
         self.assertEqual(6, len(calls))
         self.assertTrue((run / "bodies" / "1682.txt").is_file())
         again = []
-        self.run_board(again, ("--run", str(run)))
+        self.run_board(again, ("--root", self.tmp.name, "--run", RUN))
         self.assertEqual([], again)
 
     def test_board_reads_bodies_and_the_open_set_through_the_helpers(self):
@@ -686,14 +745,16 @@ class BoardTests(unittest.TestCase):
         listed = [{"number": 1440, "title": "t", "state": "OPEN", "labels": []},
                   {"number": 1682, "title": "t", "state": "CLOSED", "labels": []}]
         stub(root, "gh-issue-list.sh", f"echo '{json.dumps(listed)}'\n")
+        run = root / "artifacts" / "dispatch" / RUN
+        dr.save_state(run, {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = db.main(["board", "--tasks", str(self.path), "--today", "2026-11-01", "--root", str(root),
-                            "--run", str(root / "run")], branch_source=NO_BRANCH)
+                            "--run", RUN], branch_source=NO_BRANCH)
         self.assertEqual(0, code, err.getvalue())
         lines = out.getvalue().splitlines()
         self.assertTrue(lines[0].startswith("S1 | wave 1 | ready | free | "), lines[0])
-        self.assertIn("t\ntouches definitions.json", (root / "run" / "bodies" / "1682.txt").read_text("utf-8"))
+        self.assertIn("t\ntouches definitions.json", (run / "bodies" / "1682.txt").read_text("utf-8"))
         self.assertEqual({1440}, db.open_issues(str(root)))
 
     def test_a_helper_that_fails_is_a_refusal(self):
