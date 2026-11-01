@@ -1,6 +1,6 @@
 // Samples the machine's CPU, every container's CPU and memory, SQL Server's
-// deadlock and wait counters and each database's page latch on its inbox's
-// key, every few seconds until the stress run
+// deadlock and wait counters, each database's page latch on its inbox's key
+// and the sessions waiting on a lock, every few seconds until the stress run
 // writes raw.json, as JSON lines summarise.mjs reads. All are read from
 // outside the stack, so no exporter is added to the stack it measures.
 //
@@ -16,10 +16,12 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import {
     INBOX_LATCH,
+    LOCK_WAITS,
     QUERY_STORE_DATABASES,
     QUERY_STORE_INTERVAL_MINUTES,
     parseCpu,
     parseInboxLatch,
+    parseLockWaits,
     parseMemory,
     sqlcmdArgs,
 } from './report.js';
@@ -133,6 +135,14 @@ async function inboxLatch() {
     }
 }
 
+async function lockWaits() {
+    try {
+        return { waits: parseLockWaits(await sqlcmd(LOCK_WAITS)) };
+    } catch (error) {
+        return { error: String(error.message ?? error).split('\n')[0] };
+    }
+}
+
 // Query Store keeps a statement's figures per interval, an hour unless set,
 // which no step is as short as; so each database's is set to
 // QUERY_STORE_INTERVAL_MINUTES for the run, recorded in query-store.json
@@ -205,7 +215,7 @@ for (const signal of ['SIGINT', 'SIGTERM', 'SIGBREAK'])
 
 while (!existsSync(DONE) && !existsSync(STOP) && !signalled && Date.now() - started < LIMIT_MS) {
     const at = Date.now();
-    const [stats, counters, inbox] = await Promise.all([containers(), sql(), inboxLatch()]);
+    const [stats, counters, inbox, locks] = await Promise.all([containers(), sql(), inboxLatch(), lockWaits()]);
 
     // A failed read is written as one, so a gap in the table says why.
     appendFileSync(SAMPLES, `${JSON.stringify({
@@ -217,6 +227,8 @@ while (!existsSync(DONE) && !existsSync(STOP) && !signalled && Date.now() - star
         sqlError: counters.error,
         inboxLatch: inbox.latch,
         inboxLatchError: inbox.error,
+        lockWaits: locks.waits,
+        lockWaitsError: locks.error,
     })}\n`);
 
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, INTERVAL_MS - (Date.now() - at))));

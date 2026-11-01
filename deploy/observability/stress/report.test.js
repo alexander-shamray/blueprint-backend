@@ -35,6 +35,12 @@ import {
     promRange,
     serviceCrossings,
     sqlDelta,
+    LOCK_WAITS,
+    LOCK_WAITS_READ,
+    LOCK_WAITS_TOP,
+    lockWaits,
+    lockWaitsLine,
+    parseLockWaits,
     QUERY_STORE_TOP,
     parseQueryStore,
     queryStoreLine,
@@ -649,4 +655,94 @@ test('a step\'s inbox latch is each database\'s change, most first, and a counte
         { database: 'Payments', ms: 97 },
     ], 'Inventory\'s fell and Shipping has no first reading');
     assert.equal(inboxLatchDelta(samples, { startMs: 1500, endMs: 2500 }), null, 'one reading is no change');
+});
+
+const INSERT = '(@p0 nvarchar(256),@p1 uniqueidentifier)INSERT INTO [ordering].[InboxMessages] ([Endpoint])';
+const DELETE = 'DELETE TOP (100) FROM [ordering].[InboxState] WHERE CleanupBucket = @Bucket';
+const KEYLOCK = 'keylock hobtid=72057594043760640 dbid=7 id=lock1f2 mode=X associatedObjectId=72057594043760640';
+
+test('a lock wait is read from the waiting tasks, with the holder\'s statement whether it runs or idles', () => {
+    assert.match(LOCK_WAITS, new RegExp(`^SELECT TOP \\(${LOCK_WAITS_READ}\\)`, 'm'));
+    assert.match(LOCK_WAITS, /FROM sys\.dm_os_waiting_tasks AS w/);
+    assert.match(LOCK_WAITS, /WHERE w\.wait_type LIKE 'LCK\[_\]%' AND w\.blocking_session_id > 0/);
+    assert.match(LOCK_WAITS, /COALESCE\(hr\.sql_handle, hc\.most_recent_sql_handle\)/,
+        'an idle holder has no request, so its last batch is read from its connection');
+    assert.match(LOCK_WAITS, /hc\.parent_connection_id IS NULL/, 'one connection a session, not each MARS one');
+    assert.equal((LOCK_WAITS.match(/AS nvarchar\(200\)\)/g) ?? []).length, 3, 'every text a bounded field');
+
+    const output = [
+        `Ordering|61|58|LCK_M_X|27|sleeping|1|NULL|12|${KEYLOCK}|INSERT INTO [ordering].[InboxMessages]|${DELETE}`,
+        `Ordering|62|59|LCK_M_U|40|suspended|1|LCK_M_X|NULL|${KEYLOCK}|${DELETE}|${DELETE}`,
+        '',
+        'Ordering|x|58|LCK_M_X|27|sleeping|1|NULL|12|keylock|a|b',
+        'too|few',
+    ].join('\r\n');
+
+    assert.deepEqual(parseLockWaits(output), [
+        {
+            database: 'Ordering', session: 61, holder: 58, waitType: 'LCK_M_X', waitMs: 27,
+            holderStatus: 'sleeping', holderTransactions: 1, holderWait: null, holderIdleMs: 12,
+            resource: KEYLOCK, statement: 'INSERT INTO [ordering].[InboxMessages]', holderStatement: DELETE,
+        },
+        {
+            database: 'Ordering', session: 62, holder: 59, waitType: 'LCK_M_U', waitMs: 40,
+            holderStatus: 'suspended', holderTransactions: 1, holderWait: 'LCK_M_X', holderIdleMs: null,
+            resource: KEYLOCK, statement: DELETE, holderStatement: DELETE,
+        },
+    ]);
+});
+
+test('a step\'s lock waits pair each waiting statement with its lock and holder, the most often seen first', () => {
+    const wait = (overrides) => ({
+        database: 'Ordering', session: 61, holder: 58, waitType: 'LCK_M_X', waitMs: 20,
+        holderStatus: 'sleeping', holderTransactions: 1, holderWait: null, holderIdleMs: 5,
+        resource: KEYLOCK, statement: INSERT, holderStatement: DELETE, ...overrides,
+    });
+    const samples = [
+        { at: 1000, lockWaits: [wait({}), wait({ waitType: 'LCK_M_U', holderWait: 'LCK_M_X', holderIdleMs: null })] },
+        { at: 1500, lockWaitsError: 'sqlcmd failed' },
+        { at: 2000, lockWaits: [wait({ waitMs: 90, holderIdleMs: 30 })] },
+        { at: 3000, lockWaits: [wait({ waitMs: 500 })] },
+    ];
+
+    const row = lockWaits(samples, { startMs: 1000, endMs: 2000 });
+
+    assert.equal(row.samples, 2, 'the failed read is no sample');
+    assert.equal(row.seen, 3);
+    assert.deepEqual(row.chains[0], {
+        database: 'Ordering',
+        waitType: 'LCK_M_X',
+        resource: 'keylock held X hobt 72057594043760640',
+        statement: 'INSERT INTO [ordering].[InboxMessages] ([Endpoint])',
+        holder: { statement: DELETE, state: 'idle in its transaction' },
+        seen: 2,
+        longestMs: 90,
+        holderIdleMs: 30,
+    });
+    assert.equal(row.chains[1].holder.state, 'waiting LCK_M_X', 'a holder that waits is a link in a longer chain');
+    assert.equal(row.chains[1].holderIdleMs, null);
+
+    assert.equal(lockWaitsLine(2, row).split('; ')[0], '- Step 2: 3 waits in 2 samples');
+    assert.equal(lockWaitsLine(2, row).split('; ')[1],
+        'Ordering `INSERT INTO [ordering].[InboxMessages] ([Endpoint])` LCK_M_X on keylock held X ' +
+        `hobt 72057594043760640, behind \`${DELETE}\` idle in its transaction up to 30 ms, ` +
+        'seen 2 times, longest 90 ms');
+    assert.equal(lockWaitsLine(3, lockWaits([{ at: 1, lockWaits: [] }], { startMs: 0, endMs: 2 })),
+        '- Step 3: no session waited on a lock in any of 1 samples');
+    assert.equal(lockWaits(samples, { startMs: 1400, endMs: 1600 }), null, 'no sample read it');
+    assert.equal(lockWaitsLine(4, null), '- Step 4: not read');
+});
+
+test('a step keeps only the LOCK_WAITS_TOP pairings seen most often', () => {
+    const waits = Array.from({ length: LOCK_WAITS_TOP + 2 }, (_, i) => ({
+        database: 'Ordering', waitType: 'LCK_M_X', waitMs: i, resource: KEYLOCK,
+        statement: `UPDATE t${i}`, holderStatement: DELETE, holderStatus: 'running', holderWait: null,
+    }));
+
+    const row = lockWaits([{ at: 1, lockWaits: [...waits, waits[3], waits[3]] }], { startMs: 0, endMs: 2 });
+
+    assert.equal(row.chains.length, LOCK_WAITS_TOP);
+    assert.equal(row.chains[0].statement, 'UPDATE t3');
+    assert.equal(row.chains[0].holder.state, 'running');
+    assert.equal(row.seen, LOCK_WAITS_TOP + 4);
 });

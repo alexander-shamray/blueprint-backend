@@ -588,9 +588,13 @@ all its processors, each container's CPU and memory from
 `docker stats`, where a CPU figure is a share of one core and passes 100 on
 several, with its Compose service and CPU limit read at the start and again
 for a container started since, as the k6 run's is, SQL Server's deadlocks
-and lock, page-latch and log-flush waits, and each platform database's page
+and lock, page-latch and log-flush waits, each platform database's page
 latch on its `InboxMessages` primary key, by `stress/report.js`'s
-`INBOX_LATCH`.
+`INBOX_LATCH`, and every session waiting on a lock, by its `LOCK_WAITS`: the
+waiting statement, the lock's kind, mode and index, and the holding
+session's state and statement, the one it runs now or, idle in its
+transaction, the last it sent. The summary pairs them per step, most often
+seen first, so a lock wait's total in the table names what it waited behind.
 From the `judge`, the VUs k6 ran a second before each hold's end.
 Nothing is added to the stack to read any of them. What could only be read by
 adding a component is listed in the summary under *Not measured*.
