@@ -791,6 +791,21 @@ class WakeTests(InRoot):
             lines = self.wake()
         self.assertIn(f"transcript S9: {folder / 'abc.jsonl'}", lines)
 
+    def test_wake_follows_a_relaunched_executor_not_the_session_it_read(self):
+        folder = self.root / "projects" / dr.project_slug(os.path.abspath(".claude/worktrees/dispatch-s9"))
+        folder.mkdir(parents=True)
+        dead, live = folder / "dead.jsonl", folder / "live.jsonl"
+        for status in ("relaunch", "window", "week"):
+            with self.subTest(status=status):
+                record(RUN, "S9", status=status, pid=os.getpid(), transcript=str(dead))
+                pid_time = os.stat(state_dir() / "S9.pid").st_mtime
+                for path in (dead, live):
+                    path.write_text("{}\n", encoding="utf-8")
+                # The read session's transcript predates the pid file `run` wrote for the relaunch; the live one not.
+                created = {str(dead): pid_time - 60, str(live): pid_time + 1}
+                with mock.patch.object(dr, "_created", lambda path: created[str(path)]):
+                    self.assertIn(f"transcript S9: {live}", self.wake())
+
     def test_the_window_wait_is_capped_and_a_past_reset_returns_at_once(self):
         slept = []
         with mock.patch.object(dr, "SLEEP", slept.append):
@@ -829,7 +844,12 @@ class WakeTests(InRoot):
             self.assertEqual("stop file: yes\n", run_cli(["wait", RUN, "S1"]))
 
     def test_a_relaunch_after_the_stop_file_starts_nothing_and_its_group_goes_back(self):
-        record(RUN, "S1", status="relaunch", branch=BRANCH, worktree=WORKTREE)
+        # The crashed session the relaunch follows was read, and its record and copied result are still on disk.
+        earlier = (NOW - timedelta(hours=1)).isoformat()
+        record(RUN, "S1", status="relaunch", branch=BRANCH, worktree=WORKTREE, crashes=1, absorbed=earlier)
+        (state_dir() / "S1.session.json").write_text(json.dumps(
+            {"exit": 1, "started": earlier, "ended": earlier, "stdout": "boom", "stderr": ""}), encoding="utf-8")
+        (state_dir() / "S1.json").write_text("{}", encoding="utf-8")
         (state_dir() / "STOP").write_text("", encoding="utf-8")
         launched = []
 
@@ -842,7 +862,10 @@ class WakeTests(InRoot):
         self.assertEqual([], launched)
         self.assertIn("refused: stop file", err.getvalue())
         self.assertFalse((state_dir() / "S1.session.json").exists())
-        self.assertIn("result S1: its run launched nothing and was not read", run_cli(["resume", RUN]))
+        self.assertFalse((state_dir() / "S1.json").exists())
+        self.assertTrue((state_dir() / "S1.refused.json").is_file())
+        self.assertEqual(["result S1: its run launched nothing and was not read"],
+                         run_cli(["resume", RUN]).splitlines())
         lines = run_cli(["result", RUN, "S1"]).splitlines()
         self.assertTrue(lines[0].startswith("S1: crashed-before-launch - run refused before launch: stop file"),
                         lines)

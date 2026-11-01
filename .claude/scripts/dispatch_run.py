@@ -294,6 +294,9 @@ def run_session(root, run, gid, description):
 
 def _launch(root, directory, run, gid, entry, description):
     """Everything up to a started executor, which is returned with its prompt and start time; a refusal starts none."""
+    # A relaunch's earlier session was read, so it goes before any check can refuse: a refusal left beside its
+    # record would make `result` refuse the pair, and the group would hold its slot all night.
+    _remove_stale(directory / f"{gid}.json", directory / f"{gid}.session.json")
     # The owner's stop file ends relaunches too, not only the next wake's launches.
     if (directory / "STOP").exists():
         raise Refusal("stop file: the owner ended the night, so nothing more launches")
@@ -305,12 +308,7 @@ def _launch(root, directory, run, gid, entry, description):
     command = list(CLAUDE_COMMAND) if CLAUDE_COMMAND else [path_which("claude")]
     if not command[0]:
         raise Refusal("no claude on PATH")
-    for stale in (worktree / "artifacts" / "dispatch" / run / f"{gid}.json", directory / f"{gid}.json",
-                  directory / f"{gid}.session.json"):
-        try:
-            stale.unlink(missing_ok=True)
-        except OSError as error:
-            raise Refusal(f"could not remove the stale {stale}: {error}") from None
+    _remove_stale(worktree / "artifacts" / "dispatch" / run / f"{gid}.json")
     started = now()
     # The permission mode is the settings' own, never a flag here (spec section 6.2); the prompt goes on stdin.
     try:
@@ -326,6 +324,14 @@ def _launch(root, directory, run, gid, entry, description):
         child.wait()
         raise
     return child, text, started
+
+
+def _remove_stale(*paths):
+    for stale in paths:
+        try:
+            stale.unlink(missing_ok=True)
+        except OSError as error:
+            raise Refusal(f"could not remove the stale {stale}: {error}") from None
 
 
 # What an executor returns (spec section 6.3)
@@ -901,8 +907,8 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source, 
     for gid in active:
         entry = entries[gid]
         worktree = Path(root) / _field(entry, gid, "worktree", _path_text)
-        live = (transcript_path(str(worktree), None, _launch_time(directory, gid, entry))
-                if entry.get("status") == "running" else entry.get("transcript"))
+        # A relaunch keeps its read status while its new executor runs, so the pid file's time finds the live one.
+        live = transcript_path(str(worktree), None, _launch_time(directory, gid, entry))
         out.append(f"transcript {gid}: {live or 'none yet'}")
     pairs = state.get("pairs")
     if not _number(pairs):
