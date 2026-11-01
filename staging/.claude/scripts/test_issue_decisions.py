@@ -28,7 +28,7 @@ with open(here / "calls.jsonl", "a", encoding="utf-8") as log:
 if args[:2] == ["repo", "view"]:
     print("acme/widgets")
 elif args[:2] == ["issue", "view"]:
-    body = (here / "body.txt").read_text(encoding="utf-8")
+    body = (here / "body.txt").read_bytes().decode("utf-8")
     sys.stdout.buffer.write(json.dumps({"body": body}, ensure_ascii=False).encode("utf-8"))
 elif args[:2] == ["issue", "edit"] and "--body-file" in args:
     (here / "written.bin").write_bytes(pathlib.Path(args[args.index("--body-file") + 1]).read_bytes())
@@ -88,6 +88,7 @@ class Shapes(unittest.TestCase):
             ("q", "   "),
             ("# heading", "a"),
             ("q", "## heading"),
+            ("x A: y", "a"),
             ("x" * 501, "a"),
             ("q", "x" * 501),
         ):
@@ -131,7 +132,7 @@ class Shapes(unittest.TestCase):
 
 class Cli(StubGh):
     def test_record_reads_then_writes_the_body_with_repo_pinned(self):
-        (self.stub / "body.txt").write_text("Original.\n", encoding="utf-8")
+        (self.stub / "body.txt").write_bytes(b"Original.\n")
         question = self.write("q.txt", "Lift the pause on 1677?\n")
         answer = self.write("a.txt", "Yes, after 1671.\n")
         code, err = self.run_main(
@@ -152,7 +153,7 @@ class Cli(StubGh):
         self.assertFalse(Path(calls[2][6]).exists())
 
     def test_a_russian_answer_with_an_em_dash_reaches_the_body_byte_for_byte(self):
-        (self.stub / "body.txt").write_text("Текст.\n", encoding="utf-8")
+        (self.stub / "body.txt").write_bytes("Текст.\n".encode("utf-8"))
         question = self.write("q.txt", "Снять паузу — после 1671?\n")
         answer = self.write("a.txt", "Да — после 1671, не раньше.\n")
         code, err = self.run_main(
@@ -194,6 +195,71 @@ class Cli(StubGh):
         self.assertEqual(calls[1], ["issue", "comment", "9", "--repo", "acme/widgets", "--body-file", comment])
         self.assertEqual(
             calls[2], ["issue", "close", "9", "--repo", "acme/widgets", "--reason", "not planned"]
+        )
+
+    def test_a_gh_planted_in_the_cwd_is_not_run_and_the_one_on_path_is(self):
+        work = self.dir / "work"
+        work.mkdir()
+        (work / "gh.cmd").write_text(f'@echo planted> "{work}\\ran"\r\n', encoding="ascii")
+        here = os.getcwd()
+        os.chdir(work)
+        self.addCleanup(os.chdir, here)
+        self.assertEqual(self.run_main(["unblock", "5", "question"]), (0, ""))
+        self.assertFalse((work / "ran").exists())
+        self.assertEqual(len(self.calls()), 2)
+        with mock.patch.dict(os.environ, {"PATH": os.pathsep.join(["", ".", str(work)])}):
+            code, err = self.run_main(["unblock", "5", "question"])
+        self.assertEqual(code, 3)
+        self.assertIn("gh is not on PATH", err)
+        self.assertFalse((work / "ran").exists())
+
+    def test_a_question_holding_the_answer_marker_is_refused_by_the_cli(self):
+        code, err = self.run_main(
+            ["record", "5", "--question-file", self.write("q", "x A: y"), "--answer-file", self.write("a", "z")]
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(self.calls(), [])
+
+    def test_a_missing_run_dir_is_refused_before_gh_runs(self):
+        code, err = self.run_main(
+            ["record", "5", "--question-file", self.write("q", "q"), "--answer-file", self.write("a", "a"),
+             "--run-dir", str(self.dir / "nope")]
+        )
+        self.assertEqual(code, 2)
+        self.assertIn("--run-dir", err)
+        self.assertEqual(self.calls(), [])
+
+    def test_a_failed_edit_exits_3_and_leaves_no_temp_file(self):
+        (self.stub / "body.txt").write_text("x\n", encoding="utf-8")
+        (self.stub / "fail").write_text("", encoding="utf-8")
+        run = self.dir / "run"
+        run.mkdir()
+        code, err = self.run_main(
+            ["record", "5", "--question-file", self.write("q", "q"), "--answer-file", self.write("a", "a"),
+             "--run-dir", str(run)]
+        )
+        self.assertEqual(code, 3)
+        self.assertEqual(list(run.iterdir()), [])
+
+    def test_the_default_date_is_today(self):
+        (self.stub / "body.txt").write_text("x\n", encoding="utf-8")
+        self.run_main(["record", "5", "--question-file", self.write("q", "q"), "--answer-file", self.write("a", "a")])
+        written = (self.stub / "written.bin").read_text(encoding="utf-8")
+        self.assertIn(f"- {date.today().isoformat()}: Q: q A: a", written)
+
+    def test_a_crlf_body_keeps_crlf(self):
+        args = ["--question-file", self.write("q", "q"), "--answer-file", self.write("a", "a"), "--date", "2026-11-01"]
+        (self.stub / "body.txt").write_bytes(b"One.\r\n\r\n## Owner decisions\r\n\r\n- 2026-10-31: Q: a A: b\r\n")
+        self.run_main(["record", "5", *args])
+        self.assertEqual(
+            (self.stub / "written.bin").read_bytes(),
+            b"One.\r\n\r\n## Owner decisions\r\n\r\n- 2026-10-31: Q: a A: b\r\n- 2026-11-01: Q: q A: a\r\n",
+        )
+        (self.stub / "body.txt").write_bytes(b"One.\r\n")
+        self.run_main(["record", "5", *args])
+        self.assertEqual(
+            (self.stub / "written.bin").read_bytes(),
+            b"One.\r\n\r\n## Owner decisions\r\n\r\n- 2026-11-01: Q: q A: a\r\n",
         )
 
     def test_a_failed_gh_exits_3(self):

@@ -627,6 +627,30 @@ def _no_relay(found):
     return found
 
 
+def path_which(name):
+    """The first executable `name` on PATH, never one in the current directory, or None.
+
+    shutil.which looks in the current directory first on Windows, and the checkout is writable by any merged change,
+    so a planted gh.cmd or claude.exe would run in place of the real one. The search is done here, PATH entries only.
+    """
+    here = os.path.normcase(os.path.realpath(os.getcwd()))
+    if os.name == "nt":
+        exts = [e for e in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(os.pathsep) if e]
+        names = [name] if os.path.splitext(name)[1].upper() in (e.upper() for e in exts) else [name + e for e in exts]
+    else:
+        names = [name]
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if directory in ("", ".") or os.path.normcase(os.path.realpath(directory)) == here:
+            continue
+        for candidate in names:
+            path = os.path.join(directory, candidate)
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                real = os.path.normcase(os.path.realpath(path))
+                if real != here and not real.startswith(here + os.sep):
+                    return path
+    return None
+
+
 def git_bash():
     return _no_relay(_bash_beside(shutil.which("git") or "") if os.name == "nt" else shutil.which("bash"))
 
