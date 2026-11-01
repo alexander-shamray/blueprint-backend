@@ -2,19 +2,21 @@
 
 `record` appends a dated answer under `## Owner decisions`, `unblock` drops `question` or `paused`, `close` comments
 and closes as not planned; exit 2 is a refusal with nothing written, 3 a failed `gh` call. The untrusted body is
-searched for the heading line only, so one inside a fence or comment counts; a retried `close` comments twice."""
+searched for the heading line only, so one inside a fence or comment counts; a retried `close` comments twice.
+`record` and `close` take the run's name and read only files under that run; gh gets the checked text on stdin."""
 
 import argparse
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 from datetime import date
 from pathlib import Path
 
+# The checkout this file is in, never a caller's path: a run is resolved under it as dispatch_run's run_dir does.
+ROOT = Path(__file__).resolve().parents[2]
+RUN_NAME = re.compile(r"\d{8}-\d{6}")
 HEADING = "## Owner decisions"
 PART_LIMIT = 500
 # A close comment says why no work is needed: a few answers' worth, never a pasted file.
@@ -96,33 +98,45 @@ def issue_number(text):
     return text
 
 
-def read_utf8(path):
-    try:
-        return Path(path).read_bytes().decode("utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        raise Refusal(f"cannot read {path} as UTF-8: {error}")
+def run_directory(run):
+    """artifacts/dispatch/<run> under ROOT, refused unless the name is a run's and `start` opened it."""
+    if not isinstance(run, str) or not RUN_NAME.fullmatch(run):
+        raise Refusal(f"run name {run!r} is not a yyyymmdd-hhmmss timestamp")
+    directory = ROOT / "artifacts" / "dispatch" / run
+    if not (directory / "state.json").is_file():
+        raise Refusal(f"{directory / 'state.json'} is missing; the run was never started")
+    return directory
 
 
-def comment_file(path, run_dir):
-    """The close comment, refused unless it is a file the run wrote under its own directory and of an answer's size."""
-    if not os.path.isdir(run_dir):
-        raise Refusal(f"--run-dir {run_dir} is not a directory")
-    real, base = os.path.normcase(os.path.realpath(path)), os.path.normcase(os.path.realpath(run_dir))
+def run_file(path, directory, option, limit):
+    """A file under the run's directory, read once and at most `limit` characters, as UTF-8 text."""
+    real, base = os.path.normcase(os.path.realpath(path)), os.path.normcase(os.path.realpath(directory))
     try:
         inside = real != base and os.path.commonpath([real, base]) == base
     except ValueError:
         # Windows' commonpath refuses two drives, which are never one inside the other.
         inside = False
     if not inside:
-        raise Refusal(f"--comment-file {path} is not under --run-dir {run_dir}")
+        raise Refusal(f"{option} {path} is not under the run's directory {directory}")
     try:
         size = os.path.getsize(real)
     except OSError as error:
         raise Refusal(f"cannot read {path}: {error}")
     # Bytes first, so an oversized file is refused before it is read; a character is at most four bytes.
-    if size > 4 * COMMENT_LIMIT:
-        raise Refusal(f"the comment is over {COMMENT_LIMIT} characters")
-    text = read_utf8(real)
+    if size > 4 * limit:
+        raise Refusal(f"{option} {path} is over {limit} characters")
+    try:
+        text = Path(real).read_bytes().decode("utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise Refusal(f"cannot read {path} as UTF-8: {error}")
+    if len(text) > limit:
+        raise Refusal(f"{option} {path} is over {limit} characters")
+    return text
+
+
+def comment_text(path, directory):
+    """The close comment, refused unless it is a file the run wrote under its own directory and of an answer's size."""
+    text = run_file(path, directory, "--comment-file", COMMENT_LIMIT)
     if not text.strip():
         raise Refusal("the comment is empty")
     if len(text) > COMMENT_LIMIT:
@@ -153,12 +167,12 @@ def path_which(name):
     return None
 
 
-def gh(*args):
+def gh(*args, stdin=None):
     exe = path_which("gh")
     if exe is None:
         raise GhFailure("gh is not on PATH")
     try:
-        done = subprocess.run([exe, *args], capture_output=True)
+        done = subprocess.run([exe, *args], input=stdin, capture_output=True)
     except OSError as error:
         raise GhFailure(f"gh {' '.join(args[:2])} could not start: {error}")
     if done.returncode != 0:
@@ -174,7 +188,7 @@ def repository():
     return name
 
 
-def record(number, question, answer, day, run_dir):
+def record(number, question, answer, day):
     line = entry(day, question, answer)
     repo = repository()
     view = gh("issue", "view", number, "--repo", repo, "--json", "body")
@@ -183,13 +197,7 @@ def record(number, question, answer, day, run_dir):
     except (ValueError, KeyError, TypeError) as error:
         raise GhFailure(f"gh issue view answered no body: {error}")
     new_body = append_decision(body or "", line)
-    directory = tempfile.mkdtemp(dir=run_dir)
-    try:
-        path = Path(directory) / "body.md"
-        path.write_bytes(new_body.encode("utf-8"))
-        gh("issue", "edit", number, "--repo", repo, "--body-file", str(path))
-    finally:
-        shutil.rmtree(directory, ignore_errors=True)
+    gh("issue", "edit", number, "--repo", repo, "--body-file", "-", stdin=new_body.encode("utf-8"))
 
 
 def main(argv=None):
@@ -200,14 +208,14 @@ def main(argv=None):
     rec.add_argument("--question-file", required=True)
     rec.add_argument("--answer-file", required=True)
     rec.add_argument("--date")
-    rec.add_argument("--run-dir")
+    rec.add_argument("--run", required=True)
     unb = sub.add_parser("unblock")
     unb.add_argument("number")
     unb.add_argument("label")
     clo = sub.add_parser("close")
     clo.add_argument("number")
     clo.add_argument("--comment-file", required=True)
-    clo.add_argument("--run-dir", required=True)
+    clo.add_argument("--run", required=True)
     try:
         args = parser.parse_args(argv)
     except SystemExit as stop:
@@ -219,18 +227,20 @@ def main(argv=None):
                 day = date.fromisoformat(args.date) if args.date else date.today()
             except ValueError:
                 raise Refusal(f"--date {args.date!r} is not an ISO date")
-            if args.run_dir and not os.path.isdir(args.run_dir):
-                raise Refusal(f"--run-dir {args.run_dir} is not a directory")
-            run_dir = args.run_dir
-            record(number, read_utf8(args.question_file), read_utf8(args.answer_file), day, run_dir)
+            directory = run_directory(args.run)
+            # Both reach a public issue, so each is held to the run, as the close comment is.
+            question = run_file(args.question_file, directory, "--question-file", COMMENT_LIMIT)
+            answer = run_file(args.answer_file, directory, "--answer-file", COMMENT_LIMIT)
+            record(number, question, answer, day)
         elif args.command == "unblock":
             label = unblock_label(args.label)
             gh("issue", "edit", number, "--repo", repository(), "--remove-label", label)
         else:
-            comment_file(args.comment_file, args.run_dir)
+            # The text checked here is the text posted: gh reopening the path could read a file swapped since.
+            text = comment_text(args.comment_file, run_directory(args.run))
             repo = repository()
             try:
-                gh("issue", "comment", number, "--repo", repo, "--body-file", args.comment_file)
+                gh("issue", "comment", number, "--repo", repo, "--body-file", "-", stdin=text.encode("utf-8"))
             except GhFailure as failure:
                 raise GhFailure(f"comment step failed, the issue is still open: {failure}")
             try:
