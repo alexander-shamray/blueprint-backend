@@ -357,11 +357,12 @@ The report ends with the apply line every message here ends with.
   Copilot, no Grok) hold unchanged.
 - Everything the dispatcher runs goes through the repository's helpers and
   grants; a git write is a helper, as in `/ship`.
-- This command, its `docs/commands/` page, the `--dispatched` token in
-  `/ship` and `/branch`, its helpers and their `test_*.py` suites all live
-  under `.claude/`, which this repository denies a session editing. The
-  implementing PR lands them as a `staging/` dir and an `apply.sh` the
-  owner runs, `settings.json` last.
+- This command, the `--dispatched` token in `/ship` and `/branch`, its
+  helpers and their `test_*.py` suites all live under `.claude/`, which this
+  repository denies a session editing. The implementing PR lands them as a
+  `staging/` dir and an `apply.sh` the owner runs, `settings.json` last. The
+  command's `docs/commands/` page is outside `.claude/` and is written in
+  place.
 - A new command that grants one agent type denies every other, and
   `test_command_grants.py` holds it (`docs/harness-boundaries.md`,
   *Agent-type, push and dotnet entries*). The dispatcher grants none: it
