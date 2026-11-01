@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 import zoneinfo
 from dataclasses import dataclass
@@ -142,30 +143,62 @@ def new_run(root, pairs, lang, now):
     return name
 
 
-def open_run(root):
+def open_run(root, tasks_path):
+    """The newest run `start` resumes, and why it was kept open when that could not be read, or (None, None)."""
     base = Path(root) / "artifacts" / "dispatch"
     if not base.is_dir():
-        return None
-    names = sorted(p.name for p in base.iterdir() if p.is_dir() and RUN_NAME.fullmatch(p.name)
-                   and (p / "state.json").is_file() and (not (p / "report.md").exists() or _holds_rows(p)))
-    return names[-1] if names else None
+        return None, None
+    runs = sorted((p for p in base.iterdir() if p.is_dir() and RUN_NAME.fullmatch(p.name)
+                   and (p / "state.json").is_file()), key=lambda p: p.name, reverse=True)
+    read = []
+
+    def listed():
+        # Read once, and only when a reported run has an unclosed group to judge against it.
+        if not read:
+            read.append(_in_progress_keys(tasks_path))
+        return read[0]
+    for path in runs:
+        if not (path / "report.md").exists():
+            return path.name, None
+        held, why = _holds_rows(path, listed)
+        if held:
+            return path.name, why
+    return None, None
 
 
-# A group whose rows left In progress through this run's `done` or `back`; any other still holds them.
+# A group whose rows left In progress through this run's `done` or `back`; any other may still hold them.
 CLOSED = ("done", "returned")
 
 
-def _holds_rows(directory):
-    """Whether a run still holds In progress rows, which only its own `done` and `back` may touch.
+def _in_progress_keys(tasks_path):
+    try:
+        return {row.key for row in parse_tasks(_read(tasks_path)).in_progress}, None
+    except (OSError, ValueError, Refusal) as error:
+        return None, f"the task list {tasks_path} could not be read: {error}"
 
-    Such a run stays open past its report, so the next `start` resumes it; an unreadable state is kept open too,
-    since closing it would leave its rows to no run.
+
+def _holds_rows(directory, listed):
+    """Whether In progress, as `listed()` returns its keys, holds rows of a group this run has not closed.
+
+    Only the run's own `done` and `back` touch those rows, so such a run stays open past its report; a list or a
+    state that cannot be read keeps it open too, with why, since closing it could leave its rows to no run.
     """
     try:
-        entries = load_state(directory).get("groups", {}).values()
-    except Refusal:
-        return True
-    return any(not isinstance(entry, dict) or entry.get("status") not in CLOSED for entry in entries)
+        entries = load_state(directory).get("groups", {})
+    except Refusal as error:
+        return True, str(error)
+    for gid, entry in entries.items():
+        if isinstance(entry, dict) and entry.get("status") in CLOSED:
+            continue
+        keys, unread = listed()
+        if keys is None:
+            return True, unread
+        try:
+            if set(_field(entry if isinstance(entry, dict) else {}, gid, "keys", _texts)) & keys:
+                return True, None
+        except Refusal as error:
+            return True, str(error)
+    return False, None
 
 
 def _entry(state, gid):
@@ -1061,6 +1094,8 @@ def report(root, run, tasks_path, today, body_source, open_source):
     filed = [n for entry in entries.values() for n in (entry.get("filed") or []) if _number(n)]
     filed += [n for n in state.get("placed") or [] if _number(n)]
     filed = list(dict.fromkeys(filed))
+    tasks = parse_tasks(_read(tasks_path))
+    listed = {row.key for row in tasks.in_progress}
     for gid, entry in entries.items():
         status = entry.get("status")
         ended = entry.get("closed_from") if status in ("done", "returned") else status
@@ -1087,6 +1122,14 @@ def report(root, run, tasks_path, today, body_source, open_source):
             needs.append(f"{gid} {ended or 'returned'}: {one_line(entry.get('reason') or 'no reason recorded')}; "
                          f"worktree {worktree} {'left in place' if kept else 'removed'}"
                          + _decisions_text(entry.get("decisions")))
+        elif status in ACTIVE and not (_path_text(entry.get("worktree"))
+                                       and (Path(root) / entry["worktree"]).is_dir()):
+            # `resume` refuses it, so no night relaunches it: while its rows are listed they hold the run open.
+            keys = entry.get("keys") if isinstance(entry.get("keys"), list) else []
+            rows = (f"its In progress rows keep run {run} open until they are sent back or removed"
+                    if listed & set(map(str, keys)) else "its rows are no longer In progress")
+            needs.append(f"{gid} {status}: its worktree {entry.get('worktree')} is gone; {rows}"
+                         + _decisions_text(entry.get("decisions")))
         else:
             interrupted.append(f"{gid} {UNFINISHED.get(status, status)}")
         spent = entry.get("usage") if isinstance(entry.get("usage"), dict) else {}
@@ -1094,10 +1137,9 @@ def report(root, run, tasks_path, today, body_source, open_source):
             counts = [spent.get(key) if _count(spent.get(key)) else 0 for key in TOKEN_KEYS]
             usage.append(f"{gid}: {sum(counts)} tokens ("
                          + ", ".join(f"{name} {n}" for name, n in zip(TOKEN_NAMES, counts)) + ")")
-    if _holds_rows(directory):
+    if _holds_rows(directory, lambda: (listed, None))[0]:
         # The same test `start` reopens by, so the line appears exactly when the next /dispatch resumes this run.
         interrupted.append(f"resume: run /dispatch again in the main checkout; it resumes run {run}")
-    tasks = parse_tasks(_read(tasks_path))
     bodies = _bodies(tasks, directory, body_source)
     open_set = set(open_source())
     left = []
@@ -1120,6 +1162,7 @@ def add_commands(sub):
     s = sub.add_parser("start")
     s.add_argument("--pairs", type=int, required=True)
     s.add_argument("--lang", default="en")
+    s.add_argument("--tasks", required=True)
     for name in ("launch", "run", "result", "verify", "wait"):
         s = sub.add_parser(name)
         s.add_argument("run")
@@ -1146,9 +1189,11 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
     root = args.root
     if args.command == "start":
         _start_values(args.pairs, args.lang)
-        existing = open_run(root)
+        existing, why = open_run(root, args.tasks)
         if existing:
             print(existing)
+            if why:
+                print(f"kept open: {why}", file=sys.stderr)
             return 3
         print(new_run(root, args.pairs, args.lang, now()))
     elif args.command == "launch":
