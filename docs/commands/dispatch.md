@@ -175,15 +175,17 @@ branch the *In progress* row names, so the order is fork, record, launch.
 On every wake it absorbs the result, verifies a merge, places what was
 filed, then asks `wake` what to launch; the outcome table is the spec's
 §6.4. A hand-back or a stop goes back into its wave marked `OWNER` and is
-not retried; a crash is relaunched once (spec §2).
+not retried (spec §2); a crash is relaunched once (spec §6.4).
 
 A `run` that starts no executor — no `claude` on the path, a stale file it
 cannot remove, the stop file — would otherwise hold its slot all night,
 since `result` has no session to read. So it leaves `<group>.refused.json`
-beside the session record, never a write to `state.json`, which is the
+in place of a session record, never a write to `state.json`, which is the
 dispatcher's alone, and `result` records the group `crashed-before-launch`,
 which frees the slot and goes back like a hand-back: whatever refused one
-launch would refuse the next. The marker sends a group back unread, so it
+launch would refuse the next. A relaunch removes the session record it
+follows, already read, before anything can refuse, so a refused relaunch
+leaves the marker alone. The marker sends a group back unread, so it
 counts only when no session record sits beside it and it is no older than
 the launch, and an earlier launch's marker never ends a later one; a marker
 beside a session record is refused, since either could be the one that
@@ -191,16 +193,22 @@ does not describe this launch.
 
 ## When the night ends
 
-Only the spec's §8 ends the night: the week's limit, nothing ready and
-nothing running, or the owner's stop file, `<run>/STOP`, which `wake` reads
-on every wake. Each ends it the same way: launch nothing more, let running
+The spec's §8 ends the night: the week's limit, nothing ready and nothing
+running, or the owner's stop file, `<run>/STOP`, which `wake` reads on
+every wake. Each ends it the same way: launch nothing more, let running
 executors reach their own end, then write the report. A relaunch is a
 launch too, so `run` and `wait` read the stop file as well: a crashed or
 rate-limited group the owner stopped goes back to its wave rather than
-starting again. A night where `wake`
-names nothing to launch and no background task of this session is left to
-wake it has nothing left that can change, so it ends too; a group still
-held by an earlier dispatcher's executor is reported as interrupted.
+starting again. A crashed one's `run` refuses and `result` sends it back;
+a rate-limited one's `wait` prints `stop file: yes` and leaves it `window`,
+so the runbook sends it back with `tasks back`, or the report would list it
+as interrupted.
+
+A night where `wake` names nothing to launch and no background task of
+this session is left to wake it is §8's nothing running, read from this
+session: what still holds a slot is an earlier dispatcher's executor, whose
+exit wakes no task here, so nothing left can change before the report. That
+group is reported as interrupted.
 
 No script can read the weekly figure, so `usage` says `not read` and the
 limit is ignored, by the owner's decision in the spec's §8. Token Weather's
@@ -228,7 +236,10 @@ or a worktree it never forked.
 The command grants no agent type and denies every one, the profiles under
 `.claude/agents/` and the built-ins alike, because it spawns sessions, not
 agents (spec §11); `test_command_grants.py` reads the profiles on every run,
-so one added tomorrow fails until it is denied here too. `claude` is denied
+so one added tomorrow fails until it is denied here too. Leaving one out
+would refuse nothing: a grant only auto-approves, a tool the frontmatter
+does not list stays callable under the permission settings, and only a deny
+refuses (`docs/harness-boundaries.md`, *Grant semantics*). `claude` is denied
 as a shell command: the only launcher is `dispatch_board.py run`, which
 passes the settings' own permission mode and never a skip flag (spec §6.2).
 Raw `gh issue edit`, `close` and `create` are denied, because the issue
