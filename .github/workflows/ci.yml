@@ -905,9 +905,10 @@ jobs:
           name: sightings-${{ matrix.shard }}
           path: TestResults/sightings
 
-      # A fork's token cannot comment, and a missed comment must not fail a shard
-      # that passed. The artifact above is the record.
-      - name: "Post the sightings on #824"
+      # An unreproduced flake is a comment on the flaky tests tracker, so the
+      # sighting names its test there. A fork's token cannot comment, and a missed
+      # comment must not fail a shard that passed. The artifact above is the record.
+      - name: "Post the sightings on #1406"
         if: always() && hashFiles('TestResults/sightings/*.txt') != ''
         continue-on-error: true
         env:
@@ -918,14 +919,14 @@ jobs:
         run: |
           for f in TestResults/sightings/*.txt; do
             {
-              echo "A passing run saw a double send. Run $RUN_URL, shard $SHARD, ref $REF_NAME."
+              echo "A passing FulfilmentJourney run saw a double send. Run $RUN_URL, shard $SHARD, ref $REF_NAME."
               echo
               echo '```'
               head -c 60000 "$f"
               echo
               echo '```'
             } > body.md
-            gh issue comment 824 --body-file body.md
+            gh issue comment 1406 --body-file body.md
           done
 
       # A retry hides the failure it recovered from, so the run is posted where
