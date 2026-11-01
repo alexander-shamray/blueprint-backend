@@ -373,7 +373,8 @@ def _result_problem(data, group, issues):
     outcome, review_end, pr, oid, reason = (data[k] for k in ("outcome", "review_end", "pr", "merge_oid", "reason"))
     if outcome not in OUTCOMES:
         return f"outcome {outcome!r} is not one of {', '.join(OUTCOMES)}"
-    # A merge with no review end is a relaunch step 0 ended on a PR already merged, so no round ran.
+    # A merge with no review end is a relaunch step 0 ended on a PR already merged, so no round ran; whether the
+    # group was relaunched is the run's record, not this file's, so _unreviewed judges that.
     unreviewed = outcome != "merged" or data["rounds"] == []
     if review_end not in REVIEW_ENDS and not (review_end is None and unreviewed):
         return f"review_end {review_end!r} is not one of {', '.join(REVIEW_ENDS)}"
@@ -614,15 +615,27 @@ def _pid(directory, gid):
         return None
 
 
-def _refused(directory, gid):
-    """Why the last `run` launched nothing, on one line, or None when it launched or has not run."""
+def _refused(directory, gid, entry):
+    """Why this launch's last `run` launched nothing, on one line, or None when it launched or has not run.
+
+    The marker sends the group back unread, so it counts only when no session record exists and it is no older
+    than the launch; one beside a session record is refused rather than either being picked.
+    """
     path = Path(directory) / f"{gid}.refused.json"
     try:
-        why = json.loads(_read(path)).get("refused")
+        data = json.loads(_read(path))
     except FileNotFoundError:
         return None
-    except (OSError, ValueError, AttributeError):
-        return f"{path.name} is unreadable"
+    except (OSError, ValueError):
+        data = None
+    if (Path(directory) / f"{gid}.session.json").exists():
+        raise Refusal(f"{gid} has both {path.name} and a session record, so which ended its launch is unknown")
+    data = data if isinstance(data, dict) else {}
+    at, launched = _parse_stamp(data.get("at")), _parse_stamp(entry.get("launched"))
+    if at is None or launched is None or at < launched:
+        # Not shown to be this launch's: an earlier launch's, or undated.
+        return None
+    why = data.get("refused")
     return one_line(why, 200) if isinstance(why, str) and why.strip() else f"{path.name} names no reason"
 
 
@@ -645,6 +658,23 @@ def _reason(decision, end, result):
     return crash if decision == "relaunch" else f"a second crash: {crash}"
 
 
+UNREVIEWED = "merged with no review round"
+# A relaunch: a status only a read session leaves, while the group still waits on an executor.
+RELAUNCHED = ("relaunch", "window", "week")
+
+
+def _unreviewed(entry, result, crashes):
+    """Whether a merge claims no round from a session that cannot have reviewed it in an earlier one (ruling R15).
+
+    An empty rounds list is a clean merge only on a relaunch of this launch, whose earlier session was read; from a
+    first session it is a merge nobody reviewed, which still verifies and lands but goes to Needs a human.
+    """
+    if not (isinstance(result, Result) and result.outcome == "merged" and not result.rounds):
+        return False
+    earlier = entry.get("absorbed") is not None
+    return not (earlier and (crashes >= 1 or entry.get("status") in RELAUNCHED))
+
+
 def absorb(root, run, gid):
     """Copy, validate and classify one executor's result and session, record them, and say what happened."""
     directory = run_dir(root, run)
@@ -652,7 +682,7 @@ def absorb(root, run, gid):
     entry = _entry(state, gid)
     if entry.get("status") not in ACTIVE:
         raise Refusal(f"{gid} is {entry.get('status') or 'not launched'}, not waiting on a result")
-    refused = _refused(directory, gid)
+    refused = _refused(directory, gid, entry)
     if refused is not None:
         # Nothing ran, so there is no result to read: the slot is freed and the group goes back, never relaunched.
         reason = f"run refused before launch: {refused}"
@@ -685,8 +715,11 @@ def absorb(root, run, gid):
     crashes = _field(entry, gid, "crashes", _count, 0)
     decision = classify(end, result, crashes, now())
     reason = _reason(decision, end, result)
+    unreviewed = _unreviewed(entry, result, crashes)
+    if unreviewed:
+        reason = UNREVIEWED
     entry.update(status=decision, absorbed=raw.get("started"), exit=end.exit_code, session_id=end.session_id,
-                 usage=end.usage, denials=end.denials, reason=reason)
+                 usage=end.usage, denials=end.denials, reason=reason, unreviewed=unreviewed)
     if decision in ("relaunch", "crash-hand-back"):
         entry["crashes"] = crashes + 1
     if end.resets_at is not None:
@@ -917,7 +950,13 @@ def resume(root, run):
             if pid is not None and alive(pid):
                 out.append(f"refused {gid}: its executor is still running")
                 continue
-            if _refused(directory, gid) is not None:
+            try:
+                refused = _refused(directory, gid, entry)
+            except Refusal:
+                # A marker beside a session record: the session record's line below sends it to `result`, which
+                # refuses the pair.
+                refused = None
+            if refused is not None:
                 out.append(f"result {gid}: its run launched nothing and was not read")
                 continue
             if not entry.get("worktree") or not (Path(root) / entry["worktree"]).is_dir():
@@ -999,14 +1038,21 @@ def report(root, run, tasks_path, today, body_source, open_source):
     for gid, entry in entries.items():
         status = entry.get("status")
         ended = entry.get("closed_from") if status in ("done", "returned") else status
-        if ended == "verified" and status == "done":
+        if ended == "verified" and status == "done" and entry.get("unreviewed"):
+            # It landed, but nobody reviewed it: the one kind of merge that is not a merge needing nothing.
+            needs.append(f"{gid} #{entry.get('pr')} {UNREVIEWED}, as {entry.get('merge_oid')}: "
+                         f"{_issues_text(entry.get('issues'))}; filed {_issues_text(entry.get('filed'))}"
+                         + _decisions_text(entry.get("decisions")))
+        elif ended == "verified" and status == "done":
             merged.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}: "
                           f"{_issues_text(entry.get('issues'))}; {_rounds_text(entry.get('rounds'))}; "
                           f"review {entry.get('review_end') or 'not run'}; filed {_issues_text(entry.get('filed'))}"
                           + _decisions_text(entry.get("decisions")))
         elif status == "verified":
             # GitHub showed the merge, but the pull or the containment read after it failed, so `done` never ran.
-            needs.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}, not confirmed in main: "
+            unreviewed = f", {UNREVIEWED}" if entry.get("unreviewed") else ""
+            needs.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}{unreviewed}, "
+                         "not confirmed in main: "
                          f"its rows are still In progress and worktree {entry.get('worktree')} is left in place"
                          + _decisions_text(entry.get("decisions")))
         elif ended in HANDED or status == "returned":
