@@ -838,8 +838,8 @@ function lockResource(description) {
     return [kind, mode && `held ${mode}`, on].filter(Boolean).join(' ');
 }
 
-// What the holder was doing: waiting itself, which makes it a link in a longer chain, idle with its
-// transaction open, or running.
+// What the holder was doing: waiting itself, on a lock where it is a link in a longer chain or on
+// anything else, a log flush or the client among them; idle with its transaction open; or running.
 function holderState(wait) {
     if (wait.holderWait)
         return `waiting ${wait.holderWait}`;
