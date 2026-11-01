@@ -1,6 +1,6 @@
 ---
 description: Start from a clean main, fork a worktree where one can be forked, branch, commit, push and open a PR, run the local review until a round has nothing open, then merge the PR and tear the workspace down. Decides for itself rather than stopping to ask
-argument-hint: "[what the change does] [--sleep] — omit and each step derives its own"
+argument-hint: "[what the change does] [--sleep] [--dispatched <run-dir>] — omit and each step derives its own"
 allowed-tools: Read, Grep, Glob, Write, Skill, Agent(branch-reviewer), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(bash .claude/scripts/git-trailer-pr.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(bash .claude/scripts/git-worktree-remove.sh:*), Bash(git worktree prune:*), Bash(bash .claude/scripts/pr-locality.sh:*), Bash(bash .claude/scripts/gh-issue-create.sh:*), Bash(bash .claude/scripts/system-sleep.sh)
 ---
 
@@ -40,6 +40,15 @@ checkout and removes the worktree, however the review ended.
 | CI is not green at step 6 | A merge onto a red `main` is not a judgement call |
 | The PR is not mergeable | Conflicts are the caller's tree, not this chain's |
 
+- **Under the standalone token `--dispatched <run-dir>`**, three more
+  things hand the change back unmerged: it needs an edit under `.claude/`;
+  it needs a resource only the owner has; or the issue's own text says the
+  decision is the owner's and no `## Owner decisions` entry settles it.
+  Every other judgement is the
+  recommended option, named in the result's `decisions`. The session
+  writes the task list nowhere, even when it files or closes an issue:
+  what it files goes only in the result's `filed`. (why:
+  docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)
 - **The review hitting its ceiling is not a stop**: it ends the review,
   reported unconverged, and step 6 merges anyway.
 - **Never skip step 2**: this command merges, so it is the last gate before
@@ -177,6 +186,13 @@ branch is.
 
    (why: docs/commands/ship.md, *Step 0: the finished predicate*)
 
+   Under `--dispatched`, a finished branch, the *already merged* row's
+   included, takes no `ExitWorktree`, no teardown below and no
+   `git-worktree-remove.sh`: verify `MERGED` from `pr-for-branch.sh` and
+   `pr-state.sh`, write the result and end the run; `/dispatch` tears down
+   (why: docs/commands/ship.md, *Dispatched: the one token /dispatch
+   passes*).
+
    Then the teardown. **"Then" is a sequence, not a destination — a Stay row
    does not travel to the main checkout to run these:**
 
@@ -227,7 +243,10 @@ branch is.
    on a branch — the normal state of a resumed `/ship` — take the current
    branch as this change's branch, carry on, **say that you assumed it** and
    name the branch, and name the worktree, or say it is the main checkout.
-   (why: docs/commands/ship.md, *Step 1: /branch*)
+   (why: docs/commands/ship.md, *Step 1: /branch*) Under `--dispatched`,
+   `/branch` is handed the token with its value, and derives no name from
+   either (why: docs/commands/ship.md, *Dispatched: the one token /dispatch
+   passes*).
 
 2. **Checks**, selected by the class the PR body will carry
    (`docs/change-locality.md` §5): `/validate-blueprint` after Class C, or
@@ -476,6 +495,11 @@ branch is.
      progress* in the task list, `.todo/blueprint-backend.md` in the main
      checkout's parent directory, by that path (why:
      docs/commands/ship.md, *Step 6: the teardown*).
+   - Under `--dispatched`, skip this write, and only lines 1 and 8 run: no
+     `ExitWorktree`, no `git-worktree-remove.sh`, no switch, pull or
+     containment read; `/dispatch` does those once it has verified the
+     merge (why: docs/commands/ship.md, *Dispatched: the one token /dispatch
+     passes*).
    - Never delete the merged branch: `git branch -d` is denied; name it in
      the report.
 
@@ -518,7 +542,40 @@ In this order:
   or which of the two gates stopped it; that `main` was pulled, the HEAD it
   is now at, and that it contains the merge oid; the worktree removed, or
   the one left behind and why the helper refused it; and the merged branch
-  still sitting in `git branch`.
+  still sitting in `git branch`. Under `--dispatched`, the pull, containment
+  and removal are the dispatcher's: say "teardown left to /dispatch".
 
 Restate here every assumption a step was skipped on, and name every check
 that did not run. (why: docs/commands/ship.md, *Report*)
+
+Under `--dispatched`, end by writing `<run-dir>/<group>.json` with `Write`,
+in this worktree, the group read from the argument's leading
+`#<group>-<n>[+<n>]` tag, on a merge, a hand-back, each of the seven stops
+and a run step 0 ended alike. Exactly these keys, each value in the shape
+shown:
+
+```json
+{"group": "G1", "issues": [826, 827],
+ "outcome": "merged | handed-back | stopped",
+ "pr": 1700, "merge_oid": "<the whole 40-hex oid>",
+ "rounds": [{"kind": "full | recheck", "raised": 2, "fixed": 1, "refused": 1}],
+ "review_end": "clean | comments-rule | plan | ceiling",
+ "filed": [1701], "reason": "<what a human must do>",
+ "workspace": {"worktree": ".claude/worktrees/<slug>", "removed": false},
+ "decisions": ["<the option taken, and the one rejected>"]}
+```
+
+`issues` are the tag's numbers; `filed` is every issue filed or commented
+on, by number; `rounds` has one entry per round this run ran, `[]` for
+none; `pr` and `merge_oid`, the whole oid, are required on `merged` and
+otherwise `null` until they exist. Each ending sets the rest:
+
+| Ending | `outcome` | `review_end` | `reason` |
+|---|---|---|---|
+| Step 6 merged | `merged` | how the review ended | `null` |
+| Step 0 found the PR merged, the predicate holding | `merged`, with `rounds: []` | `null`: the review never ran in this session | `null` |
+| A hand-back | `handed-back` | how the review ended, or `null` if it had not | what a human must do |
+| Step 0 found the PR merged, the predicate failing | `handed-back` | `null` | what the workspace holds |
+| One of the seven stops | `stopped` | how the review ended, or `null` if it had not | what a human must do; a closed PR's is `closed unmerged` |
+
+(why: docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)
