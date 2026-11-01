@@ -13,8 +13,8 @@ carrying one.
 **Why.** Both files are layered after every other source, so the switch wins,
 and both come from a ConfigMap the chart keeps out of the pod's checksum, so a
 change reaches a running pod with no rollout. Read as general configuration,
-whoever may write that ConfigMap, a right a namespace grants more widely than
-Secret or Deployment edit, could override any setting: a gateway route's
+whoever may write that ConfigMap, a right a namespace may grant more widely
+than Secret or Deployment edit, could override any setting: a gateway route's
 policy, match or cluster, live, and a service's connection string, which the
 Secret-sourced environment would otherwise own, or its token authority. The
 charts render only the switch's shape, and the hosts enforced nothing. Leaving
