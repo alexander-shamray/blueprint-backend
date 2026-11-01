@@ -40,12 +40,11 @@ checkout and removes the worktree, however the review ended.
 | CI is not green at step 6 | A merge onto a red `main` is not a judgement call |
 | The PR is not mergeable | Conflicts are the caller's tree, not this chain's |
 
-- **Under the standalone token `--dispatched <run-dir>`**, which only
-  `/dispatch` passes, three more things hand the change back unmerged: it
-  needs an edit under `.claude/`; it needs a resource only the owner has (a
-  second machine, a provider key, a deployment, a paid account); or the
-  issue's own text says the decision is the owner's and no
-  `## Owner decisions` entry settles it. Every other judgement is the
+- **Under the standalone token `--dispatched <run-dir>`**, three more
+  things hand the change back unmerged: it needs an edit under `.claude/`;
+  it needs a resource only the owner has; or the issue's own text says the
+  decision is the owner's and no `## Owner decisions` entry settles it.
+  Every other judgement is the
   recommended option, named in the result's `decisions`. (why:
   docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)
 - **The review hitting its ceiling is not a stop**: it ends the review,
@@ -184,6 +183,13 @@ branch is.
      down with git.
 
    (why: docs/commands/ship.md, *Step 0: the finished predicate*)
+
+   Under `--dispatched`, a finished branch, the *already merged* row's
+   included, takes no `ExitWorktree`, no teardown below and no
+   `git-worktree-remove.sh`: verify `MERGED` from `pr-for-branch.sh` and
+   `pr-state.sh`, write the result and end the run; `/dispatch` tears down
+   (why: docs/commands/ship.md, *Dispatched: the one token /dispatch
+   passes*).
 
    Then the teardown. **"Then" is a sequence, not a destination — a Stay row
    does not travel to the main checkout to run these:**
@@ -487,7 +493,7 @@ branch is.
      progress* in the task list, `.todo/blueprint-backend.md` in the main
      checkout's parent directory, by that path (why:
      docs/commands/ship.md, *Step 6: the teardown*).
-   - Under `--dispatched`, skip this write and lines 2 to 7: no
+   - Under `--dispatched`, skip this write, and only lines 1 and 8 run: no
      `ExitWorktree`, no `git-worktree-remove.sh`, no switch, pull or
      containment read; `/dispatch` does those once it has verified the
      merge (why: docs/commands/ship.md, *Dispatched: the one token /dispatch
@@ -534,7 +540,8 @@ In this order:
   or which of the two gates stopped it; that `main` was pulled, the HEAD it
   is now at, and that it contains the merge oid; the worktree removed, or
   the one left behind and why the helper refused it; and the merged branch
-  still sitting in `git branch`.
+  still sitting in `git branch`. Under `--dispatched`, the pull, containment
+  and removal are the dispatcher's: say "teardown left to /dispatch".
 
 Restate here every assumption a step was skipped on, and name every check
 that did not run. (why: docs/commands/ship.md, *Report*)
@@ -556,9 +563,17 @@ shown:
  "decisions": ["<the option taken, and the one rejected>"]}
 ```
 
-`issues` are the tag's numbers; a hand-back is `handed-back` and a stop
-`stopped`; `rounds` has one entry per round this run ran, `[]` for none;
-`pr` and `merge_oid` are required on a merge and otherwise `null` until
-they exist; `review_end` is `null` only when the review never ended;
-`reason` is `null` on a merge and never empty otherwise.
+`issues` are the tag's numbers; `filed` is every issue filed or commented
+on, by number; `rounds` has one entry per round this run ran, `[]` for
+none; `pr` and `merge_oid`, the whole oid, are required on `merged` and
+otherwise `null` until they exist. Each ending sets the rest:
+
+| Ending | `outcome` | `review_end` | `reason` |
+|---|---|---|---|
+| Step 6 merged | `merged` | how the review ended | `null` |
+| Step 0 found the PR merged, the predicate holding | `merged`, with `rounds: []` | `null`: the review never ran in this session | `null` |
+| A hand-back | `handed-back` | how the review ended, or `null` if it had not | what a human must do |
+| Step 0 found the PR merged, the predicate failing | `handed-back` | `null` | what the workspace holds |
+| One of the seven stops | `stopped` | how the review ended, or `null` if it had not | what a human must do; a closed PR's is `closed unmerged` |
+
 (why: docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)
