@@ -278,6 +278,7 @@ def load_scan_gate(repo_root: Path, tool_root: Path = TOOL_ROOT) -> ModuleType |
     # the fingerprints written here must come from the scanner that will later
     # verify them, which is the target's. Requiring one file satisfies both.
     trusted = tool_root / SCAN_GATE
+    source = gate.read_bytes()
     if gate.resolve() != trusted.resolve():
         if not trusted.is_file():
             raise ScaffoldError(
@@ -285,7 +286,7 @@ def load_scan_gate(repo_root: Path, tool_root: Path = TOOL_ROOT) -> ModuleType |
                 f"{repo_root}'s copy against, and this script will not execute an "
                 f"unverified one."
             )
-        if gate.read_bytes() != trusted.read_bytes():
+        if source != trusted.read_bytes():
             raise ScaffoldError(
                 f"{repo_root}/{SCAN_GATE} is not the secret scan this script shipped "
                 f"with, and this script executes it. Refusing rather than running a "
@@ -301,7 +302,8 @@ def load_scan_gate(repo_root: Path, tool_root: Path = TOOL_ROOT) -> ModuleType |
 
     module = importlib.util.module_from_spec(specification)
     try:
-        specification.loader.exec_module(module)
+        # The bytes compared above: exec_module would run a pyc beside the gate in their place.
+        exec(compile(source, str(gate), "exec"), module.__dict__)
     # Every exception class there is, because the subject is arbitrary
     # module-level code and nothing narrows the set. What matters is not which
     # one arrives but that it arrives as a ScaffoldError: `main` catches that
