@@ -160,6 +160,15 @@ class TheDispatcherSpawnsSessionsNotAgents(unittest.TestCase):
             with self.subTest(reachable=command):
                 self.assertFalse(any(bash_deny_matches(rule, command) for rule in denied))
 
+    def test_dispatch_says_its_grants_only_auto_approve(self):
+        # A grant is not a whitelist, so a runbook claiming its frontmatter bounds the session misstates its guard.
+        text = " ".join((COMMANDS / "dispatch.md").read_text(encoding="utf-8").split())
+        self.assertNotIn("is the whole of what this session may do", text)
+        self.assertIn("grants auto-approve and its denies refuse", text)
+        self.assertIn("docs/harness-boundaries.md, *Grant semantics*", text)
+        boundaries = (SCRIPTS.parent.parent / "docs" / "harness-boundaries.md").read_text(encoding="utf-8")
+        self.assertRegex(boundaries, r"(?m)^## Grant semantics\s*$")
+
 
 class TheSweepsDenyEveryGhCommand(unittest.TestCase):
     """Raw filing is denied as a whole, not as the one spelling a deny list named (`docs/harness-boundaries.md`)."""

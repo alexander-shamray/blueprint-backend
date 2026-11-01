@@ -114,5 +114,21 @@ class ShipWaitsForCiInTheBackground(unittest.TestCase):
                 self.assertNotIn(retired, step)
 
 
+class DispatchSendsAStoppedWindowGroupBack(unittest.TestCase):
+    """A `wait` that saw the stop file leaves its group `window`, which the report would list as interrupted."""
+
+    def test_the_window_bullet_and_its_resume_row_send_the_group_back(self):
+        text = collapsed(COMMANDS / "dispatch.md")
+        bullet = text[text.index("- `window`:"):text.index("- `week`:")]
+        row = text[text.index("| `wait <g>: the window resets"):text.index("| `wait <g>: the week resets")]
+        for name, rule in (("step 2's window bullet", bullet), ("the Resume row", row)):
+            with self.subTest(rule=name):
+                self.assertIn("`stop file: yes`", rule)
+                self.assertIn("`tasks back`", rule)
+        # The phrase the runbook keys on is the one `wait` prints.
+        helper = (COMMANDS.parent / "scripts" / "dispatch_run.py").read_text(encoding="utf-8")
+        self.assertIn('return "stop file: yes"', helper)
+
+
 if __name__ == "__main__":
     unittest.main()
