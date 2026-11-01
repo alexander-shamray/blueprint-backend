@@ -378,11 +378,11 @@ class AForbiddenGrantNamedExactly(unittest.TestCase):
                 for f in failures), failures)
 
 
-def run_with_sources(definitions: dict, old: str, new: str) -> list[str]:
-    """`run_against`, with every Messaging source the gate reads rewritten one way."""
+def run_with_sources(definitions: dict, old: str, new: str, under: str = "") -> list[str]:
+    """`run_against`, with every Messaging source the gate reads under one path rewritten one way."""
     original_read = gate.read
-    gate.read = lambda path: original_read(path).replace(old, new) if Path(path).suffix == ".cs" \
-        else original_read(path)
+    gate.read = lambda path: original_read(path).replace(old, new) \
+        if Path(path).suffix == ".cs" and under in Path(path).as_posix() else original_read(path)
     try:
         return run_against(definitions)
     finally:
@@ -391,6 +391,8 @@ def run_with_sources(definitions: dict, old: str, new: str) -> list[str]:
 
 class ASendToAPeerExchangeBindsNothing(unittest.TestCase):
     """Privacy's queue is sent to by five holders, and a holder able to consume it swallows the others' answers."""
+
+    HOLDERS = "bff-svc, notifications-svc, ordering-svc, payments-svc, shipping-svc"
 
     def test_the_holders_send_by_exchange(self):
         found = {name: gate.exchange_sends(path) for name, path in gate.messaging_dirs().items()}
@@ -420,12 +422,20 @@ class ASendToAPeerExchangeBindsNothing(unittest.TestCase):
         # The source before the change: each holder bound Privacy's queue, so each held the read that consumes it.
         failures = run_with_sources(real(), 'new("exchange:privacy-completions")', 'new("queue:privacy-completions")')
         self.assertIn(
-            "`privacy-completions`: bff-svc, notifications-svc, ordering-svc, payments-svc, shipping-svc each send "
-            "to it as `queue:privacy-completions`, which binds it, and the read that bind takes consumes it. Send "
-            "to `exchange:privacy-completions` instead", failures)
+            f"`privacy-completions`: 5 services send to it ({self.HOLDERS}), and {self.HOLDERS} by "
+            "`queue:privacy-completions`, which binds it, so the read that bind takes consumes what the others "
+            "send. Send to `exchange:privacy-completions` instead", failures)
+
+    def test_one_holder_sending_by_queue_address_beside_four_by_exchange_is_refused(self):
+        failures = run_with_sources(real(), 'new("exchange:privacy-completions")', 'new("queue:privacy-completions")',
+                                    under="/Payments.Infrastructure/")
+        self.assertIn(
+            f"`privacy-completions`: 5 services send to it ({self.HOLDERS}), and payments-svc by "
+            "`queue:privacy-completions`, which binds it, so the read that bind takes consumes what the others "
+            "send. Send to `exchange:privacy-completions` instead", failures)
 
     def test_one_service_sending_by_queue_address_is_not_refused(self):
-        self.assertFalse(any("each send to it as" in f for f in run_against(real())))
+        self.assertFalse(any("services send to it" in f for f in run_against(real())))
 
 
 class ConfigureAndReadAreBoundedToo(unittest.TestCase):
