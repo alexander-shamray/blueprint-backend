@@ -719,7 +719,8 @@ test('a step\'s lock waits pair each waiting statement with its lock and holder,
         longestMs: 90,
         holderIdleMs: 30,
     });
-    assert.equal(row.chains[1].holder.state, 'waiting LCK_M_X', 'a holder waiting on a lock is a link in a longer chain');
+    assert.equal(row.chains[1].holder.state, 'waiting LCK_M_X',
+        'a holder waiting on a lock is a link in a longer chain');
 
     const table = 'objectlock lockPartition=0 objid=901578250 subresource=FULL dbid=7 id=lock3 mode=IX ' +
         'associatedObjectId=901578250';
