@@ -30,8 +30,9 @@ inbox without its `HandledAt` index,
 padded stock levels and
 [ADR-184](ADR-184-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md)'s
 migrator timeout, and the first two take load off Ordering's database. SQL
-Server's deadlock column read 0 at every step of both runs, so the 12
-projection writers ADR-181 lets share Ordering's read tables produced none.
+Server's deadlock column read 0 at every step of both runs, and the later
+run's 0 is the one that counts the 12 projection writers ADR-181 lets share
+Ordering's read tables, where the earlier ran three.
 The lanes, which the A/B lost with its volumes, were read from run
 `20261031-193139` at `3d6bb35a6`, after a 2400 s warm-up at 800 VUs, from
 `ordering.OutboxMessages` by `OccurredAt` and `ProcessedAt` over each hold, as
@@ -60,7 +61,7 @@ measured bound. The lanes are read only up to 1600 VUs, where
 `20261031-193139` knee-stopped on a tail at the generator rather than at the
 gateway (#1677), so the steps that run never reached are where a larger bound
 would show, if it would. Twelve writers on a read table is still argued safe
-from three runs' deadlock column, not from a test that drives them into one. A
+from two runs' deadlock column, not from a test that drives them into one. A
 database holding days of rows changes the statements' cost (#1671), and none
 of these runs is the comparison for one.
 
