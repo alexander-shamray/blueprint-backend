@@ -189,13 +189,37 @@ class Cli(StubGh):
         self.assertEqual(self.run_main(["unblock", "1677", "bug"])[0], 2)
 
     def test_close_comments_then_closes_as_not_planned(self):
-        comment = self.write("c.txt", "Нет работы — закрываю.\n")
-        self.assertEqual(self.run_main(["close", "9", "--comment-file", comment]), (0, ""))
+        (self.dir / "run").mkdir()
+        comment = self.write("run/c.txt", "Нет работы — закрываю.\n")
+        run = str(self.dir / "run")
+        self.assertEqual(self.run_main(["close", "9", "--comment-file", comment, "--run-dir", run]), (0, ""))
         calls = self.calls()
         self.assertEqual(calls[1], ["issue", "comment", "9", "--repo", "acme/widgets", "--body-file", comment])
         self.assertEqual(
             calls[2], ["issue", "close", "9", "--repo", "acme/widgets", "--reason", "not planned"]
         )
+
+    def test_close_takes_only_a_short_comment_the_run_wrote_under_its_directory(self):
+        # The comment is posted to GitHub as it stands, so the file is held to the run and to an answer's size.
+        run = self.dir / "run"
+        (run / "interview").mkdir(parents=True)
+        cases = {
+            "no --run-dir": ([], self.write("run/interview/a.txt", "No work.")),
+            "outside the run": (["--run-dir", str(run)], self.write("elsewhere.txt", "No work.")),
+            "a sibling with the run's name as a prefix": (["--run-dir", str(run)],
+                                                          self.write("run-other.txt", "No work.")),
+            "over the cap": (["--run-dir", str(run)],
+                             self.write("run/interview/b.txt", "x" * (ID.COMMENT_LIMIT + 1))),
+            "empty": (["--run-dir", str(run)], self.write("run/interview/c.txt", " \n")),
+            "a missing run dir": (["--run-dir", str(self.dir / "nope")], self.write("run/interview/d.txt", "ok")),
+        }
+        for name, (extra, comment) in cases.items():
+            with self.subTest(case=name):
+                code, _ = self.run_main(["close", "9", "--comment-file", comment, *extra])
+                self.assertEqual(code, 2)
+                self.assertEqual(self.calls(), [])
+        within = self.write("run/interview/e.txt", "x" * ID.COMMENT_LIMIT)
+        self.assertEqual(self.run_main(["close", "9", "--comment-file", within, "--run-dir", str(run)]), (0, ""))
 
     def test_a_gh_planted_in_the_cwd_is_not_run_and_the_one_on_path_is(self):
         work = self.dir / "work"

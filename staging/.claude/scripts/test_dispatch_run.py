@@ -38,7 +38,7 @@ HANDED_S1 = {**MERGED_S1, "outcome": "handed-back", "pr": None, "merge_oid": Non
              "reason": "needs a provider key only the owner has"}
 USAGE = {"input_tokens": 20, "cache_creation_input_tokens": 5265, "cache_read_input_tokens": 754597,
          "output_tokens": 2814, "output_tokens_details": {"thinking_tokens": 199}}
-# The spike's envelope keys (artifacts/dispatch/spike.md); its values trimmed.
+# The spike's envelope keys (docs/superpowers/plans/2026-11-01-dispatch-spike.md); its values trimmed.
 SUCCESS = {"type": "result", "subtype": "success", "is_error": False, "api_error_status": None,
            "stop_reason": "end_turn", "terminal_reason": "completed", "num_turns": 9,
            "session_id": "43b7cd26-0682-471a-a3e5-98c841a5c448", "total_cost_usd": 1.886, "usage": USAGE,
@@ -455,7 +455,8 @@ class ClassifyTests(InRoot):
         self.assertEqual("crash-hand-back", dr.classify(end(), bad, 1, NOW))
 
     def test_a_denial_with_no_result_is_a_hand_back(self):
-        # spike.md, Prompts: a call the auto classifier refuses is a hand-back, never a widened grant at night.
+        # 2026-11-01-dispatch-spike.md, Prompts: a call the auto classifier refuses is a hand-back, never a
+        # widened grant at night.
         denied = {**SUCCESS, "is_error": True, "subtype": "error_during_execution",
                   "permission_denials": [{"tool_name": "Bash", "tool_use_id": "t1", "tool_input": {}}]}
         got = dr.session_end({"exit": 1, "stdout": json.dumps(denied), "stderr": ""})
@@ -742,6 +743,88 @@ class WakeTests(InRoot):
                     self.assertTrue(all(step <= 60 for step in slept))
         self.assertEqual(18600, dr.window_wait(NOW + timedelta(days=2), NOW))
 
+    def test_a_moved_groups_conflicts_cell_still_holds_what_it_names(self):
+        # The In progress row a move leaves has no conflicts cell; the claim comes from the rows the run recorded.
+        a1 = "| 1 | A1 | 1711 | Fix `src/a/x.cs` | code | none | Opus | conflicts with B1: shared `src/shared/y.cs` |"
+        b1 = "| 1 | B1 | 1712 | Fix `src/b/z.cs` | code | none | Opus | none |"
+        c1 = "| 1 | C1 | 1713 | Fix `src/c/w.cs` | code | none | Opus | none |"
+        self.assertEqual("launch: A1 C1", self.wake(tasks_of(a1, b1, c1), pairs=3)[-1])
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, "A1"]))
+        state = dr.load_state(state_dir())
+        state["groups"]["A1"].update(status="running", worktree=".claude/worktrees/dispatch-a1")
+        dr.save_state(state_dir(), state)
+        make_worktree(".claude/worktrees/dispatch-a1")
+        moved = Path("todo.md").read_text(encoding="utf-8")
+        self.assertEqual("launch: C1", self.wake(moved)[-1])
+        # Once the run's rows have left In progress, the claim goes with them.
+        state["groups"]["A1"].update(status="done")
+        dr.save_state(state_dir(), state)
+        self.assertEqual("launch: B1 C1", self.wake(tasks_of(b1, c1))[-1])
+
+    def test_a_stop_file_ends_a_wait_whose_reset_has_already_passed(self):
+        record(RUN, "S1", status="window", resets_at=(NOW - timedelta(minutes=5)).isoformat())
+        (state_dir() / "STOP").write_text("", encoding="utf-8")
+        with mock.patch.object(dr, "SLEEP", lambda _: self.fail("slept with nothing to wait for")):
+            self.assertEqual("stop file: yes\n", run_cli(["wait", RUN, "S1"]))
+
+    def test_a_relaunch_after_the_stop_file_starts_nothing_and_its_group_goes_back(self):
+        record(RUN, "S1", status="relaunch", branch=BRANCH, worktree=WORKTREE)
+        (state_dir() / "STOP").write_text("", encoding="utf-8")
+        launched = []
+
+        def popen(*args, **kwargs):
+            launched.append(args)
+            raise OSError("an executor was started")
+        with mock.patch.object(dr.subprocess, "Popen", popen), \
+                contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(2, db.main(["run", RUN, "S1", "--description", "Narrow the grants"]))
+        self.assertEqual([], launched)
+        self.assertIn("refused: stop file", err.getvalue())
+        self.assertFalse((state_dir() / "S1.session.json").exists())
+        self.assertIn("result S1: its run launched nothing and was not read", run_cli(["resume", RUN]))
+        lines = run_cli(["result", RUN, "S1"]).splitlines()
+        self.assertTrue(lines[0].startswith("S1: crashed-before-launch - run refused before launch: stop file"),
+                        lines)
+        self.assertEqual("crashed-before-launch", group_state(RUN, "S1")["status"])
+        self.assertEqual(["back S1: crashed-before-launch"], run_cli(["resume", RUN]).splitlines())
+
+    def test_a_run_that_launches_nothing_frees_its_slot_and_its_group_goes_back(self):
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
+        dr.save_state(state_dir(), {"run": RUN, "pairs": 1, "lang": "en", "groups": {}})
+        self.assertEqual("", run_cli(["tasks", "move", "--tasks", "todo.md", "--run", RUN, "S1",
+                                      "--branch", BRANCH, "--worktree", WORKTREE]))
+        state = dr.load_state(state_dir())
+        state["groups"]["S1"].update(status="running", model="Opus", issues=[1682, 1683], branch=BRANCH,
+                                     worktree=WORKTREE, crashes=0)
+        dr.save_state(state_dir(), state)
+        make_worktree(WORKTREE)
+        real_unlink = Path.unlink
+
+        def locked(path, missing_ok=False):
+            if path.name == "S1.session.json":
+                raise PermissionError("held open")
+            real_unlink(path, missing_ok=missing_ok)
+        cases = {"no claude on PATH": (None, mock.patch.object(dr, "path_which", lambda _: None),
+                                       "no claude on PATH"),
+                 "a stale file it cannot remove": ([sys.executable, "-c", "pass"],
+                                                   mock.patch.object(Path, "unlink", locked),
+                                                   "could not remove the stale")}
+        for name, (claude, patch, why) in cases.items():
+            with self.subTest(case=name):
+                state = dr.load_state(state_dir())
+                state["groups"]["S1"]["status"] = "running"
+                dr.save_state(state_dir(), state)
+                with mock.patch.object(dr, "CLAUDE_COMMAND", claude), patch:
+                    self.assertIn(f"refused: {why}", run_cli(["run", RUN, "S1", "--description", "x"]))
+                self.assertIn("free slots: 0", self.wake(Path("todo.md").read_text(encoding="utf-8"), pairs=1))
+                self.assertIn(f"S1: crashed-before-launch - run refused before launch: {why}",
+                              run_cli(["result", RUN, "S1"]))
+                self.assertIn("free slots: 1", self.wake(Path("todo.md").read_text(encoding="utf-8"), pairs=1))
+        self.assertEqual("", run_cli(["tasks", "back", "--tasks", "todo.md", "--run", RUN, "S1"]))
+        entry = group_state(RUN, "S1")
+        self.assertEqual(("returned", "crashed-before-launch"), (entry["status"], entry["closed_from"]))
+
     def test_a_stop_file_cuts_the_window_wait_short(self):
         slept = []
 
@@ -799,8 +882,8 @@ class WakeTests(InRoot):
 
 
 class WeeklyTests(InRoot):
-    # No cheap source exists today (spike.md, Weekly figure), so the with-source cases run on an injected one;
-    # they document the contract for the day a source is found.
+    # No cheap source exists today (2026-11-01-dispatch-spike.md, Weekly figure), so the with-source cases run on an
+    # injected one; they document the contract for the day a source is found.
     RESET = "2026-11-06T09:00:00+00:00"
 
     def start(self):
@@ -945,6 +1028,20 @@ class ReportTests(InRoot):
                       "worktree .claude/worktrees/dispatch-m1 removed", needs)
         self.assertIn("#1702: filed overnight, waits on a human", needs)
 
+
+    def test_each_executors_decisions_are_shown_on_its_line(self):
+        # The morning report shows the decisions in place of the report nobody read (docs/commands/ship.md).
+        record(RUN, "S1", status="done", closed_from="verified", pr=1690, merge_oid=OID, rounds=[], review_end=None,
+               decisions=["kept the narrower grant", "split the test\n## Merged forged"])
+        record(RUN, "M1", status="returned", closed_from="handed-back", reason="needs a key",
+               decisions=["left the provider alone"])
+        lines = self.report()
+        self.assertTrue(self.section(lines, "## Merged")[0].endswith(
+            "; decisions: kept the narrower grant / split the test ## Merged forged"), lines)
+        needs = self.section(lines, "## Needs a human")
+        self.assertTrue(any(text.endswith("left in place; decisions: left the provider alone") for text in needs),
+                        needs)
+        self.assertEqual(1, lines.count("## Merged"))
 
     def test_a_merge_main_does_not_hold_yet_is_not_reported_as_merged(self):
         # verify passed, then the pull or the containment read failed, so `tasks done` never ran.
