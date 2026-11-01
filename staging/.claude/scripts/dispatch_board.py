@@ -571,13 +571,14 @@ def rewrite(live, read, rebuilt):
 
 def _tasks_command(args, today):
     # The run's state.json is dispatch_run's, which imports this module, so it is reached at call time.
-    from dispatch_run import _close, _note_placed, _record_move, _state_or_empty, load_state, run_dir
+    from dispatch_run import _close, _field, _note_placed, _record_move, _texts, load_state, run_dir
     directory = run_dir(args.root, args.run)
+    # Only a run `start` opened is written to, so a mistyped name leaves no phantom state.json behind.
+    state = load_state(directory)
     after, undo = [], []
 
     def update(text):
         if args.action == "rewrite":
-            load_state(directory)
             copy = directory / READ_COPY
             try:
                 source = _read(args.source)
@@ -599,23 +600,29 @@ def _tasks_command(args, today):
             moved = {"keys": [r.key for r in group.rows], "rows": [r.line for r in group.rows]}
             undo.append(_record_move(directory, args.group, moved))
             return result
-        held = {r.key for r in tasks.in_progress if r.group == args.group}
-        if not held:
-            raise Refusal(f"no In progress row carries Group {args.group}")
-        if args.action == "done":
-            after.append(lambda: _close(directory, args.group, "done"))
-            return delete_in_progress(text, held)
-        # The In progress row no longer holds the wave, labels, depends, model or conflicts, so `back` needs these.
-        entry = _state_or_empty(directory).get("groups", {}).get(args.group) or {}
-        if "rows" not in entry:
+        # Another session's row may carry the same letter, so only the keys this run's move recorded are touched.
+        entry = state.get("groups", {}).get(args.group)
+        if not isinstance(entry, dict) or "rows" not in entry:
             raise Refusal(f"{directory / 'state.json'} does not record {args.group}; it was not moved by this run")
-        rows = [line for line in entry["rows"] if _row("Remaining", line).key in held]
-        unrecorded = held - {_row("Remaining", line).key for line in rows}
-        if unrecorded:
-            raise Refusal(f"{directory / 'state.json'} does not hold {', '.join(sorted(unrecorded))}; "
-                          "they cannot go back")
+        keys = set(_field(entry, args.group, "keys", _texts))
+        rows = _field(entry, args.group, "rows", _texts)
+        if sorted(keys) != sorted(_row("Remaining", line).key for line in rows):
+            raise Refusal(f"{args.group}'s keys and rows in state.json do not name the same issues")
+        status = entry.get("status")
+        held = {r.key for r in tasks.in_progress if r.group == args.group}
+        if not keys <= held:
+            raise Refusal(f"In progress does not hold {args.group}'s rows {', '.join(sorted(keys - held))}")
+        if args.action == "done":
+            # A row is deleted only once GitHub showed the merge; anything less would hide a claim never checked.
+            if status != "verified":
+                raise Refusal(f"{args.group} is {status or 'not launched'}, not a verified merge")
+            after.append(lambda: _close(directory, args.group, "done"))
+            return delete_in_progress(text, keys)
+        if status in ("verified", "merged-claimed"):
+            raise Refusal(f"{args.group} is {status}: a claimed merge is verified and done, never sent back")
+        # The In progress row no longer holds the wave, labels, depends, model or conflicts, so `back` needs these.
         after.append(lambda: _close(directory, args.group, "returned"))
-        return return_to_remaining(text, rows, held)
+        return return_to_remaining(text, rows, keys)
 
     # The file is read here, at the moment of the write, so another session's edit since `board` is kept. A move's
     # record is written first and undone if the list write is refused, so neither is left without the other.

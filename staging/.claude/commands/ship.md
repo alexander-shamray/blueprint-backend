@@ -45,7 +45,9 @@ checkout and removes the worktree, however the review ended.
   it needs a resource only the owner has; or the issue's own text says the
   decision is the owner's and no `## Owner decisions` entry settles it.
   Every other judgement is the
-  recommended option, named in the result's `decisions`. (why:
+  recommended option, named in the result's `decisions`. The session
+  writes the task list nowhere, even when it files or closes an issue:
+  what it files goes only in the result's `filed`. (why:
   docs/commands/ship.md, *Dispatched: the one token /dispatch passes*)
 - **The review hitting its ceiling is not a stop**: it ends the review,
   reported unconverged, and step 6 merges anyway.

@@ -51,9 +51,12 @@ def flat(text):
 
 
 def between(text, start, end):
-    """The text from `start` up to the first `end` after it, refusing a missing marker."""
-    first = text.index(start)
-    return text[first:text.index(end, first + len(start))]
+    """The text from `start` up to the first `end` after it; a missing marker fails the case as a missing rule."""
+    first = text.find(start)
+    last = text.find(end, first + len(start)) if first >= 0 else -1
+    if last < 0:
+        raise AssertionError(f"{start!r} then {end!r} is not in the text")
+    return text[first:last]
 
 
 def ship():
@@ -108,6 +111,13 @@ class TheDispatchedTokenChangesOnlyWhatTheSpecLists(unittest.TestCase):
             with self.subTest(where=name):
                 self.assertIn(SKIP_WRITE, text)
                 self.assertLess(text.index(write), text.index(SKIP_WRITE))
+
+    def test_the_task_list_is_written_nowhere_under_the_token(self):
+        # CLAUDE.md and the owner's memory tell a session that files an issue to update the list; this overrides both.
+        rule = between(flat(between(ship(), "## It runs to the end", "## Resume, don't restart")),
+                       "Under the standalone token --dispatched <run-dir>", "(why:")
+        self.assertIn("writes the task list nowhere, even when it files or closes an issue", rule)
+        self.assertIn("what it files goes only in the result's filed", rule)
 
     def test_step_6_neither_exits_nor_removes_the_worktree(self):
         step = ship_step_6()

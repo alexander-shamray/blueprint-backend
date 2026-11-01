@@ -37,9 +37,14 @@ OID = re.compile(r"[0-9a-f]{40}")
 SESSION_ID = re.compile(r"[A-Za-z0-9-]{1,80}")
 # A group holds an executor slot while it runs or waits to run again; a week's limit ends the night until it resets.
 ACTIVE = ("running", "relaunch", "window", "week")
+# A `run` that started no executor: no slot is held, and the group goes back rather than being launched again.
+PRE_LAUNCH = "crashed-before-launch"
+# Each ends in `tasks back`, its worktree left for the owner, and the report's Needs a human.
+HANDED = ("handed-back", "stopped", "crash-hand-back", PRE_LAUNCH)
 WINDOW = timedelta(hours=5, minutes=10)
-# No limit was hit in the spike (artifacts/dispatch/spike.md, Rate-limit text), so the envelope's structured
-# fields are read first and these phrases only on a session that failed; they await the first real limit.
+# No limit was hit in the spike (docs/superpowers/plans/2026-11-01-dispatch-spike.md, Rate-limit text), so the
+# envelope's structured fields are read first and these phrases only on a session that failed; they await the first
+# real limit.
 LIMIT_PHRASES = ("usage limit", "rate limit", "limit reached")
 RATE_LIMIT_KIND = re.compile(r"rate_limit(?:_error|_exceeded)?", re.IGNORECASE)
 ISO_STAMP = r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?"
@@ -56,30 +61,23 @@ PROJECTS = Path.home() / ".claude" / "projects"
 SLEEP = time.sleep
 
 
-def _state_or_empty(directory):
-    return load_state(directory) if (Path(directory) / "state.json").is_file() else {"groups": {}}
-
-
 def _record_move(directory, gid, moved):
     """Record a move before the list is written, and return how to undo the record if that write is refused."""
     path = Path(directory) / "state.json"
-    before = _read(path) if path.is_file() else None
-    state = _state_or_empty(directory)
+    state = load_state(directory)
+    before = _read(path)
     # A new move starts the group afresh: what an earlier launch recorded no longer describes it.
     state.setdefault("groups", {})[gid] = moved
     save_state(directory, state)
 
     def undo():
         with contextlib.suppress(OSError, Refusal):
-            if before is None:
-                path.unlink(missing_ok=True)
-            else:
-                _write(path, before)
+            _write(path, before)
     return undo
 
 
 def _close(directory, gid, status):
-    state = _state_or_empty(directory)
+    state = load_state(directory)
     entry = state.get("groups", {}).get(gid)
     if entry is not None:
         # The report names how a group ended, which `done` and `back` would otherwise overwrite.
@@ -88,7 +86,7 @@ def _close(directory, gid, status):
 
 
 def _note_placed(directory, issue):
-    state = _state_or_empty(directory)
+    state = load_state(directory)
     placed = state.setdefault("placed", [])
     if issue not in placed:
         placed.append(issue)
@@ -260,13 +258,40 @@ def launch(root, run, gid, tasks_path, branch, worktree):
 def run_session(root, run, gid, description):
     """The dispatcher's background task for one executor, returning when the session ends.
 
-    It writes only its own <group>.pid and <group>.session.json, never state.json, which only the dispatcher writes,
-    so parallel executors never race one record.
+    It writes only its own <group>.pid and <group>.session.json, or <group>.refused.json when it launches nothing,
+    never state.json, which only the dispatcher writes, so parallel executors never race one record.
     """
     directory = run_dir(root, run)
     entry = _entry(load_state(directory), gid)
     if entry.get("status") not in ACTIVE:
         raise Refusal(f"{gid} is {entry.get('status') or 'not launched'}, not waiting for an executor")
+    marker = directory / f"{gid}.refused.json"
+    try:
+        marker.unlink(missing_ok=True)
+    except OSError as error:
+        raise Refusal(f"could not remove the stale {marker}: {error}") from None
+    try:
+        child, text, started = _launch(root, directory, run, gid, entry, description)
+    except Refusal as refusal:
+        # The group holds a slot until `result` reads why nothing launched; state.json stays the dispatcher's.
+        try:
+            _write(marker, json.dumps({"refused": str(refusal), "at": now().isoformat()}, ensure_ascii=False) + "\n")
+        except Refusal as unwritten:
+            raise Refusal(f"{refusal}; {unwritten}") from None
+        raise
+    out, err = child.communicate(text.encode("utf-8"))
+    ended = now()
+    record = {"exit": child.returncode, "started": started.isoformat(), "ended": ended.isoformat(),
+              "seconds": round((ended - started).total_seconds()),
+              "stdout": out.decode("utf-8", errors="replace"), "stderr": err.decode("utf-8", errors="replace")}
+    _write(directory / f"{gid}.session.json", json.dumps(record, ensure_ascii=False, indent=1) + "\n")
+
+
+def _launch(root, directory, run, gid, entry, description):
+    """Everything up to a started executor, which is returned with its prompt and start time; a refusal starts none."""
+    # The owner's stop file ends relaunches too, not only the next wake's launches.
+    if (directory / "STOP").exists():
+        raise Refusal("stop file: the owner ended the night, so nothing more launches")
     text = prompt(_entry_group(gid, entry), description, run)
     flag = model_flag(entry.get("model"))
     worktree = Path(root) / _field(entry, gid, "worktree", _path_text)
@@ -295,12 +320,7 @@ def run_session(root, run, gid, description):
         child.kill()
         child.wait()
         raise
-    out, err = child.communicate(text.encode("utf-8"))
-    ended = now()
-    record = {"exit": child.returncode, "started": started.isoformat(), "ended": ended.isoformat(),
-              "seconds": round((ended - started).total_seconds()),
-              "stdout": out.decode("utf-8", errors="replace"), "stderr": err.decode("utf-8", errors="replace")}
-    _write(directory / f"{gid}.session.json", json.dumps(record, ensure_ascii=False, indent=1) + "\n")
+    return child, text, started
 
 
 # What an executor returns (spec section 6.3)
@@ -528,7 +548,8 @@ def classify(end, result, crashes, now):
         return {"merged": "merged-claimed", "handed-back": "handed-back", "stopped": "stopped"}[result.outcome]
     if end.rate_limited and end.resets_at is not None:
         return "window" if end.resets_at - now <= WINDOW else "week"
-    # spike.md, Prompts: a call the auto classifier refused is a hand-back; a relaunch would meet it again.
+    # 2026-11-01-dispatch-spike.md, Prompts: a call the auto classifier refused is a hand-back; a relaunch would
+    # meet it again.
     if end.denials:
         return "handed-back"
     return "relaunch" if crashes < 1 else "crash-hand-back"
@@ -588,6 +609,18 @@ def _pid(directory, gid):
         return None
 
 
+def _refused(directory, gid):
+    """Why the last `run` launched nothing, on one line, or None when it launched or has not run."""
+    path = Path(directory) / f"{gid}.refused.json"
+    try:
+        why = json.loads(_read(path)).get("refused")
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, AttributeError):
+        return f"{path.name} is unreadable"
+    return one_line(why, 200) if isinstance(why, str) and why.strip() else f"{path.name} names no reason"
+
+
 def _launch_time(directory, gid, entry):
     try:
         return os.stat(Path(directory) / f"{gid}.pid").st_mtime
@@ -614,6 +647,13 @@ def absorb(root, run, gid):
     entry = _entry(state, gid)
     if entry.get("status") not in ACTIVE:
         raise Refusal(f"{gid} is {entry.get('status') or 'not launched'}, not waiting on a result")
+    refused = _refused(directory, gid)
+    if refused is not None:
+        # Nothing ran, so there is no result to read: the slot is freed and the group goes back, never relaunched.
+        reason = f"run refused before launch: {refused}"
+        entry.update(status=PRE_LAUNCH, reason=reason)
+        save_state(directory, state)
+        return [f"{gid}: {PRE_LAUNCH} - {reason}", "transcript: not found"]
     record = directory / f"{gid}.session.json"
     try:
         raw = json.loads(_read(record))
@@ -732,18 +772,20 @@ def wait(root, run, gid):
     if entry.get("status") != "window" or resets is None:
         raise Refusal(f"{gid} is {entry.get('status') or 'not launched'}, not waiting on a window")
     total = left = window_wait(resets, now())
-    # In steps, so the owner's stop file ends a five-hour wait within a minute rather than after it.
-    while left > 0:
+    # In steps, so the owner's stop file ends a five-hour wait within a minute; a reset already past still reads it.
+    while True:
         if (directory / "STOP").exists():
             return "stop file: yes"
+        if left <= 0:
+            break
         step = min(60.0, left)
         SLEEP(step)
         left -= step
     return f"waited {total:.0f} s"
 
 
-# The seven_day window exists only to mods inside a running session (spike.md, Weekly figure), so no script reads
-# it. A source, when one is found, returns {"percentUsed": <0 to 100>, "resetsAt": <ISO stamp>}.
+# The seven_day window exists only to mods inside a running session (2026-11-01-dispatch-spike.md, Weekly figure),
+# so no script reads it. A source, when one is found, returns {"percentUsed": <0 to 100>, "resetsAt": <ISO stamp>}.
 WEEKLY_SOURCE = None
 WEEKLY_STOP_PERCENT_LEFT = 1
 
@@ -845,8 +887,13 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source, 
     candidates = groups(tasks)
     ready_map = {g.id: ready(g, open_set, today, bodies) for g in candidates}
     claims = {g.id: group_claim(g, bodies) for g in candidates}
+    # A moved group's In progress row has lost its conflicts cell, so the claim its Remaining rows made is kept.
+    held_keys = {r.key for r in tasks.in_progress}
+    running = [_entry_group(gid, entry) for gid, entry in entries.items()
+               if "rows" in entry and set(_field(entry, gid, "keys", _texts)) & held_keys]
+    claims.update({g.id: group_claim(g, bodies) for g in running})
     taken = [claim for claim, _ in _held(tasks, bodies, branch_source)]
-    chosen = pick(candidates, ready_map, claims, [], taken, slots)
+    chosen = pick(candidates + running, ready_map, claims, [g.id for g in running], taken, slots)
     if chosen:
         return out + [f"launch: {' '.join(chosen)}"]
     return out + ["launch: none" if active else "end: drained"]
@@ -864,6 +911,9 @@ def resume(root, run):
             pid = _pid(directory, gid)
             if pid is not None and alive(pid):
                 out.append(f"refused {gid}: its executor is still running")
+                continue
+            if _refused(directory, gid) is not None:
+                out.append(f"result {gid}: its run launched nothing and was not read")
                 continue
             if not entry.get("worktree") or not (Path(root) / entry["worktree"]).is_dir():
                 out.append(f"refused {gid}: its worktree {entry.get('worktree')} is gone")
@@ -887,7 +937,7 @@ def resume(root, run):
             out.append(f"verify {gid}")
         elif status == "verified":
             out.append(f"done {gid}: verified, its rows are still In progress")
-        elif status in ("handed-back", "stopped", "crash-hand-back"):
+        elif status in HANDED:
             out.append(f"back {gid}: {status}")
     return out
 
@@ -895,7 +945,6 @@ def resume(root, run):
 # The morning report's facts (spec section 10), in English; the dispatcher writes report.md from them in --lang.
 
 REPORT_SECTIONS = ("Merged", "Needs a human", "Interrupted", "Filed overnight", "Left in the backlog", "Usage")
-HANDED = ("handed-back", "stopped", "crash-hand-back")
 TOKEN_NAMES = ("input", "cache write", "cache read", "output")
 UNFINISHED = {None: "moved, never launched", "merged-claimed": "merge claimed, not yet verified"}
 
@@ -910,6 +959,13 @@ def _rounds_text(rounds):
     kinds = [f"{r.get('kind')} raised {r.get('raised')} fixed {r.get('fixed')} refused {r.get('refused')}"
              for r in rounds if isinstance(r, dict)]
     return f"rounds {len(rounds)}: " + "; ".join(kinds)
+
+
+def _decisions_text(decisions):
+    # Each is the executor's text: one_line keeps a line break in it from forging a report line of its own.
+    if not isinstance(decisions, list) or not decisions:
+        return ""
+    return "; decisions: " + " / ".join(one_line(d, 200) for d in decisions if isinstance(d, str))
 
 
 def _weekly_lines(usage):
@@ -941,16 +997,19 @@ def report(root, run, tasks_path, today, body_source, open_source):
         if ended == "verified" and status == "done":
             merged.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}: "
                           f"{_issues_text(entry.get('issues'))}; {_rounds_text(entry.get('rounds'))}; "
-                          f"review {entry.get('review_end') or 'not run'}; filed {_issues_text(entry.get('filed'))}")
+                          f"review {entry.get('review_end') or 'not run'}; filed {_issues_text(entry.get('filed'))}"
+                          + _decisions_text(entry.get("decisions")))
         elif status == "verified":
             # GitHub showed the merge, but the pull or the containment read after it failed, so `done` never ran.
             needs.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}, not confirmed in main: "
-                         f"its rows are still In progress and worktree {entry.get('worktree')} is left in place")
+                         f"its rows are still In progress and worktree {entry.get('worktree')} is left in place"
+                         + _decisions_text(entry.get("decisions")))
         elif ended in HANDED or status == "returned":
             worktree = entry.get("worktree")
             kept = _path_text(worktree) and (Path(root) / worktree).is_dir()
             needs.append(f"{gid} {ended or 'returned'}: {one_line(entry.get('reason') or 'no reason recorded')}; "
-                         f"worktree {worktree} {'left in place' if kept else 'removed'}")
+                         f"worktree {worktree} {'left in place' if kept else 'removed'}"
+                         + _decisions_text(entry.get("decisions")))
         else:
             interrupted.append(f"{gid} {UNFINISHED.get(status, status)}")
         spent = entry.get("usage") if isinstance(entry.get("usage"), dict) else {}

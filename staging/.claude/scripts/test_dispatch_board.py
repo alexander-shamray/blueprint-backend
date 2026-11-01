@@ -438,6 +438,7 @@ class WriteTests(unittest.TestCase):
             db.place(FIXTURE, 2, "S1", 1702)
 
     def test_a_move_rereads_the_file_and_keeps_another_sessions_edit(self):
+        self.start()
         self.write(FIXTURE)
 
         def fetch(_):
@@ -459,6 +460,8 @@ class WriteTests(unittest.TestCase):
         self.assertIn("| S1 | #1682 |", section(text, "In progress"))
 
     def test_a_refused_write_leaves_no_temporary_file_and_no_state_record(self):
+        self.start()
+        before = (self.run_dir / "state.json").read_bytes()
         self.write(FIXTURE)
         with mock.patch.object(db.os, "replace", side_effect=PermissionError("held open")):
             code, err = self.cli("move", "S1")
@@ -466,9 +469,12 @@ class WriteTests(unittest.TestCase):
         self.assertIn("refused: could not write", err)
         self.assertEqual(FIXTURE, self.read())
         self.assertEqual(["todo.md"], sorted(p.name for p in self.dir.iterdir() if p.is_file()))
-        self.assertFalse((self.run_dir / "state.json").exists())
+        self.assertEqual(["state.json"], sorted(p.name for p in self.run_dir.iterdir()))
+        self.assertEqual(before, (self.run_dir / "state.json").read_bytes())
 
     def test_a_refused_list_write_undoes_the_moves_state_record(self):
+        self.start()
+        started = (self.run_dir / "state.json").read_text(encoding="utf-8")
         self.write(FIXTURE)
         real_write = db._write
 
@@ -478,7 +484,7 @@ class WriteTests(unittest.TestCase):
             real_write(path, text)
         with mock.patch.object(db, "_write", refuse_the_list):
             self.assertEqual(2, self.cli("move", "S1")[0])
-        self.assertFalse((self.run_dir / "state.json").exists())
+        self.assertEqual(started, (self.run_dir / "state.json").read_text(encoding="utf-8"))
         dr.save_state(self.run_dir, {"run": "x", "groups": {"S3": {"keys": ["#1681"]}}})
         before = (self.run_dir / "state.json").read_text(encoding="utf-8")
         with mock.patch.object(db, "_write", refuse_the_list):
@@ -487,6 +493,7 @@ class WriteTests(unittest.TestCase):
         self.assertEqual(FIXTURE, self.read())
 
     def test_a_move_records_the_rows_in_the_runs_state_and_back_reads_them_there(self):
+        self.start()
         self.write(FIXTURE)
         self.assertEqual((0, ""), self.cli("move", "S1"))
         entry = dr.load_state(self.run_dir)["groups"]["S1"]
@@ -535,6 +542,7 @@ class WriteTests(unittest.TestCase):
         self.assertEqual(["M2"], free)
 
     def test_the_cli_moves_finishes_and_returns_a_group(self):
+        self.start()
         self.write(FIXTURE)
         self.assertEqual((0, ""), self.cli("move", "S1", "--branch", "fix/s1", "--worktree", "wt"))
         self.assertIn("`fix/s1`, `wt`", self.read())
@@ -544,11 +552,13 @@ class WriteTests(unittest.TestCase):
         self.assertEqual("OWNER", back[1682].cells[db.DEPENDS])
         self.write(FIXTURE)
         self.cli("move", "S1")
+        self.verified("S1")
         self.assertEqual((0, ""), self.cli("done", "S1"))
         self.assertEqual(1, len(db.parse_tasks(self.read()).in_progress))
         self.assertNotIn("1682", self.read())
 
     def test_the_cli_refuses_with_exit_two_and_writes_nothing(self):
+        self.start()
         self.write(FIXTURE)
         code, err = self.cli("move", "Q9")
         self.assertEqual(2, code)
@@ -560,17 +570,79 @@ class WriteTests(unittest.TestCase):
         self.assertEqual(2, self.cli("move", "S1")[0])
 
     def test_the_cli_places_a_row(self):
+        self.start()
         self.write(FIXTURE)
         self.assertEqual((0, ""), self.cli("place", "1", "S3", "1700", "--depends", "none"))
         self.assertEqual([1681, 1700], [r.number for r in db.groups(db.parse_tasks(self.read()))[1].rows])
 
     def board(self):
-        with contextlib.redirect_stdout(io.StringIO()):
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             return db.main(["board", "--tasks", str(self.path), "--today", "2026-11-01", "--root", str(self.dir),
                             "--run", RUN], body_source=lambda n: "", open_source=set, branch_source=NO_BRANCH)
 
     def start(self):
         dr.save_state(self.run_dir, {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
+
+    def verified(self, gid):
+        state = dr.load_state(self.run_dir)
+        state["groups"][gid]["status"] = "verified"
+        dr.save_state(self.run_dir, state)
+
+    def test_every_tasks_action_refuses_a_run_start_never_opened_and_writes_nothing(self):
+        # A mistyped run name would otherwise create a phantom run, and `done` would delete whatever the letter held.
+        self.write(FIXTURE)
+        actions = {"move": ["move", "S1"], "done": ["done", "S1"], "back": ["back", "S1"],
+                   "place": ["place", "1", "S3", "1700"]}
+        for name, args in actions.items():
+            with self.subTest(action=name, state="missing"):
+                code, err = self.cli(*args)
+                self.assertEqual(2, code)
+                self.assertIn("the run was never started", err)
+                self.assertEqual(FIXTURE, self.read())
+                self.assertFalse(self.run_dir.exists())
+        self.start()
+        (self.run_dir / "state.json").write_text("{not json", encoding="utf-8")
+        for name, args in actions.items():
+            with self.subTest(action=name, state="corrupt"):
+                code, err = self.cli(*args)
+                self.assertEqual(2, code)
+                self.assertIn("is not JSON", err)
+                self.assertEqual(FIXTURE, self.read())
+                self.assertEqual("{not json", (self.run_dir / "state.json").read_text(encoding="utf-8"))
+
+    def test_done_deletes_only_this_runs_verified_rows_and_back_only_its_own(self):
+        # Another session's row carries the letter S1 too; the run's own move recorded only #1682 and #1683.
+        foreign = "| S1 | #1690 | Another session's work | `fix/other`, `.claude/worktrees/other` | started |"
+        text = FIXTURE.replace("| started |\n", f"| started |\n{foreign}\n", 1)
+        self.start()
+        self.write(text)
+        code, err = self.cli("done", "S1")
+        self.assertEqual(2, code)
+        self.assertIn("does not record S1; it was not moved by this run", err)
+        self.assertEqual((0, ""), self.cli("move", "S1"))
+        moved = self.read()
+        for status in (None, "running", "merged-claimed", "handed-back"):
+            with self.subTest(status=status):
+                state = dr.load_state(self.run_dir)
+                state["groups"]["S1"]["status"] = status
+                dr.save_state(self.run_dir, state)
+                code, err = self.cli("done", "S1")
+                self.assertEqual(2, code)
+                self.assertIn("not a verified merge", err)
+                self.assertEqual(moved, self.read())
+        self.verified("S1")
+        code, err = self.cli("back", "S1")
+        self.assertEqual(2, code)
+        self.assertIn("never sent back", err)
+        self.assertEqual((0, ""), self.cli("done", "S1"))
+        self.assertEqual([None, 1690], [r.number for r in db.parse_tasks(self.read()).in_progress])
+        self.write(moved)
+        state = dr.load_state(self.run_dir)
+        state["groups"]["S1"]["status"] = "handed-back"
+        dr.save_state(self.run_dir, state)
+        self.assertEqual((0, ""), self.cli("back", "S1"))
+        self.assertIn(foreign, self.read())
+        self.assertLessEqual({"#1682", "#1683"}, {r.key for r in db.parse_tasks(self.read()).remaining})
 
     def rebuild(self, text):
         path = self.dir / "rebuilt.md"
@@ -602,6 +674,7 @@ class WriteTests(unittest.TestCase):
         self.assertEqual(edited, self.read())
 
     def test_a_rewrite_refuses_a_rebuild_that_drops_the_note_or_this_runs_rows_or_does_not_parse(self):
+        self.start()
         self.write(FIXTURE)
         self.assertEqual((0, ""), self.cli("move", "S1"))
         self.board()
@@ -671,11 +744,13 @@ class WriteTests(unittest.TestCase):
 
     def test_place_records_the_issue_in_the_runs_state(self):
         # The morning report's Filed overnight names what the dispatcher placed as well as what results named.
+        self.start()
         self.write(FIXTURE)
         self.assertEqual((0, ""), self.cli("place", "1", "S3", "1700"))
         self.assertEqual([1700], dr.load_state(self.run_dir)["placed"])
 
     def test_back_keeps_how_the_group_ended(self):
+        self.start()
         self.write(FIXTURE)
         self.cli("move", "S1")
         state = dr.load_state(self.run_dir)
@@ -686,11 +761,13 @@ class WriteTests(unittest.TestCase):
         self.assertEqual(("returned", "handed-back"), (entry["status"], entry["closed_from"]))
 
     def test_the_files_line_endings_survive_a_write(self):
+        self.start()
         self.write(FIXTURE.replace("\n", "\r\n"))
         self.assertEqual((0, ""), self.cli("move", "S1"))
         text = self.read()
         self.assertEqual(text.count("\n"), text.count("\r\n"))
         self.assertIn("| S1 | #1682 |", text)
+        self.verified("S1")
         self.assertEqual((0, ""), self.cli("done", "S1"))
         text = self.read()
         self.assertEqual(text.count("\n"), text.count("\r\n"))

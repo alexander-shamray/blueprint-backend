@@ -17,6 +17,8 @@ from pathlib import Path
 
 HEADING = "## Owner decisions"
 PART_LIMIT = 500
+# A close comment says why no work is needed: a few answers' worth, never a pasted file.
+COMMENT_LIMIT = 4 * PART_LIMIT
 LABELS = ("question", "paused")
 ENTRY_RE = re.compile(
     r"- \d{4}-\d{2}-\d{2}: Q: (?P<question>[^\r\n#][^\r\n]{0,%d}) A: (?P<answer>[^\r\n#][^\r\n]{0,%d})"
@@ -101,6 +103,33 @@ def read_utf8(path):
         raise Refusal(f"cannot read {path} as UTF-8: {error}")
 
 
+def comment_file(path, run_dir):
+    """The close comment, refused unless it is a file the run wrote under its own directory and of an answer's size."""
+    if not os.path.isdir(run_dir):
+        raise Refusal(f"--run-dir {run_dir} is not a directory")
+    real, base = os.path.normcase(os.path.realpath(path)), os.path.normcase(os.path.realpath(run_dir))
+    try:
+        inside = real != base and os.path.commonpath([real, base]) == base
+    except ValueError:
+        # Windows' commonpath refuses two drives, which are never one inside the other.
+        inside = False
+    if not inside:
+        raise Refusal(f"--comment-file {path} is not under --run-dir {run_dir}")
+    try:
+        size = os.path.getsize(real)
+    except OSError as error:
+        raise Refusal(f"cannot read {path}: {error}")
+    # Bytes first, so an oversized file is refused before it is read; a character is at most four bytes.
+    if size > 4 * COMMENT_LIMIT:
+        raise Refusal(f"the comment is over {COMMENT_LIMIT} characters")
+    text = read_utf8(real)
+    if not text.strip():
+        raise Refusal("the comment is empty")
+    if len(text) > COMMENT_LIMIT:
+        raise Refusal(f"the comment is over {COMMENT_LIMIT} characters")
+    return text
+
+
 def path_which(name):
     """The first executable `name` on PATH, never one in the current directory, or None.
 
@@ -178,6 +207,7 @@ def main(argv=None):
     clo = sub.add_parser("close")
     clo.add_argument("number")
     clo.add_argument("--comment-file", required=True)
+    clo.add_argument("--run-dir", required=True)
     try:
         args = parser.parse_args(argv)
     except SystemExit as stop:
@@ -197,7 +227,7 @@ def main(argv=None):
             label = unblock_label(args.label)
             gh("issue", "edit", number, "--repo", repository(), "--remove-label", label)
         else:
-            read_utf8(args.comment_file)
+            comment_file(args.comment_file, args.run_dir)
             repo = repository()
             try:
                 gh("issue", "comment", number, "--repo", repo, "--body-file", args.comment_file)
