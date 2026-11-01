@@ -1402,7 +1402,10 @@ public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, Cance
 > ([Appendix E.5.2](appendix-e-reference-domain.md#e52-the-queues-and-broker-identities)) — and
 > `deploy/compose/rabbitmq/check_permissions.py` asserts, from each service's
 > own source, that no service's `write` covers another's command endpoint or
-> contracts, so the property is gated rather than remembered.
+> contracts, so the property is gated rather than remembered. Nor can it
+> name `OrderPlaced` in an envelope sent to its own exchange, since a consumer
+> takes a delivery only through its type's exchange or its endpoint's own
+> ([ADR-191](adr/ADR-191-a-consumer-takes-a-delivery-only-through-its-types-exchange-or-its-endpoints-own-1684-amending-adr-036.md)).
 > `CommandOrigin` therefore closes §11.4's
 > failure rather than narrowing it: it stops a caller-less command inheriting
 > an owner's privileges, and the broker says who may publish.
@@ -3618,8 +3621,9 @@ cfg.ReceiveEndpoint(
         // buffered sends have flushed rather than before. The outbox defers
         // any Publish/Send until the consumer completes, so a retry does not
         // re-emit messages the failed attempt already sent. One call places
-        // both on each consumer's pipe, in that order; the callout under this
-        // block is the argument, and why two calls cannot.
+        // both on each consumer's pipe, in that order, behind ADR-191's
+        // source check; the callout under this block is the argument, and
+        // why two calls cannot.
         e.UseInboxAndInMemoryOutbox(context);
 
         e.ConfigureConsumer<IntegrationEventConsumer<ProductPublished>>(context);
@@ -3658,7 +3662,8 @@ cfg.ReceiveEndpoint(
 > to the endpoint's, which wraps every consumer's pipe — so on an endpoint the
 > outbox is outside the inbox whichever line comes first.
 > `UseInboxAndInMemoryOutbox`, in `Common.Infrastructure.Inbox`, adds both to
-> each consumer's pipe, the inbox first, and is the only caller of
+> each consumer's pipe, the inbox before the outbox and behind ADR-191's
+> source check, and is the only caller of
 > `UseInMemoryOutbox` in `src/`, which `InboxEndpointExtensionsTests` holds.
 > An `InboxFilterTests` over a service's real inbox table makes one flush
 > fail: with the two calls the retry drops the message and its send, and with
@@ -3678,8 +3683,9 @@ cfg.ReceiveEndpoint(
 > and does not persist. The saga is that consumer, and
 > [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
 > gives it one. **The nesting rule survives the substitution unchanged**: on
-> the saga's endpoint the inbox filter is still added first and still
-> outermost, and MassTransit's outbox delivers after the inner pipeline
+> the saga's endpoint the inbox filter is still added before the outbox and
+> still outside it, with only the source check in front of it, and
+> MassTransit's outbox delivers after the inner pipeline
 > returns exactly as the in-memory one flushes after it. What differs is what
 > a failure there costs — the messages are already committed, so the delivery
 > resumes instead of being lost — not which filter wraps which.
@@ -3743,6 +3749,9 @@ cfg.ReceiveEndpoint(
     {
         e.UseMessageRetry(RetryPolicy.Standard);
 
+        // The helper's source check, typed here since the helper is not used.
+        e.UseSourceExchangeCheck(context);
+
         // The inbox is here too, on its own, since the helper's outbox is the
         // in-memory one. The callout below is why there is no exception for a
         // state machine.
@@ -3752,7 +3761,7 @@ cfg.ReceiveEndpoint(
         // transactional outbox rather than the in-memory one, on the DbContext
         // the saga repository already holds, so the sends commit with the
         // instance (ADR-032). It goes on each saga message's pipe, as the
-        // inbox does, so added second it sits inside it. A pass delivers
+        // inbox does, so added after it it sits inside it. A pass delivers
         // everything a transition staged, so a message takes two transactions
         // (ADR-174).
         e.UseEntityFrameworkOutbox<OrderingDbContext>(
@@ -3767,6 +3776,16 @@ cfg.ReceiveEndpoint(
 > endpoint applies `InboxFilter<>`, and what the consumer dispatches to is not
 > the criterion: a redelivered command is as duplicable as a redelivered
 > event, and so is a redelivered event that *starts* a saga.
+>
+> **And the source check stands in front of it on every endpoint.** The
+> envelope's message type picks the consumer and the publisher writes the
+> envelope, so the saga's queue, which binds Inventory's exchanges beside
+> Payments', would take a `PaymentAuthorised` named in a `StockReleased`
+> publish. `SourceExchangeFilter<T>` passes a delivery on only through the
+> consumed type's exchange, the endpoint's own or the delayed exchange in
+> front of it, and leaves the rest to park in `<queue>_skipped`; outside the
+> inbox, a refused delivery writes no row
+> ([ADR-191](adr/ADR-191-a-consumer-takes-a-delivery-only-through-its-types-exchange-or-its-endpoints-own-1684-amending-adr-036.md)).
 
 > **The outbox is not the default, and this endpoint is the only one that
 > departs from it.**

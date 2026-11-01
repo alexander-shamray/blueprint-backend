@@ -9,9 +9,9 @@
 
 ## What it means
 
-MassTransit handed an endpoint a message it has **no consumer for** and parked
-it in `<queue>_skipped`. Nothing threw, nothing was retried, and nothing will
-retry it.
+MassTransit handed an endpoint a message it has **no consumer for**, or one
+its consumer's source check refused, and parked it in `<queue>_skipped`.
+Nothing threw, nothing was retried, and nothing will retry it.
 
 **This is not the error queue's problem in a different queue.** An `_error`
 message is one a consumer accepted and could not finish; a `_skipped` message
@@ -106,7 +106,7 @@ why the message was moved.
 Compare `messageType` against what this endpoint's consumers — and, for a
 saga, the state machine's `Event<>` declarations — actually bind.
 
-## Then it is one of three things
+## Then it is one of four things
 
 ### A producer shipped ahead of its consumer
 
@@ -124,7 +124,9 @@ insufficient.
 1. **Finish the rollout first.** Once every replica runs the new build, nothing
    further is skipped, and the queue stops growing. Do not roll back — the old
    build is the one that cannot handle these messages.
-2. **Then replay what was parked**, with the tool —
+2. **Then replay what was parked**, once the service's log names none of
+   its ids in a `Refused` line, which is the source check's case below and
+   is never replayed; with the tool —
    `dead_letters.py replay <endpoint>_skipped --all`, a dry run, then again
    with `--execute --record FILE` — or with the shovel procedure in
    [`error-queue.md`](error-queue.md); the mechanics are identical and only the
@@ -135,7 +137,8 @@ insufficient.
    §9.2 violation and the next release of that service should not repeat it.
 
 > **Replay is right here, and on the error queue it depends on the arrival.**
-> These messages were never refused on their merits — no consumer saw them —
+> These messages, unlike a refused one below, were never refused on their
+> merits — no consumer saw them —
 > so once the consumer exists they succeed. A `PaymentAuthorised` whose saga
 > instance is gone is the opposite: it faults every time it is replayed,
 > because a deleted instance does not come back. A faulted `OrderCancelled`
@@ -164,8 +167,9 @@ and the messages return here.
 ### The message was addressed here and does not belong here
 
 **A `Send` to the wrong endpoint, not a `Publish`** — and the distinction
-matters because the obvious suspect is the wrong one. A publish reaches a queue
-only if that endpoint bound the type, and it bound it *because* it has a
+matters because the obvious suspect is the wrong one. A publish through the
+type's own exchange reaches a queue only if that endpoint bound the type, and
+it bound it *because* it has a
 consumer for it; so publishing a command produces N consumers all running it
 (§9.6's actual hazard) and skips nothing. A **send** is addressed to a queue
 directly and arrives whatever that endpoint consumes, so a wrong destination —
@@ -181,6 +185,25 @@ Discard with a record once the real destination has had it —
 --record FILE` takes the messages ahead of it and that one, writes each to
 the record, returns the others to the tail and discards that one. Fixing
 the sender is what closes it.
+
+### The source check refused it
+
+**A forgery, or a message published by hand, and never a replay.** The
+endpoint does consume the type, but the delivery came through neither that
+type's exchange nor the endpoint's own, so `SourceExchangeFilter<T>` passed it
+to no consumer
+([ADR-191](../backend-architecture/adr/ADR-191-a-consumer-takes-a-delivery-only-through-its-types-exchange-or-its-endpoints-own-1684-amending-adr-036.md)).
+The tell is the service's warning log, `Refused <type> from exchange
+<exchange> on <endpoint>`, with the message's id; the exchange it names is
+the publisher's. A peer's own contract exchange names a peer whose credential
+wrote another context's type into an envelope, which is a security incident.
+An empty exchange is the default exchange, which the management UI's
+*Publish message* on a queue uses.
+
+**Do not replay it**: a replay publishes to the endpoint's exchange, which
+the check admits, so the forged message would run. Discard it with a record,
+as the case above does, once the record names the publisher, and find who
+holds that credential.
 
 ## Closing it
 

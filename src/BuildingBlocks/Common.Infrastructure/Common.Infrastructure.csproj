@@ -15,8 +15,10 @@
     <!-- An instrumentation lands with the package it instruments (§13.2). -->
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Instrumentation.StackExchangeRedis" />
-    <!-- The outbox (§9.4); core, not the transport, which stays in each service's Infrastructure. -->
+    <!-- The outbox (§9.4); the transport for the exchange a delivery names, which the source check reads
+         (ADR-191). -->
     <PackageReference Include="MassTransit" />
+    <PackageReference Include="MassTransit.RabbitMQ" />
     <!-- The outbox claim (§9.4), the retention purge (§9.5) and the migrators' isolation read (§7.4): raw
          SQL outside any command's transaction. -->
     <PackageReference Include="Dapper" />
