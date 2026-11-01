@@ -963,7 +963,8 @@ class EditsTheSharedFiles(unittest.TestCase):
         # And it binds no context the render does not subscribe it to: the
         # template's Inventory consumer is omitted, so its grant goes with it.
         self.assertEqual("^(zulu-|Common\\.Contracts(\\.Zulu\\.V1:|:)|MassTransit:)", permission["configure"])
-        self.assertEqual("^(zulu-|Common\\.Contracts\\.Zulu\\.V1:|MassTransit:(ReceiveFault$|Fault--))",
+        self.assertEqual("^(zulu-|Common\\.Contracts\\.Zulu\\.V1:|MassTransit:(ReceiveFault$|Fault--("
+                         "Common\\.Contracts\\.(Zulu)\\.V1:|Zulu\\.Infrastructure\\.Messaging:)))",
                          permission["read"])
 
     def test_the_service_gets_the_redis_user_its_unit_names(self):
@@ -1731,7 +1732,8 @@ class RendersAPureConsumer(unittest.TestCase):
         permission = next(e for e in definitions["permissions"] if e["user"] == f"{PROBE.lower()}-svc")
         for verb in ("configure", "write"):
             self.assertEqual(f"^({PROBE.lower()}-|MassTransit:)", permission[verb])
-        self.assertEqual(f"^({PROBE.lower()}-|MassTransit:(ReceiveFault$|Fault--))", permission["read"])
+        self.assertEqual(f"^({PROBE.lower()}-|MassTransit:(ReceiveFault$|Fault--{PROBE}\\.Infrastructure\\.Messaging:))",
+                         permission["read"])
 
     def test_no_building_block_is_written(self):
         self.assertEqual([], [path for path in self.rendered.updated if path.startswith("src/BuildingBlocks/")])
