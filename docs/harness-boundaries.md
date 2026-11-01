@@ -25,6 +25,7 @@ the whole is about 20k. `Grep -n "^## <title>"` gives its first line.
 | The edit-target guard | The symbolic-link premise and guard-edit-target.py refusing spelling mismatches. |
 | Edit guard path resolution | Link anchors, case folding, checkout-root anchors, UNC and device prefixes, and short-name aliases. |
 | Normalisation, residuals and the sweeps | Unicode and per-directory traits, the .. admission, out-of-tree residual, how the sweeps share worktrees, their slice lists and ref, and the one sweep that executes. |
+| Headless dispatched sessions | Unattended `claude -p` executors, what holds them, why no grant was added, and the night's residuals: a refusal read in the morning, and the weekly stop. |
 
 ## Purpose and provenance of this file
 
@@ -1442,3 +1443,55 @@ the session holds no `Edit`, `Write` or agent there, and the raw `dotnet` is
 denied so that the helper is the one route to an execution;
 [`docs/commands/mutation-sweep.md`](commands/mutation-sweep.md) argues the
 rest.
+
+## Headless dispatched sessions
+
+Up to `--pairs` headless `claude -p` sessions, a number the owner sets at
+launch (its ceiling is `docs/superpowers/specs/2026-11-01-dispatch-design.md`
+§3), run `/ship --dispatched` at night, each in its own worktree and each to
+a merge, with nobody to answer a prompt. `.claude/commands/dispatch.md`
+starts them; [`docs/commands/dispatch.md`](commands/dispatch.md) argues it.
+
+**What holds them.** The permission mode is the settings' own: the launcher
+passes no skip flag and the command denies `claude` as a shell word, so
+`dispatch_board.py run` is the only way in. Every guard hook runs in an
+executor as in any session. Beyond `/ship`'s seven stops, `--dispatched`
+hands a change back unmerged in three cases: an edit under `.claude/`, a
+resource only the owner has, and a decision the issue leaves to the owner.
+It also changes the executor: it never tears down its workspace, step 6 runs
+only lines 1 and 8, step 0's finished teardown is skipped, and it never
+writes the task list. The dispatcher grants no agent type and denies every
+one, because it spawns sessions.
+
+**No grant was added for this.** Both spikes, one on docs and one on code,
+ran with `permission_denials` empty (`artifacts/dispatch/spike.md`). The
+reason is the owner's user settings: `defaultMode` is `auto`, a `claude -p`
+session inherits it, and `/ship`'s frontmatter grants auto-approve its
+helpers. This repository's settings set no mode, so the executor depends on
+a setting outside the repository; on a machine without it the first prompt
+hands every executor back.
+
+**The dispatcher writes the task list alone.** It writes only through
+`dispatch_board.py tasks`, with no `Edit` grant on the file. `tasks rewrite`
+refuses any change to the *In progress* section and refuses a run with no
+`state.json`. After `verify`, the dispatcher pulls with `--ff-only`, checks
+containment with `git merge-base --is-ancestor`, runs `tasks done` and
+removes the worktree with `git-worktree-remove.sh`.
+
+**What an executor reports is not trusted.** A prompt-injected issue body
+reaches an executor as it reaches any `/ship`. Its result file is checked
+against `dispatch_run.py`'s schema by `result`, and a claimed merge is read
+from GitHub by `verify` before it counts; a missing or mis-shaped file is a
+crash, never a success.
+
+**Residuals.**
+
+- A refusal at night is a hand-back. `result` classifies it, the morning
+  report shows it, and the grant is never widened to get past it (the
+  spec's §2, its last anti-goal).
+- No script reads the weekly figure. Token Weather's pause notice in the
+  dispatcher's own session ends the night (spec §8). Whether that pause
+  reaches a headless executor is untested (`artifacts/dispatch/spike.md`),
+  so an executor may run on past the limit.
+- The `Edit(artifacts/dispatch/**)` grant also reaches the helper-owned
+  `state.json`; that gap is outside the guards' threat model.
