@@ -456,7 +456,8 @@ function markdown(s) {
         '',
         ...s.steps.filter((r) => r.requests > 0).map((r) => `- Step ${r.step}: ` + (r.inboxLatch === null
             ? 'not read'
-            : r.inboxLatch.map((d) => `${d.database} ${ms(d.ms)}`).join(', ') || 'no database holds one')),
+            : r.inboxLatch.map((d) => `${d.database} ${ms(d.ms)}`).join(', ') ||
+                'no database\'s counter held over the hold')),
         '',
         '## Statements',
         '',
