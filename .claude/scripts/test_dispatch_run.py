@@ -5,6 +5,8 @@ import contextlib
 import io
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -204,6 +206,29 @@ class RunDirectoryTests(InRoot):
         self.assertIsNone(dr.open_run("."))
         os.makedirs("artifacts/dispatch/spike-notes")
         self.assertIsNone(dr.open_run("."))
+
+    def test_a_reported_run_stays_open_while_it_holds_in_progress_rows(self):
+        # Only this run's `done` and `back` touch its rows, so a run its report left holding some is resumed.
+        run_cli(["start", "--pairs", "2"])
+        (state_dir() / "report.md").write_text("the first night", encoding="utf-8")
+        self.clock = NOW + timedelta(hours=10)
+        cases = {"interrupted in its window": ("window", RUN), "moved, never launched": (None, RUN),
+                 "a merge not confirmed in main": ("verified", RUN), "a hand-back not sent back": ("handed-back", RUN),
+                 "done": ("done", None), "sent back": ("returned", None)}
+        for name, (status, reopened) in cases.items():
+            with self.subTest(group=name):
+                record(RUN, "S1", **({"status": status} if status else {}))
+                self.assertEqual(reopened, dr.open_run("."))
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = db.main(["start", "--pairs", "2"])
+                self.assertEqual((3, f"{RUN}\n") if reopened else (0, "20261102-080000\n"), (code, out.getvalue()))
+                shutil.rmtree(state_dir("20261102-080000"), ignore_errors=True)
+                with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+                    handle.write(FIXTURE)
+                report = run_cli(["report", RUN, "--tasks", "todo.md", "--today", "2026-11-02"],
+                                 body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH)
+                self.assertEqual(bool(reopened), f"it resumes run {RUN}" in report)
 
     def test_a_run_name_that_is_not_a_timestamp_is_refused(self):
         for bad in ("../x", "20261101", "20261101-22000", "20261101-220000/..", ""):
@@ -725,6 +750,24 @@ class WakeTests(InRoot):
         record(RUN, "S9", status="running")
         lines = self.wake(tasks_of(line(depends="OWNER")))
         self.assertEqual("launch: none", lines[-1])
+
+    def test_a_ready_group_only_another_sessions_row_holds_is_not_drained(self):
+        # FIXTURE's In progress row is another session's and names the dispatch plan, so a group on it is held.
+        held = line(task="Fix `docs/superpowers/plans/2026-11-01-dispatch.md`")
+        self.assertEqual(["stop file: no", "running: none", "free slots: 2", "end: held"], self.wake(tasks_of(held)))
+        self.assertEqual("launch: Z1", self.wake(tasks_of(line()))[-1])
+        self.assertEqual("end: drained", self.wake(tasks_of(line(depends="OWNER")))[-1])
+
+    def test_the_runbook_names_every_ending_wake_prints(self):
+        # Read from the source, so an ending added later fails here until the night loop says what it means.
+        endings = set(re.findall(r'"(end: [a-z-]+)"', Path(dr.__file__).read_text(encoding="utf-8")))
+        self.assertEqual({"end: drained", "end: held", "end: week", "end: stop-file"}, endings)
+        runbook = " ".join((Path(dr.__file__).parent.parent / "commands" / "dispatch.md").read_text(
+            encoding="utf-8").split())
+        loop = runbook[runbook.index("2. **The night loop.**"):runbook.index("**Launch a group**")]
+        for ending in sorted(endings):
+            with self.subTest(ending=ending):
+                self.assertIn(f"`{ending}`", loop)
 
     def test_wake_offers_no_more_than_pairs_minus_running(self):
         record(RUN, "S9", status="window", pid=os.getpid())

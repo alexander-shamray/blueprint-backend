@@ -147,8 +147,25 @@ def open_run(root):
     if not base.is_dir():
         return None
     names = sorted(p.name for p in base.iterdir() if p.is_dir() and RUN_NAME.fullmatch(p.name)
-                   and (p / "state.json").is_file() and not (p / "report.md").exists())
+                   and (p / "state.json").is_file() and (not (p / "report.md").exists() or _holds_rows(p)))
     return names[-1] if names else None
+
+
+# A group whose rows left In progress through this run's `done` or `back`; any other still holds them.
+CLOSED = ("done", "returned")
+
+
+def _holds_rows(directory):
+    """Whether a run still holds In progress rows, which only its own `done` and `back` may touch.
+
+    Such a run stays open past its report, so the next `start` resumes it; an unreadable state is kept open too,
+    since closing it would leave its rows to no run.
+    """
+    try:
+        entries = load_state(directory).get("groups", {}).values()
+    except Refusal:
+        return True
+    return any(not isinstance(entry, dict) or entry.get("status") not in CLOSED for entry in entries)
 
 
 def _entry(state, gid):
@@ -940,7 +957,10 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source, 
     chosen = pick(candidates + running, ready_map, claims, [g.id for g in running], taken, slots)
     if chosen:
         return out + [f"launch: {' '.join(chosen)}"]
-    return out + ["launch: none" if active else "end: drained"]
+    if active:
+        return out + ["launch: none"]
+    # With nothing running every slot is free, so a ready group left unchosen is held by an In progress row.
+    return out + ["end: held" if any(ok for ok, _ in ready_map.values()) else "end: drained"]
 
 
 def resume(root, run):
@@ -1074,7 +1094,8 @@ def report(root, run, tasks_path, today, body_source, open_source):
             counts = [spent.get(key) if _count(spent.get(key)) else 0 for key in TOKEN_KEYS]
             usage.append(f"{gid}: {sum(counts)} tokens ("
                          + ", ".join(f"{name} {n}" for name, n in zip(TOKEN_NAMES, counts)) + ")")
-    if interrupted:
+    if _holds_rows(directory):
+        # The same test `start` reopens by, so the line appears exactly when the next /dispatch resumes this run.
         interrupted.append(f"resume: run /dispatch again in the main checkout; it resumes run {run}")
     tasks = parse_tasks(_read(tasks_path))
     bodies = _bodies(tasks, directory, body_source)
