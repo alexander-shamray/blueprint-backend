@@ -193,6 +193,7 @@ decision looks wrong.
 | **ADR-184** | [Migrations run under a raised command timeout (#1644), adding to ADR-007](adr/ADR-184-migrations-run-under-a-raised-command-timeout-1644-adding-to-adr-007.md) |
 | **ADR-185** | [Every service database runs read-committed snapshot, and its migrator refuses one that does not (#1653); supersedes ADR-112's locking reads](adr/ADR-185-every-service-database-runs-read-committed-snapshot-and-its-migrator-refuses-one-that-does-not-1653-supersedes-adr-112s-locking-reads.md) |
 | **ADR-186** | [The inbox has no index on the time a row was handled (#1648)](adr/ADR-186-the-inbox-has-no-index-on-the-time-a-row-was-handled-1648.md) |
+| **ADR-187** | [A switch file contributes only its switch's keys (#1681), amending ADR-113 and ADR-119](adr/ADR-187-a-switch-file-contributes-only-its-switchs-keys-1681-amending-adr-113-and-adr-119.md) |
 
 ---
 

@@ -43,6 +43,12 @@ there with `Suspended` set still starts the gateway switched off, and the
 mounted file wins on any route it names, for either value. ADR-116 is
 otherwise unchanged.
 
+**Amended by
+[ADR-187](ADR-187-a-switch-file-contributes-only-its-switchs-keys-1681-amending-adr-113-and-adr-119.md)**:
+the file contributes each route's `Metadata:Suspended` entry and no other key,
+so it cannot change a route's match, policy or cluster. This record is
+otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

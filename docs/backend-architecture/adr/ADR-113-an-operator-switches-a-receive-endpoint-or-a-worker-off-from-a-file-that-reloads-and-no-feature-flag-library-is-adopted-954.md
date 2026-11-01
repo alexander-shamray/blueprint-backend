@@ -68,6 +68,11 @@ and reported Degraded by the `operator-switches` check when a reload brings one
 in, since a list binds only from indexed keys and a scalar would switch nothing
 off. This record is otherwise unchanged.
 
+**Amended by
+[ADR-187](ADR-187-a-switch-file-contributes-only-its-switchs-keys-1681-amending-adr-113-and-adr-119.md)**:
+the file contributes `Switches:Off` and its items and no other key, so writing
+its ConfigMap overrides no other setting. This record is otherwise unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
