@@ -554,7 +554,7 @@ cap raised. Unset, the staircase is `DEFAULT_STEPS`, with
 run's level `custom`, and `STRESS_RAMP_SECONDS` and `STRESS_HOLD_SECONDS`
 override the ramps and holds; a staircase above the cap is refused. A
 step is measured over its hold alone, since a ramp mixes two loads. A hold
-shorter than `summarise.mjs`'s `MINIMUM_RANGE_SECONDS` is read over that span,
+shorter than `report.js`'s `MINIMUM_RANGE_SECONDS` is read over that span,
 reaching into its ramp, because the services export their meters once a
 minute and a rate needs two exports.
 
