@@ -1,8 +1,8 @@
 """Follow a Claude Code transcript (.jsonl) live, readably: the owner's window on a /dispatch executor. Ctrl+C stops.
 
 Usage: py -3.12 watch_session.py <transcript.jsonl | project directory> [--raw], the path dispatch_board.py's `result`
-or `wake` prints; a directory waits for the next session in it. --raw shows each Bash command, not its description.
-"""
+or `wake` prints; a directory follows a session started up to ten minutes before the watcher, or after it. --raw
+shows each Bash command, not its description."""
 
 import json
 import os
@@ -17,6 +17,9 @@ from datetime import datetime
 RAW = "--raw" in sys.argv
 WIDTH = max(60, min(shutil.get_terminal_size((120, 40)).columns, 140))
 CD_PREFIX = re.compile(r"^\s*cd\s+\S+\s*&&\s*")
+LOOKBACK = 600
+# Transcripts carry issue-body text anyone can write; an escape sequence in it would drive the owner's terminal.
+ESCAPES = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-_]?|\x9b[0-?]*[ -/]*[@-~]")
 
 DIM, BOLD, RED, GREEN, CYAN, YELLOW, MAGENTA, RESET = (
     "\033[2m", "\033[1m", "\033[31m", "\033[32m", "\033[36m", "\033[33m", "\033[35m", "\033[0m")
@@ -35,12 +38,22 @@ def local_time(stamp):
         return "--:--:--"
 
 
+def clean(text, keep="\t\n"):
+    """Transcript text with every escape sequence and control character gone but those in `keep`."""
+    text = ESCAPES.sub("", str(text))
+    return "".join(ch for ch in text if ch in keep or unicodedata.category(ch) != "Cc")
+
+
 def one_line(text, limit):
-    text = " ".join(str(text).split())
+    text = " ".join(clean(text).split())
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
 def tool_summary(name, args):
+    return clean(_summary(name, args), keep="\t")
+
+
+def _summary(name, args):
     if name == "Bash":
         command = CD_PREFIX.sub("", args.get("command", ""))
         if RAW or not args.get("description"):
@@ -102,7 +115,7 @@ def render_table(rows):
 
 def render_text(text):
     lines, table = [], []
-    for raw in text.strip().splitlines() + [""]:
+    for raw in clean(text).strip().splitlines() + [""]:
         if raw.lstrip().startswith("|"):
             table.append(raw)
             continue
@@ -129,16 +142,18 @@ def show(event):
     for part in content or []:
         if not isinstance(part, dict):
             continue
-        if part.get("type") == "text" and kind == "assistant" and part.get("text", "").strip():
+        text = part.get("text")
+        if part.get("type") == "text" and kind == "assistant" and isinstance(text, str) and text.strip():
             print()
-            lines = render_text(part["text"])
+            lines = render_text(text)
             pad = "\n" + " " * 11
             print(f"{stamp} {BOLD}{GREEN}💬{RESET} {GREEN}{pad.join(lines)}{RESET}")
             print()
         elif part.get("type") == "tool_use":
-            name = part.get("name", "")
+            name = clean(part.get("name", ""), keep="")
             icon, colour = ICONS.get(name, ("•", ""))
-            print(f"{stamp} {colour}{icon} {name}{RESET}  {tool_summary(name, part.get('input') or {})}")
+            args = part.get("input")
+            print(f"{stamp} {colour}{icon} {name}{RESET}  {tool_summary(name, args if isinstance(args, dict) else {})}")
         elif part.get("type") == "tool_result" and part.get("is_error"):
             body = part.get("content")
             if isinstance(body, list):
@@ -161,7 +176,7 @@ def newest_transcript(directory, since):
 def main(path):
     if not path.endswith(".jsonl"):
         print(f"{DIM}waiting for a session under {path}{RESET}")
-        path = newest_transcript(path, time.time() - 600)
+        path = newest_transcript(path, time.time() - LOOKBACK)
         print(f"{DIM}following {path}{RESET}")
     with open(path, encoding="utf-8", errors="replace") as handle:
         while True:
@@ -180,6 +195,9 @@ if __name__ == "__main__":
     # A constant empty command, no input reaches it: it only turns on ANSI colours in a Windows console.
     os.system("")
     paths = [a for a in sys.argv[1:] if a != "--raw"]
+    if not paths:
+        print(__doc__.split("\n\n", 1)[1], file=sys.stderr)
+        sys.exit(2)
     try:
         main(paths[0])
     except KeyboardInterrupt:
