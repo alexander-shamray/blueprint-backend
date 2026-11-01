@@ -616,6 +616,16 @@ export const QUERY_STORE_DATABASES =
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 const DATABASE = /^\w+$/;
 
+// A statement's text as one sqlcmd field: without its declarations, which end at the first ')' a letter
+// follows ("datetime2(7))UPDATE"), on one line, with no '|', and as a bounded type: sqlcmd cuts an
+// nvarchar(max) at 256 characters, inside a long EF declaration list.
+function sqlTextColumn(column) {
+    const body = `CASE WHEN ${column} LIKE '(@%' AND PATINDEX('%)[A-Za-z]%', ${column}) > 0 ` +
+        `THEN SUBSTRING(${column}, PATINDEX('%)[A-Za-z]%', ${column}) + 1, 400) ` +
+        `ELSE ${column} END`;
+    return `CAST(REPLACE(REPLACE(REPLACE(${body}, CHAR(13), ' '), CHAR(10), ' '), '|', '/') AS nvarchar(200))`;
+}
+
 /**
  * sqlcmd's arguments for `docker exec`, the password read inside the container as its healthcheck reads it,
  * and -b so that a T-SQL error is a failed exit rather than a Msg line on a successful one.
@@ -641,12 +651,7 @@ export function queryStoreSql(startIso, endIso) {
     if (!ISO.test(startIso) || !ISO.test(endIso))
         throw new Error(`Query Store windows are ISO instants in UTC, not "${startIso}" and "${endIso}"`);
 
-    // Without its declarations, which end at the first ')' a letter follows ("datetime2(7))UPDATE"), and as a
-    // bounded type: sqlcmd cuts an nvarchar(max) at 256 characters, inside a long EF declaration list.
-    const body = "CASE WHEN x.query_sql_text LIKE '(@%' AND PATINDEX('%)[A-Za-z]%', x.query_sql_text) > 0 " +
-        "THEN SUBSTRING(x.query_sql_text, PATINDEX('%)[A-Za-z]%', x.query_sql_text) + 1, 400) " +
-        'ELSE x.query_sql_text END';
-    const text = `CAST(REPLACE(REPLACE(REPLACE(${body}, CHAR(13), ' '), CHAR(10), ' '), '|', '/') AS nvarchar(200))`;
+    const text = sqlTextColumn('x.query_sql_text');
 
     return [
         'SET NOCOUNT ON;',
