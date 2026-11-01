@@ -108,6 +108,12 @@ def fault_of(prefix: str) -> str:
     """The fault exchange for a message in one namespace, `MassTransit:Fault--<ns>:<type>--`."""
     return f"{FAULT_ROOT}--{prefix}Anything--"
 
+
+def fault_probes(prefix: str, names: dict[str, set[str]]) -> list[str]:
+    """The fault exchanges a read on one namespace's faults is tested against, as `probes` tests a write."""
+    return [fault_of(prefix), *(f"{FAULT_ROOT}--{prefix}{name}--" for name in sorted(names.get(prefix, ())))]
+
+
 # The polymorphic publish exchange. MassTransit binds each concrete contract
 # exchange to one exchange per interface the message implements, and the
 # sender declares that binding: `exchange.bind` takes write on the
@@ -513,6 +519,17 @@ def main() -> int:
         if matches(entry["read"], f"{FRAMEWORK_PREFIX}Anything"):
             fail(f"{user}: read COVERS `{FRAMEWORK_PREFIX}Anything`, beyond the fault exchanges "
                  f"a fault's publish binds from")
+
+        # A fault carries the message that faulted, so read on another namespace's fault exchange
+        # receives that context's messages whole: check 5's refusal, one exchange over.
+        for prefix in sorted((prefixes | set().union(*private.values())) - consumed):
+            resource = first_covered(entry["read"], fault_probes(prefix, names))
+            if resource:
+                fail(f"{user}: read COVERS `{resource}`, the fault exchange of `{prefix}`, which it does "
+                     f"not consume. A queue of its own bound there receives each faulted message whole")
+        if matches(entry["read"], fault_of("Elsewhere:")):
+            fail(f"{user}: read COVERS `{fault_of('Elsewhere:')}`, a fault exchange in no namespace "
+                 f"it consumes")
 
         # 4. It may publish its OWN context's contracts — WHERE IT HAS ANY.
         #

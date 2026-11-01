@@ -514,14 +514,54 @@ class ConfigureAndReadAreBoundedToo(unittest.TestCase):
 class TheFaultExchangesAreReadOnlyAsSources(unittest.TestCase):
     """Read on the framework prefix reaches the sources a fault's publish binds from, and not the root."""
 
-    NARROW = "MassTransit:(ReceiveFault$|Fault--))"
+    FRAMEWORK = "MassTransit:("
 
-    def failures_with(self, read_tail: str) -> list[str]:
+    def failures_with(self, read_tail: str, user: str = "catalog-svc") -> list[str]:
+        definitions = real()
+        entry = permission(definitions, user)
+        self.assertEqual(1, entry["read"].count(self.FRAMEWORK), "the case, not the gate")
+        entry["read"] = entry["read"][: entry["read"].index(self.FRAMEWORK)] + read_tail
+        return run_against(definitions)
+
+    def with_catalog_faults(self, alternative: str) -> list[str]:
+        """Catalog's real fault read with one more namespace alternative."""
         definitions = real()
         entry = permission(definitions, "catalog-svc")
-        self.assertTrue(entry["read"].endswith(self.NARROW), "the case, not the gate")
-        entry["read"] = entry["read"][: -len(self.NARROW)] + read_tail
+        self.assertTrue(entry["read"].endswith(")))"), "the case, not the gate")
+        entry["read"] = entry["read"][:-3] + f"|{alternative})))"
         return run_against(definitions)
+
+    def test_the_fault_read_before_the_narrowing_is_refused(self):
+        # The grant every account held: one alternative covering every namespace's fault exchange.
+        failures = self.failures_with("MassTransit:(ReceiveFault$|Fault--))")
+        self.assertIn(
+            "catalog-svc: read COVERS `MassTransit:Fault--Common.Contracts.Payments.V1:Anything--`, the fault "
+            "exchange of `Common.Contracts.Payments.V1:`, which it does not consume. A queue of its own bound "
+            "there receives each faulted message whole", failures)
+
+    def test_a_peer_context_s_fault_exchange_is_refused(self):
+        failures = self.with_catalog_faults(r"Common\.Contracts\.Privacy\.V1:")
+        self.assertTrue(any("catalog-svc: read COVERS `MassTransit:Fault--Common.Contracts.Privacy.V1:" in f
+                            for f in failures), failures)
+
+    def test_a_peer_s_private_fault_exchange_is_refused(self):
+        failures = self.with_catalog_faults(r"Ordering\.Infrastructure\.Messaging:")
+        self.assertTrue(any("the fault exchange of `Ordering.Infrastructure.Messaging:`" in f for f in failures),
+                        failures)
+
+    def test_one_real_fault_exchange_named_exactly_is_refused(self):
+        # An invented type name cannot match a grant naming one real message, so the declared ones are probed.
+        declared = sorted(gate.declared_names(gate.CONTRACTS.rglob("*.cs"))["Common.Contracts.Payments.V1:"])
+        self.assertTrue(declared, "the case, not the gate")
+        failures = self.with_catalog_faults(rf"Common\.Contracts\.Payments\.V1:{declared[0]}--")
+        self.assertTrue(
+            any(f"catalog-svc: read COVERS `MassTransit:Fault--Common.Contracts.Payments.V1:{declared[0]}--`" in f
+                for f in failures), failures)
+
+    def test_a_fault_exchange_in_no_known_namespace_is_refused(self):
+        failures = self.with_catalog_faults("Elsewhere:")
+        self.assertIn("catalog-svc: read COVERS `MassTransit:Fault--Elsewhere:Anything--`, a fault exchange in "
+                      "no namespace it consumes", failures)
 
     def test_the_whole_prefix_is_refused(self):
         failures = self.failures_with("MassTransit:)")
@@ -544,11 +584,7 @@ class TheFaultExchangesAreReadOnlyAsSources(unittest.TestCase):
 
     def test_a_private_timeout_s_fault_left_out(self):
         # The saga consumes its own timeouts, so their faults bind from a namespace outside Common.Contracts.
-        definitions = real()
-        entry = permission(definitions, "ordering-svc")
-        self.assertTrue(entry["read"].endswith(self.NARROW), "the case, not the gate")
-        entry["read"] = entry["read"][: -len(self.NARROW)] + r"MassTransit:(ReceiveFault$|Fault--Common\.))"
-        failures = run_against(definitions)
+        failures = self.failures_with(r"MassTransit:(ReceiveFault$|Fault--Common\.))", "ordering-svc")
         self.assertTrue(
             any("ordering-svc: read does not cover `MassTransit:Fault--Ordering.Infrastructure.Messaging:" in f
                 for f in failures), failures)

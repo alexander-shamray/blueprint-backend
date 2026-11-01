@@ -1235,10 +1235,11 @@ def update_env_example(repo_root: Path, names: Names) -> str:
 
 # What the template's configure and read grant for the StockLevelConsumer.cs the
 # render omits. A rendered service subscribes to nothing, and check_permissions.py
-# refuses an account that may bind a context its Messaging code never names.
+# refuses an account that may bind a context its Messaging code never names, or
+# read the fault exchange of one it does not consume. Each cut is held once.
 TEMPLATE_SUBSCRIPTION = {
-    "configure": r"\.Inventory\.V1:|",
-    "read": r"Common\.Contracts\.Inventory\.V1:|",
+    "configure": (r"\.Inventory\.V1:|",),
+    "read": (r"Common\.Contracts\.Inventory\.V1:|", "|Inventory"),
 }
 
 
@@ -1281,20 +1282,21 @@ def update_broker_definitions(repo_root: Path, names: Names) -> str:
     })
     def unsubscribed(verb: str) -> str:
         granted = template_permission[verb]
-        cut = TEMPLATE_SUBSCRIPTION.get(verb)
-        if cut is None:
-            return granted
-        if granted.count(cut) != 1:
-            raise ScaffoldError(
-                f"{relative}: {template_user}'s {verb} grant does not hold its subscription `{cut}` once")
-        return granted.replace(cut, "")
+        for cut in TEMPLATE_SUBSCRIPTION.get(verb, ()):
+            if granted.count(cut) != 1:
+                raise ScaffoldError(
+                    f"{relative}: {template_user}'s {verb} grant does not hold its subscription `{cut}` once")
+            granted = granted.replace(cut, "")
+        return granted
 
     if names.pure_consumer:
         # A consumer's shape, not the template's publisher's: it subscribes to
         # nothing yet, so it binds no contract exchange, and writes only its own
         # endpoints and the fault exchanges, since §3.2 gives it nothing to publish.
+        # It reads the faults of its own Messaging namespace alone, the one it consumes.
         bound = f"^({names.lower}-|MassTransit:)"
-        faults = f"^({names.lower}-|MassTransit:(ReceiveFault$|Fault--))"
+        own = f"{names.pascal}\\.Infrastructure\\.Messaging:"
+        faults = f"^({names.lower}-|MassTransit:(ReceiveFault$|Fault--{own}))"
         grant = {"configure": bound, "write": bound, "read": faults}
     else:
         grant = {verb: names.rename(unsubscribed(verb)) for verb in ("configure", "write", "read")}
