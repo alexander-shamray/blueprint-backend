@@ -901,8 +901,9 @@ export function lockWaitsLine(step, row) {
     if (row.seen === 0)
         return `- Step ${step}: no session waited on a lock in any of ${row.samples} samples`;
 
+    const code = (text) => (text ? `\`${text}\`` : 'an unread statement');
     const chains = row.chains.map((c) =>
-        `${c.database} \`${c.statement}\` ${c.waitType} on ${c.resource}, behind \`${c.holder.statement}\` ` +
+        `${c.database} ${code(c.statement)} ${c.waitType} on ${c.resource}, behind ${code(c.holder.statement)} ` +
         `${c.holder.state}${c.holderIdleMs === null ? '' : ` up to ${c.holderIdleMs} ms`}, ` +
         `seen ${c.seen} times, longest ${c.longestMs} ms`);
 

@@ -728,6 +728,10 @@ test('a step\'s lock waits pair each waiting statement with its lock and holder,
 
     const outside = lockWaits([{ at: 1, lockWaits: [wait({ holderTransactions: 0 })] }], { startMs: 0, endMs: 2 });
     assert.equal(outside.chains[0].holder.state, 'idle', 'a session lock held outside any transaction');
+
+    const gone = lockWaits([{ at: 1, lockWaits: [wait({ holderStatement: null })] }], { startMs: 0, endMs: 2 });
+    assert.match(lockWaitsLine(5, gone), /, behind an unread statement idle in its transaction/,
+        'no empty code span');
     assert.equal(row.chains[1].holderIdleMs, null);
 
     assert.equal(lockWaitsLine(2, row).split('; ')[0], '- Step 2: 3 waits in 2 samples');
