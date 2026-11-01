@@ -720,6 +720,11 @@ test('a step\'s lock waits pair each waiting statement with its lock and holder,
         holderIdleMs: 30,
     });
     assert.equal(row.chains[1].holder.state, 'waiting LCK_M_X', 'a holder that waits is a link in a longer chain');
+
+    const table = 'objectlock lockPartition=0 objid=901578250 subresource=FULL dbid=7 id=lock3 mode=IX ' +
+        'associatedObjectId=901578250';
+    const escalated = lockWaits([{ at: 1, lockWaits: [wait({ resource: table })] }], { startMs: 0, endMs: 2 });
+    assert.equal(escalated.chains[0].resource, 'objectlock held IX object 901578250', 'a table lock names no hobt');
     assert.equal(row.chains[1].holderIdleMs, null);
 
     assert.equal(lockWaitsLine(2, row).split('; ')[0], '- Step 2: 3 waits in 2 samples');
