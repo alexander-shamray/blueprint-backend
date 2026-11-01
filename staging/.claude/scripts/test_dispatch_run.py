@@ -882,6 +882,70 @@ class WeeklyTests(InRoot):
         self.assertEqual(NOW.isoformat(), recorded["start"]["at"])
 
 
+class ReportTests(InRoot):
+    # The morning report's facts, in English, for the dispatcher to write up in --lang (spec section 10).
+    SECTIONS = ["## Merged", "## Needs a human", "## Interrupted", "## Filed overnight", "## Left in the backlog",
+                "## Usage"]
+
+    def report(self, text=FIXTURE):
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+        return run_cli(["report", RUN, "--tasks", "todo.md", "--today", "2026-11-01"], body_source=lambda n: "",
+                       open_source=lambda: {1440}, branch_source=NO_BRANCH).splitlines()
+
+    def section(self, lines, heading):
+        start = lines.index(heading) + 1
+        rest = [i for i, text in enumerate(lines[start:], start) if text.startswith("## ")]
+        return lines[start:rest[0] if rest else len(lines)]
+
+    def test_the_report_has_the_six_sections_in_order(self):
+        record(RUN, "S1", status="done", closed_from="verified", pr=1690, merge_oid=OID, rounds=MERGED_S1["rounds"],
+               review_end="clean", filed=[1701], usage={key: USAGE[key] for key in dr.TOKEN_KEYS})
+        record(RUN, "M2", status="running")
+        lines = self.report()
+        self.assertEqual(self.SECTIONS, [text for text in lines if text.startswith("## ")])
+        merged = self.section(lines, "## Merged")
+        self.assertEqual(1, len(merged), merged)
+        for fact in ("S1", "#1690", OID, "#1682", "#1683", "full raised 5 fixed 5 refused 0",
+                     "recheck raised 2 fixed 1 refused 1", "review clean", "filed #1701"):
+            self.assertIn(fact, merged[0])
+        self.assertEqual(["none"], self.section(lines, "## Needs a human"))
+        interrupted = self.section(lines, "## Interrupted")
+        self.assertTrue(interrupted[0].startswith("M2 running"), interrupted)
+        self.assertIn(f"resumes run {RUN}", interrupted[-1])
+        self.assertEqual(["#1701"], self.section(lines, "## Filed overnight"))
+        self.assertIn("J1 wave 2: waits until 2026-11-09", self.section(lines, "## Left in the backlog"))
+        self.assertIn("S1: 762696 tokens (input 20, cache write 5265, cache read 754597, output 2814)",
+                      self.section(lines, "## Usage"))
+
+    def test_an_unread_week_is_said_so(self):
+        dr.save_state(state_dir(), {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
+        self.assertIn("weekly: not read", self.section(self.report(), "## Usage"))
+        dr.take_reading(state_dir(), None)
+        self.assertIn("weekly: not read", self.section(self.report(), "## Usage"))
+        dr.take_reading(state_dir(), lambda: {"percentUsed": "x"})
+        usage = self.section(self.report(), "## Usage")
+        self.assertIn("weekly: not read", usage)
+        self.assertTrue(any(text.startswith(f"weekly: reading failed at {NOW.isoformat()}: ") for text in usage),
+                        usage)
+
+    def test_each_hand_back_names_its_reason_and_its_worktree(self):
+        record(RUN, "S1", status="returned", closed_from="handed-back",
+               reason="needs a provider key only the owner has")
+        record(RUN, "M1", status="crash-hand-back", reason="a second crash: no result; exit 1")
+        os.rmdir(".claude/worktrees/dispatch-m1")
+        state = dr.load_state(state_dir())
+        state["placed"] = [1702]
+        dr.save_state(state_dir(), state)
+        waiting = line(depends="OWNER", number=1702, gid="Z9", wave=3)
+        needs = self.section(self.report(tasks_of(*REMAINING_ROWS.splitlines(), waiting)), "## Needs a human")
+        self.assertIn("S1 handed-back: needs a provider key only the owner has; "
+                      "worktree .claude/worktrees/dispatch-s1 left in place", needs)
+        self.assertIn("M1 crash-hand-back: a second crash: no result; exit 1; "
+                      "worktree .claude/worktrees/dispatch-m1 removed", needs)
+        self.assertIn("#1702: filed overnight, waits on a human", needs)
+
+
 class TranscriptTests(unittest.TestCase):
     def test_the_slug_turns_every_other_character_into_a_dash(self):
         self.assertEqual("C--dev-ashamray-blueprint-backend--claude-worktrees-dispatch",

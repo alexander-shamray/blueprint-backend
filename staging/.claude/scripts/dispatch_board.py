@@ -543,15 +543,53 @@ def board(text, today, bodies, open_issues, branch_source=lambda _branch: frozen
     return out or ["no groups in Remaining"]
 
 
+READ_COPY = "tasks.read.md"
+
+
+def _note(text):
+    return text[:text.find("\n## ")] if "\n## " in text else text
+
+
+def rewrite(live, read, rebuilt, open_groups):
+    """The session's rebuild of the list, refused unless it starts from what `board` read and keeps what the
+    run relies on: the owner's note, a list that parses into groups, and the rows of each group still open."""
+    if read is None:
+        raise Refusal(f"no {READ_COPY} under the run; run board --run first and rebuild from what it read")
+    if live != read:
+        raise Refusal("the task list changed since board read it; run board --run again and rebuild from that")
+    cr = _cr(_lines(live))
+    rebuilt = rebuilt.replace("\r\n", "\n").replace("\n", cr + "\n")
+    if _note(rebuilt).replace("\r", "") != _note(live).replace("\r", ""):
+        raise Refusal("the rebuild changes the note above the sections, which is the owner's")
+    before, after = parse_tasks(live), parse_tasks(rebuilt)
+    groups(after)
+    for gid in sorted(open_groups):
+        if sorted(r.line for r in before.in_progress if r.group == gid) != sorted(
+                r.line for r in after.in_progress if r.group == gid):
+            raise Refusal(f"the rebuild changes {gid}'s In progress rows, which this run still holds")
+    return rebuilt
+
+
 def _tasks_command(args, today):
     # The run's state.json is dispatch_run's, which imports this module, so it is reached at call time.
-    from dispatch_run import _close, _record_move, _state_or_empty
+    from dispatch_run import _close, _note_placed, _record_move, _state_or_empty
     directory = Path(args.run)
     after, undo = [], []
 
     def update(text):
+        if args.action == "rewrite":
+            copy = directory / READ_COPY
+            entries = _state_or_empty(directory).get("groups", {})
+            held = {gid for gid, entry in entries.items()
+                    if not isinstance(entry, dict) or entry.get("status") not in ("done", "returned")}
+            try:
+                source = _read(args.source)
+            except OSError as error:
+                raise Refusal(f"could not read {args.source}: {error}") from None
+            return rewrite(text, _read(copy) if copy.is_file() else None, source, held)
         tasks = parse_tasks(text)
         if args.action == "place":
+            after.append(lambda: _note_placed(directory, args.issue))
             return place(text, args.wave, args.group, args.issue, args.task, args.labels, args.depends,
                          args.model, args.conflicts)
         if args.action == "move":
@@ -731,12 +769,14 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
     b.add_argument("--run")
     t = sub.add_parser("tasks")
     actions = t.add_subparsers(dest="action", required=True)
-    for action in ("move", "done", "back", "place"):
+    for action in ("move", "done", "back", "place", "rewrite"):
         s = actions.add_parser(action)
         s.add_argument("--tasks", required=True)
         s.add_argument("--run", required=True)
         s.add_argument("--today")
-        if action == "place":
+        if action == "rewrite":
+            s.add_argument("--from", dest="source", required=True)
+        elif action == "place":
             s.add_argument("wave", type=int)
             s.add_argument("group")
             s.add_argument("issue", type=int)
@@ -767,6 +807,11 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
             text = _read(args.tasks)
             bodies = _bodies(parse_tasks(text), args.run, bodies_from)
             print("\n".join(board(text, today, bodies, set(open_from()), branch_from)))
+            if args.run:
+                # What this board read is the only base `tasks rewrite` accepts a rebuild from.
+                with contextlib.suppress(OSError):
+                    Path(args.run).mkdir(parents=True, exist_ok=True)
+                _write(Path(args.run) / READ_COPY, text)
         elif args.command == "tasks":
             _tasks_command(args, today)
         else:
