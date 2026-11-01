@@ -454,7 +454,7 @@ class WriteTests(unittest.TestCase):
                 mock.patch.object(db, "_write", lambda p, t: events.append(("write", Path(p).name)) or real_write(p, t)):
             self.assertEqual((0, ""), self.cli("move", "S1"))
         # The tasks file is read once, then written, with nothing carried over from `board`.
-        self.assertEqual([("read", "todo.md"), ("write", "todo.md")], events[:2])
+        self.assertEqual([("read", "todo.md"), ("write", "todo.md")], [e for e in events if e[1] == "todo.md"])
         text = self.read()
         self.assertIn("| S1 | #1683 | x Narrow read", section(text, "In progress"))
         self.assertIn("| S1 | #1682 |", section(text, "In progress"))
@@ -468,6 +468,24 @@ class WriteTests(unittest.TestCase):
         self.assertEqual(FIXTURE, self.read())
         self.assertEqual(["todo.md"], sorted(p.name for p in self.dir.iterdir() if p.is_file()))
         self.assertFalse((self.run_dir / "state.json").exists())
+
+    def test_a_refused_list_write_undoes_the_moves_state_record(self):
+        self.write(FIXTURE)
+        real_write = db._write
+
+        def refuse_the_list(path, text):
+            if Path(path).name == "todo.md":
+                raise db.Refusal("could not write todo.md: held open")
+            real_write(path, text)
+        with mock.patch.object(db, "_write", refuse_the_list):
+            self.assertEqual(2, self.cli("move", "S1")[0])
+        self.assertFalse((self.run_dir / "state.json").exists())
+        db.save_state(self.run_dir, {"run": "x", "groups": {"S3": {"keys": ["#1681"]}}})
+        before = (self.run_dir / "state.json").read_text(encoding="utf-8")
+        with mock.patch.object(db, "_write", refuse_the_list):
+            self.assertEqual(2, self.cli("move", "S1")[0])
+        self.assertEqual(before, (self.run_dir / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual(FIXTURE, self.read())
 
     def test_a_move_records_the_rows_in_the_runs_state_and_back_reads_them_there(self):
         self.write(FIXTURE)
@@ -1064,6 +1082,16 @@ class ClassifyTests(InRoot):
         vague = db.session_end({"exit": 1, "stdout": "usage limit; resets in 5", "ended": NOW.isoformat()})
         self.assertIsNone(vague.resets_at)
 
+    def test_a_date_away_from_a_reset_phrase_is_not_the_reset(self):
+        text = "Usage limit reached. The deploy freeze lifts 2026-11-03T00:00:00Z; see the 2026-11-04 09:00 notes."
+        got = db.session_end({"exit": 1, "stdout": text, "ended": NOW.isoformat()})
+        self.assertEqual((True, None), (got.rate_limited, got.resets_at))
+        self.assertEqual("relaunch", db.classify(got, None, 0, NOW))
+        # "resets" alone is no limit: a crash that mentions a cache reset stays a crash.
+        crash = db.session_end({"exit": 1, "stdout": "Error: the cache resets 2026-11-03T00:00:00Z, then failed"})
+        self.assertEqual((False, None), (crash.rate_limited, crash.resets_at))
+        self.assertNotIn("resets", db.LIMIT_PHRASES)
+
     def test_token_keys_are_quality_sets_own(self):
         here = Path(__file__).resolve()
         owner = next((p / "tools" / "quality-sets" / "quality_sets.py" for p in here.parents
@@ -1092,11 +1120,14 @@ class ResultCommandTests(InRoot):
             return run_cli(["result", RUN, "S1"]).splitlines()
 
     def test_result_copies_validates_classifies_records_and_names_the_transcript(self):
+        self.assertEqual("transcript: not found", self.absorb(MERGED_S1)[1])
+        slug = db.project_slug(os.path.abspath(WORKTREE))
+        transcript = self.root / "projects" / slug / (SUCCESS["session_id"] + ".jsonl")
+        transcript.parent.mkdir(parents=True)
+        transcript.write_text("{}\n", encoding="utf-8")
         lines = self.absorb(MERGED_S1)
         self.assertEqual("S1: merged-claimed pr #1690", lines[0])
-        slug = db.project_slug(os.path.abspath(WORKTREE))
-        self.assertEqual(f"transcript: {self.root / 'projects' / slug / (SUCCESS['session_id'] + '.jsonl')}",
-                         lines[1])
+        self.assertEqual(f"transcript: {transcript}", lines[1])
         self.assertEqual(MERGED_S1, json.loads((state_dir() / "S1.json").read_text(encoding="utf-8")))
         entry = group_state(RUN, "S1")
         self.assertEqual(("merged-claimed", 1690, OID, [1701]), (entry["status"], entry["pr"], entry["merge_oid"],
@@ -1154,17 +1185,33 @@ class MergeCheckTests(InRoot):
                 self.assertEqual(3, db.main(["verify", RUN, "S1"]))
                 self.assertEqual("stopped", group_state(RUN, "S1")["status"])
 
-    def test_a_github_read_that_fails_or_another_pr_number_is_a_stop(self):
+    def test_another_pr_number_or_an_unknown_head_is_a_stop(self):
         self.fake_pr(number=1691)
         code, out = self.verify()
         self.assertEqual(3, code)
         self.assertEqual(f"not verified: #1690 is not a pull request from {BRANCH}\n", out)
-        self.fake_pr()
-        stub(self.root, "pr-state.sh", "echo 'gh: HTTP 502' >&2\nexit 1\n")
-        code, out = self.verify()
-        self.assertEqual(3, code)
-        self.assertIn("not verified: GitHub could not be read: pr-state.sh 1690 exited 1", out)
         self.assertIn("merge not verified", group_state(RUN, "S1")["reason"])
+        # Two absent heads are not the same head.
+        self.fake_pr()
+        listed = [{"number": 1690, "state": "MERGED", "baseRefName": "main"}]
+        stub(self.root, "pr-for-branch.sh", f"echo '{json.dumps(listed)}'\n")
+        stub(self.root, "pr-state.sh", f"echo '{json.dumps({'state': 'MERGED', 'mergeCommit': {'oid': OID}})}'\n")
+        self.assertEqual((3, f"not verified: #1690's head is not {BRANCH}'s\n"), self.verify())
+
+    def test_a_github_read_that_fails_is_refused_and_the_claim_kept(self):
+        for script, body, why in (("pr-state.sh", "echo 'gh: HTTP 502' >&2\nexit 1\n",
+                                   "GitHub could not be read: pr-state.sh 1690 exited 1: gh: HTTP 502"),
+                                  ("pr-for-branch.sh", "echo '<html>'\n", "GitHub's answer was not JSON"),
+                                  ("pr-state.sh", "echo '[]'\n", "GitHub's answer has another shape")):
+            with self.subTest(script=script, why=why):
+                self.fake_pr()
+                stub(self.root, script, body)
+                err = io.StringIO()
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                    self.assertEqual(2, db.main(["verify", RUN, "S1"]))
+                self.assertIn(f"refused: {why}", err.getvalue())
+                self.assertEqual("merged-claimed", group_state(RUN, "S1")["status"])
+                self.assertIn("verify S1", run_cli(["resume", RUN]))
 
     def test_verify_refuses_a_group_that_claimed_no_merge(self):
         record(RUN, "S1", status="handed-back")
@@ -1216,6 +1263,10 @@ class WakeTests(InRoot):
         self.assertEqual("end: week", self.wake()[-1])
         record(RUN, "S9", status="week", resets_at=(NOW + timedelta(days=2)).isoformat())
         self.assertEqual("end: week", self.wake()[-1])
+        self.assertIn(f"wait S9: the week resets {(NOW + timedelta(days=2)).isoformat()}", run_cli(["resume", RUN]))
+        self.assertNotIn("relaunch S9", run_cli(["resume", RUN]))
+        record(RUN, "S9", status="week", resets_at="whenever")
+        self.assertIn("wait S9: the week resets unknown", run_cli(["resume", RUN]))
         # A run resumed after the reset relaunches the group, which holds its slot meanwhile.
         record(RUN, "S9", status="week", resets_at=(NOW - timedelta(minutes=1)).isoformat())
         self.assertEqual(["running: S9", "free slots: 1", "launch: S1"], [self.wake()[i] for i in (1, 3, 4)])
@@ -1224,6 +1275,35 @@ class WakeTests(InRoot):
             self.assertEqual("", run_cli(["run", RUN, "S9", "--description", "Resume after the week"]))
         self.assertTrue((state_dir() / "S9.session.json").is_file())
         self.assertIn("S9: relaunch - no result; exit 0", run_cli(["result", RUN, "S9"]))
+
+    def test_an_unreadable_week_reset_holds_under_a_moving_clock(self):
+        ticks = iter(NOW + timedelta(seconds=n) for n in range(100))
+        record(RUN, "S9", status="week", resets_at="whenever")
+        with mock.patch.object(db, "now", lambda: next(ticks)):
+            self.assertEqual("end: week", self.wake()[-1])
+            self.assertIn("wait S9: the week resets unknown", run_cli(["resume", RUN]))
+
+    def test_a_malformed_state_is_refused_not_a_traceback(self):
+        db.save_state(state_dir(), {"run": RUN, "pairs": "two", "lang": "en", "groups": {}})
+        self.assertIn("refused: ", self.wake()[-1])
+        record(RUN, "S1", status="running", crashes="many")
+        (state_dir() / "S1.session.json").write_text(json.dumps({"exit": 1, "started": "x"}), encoding="utf-8")
+        self.assertIn("refused: S1's crashes in state.json is missing or malformed", run_cli(["result", RUN, "S1"]))
+        state = db.load_state(state_dir())
+        del state["groups"]["S1"]["keys"]
+        state["groups"]["S2"] = "not an object"
+        db.save_state(state_dir(), state)
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
+        out = run_cli(["launch", RUN, "S1", "--tasks", "todo.md", "--branch", BRANCH, "--worktree", WORKTREE])
+        self.assertIn("refused: S1's keys in state.json is missing or malformed", out)
+        self.assertIn("refused: S2's record in state.json is not an object", run_cli(["resume", RUN]))
+
+    def test_a_helper_that_hangs_is_a_refusal(self):
+        with mock.patch.object(db.subprocess, "run", side_effect=subprocess.TimeoutExpired(["gh"], 120)):
+            with self.assertRaisesRegex(db.Refusal, "took over 120 s"):
+                db.git(".", "worktree", "list")
+        self.assertEqual(120, db.CHILD_TIMEOUT)
 
     def test_wake_names_each_running_executors_transcript(self):
         record(RUN, "S9", status="running", pid=os.getpid())
@@ -1265,6 +1345,15 @@ class WakeTests(InRoot):
         self.assertFalse(db.alive(finished_pid()))
         for bad in (0, -1, None, "12"):
             self.assertFalse(db.alive(bad))
+        if os.name == "nt":
+            # A process this user may not query is alive; any other refusal to open it is a dead pid.
+            kernel = mock.Mock()
+            kernel.OpenProcess.return_value = None
+            import ctypes
+            for error, expected in ((db.ERROR_ACCESS_DENIED, True), (87, False)):
+                with mock.patch.object(ctypes, "WinDLL", return_value=kernel), \
+                        mock.patch.object(ctypes, "get_last_error", return_value=error):
+                    self.assertEqual(expected, db.alive(4242))
 
     def test_resume_adopts_only_its_own_dead_groups(self):
         FINISHED_PID = finished_pid()

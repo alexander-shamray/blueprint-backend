@@ -65,14 +65,17 @@ ACTIVE = ("running", "relaunch", "window", "week")
 WINDOW = timedelta(hours=5, minutes=10)
 # No limit was hit in the spike (artifacts/dispatch/spike.md, Rate-limit text), so the envelope's structured
 # fields are read first and these phrases only on a session that failed; they await the first real limit.
-LIMIT_PHRASES = ("usage limit", "rate limit", "limit reached", "resets")
+LIMIT_PHRASES = ("usage limit", "rate limit", "limit reached")
 RATE_LIMIT_KIND = re.compile(r"rate_limit(?:_error|_exceeded)?", re.IGNORECASE)
-ISO_STAMP = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?")
+ISO_STAMP = r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?"
+# A time counts as the reset only right after a reset phrase; any other date in the text is about something else.
 RESET_PATTERN = re.compile(
-    r"\breset(?:s)?\s+(?:at\s+)?(?P<hour>\d{1,2})(?![\d-])(?::(?P<minute>\d{2}))?\s*(?P<half>[ap]\.?m\b\.?)?"
-    r"(?:\s*\((?P<zone>[A-Za-z_]+(?:/[A-Za-z_+-]+)+)\))?", re.IGNORECASE)
+    rf"\breset(?:s)?\s+(?:at\s+|on\s+)?(?:(?P<iso>{ISO_STAMP})|(?P<hour>\d{{1,2}})(?![\d-])(?::(?P<minute>\d{{2}}))?"
+    r"\s*(?P<half>[ap]\.?m\b\.?)?(?:\s*\((?P<zone>[A-Za-z_]+(?:/[A-Za-z_+-]+)+)\))?)", re.IGNORECASE)
 RESET_KEYS = ("resetsAt", "resets_at", "resetAt", "reset_at")
 STILL_ACTIVE = 259
+ERROR_ACCESS_DENIED = 5
+CHILD_TIMEOUT = 120
 # The executor's command, resolved from PATH when None; a suite points it at a fake, never through the environment.
 CLAUDE_COMMAND = None
 PROJECTS = Path.home() / ".claude" / "projects"
@@ -288,7 +291,7 @@ def group_claim(group, bodies):
 
 def row_branch(row):
     """The branch an In progress row's Branch or PR cell names first in backticks, or None."""
-    quoted = re.search(r"`([^`]+)`", row.cells[3])
+    quoted = re.search(r"`([^`]+)`", row.cells[HEADERS["In progress"].index("Branch or PR")])
     token = quoted.group(1).split()[0] if quoted and quoted.group(1).split() else ""
     return token if BRANCH_NAME.fullmatch(token) else None
 
@@ -574,10 +577,21 @@ def _state_or_empty(directory):
 
 
 def _record_move(directory, gid, moved):
+    """Record a move before the list is written, and return how to undo the record if that write is refused."""
+    path = Path(directory) / "state.json"
+    before = _read(path) if path.is_file() else None
     state = _state_or_empty(directory)
     # A new move starts the group afresh: what an earlier launch recorded no longer describes it.
     state.setdefault("groups", {})[gid] = moved
     save_state(directory, state)
+
+    def undo():
+        with contextlib.suppress(OSError, Refusal):
+            if before is None:
+                path.unlink(missing_ok=True)
+            else:
+                _write(path, before)
+    return undo
 
 
 def _close(directory, gid, status):
@@ -590,7 +604,7 @@ def _close(directory, gid, status):
 
 def _tasks_command(args, today):
     directory = Path(args.run)
-    after = []
+    after, undo = [], []
 
     def update(text):
         tasks = parse_tasks(text)
@@ -605,7 +619,7 @@ def _tasks_command(args, today):
             result = move_to_in_progress(text, group, args.branch or f"chore/dispatch-{slug}",
                                          args.worktree or f".claude/worktrees/dispatch-{slug}", today)
             moved = {"keys": [r.key for r in group.rows], "rows": [r.line for r in group.rows]}
-            after.append(lambda: _record_move(directory, args.group, moved))
+            undo.append(_record_move(directory, args.group, moved))
             return result
         held = {r.key for r in tasks.in_progress if r.group == args.group}
         if not held:
@@ -625,9 +639,15 @@ def _tasks_command(args, today):
         after.append(lambda: _close(directory, args.group, "returned"))
         return return_to_remaining(text, rows, held)
 
-    # The file is read here, at the moment of the write, so another session's edit since `board` is kept; the
-    # state follows the list, so a refused write leaves no record of a move that did not happen.
-    _write(args.tasks, update(_read(args.tasks)))
+    # The file is read here, at the moment of the write, so another session's edit since `board` is kept. A move's
+    # record is written first and undone if the list write is refused, so neither is left without the other.
+    text = update(_read(args.tasks))
+    try:
+        _write(args.tasks, text)
+    except Refusal:
+        for step in undo:
+            step()
+        raise
     for step in after:
         step()
 
@@ -702,11 +722,33 @@ def _entry(state, gid):
     entry = state.get("groups", {}).get(gid)
     if entry is None:
         raise Refusal(f"{gid} is not in this run")
+    if not isinstance(entry, dict):
+        raise Refusal(f"{gid}'s record in state.json is not an object")
     return entry
 
 
+def _path_text(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _texts(value):
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _numbers_list(value):
+    return isinstance(value, list) and all(_number(item) for item in value)
+
+
+def _field(entry, gid, key, check, default=None):
+    """One recorded field of a group, refused rather than a traceback when state.json was edited out of shape."""
+    value = entry.get(key, default)
+    if not check(value):
+        raise Refusal(f"{gid}'s {key} in state.json is missing or malformed")
+    return value
+
+
 def _entry_group(gid, entry):
-    rows = tuple(_row("Remaining", line) for line in entry.get("rows") or ())
+    rows = tuple(_row("Remaining", line) for line in _field(entry, gid, "rows", _texts, []))
     if not rows:
         raise Refusal(f"{gid} was not moved by this run; tasks move records its rows first")
     models = sorted({r.cells[MODEL] for r in rows})
@@ -739,8 +781,12 @@ def git_bash():
 
 
 def _child(argv, cwd):
+    # A hung gh or git would stall the wake the dispatcher is waiting on; an executor never runs through here.
     try:
-        done = subprocess.run(argv, cwd=cwd, capture_output=True)
+        done = subprocess.run(argv, cwd=cwd, capture_output=True, timeout=CHILD_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise Refusal(f"{' '.join(Path(a).name if i == 0 else a for i, a in enumerate(argv))} "
+                      f"took over {CHILD_TIMEOUT} s") from None
     except OSError as error:
         raise Refusal(f"could not start {Path(argv[0]).name}: {error}") from None
     # Never text=True: on Windows that is cp1252, which drops an em dash or Cyrillic from the output.
@@ -848,9 +894,10 @@ def launch(root, run, gid, tasks_path, branch, worktree):
         raise Refusal(f"{gid} holds an owed row; only filed issues are dispatched")
     if not BRANCH_NAME.fullmatch(branch):
         raise Refusal(f"{branch!r} is not a branch name")
+    keys = _field(entry, gid, "keys", _texts)
     held = [r for r in parse_tasks(_read(tasks_path)).in_progress if r.group == gid]
-    if sorted(r.key for r in held) != sorted(entry["keys"]):
-        raise Refusal(f"In progress does not hold {gid}'s rows {', '.join(entry['keys'])}")
+    if sorted(r.key for r in held) != sorted(keys):
+        raise Refusal(f"In progress does not hold {gid}'s rows {', '.join(keys)}")
     named = sorted({row_branch(r) or "none" for r in held})
     if named != [branch]:
         raise Refusal(f"{gid}'s In progress rows name {', '.join(f'`{n}`' for n in named)}, not {branch}")
@@ -875,7 +922,7 @@ def run_session(root, run, gid, description):
         raise Refusal(f"{gid} is {entry.get('status') or 'not launched'}, not waiting for an executor")
     text = prompt(_entry_group(gid, entry), description, run)
     flag = model_flag(entry.get("model"))
-    worktree = Path(root) / entry["worktree"]
+    worktree = Path(root) / _field(entry, gid, "worktree", _path_text)
     if not worktree.is_dir():
         raise Refusal(f"{entry['worktree']} is not a directory")
     command = list(CLAUDE_COMMAND) if CLAUDE_COMMAND else [shutil.which("claude")]
@@ -1075,12 +1122,14 @@ def _zone(name):
 
 
 def _text_reset(text, base):
-    """The reset a limit notice names: an ISO time after the session ended, else the next such clock time."""
-    for match in ISO_STAMP.finditer(text):
-        stamp = _parse_stamp(match.group(0))
-        if stamp and stamp > base:
-            return stamp
+    """The reset a limit notice names after a reset phrase: an ISO time after the session ended, else the next
+    such clock time."""
     for match in RESET_PATTERN.finditer(text):
+        if match["iso"]:
+            stamp = _parse_stamp(match["iso"])
+            if stamp and stamp > base:
+                return stamp
+            continue
         hour, minute, half = int(match["hour"]), match["minute"], match["half"]
         if minute is None and half is None:
             continue
@@ -1155,7 +1204,8 @@ def alive(pid):
     kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
     handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not handle:
-        return False
+        # A process this user may not query still exists; only a pid with no process behind it is dead.
+        return ctypes.get_last_error() == ERROR_ACCESS_DENIED
     try:
         code = wintypes.DWORD()
         return bool(kernel.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == STILL_ACTIVE
@@ -1230,7 +1280,8 @@ def absorb(root, run, gid):
         raise Refusal(f"{record} is not a session record")
     if raw.get("started") is not None and raw.get("started") == entry.get("absorbed"):
         raise Refusal(f"{gid}'s session record was already read")
-    source = Path(root) / entry["worktree"] / "artifacts" / "dispatch" / run / f"{gid}.json"
+    worktree = _field(entry, gid, "worktree", _path_text)
+    source = Path(root) / worktree / "artifacts" / "dispatch" / run / f"{gid}.json"
     copy = directory / f"{gid}.json"
     try:
         if source.is_file():
@@ -1239,9 +1290,9 @@ def absorb(root, run, gid):
             copy.unlink(missing_ok=True)
     except OSError as error:
         raise Refusal(f"could not copy {source}: {error}") from None
-    result = load_result(copy, gid, entry.get("issues") or [])
+    result = load_result(copy, gid, _field(entry, gid, "issues", _numbers_list))
     end = session_end(raw)
-    crashes = entry.get("crashes", 0)
+    crashes = _field(entry, gid, "crashes", _count, 0)
     decision = classify(end, result, crashes, now())
     reason = _reason(decision, end, result)
     entry.update(status=decision, absorbed=raw.get("started"), exit=end.exit_code, session_id=end.session_id,
@@ -1253,9 +1304,10 @@ def absorb(root, run, gid):
     if isinstance(result, Result):
         entry.update(pr=result.pr, merge_oid=result.merge_oid, filed=list(result.filed),
                      review_end=result.review_end, rounds=list(result.rounds), decisions=list(result.decisions))
-    entry["transcript"] = transcript_path(str(Path(root) / entry["worktree"]), end.session_id,
+    entry["transcript"] = transcript_path(str(Path(root) / worktree), end.session_id,
                                           _launch_time(directory, gid, entry))
     save_state(directory, state)
+    shown = entry["transcript"] if entry["transcript"] and os.path.isfile(entry["transcript"]) else "not found"
     parts = [f"{gid}: {decision}"]
     if isinstance(result, Result) and result.pr:
         parts.append(f"pr #{result.pr}")
@@ -1263,22 +1315,25 @@ def absorb(root, run, gid):
         parts.append(f"- {reason}")
     if end.denials:
         parts.append(f"[denials: {len(end.denials)}]")
-    return [" ".join(parts), f"transcript: {entry['transcript'] or 'not found'}"]
+    return [" ".join(parts), f"transcript: {shown}"]
 
 
 def _merge_problem(root, pr, oid, branch):
-    """Why GitHub does not show this merge, or None: merged, at this oid, from this branch, into main."""
+    """Where GitHub contradicts the claim, or None: merged, at this oid, from this branch, into main.
+
+    A read that fails or answers out of shape is a Refusal, not a contradiction: the claim stays to be checked again.
+    """
     if not _number(pr) or not _oid(oid) or not isinstance(branch, str) or not BRANCH_NAME.fullmatch(branch):
-        return "the claim names no pr, whole oid or branch"
+        raise Refusal("the claim in state.json names no pr, whole oid or branch")
     try:
         view = json.loads(helper(root, "pr-state.sh", str(pr)))
         listed = json.loads(helper(root, "pr-for-branch.sh", branch))
     except Refusal as error:
-        return f"GitHub could not be read: {error}"
+        raise Refusal(f"GitHub could not be read: {error}") from None
     except ValueError:
-        return "GitHub's answer was not JSON"
+        raise Refusal("GitHub's answer was not JSON") from None
     if not isinstance(view, dict) or not isinstance(listed, list):
-        return "GitHub's answer has another shape"
+        raise Refusal("GitHub's answer has another shape")
     if view.get("state") != "MERGED":
         return f"#{pr} is {view.get('state')}, not MERGED"
     commit = view.get("mergeCommit")
@@ -1290,7 +1345,8 @@ def _merge_problem(root, pr, oid, branch):
         return f"#{pr} is not a pull request from {branch}"
     if mine.get("state") != "MERGED" or mine.get("baseRefName") != "main":
         return f"#{pr} from {branch} is {mine.get('state')} into {mine.get('baseRefName')}, not merged into main"
-    if mine.get("headRefOid") != view.get("headRefOid"):
+    heads = (mine.get("headRefOid"), view.get("headRefOid"))
+    if not all(_oid(head) for head in heads) or heads[0] != heads[1]:
         return f"#{pr}'s head is not {branch}'s"
     return None
 
@@ -1310,6 +1366,12 @@ def verify(root, run, gid):
     entry["status"] = "verified"
     save_state(directory, state)
     return 0, f"verified {entry['merge_oid']}"
+
+
+def _week_passed(entry, current):
+    # A week's reset that cannot be read is taken as not yet come: relaunching into the limit wastes the night.
+    stamp = _parse_stamp(entry.get("resets_at"))
+    return stamp is not None and stamp < current
 
 
 def window_wait(resets_at, now):
@@ -1339,21 +1401,26 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source):
     directory = run_dir(root, run)
     state = load_state(directory)
     entries = state.get("groups", {})
+    if not all(isinstance(entry, dict) for entry in entries.values()):
+        raise Refusal(f"{directory / 'state.json'} holds a group that is not an object")
+    current = now()
     active = [gid for gid, entry in entries.items() if entry.get("status") in ACTIVE]
     stop = (directory / "STOP").exists()
     out = [f"stop file: {'yes' if stop else 'no'}", f"running: {', '.join(active) or 'none'}"]
     for gid in active:
         entry = entries[gid]
-        live = (transcript_path(str(Path(root) / entry["worktree"]), None, _launch_time(directory, gid, entry))
+        worktree = Path(root) / _field(entry, gid, "worktree", _path_text)
+        live = (transcript_path(str(worktree), None, _launch_time(directory, gid, entry))
                 if entry.get("status") == "running" else entry.get("transcript"))
         out.append(f"transcript {gid}: {live or 'none yet'}")
-    slots = max(0, int(state.get("pairs", 0)) - len(active))
+    pairs = state.get("pairs")
+    if not _number(pairs):
+        raise Refusal(f"{directory / 'state.json'} has no whole number of pairs")
+    slots = max(0, pairs - len(active))
     out.append(f"free slots: {slots}")
     if stop:
         return out + ["end: stop-file"]
-    # A week's reset that cannot be read is taken as not yet come.
-    if any(entry.get("status") == "week" and (_parse_stamp(entry.get("resets_at")) or now()) >= now()
-           for entry in entries.values()):
+    if any(entry.get("status") == "week" and not _week_passed(entry, current) for entry in entries.values()):
         return out + ["end: week"]
     tasks = parse_tasks(_read(tasks_path))
     bodies = _bodies(tasks, directory, body_source)
@@ -1371,8 +1438,10 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source):
 def resume(root, run):
     """What each of this run's unfinished groups needs next; worktrees the run never recorded are not its own."""
     directory = run_dir(root, run)
-    out = []
+    out, current = [], now()
     for gid, entry in load_state(directory).get("groups", {}).items():
+        if not isinstance(entry, dict):
+            raise Refusal(f"{gid}'s record in state.json is not an object")
         status = entry.get("status")
         if status in ACTIVE:
             pid = _pid(directory, gid)
@@ -1390,6 +1459,9 @@ def resume(root, run):
                 out.append(f"result {gid}: its executor ended and its result was not read")
             elif status == "window":
                 out.append(f"wait {gid}: the window resets {entry.get('resets_at')}, then relaunch")
+            elif status == "week" and not _week_passed(entry, current):
+                stamp = _parse_stamp(entry.get("resets_at"))
+                out.append(f"wait {gid}: the week resets {stamp.isoformat() if stamp else 'unknown'}")
             else:
                 out.append(f"relaunch {gid}")
         elif status is None:
