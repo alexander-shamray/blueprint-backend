@@ -22,6 +22,7 @@ CEILINGS = {
     "validate-blueprint.md": 9000,
     "review-branch.md": 8400,
     "team.md": 6300,
+    "dispatch.md": 14500,
 }
 
 ROOT = COMMANDS.parent.parent

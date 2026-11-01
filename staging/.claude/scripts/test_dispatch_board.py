@@ -562,6 +562,71 @@ class WriteTests(unittest.TestCase):
         self.assertEqual((0, ""), self.cli("place", "1", "S3", "1700", "--depends", "none"))
         self.assertEqual([1681, 1700], [r.number for r in db.groups(db.parse_tasks(self.read()))[1].rows])
 
+    def board(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            return db.main(["board", "--tasks", str(self.path), "--today", "2026-11-01", "--run", str(self.run_dir)],
+                           body_source=lambda n: "", open_source=set, branch_source=NO_BRANCH)
+
+    def rebuild(self, text):
+        path = self.dir / "rebuilt.md"
+        path.write_bytes(text.encode("utf-8"))
+        return self.cli("rewrite", "--from", str(path))
+
+    def test_a_rewrite_replaces_the_list_with_the_rebuild_from_what_board_read(self):
+        # The rebuild is the session's judgement written under the run; the helper is the only writer of the list.
+        self.write(FIXTURE.replace("\n", "\r\n"))
+        self.assertEqual(0, self.board())
+        self.assertEqual(FIXTURE.replace("\n", "\r\n"), (self.run_dir / "tasks.read.md").read_bytes().decode())
+        rebuilt = FIXTURE.replace("| 2026-11-09 | Opus |", "| OWNER; 2026-11-09 | Opus |")
+        self.assertEqual((0, ""), self.rebuild(rebuilt))
+        self.assertEqual(rebuilt.replace("\n", "\r\n"), self.read())
+
+    def test_a_rewrite_refuses_a_list_changed_since_board_read_it(self):
+        self.write(FIXTURE)
+        code, err = self.rebuild(FIXTURE)
+        self.assertEqual(2, code)
+        self.assertIn("run board --run first", err)
+        self.board()
+        edited = FIXTURE.replace("Write `docs/ci-cost-comparison.md`", "Another session's edit")
+        self.write(edited)
+        code, err = self.rebuild(FIXTURE)
+        self.assertEqual(2, code)
+        self.assertIn("the task list changed since board read it", err)
+        self.assertEqual(edited, self.read())
+
+    def test_a_rewrite_refuses_a_rebuild_that_drops_the_note_or_this_runs_rows_or_does_not_parse(self):
+        self.write(FIXTURE)
+        self.assertEqual((0, ""), self.cli("move", "S1"))
+        self.board()
+        moved = self.read()
+        held = [line for line in moved.split("\n") if line.startswith("| S1 | #")]
+        self.assertEqual(2, len(held))
+        cases = {"the note above the sections": moved.replace("Rules for filling", "Rules"),
+                 "S1's In progress rows": moved.replace(held[0] + "\n", ""),
+                 "unexpected section 'Done'": moved + "\n## Done\n\nnone\n"}
+        for why, rebuilt in cases.items():
+            with self.subTest(why=why):
+                code, err = self.rebuild(rebuilt)
+                self.assertEqual(2, code)
+                self.assertIn(why, err)
+                self.assertEqual(moved, self.read())
+
+    def test_place_records_the_issue_in_the_runs_state(self):
+        # The morning report's Filed overnight names what the dispatcher placed as well as what results named.
+        self.write(FIXTURE)
+        self.assertEqual((0, ""), self.cli("place", "1", "S3", "1700"))
+        self.assertEqual([1700], dr.load_state(self.run_dir)["placed"])
+
+    def test_back_keeps_how_the_group_ended(self):
+        self.write(FIXTURE)
+        self.cli("move", "S1")
+        state = dr.load_state(self.run_dir)
+        state["groups"]["S1"].update(status="handed-back", reason="needs a provider key")
+        dr.save_state(self.run_dir, state)
+        self.assertEqual((0, ""), self.cli("back", "S1"))
+        entry = dr.load_state(self.run_dir)["groups"]["S1"]
+        self.assertEqual(("returned", "handed-back"), (entry["status"], entry["closed_from"]))
+
     def test_the_files_line_endings_survive_a_write(self):
         self.write(FIXTURE.replace("\n", "\r\n"))
         self.assertEqual((0, ""), self.cli("move", "S1"))

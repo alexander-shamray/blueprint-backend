@@ -17,8 +17,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from dispatch_board import (BRANCH_NAME, MODEL, Group, Refusal, _bodies, _held, _number, _read, _row, _write, git,
-                            group_claim, groups, helper, one_line, parse_tasks, path_which, pick, ready, row_branch)
+from dispatch_board import (BRANCH_NAME, MODEL, Group, Refusal, _blocker, _bodies, _held, _number, _read, _row, _write,
+                            git, group_claim, groups, helper, one_line, parse_tasks, path_which, pick, ready,
+                            row_branch)
 
 RUN_NAME = re.compile(r"\d{8}-\d{6}")
 LANG = re.compile(r"[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})?")
@@ -81,7 +82,16 @@ def _close(directory, gid, status):
     state = _state_or_empty(directory)
     entry = state.get("groups", {}).get(gid)
     if entry is not None:
-        entry["status"] = status
+        # The report names how a group ended, which `done` and `back` would otherwise overwrite.
+        entry.update(closed_from=entry.get("status"), status=status)
+        save_state(directory, state)
+
+
+def _note_placed(directory, issue):
+    state = _state_or_empty(directory)
+    placed = state.setdefault("placed", [])
+    if issue not in placed:
+        placed.append(issue)
         save_state(directory, state)
 
 
@@ -882,6 +892,89 @@ def resume(root, run):
     return out
 
 
+# The morning report's facts (spec section 10), in English; the dispatcher writes report.md from them in --lang.
+
+REPORT_SECTIONS = ("Merged", "Needs a human", "Interrupted", "Filed overnight", "Left in the backlog", "Usage")
+HANDED = ("handed-back", "stopped", "crash-hand-back")
+TOKEN_NAMES = ("input", "cache write", "cache read", "output")
+UNFINISHED = {None: "moved, never launched", "merged-claimed": "merge claimed, not yet verified"}
+
+
+def _issues_text(numbers):
+    return ", ".join(f"#{n}" for n in numbers if _number(n)) if isinstance(numbers, list) and numbers else "none"
+
+
+def _rounds_text(rounds):
+    if not isinstance(rounds, list) or not rounds:
+        return "no review rounds in this session"
+    kinds = [f"{r.get('kind')} raised {r.get('raised')} fixed {r.get('fixed')} refused {r.get('refused')}"
+             for r in rounds if isinstance(r, dict)]
+    return f"rounds {len(rounds)}: " + "; ".join(kinds)
+
+
+def _weekly_lines(usage):
+    usage = usage if isinstance(usage, dict) else {}
+    out = []
+    for when in ("start", "end"):
+        point = usage.get(when)
+        if isinstance(point, dict) and point.get("percent_left") is not None:
+            out.append(f"weekly at the {when}: {point['percent_left']:g}% left, resets {point.get('resets_at')}")
+    # The owner's decision: with no reading the limit is ignored, and the report says it was not read.
+    out = out or ["weekly: not read"]
+    for failure in usage.get("failures") or []:
+        if isinstance(failure, dict):
+            out.append(f"weekly: reading failed at {failure.get('at')}: {one_line(failure.get('why'), 200)}")
+    return out
+
+
+def report(root, run, tasks_path, today, body_source, open_source):
+    directory = run_dir(root, run)
+    state = load_state(directory)
+    entries = {gid: entry for gid, entry in state.get("groups", {}).items() if isinstance(entry, dict)}
+    merged, needs, interrupted, usage = [], [], [], []
+    filed = [n for entry in entries.values() for n in (entry.get("filed") or []) if _number(n)]
+    filed += [n for n in state.get("placed") or [] if _number(n)]
+    filed = list(dict.fromkeys(filed))
+    for gid, entry in entries.items():
+        status = entry.get("status")
+        ended = entry.get("closed_from") if status in ("done", "returned") else status
+        if ended == "verified":
+            teardown = "" if status == "done" else "; its rows are still In progress"
+            merged.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}: "
+                          f"{_issues_text(entry.get('issues'))}; {_rounds_text(entry.get('rounds'))}; "
+                          f"review {entry.get('review_end') or 'not run'}; filed {_issues_text(entry.get('filed'))}"
+                          f"{teardown}")
+        elif ended in HANDED or status == "returned":
+            worktree = entry.get("worktree")
+            kept = _path_text(worktree) and (Path(root) / worktree).is_dir()
+            needs.append(f"{gid} {ended or 'returned'}: {one_line(entry.get('reason') or 'no reason recorded')}; "
+                         f"worktree {worktree} {'left in place' if kept else 'removed'}")
+        else:
+            interrupted.append(f"{gid} {UNFINISHED.get(status, status)}")
+        spent = entry.get("usage") if isinstance(entry.get("usage"), dict) else {}
+        if spent:
+            counts = [spent.get(key) if _count(spent.get(key)) else 0 for key in TOKEN_KEYS]
+            usage.append(f"{gid}: {sum(counts)} tokens ("
+                         + ", ".join(f"{name} {n}" for name, n in zip(TOKEN_NAMES, counts)) + ")")
+    if interrupted:
+        interrupted.append(f"resume: run /dispatch again in the main checkout; it resumes run {run}")
+    tasks = parse_tasks(_read(tasks_path))
+    bodies = _bodies(tasks, directory, body_source)
+    open_set = set(open_source())
+    left = []
+    for group in groups(tasks):
+        ok, why = ready(group, open_set, today, bodies)
+        left.append(f"{group.id} wave {group.wave}: {'ready, not launched before the night ended' if ok else why}")
+        needs += [f"#{row.number}: filed overnight, waits on a human" for row in group.rows
+                  if row.number in filed and _blocker(row, open_set, today, bodies) == "waits on a human"]
+    left.append(f"Tracking: {len(tasks.tracking)} rows and Paused: {len(tasks.paused)} rows, which no night runs")
+    spent = (usage or ["executors: no usage read"]) + _weekly_lines(state.get("usage"))
+    out = []
+    for name, lines in zip(REPORT_SECTIONS, (merged, needs, interrupted, [_issues_text(filed)], left, spent)):
+        out += [f"## {name}", *(lines or ["none"])]
+    return out
+
+
 # Command line, reached through dispatch_board.py's main
 
 def add_commands(sub):
@@ -903,6 +996,10 @@ def add_commands(sub):
     w.add_argument("--today")
     sub.add_parser("resume").add_argument("run")
     sub.add_parser("usage").add_argument("run")
+    r = sub.add_parser("report")
+    r.add_argument("run")
+    r.add_argument("--tasks", required=True)
+    r.add_argument("--today")
 
 
 def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from, weekly_from=None):
@@ -931,6 +1028,8 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
         print("\n".join(wake(root, args.run, args.tasks, today, bodies_from, open_from, branch_from, weekly_from)))
     elif args.command == "usage":
         print(usage_line(*take_reading(run_dir(root, args.run), weekly_from)))
+    elif args.command == "report":
+        print("\n".join(report(root, args.run, args.tasks, today, bodies_from, open_from)))
     else:
         print("\n".join(resume(root, args.run)))
     return 0
