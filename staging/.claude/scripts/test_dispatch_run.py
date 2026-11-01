@@ -759,6 +759,90 @@ class WakeTests(InRoot):
                           "launch S7: moved, never launched"], lines)
 
 
+class WeeklyTests(InRoot):
+    # No cheap source exists today (spike.md, Weekly figure), so the with-source cases run on an injected one;
+    # they document the contract for the day a source is found.
+    RESET = "2026-11-06T09:00:00+00:00"
+
+    def start(self):
+        if not (state_dir() / "state.json").is_file():
+            dr.save_state(state_dir(), {"run": RUN, "pairs": 2, "lang": "en", "groups": {}})
+
+    def usage(self, source=None):
+        self.start()
+        return run_cli(["usage", RUN], weekly_source=source)
+
+    def wake(self, source=None):
+        self.start()
+        with open("todo.md", "w", encoding="utf-8", newline="") as handle:
+            handle.write(FIXTURE)
+        with mock.patch.object(dr, "PROJECTS", self.root / "projects"):
+            return run_cli(["wake", RUN, "--tasks", "todo.md", "--today", "2026-11-01"], weekly_source=source,
+                           body_source=lambda n: "", open_source=lambda: {1440}, branch_source=NO_BRANCH).splitlines()
+
+    def test_no_source_is_not_read_and_never_ends_the_night(self):
+        self.assertIsNone(dr.WEEKLY_SOURCE)
+        self.assertIsNone(dr.read_weekly())
+        self.assertFalse(dr.week_ends_night(None))
+        self.assertEqual("weekly: not read\n", self.usage())
+        self.assertNotEqual("end: week", self.wake()[-1])
+        self.assertIsNone(dr.load_state(state_dir())["usage"]["start"]["percent_left"])
+
+    def test_a_failed_reading_is_recorded_and_is_not_the_limit(self):
+        def broken():
+            raise OSError("no token file")
+        self.assertEqual("weekly: reading failed: no token file\n", self.usage(broken))
+        failures = dr.load_state(state_dir())["usage"]["failures"]
+        self.assertEqual(["no token file"], [f["why"] for f in failures])
+        with self.assertRaises(dr.ReadingFailed):
+            dr.read_weekly(broken)
+        self.assertNotEqual("end: week", self.wake(broken)[-1])
+
+    def test_the_next_wake_reads_again_after_a_failure(self):
+        calls = []
+
+        def flaky():
+            calls.append(1)
+            if len(calls) == 1:
+                raise ValueError("timed out")
+            return {"percentUsed": 10, "resetsAt": self.RESET}
+        first = self.wake(flaky)
+        self.assertIn("weekly: reading failed: timed out", first)
+        second = self.wake(flaky)
+        self.assertEqual(2, len(calls))
+        self.assertNotIn("weekly: reading failed: timed out", second)
+        self.assertEqual(90.0, dr.load_state(state_dir())["usage"]["start"]["percent_left"])
+        self.assertEqual(1, len(dr.load_state(state_dir())["usage"]["failures"]))
+
+    def test_one_percent_left_ends_the_night_and_two_does_not(self):
+        stamp = datetime(2026, 11, 6, tzinfo=timezone.utc)
+        self.assertTrue(dr.week_ends_night(dr.WeeklyReading(1.0, stamp)))
+        self.assertTrue(dr.week_ends_night(dr.WeeklyReading(0.0, stamp)))
+        self.assertFalse(dr.week_ends_night(dr.WeeklyReading(2.0, stamp)))
+        self.assertEqual("end: week", self.wake(lambda: {"percentUsed": 99, "resetsAt": self.RESET})[-1])
+        self.assertNotEqual("end: week", self.wake(lambda: {"percentUsed": 98, "resetsAt": self.RESET})[-1])
+
+    def test_the_reading_maps_percent_used_to_percent_left(self):
+        reading = dr.read_weekly(lambda: {"percentUsed": 37.5, "resetsAt": self.RESET})
+        self.assertEqual(62.5, reading.percent_left)
+        self.assertEqual(datetime.fromisoformat(self.RESET), reading.resets_at)
+        for bad in ({}, {"percentUsed": "most", "resetsAt": self.RESET}, {"percentUsed": 5, "resetsAt": "soon"},
+                    {"percentUsed": 140, "resetsAt": self.RESET}, [1]):
+            with self.assertRaises(dr.ReadingFailed, msg=bad):
+                dr.read_weekly(lambda bad=bad: bad)
+
+    def test_usage_records_start_once_and_end_on_every_later_reading(self):
+        self.assertEqual(f"weekly: 60% left, resets {self.RESET}\n",
+                         self.usage(lambda: {"percentUsed": 40, "resetsAt": self.RESET}))
+        self.clock = NOW + timedelta(hours=3)
+        self.usage(lambda: {"percentUsed": 55, "resetsAt": self.RESET})
+        self.clock = NOW + timedelta(hours=6)
+        self.usage(lambda: {"percentUsed": 70, "resetsAt": self.RESET})
+        recorded = dr.load_state(state_dir())["usage"]
+        self.assertEqual((60.0, 30.0), (recorded["start"]["percent_left"], recorded["end"]["percent_left"]))
+        self.assertEqual(NOW.isoformat(), recorded["start"]["at"])
+
+
 class TranscriptTests(unittest.TestCase):
     def test_the_slug_turns_every_other_character_into_a_dash(self):
         self.assertEqual("C--dev-ashamray-blueprint-backend--claude-worktrees-dispatch",

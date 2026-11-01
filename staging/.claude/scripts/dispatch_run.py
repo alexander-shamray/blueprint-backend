@@ -730,7 +730,73 @@ def wait(root, run, gid):
     return f"waited {total:.0f} s"
 
 
-def wake(root, run, tasks_path, today, body_source, open_source, branch_source):
+# The seven_day window exists only to mods inside a running session (spike.md, Weekly figure), so no script reads
+# it. A source, when one is found, returns {"percentUsed": <0 to 100>, "resetsAt": <ISO stamp>}.
+WEEKLY_SOURCE = None
+WEEKLY_STOP_PERCENT_LEFT = 1
+
+
+@dataclass(frozen=True)
+class WeeklyReading:
+    percent_left: float
+    resets_at: datetime
+
+
+class ReadingFailed(Exception):
+    pass
+
+
+def read_weekly(source=WEEKLY_SOURCE):
+    """The week's figure, or None when there is no source to read it from; a source that fails raises."""
+    if source is None:
+        return None
+    try:
+        raw = source()
+        used, stamp = raw["percentUsed"], raw["resetsAt"]
+        if isinstance(used, bool) or not isinstance(used, (int, float)) or not 0 <= used <= 100:
+            raise ValueError(f"percentUsed {used!r} is not a number from 0 to 100")
+        resets = datetime.fromisoformat(stamp)
+        if resets.tzinfo is None:
+            raise ValueError(f"resetsAt {stamp!r} has no zone")
+    except Exception as error:
+        raise ReadingFailed(str(error) or type(error).__name__) from None
+    return WeeklyReading(100.0 - used, resets)
+
+
+def week_ends_night(reading):
+    # Only a reading ends the night on the week; an unread or failed one never does.
+    return reading is not None and reading.percent_left <= WEEKLY_STOP_PERCENT_LEFT
+
+
+def usage_line(reading, failure):
+    if failure is not None:
+        return f"weekly: reading failed: {failure}"
+    if reading is None:
+        return "weekly: not read"
+    return f"weekly: {reading.percent_left:g}% left, resets {reading.resets_at.isoformat()}"
+
+
+def take_reading(directory, source):
+    """Read the week, record it in state.json, and return the reading and the failure, one of them None."""
+    reading = failure = None
+    try:
+        reading = read_weekly(source)
+    except ReadingFailed as error:
+        failure = str(error)
+    state = load_state(directory)
+    usage = state.setdefault("usage", {})
+    stamp = now().isoformat()
+    if failure is not None:
+        usage.setdefault("failures", []).append({"at": stamp, "why": failure})
+    else:
+        point = {"at": stamp, "percent_left": reading.percent_left if reading else None,
+                 "resets_at": reading.resets_at.isoformat() if reading else None}
+        usage["end" if "start" in usage else "start"] = point
+    save_state(directory, state)
+    return reading, failure
+
+
+def wake(root, run, tasks_path, today, body_source, open_source, branch_source, weekly_source=None):
     directory = run_dir(root, run)
     state = load_state(directory)
     entries = state.get("groups", {})
@@ -753,6 +819,12 @@ def wake(root, run, tasks_path, today, body_source, open_source, branch_source):
     out.append(f"free slots: {slots}")
     if stop:
         return out + ["end: stop-file"]
+    # A failed reading is named and the next wake tries again; the executor's own week limit stays below.
+    reading, failure = take_reading(directory, weekly_source)
+    if failure is not None:
+        out.append(usage_line(None, failure))
+    if week_ends_night(reading):
+        return out + ["end: week"]
     if any(entry.get("status") == "week" and not _week_passed(entry, current) for entry in entries.values()):
         return out + ["end: week"]
     tasks = parse_tasks(_read(tasks_path))
@@ -828,9 +900,10 @@ def add_commands(sub):
     w.add_argument("--tasks", required=True)
     w.add_argument("--today")
     sub.add_parser("resume").add_argument("run")
+    sub.add_parser("usage").add_argument("run")
 
 
-def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from):
+def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from, weekly_from=None):
     """Run one of add_commands' subcommands and return its exit code; a Refusal is the caller's to print."""
     root = args.root
     if args.command == "start":
@@ -853,7 +926,9 @@ def command(args: argparse.Namespace, today, bodies_from, open_from, branch_from
     elif args.command == "wait":
         print(wait(root, args.run, args.group))
     elif args.command == "wake":
-        print("\n".join(wake(root, args.run, args.tasks, today, bodies_from, open_from, branch_from)))
+        print("\n".join(wake(root, args.run, args.tasks, today, bodies_from, open_from, branch_from, weekly_from)))
+    elif args.command == "usage":
+        print(usage_line(*take_reading(run_dir(root, args.run), weekly_from)))
     else:
         print("\n".join(resume(root, args.run)))
     return 0
