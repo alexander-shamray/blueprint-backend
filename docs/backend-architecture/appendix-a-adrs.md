@@ -198,6 +198,7 @@ decision looks wrong.
 | **ADR-189** | [Saga inbox cleanup runs on one replica and yields to lock waits (#1671), adding to ADR-182](adr/ADR-189-saga-inbox-cleanup-runs-on-one-replica-and-yields-to-lock-waits-1671-adding-to-adr-182.md) |
 | **ADR-190** | [Holders send to Privacy's exchange and fault reads stop at consumed namespaces (#1682, #1683), amending ADR-036 and ADR-094](adr/ADR-190-holders-send-to-privacys-exchange-and-fault-reads-stop-at-consumed-namespaces-1682-1683-amending-adr-036-and-adr-094.md) |
 | **ADR-191** | [A consumer takes a delivery only through its type's exchange or its endpoint's own (#1684), amending ADR-036](adr/ADR-191-a-consumer-takes-a-delivery-only-through-its-types-exchange-or-its-endpoints-own-1684-amending-adr-036.md) |
+| **ADR-192** | [Fault reads stop at consumed types (#1702), amending ADR-190](adr/ADR-192-fault-reads-stop-at-consumed-types-1702-amending-adr-190.md) |
 
 ---
 
