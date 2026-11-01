@@ -1632,7 +1632,11 @@ this service's.
   would register on the same predicate and whose index put every delivery on
   one page
   ([ADR-182](adr/ADR-182-masstransits-inbox-is-cleaned-up-by-this-service-bucket-by-bucket-1634-supersedes-adr-032s-library-cleanup.md)),
-  and like it reads this one table and nothing else.
+  and like it deletes from this one table, though each delete's foreign key
+  check reads `ordering.OutboxMessage` under locks. One replica cleans at a
+  time, and a bucket whose delete waits on a lock longer than
+  `SagaInboxCleanupService.LockTimeout` is left for the next pass
+  ([ADR-189](adr/ADR-189-saga-inbox-cleanup-runs-on-one-replica-and-yields-to-lock-waits-1671-adding-to-adr-182.md)).
 - **`ordering.OutboxState`** belongs to the *bus-side* outbox, which is
   `UseBusOutbox()`, and this platform deliberately does not call it. **In this
   configuration nothing writes, reads or prunes that table.** The migration

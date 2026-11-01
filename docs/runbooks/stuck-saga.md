@@ -329,8 +329,12 @@ mechanisms:
   has passed since its delivery, which stands in for the library's own
   cleanup
   ([ADR-182](../backend-architecture/adr/ADR-182-masstransits-inbox-is-cleaned-up-by-this-service-bucket-by-bucket-1634-supersedes-adr-032s-library-cleanup.md)).
-  That service reads **this table only**, and never a row whose `Delivered`
-  is null.
+  That service deletes from **this table only**, and never a row whose
+  `Delivered` is null. One replica runs it at a time, and it leaves a bucket
+  for its next pass rather than wait on a lock past
+  `SagaInboxCleanupService.LockTimeout`, so under load the table can
+  hold rows past the window until the load eases
+  ([ADR-189](../backend-architecture/adr/ADR-189-saga-inbox-cleanup-runs-on-one-replica-and-yields-to-lock-waits-1671-adding-to-adr-182.md)).
 
 `ordering.OutboxState` is the third table and is not part of either story:
 it belongs to the bus-side outbox, `UseBusOutbox()` is deliberately not called,
