@@ -123,6 +123,13 @@ nothing, so it holds no `read` on Privacy's queue, and each account reads only
 the fault exchanges of the namespaces it consumes. The `read` on a peer's
 command queue with one sender stands. This record is otherwise unchanged.
 
+**Amended by
+[ADR-191](ADR-191-a-consumer-takes-a-delivery-only-through-its-types-exchange-or-its-endpoints-own-1684-amending-adr-036.md)**:
+a consumer takes a delivery only through its type's exchange or its
+endpoint's own, so the `write` on a service's own exchanges no longer reaches
+a peer's consumer on a queue that binds both. This record is otherwise
+unchanged.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

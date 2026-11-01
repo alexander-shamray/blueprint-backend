@@ -211,6 +211,9 @@ public static class DependencyInjection
                     {
                         e.UseMessageRetry(RetryPolicy.Standard);
 
+                        // The one endpoint without the helper, so its source check is typed here (ADR-191).
+                        e.UseSourceExchangeCheck(context);
+
                         // A duplicate OrderPlaced after finalisation would start a second workflow (§9.5).
                         e.UseConsumeFilter(typeof(InboxFilter<>), context);
 

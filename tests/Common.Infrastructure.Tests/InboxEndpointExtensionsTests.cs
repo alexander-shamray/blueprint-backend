@@ -36,6 +36,27 @@ public sealed class InboxEndpointExtensionsTests
         }
     }
 
+    [Fact]
+    public void Every_endpoint_that_takes_the_inbox_alone_takes_the_source_check_beside_it()
+    {
+        // The helper adds both, so only an endpoint without it can drop the check (ADR-191).
+        string root = RepositoryRoot();
+        string[] alone = [.. Callers(root, "UseConsumeFilter(typeof(InboxFilter<>)").Where(c => c != Helper)];
+
+        alone.ShouldNotBeEmpty("the saga's endpoint takes the inbox alone, so a scan finding none read nothing");
+        alone.ShouldBe(Callers(root, ".UseSourceExchangeCheck(").Where(c => c != Helper), ignoreOrder: true);
+        foreach (string file in alone)
+        {
+            string text = File.ReadAllText(Path.Combine(root, file));
+            Occurrences(text, ".UseSourceExchangeCheck(").ShouldBe(
+                Occurrences(text, "UseConsumeFilter(typeof(InboxFilter<>)"),
+                file);
+        }
+    }
+
+    private static int Occurrences(string text, string call) =>
+        text.Split(call, StringSplitOptions.None).Length - 1;
+
     private static string[] Callers(string root, string call) =>
     [
         .. Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
