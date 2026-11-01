@@ -550,9 +550,9 @@ def _note(text):
     return text[:text.find("\n## ")] if "\n## " in text else text
 
 
-def rewrite(live, read, rebuilt, open_groups):
-    """The session's rebuild of the list, refused unless it starts from what `board` read and keeps what the
-    run relies on: the owner's note, a list that parses into groups, and the rows of each group still open."""
+def rewrite(live, read, rebuilt):
+    """The session's rebuild of the list, refused unless it starts from what `board` read, keeps the owner's note,
+    parses into groups and leaves In progress as it was: those rows change only through move, done and back."""
     if read is None:
         raise Refusal(f"no {READ_COPY} under the run; run board --run first and rebuild from what it read")
     if live != read:
@@ -563,30 +563,27 @@ def rewrite(live, read, rebuilt, open_groups):
         raise Refusal("the rebuild changes the note above the sections, which is the owner's")
     before, after = parse_tasks(live), parse_tasks(rebuilt)
     groups(after)
-    for gid in sorted(open_groups):
-        if sorted(r.line for r in before.in_progress if r.group == gid) != sorted(
-                r.line for r in after.in_progress if r.group == gid):
-            raise Refusal(f"the rebuild changes {gid}'s In progress rows, which this run still holds")
+    # Another session's row is never the dispatcher's to drop or edit (spec section 4), whatever state.json holds.
+    if sorted(r.line for r in before.in_progress) != sorted(r.line for r in after.in_progress):
+        raise Refusal("the rebuild changes the In progress section; its rows change only through move, done and back")
     return rebuilt
 
 
 def _tasks_command(args, today):
     # The run's state.json is dispatch_run's, which imports this module, so it is reached at call time.
-    from dispatch_run import _close, _note_placed, _record_move, _state_or_empty
-    directory = Path(args.run)
+    from dispatch_run import _close, _note_placed, _record_move, _state_or_empty, load_state, run_dir
+    directory = run_dir(args.root, args.run)
     after, undo = [], []
 
     def update(text):
         if args.action == "rewrite":
+            load_state(directory)
             copy = directory / READ_COPY
-            entries = _state_or_empty(directory).get("groups", {})
-            held = {gid for gid, entry in entries.items()
-                    if not isinstance(entry, dict) or entry.get("status") not in ("done", "returned")}
             try:
                 source = _read(args.source)
             except OSError as error:
                 raise Refusal(f"could not read {args.source}: {error}") from None
-            return rewrite(text, _read(copy) if copy.is_file() else None, source, held)
+            return rewrite(text, _read(copy) if copy.is_file() else None, source)
         tasks = parse_tasks(text)
         if args.action == "place":
             after.append(lambda: _note_placed(directory, args.issue))
@@ -788,7 +785,8 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
             s.add_argument("--branch")
             s.add_argument("--worktree")
     dispatch_run.add_commands(sub)
-    for command in sub.choices.values():
+    # The task actions resolve their run under the root too, so each takes it after its own name.
+    for command in [c for name, c in sub.choices.items() if name != "tasks"] + list(actions.choices.values()):
         command.add_argument("--root", default=".")
     args = parser.parse_args(argv)
     root = args.root
@@ -804,14 +802,16 @@ def main(argv=None, body_source=None, open_source=None, branch_source=None, week
         except ValueError:
             raise Refusal(f"--today {args.today!r} is not an ISO date") from None
         if args.command == "board":
+            # Only a run `start` opened takes the copy and the bodies, so a mistyped --run creates nothing.
+            directory = dispatch_run.run_dir(root, args.run) if args.run else None
+            if directory is not None:
+                dispatch_run.load_state(directory)
             text = _read(args.tasks)
-            bodies = _bodies(parse_tasks(text), args.run, bodies_from)
+            bodies = _bodies(parse_tasks(text), directory, bodies_from)
             print("\n".join(board(text, today, bodies, set(open_from()), branch_from)))
-            if args.run:
+            if directory is not None:
                 # What this board read is the only base `tasks rewrite` accepts a rebuild from.
-                with contextlib.suppress(OSError):
-                    Path(args.run).mkdir(parents=True, exist_ok=True)
-                _write(Path(args.run) / READ_COPY, text)
+                _write(directory / READ_COPY, text)
         elif args.command == "tasks":
             _tasks_command(args, today)
         else:

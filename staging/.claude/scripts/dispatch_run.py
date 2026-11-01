@@ -938,12 +938,14 @@ def report(root, run, tasks_path, today, body_source, open_source):
     for gid, entry in entries.items():
         status = entry.get("status")
         ended = entry.get("closed_from") if status in ("done", "returned") else status
-        if ended == "verified":
-            teardown = "" if status == "done" else "; its rows are still In progress"
+        if ended == "verified" and status == "done":
             merged.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}: "
                           f"{_issues_text(entry.get('issues'))}; {_rounds_text(entry.get('rounds'))}; "
-                          f"review {entry.get('review_end') or 'not run'}; filed {_issues_text(entry.get('filed'))}"
-                          f"{teardown}")
+                          f"review {entry.get('review_end') or 'not run'}; filed {_issues_text(entry.get('filed'))}")
+        elif status == "verified":
+            # GitHub showed the merge, but the pull or the containment read after it failed, so `done` never ran.
+            needs.append(f"{gid} #{entry.get('pr')} merged as {entry.get('merge_oid')}, not confirmed in main: "
+                         f"its rows are still In progress and worktree {entry.get('worktree')} is left in place")
         elif ended in HANDED or status == "returned":
             worktree = entry.get("worktree")
             kept = _path_text(worktree) and (Path(root) / worktree).is_dir()
